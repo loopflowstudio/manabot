@@ -69,7 +69,8 @@ no state. A declared minimum of valid results per match would be Etude's.
 2026-11-17 reversible choice: use an isolated launcher database for the approved
 L4 comparison instead of upgrading the shared launcher. Copy provider/storage
 configuration only, so no other queued work can occupy the comparison machine.
-RunPod/Vast/Lium report no L4 capacity; leave performance pending at USD 3.
+RunPod/Vast/Lium reported no L4 capacity. A later steer allows any reasonable
+single GPU under a USD 10 total cap (plan.md, Remaining).
 
 2026-11-17 write-docs choices for the regime-reader deletion (mine, reversible;
 nobody answered these). The docs are written to them:
@@ -94,6 +95,6 @@ nobody answered these). The docs are written to them:
 `MemoryLimit`, which the plan had kept for historical receipts; their only
 reader was the deleted run record. Kept the training-report page's script and
 `CohortRun` payload unchanged though its flamegraph and phase table can no
-longer show anything; stripping them, or deleting the command, waits on the
-open question above. Left the `notebook` extra and plotting dependencies in
+longer show anything. Realign: those parts go under either answer to the open
+question above (plan.md, Delete list); only deleting the whole command waits. Left the `notebook` extra and plotting dependencies in
 pyproject for the same reason: CLAUDE.md's commands name `--extra notebook`.

@@ -2,8 +2,9 @@
 
 Design: design-train-api.md. Etude pin d9a6bc8f06b20948601d540be80e285d46010465;
 Pydantic required. Jack Heart, 2026-11-16: "the whole point is the adoption";
-"These should be done/mainatined in this task". The 2026-11-17 steer approves one L4 comparison under `--max-usd 3`;
-no landing with this pin. Publication and gate remain the caller's steps.
+"These should be done/mainatined in this task". The 2026-11-17 steers approve
+the speed and learning measurements on one reasonable single GPU, total
+`--max-usd 10`; no landing with this pin. Publication and gate remain the caller's steps.
 
 ## Delete — do not maintain
 
@@ -32,7 +33,8 @@ records, snapshot, study, time_profile and regime_study.ipynb; infra/host.py
 and `precision="auto"`; read_updates, stage_rows, self_play_figures,
 training_dashboard, native_cohort; tests/fixtures/regime_builders.py,
 saved_regimes.py and experiment-demo/, and the tests only for these.
-Still to delete, not to maintain: the training-report page's flamegraph and
+Still to delete, not to maintain (unreachable whichever way the open
+`training-report` question in questions.md goes): the training-report page's flamegraph and
 phase table (`time_cohort.js` `flamegraph`, `aggregate().phases`, their HTML
 sections) and `CohortRun.elapsed_seconds/phases/phase_coverage/cost_usd`:
 an Etude run never sets them, so they are unreachable. Then the `notebook`
@@ -101,76 +103,59 @@ Etude's failed match. Nothing further to change; no new open choice.
 
 ## Remaining
 
-QA fixes are built: evaluation error handling (24 passed, 37.31s) and snapshot
-retry (`reports/snapshot.py` opens the source before creating the output; 1
-passed). Commands and limits: implementation.md.
-
-- Steer 2026-11-17 (complete text: `lf session steers`; quotes in
-  positioning.md). No shipped doc changes for it: docs/evaluation.md
-  ("Failure") already says native `AgentError`/`PanicException` give invalid
-  score-null rows and "Other Python exceptions fail the match".
-  - Fixed the stale red-CI test: RuntimeError propagates without a result row;
-    native AgentError retains a crash row naming the responsible player.
-    Compress split it into two tests; `pytest tests/eval/test_evaluation_match.py
-    -q -k policy_error`: 2 passed (0.60s); Ruff check/format pass.
-  - Speed against main on one rented L4, `--max-usd 3`, both sides in one
-    session: Elemental training updates/s with collection and learning
-    seconds per update and the cost of `run.save()`; evaluation games/s and
-    decisions/s on the same checkpoints and paired deals, first saying whether
-    CUDA batching worked. Numbers, method and limits go to implementation.md
-    and the PR description; terminate the machine and confirm. More than a few
-    percent slower: say where the time goes, do not optimize unasked.
-    Blocked 2026-11-17: RunPod quotes $0.69/hour but no available L4; Vast
-    and Lium also report none. No machine rented, no spend, no CUDA or speed
-    numbers. Shared launcher DB unchanged; isolated launcher has no rentals.
-    Rechecked 14:50 UTC through the isolated launcher: still none available.
-    Retry when L4 capacity returns, keeping the approved USD 3 cap.
-    Steers 2026-11-17 (.lf/prompts/20261117-065538-msrXVy-steer.md,
-    -cZtiPA-steer.md, 20261117-065639-rst6T1-steer.md; quotes in
-    positioning.md): any reasonable single GPU (L4, 4090 or similar price)
-    may stand in, both sides on one machine in one session, the report names
-    the GPU; Lium rental is untested, so confirm start and termination. Total
-    cap `--max-usd 10` including this speed run.
-  - Learning check, main against the branch (exploratory: question, method,
-    confounds and cost cap written before scored runs; numbers and limits to
-    implementation.md and the PR). Step 1 on CPU, no rental: fresh run, same
-    recipe, config and seed, uninterrupted; compare every raw and EMA policy
-    tensor after a few updates and report equal / summation-order only /
-    different. Step 2 only on a real difference: Elemental, several seeds a
-    side, curves and paired-deal strength including head-to-head at matched
-    updates; if it cannot fit the cap, stop and say the cost. Step 3 on the
-    rented GPU: one branch run stopped and resumed against one uninterrupted
-    run to the same update count; compare strength and curves, not tensors.
-    Evaluation speed: cite Etude's own measurements; measure only that
-    Manabot's players run on CUDA and games/s against main.
-- Steer 2026-11-17 on PR #500 (complete text:
-  .lf/prompts/20261117-065016-7oIWNJ-steer.md). Jack Heart: "i also would
-  have expected this pr to involve more deletion of the executor and training
-  regime code, no?"; offered keep / thin reader / delete, he answered "3".
-  Built (Delete list, third cut). What survives and why:
-  - `experiments/tla_frontier.py` states its settings in code (`OBSERVATION`,
-    `model`, `learning`, `settings`) and reads only the 134-deck `deck_source`
-    of `experiments/regimes/tla-frontier-c5fba4-w64.json` as `UniformDecks`
-    (`corpus`). Both sizes' `settings()` dumps equal the record-derived ones
-    from before the cut. `Protocol` is unchanged, so the environment digest is.
-  - `manabot.experiment`: `setup`, `numerics`. `manabot.training.report`.
-  - `manabot.reports`: `update_metrics.updates_from_run`,
-    `self_play.self_play_points(rows, window_updates)` (no `stage`),
-    `training` (`--evaluations` only), `time_sources`/`time_cohort` (Etude
-    runs only; a regime `run.json` is warned as unrecognized), `belief`,
-    `inference`, `evaluation`.
-  - SelfPlay's own refusals (tf32/bf16 device, both-seat and exact-quota
-    rules) had only regime-schema tests; ported as
-    `test_settings_refuse_what_the_loop_cannot_run`.
-  - Lines: manabot+experiments 5,686 deleted / 269 added; tests 3,086 / 184;
-    experiment-demo fixture 12,970 deleted. The PR must say which reports can
-    no longer be rebuilt from main (docs/training.md "Saved regimes" has the
-    list and names f4e1822faf).
-  - Docs were written ahead of the code; three lines changed to match it
-    (corpus read: docs/training.md, experiments/README.md,
-    docs/deck-building.md).
+- Delete the unreachable training-report parts and the unused plotting
+  dependencies (Delete list, "Still to delete").
+- Learning check, main against the branch (steer 2026-11-17,
+  .lf/prompts/20261117-065538-msrXVy-steer.md; quotes in positioning.md).
+  Exploratory: question, method, confounds and cost cap written before scored
+  runs; numbers and limits to implementation.md and the PR.
+  - Step 1 on CPU, no rental, not yet run: fresh run, same recipe, config and
+    seed, uninterrupted; compare every raw and EMA policy tensor after a few
+    updates; report equal / summation-order only / different.
+  - Step 2 only on a real difference: Elemental, several seeds a side, curves
+    and paired-deal strength including head-to-head at matched updates; if it
+    cannot fit the cap, stop and say the cost.
+  - Step 3 on the GPU: one branch run stopped and resumed against one
+    uninterrupted run to the same update count; strength and curves, not
+    tensors.
+- Speed against main on the same GPU in the same session: Elemental training
+  updates/s, collection and learning seconds per update, cost of `run.save()`;
+  evaluation: show Manabot's players batch on CUDA, then games/s and
+  decisions/s on the same checkpoints and paired deals (cite Etude's own
+  evaluation measurements otherwise). More than a few percent slower: say
+  where the time goes, do not optimize unasked. Any reasonable single GPU (L4,
+  4090 or similar price; .lf/prompts/20261117-065639-rst6T1-steer.md,
+  replacing the L4-only steer); the report names it. Lium rental is untested:
+  confirm start and termination. Terminate every machine and confirm.
+  Seen 2026-11-17 14:45–14:50 UTC: no L4 at RunPod, Vast or Lium; nothing
+  rented, nothing spent (implementation.md). Not yet checked: 4090s or other
+  GPUs under the wider steer.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
-  as the gate's proof of that path. PR #500 CI was running at 89fbdafed8
-  (the policy-error split) when last checked; its result is not yet known.
+  as the gate's proof of that path. PR #500 CI at 09e4dd825a (the regime
+  reader deletion) was pending when last checked; no result yet.
+
+## Built since the 2026-11-17 steers
+
+- Policy-error test: RuntimeError propagates without a result row; native
+  AgentError retains a crash row naming the responsible player
+  (`pytest tests/eval/test_evaluation_match.py -q -k policy_error`: 2 passed).
+  docs/evaluation.md ("Failure") already matched.
+- Regime-reader deletion (PR #500 steer, .lf/prompts/20261117-065016-7oIWNJ-steer.md).
+  Jack Heart: "i also would have expected this pr to involve more deletion of
+  the executor and training regime code, no?"; offered keep / thin reader /
+  delete, he answered "3". Built as the Delete list's third cut. Survivors:
+  - `experiments/tla_frontier.py` states its settings in code and reads only
+    the 134-deck `deck_source` of
+    `experiments/regimes/tla-frontier-c5fba4-w64.json` as `UniformDecks`.
+    Both sizes' `settings()` dumps equal the record-derived ones; `Protocol`
+    is unchanged, so the environment digest is.
+  - `manabot.experiment`: `setup`, `numerics`. `manabot.training.report`.
+  - `manabot.reports`: `update_metrics.updates_from_run`,
+    `self_play.self_play_points(rows, window_updates)`, `training`
+    (`--evaluations` only), `time_sources`/`time_cohort` (Etude runs only),
+    `belief`, `inference`, `evaluation`.
+  - SelfPlay's refusals ported as `test_settings_refuse_what_the_loop_cannot_run`.
+  - The PR must say which reports can no longer be rebuilt from main
+    (docs/training.md "Saved regimes" lists them and names f4e1822faf).
