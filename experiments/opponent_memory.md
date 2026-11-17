@@ -1534,3 +1534,21 @@ run with retained diagnostics; the comparison will not discard an overflowing
 game and continue learning. This supersedes the earlier open overflow choice.
 No pilot has launched. An overflow requires a prospective capacity revision
 across the comparison, with the failed run retained as incomplete evidence.
+
+### Reference-repeat completion plan — 2026-11-16
+
+The full calibration completed its producer, first incumbent, and both control,
+transformer and GRU branch repeats. Its conservative 1,890-second admission
+reserve then refused the last incumbent despite a completed preceding worker.
+The attempt is incomplete (eight of nine), not a nine-worker success. No live
+source or bound is changed. Measurements and cost are recorded after delivery.
+
+Complete reference variability prospectively with a separately labelled
+`cuda-calibration-reference` job: fresh incumbent/control/incumbent processes,
+the same seed, workload, precision, capacities, execution rows and two-update
+targets, with ordinary raw/EMA reload. This runs after the first rental ends,
+with a 0.65-hour window and USD0.50 cap under the unchanged cumulative USD3
+calibration limit. It does not rerun memory arms. The control is fresh, like the
+original producer; it is not represented as another pretrained branch. Keep
+host identities and rates separate: a new rental cannot supply the missing
+same-host incumbent repeat or make the original sequence complete.

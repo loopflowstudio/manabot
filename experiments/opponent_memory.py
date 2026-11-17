@@ -47,9 +47,13 @@ DISCLOSURES = ("open", "closed")
 MAX_USD = 50
 
 
-def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
+def training_jobs(
+    revision: str, calibration: bool = False, calibration_reference: bool = False
+) -> list[RunRequest]:
     """Declare calibration only; pilot allocation requires its measured results."""
-    if calibration:
+    if calibration and calibration_reference:
+        raise ValueError("select one calibration workload")
+    if calibration or calibration_reference:
         from etude.jobs import TrainingJob as PythonJob
 
         from experiments.opponent_memory import Calibration, calibrate
@@ -58,15 +62,19 @@ def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
 
         root = Path(__file__).resolve().parents[1]
         job = PythonJob(
-            name="cuda-calibration-full",
+            name="cuda-calibration-reference"
+            if calibration_reference
+            else "cuda-calibration-full",
             train=calibrate,
-            config=Calibration(source_bundle=bundle_at(root, revision)),
+            config=Calibration(
+                source_bundle=bundle_at(root, revision), reference=calibration_reference
+            ),
             repo=str(root),
             revision=revision,
             setup=machine_setup(" --extra artifacts --extra dev"),
             extras=("artifacts", "dev"),
-            max_hours=3.0,
-            max_usd=Decimal("2.00"),
+            max_hours=0.65 if calibration_reference else 3.0,
+            max_usd=Decimal("0.50") if calibration_reference else Decimal("2.00"),
             max_attempts=1,
         ).plain()
         return job.model_copy(
@@ -168,6 +176,7 @@ class Calibration(BaseModel):
     """Exploratory real-worker calibration, separate from pilot training."""
 
     model_config = ConfigDict(extra="forbid")
+    reference: bool = False
 
     source_bundle: SourceBundle | None = None
     smoke: bool = False
@@ -415,6 +424,10 @@ def calibrate(config: Calibration) -> None:
     if not config.smoke:
         sequence += list(reversed(sequence))
     sequence.insert(0, "control")  # one shared EMA producer before any branches
+    if config.reference:
+        # Complete the missing reference variability without rerunning admitted
+        # memory workers. This is a separately labelled, fresh-host measurement.
+        sequence = ["incumbent", "control", "incumbent"]
     receipts: list[str] = []
     try:
         for ordinal, name in enumerate(sequence):
@@ -434,7 +447,7 @@ def calibrate(config: Calibration) -> None:
                     str(directory),
                     config.smoke,
                     str(out / "00-control/output/training/run.json")
-                    if ordinal and name != "incumbent"
+                    if ordinal and name != "incumbent" and not config.reference
                     else None,
                 ),
             )
@@ -464,6 +477,7 @@ def calibrate(config: Calibration) -> None:
                 {
                     "receipts": receipts,
                     "smoke": config.smoke,
+                    "reference": config.reference,
                     "wall_seconds": time.monotonic() - started,
                     "complete": len(receipts) == len(sequence),
                 },
