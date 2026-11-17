@@ -78,14 +78,19 @@ on 5826f7502e finished. Both endpoints won 11 of 128 replay-verified legs;
 managed CUDA batches reached 14/13. Report and artifact manifest retain the
 numbers, traces, differing source revisions and endpoint hashes. All machines
 terminated and confirmed absent; cumulative launcher estimate ~USD 0.62.
+No stall on a throttled disk was confirmed, so no Etude fsync Task was filed.
+The timed arms predate 5826f7502e and the sync onto main dcee96ccd1 (merged
+at c7fd53704a; choices in questions.md); neither was re-timed.
 
 ## Remaining
 
 Gate and publication are the caller's steps, including updating PR #500
 with the completed GPU measurement and checking CI on the new commit.
 
-Dependency release
-cut is complete. External limits: Etude Task 2d1933 owns hard per-match
+The dependency release
+cut is complete. Known failure not caused by this branch:
+`test_resource_limit_replay_rejects_old_schema...` diverges at action 32 of
+the frozen TLA fixture under the current engine (questions.md). External limits: Etude Task 2d1933 owns hard per-match
 deadlines (hang/death currently retries grouped job); 73e1a9 owns Lium lifecycle.
 LLM jobs await EXP-70/frozen checkpoints. Automatic same-seed policy→sampler
 scheduling and whether Agents(build=) builds every seat remain Etude questions,
