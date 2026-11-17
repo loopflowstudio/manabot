@@ -31,6 +31,11 @@ choice-corpus fix. No paid/provider/service run or landing.
   `lf context` reports default 16000-token/131072-byte targets, no usage entries;
   protected notes retained, older evidence condensed by git reference.
 
+- Compress, 2026-11-16: `docs/training.md` names
+  `manabot.reports.update_metrics.read_updates` (was the training path), and
+  `Collector.operation` carries its own comment. `uv run --extra dev --extra
+  artifacts pytest tests/training/test_phase_timing.py -q`: 5 passed (2.30s).
+
 Not shown: CUDA, real Rust panic or native hang injection, launched/provider
 runs, browser proof, full suite, automatic policy→sampler scheduling. The full
 nightly baseline remains a gate obligation; publication stays with the caller.

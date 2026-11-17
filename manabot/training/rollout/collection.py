@@ -378,10 +378,12 @@ class Collector:
     # Legal action prefix of each stream's game in progress, for failure receipts.
     _game_actions: list[list[int]]
     _self_play_decks: list[tuple[str, str]]
-    # RandomBatchController or BatchedSampler; None when the live model plays both seats.
+    # Scopes a named boundary (collection, learning, inference) in the caller's
+    # failure journal; the step loop wraps collection and learning with it.
     operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
         nullcontext()
     )
+    # RandomBatchController or BatchedSampler; None when the live model plays both seats.
     _opponent: Any = None
     _sampler: AdaptiveSampler | None = None
     _assignments: list[Assignment] = field(default_factory=list)

@@ -766,7 +766,7 @@ for table in history.read_table("self_play_outcomes", "updates"):
 1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, ...)
 ```
 
-`manabot.training.update_metrics.read_updates` reads the same tables and
+`manabot.reports.update_metrics.read_updates` reads the same tables and
 projects their counts as `self_play_outcomes/<deck>/<opponent>/<play|draw>/wins`
 (and `losses`/`draws`) for existing reports. Etude selects resumed and duplicate
 updates before fetching tables; unreferenced tables supply no results, and a
