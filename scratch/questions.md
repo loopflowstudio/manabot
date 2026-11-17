@@ -51,4 +51,8 @@ Sync onto main dcee96ccd1 (one game record), 2026-11-17 — choices made:
   diverges at action 32 of the frozen TLA fixture under the current engine
   (`replay_attempt` is byte-identical to main's).
 
-The shared instrumentation fields preserve each recipe’s existing Pydantic extra-field and mutability behavior. The Elemental recording check uses two CPU streams and seed 197.
+Since a23f14a56d every self-play recipe config subclasses `RunSettings`, so
+`ElementalConfig` and `PolicyConfig` are frozen and reject unknown keys, as
+`BaselineConfig` already did (a misspelt `record_game` fails instead of doing
+nothing). No caller mutates them or passes extra keys. The Elemental recording
+check uses two CPU streams and seed 197.

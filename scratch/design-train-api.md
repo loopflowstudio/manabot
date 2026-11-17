@@ -539,3 +539,11 @@ cannot be resumed with `diagnostics: "detailed"`, and a recorded run is a
 different run from the same learner unrecorded. Runtime escalation
 (`diagnostics.request`) still works. The clearer model is a launch-time option
 channel outside config identity; that belongs to Etude, no Manabot workaround.
+
+## Concept review, 2026-11-17 (after 8606b72454 and a23f14a56d)
+
+The four directions above are built as written: one declaration
+(`RunSettings`), flat keys on every self-play recipe config, the no-op
+operation, and the one-update Elemental recording test. Nothing further to
+change and no open Manabot product choice. Instrumentation as resume identity
+stays the Etude question recorded above.
