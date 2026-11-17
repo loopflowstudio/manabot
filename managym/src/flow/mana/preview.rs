@@ -476,6 +476,16 @@ mod tests {
             .position(|a| matches!(a, Action::PayCost { .. }))
             .unwrap();
         assert!(preview(&game, pay).pool_after_spending.is_none());
+        game.step(pay).unwrap();
+        let choices = &game.action_space().unwrap().actions;
+        assert_eq!(choices.len(), 2);
+        for (index, choice) in choices.iter().enumerate() {
+            assert!(matches!(choice, Action::ChooseMode { .. }));
+            assert_eq!(
+                preview(&game, index).state,
+                PaymentPreviewState::NotApplicable
+            );
+        }
     }
     #[test]
     fn payment_preview_zero_cost_needs_no_sources_or_spending() {
