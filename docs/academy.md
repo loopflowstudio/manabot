@@ -669,7 +669,8 @@ after commitment, costs and revealed information remain committed.
 
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
 (`{1}{G}`). Hover its cast action in **Your choices**, or move keyboard
-focus to it. A **Payment preview** opens beside the choices:
+focus to it. On a laptop, the **Payment preview** opens between the board and
+the choices. On smaller screens it appears below the choices:
 
 ```text
 Payment preview

@@ -517,6 +517,79 @@ mod tests {
     }
 
     #[test]
+    fn payment_preview_matches_committed_restricted_mana_and_spend_effect() {
+        use crate::state::{
+            mana::{ManaClass, ManaRestriction, SpendEffect},
+            stack_object::StackObject,
+        };
+        let payer = PlayerId(0);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new(
+                    "payer",
+                    BTreeMap::from([("Island".into(), 24), ("Spectral Sailor".into(), 16)]),
+                ),
+                PlayerConfig::new("other", BTreeMap::from([("Plains".into(), 40)])),
+            ],
+            165,
+            true,
+        );
+        game.scenario_force_card_in_hand(payer, "Spectral Sailor")
+            .unwrap();
+        let blue = [0, 1, 0, 0, 0, 0];
+        game.state.mana_pool_mut(payer).add(&Mana::restricted_to(
+            ManaRestriction::spell(["Lesson"]),
+            blue,
+        ));
+        game.state.combat_mana_pool_mut(payer).add(&Mana::of_class(
+            ManaClass {
+                restriction: Some(ManaRestriction::spell(["Pirate"])),
+                effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
+                    without_subtype: "Human".into(),
+                }),
+                combat: false,
+            },
+            blue,
+        ));
+        game.scenario_refresh_priority().unwrap();
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::CastSpell { .. }))
+            .unwrap();
+        let before = witness(&game);
+        let proposal = preview(&game, index);
+        assert_eq!(witness(&game), before);
+        assert_eq!(proposal.state, PaymentPreviewState::Exact);
+        assert!(proposal.sources.is_empty());
+        let production = proposal.pool_after_production.unwrap();
+        assert_eq!(production.amounts, [0, 2, 0, 0, 0, 0]);
+        assert!(production.classes.iter().any(|class| class.combat
+            && class.effect.is_some()
+            && class
+                .restriction
+                .as_ref()
+                .is_some_and(|s| s.contains("Pirate"))));
+
+        // Inspect the committed spell before priority passes can resolve it.
+        let cast = game.action_space().unwrap().actions[index].clone();
+        game.execute_action(&cast).unwrap();
+        let Some(StackObject::Spell(spell)) = game.state.stack_objects.last() else {
+            panic!("expected the paid spell on the stack");
+        };
+        assert_eq!(spell.spent.amounts, blue);
+        assert_eq!(spell.spent.entry_counters, 1);
+        let leftover = proposal.pool_after_spending.unwrap();
+        assert_eq!(leftover.amounts, blue.map(u16::from));
+        assert_eq!(
+            serde_json::to_value(leftover).unwrap(),
+            serde_json::to_value(PreviewPool::from(&game.pooled_mana(payer))).unwrap(),
+        );
+    }
+
+    #[test]
     fn payment_preview_keeps_restrictions_and_combat_expiry() {
         use crate::state::mana::ManaRestriction;
         let mut game = preview_game();

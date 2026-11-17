@@ -74,7 +74,8 @@
   // sources. This changes navigation only: focus previews, activation commits.
   const visibleOffers = $derived([
     ...matchingOffers.filter(action => action.action_type === 'PAY_COST'),
-    ...matchingOffers.filter(action => action.action_type !== 'PAY_COST'),
+    ...matchingOffers.filter(action => action.action_type === 'TAP_FOR_COST'),
+    ...matchingOffers.filter(action => action.action_type !== 'PAY_COST' && action.action_type !== 'TAP_FOR_COST'),
   ]);
   let searchInput: HTMLInputElement | null = $state(null);
   // Pointer previews follow movement, not entry: when a Command re-renders the

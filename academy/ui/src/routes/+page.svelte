@@ -571,7 +571,7 @@
     </section>
   {/if}
   {#if gameStore.observation && boardObservation}
-    <div class="play-workspace" data-testid="play-workspace">
+    <div class="play-workspace" class:with-payment={paymentSlot} data-testid="play-workspace">
       <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
         workspace
@@ -638,7 +638,7 @@
         />
         {#if paymentSlot}
           <PaymentPreview
-            state={paymentState}
+            state={paymentState?.preview?.state === 'not_applicable' ? null : paymentState}
             observation={tableFrame.projection}
             chosenSourceFirst={tableFrame.offers.some(offer => offer.id === paymentState?.offer && offer.action_type === 'TAP_FOR_COST')}
             onClose={() => payments.clear()}
@@ -735,7 +735,14 @@
     .table-active .sheet-content { height: 100%; display: flex; flex-direction: column; }
     .table-active .sheet-content > :global(*) { flex-shrink: 0; }
     .table-active .play-workspace { flex: 1; min-height: 0; }
-    .play-workspace { grid-template-columns: minmax(0, 1fr) clamp(19rem, 26vw, 23rem); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
+    .play-workspace { --choices-width: clamp(19rem, 26vw, 23rem); grid-template-columns: minmax(0, 1fr) var(--choices-width); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
+    .with-payment { position: relative; --preview-width: clamp(13rem, 19vw, 17rem); }
+    .with-payment .board-region { margin-right: calc(var(--preview-width) + 1rem); }
+    .with-payment :global([data-testid="payment-preview"]) {
+      position: absolute; inset: .5rem calc(var(--choices-width) + 1rem) 0 auto;
+      width: var(--preview-width); height: auto;
+      border-top: 0; border-left: 1px solid var(--border); padding-left: .75rem;
+    }
     .board-region { min-height: 0; display: flex; flex-direction: column; }
     .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
     .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }

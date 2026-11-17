@@ -59,6 +59,9 @@ def new_game(
             "Mountain",
             "Mountain",
             "Island",
+            "Island",
+            "Mountain",
+            "Mountain",
             "Prophetic Prism",
             "White Lotus Hideout",
         ):
