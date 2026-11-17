@@ -1,4 +1,7 @@
-"""Native games inside Etude's game process, with durable Command evidence.
+"""Native games inside Etude's game process, with durable evidence.
+
+Ordinary games journal through their capture before each native step and keep
+a canonical record; constructed scenarios keep an fsynced Command event journal.
 
 Cooperative limits are checked between native steps. Until Etude's per-match
 watchdog lands, a true native hang or hard process exit retries the grouped
@@ -17,7 +20,13 @@ from manabot.sim.card_evidence import EvidenceRef
 from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt
-from manabot.sim.supervision import ReplayOutcome, is_game_error, verify_game
+from manabot.sim.supervision import (
+    ReplayOutcome,
+    is_game_error,
+    settle_record,
+    verify_game,
+)
+from managym.statistics import Reduction
 
 
 def play_game(
@@ -34,6 +43,24 @@ def play_game(
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
     game["registrations"] = [r.model_dump(mode="json") for r in registrations]
+    if "scenario_root" not in game:
+        if evidence_path.exists():
+            raise FileExistsError(evidence_path)
+        game["capture_path"] = str(evidence_path)
+        execute_game(
+            game,
+            registrations,
+            {},
+            max_commands,
+            lambda event: None,
+            agents=agents,
+            deadline=started + game_seconds,
+        )
+        game["execution_seconds"] = time.monotonic() - started
+        settle_record(game, evidence_path, keep_completed=keep_completed)
+        if game["failure"] is None and not keep_completed:
+            evidence_path.unlink(missing_ok=True)
+        return game
     with evidence_path.open("x") as journal:
 
         def send(event: tuple[str, Any]) -> None:
@@ -61,14 +88,18 @@ def play_game(
 def replay_in_process(
     games: list[dict[str, Any]],
     card_evidence_dir: Path | None,
+    reduction: Reduction | None = None,
 ) -> ReplayOutcome:
-    """Verify Commands and capture cards in the owning Etude game process."""
+    """Verify games and capture cards in the owning Etude game process.
+
+    `reduction` accumulates its rows in place over the same traversal.
+    """
     receipts: list[dict[str, Any]] = []
     references: list[EvidenceRef] = []
     errors: list[str] = []
     for game in games:
         try:
-            receipt, reference = verify_game(game, card_evidence_dir)
+            receipt, reference = verify_game(game, card_evidence_dir, reduction)
             receipts.append(receipt)
             if reference is not None:
                 references.append(reference)

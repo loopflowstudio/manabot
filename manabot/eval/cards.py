@@ -16,7 +16,6 @@ import time
 
 from etude.storage import default_root
 
-from manabot.eval.arena_log import CardMapping, export_arena_log
 from manabot.eval.card_evaluation import (
     CardEvaluationSpec,
     evaluate_cards,
@@ -31,6 +30,9 @@ from manabot.eval.card_query import (
     card_db,
     load_game,
 )
+from manabot.sim.evaluation_records import is_record
+from managym.export_arena import CardMapping, export_capture, export_log
+from managym.recording import GameRecord
 
 
 def verify(games: int, out: Path) -> dict[str, int | float | str]:
@@ -169,10 +171,22 @@ def main() -> None:
         source = args.source
         with card_db(args.experiment, source) as db:
             game = load_game(db, source or default_root(), args.run, args.game)
-        log = export_arena_log(
-            game,
-            args.viewer,
-            CardMapping.model_validate_json(args.mapping.read_bytes()),
+        if game.outcome not in ("win_loss", "draw") or not game.replay.get("passed"):
+            raise ValueError("export requires a replay-verified completed game")
+        mapping = CardMapping.model_validate_json(args.mapping.read_bytes())
+        log = (
+            export_log(
+                GameRecord.model_validate(game.trace.data), args.viewer, mapping=mapping
+            )
+            if is_record(game.trace.data)
+            else export_capture(
+                game.cards,
+                args.viewer,
+                mapping,
+                match_id=game.game,
+                winner=game.winner,
+                reason=game.trace.audit.get("termination_reason"),
+            )
         )
         args.out.write_text(log)
     else:

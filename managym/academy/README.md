@@ -269,8 +269,9 @@ retained across reload and shown with its message. At the live edge, **Retry
 search** explicitly retries that decision; browsing saved positions never retries
 it. The exact selected position remains selected after reload.
 
-`watch.py` admits controllers and verified exported training games or evaluation
-traces through **Open a game file**; choose a game when a trace contains several.
+`watch.py` admits controllers, managym game records (`import_record`, re-executed
+through `managym.replay.walk` with no extension) and retained Command traces
+through **Open a game file**; choose a game when a file contains several.
 Import verifies the original receipt, Commands and state digests without invoking a player.
 The imported Academy replay has its own identity; the source digest is retained
 without rewriting the arena evidence. A game's stated source kind is kept

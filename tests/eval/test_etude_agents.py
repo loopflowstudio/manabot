@@ -22,6 +22,7 @@ from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import prepare
 from manabot.sim.card_evidence import EvidenceRef
 import managym
+from managym.statistics import Reduction
 from tests.fixtures.evaluation_callbacks import PanicException
 
 
@@ -33,7 +34,9 @@ def test_replay_only_retains_native_failures(
     monkeypatch: pytest.MonkeyPatch, error_type: type[BaseException]
 ) -> None:
     def failed_replay(
-        trace: dict[str, object], directory: Path | None
+        trace: dict[str, object],
+        directory: Path | None,
+        reduction: Reduction | None = None,
     ) -> tuple[dict[str, object], EvidenceRef | None]:
         raise error_type("controlled replay failure")
 

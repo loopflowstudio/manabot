@@ -16,7 +16,8 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.identity import file_sha256
+from manabot.sim.evaluation_records import audit_view, finalize_game, stored_game
 from manabot.sim.guidance import build_registered_player
 from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
@@ -263,6 +264,7 @@ def test_registered_puct_completes_games_and_replays(tmp_path: Path) -> None:
         )
         assert game.get("terminated"), game.get("failure")
         assert all(v == 0 for v in game["integrity"].values())
-        game["game_trace_sha256"] = canonical_sha256(game)
+        finalize_game(game)
+        assert audit_view(stored_game(game))["decisions"] == game["decisions"]
         games.append(game)
     assert replay_games(games).passed

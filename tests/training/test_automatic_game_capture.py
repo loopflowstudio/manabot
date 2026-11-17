@@ -31,7 +31,7 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.selection_data import SelectionGameSpec
 import managym
 from managym.decision import Command
-from managym.recording import read_failure
+from managym.recording import ScalarCapture, read_record
 
 
 def _model() -> ActorCritic:
@@ -111,7 +111,7 @@ def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
         with pytest.raises(managym.AgentError) as failure, env._capture.guard():
             env.step(-1)
     assert len(scope.paths) == 1
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.games[0].actions == [0, -1]
     assert evidence.context["update"] == 7
     assert evidence.context["allocation_deadline"] == 123.0
@@ -123,7 +123,7 @@ def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
 
     with capture_scope(scope), pytest.raises(BaseException):
         env._capture.reset(env._engine, [])
-    assert read_failure(scope.paths[-1]).operation == "reset"
+    assert read_record(scope.paths[-1]).operation == "reset"
     assert _bounded(scope.paths[-1])["results"][0]["matches_error"]
 
 
@@ -155,7 +155,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
                 with pytest.raises(managym.AgentError):
                     env.step(-1)
     original = scope.paths[0].read_bytes()
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     if variant == "wrong_frame":
         evidence.games[0].frame = "{}"
     elif variant == "different_error":
@@ -207,7 +207,7 @@ def test_ordinary_vector_replays_current_game_after_autoreset(
         seeds = env._rust_env.current_game_seeds()
         with pytest.raises(managym.AgentError):
             env.step(torch.tensor([-1, 0]))
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert [game.seed for game in evidence.games] == seeds
     assert evidence.seed_stride == 2
     assert all(game.frame for game in evidence.games)
@@ -241,7 +241,7 @@ def test_strict_collector_preserves_masked_prefixes(
                 collector._env.step_into_buffers([-1, -999], [True, False])
         finally:
             close_collector(collector)
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert len(evidence.games) == 1
     assert evidence.games[0].actions == [0, -1]
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
@@ -272,16 +272,20 @@ def test_semantic_training_retains_rejected_command_and_offer_frame(
             predictor=SelectionPredictor(_model(), seed=1),
             max_steps=100,
         )
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.games[0].frame
     assert json.loads(evidence.games[0].frame)["offers"]
     assert len(evidence.games[0].actions) == 1
-    rows = [json.loads(line) for line in scope.paths[0].read_text().splitlines()]
-    assert "pending" in rows[1] and "error" in rows[2]
+    assert evidence.boundary is not None
+    assert evidence.boundary.phase == "executing"
+    assert evidence.boundary.pending_actions == evidence.games[0].actions
+    assert evidence.games[0].committed == 0
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
     interrupted = tmp_path / "interrupted.jsonl"
     interrupted.touch(mode=0o600)
-    interrupted.write_text("\n".join(json.dumps(row) for row in rows[:2]) + "\n")
+    evidence.error_class = evidence.error = evidence.traceback = None
+    evidence.execution_outcome = "execution_outcome_unknown"
+    interrupted.write_text(evidence.model_dump_json(by_alias=True) + "\n")
     replay = _bounded(interrupted)
     assert replay["original_outcome"] == "execution_outcome_unknown"
     result = replay["results"][0]
@@ -312,9 +316,9 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
             pool.step_active([-1] * pool.num_slots)
         with pytest.raises(managym.AgentError):
             env.step(-1)
-    assert read_failure(scope.paths[0]).mode == "search"
+    assert read_record(scope.paths[0]).mode == "search"
     for path in scope.paths:
-        assert read_failure(path).context["game_index"] == 11
+        assert read_record(path).context["game_index"] == 11
         result = _bounded(path)["results"][0]
         assert result["matches_error"] and result["at_retained_failure"]
 
@@ -373,7 +377,7 @@ def test_value_search_failure_keeps_sampled_pool_actions(
         scorer = value._ValueLeafScorer(Scorer(), worlds=1, depth=1)
         with pytest.raises(managym.AgentError):
             scorer.score_actions(env)
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.search and evidence.search.operations
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
 
@@ -412,16 +416,23 @@ def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
                 collector._env.step_into_buffers([0, -1], [False, True])
         finally:
             close_collector(collector)
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.games[0].stream == 1
     assert evidence.games[0].seed == 1
     assert _bounded(scope.paths[0])["results"][0]["stream"] == 1
 
 
-def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
+@pytest.mark.parametrize("standalone", [False, True])
+def test_command_is_durable_before_native_execution(
+    tmp_path: Path, standalone: bool
+) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
         env = _env()
+        if standalone:
+            env._capture = ScalarCapture(
+                seed=24, failure_directory=tmp_path, on_retained=scope.paths.append
+            )
         env.reset()
         frame = json.loads(env._engine.semantic_decision_frame_json())
         command = Command("pending", frame["revision"], frame["offers"][0]["id"])
@@ -436,8 +447,9 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
 
             def execute_semantic_command_json(self, value: str) -> str:
                 # Read independently while the failing native call is entered.
-                evidence = read_failure(scope.paths[0])
+                evidence = read_record(scope.paths[0])
                 assert evidence.games[0].actions == [value]
+                assert not evidence.games[0].digests
                 assert evidence.execution_outcome == "execution_outcome_unknown"
                 assert scope.paths[0].stat().st_mode & 0o777 == 0o600
                 raise original
@@ -445,7 +457,12 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
         with pytest.raises(managym.AgentError) as failure:
             env._capture.command(NativeFailure(), command.to_json())
         assert failure.value is original
-    assert read_failure(scope.paths[0]).execution_outcome == "failed"
+    assert read_record(scope.paths[0]).execution_outcome == "failed"
+    before = scope.paths[0].read_bytes()
+    env.reset()
+    env.close()
+    assert scope.paths[0].read_bytes() == before
+    assert len(scope.paths) == 1
 
 
 def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> None:
@@ -476,7 +493,7 @@ def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> N
                 collector._env.step_into_buffers([-1, 0], [True, False])
         finally:
             close_collector(collector)
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert len(evidence.games) == 1
     assert evidence.games[0].seed == 17502
     assert evidence.games[0].actions == [0, -1]
@@ -505,11 +522,11 @@ def test_search_construction_failure_retains_original_error(tmp_path: Path) -> N
                 env._capture, BrokenSearch(), "rollout_pool", [1, 1, 197, 100]
             )
     assert failed.value is original
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.mode == "search" and evidence.error == str(original)
 
 
-@pytest.mark.parametrize("name", ["FailureEvidence", "GameInputs", "PlayerSetup"])
+@pytest.mark.parametrize("name", ["GameRecord", "GameInputs", "PlayerSetup"])
 def test_portable_record_names_warn_before_removal(name: str) -> None:
     from manabot.env import failures
     from managym import recording

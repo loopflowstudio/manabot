@@ -331,10 +331,12 @@ blob per game read with Etude's `read_blobs`; `etude convert-eval` makes older
 per-file runs readable.
 
 **Arena logs.** `cards export-log --experiment EXP --source .runs/cards --run RUN
---game GAME --viewer 0|1 --mapping mapping.json --out game.log` writes `arena-card-log-v1` (`eval.arena_log`).
-`CardMapping` binds content keys to retained Scryfall responses with verified
-`arena_id`; export refuses missing mappings and never joins by name. Logs omit
-opponent private cards and library order, are synthetic, and must never be
+--game GAME --viewer 0|1 --out game.log` writes the game's
+[Arena-style log](engine-python.md#export-an-arena-style-log) through managym's
+exporter, which any recorded game can use without manabot. Arena ids come from
+the table shipped with managym, joined by Scryfall id and never by name; cards
+without one are written with id `0` and counted in the coverage report. Logs
+omit opponent private cards and library order, are synthetic, and must never be
 submitted to 17Lands; `tests/fixtures/seventeenlands` pins the upstream client.
 
 **Scale.** MTG-206 (2026-10-27): 5,000 player-games and 90 cards rendered 363
@@ -453,3 +455,71 @@ import the managed player loader. `manabot.eval.models` holds only the identitie
 leg); wire field names keep their recorded meanings because frozen evidence
 carries them. Tests load the INT-6 fixture's key and anchors through
 `tests/eval/arena_fixture.py`.
+
+Ordinary evaluation games are retained as canonical managym records in
+`games/<cell-id>.jsonl`, with finalized per-deal shards in `games/deals/`. Evaluation
+setup, participant and runtime identities stay in private record context;
+viewer-frame hashes, player ordinals, policy seeds, latencies, inference ids and
+local-update receipts stay in decision annotations. Card eligibility and Etude
+admission still require the separate successful replay audit. Its `trace_sha256`
+identifies the canonical record, including that metadata. Existing rollup names
+and `gih-copies-v1` counting rules are unchanged.
+
+### Custom statistics for every evaluation game
+
+Pass named managym reducers to `play_cell`:
+
+```python
+from managym.statistics import Behaviour, CardPerformance
+
+rows, trace, replay = play_cell(
+    # Supply the usual key, player_a, player_b, deal_seeds and out_dir.
+    **cell_arguments,
+    reducers={"cards": CardPerformance(), "behaviour": Behaviour()},
+)
+print(trace["statistics_path"])
+```
+
+The private `statistics.json` contains `tables` under those names, the number
+of games, `complete_verified_games`, and replay status/errors. Custom reducers
+use the same interface as [record analysis](engine-python.md#ask-questions-of-recorded-games).
+They receive decisions and card facts from the existing verification replay;
+there is no additional replay or policy inference for statistics. When
+`card_evidence_dir` is also set, its audited card evidence comes from that
+same traversal. Each reducer's `finish` runs once across all deal blocks, not
+once per worker. The card table uses native seats; participant mapping,
+eligibility and bootstrap intervals remain evaluation responsibilities.
+
+Only complete, successfully audited games contribute reducer rows. Rejected
+games remain in the evaluation's original records and outcome diagnostics.
+A catchable reducer exception stops custom analysis and publishes no custom
+tables. Its separate `analysis_error` does not invalidate successfully completed
+verification, audited card evidence or game scores. Callback, aggregation and
+question/result transport failures are analysis failures. An experiment that
+requires the table must check this status and can reject the evaluation without
+relabeling verified games. It never retries or rewrites the played game.
+A worker death or deadline still leaves unfinished verification unavailable;
+a hung callback shares that supervised deadline. Tables are mode 0600 and are not attached to Academy viewer records.
+Ordinary canonical game records support these hooks; legacy traces and
+constructed scenario roots retain their existing verification reader.
+
+Per-game callbacks run in the bounded replay child, so expensive Python analysis
+counts toward its replay deadline. Final `finish` aggregation runs once in the
+coordinator. Script-local reducer classes and dataclass rows
+are supported. Imported reducer modules must be available to that child, just
+as they are to the evaluation runner. Keeping all questions in this one call
+shares the replay; calling `reduce()` later is a deliberate new analysis.
+
+A failed game's `failures/*.jsonl` file is a settled capture snapshot. A pending
+call is retained as unknown and is never attempted while viewing it. Diagnose
+it with `uv run --no-project python -m managym.replay <file>` on the recorded
+runtime (or explicitly allow a changed runtime for diagnostic replay). Old
+Command traces and event journals remain readable; constructed scenario roots
+continue to use Command traces.
+
+An audit-view dictionary has the retained Command-trace shape and carries its
+canonical `record`; it is a derived view for reports, not another stored
+trajectory. Completion and winner come from the record ending. Runner failures
+stay in private evaluation context; only a captured native exception marks the
+record as failed. Interrupted endings carry a reason token such as `command_cap`,
+`truncated` or `crash`, without exposing exception text in Academy.

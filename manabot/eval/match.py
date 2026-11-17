@@ -11,6 +11,7 @@ import time
 from typing import Any, Literal
 
 import numpy as np
+from pydantic import TypeAdapter
 
 from manabot.eval.game import play_game as play_in_process, replay_in_process
 from manabot.eval.models import EvaluationKey
@@ -18,6 +19,7 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.agent import GamePlayer
+from manabot.sim.evaluation_records import finalize_game
 from manabot.sim.match import play_game
 from manabot.sim.matchup import (
     SELECTED_SUITE,
@@ -32,6 +34,8 @@ from manabot.sim.replay import ReplayReceipt, write_trace
 from manabot.sim.supervision import failure_record, replay_retained
 from manabot.verify.games import INTERACTIVE_DECK
 from managym import WORLD_VERSION
+from managym.recording import atomic_private_json
+from managym.statistics import Reducer, Reduction
 
 MatchupMode = Literal["cross", "mirrors", "all"]
 
@@ -78,14 +82,19 @@ def play_cell(
     keep_game_logs: bool = False,
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
+    reducers: Mapping[str, Reducer[Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Play complete deals or an explicit leg subset under bounded supervision.
 
     Card capture uses verified replay within the same deadline and retains the
     upstream evidence references for trace_card_tables.
 
-    Each game's Command journal under `out_dir/failures/` is kept only when the
-    game fails, unless `keep_game_logs`; the cell trace keeps every game.
+    Each game's capture journal under `out_dir/failures/` is kept only when the
+    game fails, unless `keep_game_logs`; `games/<cell-id>.jsonl` keeps every
+    settled canonical record. Block shards under `games/deals/` preserve
+    finalized progress. `reducers` run inside the verification replay; their
+    tables go to the private `statistics.json`, and a reducer failure is an
+    `analysis_error` that voids no game.
 
     `legs` selects a subset of the mode's legs for every deal, for designs that
     assign one seat and deck pair per game instead of playing whole deals.
@@ -106,6 +115,8 @@ def play_cell(
     if not deal_seeds or len(set(deal_seeds)) != len(deal_seeds):
         raise ValueError("deal seeds must be nonempty and unique")
     checkpoint_paths = checkpoint_paths or {}
+    reducers = dict(reducers or {})
+    reduction = Reduction(tuple(reducers.values()))
     match = (
         authored_matchup.match()
         if authored_matchup is not None
@@ -165,7 +176,7 @@ def play_cell(
     perf = EvalPerformance("cell")
     pair = (player_a.player_id, player_b.player_id)
     cell_id = "__".join(sorted(pair))
-    trace_relative_path = str(Path("traces") / f"{cell_id}.commands.jsonl.gz")
+    trace_relative_path = str(Path("games") / f"{cell_id}.jsonl")
     trace_path = out_dir / trace_relative_path
     deal_seed_set_sha256 = canonical_sha256(list(deal_seeds))
     for block, deal_seed in enumerate(deal_seeds):
@@ -282,14 +293,16 @@ def play_cell(
         block_rows = sorted(
             (r for r in rows if r["deal_block"] == block), key=lambda r: r["leg"]
         )
+        # Shards sit below games/ so reading that directory yields each game once.
         relative = (
-            Path("traces")
-            / f"{cell_id}.{block_games[0]['deal_seed']}.commands.jsonl.gz"
+            Path("games") / "deals" / f"{cell_id}.{block_games[0]['deal_seed']}.jsonl"
         )
         shard = write_trace(out_dir / relative, block_games)
         started = time.perf_counter()
         if agents is not None:
-            outcome = replay_in_process(block_games, card_evidence_dir)
+            outcome = replay_in_process(
+                block_games, card_evidence_dir, reduction if reducers else None
+            )
         else:
             outcome = replay_retained(
                 block_games,
@@ -299,8 +312,16 @@ def play_cell(
                     game_seconds * len(block_games), max(0, deadline - time.time())
                 ),
                 card_evidence_dir=card_evidence_dir,
+                reducers=reduction.reducers,
             )
+            if outcome.statistics_rows and reduction.error is None:
+                for combined, reducer_rows in zip(
+                    reduction.rows, outcome.statistics_rows, strict=True
+                ):
+                    combined.extend(reducer_rows)
         receipts = outcome.receipts
+        if outcome.analysis_error is not None:
+            reduction.fail(outcome.analysis_error)
         if outcome.error is not None:
             replay_errors.append(outcome.error)
         if receipts is None:
@@ -341,7 +362,7 @@ def play_cell(
         seeds = game["player_seeds"]
         seat_decks = game.get("seat_decks")
         seconds = game["execution_seconds"]
-        game["game_trace_sha256"] = canonical_sha256(game)
+        finalize_game(game)
         games.append(game)
         if game["failure"] is not None:
             score_a = None
@@ -414,7 +435,7 @@ def play_cell(
         for item in work:
             finalize(run(item))
     finally:
-        # Block shards and Command journals retain progress. Build the
+        # Block shards and capture journals retain progress. Build the
         # diagnostic aggregate once, including on coordinator failure,
         # rather than recompressing the growing panel after every game.
         if games:
@@ -456,4 +477,34 @@ def play_cell(
     perf.count("decisions", sum(r["decisions"] for r in rows))
     perf.write(out_dir / "performance.json")
     atomic_json(out_dir / "rows.json", rows)
+    if reducers:
+        # Tables contain private facts. Keep them separate from viewer
+        # records, and aggregate once across all deal blocks.
+        tables = None
+        if not replay_errors and reduction.error is None:
+            try:
+                tables = TypeAdapter(dict[str, list[Any]]).dump_python(
+                    dict(zip(reducers, reduction.finish(), strict=True)),
+                    mode="json",
+                )
+            except Exception as exc:
+                reduction.fail(f"analysis table encoding: {type(exc).__name__}: {exc}")
+        if reduction.error is not None:
+            tables = None
+        statistics_path = out_dir / "statistics.json"
+        atomic_private_json(
+            statistics_path,
+            {
+                "tables": tables,
+                "games": len(rows),
+                "complete_verified_games": sum(
+                    r["failure"] is None and r["replay_passed"] and r["terminated"]
+                    for r in rows
+                ),
+                "replay_passed": replay_payload["passed"],
+                "error": reduction.error or replay_payload.get("error"),
+                "analysis_error": reduction.error,
+            },
+        )
+        trace_receipt["statistics_path"] = str(statistics_path)
     return rows, trace_receipt, replay_payload

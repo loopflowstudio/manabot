@@ -22,23 +22,42 @@ from managym.recording import GameInputs
 
 @pytest.fixture(scope="module")
 def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    directory = tmp_path_factory.mktemp("recorded-games")
-    previous = torch.get_num_threads()
-    torch.set_num_threads(1)
-    # The identity `etude train` hands a local run, set here for an in-process call.
-    environment = pytest.MonkeyPatch()
-    track = tmp_path_factory.mktemp("recorded-run")
-    environment.setenv("ETUDE_OUT", str(track / "out"))
-    environment.setenv("ETUDE_EXPERIMENT", "recorded-games")
-    environment.setenv("ETUDE_RUN", "recorded-games-seed-3")
-    environment.setenv("ETUDE_SEED", "3")
-    environment.setenv("ETUDE_TRACK_DIR", str(track / "track"))
-    try:
-        with record_games(directory, players=("learner", "learner")):
-            train(MinimalConfig(updates=1, streams=2, decisions=16))
-    finally:
-        environment.undo()
-        torch.set_num_threads(previous)
+    """Retained receipt reader fixture; ordinary collectors no longer write these."""
+    from manabot.env.failures import NativeTrainingGame, runtime_identities
+    import managym
+
+    directory = tmp_path_factory.mktemp("retained-exposure")
+    from managym.recording import ScalarCapture
+
+    for seed in (3, 4):
+        env = managym.Env(seed=seed)
+        env.enable_exposure_capture()
+        capture = ScalarCapture(seed=seed)
+        capture.reset(
+            env, [managym.PlayerConfig(str(seat), {"Mountain": 12}) for seat in (0, 1)]
+        )
+        while not env.is_game_over():
+            capture.step(env, 0)
+        receipt = TrainingExposureReceipt(
+            stream=0,
+            game=NativeTrainingGame.model_validate(
+                {
+                    "seed": seed,
+                    "terminal": True,
+                    "trace": {
+                        "player_configs": capture.inputs.players,
+                        "actions": capture.inputs.actions,
+                    },
+                    "cards": json.loads(env.card_capture_json()),
+                }
+            ),
+            skip_trivial=True,
+            identities=runtime_identities(),
+            context={"players": ["learner", "learner"]},
+            seconds=1,
+        )
+        capture.close()
+        _write_receipt(directory, receipt.model_dump(mode="json", by_alias=True))
     return directory
 
 
@@ -46,7 +65,7 @@ def test_actual_training_games_export_and_replay_without_policy(
     captured: Path, tmp_path: Path
 ) -> None:
     games = TrainingGames(source=captured)
-    assert len(games.games()) >= 2
+    assert len(games.games()) == 2
     assert games.sample(seed=0) == games.sample(seed=0)
     for index, game in enumerate(games.games()):
         before = game.path.read_bytes()
@@ -203,3 +222,35 @@ def test_export_game_cli_refuses_a_directory_without_complete_games(
     assert result.exit_code == 2, result.output
     assert "no complete game" in result.output
     assert "--game" not in result.output
+
+
+def test_training_helper_writes_only_canonical_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from managym.recording import read_records
+    from managym.replay import walk
+
+    # The identity `etude train` hands a local run, set here for an in-process call.
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "run" / "out"))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "recorded-games")
+    monkeypatch.setenv("ETUDE_RUN", "recorded-games-seed-3")
+    monkeypatch.setenv("ETUDE_SEED", "3")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "run" / "track"))
+    previous = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        with pytest.warns(DeprecationWarning, match="0.4.0"):
+            with record_games(tmp_path, players=("learner", "learner")) as games:
+                train(MinimalConfig(updates=1, streams=2, decisions=16))
+    finally:
+        torch.set_num_threads(previous)
+    records = list(read_records(tmp_path / "games"))
+    assert records and all(
+        record.schema_version == "managym-game-v1" for record in records
+    )
+    assert not (tmp_path / "exposure").exists()
+    selected = games.sample(seed=0)
+    exported = selected.export(tmp_path / "selected.jsonl")
+    replay = walk(next(read_records(exported)))
+    assert len(list(replay)) == selected.decisions
+    assert replay.stop.status == "complete"

@@ -116,6 +116,21 @@ publish, land or choose the next Graph step from here.
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
   SIGINT is ignored and the server looks hung.
+- Game records in Academy (`managym.recording`, `managym academy replay
+  <file|dir> --game N`): write records with the `docs/engine-python.md` Record
+  games example (a complete game, and one closed after a few steps for
+  interrupted), then open each from an engine-only wheel venv in a fresh
+  Playwright context: the launcher's `open` address carries no credential, so
+  a 403 there is a real failure. `[data-testid=recorded-decision-evidence]`
+  holds Value/Update/Policy or "not retained". `etude train
+  manabot/recipes/local.py --config '{"record_games": 0.25}'` prints the games
+  command; `play_cell` with two legs
+  writes `games/<cell>.jsonl`. Count `read_records(<dir>)` against the games
+  played: duplicates mean a second file in that directory. A different-world
+  record can be made by editing `identities.world`/`card_digest` in a copy.
+  Stall checks: `"stall_seconds": 0.3` in the local recipe config and
+  `touch <out>/diagnostics.request` exercise the watchdog without load; read
+  `escalations.jsonl` for one line per real stall.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press Start game, play a land and Pass Turn.
@@ -417,7 +432,7 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
-- Training game journals (`training_game_logs`): run `etude train manabot/recipes/local.py --experiment NAME --config '{"updates": 200, "training_game_logs": true}'` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `SelfPlay.workers=2` gives sharded files.
+- Training game journals (`diagnostics: detailed`): run `etude train manabot/recipes/local.py --experiment NAME --config '{"updates": 200, "diagnostics": "detailed"}'` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `SelfPlay.workers=2` gives sharded files.
 - Standalone statistics/recording: stage and install an engine-only wheel into a
   fresh venv, then run the two Python examples in `docs/engine-python.md` outside
   the checkout. Play the same seeded authored game with neither option, statistics

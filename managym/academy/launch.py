@@ -1,15 +1,15 @@
 """Start Academy and prepare browser addresses for games and retained replays.
 
 `serve` owns the one process-local server. `Academy` prepares configurations
-through the server's admission path and imports game files (evaluation traces
-and exported training games) through the optional bot extension; neither
-operation chooses a game action.
+through the server's admission path and imports game files: managym game
+records by re-execution, and retained Command traces through the optional bot
+extension; neither operation chooses a game action.
 """
 
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import errno
 import gzip
 import json
@@ -21,6 +21,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
+import warnings
 import webbrowser
 
 from managym.disclosure import DecklistDisclosure
@@ -38,12 +39,47 @@ _TRACE_SUFFIXES = {".json", ".jsonl", ".gz"}
 @dataclass(frozen=True)
 class RecordedGame:
     index: int
-    deal_seed: int
-    leg: int
+    seed: int
+    stream: int
     players: tuple[str, str]
-    decks: tuple[str, str]
-    game_trace_sha256: str
+    decisions: int
+    ended: str
+    digest: str
     _record: dict[str, Any] = field(repr=False, compare=False)
+
+    @property
+    def deal_seed(self) -> int:
+        _warn_listing_field("deal_seed", "seed")
+        return self.seed
+
+    @property
+    def leg(self) -> int:
+        _warn_listing_field("leg", "stream")
+        return self.stream
+
+    @property
+    def game_trace_sha256(self) -> str:
+        _warn_listing_field("game_trace_sha256", "digest")
+        return self.digest
+
+    @property
+    def decks(self) -> tuple[str, str]:
+        _warn_listing_field("decks", "the original record's setups")
+        if "seat_decks" in self._record:
+            return _seat_pair(self._record, "seat_decks")
+        games = self._record.get("games")
+        if games:
+            names = [player["name"] for player in games[0]["players"]]
+            return names[0], names[1]
+        return "interactive", "interactive"
+
+
+def _warn_listing_field(name: str, replacement: str) -> None:
+    warnings.warn(
+        f"RecordedGame.{name} is deprecated; use {replacement}; removal in 0.4.0",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 
 class AcademyLaunchError(ValueError):
@@ -77,17 +113,16 @@ def _file_hint(value: str, suffixes: set[str]) -> str:
     return ""
 
 
-def refuse_training_receipt(record: object) -> None:
-    """Name the export step when a training exposure receipt is offered as a game."""
-    if isinstance(record, dict) and {"schema", "stream", "game"} <= record.keys():
-        raise ValueError(
-            "this is a training game receipt, not a game file; export it first with "
-            "`uv run manabot export-game <receipt or directory> --out <name>.game.jsonl.gz`"
-        )
-
-
 def read_games(path: Path) -> list[RecordedGame]:
     """Read a JSON, JSONL or gzip game file without altering its retained bytes."""
+    if path.is_dir():
+        games: list[RecordedGame] = []
+        for child in sorted(path.glob("*.jsonl")):
+            for game in read_games(child):
+                games.append(replace(game, index=len(games)))
+        if not games:
+            raise AcademyLaunchError("replay.unreadable", f"{path}: no game records")
+        return games
     try:
         data = path.expanduser().read_bytes()
     except OSError as exc:
@@ -106,9 +141,33 @@ def read_games(path: Path) -> list[RecordedGame]:
             records = value if isinstance(value, list) else [value]
         except json.JSONDecodeError:
             records = [json.loads(line) for line in source.splitlines() if line.strip()]
+        from managym.recording import records_from_source
+
         games = []
-        for index, record in enumerate(records):
-            refuse_training_receipt(record)
+        for record in records:
+            native_records = records_from_source(record, journal_path=path)
+            if native_records is not None:
+                for native in native_records:
+                    inputs = native.games[0]
+                    names = tuple(p.name for p in inputs.players)
+                    if len(names) != 2:
+                        raise ValueError("record setup unavailable")
+                    games.append(
+                        RecordedGame(
+                            index=len(games),
+                            seed=inputs.seed,
+                            stream=inputs.stream,
+                            players=(names[0], names[1]),
+                            decisions=len(inputs.actions),
+                            ended=inputs.end.status if inputs.end else "interrupted",
+                            digest=native.sha256,
+                            _record=native.model_dump(mode="json", by_alias=True),
+                        )
+                    )
+                # A journal's subsequent rows are changes, not separate games.
+                if record.get("schema") == "training-game-checkpoint-v1":
+                    break
+                continue
             if not isinstance(record, dict) or not isinstance(
                 record.get("decisions"), list
             ):
@@ -120,17 +179,14 @@ def read_games(path: Path) -> list[RecordedGame]:
                 raise ValueError("deal_seed and leg must be integers")
             games.append(
                 RecordedGame(
-                    index,
-                    record["deal_seed"],
-                    record["leg"],
-                    _seat_pair(record, "seat_players"),
-                    # Interactive evaluation traces omit seat_decks, as in the
-                    # browser importer; their match_hypers still bind the real lists.
-                    _seat_pair(
-                        {"seat_decks": ["interactive"] * 2, **record}, "seat_decks"
-                    ),
-                    digest,
-                    record,
+                    index=len(games),
+                    seed=record["deal_seed"],
+                    stream=record["leg"],
+                    players=_seat_pair(record, "seat_players"),
+                    decisions=len(record["decisions"]),
+                    ended="complete" if record.get("terminated") else "interrupted",
+                    digest=digest,
+                    _record=record,
                 )
             )
         if not games:
@@ -139,7 +195,7 @@ def read_games(path: Path) -> list[RecordedGame]:
     except (ValueError, KeyError, TypeError, OSError, EOFError) as exc:
         raise AcademyLaunchError(
             "replay.unreadable",
-            f"{path}: {exc}. Supply an evaluation command trace or an exported training game.",
+            f"{path}: {exc}. Supply a managym game record or a retained evaluation command trace.",
         ) from exc
 
 
@@ -178,11 +234,7 @@ def _select_game(path: Path, game: int | str | None) -> RecordedGame:
     matches = [
         row
         for row in games
-        if (
-            row.index == game
-            if isinstance(game, int)
-            else row.game_trace_sha256.startswith(game)
-        )
+        if (row.index == game if isinstance(game, int) else row.digest.startswith(game))
     ]
     if len(matches) != 1:
         raise AcademyLaunchError(
@@ -387,12 +439,12 @@ class Academy:
         from fastapi import HTTPException
 
         from managym.academy.attempts import AttemptStore
-        from managym.academy.watch import import_arena
+        from managym.academy.watch import import_game
 
         if isinstance(source, Path):
             selected = _select_game(source, game)
             try:
-                imported = import_arena(selected._record)
+                imported = import_game(selected._record)
             except HTTPException as exc:
                 if exc.detail == "arena_import_unavailable":
                     raise AcademyLaunchError(

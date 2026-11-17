@@ -1,7 +1,7 @@
 """Training adapters for managym recording.
 
 CaptureScope owns live run coordinates, producer destinations and outer phase
-markers. Adapters retain exposure receipts and policy cutoff accounting; the
+markers. Adapters retain policy cutoff accounting; the
 engine owns replay inputs, native boundaries and durable journal projection.
 """
 
@@ -15,27 +15,25 @@ import hashlib
 import json
 from pathlib import Path
 import platform
-import time
 from typing import Any, Literal
 from uuid import uuid4
 import warnings
-from weakref import WeakValueDictionary
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.infra.log import getLogger
+from manabot.infra.run_settings import RunSettings
 import managym
 from managym import recording
 from managym.card_capture import CapturedCards
+from managym.diagnostics import Diagnostics, Operation
 from managym.recording import (
-    FailureEvidence as _FailureEvidence,
     GameInputs as _GameInputs,
+    GameRecord as _GameRecord,
     PlayerSetup as _PlayerSetup,
-    _append,
     _game_disclosure,
     _jsonl,
-    atomic_private_json as _atomic_private_json,
 )
 
 
@@ -138,87 +136,44 @@ class TrainingExposureReceipt(BaseModel):
         body = _jsonl(self.model_dump(mode="json", by_alias=True))
         return hashlib.sha256(body.encode()).hexdigest()
 
-    def replay_inputs(self) -> _FailureEvidence:
-        return _FailureEvidence(
-            mode="scalar",
-            operation="step",
-            skip_trivial=self.skip_trivial,
-            games=[
-                _GameInputs(
-                    stream=self.stream,
-                    seed=self.game.seed,
-                    players=self.game.trace.player_configs,
-                    actions=self.game.trace.actions,
-                )
-            ],
-            identities=self.identities,
-            context=self.context,
-            seconds=self.seconds,
-            execution_outcome="last_command_succeeded",
-        )
-
 
 @dataclass
 class CaptureScope:
     directory: Path
     context: Callable[[], dict[str, object]] = dict
     paths: list[Path] = field(default_factory=list)
-    training_exposure: bool = False
-    exposure_directory: Path | None = None
-    training_game_logs: bool = False
-    _operation_sequence: int = 0
-    _operations: list[str] = field(default_factory=list)
-    _writers: WeakValueDictionary[str, "_TrainingCapture"] = field(
-        default_factory=WeakValueDictionary
-    )
+    settings: RunSettings = RunSettings()
+    _diagnostics: Diagnostics | None = field(default=None, init=False, repr=False)
+
+    @property
+    def detailed(self) -> bool:
+        return (
+            self._diagnostics.level
+            if self._diagnostics is not None
+            else self.settings.diagnostics
+        ) == "detailed"
 
     def retire_cursors(self) -> None:
         """Retire settled producers when a stage replaces its collector."""
-        if self.training_game_logs:
+        if self.detailed:
             for path in self.journal_directory.glob("*.jsonl"):
-                path.unlink()
+                if path.name != "escalations.jsonl":
+                    path.unlink()
 
     @property
     def journal_directory(self) -> Path:
         return self.directory.parent / "game-journals"
 
     @contextmanager
-    def operation(self, name: str) -> Iterator[None]:
-        """Owner-thread operation stack, restoring collection after inference."""
-        if not self.training_game_logs:
-            yield
+    def operation(self, name: str, *, per_step: bool = False) -> Iterator[Operation]:
+        diagnostics = self._diagnostics
+        if diagnostics is None:
+            with capture_scope(self):
+                with self.operation(name, per_step=per_step) as operation:
+                    yield operation
             return
-        self._operations.append(name)
-        self._mark_operation(name, "pending")
-        try:
-            yield
-        except BaseException:
-            # Preserve the interrupted boundary if an exception unwinds it.
-            self._operations.pop()
-            raise
-        else:
-            self._operations.pop()
-            self._mark_operation(name, "returned")
-            if self._operations:
-                self._mark_operation(self._operations[-1], "pending")
-
-    def _mark_operation(self, name: str, state: str) -> None:
-        self._operation_sequence += 1
-        _atomic_private_json(
-            self.journal_directory / "operation.json",
-            {
-                "operation": name,
-                "state": state,
-                "sequence": self._operation_sequence,
-                "timestamp": time.time(),
-                "context": {
-                    key: value
-                    for key, value in self.context().items()
-                    if key
-                    in {"run", "stage", "seed", "coordinates", "update", "updates"}
-                },
-            },
-        )
+        with diagnostics.operation(name, per_step=per_step) as operation:
+            yield operation
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -228,8 +183,21 @@ _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", defau
 def capture_scope(scope: CaptureScope) -> Iterator[None]:
     token = _scope.set(scope)
     try:
+        scope._diagnostics = Diagnostics(
+            scope.journal_directory,
+            level=scope.settings.diagnostics,
+            stall_seconds=scope.settings.stall_seconds,
+            context_provider=lambda: {
+                key: value
+                for key, value in scope.context().items()
+                if key in {"run", "stage", "seed", "coordinates", "update", "updates"}
+            },
+        )
         yield
     finally:
+        if scope._diagnostics is not None:
+            scope._diagnostics.close()
+            scope._diagnostics = None
         _scope.reset(token)
 
 
@@ -260,8 +228,20 @@ class _TrainingCapture:
         self.scope = _scope.get()
         kwargs.setdefault("context_provider", self._live_context)
         if self.scope is not None:
+            kwargs.setdefault("record_fraction", self.scope.settings.record_games)
             kwargs.setdefault("failure_directory", self.scope.directory)
             kwargs.setdefault("on_retained", self.scope.paths.append)
+        if self.scope is not None and self.scope.settings.record_games:
+            kwargs["context"] = {**kwargs.get("context", {}), "source_kind": "training"}
+            kwargs.setdefault(
+                "games_path",
+                self.scope.directory.parent / "games" / f"{uuid4().hex}.jsonl",
+            )
+        if self.scope is not None and self.scope.settings.statistics:
+            kwargs.setdefault(
+                "statistics_path",
+                self.scope.directory.parent / "statistics" / f"{uuid4().hex}.jsonl",
+            )
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
         self._policy_samples: list[ActionCutoffSample] = []
         self._policy_path: Path | None = None
@@ -271,7 +251,7 @@ class _TrainingCapture:
         scope = _scope.get() or self.scope
         return scope.context() if scope else {}
 
-    def _retain(self, evidence: _FailureEvidence) -> Path:
+    def _retain(self, evidence: _GameRecord) -> Path:
         scope = _scope.get() or self.scope
         if scope is not None:
             self.failure_directory = scope.directory
@@ -279,17 +259,9 @@ class _TrainingCapture:
         return super()._retain(evidence)
 
     def _start_cursor(self, name: str) -> None:
-        if self.scope is not None and self.scope.training_game_logs:
-            base = name
-            index = 0
-            while name in self.scope._writers:
-                index += 1
-                name = f"{base}-{index}"
-            self.scope._writers[name] = self
-            self._game_journal = recording._GameJournal(
-                self.scope.journal_directory / f"{name}.jsonl"
-            )
         super()._start_cursor(name)
+        if self.scope is not None and self.scope._diagnostics is not None:
+            self.scope._diagnostics.add_capture(self)
 
     def record_policy_actions(
         self, count: int, kind: str, capacity: int, game: _GameInputs
@@ -373,46 +345,7 @@ class ScalarCapture(_TrainingCapture, recording.ScalarCapture):
 
 
 class CapturedVector(_TrainingCapture, recording.CapturedVector):
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._exposure = bool(self.scope and self.scope.training_exposure)
-        if self._exposure:
-            if self.player_policies != ("agent", "agent") or not self.skip_trivial:
-                raise ValueError(
-                    "training exposure requires surfaced seats and trivial skipping"
-                )
-            self.native.enable_exposure_capture()
-
-    def _retain_exposure(self, *, current: bool = False) -> None:
-        if not self._exposure or not any(game.players for game in self.games):
-            return
-        assert self.scope is not None
-        retained = self.native.take_exposure()
-        if current:
-            for rows, raw in zip(retained, self.native.current_exposure(), strict=True):
-                rows.append(raw)
-        directory = (
-            self.scope.exposure_directory or self.scope.directory.parent / "exposure"
-        )
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        for inputs, rows in zip(self.games, retained, strict=True):
-            for raw in rows:
-                game = NativeTrainingGame.model_validate_json(raw)
-                # Auto-reset prepares a fresh unused root; it is not an attempted game.
-                if not game.trace.actions and not game.terminal:
-                    continue
-                receipt = TrainingExposureReceipt(
-                    stream=inputs.stream,
-                    game=game,
-                    skip_trivial=self.skip_trivial,
-                    identities=self.identities,
-                    **self._coordinates(),
-                )
-                body = receipt.model_dump(mode="json", by_alias=True)
-                path = directory / f"{receipt.sha256}.jsonl"
-                if not path.exists():
-                    _append(path, body, create=True)
-                    self.scope.paths.append(path)
+    """Engine recording with run scope and policy accounting."""
 
 
 class CapturedSearch(_TrainingCapture, recording.CapturedSearch):

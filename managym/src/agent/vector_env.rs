@@ -212,6 +212,28 @@ impl VectorEnv {
         self.envs.iter_mut().map(Env::take_exposure).collect()
     }
 
+    /// Detached chooser observations only for requested active streams.
+    /// Optional Python analyses call this; the buffered policy path does not.
+    pub fn decision_observations(
+        &self,
+        active: &[bool],
+    ) -> Result<Vec<Option<Observation>>, AgentError> {
+        self.validate_actions_len(active.len())?;
+        self.validate_ready_for_step()?;
+        self.envs
+            .iter()
+            .zip(active)
+            .map(|(env, on)| {
+                if *on {
+                    env.observation_for_player(env.current_agent_index().unwrap_or(0))
+                        .map(Some)
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect()
+    }
+
     pub fn current_exposure(&self) -> Result<Vec<String>, AgentError> {
         self.envs.iter().map(Env::exposure_json).collect()
     }
@@ -352,6 +374,44 @@ impl VectorEnv {
     /// replacement (including a repeated seed). Never a replay or world identity.
     pub fn current_game_generations(&self) -> Vec<u64> {
         self.envs.iter().map(|env| env.capture_generation).collect()
+    }
+
+    pub fn enable_profiler(&mut self) {
+        for env in &mut self.envs {
+            if !env.profiler.is_enabled() {
+                env.profiler = crate::infra::profiler::Profiler::new(true, 64);
+            }
+        }
+    }
+
+    /// Select terminal digest retention for the next call, before autoreset.
+    pub fn record_games(&mut self, active: &[bool]) -> Result<(), AgentError> {
+        self.validate_actions_len(active.len())?;
+        for (env, selected) in self.envs.iter_mut().zip(active) {
+            env.record_terminal = *selected;
+        }
+        Ok(())
+    }
+
+    /// Hash only selected games, preserving slot order without advancing RNG.
+    pub fn state_digests(
+        &self,
+        active: Option<&[bool]>,
+    ) -> Result<Vec<Option<String>>, AgentError> {
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
+        self.envs
+            .iter()
+            .enumerate()
+            .map(|(index, env)| {
+                if active.is_none_or(|mask| mask[index]) {
+                    env.state_digest().map(Some)
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect()
     }
 
     /// Read all requested seats in slot order. After autoreset these describe the
@@ -624,7 +684,7 @@ impl VectorEnv {
                         }
                     }
                 }
-                let mut env = Env::new(self.envs[index].seed(), self.skip_trivial, false, false);
+                let mut env = self.envs[index].replacement_root()?;
                 let (obs, info) = env.reset(setup.clone())?;
                 validate(index, &obs)?;
                 prepared.push((index, setup, env, obs, info));
@@ -893,13 +953,19 @@ impl VectorEnv {
     }
 
     fn step_one_on_env(env: &mut Env, action: i64) -> Result<StepResult, AgentError> {
-        let (obs, reward, terminated, truncated, info) = env.step(action).map_err(|error| {
+        let (obs, reward, terminated, truncated, mut info) = env.step(action).map_err(|error| {
             AgentError(format!(
                 "{}; native_failure={}",
                 error.0,
                 env.vector_failure_context(action)
             ))
         })?;
+        if env.record_terminal && (terminated || truncated) {
+            info.insert(
+                "record_terminal_digest".into(),
+                InfoValue::String(env.state_digest()?),
+            );
+        }
         Ok(StepResult {
             obs,
             reward,
@@ -951,6 +1017,38 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::{GameSetup, PlayerConfig},
     };
+
+    #[test]
+    fn decision_observations_keep_chooser_and_active_mask() {
+        let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
+        assert!(vector.decision_observations(&[true, false]).is_err());
+        vector.reset_all(sample_player_configs()).unwrap();
+        let before = vector.state_digests(None).unwrap();
+        let observations = vector.decision_observations(&[true, false]).unwrap();
+        assert_eq!(
+            observations[0].as_ref().unwrap().agent.player_index,
+            i32::try_from(vector.envs[0].current_agent_index().unwrap()).unwrap()
+        );
+        assert!(observations[1].is_none());
+        assert_eq!(vector.state_digests(None).unwrap(), before);
+        assert!(vector.decision_observations(&[true]).is_err());
+    }
+
+    #[test]
+    fn state_digests_match_scalar_and_respect_mask() {
+        let players = sample_player_configs();
+        let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
+        vector.reset_all(players.clone()).unwrap();
+        let mut scalar = Env::new(42, true, false, false);
+        scalar.reset(players).unwrap();
+        let before = scalar.state_digest().unwrap();
+        assert_eq!(
+            vector.state_digests(Some(&[true, false])).unwrap(),
+            vec![Some(before.clone()), None]
+        );
+        assert_eq!(vector.state_digests(None).unwrap()[0], Some(before));
+        assert!(vector.state_digests(Some(&[true])).is_err());
+    }
 
     #[test]
     fn fixed_seat_observations_validate_before_writing_and_preserve_control() {
@@ -1379,6 +1477,43 @@ mod tests {
             }
         }
         assert!(terminals > 0 && changed > 0);
+    }
+
+    #[test]
+    fn reassignment_preserves_recording_sinks_and_rejected_setup() {
+        let mut vector = VectorEnv::new(1, 23, true, [PlayerPolicy::Agent; 2]);
+        vector.enable_statistics().unwrap();
+        vector.enable_exposure_capture().unwrap();
+        vector.reset_all(sample_player_configs()).unwrap();
+        let generation = vector.current_game_generations();
+        assert!(vector
+            .reassign_roots_into(
+                vec![Some(sample_player_configs())],
+                |_, _| Err(AgentError("injected admission".into())),
+                |_, _, _, _, _| Ok(()),
+            )
+            .is_err());
+        assert_eq!(vector.current_game_generations(), generation);
+        assert!(vector.take_exposure()[0].is_empty());
+        assert!(vector.take_statistics().is_empty());
+        vector
+            .reassign_roots_into(
+                vec![Some(sample_player_configs())],
+                |_, _| Ok(()),
+                |_, _, _, _, _| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(vector.take_exposure()[0].len(), 1);
+        let summaries = vector.take_statistics();
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].generation, generation[0]);
+        assert!(!summaries[0].terminal);
+        assert!(vector.statistics()[0].is_some());
+        vector.step(&[0]).unwrap();
+        vector.reset_all(sample_player_configs()).unwrap();
+        let receipt: serde_json::Value =
+            serde_json::from_str(&vector.take_exposure()[0][0]).unwrap();
+        assert_eq!(receipt["trace"]["actions"], serde_json::json!([0]));
     }
 
     #[test]

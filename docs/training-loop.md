@@ -346,8 +346,8 @@ and exits 75; the third carries that run on to update
   checkpoints/updates-00000003/policy.pt   torch.save(averaged.state_dict())
 ```
 
-To watch the games, wrap the loop in `record_games` and open a recording in
-Academy ([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)).
+To watch the games, give the collector a `games_path` and open one of its
+games in Academy ([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)).
 
 `run.checkpoint(policy=averaged)` publishes plain weights. To publish a policy
 bound to the decks it played, as a recipe's are bound to their setups, write

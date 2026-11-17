@@ -364,8 +364,9 @@
     <button class="btn btn-secondary" disabled={inStudy || studyStore.busy} onclick={() => { if (replayStore.headUncertain) void replayStore.refreshHead(); else if (index) void replayStore.open(index.id, selectedKey); else void loadList(); }}>Refresh saved head</button>
     {#if index}
       <div class="recording-heading flex flex-wrap items-baseline gap-x-3">
-        <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'play' ? 'Recorded Play game' : index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ''}</h2>
-        <p role="status">{replayStore.busy ? 'Reading saved recording…' : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `Seat ${index.winner + 1} wins`}` : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only' : 'Interrupted · saved recording only'}</p>
+        <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'play' ? 'Recorded Play game' : index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ' · Recorded game'}</h2>
+        <p role="status">{replayStore.busy ? 'Reading saved recording…' : index.record_stop?.status === 'diverged' ? `Stopped at decision ${index.record_stop.index} · saved recording only` : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `Seat ${index.winner + 1} wins`}` : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only' : 'Interrupted · saved recording only'}</p>
+        {#if index.record_stop?.reason}<p class="type-caption">{index.record_stop.reason}</p>{/if}
       </div>
     {/if}
     {#if index?.source_kind === 'play'}

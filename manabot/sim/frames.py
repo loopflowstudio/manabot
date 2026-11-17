@@ -106,11 +106,14 @@ def build_command(frame: dict[str, Any], action: int) -> dict[str, Any]:
     return command.model_dump(mode="json")
 
 
-def decision_row(env: Env, frame: dict[str, Any], offer_id: int) -> dict[str, Any]:
+def decision_row(
+    env: Env, frame: dict[str, Any], offer_id: int, *, retain_digest: bool = True
+) -> dict[str, Any]:
     """Build pre-command evidence without stepping or acknowledging the Command.
 
     The caller owns execution and adds post_state_digest only after success.
     Keeping these separate preserves durable evidence of rejected Commands.
+    Captured callers leave state digests to the capture with retain_digest=False.
     """
     offer = next((o for o in frame["offers"] if int(o["id"]) == offer_id), None)
     if offer is None:
@@ -123,5 +126,5 @@ def decision_row(env: Env, frame: dict[str, Any], offer_id: int) -> dict[str, An
         "command": command,
         "command_sha256": canonical_sha256(command),
         "chosen_offer": offer,
-        "pre_state_digest": env._engine.state_digest(),
+        **({"pre_state_digest": env._engine.state_digest()} if retain_digest else {}),
     }

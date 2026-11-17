@@ -2266,6 +2266,13 @@
         "frame": {
           "$ref": "#/$defs/ExperienceFrame"
         },
+        "native_command": {
+          "description": "Original rules commitment, separate from the presentation revision scope.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "offer": {
           "$ref": "#/$defs/InteractionOffer"
         },

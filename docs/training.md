@@ -1197,7 +1197,7 @@ clear a game-error threshold stop.
 Capture is independent of `game_errors`. Strict native calls retain private
 evidence (`manabot.env.failures`) before propagating the original exception,
 under the run's `run.out / "failures"` or `.runs/game-failures/`
-elsewhere. Files are create-only, mode 0600 and fsynced; a storage failure is
+elsewhere. Failure evidence is immutable, mode 0600 and fsynced; a storage failure is
 attached to the original exception. Coverage includes strict self-play,
 `sim.rollout` and vector environments, search players (flat-MC and rollout
 pool roots), selection journals, and arena evaluation, which journals
@@ -1225,26 +1225,78 @@ Only agreement on binding, boundary and error reproduces a known failure.
 Replay never rewrites evidence, restores allowance or runs an optimizer.
 Engine failures in evaluation get no loss, draw or strength credit.
 
-## Diagnosing stalled training
-
-Enable durable game journals before starting an attempt you need to diagnose:
+## Recording training games
 
 ```sh
-uv run etude train manabot/recipes/local.py --experiment journal-demo --config '{"training_game_logs": true}'
+uv run etude train manabot/recipes/local.py --experiment demo --config '{"record_games": 0.25}'
+uv run --no-project managym academy replay ~/.etude/track/demo/out/games --game 0
 ```
 
-The run's `out/` directory holds `game-journals/operation.json` and one rolling
-`game-journals/PRODUCER.jsonl` journal per active producer. Scalar and vector
-producers use the same private replay evidence; sharded producers write separate
-files with global stream identities. For the command above, the directory is
-`~/.etude/track/journal-demo/out/game-journals/`.
-The files remain readable if a producer
-never returns or the process exits abruptly, without waiting for exception
-handling or cleanup.
+The second command opens one of the run's own games in Academy, decision by
+decision, with the policy's probabilities, value and update number at each
+([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)).
 
-`training_game_logs` defaults off in the local and baseline recipe configs.
-Python callers set it on `SelfPlay`; remote declarations set it on the recipe's
-config:
+`record_games` takes 0 (the default), 1 for every game, or a fraction. A
+selected game is written to `out/games/PRODUCER.jsonl` when it ends, as a
+[managym game record](engine-python.md#record-games): seed, decks, actions,
+state digests and the collector's annotations. Selection hashes the game's
+seed and stream, so it draws on no training randomness and the same run
+records the same games. An unselected game adds no native read; a selected one
+reads one state digest per decision. The local and baseline recipe configs
+carry `record_games`, `statistics`, `diagnostics` and `stall_seconds`; Python
+callers set `SelfPlay.run_settings`, a `RunSettings` from
+`manabot.infra.run_settings`. `statistics: true` collects native counters for
+every game, written privately to `out/statistics/`, independently of recording.
+These are runtime options: outside the learner digest and checkpoint bindings.
+Etude still compares recipe configs on resume, so choose them when declaring a
+new run. Games in progress when the run ends are written as interrupted.
+
+Records hold both decks and the seed; keep them as private as the run.
+Statistics computed from them
+([reducers](engine-python.md#ask-questions-of-recorded-games)) describe the
+recorded fraction, not every training game. Their CUDA cost is not yet
+measured ([recording cost](../experiments/recording_cost.md)).
+
+Runs no longer write `training/exposure` receipts; retained ones still open in
+Academy.
+
+## Diagnosing stalled training
+
+A run that stops making progress has already left what locates it:
+
+```sh
+cat ~/.etude/track/demo/out/game-journals/operation.json      # the phase that did not return
+cat ~/.etude/track/demo/out/game-journals/escalations.jsonl   # when it was noticed, and why
+less ~/.etude/track/demo/out/game-journals/stacks.txt         # every thread's stack
+```
+
+No option is needed for these. Training runs
+[managym's diagnostics](engine-python.md#locate-a-stall) at one of three levels:
+
+| `diagnostics` | What the run does |
+|---|---|
+| `standard` (default) | Marks each collection and learning operation pending and returned in `operation.json`: one small write per operation, none per step. A watchdog thread watches for a stall or a slowdown. `kill -USR1 <pid>` dumps every thread's stack to `stacks.txt`. |
+| `detailed` | Also writes a durable journal of every producer's games, `game-journals/PRODUCER.jsonl`, before and after each native call; marks each batched inference step; and turns on the engine's profiler scopes. |
+| `off` | No marker, watchdog, journal or per-step read. |
+
+The run moves itself from `standard` to `detailed`, and records the reason in
+`escalations.jsonl`, when no operation returns for `stall_seconds` (default
+600) or collection falls below a quarter of its trailing decisions per second. On a
+stall the watchdog first writes each producer's games in progress to its
+`PRODUCER.snapshot.json` and dumps the stacks, then journals later calls to
+`PRODUCER.jsonl`. You can ask for the same at any time:
+
+```sh
+touch ~/.etude/track/demo/out/diagnostics.request     # the watchdog reads it within a second
+```
+
+or declare a new run detailed from the start:
+
+```sh
+uv run etude train manabot/recipes/local.py --experiment journal-demo --config '{"diagnostics": "detailed"}'
+```
+
+Remote declarations set it on the recipe's config:
 
 ```python
 from etude.jobs import TrainingJob
@@ -1255,27 +1307,32 @@ from manabot.recipes.baseline import BaselineConfig, train
 def training_jobs() -> list[TrainingJob]:
     return [
         TrainingJob(
-            name="baseline", train=train, config=BaselineConfig(training_game_logs=True)
+            name="baseline", train=train, config=BaselineConfig(diagnostics="detailed")
         )
     ]
 ```
 
-Use the imports and launch setup in [remote training](#remote-training).
-This is a diagnostic config option excluded from the learner digest and
-checkpoint bindings. Etude still compares recipe configs on resume, so enable
-it when declaring a new run. It cannot recover an unfinished game's inputs from
-an earlier run that omitted logging.
-With logging off, there are no additional diagnostic native reads or durable
-per-step writes.
+Use the imports and launch setup in [remote training](#remote-training). It
+cannot recover an unfinished game's inputs from an earlier run that omitted
+detailed logging.
 
-Game facts, optional statistics and private recording belong to managym and
-can be used [without the training package](engine-python.md#collect-in-game-statistics).
-Training selects that recorder and supplies producer paths, run coordinates,
-retention and the outer phase markers. `training_game_logs` does not enable
-aggregate statistics or audited evaluation eligibility. Statistics can count
-play without detailed logs, but cannot explain a native call that never returns.
-The training exposure option retains detailed facts for analysis; it is distinct
-from both in-memory statistics and durable pending-call recording.
+What a stall can leave depends on where it hangs. Training collects through
+the engine's buffered batch calls, which release Python's interpreter lock, so
+the watchdog keeps running during a hung collection call and writes the games
+and stacks itself. Evaluation steps a scalar `Env`, which holds the lock: a
+hang there leaves the phase marker, and the stack comes from `kill -USR1`. A
+journal cannot be written afterwards for the call that was already hung; the
+games in the snapshot are known up to the last call that returned. The
+producer files are the [same record](engine-python.md#keep-a-durable-journal)
+finished games use, and are superseded as games finish; use `record_games` to
+keep games. Sharded producers write separate files with global stream
+identities.
+
+Game facts, statistics, recording and diagnostics belong to managym and
+can be used [without the training package](engine-python.md#record-games).
+Training supplies producer paths, run coordinates, retention and the phase
+names. Diagnostics do not enable aggregate statistics or audited evaluation
+eligibility, and introduce no retry, game skipping or failure tolerance.
 
 ### Locate the interrupted operation
 
@@ -1347,14 +1404,16 @@ larger of the last checkpoint size and 64 KiB. Allow for one oversized record
 and a temporary checkpoint during compaction. Directory entries are synced on
 creation/replacement. Phase-only changes do not serialize action prefixes, but
 fresh decision frames still need serialization and each boundary needs durable
-I/O. Logging remains opt-in and can reduce throughput.
+I/O. This is the cost of the `detailed` level; the `standard` level writes
+only the operation marker. CUDA rates are not yet measured; the comparison is
+[recording cost](../experiments/recording_cost.md).
 
 A deterministic fixture with a 10,000-action prefix and five publications wrote
 32,743 bytes instead of the previous full-snapshot path's 153,601 bytes. Both
 paths made five writes and five file syncs; directory syncs fell from ten to
 one. With ten actions the same fixture wrote 2,773 versus 3,751 bytes. These
 counts measure serialization and I/O work on synthetic inputs, not training
-throughput; no controlled on/off throughput measurement is available.
+throughput.
 
 Retained file count is bounded by the run's maximum simultaneous producers;
 bytes depend on active prefixes and the compaction allowance. Successful games
@@ -1371,8 +1430,8 @@ terminal journals on success or failure. On Etude workers the directory is
 boundary. A hung process leaves local bytes; remote retention still requires
 the launcher or host to collect them before deleting the machine. Journaling
 does not provide live cloud upload from a hung worker or guarantee survival of
-host deletion. Completed-game arena exports, `game-attempts.jsonl` and optional
-training exposure do not replace these pending-call journals.
+host deletion. Recorded games (`record_games`), completed-game arena exports
+and `game-attempts.jsonl` do not replace these pending-call journals.
 
 If a requested pending boundary cannot be persisted, training stops with a
 storage error before entering that native operation. A write failure after

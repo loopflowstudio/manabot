@@ -474,7 +474,7 @@ def test_incremental_replay_retains_first_block_when_later_game_crashes(
     assert first.error and "coordinator interrupted" in first.error
     assert evaluation_status(out).complete_deals() == (777,)
     cell = "__".join(sorted((request.candidate.player_id, request.opponent.player_id)))
-    aggregate = out / "traces" / f"{cell}.commands.jsonl.gz"
+    aggregate = out / "games" / f"{cell}.jsonl"
     assert len(read_trace(aggregate)) == 2  # diagnostics also survive interruption
     original_trace = aggregate.read_bytes()
     completed = continue_evaluation(out)

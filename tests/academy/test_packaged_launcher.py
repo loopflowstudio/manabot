@@ -13,7 +13,7 @@ import pytest
 
 from managym.academy import extensions, opponent, server
 from managym.academy.launch import Academy
-from managym.academy.watch import WatchRequest, create_watch, import_arena
+from managym.academy.watch import WatchRequest, create_watch, import_game
 from managym.cli import academy
 
 
@@ -161,7 +161,7 @@ def test_play_only_capabilities_are_explicit(
         assert refused.value.status_code == 400
         assert "no longer available" in refused.value.detail
         with pytest.raises(HTTPException) as refused:
-            import_arena({})
+            import_game({})
         assert refused.value.detail == "arena_import_unavailable"
         from managym.academy import advice
 

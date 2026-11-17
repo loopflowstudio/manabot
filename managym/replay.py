@@ -1,29 +1,254 @@
-"""Policy-free replay of private native inputs and shared CLI admission.
+"""Two policy-free reconstructions of private native inputs.
 
-Capture owns immutable evidence; this module only reconstructs it. Both replay
-CLIs use the same subprocess deadline and runtime checks, while their distinct
-receipt formats retain their own validation and result semantics.
+RecordWalker verifies what happened, never attempts pending calls, and admits
+any build of the same world and cards. Failure reproduction reconstructs the
+original execution mode and attempts the retained call, requiring identical
+native bytes and source unless changed-runtime admission is explicit. Its
+prefix loop remains separate because it measures failure agreement, not history.
 """
 
 import argparse
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import asdict, dataclass
 import hashlib
 import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Never
+from typing import Literal, Never
 
 import numpy as np
 
 import managym
+from managym.card_capture import CapturedCards, captured_cards
+from managym.decision import Command, DecisionFrame, SemanticContractError
 from managym.recording import (
-    FailureEvidence,
+    DecisionAnnotation,
     GameInputs,
-    read_failure,
+    GameRecord,
+    read_record,
+    read_records,
     runtime_identities,
+    semantic_frame_sha256,
 )
+from managym.statistics import reduce_cards
+
+
+@dataclass(frozen=True)
+class ReplayStop:
+    status: Literal["complete", "interrupted", "diverged"]
+    index: int
+    reason: str | None = None
+    winner: int | None = None
+
+
+@dataclass(frozen=True)
+class RecordedDecision:
+    index: int
+    observation: managym.Observation
+    commitment: int | Command
+    annotation: DecisionAnnotation | None
+    frame: DecisionFrame | None = None
+
+    @property
+    def chosen(self) -> int:
+        """Index of the one legal offer the commitment names."""
+        if isinstance(self.commitment, int):
+            return self.commitment
+        if self.frame is None:
+            raise ValueError("a semantic commitment needs its legal frame")
+        return next(
+            i
+            for i, offer in enumerate(self.frame.offers)
+            if offer["id"] == self.commitment.offer_id
+        )
+
+    def apply(self, env: managym.Env) -> managym.Observation:
+        if isinstance(self.commitment, int):
+            return env.step(self.commitment)[0]
+        env.execute_semantic_command_json(self.commitment.to_json())
+        return env.observation_for_player(env.current_agent_index() or 0)
+
+
+def _build_name(identities: Mapping[str, object]) -> str:
+    return (
+        f"managym {identities.get('managym_version', 'unknown')} "
+        f"world {identities.get('world')} cards {identities.get('card_digest', 'unknown')} "
+        f"engine {identities.get('engine_recording_source_sha256', 'unknown')}"
+    )
+
+
+class RecordWalker:
+    """One verified traversal, optionally applying through a consumer authority.
+
+    Academy's apply callback executes its bound Command on this same Env. Every
+    other consumer uses the native step. No pending journal call is attempted.
+    """
+
+    def __init__(
+        self,
+        record: GameRecord,
+        *,
+        capture_cards: bool = False,
+    ) -> None:
+        if len(record.games) != 1 or record.mode == "search":
+            raise ValueError("walk requires one game, not a batch or a search")
+        current = runtime_identities()
+        self.builds = (
+            f"recorded {_build_name(record.identities)}; running {_build_name(current)}"
+        )
+        if record.identities.get("world") != current["world"] or (
+            record.identities.get("card_digest") is not None
+            and record.identities["card_digest"] != current["card_digest"]
+        ):
+            raise ValueError(
+                f"record world or cards differ: {self.builds}. Open it with managym "
+                f"{record.identities.get('managym_version', 'unknown')}."
+            )
+        self.build_differs = any(
+            record.identities.get(key) != current[key]
+            for key in ("engine_recording_source_sha256", "engine_extension_sha256")
+        )
+        self.record = record
+        self.game = record.games[0]
+        if not self.game.players:
+            raise ValueError("record setup unavailable")
+        self.env = managym.Env(
+            seed=self.game.seed,
+            skip_trivial=record.skip_trivial,
+            player_policies=record.resolved_player_policies,
+        )
+        self._capture_cards = capture_cards
+        if capture_cards:
+            self.env.enable_exposure_capture()
+        self.observation = self.env.reset(self.game.setup())[0]
+        self.stop: ReplayStop | None = None
+        self._used = False
+
+    def cards(self) -> CapturedCards:
+        """Private facts strictly through the last verified commitment."""
+        if not self._capture_cards:
+            raise ValueError("walk requires capture_cards=True to collect card facts")
+        if self.stop is None:
+            raise ValueError("card facts require a finished verified traversal")
+        return captured_cards(self.env)
+
+    def __iter__(self) -> Iterator[RecordedDecision]:
+        return self.run()
+
+    def run(
+        self, apply: Callable[[RecordedDecision], None] | None = None
+    ) -> Iterator[RecordedDecision]:
+        if self._used:
+            raise ValueError("a record walker can only be consumed once")
+        self._used = True
+        game = self.game
+        count = len(game.actions) if game.committed is None else game.committed
+        boundary = self.record.boundary
+        if boundary is not None and boundary.phase != "ready":
+            count = min(
+                count, boundary.committed_counts[0] if boundary.committed_counts else 0
+            )
+        if (
+            game.committed is None
+            and boundary is None
+            and game.frame is not None
+            and self.record.execution_outcome != "last_command_succeeded"
+        ):
+            count = max(0, count - 1)
+        index = 0
+        try:
+            for index, action in enumerate(game.actions[:count]):
+                if (
+                    index < len(game.digests)
+                    and self.env.state_digest() != game.digests[index]
+                ):
+                    raise ValueError("pre-decision digest differs")
+                observation = self.observation
+                frame = None
+                commitment: int | Command = (
+                    action if isinstance(action, int) else Command(**json.loads(action))
+                )
+                if isinstance(commitment, Command):
+                    live_frame = self.env.semantic_decision_frame_json()
+                    retained_frame = (
+                        game.command_frame_hashes[index]
+                        if index < len(game.command_frame_hashes)
+                        else None
+                    )
+                    if (
+                        retained_frame is not None
+                        and retained_frame != semantic_frame_sha256(live_frame)
+                    ):
+                        raise ValueError("recorded legal semantic frame differs")
+                    frame = DecisionFrame.from_json(live_frame)
+                    if commitment.expected_revision != frame.revision:
+                        raise ValueError("stale recorded Command")
+                    frame.offer(commitment.offer_id)
+                elif action != -1 and not 0 <= action < len(
+                    observation.action_space.actions
+                ):
+                    raise ValueError("recorded action is not offered")
+                decision = RecordedDecision(
+                    index,
+                    observation,
+                    commitment,
+                    game.annotations[index] if index < len(game.annotations) else None,
+                    frame,
+                )
+                # Check the transition on a search fork before committing it to
+                # the Env owning the retained card facts or consumer presentation.
+                # A divergent action must contribute to neither history nor rows.
+                target = self.env.clone_env()
+                decision.apply(target)
+                after = (
+                    game.digests[index + 1]
+                    if index + 1 < count and index + 1 < len(game.digests)
+                    else game.end.digest
+                    if index + 1 == count and game.end is not None
+                    else None
+                )
+                if after is not None and target.state_digest() != after:
+                    raise ValueError("transition digest differs")
+                if apply is None:
+                    self.observation = decision.apply(self.env)
+                else:
+                    apply(decision)
+                    if self.env.state_digest() != target.state_digest():
+                        raise RuntimeError(
+                            "consumer transition differs from verified native commitment"
+                        )
+                    self.observation = self.env.observation_for_player(
+                        self.env.current_agent_index() or 0
+                    )
+                yield decision
+            index = count
+            end = game.end
+            if end is not None and end.status == "complete":
+                if not self.env.is_game_over() or (
+                    end.winner_retained and self.env.winner_index() != end.winner
+                ):
+                    raise ValueError("recorded result differs")
+                if end.digest is not None and self.env.state_digest() != end.digest:
+                    raise ValueError("final digest differs")
+                self.stop = ReplayStop(
+                    "complete", count, winner=self.env.winner_index()
+                )
+            else:
+                self.stop = ReplayStop(
+                    "interrupted", count, end.reason if end else "saved prefix only"
+                )
+        except (
+            ValueError,
+            TypeError,
+            SemanticContractError,
+            managym.AgentError,
+        ) as error:
+            self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
+
+
+def walk(record: GameRecord, *, capture_cards: bool = False) -> RecordWalker:
+    return RecordWalker(record, capture_cards=capture_cards)
 
 
 @dataclass
@@ -125,7 +350,7 @@ def require_replay_runtime(
 
 
 def replay_failure_inputs(
-    evidence: FailureEvidence, *, statistics: bool = False
+    evidence: GameRecord, *, statistics: bool = False
 ) -> list[dict[str, object]]:
     """Replay only retained inputs. The CLI supplies the process wall-time bound."""
     boundary = evidence.boundary
@@ -171,7 +396,11 @@ def replay_failure_inputs(
             boundary_phase=boundary.phase,
             native_returned=boundary.returned,
             setup_known=boundary.setup_known,
-            original_outcome="execution_outcome_unknown",
+            original_outcome=(
+                "failed"
+                if evidence.mode != "vector" and evidence.execution_outcome == "failed"
+                else "execution_outcome_unknown"
+            ),
             diagnostic="Replay cannot settle the original interrupted call's outcome",
         )
         if not bound_step:
@@ -190,7 +419,7 @@ def replay_failure_inputs(
 
 
 def _replay_game_inputs(
-    evidence: FailureEvidence, game: GameInputs, *, statistics: bool = False
+    evidence: GameRecord, game: GameInputs, *, statistics: bool = False
 ) -> dict[str, object]:
     """Reconstruct one stream; keep binding divergence out of native failures."""
     # A strict vector exception records the batch outcome, without proving
@@ -228,10 +457,15 @@ def _replay_game_inputs(
     reached: managym.Observation | None = None
     try:
         agreement.at_retained_failure = retained_phase == "reset"
+        # Invalid reset setups are retained verbatim for reproduction. Normal
+        # replay admission still requires a complete two-seat setup.
+        setup = (
+            [] if evidence.operation == "reset" and not game.players else game.setup()
+        )
         if evidence.mode == "vector":
-            reached = env.reset_all(game.setup())[0][0]
+            reached = env.reset_all(setup)[0][0]
         else:
-            reached = env.reset(game.setup())[0]
+            reached = env.reset(setup)[0]
         phase = "prefix"
         for index, action in enumerate(game.actions):
             if (
@@ -348,9 +582,34 @@ def main() -> None:
     if not args.worker:
         run_bounded_replay("managym.replay", args.seconds)
     try:
-        evidence = read_failure(args.path)
-    except (OSError, ValueError) as error:
+        evidence = next(read_records(args.path))
+    except (OSError, ValueError, StopIteration) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
+    if not evidence.needs_reproduction:
+        results = []
+        for record in read_records(args.path):
+            try:
+                replay = walk(record, capture_cards=args.statistics)
+            except ValueError as error:
+                parser.error(f"cannot replay {args.path}: {error}")
+            for _ in replay:
+                pass
+            assert replay.stop is not None
+            result = {**asdict(replay.stop), "build_differs": replay.build_differs}
+            if args.statistics:
+                result["statistics"] = {
+                    "terminal": replay.stop.status == "complete",
+                    "winner": replay.stop.winner,
+                    "cards": [
+                        row.model_dump(mode="json")
+                        for row in reduce_cards(replay.cards())
+                    ],
+                }
+            results.append(result)
+        print(json.dumps({"status": "replayed", "results": results}))
+        return
+    # Reproduction needs every stream and its original batch boundary.
+    evidence = read_record(args.path)
     try:
         require_replay_runtime(
             evidence.identities,

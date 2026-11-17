@@ -10,8 +10,8 @@ use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
 run preserves the retired executor's offsets; resume starts fresh streams.
 """
 
-from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 import os
 from pathlib import Path
@@ -50,6 +50,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256
+from manabot.infra.run_settings import RunSettings
 from manabot.model.world import (
     validate_agent_decks,
     validate_agent_setup,
@@ -64,9 +65,11 @@ from manabot.training.learning import (
 from manabot.training.mps import mps_torch_error
 from manabot.training.rollout.collection import (
     Collector,
+    OperationScope,
     RolloutBatch,
     close_collector,
     collect,
+    no_operation,
     open_collector,
 )
 from manabot.training.rollout.matchups import elemental_roster
@@ -134,7 +137,10 @@ class SelfPlay(BaseModel):
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
     ] = "fixed"
     game_errors: GameErrorPolicy | None = None
-    training_game_logs: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Recording, diagnostics and statistics; excluded from the learner identity.
+    run_settings: RunSettings = Field(
+        default_factory=RunSettings, exclude_if=lambda value: value == RunSettings()
+    )
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     precision: Precision = "float32"
     workers: Literal[1, 2, 4] = 1
@@ -228,7 +234,7 @@ def learner_digest(settings: SelfPlay) -> str:
     """Identity of the learner `settings` train; machine fields excluded."""
     return canonical_sha256(
         settings.model_dump(
-            mode="json", exclude={"device", "workers", "threads", "training_game_logs"}
+            mode="json", exclude={"device", "workers", "threads", "run_settings"}
         )
     )
 
@@ -246,9 +252,7 @@ def self_play_collector(
     seed: int,
     start: int,
     record_attempt: RecordAttempt | None = None,
-    operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
-        nullcontext()
-    ),
+    operation: OperationScope = no_operation,
 ) -> Collector:
     """Native streams seeded from the run seed and the update they start at.
 
@@ -514,10 +518,12 @@ def step(
     before = phase_seconds(collector.profiler, learner.profiler)
     batch: RolloutBatch | None = None
     try:
-        with collector.operation("collection"):
+        with collector.operation("collection") as collection:
             batch = collect(
                 collector, behavior(settings, learner, ema), settings.transitions
             )
+            if collection is not None:
+                collection.progress(stats.micro_steps - decisions)
         synchronize(device)
         with collector.operation("learning"), learner.profiler.track("Learning"):
             metrics = learn(settings, learner, ema, counts, batch, rng)
@@ -642,7 +648,7 @@ def self_play_games(
     failures = CaptureScope(
         run.out / "failures",
         lambda: {"seed": run.seed, "update": counts.updates, "out": str(run.out)},
-        training_game_logs=settings.training_game_logs,
+        settings=settings.run_settings,
     )
     record_attempt: RecordAttempt | None = None
     errors = GameErrorState()

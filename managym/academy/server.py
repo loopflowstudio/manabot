@@ -82,6 +82,7 @@ from .advice import (
     request_versioned_fixture_advice,
 )
 from .attempts import (
+    CLOSED_RECORD_ENDINGS,
     AttemptStore,
     RecordedPlayer,
     decode_cursor,
@@ -1499,6 +1500,7 @@ class GameSession:
         raw_command: dict[str, Any],
         *,
         source: str,
+        native_command: str | None = None,
     ) -> None:
         """Validate, capture, and lower one deliberate authority command."""
         command = Command.model_validate(raw_command)
@@ -1522,6 +1524,7 @@ class GameSession:
             context=context,
             command=command.model_dump(mode="json"),
             source=source,
+            native_command=native_command,
         )
 
     def _step_and_record(
@@ -1533,6 +1536,7 @@ class GameSession:
         context: DecisionContext | None = None,
         command: dict[str, Any] | None = None,
         source: str | None = None,
+        native_command: str | None = None,
     ) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
@@ -1598,6 +1602,7 @@ class GameSession:
                     "frame": context.frame,
                     "offer": selected_offer,
                     "command": command,
+                    "native_command": native_command,
                 }
             )
             retained_root = self.env.clone_env()
@@ -1636,10 +1641,15 @@ class GameSession:
             != int(command["offer_id"])
         ):
             raise RuntimeError("Academy decision drifted from semantic authority.")
-        semantic_command = SemanticCommand(
-            command_id=str(command["command_id"]),
-            expected_revision=int(semantic_frame["revision"]),
-            offer_id=int(command["offer_id"]),
+        semantic_command = (
+            SemanticCommand(**json.loads(native_command))
+            if native_command is not None
+            else SemanticCommand(
+                command_id=str(command["command_id"]),
+                expected_revision=int(semantic_frame["revision"]),
+                offer_id=int(command["offer_id"]),
+                answers=tuple(command["answers"]),
+            )
         )
         transition_json, next_obs, reward, _, _, _ = self.env.step_semantic_command(
             semantic_command.to_json()
@@ -4024,6 +4034,7 @@ def get_recording_index(
         "can_study": study_available,
         "winner": payload.get("winner") if finished else None,
         "players": players,
+        "record_stop": (payload.get("recording_import") or {}).get("stop"),
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),
@@ -4086,9 +4097,13 @@ async def get_trace_decision(
     replay = _load_trace_replay(trace_id)
     payload = trace_store.load_trace(trace_id)
     watch_mode = bool(payload["config"].get("watch_players"))
-    if watch_mode and not (
-        payload["end_reason"] == "game_over"
-        and payload["final_observation"]["game_over"]
+    if (
+        watch_mode
+        and payload["end_reason"] not in CLOSED_RECORD_ENDINGS
+        and not (
+            payload["end_reason"] == "game_over"
+            and payload["final_observation"]["game_over"]
+        )
     ):
         _rest_study_owner(_live_record_for_trace(trace_id), x_etude_participant_token)
     try:
@@ -4336,11 +4351,11 @@ def inspect_bot_watch(
 
 
 @app.post("/api/watch/import")
-def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
-    from .watch import import_arena
+def import_game_watch(payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import import_game
 
     try:
-        return import_arena(payload)
+        return import_game(payload)
     except ValueError as exc:
         raise HTTPException(400, f"Game file rejected: {exc}") from exc
     except (KeyError, TypeError) as exc:

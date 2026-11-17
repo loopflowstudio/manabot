@@ -29,8 +29,9 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
+from pathlib import Path
 import time
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, Protocol, TypedDict
 
 import numpy as np
 
@@ -81,6 +82,7 @@ from manabot.training.state.game_errors import (
     RecordAttempt,
 )
 from managym import WORLD_SETUP, Deck, GameSetup
+from managym.diagnostics import Operation
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -281,6 +283,22 @@ class ExposureCounts(TypedDict):
     truncated_games: int
 
 
+class OperationScope(Protocol):
+    """A named boundary in the caller's failure journal.
+
+    `per_step` marks boundaries entered once per native step, which only
+    detailed diagnostics journal. The yielded operation reports progress.
+    """
+
+    def __call__(
+        self, name: str, *, per_step: bool = False
+    ) -> AbstractContextManager[Operation | None]: ...
+
+
+def no_operation(name: str, *, per_step: bool = False) -> AbstractContextManager[None]:
+    return nullcontext()
+
+
 @dataclass
 class CollectorStats:
     """Cumulative accounting, including the opponent fingerprint."""
@@ -380,9 +398,9 @@ class Collector:
     _self_play_decks: list[tuple[str, str]]
     # Scopes a named boundary (collection, learning, inference) in the caller's
     # failure journal; the step loop wraps collection and learning with it.
-    operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
-        nullcontext()
-    )
+    operation: OperationScope = no_operation
+    # Per-stream policy annotations for the recorded games of the coming step.
+    _record_annotations: list[dict[str, object] | None] = field(default_factory=list)
     # RandomBatchController or BatchedSampler; None when the live model plays both seats.
     _opponent: Any = None
     _sampler: AdaptiveSampler | None = None
@@ -437,9 +455,9 @@ def open_collector(
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
     adaptive: AdaptiveConfig | None = None,
-    operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
-        nullcontext()
-    ),
+    operation: OperationScope = no_operation,
+    games_path: Path | None = None,
+    record_fraction: float = 1.0,
 ) -> Collector:
     """Start `num_envs` native streams at their first roots.
 
@@ -524,13 +542,24 @@ def open_collector(
     env: Any
     if root is None:
         env = (
-            ShardedVectorEnv(num_envs, seed, workers)
+            ShardedVectorEnv(
+                num_envs,
+                seed,
+                workers,
+                games_path=games_path,
+                record_fraction=record_fraction,
+            )
             if workers > 1
             else CapturedVector(
                 num_envs=num_envs,
                 seed=seed,
                 skip_trivial=True,
                 player_policies=("agent", "agent"),
+                **(
+                    {"games_path": games_path, "record_fraction": record_fraction}
+                    if games_path is not None
+                    else {}
+                ),
             )
         )
     else:
@@ -578,6 +607,7 @@ def open_collector(
             _game_actions=[[] for _ in range(num_envs)],
             _self_play_decks=[("", "")] * num_envs,
             operation=operation,
+            _record_annotations=[None] * num_envs,
             _sampler=sampler,
             _assignments=assignments,
             _ordinals=[0] * num_envs,
@@ -699,7 +729,7 @@ def _expose(collector: Collector, row: int, kind: ExposureKind, count: int = 1) 
 def _opponent_actions(
     collector: Collector, rows: np.ndarray, inference: CollectionScope
 ) -> np.ndarray:
-    with collector.operation("opponent_inference"):
+    with collector.operation("opponent_inference", per_step=True):
         if collector.opponent_mode == "self":
             return inference.opponent_actions(_slice_obs_rows(collector, rows))
         return collector._opponent.select(collector._buffers, rows)
@@ -886,6 +916,7 @@ def _collect(
         if not active.any():
             break
         collector.stats.idle_stream_steps += num_envs - int(active.sum())
+        collector._record_annotations = [None] * num_envs
         actions = np.zeros(num_envs, dtype=np.int64)
         learner_rows = np.flatnonzero(active & (acting == collector.learner_seat))
         opp_rows = np.flatnonzero(active & (acting != collector.learner_seat))
@@ -927,6 +958,11 @@ def _collect(
         for row in np.flatnonzero(active):
             _expose(collector, int(row), "environment_decisions")
         seeds = env.current_game_seeds() if collector.game_errors else []
+        annotations = (
+            {"annotations": collector._record_annotations}
+            if any(collector._record_annotations)
+            else {}
+        )
         with (
             collector.profiler.track("Environment step and encoding"),
             _native_step_split(collector),
@@ -936,9 +972,10 @@ def _collect(
                     actions.tolist(),
                     active.tolist(),
                     collector.game_errors.recover_capacity,
+                    **annotations,
                 )
             else:
-                env.step_into_buffers(actions.tolist(), active.tolist())
+                env.step_into_buffers(actions.tolist(), active.tolist(), **annotations)
         collector.stats.micro_steps += int(active.sum())
 
         with collector.profiler.track("Stream bookkeeping"):
@@ -1351,7 +1388,7 @@ def _sample_learning_rows(
     inference: CollectionScope,
     operation: str = "learner_inference",
 ) -> np.ndarray:
-    with collector.operation(operation):
+    with collector.operation(operation, per_step=True):
         sampled = inference.sample(_slice_obs_rows(collector, rows), collector.profiler)
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs
@@ -1366,7 +1403,21 @@ def _sample_learning_rows(
             sampled.log_probabilities,
             validator=collector.numerics,
         )
+        env = collector._env
+        recording = (
+            env.recording_mask()
+            if hasattr(env, "recording_mask")
+            else [False] * len(collector._record_annotations)
+        )
         for j, row in enumerate(rows):
+            if recording[int(row)]:
+                valid = np.asarray(collector._buffers["actions_valid"][row], dtype=bool)
+                collector._record_annotations[int(row)] = {
+                    "value": float(values[j]),
+                    "probabilities": np.exp(
+                        sampled.log_probabilities[j][valid]
+                    ).tolist(),
+                }
             slot = (
                 2 * int(row) + int(acting[row])
                 if collector.learning_seats == "both"

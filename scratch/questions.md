@@ -33,3 +33,19 @@ LLM declarations await EXP-70 and compatible frozen checkpoints.
 Ideas outside this plan: move setup/numerics out of experiment/, move
 regime_tag to its single caller; simplify all-invalid admission only if Etude
 owns a declared minimum. No scope expansion authorized by these notes.
+
+Sync onto main dcee96ccd1 (one game record), 2026-11-17 — choices made:
+- Recording, statistics and diagnostics reach training as `SelfPlay.run_settings`
+  (excluded from `learner_digest`); local/baseline configs carry the flat
+  `record_games`/`statistics`/`diagnostics`/`stall_seconds` fields.
+  `training_game_logs` on BaselineConfig/SelfPlay was branch-only and is replaced,
+  not aliased.
+- Managed (in-process) evaluation passes `Reduction` straight to replay; only the
+  standalone `replay_retained` child keeps main's cloudpickle transport.
+  `eval.game.play_game` writes ordinary games through the capture journal and
+  keeps a canonical record on failure, as `supervise_game` does.
+- `experiments/recording_cost.py` drove the retired regime executor and was
+  removed (report notes `dcee96ccd1:experiments/recording_cost.py`).
+- Not caused by the sync: `test_resource_limit_replay_rejects_old_schema...`
+  diverges at action 32 of the frozen TLA fixture under the current engine
+  (`replay_attempt` is byte-identical to main's).

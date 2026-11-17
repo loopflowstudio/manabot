@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional
+import warnings
 
 import typer
 
@@ -172,6 +173,11 @@ def export_game_command(
     players: tuple[str, str] | None = typer.Option(None, help="Names of the two seats"),
 ) -> None:
     """Export one complete training game without loading its policy."""
+    warnings.warn(
+        "export-game is deprecated; open records directly with managym academy replay; removal in 0.4.0",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from manabot.sim.recording import TrainingGames
 
     try:

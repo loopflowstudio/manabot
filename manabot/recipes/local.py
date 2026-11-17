@@ -24,3 +24,9 @@ def train(config: LocalConfig) -> None:
             kind="smoke",
             recipe="manabot.recipes.local",
         )
+        games = run.out / "games"
+        if any(games.glob("*.jsonl")):
+            print(
+                f"games: {games} (open one with: "
+                f"uv run --no-project managym academy replay {games} --game 0)"
+            )

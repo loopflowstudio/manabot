@@ -8,20 +8,23 @@ pinned client consequently reports its unavailable mulligan count (-1)."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Literal
 
-from pydantic import JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, JsonValue, model_validator
 
-from manabot.infra.identity import StrictModel
-from manabot.sim.card_evidence import GameEvidence
-from managym.card_capture import CardSnapshot, Seat
+import managym
+from managym.card_capture import CapturedCards, CardSnapshot, Seat
+from managym.recording import GameRecord
+from managym.replay import walk
 
 EXPORT_VERSION = "arena-card-log-v1"
 
 PUBLIC_ZONES = {"Battlefield", "Graveyard", "Stack", "Exile", "Command"}
 
 
-class ArenaPrinting(StrictModel):
+class ArenaPrinting(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
     """Retained Scryfall printing response supplies the actual Arena ID.
 
     The native content-bound key is an explicit authored binding to a printing;
@@ -49,7 +52,8 @@ class ArenaPrinting(StrictModel):
         return self
 
 
-class CardMapping(StrictModel):
+class CardMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
     version: Literal[1] = 1
     printings: tuple[ArenaPrinting, ...]
 
@@ -60,20 +64,27 @@ class CardMapping(StrictModel):
         return self
 
 
-def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> str:
+def export_capture(
+    captured: CapturedCards,
+    viewer: Seat,
+    mapping: CardMapping,
+    *,
+    match_id: str,
+    winner: int | None,
+    reason: str | None = None,
+) -> str:
+    """Project verified native facts; retained evaluation consumers share this writer."""
     if viewer not in (0, 1):
         raise ValueError("viewer must be 0 or 1")
-    if game.outcome not in ("win_loss", "draw") or not game.replay.get("passed"):
-        raise ValueError("export requires a replay-verified completed game")
     printings = {p.card: p.scryfall for p in mapping.printings}
-    content = game.cards.capture.content_digest
+    content = captured.capture.content_digest
 
     def arena_id(card: CardSnapshot) -> int:
         key = f"{content}:{card.definition}"
-        if key not in printings or printings[key]["name"] != card.name:
-            raise ValueError(
-                f"verified Arena printing unavailable: {key} ({card.name})"
-            )
+        if key not in printings:
+            return 0
+        if card.name not in str(printings[key]["name"]).split(" // "):
+            raise ValueError(f"verified Arena printing differs: {key} ({card.name})")
         return int(printings[key]["arena_id"])
 
     lines = [
@@ -88,7 +99,7 @@ def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> 
     def gre(message: dict[str, JsonValue]) -> None:
         emit({"greToClientEvent": {"greToClientMessages": [message]}})
 
-    initial = game.cards.capture.initial
+    initial = captured.capture.initial
     gre(
         {
             "type": "GREMessageType_ConnectResp",
@@ -156,7 +167,7 @@ def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> 
                 if opening and seat == viewer and zone == "Hand":
                     ids = [
                         objects[c, cards[c].incarnation]
-                        for c in game.cards.capture.opening[viewer]
+                        for c in captured.capture.opening[viewer]
                     ]
                 zones.append(
                     {
@@ -179,7 +190,7 @@ def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> 
                 "type": "GREMessageType_GameStateMessage",
                 "systemSeatIds": [viewer + 1],
                 "gameStateMessage": {
-                    "gameInfo": {"matchID": game.game},
+                    "gameInfo": {"matchID": match_id},
                     "turnInfo": turn_info,
                     "gameObjects": game_objects,
                     "zones": zones,
@@ -188,22 +199,22 @@ def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> 
         )
 
     state(1, opening=True)
-    for move in game.cards.capture.moves:
+    for move in captured.capture.moves:
         cards[move.card.copy_id] = move.card
         state(move.turn)
-    state(game.cards.turn)
+    state(captured.turn)
     # The client needs >5 actual state messages to retain game data. Very short
     # synthetic fixtures are outside this subset; do not pad invented transitions.
-    if len(game.cards.capture.moves) + 2 <= 5:
+    if len(captured.capture.moves) + 2 <= 5:
         raise ValueError("game too short for pinned client's retained-history subset")
-    result = "ResultType_Draw" if game.winner is None else "ResultType_WinLoss"
-    winner = None if game.winner is None else game.winner + 1
+    result = "ResultType_Draw" if winner is None else "ResultType_WinLoss"
+    winner = None if winner is None else winner + 1
     emit(
         {
             "StartingTeamId": 1,
             "WinningTeamId": winner,
             "WinningType": result,
-            "WinningReason": game.trace.data.get("termination_reason"),
+            "WinningReason": reason,
             "GameNumber": 1,
         },
         "LogBusinessEvents ",
@@ -218,7 +229,7 @@ def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> 
                                 "scope": "MatchScope_Game",
                                 "winningTeamId": winner,
                                 "result": result,
-                                "reason": game.trace.data.get("termination_reason"),
+                                "reason": reason,
                             }
                         ]
                     }
@@ -227,3 +238,59 @@ def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> 
         }
     )
     return "\n".join(lines) + "\n"
+
+
+def coverage() -> dict[str, int]:
+    """Current-world definition coverage, including unmapped faces and tokens."""
+    ids = json.loads(Path(__file__).with_name("arena_ids.json").read_text())
+    definitions = managym.content_pool("world")["definitions"]
+    mapped = sum(
+        bool(ids.get(row["scryfall_id"], {}).get("arena_id"))
+        for row in definitions
+        if row["scryfall_id"]
+    )
+    return {
+        "definitions": len(definitions),
+        "mapped": mapped,
+        "unmapped": len(definitions) - mapped,
+    }
+
+
+def _world_mapping() -> CardMapping:
+    ids = json.loads(Path(__file__).with_name("arena_ids.json").read_text())
+    pool = managym.content_pool("world")
+    return CardMapping(
+        printings=tuple(
+            ArenaPrinting(
+                card=f"{pool['content_digest']}:{row['card_def_id']}",
+                scryfall={
+                    "object": "card",
+                    "id": row["scryfall_id"],
+                    "uri": f"https://api.scryfall.com/cards/{row['scryfall_id']}",
+                    **ids[row["scryfall_id"]],
+                },
+            )
+            for row in pool["definitions"]
+            if ids.get(row["scryfall_id"], {}).get("arena_id")
+        )
+    )
+
+
+def export_log(
+    record: GameRecord, viewer: Seat = 0, *, mapping: CardMapping | None = None
+) -> str:
+    """Export a completed, verified game without a model or training package."""
+    replay = walk(record, capture_cards=True)
+    for _ in replay:
+        pass
+    if replay.stop is None or replay.stop.status != "complete":
+        raise ValueError(f"export requires a completed verified game: {replay.stop}")
+    cards = replay.cards()
+    return export_capture(
+        cards,
+        viewer,
+        mapping or _world_mapping(),
+        match_id=record.sha256,
+        winner=replay.stop.winner,
+        reason=record.games[0].end.reason if record.games[0].end else None,
+    )

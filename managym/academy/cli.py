@@ -227,7 +227,7 @@ def watch(
 def replay(
     ctx: typer.Context,
     source: str = typer.Argument(
-        help="A game file (an evaluation trace or exported training game) or a recording id from Games"
+        help="A file or directory of recorded games, an evaluation trace, or a recording id from Games"
     ),
     game: str | None = typer.Option(
         None,
@@ -290,12 +290,12 @@ def _report(exc: AcademyLaunchError) -> None:
     shown = exc.games[:SHOWN_GAMES]
     players = [" vs ".join(row.players) for row in shown]
     width = max(len("players"), *(len(names) for names in players))
-    header = f"  game  deal seed   leg  {'players':<{width}}  trace"
+    header = f"  game  seed        stream  {'players':<{width}}  decisions  ended        digest"
     typer.echo(header, err=True)
     for row, names in zip(shown, players, strict=True):
         typer.echo(
-            f"  {row.index:4}  {row.deal_seed:<10}  {row.leg:<3}  {names:<{width}}  "
-            f"{row.game_trace_sha256[:12]}",
+            f"  {row.index:4}  {row.seed:<10}  {row.stream:<6}  {names:<{width}}  "
+            f"{row.decisions:<9}  {row.ended:<11}  {row.digest[:12]}",
             err=True,
         )
     if len(exc.games) > SHOWN_GAMES:

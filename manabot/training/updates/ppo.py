@@ -129,9 +129,6 @@ def update_iteration(
         }
         types = batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)
         chosen_types = types.reshape(-1)
-        diagnostics["action_types"] = np.bincount(
-            chosen_types, minlength=ACTION_TYPE_DIM
-        ).tolist()
         diagnostics["selected_action_types"] = np.bincount(
             chosen_types[retained], minlength=ACTION_TYPE_DIM
         ).tolist()

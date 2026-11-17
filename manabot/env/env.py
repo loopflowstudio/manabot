@@ -7,15 +7,16 @@ from typing import Any, Dict, Optional
 
 import gymnasium as gym
 from gymnasium import spaces
+
+# Local imports
+from manabot.infra.log import getLogger
+import managym
 from managym.decision import (
     Command,
     SemanticContractError,
     SemanticTransition,
 )
-
-# Local imports
-from manabot.infra.log import getLogger
-import managym
+from managym.recording import DecisionAnnotation
 
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
@@ -57,7 +58,9 @@ class Env(gym.Env):
         seed: int = 0,
         enable_profiler: bool = False,
         enable_behavior_tracking: bool = False,
-    ):
+        *,
+        capture: ScalarCapture | None = None,
+    ) -> None:
         """Gymnasium-compatible wrapper around one native game.
 
         A finished game stays finished: ``step`` returns the terminal
@@ -65,7 +68,7 @@ class Env(gym.Env):
         """
         super().__init__()
         self.seed = seed
-        self._capture = ScalarCapture(seed)
+        self._capture = capture if capture is not None else ScalarCapture(seed)
         self.skip_trivial = True
         self.enable_profiler = enable_profiler
         self.enable_behavior_tracking = enable_behavior_tracking
@@ -132,7 +135,12 @@ class Env(gym.Env):
 
         return py_obs, raw_info
 
-    def step(self, action: int) -> tuple[dict, float, bool, bool, dict]:
+    def step(
+        self,
+        action: int,
+        *,
+        annotation: DecisionAnnotation | dict[str, object] | None = None,
+    ) -> tuple[dict, float, bool, bool, dict]:
         """
         Step the environment by applying `action` (int). A terminal step returns
         the terminal observation; the caller resets.
@@ -150,7 +158,7 @@ class Env(gym.Env):
         log = getLogger(__name__).getChild("step")
         self._record_policy_actions()
         raw_obs, raw_reward, terminated, truncated, info = self._capture.step(
-            self._engine, action
+            self._engine, action, annotation=annotation
         )
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
         add_truncation_flags(raw_obs, info, self.obs_space.encoder)
@@ -166,7 +174,10 @@ class Env(gym.Env):
         return py_obs, reward, terminated, truncated, info
 
     def step_semantic(
-        self, command: Command
+        self,
+        command: Command,
+        *,
+        annotation: DecisionAnnotation | dict[str, object] | None = None,
     ) -> tuple[dict, float, bool, bool, dict, SemanticTransition]:
         """Execute one authoritative semantic Command.
 
@@ -179,7 +190,10 @@ class Env(gym.Env):
         try:
             transition_json, raw_obs, raw_reward, terminated, truncated, info = (
                 self._capture.command(
-                    self._engine, command.to_json(), transition_only=False
+                    self._engine,
+                    command.to_json(),
+                    transition_only=False,
+                    annotation=annotation,
                 )
             )
         except Exception as error:  # managym.AgentError
@@ -268,7 +282,8 @@ class Env(gym.Env):
                 self._capture.inputs,
             )
 
-    def close(self) -> None:
+    def close(self, *, reason: str = "capture closed") -> None:
+        self._capture.close(reason=reason)
         self._capture.flush_policy_actions()
 
     @property

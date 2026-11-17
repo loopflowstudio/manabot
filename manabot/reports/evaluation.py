@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from manabot.reports.inference import BaselineAllocation, EvidenceReader, ObservedStatus
+from manabot.sim.evaluation_records import audit_view
 from manabot.sim.performance import allocation_cost
 
 
@@ -135,10 +136,12 @@ def project_evaluations(
             {directory / row["trace_path"] for row in rows if "trace_path" in row}
         )
         games = [
-            json.loads(line)
+            audit_view(json.loads(line))
             for path in trace_paths
             if (data := evidence.read(path)) is not None
-            for line in gzip.decompress(data).splitlines()
+            for line in (
+                gzip.decompress(data) if path.suffix == ".gz" else data
+            ).splitlines()
         ]
         elapsed = receipt["elapsed_seconds"]
         counters = receipt["counters"]
