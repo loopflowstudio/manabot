@@ -74,7 +74,7 @@ def training_jobs(
             setup=machine_setup(" --extra artifacts --extra dev"),
             extras=("artifacts", "dev"),
             max_hours=0.65 if calibration_reference else 3.0,
-            max_usd=Decimal("0.50") if calibration_reference else Decimal("2.00"),
+            max_usd=Decimal("0.60") if calibration_reference else Decimal("2.00"),
             max_attempts=1,
         ).plain()
         return job.model_copy(

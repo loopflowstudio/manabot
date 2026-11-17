@@ -1547,8 +1547,13 @@ Complete reference variability prospectively with a separately labelled
 `cuda-calibration-reference` job: fresh incumbent/control/incumbent processes,
 the same seed, workload, precision, capacities, execution rows and two-update
 targets, with ordinary raw/EMA reload. This runs after the first rental ends,
-with a 0.65-hour window and USD0.50 cap under the unchanged cumulative USD3
+with a 0.65-hour window and USD0.60 cap under the unchanged cumulative USD3
 calibration limit. It does not rerun memory arms. The control is fresh, like the
 original producer; it is not represented as another pretrained branch. Keep
 host identities and rates separate: a new rental cannot supply the missing
 same-host incumbent repeat or make the original sequence complete.
+
+The first reference quote refused the USD0.50 cap because it did not cover
+the whole window plus startup. Increase only that ceiling to USD0.60 before
+launch; the quote must still fit the unchanged cumulative USD3 cap. No machine
+was acquired by the refused quote.
