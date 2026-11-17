@@ -140,7 +140,9 @@ def test_worker_branches_from_one_published_trunk(
     assert record.inputs["pretrained/checkpoint"]["sha256"] == trunk.checkpoint.sha256
 
 
-@pytest.mark.parametrize("fault", ["source_run", "checkpoint", "weights", "model"])
+@pytest.mark.parametrize(
+    "fault", ["source_run", "checkpoint", "weights", "model", "seed"]
+)
 def test_pretrained_worker_refuses_invalid_producer_before_updates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -162,6 +164,9 @@ def test_pretrained_worker_refuses_invalid_producer_before_updates(
     elif fault == "weights":
         spec.pretrained.weights = "raw"
         message = "weight artifact"
+    elif fault == "seed":
+        spec.pretrained.source_seed = memory_trunk.seed + 1
+        message = "different seed than declared"
     else:
         spec.regime.agent.hidden_dim *= 2
         message = "model settings"
@@ -169,6 +174,10 @@ def test_pretrained_worker_refuses_invalid_producer_before_updates(
     monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
     with pytest.raises(ValueError, match=message):
         run_worker()
+    if fault == "seed":
+        # Refused before execution: no training record or update exists.
+        assert not (tmp_path / "output/training").exists()
+        return
     failed = TrainingRun.model_validate_json(
         (tmp_path / "output/training/run.json").read_text()
     )

@@ -172,8 +172,6 @@ class PretrainedInitialization(Strict):
         errors; incomplete producers and mismatched exports raise ValueError.
         Model/world and cost admission still belongs to the worker.
         """
-        if weights not in {"raw", "ema"}:
-            raise ValueError("pretrained weights must be raw or ema")
         payload = storage.get(record_key)
         producer = TrainingRun.model_validate_json(payload)
         if producer.status != "completed":
@@ -523,6 +521,21 @@ def _run_worker(spec: TrainingJob, *, backend: Backend) -> TrainingRun:
                 raise ValueError("staged parent ends at a different update")
             if parent.seed != int(environment["ETUDE_SEED"]):
                 raise ValueError("a learner continuation keeps its parent's seed")
+        if spec.pretrained is not None:
+            # The producer record owns its seed; the declared label is a copy.
+            # Mismatched bytes are left to PretrainedPolicy admission, which
+            # retains a failed run naming the digest fault.
+            declared = spec.pretrained.source_run
+            staged = (inputs / spec.pretrained.files()["source_run"][0]).read_bytes()
+            if (hashlib.sha256(staged).hexdigest(), len(staged)) == (
+                declared.sha256,
+                declared.bytes,
+            ):
+                producer = TrainingRun.model_validate_json(staged)
+                if producer.seed != spec.pretrained.source_seed:
+                    raise ValueError(
+                        "staged producer has a different seed than declared"
+                    )
         regime = spec.bound_regime(inputs)
     # Native world admission precedes any collector or optimizer work. Never
     # shrink the recipe to fit a late start or silently substitute a device.
