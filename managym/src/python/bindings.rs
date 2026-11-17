@@ -4368,8 +4368,7 @@ impl PyEnv {
         ))
     }
 
-    /// Shared semantic DecisionFrame for the current revision, as canonical
-    /// JSON. See `managym.decision.DecisionFrame`.
+    /// Read-only automatic payment plan for one offer; see `managym.payment`.
     fn payment_preview_json(
         &self,
         viewer: usize,
@@ -4387,6 +4386,8 @@ impl PyEnv {
         serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Shared semantic DecisionFrame for the current revision, as canonical
+    /// JSON. See `managym.decision.DecisionFrame`.
     fn semantic_decision_frame_json(&self) -> PyResult<String> {
         let env = self
             .inner

@@ -4,6 +4,7 @@ use super::*;
 use crate::agent::ability_description::cost_description;
 use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
 use crate::flow::game::CastChoices;
+use crate::state::game_object::Object;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -12,15 +13,6 @@ pub enum PaymentPreviewState {
     NeedsChoice,
     NotApplicable,
     Unavailable,
-}
-
-/// The cost boundary explained, never a promise about resolution effects.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PaymentScope {
-    SpellCost,
-    ActivationFee,
-    CurrentPayment,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -33,7 +25,6 @@ pub struct PaymentSourcePreview {
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct PaymentPreview {
     pub state: PaymentPreviewState,
-    pub scope: Option<PaymentScope>,
     pub explanation: String,
     pub cost: Option<String>,
     pub sources: Vec<PaymentSourcePreview>,
@@ -73,11 +64,25 @@ impl From<&Mana> for PreviewPool {
     }
 }
 
+/// A sacrifice, waterbend or exile alternative needs its own choice, which the
+/// preview does not make for the player.
+fn has_unannounced_cost(card: &Object, cast: CastChoices) -> bool {
+    card.sacrifice_cost().is_some()
+        || card.required_waterbend().is_some()
+        || (cast.kicked && card.exile_alternative().is_some())
+}
+
 impl PaymentPreview {
-    fn message(state: PaymentPreviewState, explanation: &str, scope: Option<PaymentScope>) -> Self {
+    fn needs_additional_cost() -> Self {
+        Self::message(
+            PaymentPreviewState::NeedsChoice,
+            "Choose the additional or alternative cost before previewing payment.",
+        )
+    }
+
+    fn message(state: PaymentPreviewState, explanation: &str) -> Self {
         Self {
             state,
-            scope,
             explanation: explanation.into(),
             cost: None,
             sources: Vec::new(),
@@ -113,14 +118,6 @@ impl Game {
             .actions
             .get(action_index)
             .ok_or_else(|| AgentError("unknown payment action".into()))?;
-        let scope = match action {
-            Action::CastSpell { .. } | Action::ChooseTarget { .. } => Some(PaymentScope::SpellCost),
-            Action::ActivateAbility { .. } => Some(PaymentScope::ActivationFee),
-            Action::PayCost { .. } | Action::TapForMana { .. } => {
-                Some(PaymentScope::CurrentPayment)
-            }
-            _ => None,
-        };
         let player = action.player();
         // Execute the production prefix and forced spends on a copy, stopping
         // before cost completion can advance the spell or ability.
@@ -134,7 +131,6 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose X or replicate count before previewing payment.",
-                        scope,
                     ));
                 }
                 let Some(cast) =
@@ -143,24 +139,15 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the optional or alternative cost before previewing payment.",
-                        scope,
                     ));
                 };
-                if card.required_waterbend().is_some()
-                    || card.sacrifice_cost().is_some()
-                    || (cast.kicked && card.exile_alternative().is_some())
-                {
-                    return Ok(PaymentPreview::message(
-                        PaymentPreviewState::NeedsChoice,
-                        "Choose the additional or alternative cost before previewing payment.",
-                        scope,
-                    ));
+                if has_unannounced_cost(card, cast) {
+                    return Ok(PaymentPreview::needs_additional_cost());
                 }
                 if card.cost_reduction_if_targets().is_some() {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose targets before previewing this target-dependent cost.",
-                        scope,
                     ));
                 }
                 self.effective_spell_cost(player, *object, cast, None)
@@ -176,15 +163,8 @@ impl Game {
                     ..
                 }) => {
                     let card = &self.state[*object];
-                    if card.sacrifice_cost().is_some()
-                        || card.required_waterbend().is_some()
-                        || (cast.kicked && card.exile_alternative().is_some())
-                    {
-                        return Ok(PaymentPreview::message(
-                            PaymentPreviewState::NeedsChoice,
-                            "Choose the remaining additional costs before previewing payment.",
-                            scope,
-                        ));
+                    if has_unannounced_cost(card, *cast) {
+                        return Ok(PaymentPreview::needs_additional_cost());
                     }
                     let requirements = card.target_requirements_for_mode(*mode);
                     let completes = *requirement_index + 1 == requirements.len()
@@ -196,7 +176,7 @@ impl Game {
                             >= requirements[*requirement_index].max_for(cast.x);
                     if card.cost_reduction_if_targets().is_some() && !completes {
                         return Ok(PaymentPreview::message(PaymentPreviewState::NeedsChoice,
-                            "Choose the remaining targets before previewing this target-dependent cost.", scope));
+                            "Choose the remaining targets before previewing this target-dependent cost."));
                     }
                     let mut targets = chosen.clone();
                     targets.push(*target);
@@ -246,7 +226,6 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Finish announcing costs and targets before previewing payment.",
-                        scope,
                     ))
                 }
                 None => None,
@@ -258,7 +237,6 @@ impl Game {
                     let mut preview = PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose mana to finish paying this cost; the spending remainder is not yet determined.",
-                        scope,
                     );
                     preview.cost = Some(cost_description(cost));
                     return Ok(preview);
@@ -277,7 +255,6 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NotApplicable,
                         "No automatic activation fee preview.",
-                        None,
                     ));
                 }
                 if ability.mana_cost.x > 0
@@ -289,7 +266,6 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the activation's additional costs before previewing payment.",
-                        scope,
                     ));
                 }
                 position.to_mut().pending_choice = Some(PendingChoice::ManaPayment {
@@ -311,14 +287,12 @@ impl Game {
             return Ok(PaymentPreview::message(
                 PaymentPreviewState::NotApplicable,
                 "This action does not have an automatic payment preview.",
-                scope,
             ));
         };
         let Ok(taps) = position.automatic_taps(player, &cost) else {
             let mut preview = PaymentPreview::message(
                 PaymentPreviewState::Unavailable,
                 "No automatic route. Use a legal mana activation and choose its output first.",
-                scope,
             );
             preview.cost = Some(cost_description(&cost));
             return Ok(preview);
@@ -353,7 +327,6 @@ impl Game {
         };
         Ok(PaymentPreview {
             state: PaymentPreviewState::Exact,
-            scope,
             explanation: if final_pool.is_some() {
                 "Exact automatic source plan."
             } else {

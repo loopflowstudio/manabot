@@ -708,10 +708,9 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
 | `not_applicable` | The action pays no mana, or is a mana ability with its own fee. |
 
-`scope` says which cost was planned: `current_payment` for `PayCost` or a
-source tap at a pending payment, `spell_cost` for a cast offer or the target
-that completes it, `activation_fee` for a non-mana activated ability. A
-source-tap offer previews tapping that source and then paying automatically,
+A cast offer, or the target that completes it, previews the spell's cost; a
+non-mana activated ability previews its fee; `PayCost` previews the pending
+payment. A source-tap offer previews tapping that source and then paying automatically,
 with the chosen source first. Each source carries its object reference, name
 and output; pools carry the six amounts and the restriction, spend-effect and
 combat-expiry classes of the mana in them.

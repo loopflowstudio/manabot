@@ -100,7 +100,6 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
             preview = response.json()["preview"]
             assert preview["state"] == "exact"
             assert preview["cost"] == "{U}"
-            assert preview["scope"] == "spell_cost"
             assert preview["sources"]
             assert before == record.game.env.search_witness_json()
             assert record.game._next_prompt_id == prompt_count
@@ -303,7 +302,7 @@ def test_preview_preserves_followups_and_reserves_activation_source(
     predicted = {
         s.source.id.entity for s in proposal.sources if s.source.kind == "object"
     }
-    if proposal.scope == "activation_fee":
+    if label.startswith("Activate"):
         # The ability's own tap cost is separate from mana production.
         predicted.add(int(describe_actions(obs)[index]["focus"][0]))
     address = json.loads(env.semantic_decision_frame_json())
@@ -324,7 +323,7 @@ def test_preview_preserves_followups_and_reserves_activation_source(
             fingerprint=address["fingerprint"],
             action_index=index,
         )
-    if proposal.scope == "spell_cost":
+    if label.startswith("Cast"):
         pay = next(row for row in describe_actions(obs) if row["type"] == "PAY_COST")
         obs, *_ = env.step(int(pay["index"]))
     assert {
