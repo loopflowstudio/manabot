@@ -114,3 +114,7 @@ receipt/provider id reached the launcher. Do not patch Manabot or add an SDK
 shim for this; terminate through Lium's authenticated API and confirm removal.
 The isolated launcher may retain an unresolved intent; keep it as evidence and
 do not start a server loop or rent again until Etude can reconcile it.
+
+2026-11-17 realign choice (mine, reversible): the GPU retry uses a fresh
+isolated launcher home rather than the one holding the unresolved Lium intent;
+that home is kept untouched as evidence, and Lium is not retried.

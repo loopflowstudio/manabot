@@ -5,6 +5,9 @@ Pydantic required. Jack Heart, 2026-11-16: "the whole point is the adoption";
 "These should be done/mainatined in this task". The 2026-11-17 steers approve
 the speed and learning measurements on one reasonable single GPU, total
 `--max-usd 10`; no landing with this pin. Publication and gate remain the caller's steps.
+Upstream (rechecked 2026-11-17): Etude v0.4.1 is on PyPI and differs from d9
+only in release metadata (`gh api .../compare/d9a6bc8f06...cd4ab8c5e9`), so it
+carries no Lium timestamp fix; it is the released form of this pin.
 
 ## Delete — do not maintain
 
@@ -135,9 +138,11 @@ Etude's failed match. Nothing further to change; no new open choice.
     `AwareDatetime`, so no receipt was kept. Pod deleted through Lium's API
     and confirmed absent; the isolated launcher
     (`/tmp/mtg329-performance-etude`) keeps an unresolved intent (~USD 0.01).
-  - Blocked on a provider allocation whose lifecycle the pinned client can
-    read, or an Etude timestamp/recovery fix. Do not retry Lium or claim GPU
-    acceptance. A later rental stays within the USD 10 total (cap it at 9).
+  - Next: retry on RunPod or Vast (both readable by the pinned client) when
+    either has a 4090/L4-class offer, from a fresh isolated `ETUDE_HOME` so the
+    unresolved Lium intent in `/tmp/mtg329-performance-etude` stays as evidence
+    and cannot hold the rental. Do not retry Lium or claim GPU acceptance until
+    a scored run completes. Spent so far ~USD 0.13; cap the rental at 9.
   - Local preflight passed: two-update CPU stop/resume, 16 replayed games.
     Direct SSH proves no queued launcher delivery. The harness is unchanged
     since ee370d9757 apart from compress edits, so a repeat may archive HEAD;
@@ -146,8 +151,13 @@ Etude's failed match. Nothing further to change; no new open choice.
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
   as the gate's proof of that path. PR #500 (open, not draft) head is
-  773ee9a135; `gh pr checks 500` reported no checks at realign
+  b2fd182b0b; `gh pr checks 500` showed preflight pending at realign
   (2026-11-17).
+- Replace the git pin (`tool.uv.sources`, pyproject.toml) and the
+  `etude-sdk==0.4.0` / `>=0.4.0` requirements with released 0.4.1, relock,
+  and run the isolated dependency integration check (CLAUDE.md, Testing).
+  Open decision: does the released pin lift "no landing with this pin", or
+  does landing also wait on Etude Task 2d1933 / the Lium fix?
 
 ## Built since the 2026-11-17 steers
 
