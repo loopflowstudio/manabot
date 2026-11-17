@@ -125,3 +125,22 @@ after paid creation, and `etude terminate` then refuses the unreconciled
 intent (experiments/reports/etude-execution.md, Retry). Proposed, not filed:
 an Etude Task to accept/normalize Lium timestamps and reconcile an interrupted
 create. Lium stays excluded from this Task's retry either way.
+
+2026-11-17 sixth concept review, ideas not planned (mine): leftovers that
+still carry the retired names, each small enough for a later compress.
+- `manabot.experiment` holds only `setup.machine_setup` (machine preparation)
+  and `numerics` (the CUDA admission gate); no experiment concept is left in
+  it. Renaming touches four experiments, the boundary and CI-selection tests
+  and two guides.
+- `manabot/infra/runtime.py` is one function, `regime_tag`, with one caller
+  (`experiments/tla_frontier.py`, for the executed runs' checkpoints). It
+  could live with that caller, as `lineage_roots` now does. The tag string is
+  frozen either way.
+- `manabot/backends/README.md` still says MLX lacks "full regime execution
+  and recovery"; main has neither for any backend.
+- `experiments/etude_execution.py::main_arm` imports modules that exist only
+  on the reference revision. That is its method (it runs from a main
+  archive), and the file stays as the experiment at its commit; after a merge
+  the main arm runs only from 3afd92d8f3.
+The two "Open:" items above (tla_frontier, `training-report`) keep their
+defaults; either deletion is its own later change and loses nothing now.

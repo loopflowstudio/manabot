@@ -106,6 +106,15 @@ Fifth concept review (928ee3f4bc): the QA fixes settle as built — an invalid
 game row means a native failure only, and an all-invalid Elemental group is
 Etude's failed match. Nothing further to change; no new open choice.
 
+Sixth concept review (1af59dc55e), the first since the regime-reader deletion:
+the experience is one path (`etude train FILE`, exit 75, `--resume`,
+`etude continue`, `etude report`) and main holds no second way to run or read
+a run. Nothing to change. The two write-docs defaults stand as reversible and
+do not block: tla_frontier stays as the reader of its executed runs' report,
+and `manabot training-report` stays as the cross-experiment run list
+`etude report` does not draw. Naming leftovers are ideas in questions.md, not
+implement directions.
+
 ## Remaining
 
 - Learning check, main against the branch (steer 2026-11-17,
