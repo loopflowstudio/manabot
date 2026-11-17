@@ -113,16 +113,21 @@ def _job(
         recipe.agent.decision_memory = ARMS[name]
         if ARMS[name] != "none":
             recipe.agent.decision_memory_gate_scale = 2.0
-    return TrainingJob(
-        regime=recipe,
-        experiment=EXPERIMENT,
-        pretrained=trunk,
-        milestones=MILESTONES if trunk is not None else (),
-    ).job(
-        repo=ROOT,
-        revision=revision,
-        max_hours=limits.max_hours,
-        max_usd=limits.max_usd,
+    return (
+        TrainingJob(
+            regime=recipe,
+            experiment=EXPERIMENT,
+            pretrained=trunk,
+            milestones=MILESTONES if trunk is not None else (),
+        )
+        .job(
+            repo=ROOT,
+            revision=revision,
+            max_hours=limits.max_hours,
+            max_usd=limits.max_usd,
+            # A provider capacity refusal consumes an attempt at no cost.
+        )
+        .model_copy(update={"max_attempts": 3})
     )
 
 
