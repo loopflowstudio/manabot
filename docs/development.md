@@ -444,7 +444,18 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference: MTG-297 mana spending.** Commit `d53220d36` is adopted
+**Current reference: automatic source preference.** Commit `f62b5201e` is
+adopted from [PR #524 run 44120472876](https://github.com/loopflowstudio/manabot/actions/runs/44120472876)
+(2026-11-17 UTC, AMD EPYC 9V74). Removing redundant automatic taps and preferring
+sources for follow-up costs deliberately changes the search/step digests.
+Every timing threshold passes against the rebuilt previous reference on the
+same runner: search total 105.067 s versus 99.537 s (+5.6%), worst reply
+2.370 s versus 2.767 s, and stepping 19,581.9/s versus 18,980.4/s. These are
+changed gameplay workloads, not an isolated chooser speedup. The 10% tolerance
+is unchanged. This supersedes the older PR-head performance results; it does
+not establish performance for the separate default-on manual-source feature.
+
+**Previous reference: MTG-297 mana spending.** Commit `d53220d36` is adopted
 from [dedicated run 43417765062](https://github.com/loopflowstudio/manabot/actions/runs/43417765062)
 (2026-11-13 UTC, AMD EPYC 7763). Native unit/class spending adds decisions to
 these decks: all three search digests and the step digest change, with 102,209

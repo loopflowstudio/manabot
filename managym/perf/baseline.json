@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "1ad670d8fdbb763ec28f1392f8dbdb623a5ccaa3",
-    "date": "2026-11-16",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/43793436703",
-    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
-    "reason": "Viewer-known library positions (PR #550) change which hidden worlds search samples: search seeds 1 and 2 move their digests and run 3.3% more simulations; about 4.5% added cost per simulation, accepted"
+    "commit": "f62b5201e60fb87aa1ea8132326ae92c93eaf963",
+    "date": "2026-11-17",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44120472876",
+    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 9V74 80-Core Processor (4 vCPU), release",
+    "reason": "PR524 deliberately changes automatic source selection and removes redundant taps, changing search and step digests. Current-head same-runner run44120472876 passes every timing threshold (search105.067s vs99.537s; worst2.370s vs2.767s; steps19581.9/s vs18980.4/s). Adopt its gameplay reference without changing the10%tolerance."
   },
   "bench_search": {
-    "worst_s": 2.9672699725,
-    "total_s": 107.724,
+    "worst_s": 2.370093444,
+    "total_s": 105.067,
     "seeds": {
       "1": {
-        "worst_s": 2.66291051,
-        "total_s": 46.0430213315,
-        "digest": 16908096509945091352
+        "worst_s": 2.370093444,
+        "total_s": 42.55203934200001,
+        "digest": 8473985135635542497
       },
       "2": {
-        "worst_s": 2.9672699725,
-        "total_s": 33.394061825,
-        "digest": 3370922912939536192
+        "worst_s": 1.780498035,
+        "total_s": 31.292355961,
+        "digest": 4051899434388603763
       },
       "3": {
-        "worst_s": 2.1075808665,
-        "total_s": 28.2867909065,
-        "digest": 18315821755026080079
+        "worst_s": 1.7768688075,
+        "total_s": 31.222847101999996,
+        "digest": 16744826618325011459
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 18939.229656851097,
-    "steps": 102209,
+    "steps_per_s": 19581.888567904953,
+    "steps": 99928,
     "games": 512,
-    "digest": 17459788495858550277
+    "digest": 5751033950544965762
   }
 }
