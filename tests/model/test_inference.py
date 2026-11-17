@@ -20,9 +20,15 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import RewardConfig
 from manabot.policy.prepare import CatalogPrograms, Prepared
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout import collection
+from manabot.training.rollout.collection import (
+    Collector,
+    RolloutBatch,
+    collect,
+    open_collector,
+)
+from tests.model.policy_fixture import recipe
 from tests.model.prepared_routes import device_input, program_input
-from tests.training.test_recovery import recipe
 
 
 def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
@@ -51,7 +57,7 @@ def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
 @dataclass
 class PolicyFixture:
     agent: ActorCritic
-    collector: SeatRoutedCollector
+    collector: Collector
     obs: ObservationBuffers
 
 
@@ -73,17 +79,18 @@ def _policy(
         config.agent.world = None
     space = ObservationSpace(config.observation)
     agent = ActorCritic(space, config.agent).eval()
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(config.match),
         Reward(RewardConfig()),
         num_envs=2,
         seed=91,
         opponent_mode="self",
-        recovery_max_microsteps=10000,
         numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
-    return PolicyFixture(agent, collector, collector._slice_obs_rows(np.arange(2)))
+    return PolicyFixture(
+        agent, collector, collection._slice_obs_rows(collector, np.arange(2))
+    )
 
 
 def test_half_precision_head_keeps_finite_public_logits() -> None:
@@ -143,7 +150,7 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     case = _policy(history=history)
     if history:
         # Later decisions carry public history.
-        batch = case.collector.collect(case.agent, 16)
+        batch = collect(case.collector, case.agent, 16)
         case.obs = {
             key: value[-8:, 0].astype(np.float32)
             if key == "action_focus"
@@ -265,7 +272,7 @@ def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
             torch.testing.assert_close(a, b, atol=0, rtol=0)
 
 
-def test_prepared_collection_and_restored_continuation_match_reference() -> None:
+def test_prepared_collection_matches_reference() -> None:
     optimized, reference = _policy(), _policy()
 
     @torch.no_grad()
@@ -275,22 +282,14 @@ def test_prepared_collection_and_restored_continuation_match_reference() -> None
         """Admitted outside the scope: no cached catalog or scope checks."""
         return device_input(scope.agent, obs)
 
-    actual = optimized.collector.collect(optimized.agent, 8)
+    actual = collect(optimized.collector, optimized.agent, 8)
     with patch.object(PolicyInference, "prepare", plain_inputs):
-        expected = reference.collector.collect(reference.agent, 8)
+        expected = collect(reference.collector, reference.agent, 8)
     for key, value in _batch_tensors(actual).items():
         torch.testing.assert_close(value, _batch_tensors(expected)[key], atol=0, rtol=0)
-    snapshot = optimized.collector.snapshot()
-    assert snapshot.journal == reference.collector.snapshot().journal
     torch.testing.assert_close(
-        snapshot.sampling_rng,
-        reference.collector.snapshot().sampling_rng,
+        optimized.collector.numerics.snapshot_rng(),
+        reference.collector.numerics.snapshot_rng(),
         atol=0,
         rtol=0,
     )
-    restored = _policy()
-    restored.collector.restore(snapshot, lambda: None)
-    continued = optimized.collector.collect(optimized.agent, 8)
-    resumed = restored.collector.collect(restored.agent, 8)
-    for key, value in _batch_tensors(continued).items():
-        torch.testing.assert_close(value, _batch_tensors(resumed)[key], atol=0, rtol=0)

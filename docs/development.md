@@ -39,36 +39,31 @@ atomically.
   `uv run scripts/play.py` works in an already prepared environment but cannot
   diagnose a missing `uv`. Development flags: `--port`, `--frontend-port`,
   `--no-frontend`, `--demo learn`.
-- `uv run manabot train --out .runs/<name>` runs a training smoke.
+- `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.4.0,<0.5` (also
-for its `eval` and `s3` extras) and `torch>=2.15.0`. The repository and release
-checks pin Etude's merged migration build at
-`d60236d015a4b2a01055b2c861856f06bb1852a2` through a Git source. PyPI's
-0.4.0 predates this migration API; the version requirement alone does not
-select it. Keep the Git pin until a registry release contains these migrations,
-and raise the public minimum to that release before publishing Manabot.
-A downstream project must use the same source override in the meantime.
-The repository's `uv.lock` records the exact source, and its dedicated training
-and play runtime groups retain exact Torch/backend choices.
+The `manabot` public dependency requirements are `etude-sdk>=0.4.1,<0.5`
+(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.1 carries
+the experiment-file and Agents APIs used by the recipes. The repository's
+`uv.lock` records the registry release; dedicated training and play runtime
+groups retain their backend choices.
 
-To install the pinned client:
+Install the locked client and inspect its database:
 
 ```bash
 uv sync --locked --python 3.13 --extra dev --extra artifacts
 uv run etude database status
 ```
 
-When changing the Etude source, update `[tool.uv.sources]`, run `uv lock`, and
-commit both metadata and lock before preparing an experiment. Keep consumer
-install commands in `.github/workflows/release.yml` on the same source.
-Etude uses one `~/.etude/launcher.sqlite` across experiments and compatible
-branches. Installing a client does not upgrade the database: inspect it with
-`etude database status` and explicitly apply forward migrations with
-`etude database upgrade`. Ordinary reads never select a different database.
-Recovery snapshots are not operational databases. This machine's older files
-have already been consolidated; never reinstall an old launcher against its
-shared home. See [experiments](experiments.md#what-an-experiment-is).
+When changing the dependency, update `pyproject.toml`, run `uv lock`, and commit
+both metadata and lock before preparing an experiment. Keep consumer install
+commands in `.github/workflows/release.yml` on the same release. Etude uses one
+`~/.etude/launcher.sqlite` across experiments and compatible branches. Installing
+a client does not migrate data: explicitly run `uv run etude database upgrade`
+when status reports pending migrations. Upgrades keep recovery backups and
+never launch or stop a worker. Recovery snapshots are not operational databases.
+This machine's historical files have already been consolidated; keep older
+clients in isolated homes so they cannot split the live ledger.
+See [experiments](experiments.md#what-an-experiment-is).
 Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
 Retained experiments keep their original source and lock, including the v7
 representation study's historical Git source pin. Never downgrade the current
@@ -114,7 +109,7 @@ including semantic-kernel conformance, and focused browser interactions. Also:
 
 - `uv run --extra dev pytest tests/semantic/test_elemental_world.py -q`
   for Elemental roster or training-admission changes; its PPO smoke reloads the
-  final checkpoint written by the recipe's `execute_regime` after tracking closes.
+  final checkpoint the recipe's loop writes.
 - `uv run pytest tests/academy/test_choice_navigation.py -q`: browser coverage
   replays only two of its retained positions. Bind refreshed positions to a new
   world file and retain prior evidence.
@@ -130,16 +125,14 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   `npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts trigger-order.spec.ts`
   with isolated `ACADEMY_RELEASE_API_PORT` and `ACADEMY_RELEASE_FRONTEND_PORT`.
 
-**Training recovery.** Resume admission or game-error recovery:
-`uv run --extra dev --extra artifacts pytest tests/training/test_recovery.py tests/training/test_game_error_recovery.py -q`.
-Observation-input or model-cost changes add
-`uv run --extra dev pytest tests/training/test_active_training.py -q`; its
-endpoint checks use injected durations, so never mix host elapsed time into an
-exact-update-count assertion.
+**Training resume and game errors.**
+`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
+Resume restores learner state at a saved update and opens fresh native streams;
+it does not restore an unfinished collection.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
-`uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
+`uv run --extra dev --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
 Fixtures asserting exact rollout shapes or transition counts must explicitly
 select `batch_closure="exact-quota"` as well as one learning seat; whole-game
 closure treats the transition quota as a minimum.
@@ -170,21 +163,22 @@ identical tensors. It also checks that v3 receipts and registrations omitting
 `managym.encode_observations_into` also runs `tests/env/test_observation.py`
 and the debug native suite.
 Inspect collector fixtures before selecting laptop-safe model tests:
-`SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
-`collect(model, 1)` can play a complete game.
+`open_collector` defaults to `batch_closure="complete-games"`, so even
+`collect(collector, model, 1)` can play a complete game.
 
 **Tracking and offline reports.** Checkpoint imports or managed evaluation
 adapters:
 `uv run pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`
 (a fresh process rejecting managed evaluation imports; adapter-only tests cannot
 establish that boundary). Tracking or report discovery:
-`uv run pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q`;
-the live tiny comparison writes both TrainingRun exports and Etude tracker
-declarations named `run.json`.
+`uv run pytest tests/training/test_time_cohort.py tests/training/test_recipe_etude.py -q`;
+the recipe proof checks local tracking, stop/resume, immutable checkpoints and
+belief output provenance.
 
-**Python package and CLI moves.** Experiment imports or recipe discovery:
-`uv run --extra dev pytest tests/training/test_regimes.py -q` (listing recipes
-must not import DuckDB). Adding, renaming or removing an Etude experiment also
+**Python package and CLI moves.** Training command retirement:
+`uv run --extra dev pytest tests/training/test_train_command.py -q` (the
+migration message must be available without training SDK imports).
+Adding, renaming or removing an Etude experiment also
 requires updating its exact discovery inventory and running
 `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_experiment_files.py -q`.
 When integrating a frozen pilot with a changed world or tensor schema, run its
@@ -793,7 +787,7 @@ MPS is admitted, on explicit request, for float32 self-play training with Torch 
 newer. Baseline requires CUDA or an explicit `--device mps`; local selects CUDA when
 available and CPU otherwise.
 Evaluation and search run on CPU for this workflow. GPU-less tests use
-`baseline_test()`, which shares baseline construction and changes only the device.
+`BaselineConfig(device="cpu")` with the same `train` and `evaluate` functions.
 No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 
@@ -801,36 +795,28 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.0,<0.5`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.1,<0.5`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
 Torch/Etude pin in your project, or a missing wheel on the selected backend.
 Do not bypass dependency checks with `--no-deps`.
 
-Notebook file generation remains a core dependency because ordinary experiment
-reporting creates an editable notebook. Pandas is no longer a direct requirement;
-no library entry point consumes it.
-
 Choose extras for the features you use:
 
 | Extra | Use |
 |---|---|
 | `academy` | The same as `managym[academy]`: the server dependencies for `managym academy`, the [browser UI](academy.md#running-academy) that the engine wheel carries |
-| `evaluation` | Etude evaluation and plots |
+| `evaluation` | Etude evaluation |
 | `reports` | Reports and Etude S3 report sources |
 | `artifacts` | Artifact-store access |
-| `notebook` | Jupyter and notebook execution |
 | `llm` | Local transformer inference |
 | `openrouter` | OpenRouter inference |
 
-For notebook work, use `'manabot[notebook]'` in the install command and retain
-the resolved versions in your lockfile.
-In a checkout, use `uv sync --locked --extra notebook`. If a command reports
-a missing optional dependency, install its named extra in the same environment
+If a command reports a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
 
-`--regime-name`, experiment drivers and data-ledger tools need a
+Experiment recipes (`etude train experiments/<experiment>.py`), experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
 

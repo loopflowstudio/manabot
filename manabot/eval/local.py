@@ -7,6 +7,7 @@ an Etude checkpoint record that could fetch remote bytes.
 """
 
 import argparse
+import math
 import multiprocessing as mp
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -32,7 +33,6 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.policy.protocol import Backend
-from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 
 
@@ -176,9 +176,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--game-seconds", type=float, default=120)
     parser.add_argument("--max-commands", type=int, default=10_000)
-    parser.add_argument("--workers", type=int)
-    parser.add_argument("--batch-rows", type=int)
-    parser.add_argument("--resident-mib", type=int)
     args = parser.parse_args(argv)
     if (args.request or args.continuation or args.status) and (
         args.opponent != "heuristic"
@@ -192,52 +189,28 @@ def main(argv: list[str] | None = None) -> int:
             "saved evaluation already fixes opponents, deals, matchup and game limits"
         )
     if args.continuation or args.status:
-        if any(
-            value is not None
-            for value in (args.workers, args.batch_rows, args.resident_mib)
-        ):
-            parser.error("saved evaluation fixes workers, batch rows and residency")
         if args.out:
             parser.error("--out is only for a fresh evaluation")
         directory = args.continuation or args.status
         try:
             result = evaluation_status(directory)
             if args.continuation:
-                if args.seconds <= 0:
+                if not math.isfinite(args.seconds) or args.seconds <= 0:
                     parser.error("--seconds must be positive")
-                if result.execution is None or result.execution.device != "cpu":
-                    raise ValueError(
-                        "local continuation requires an existing CPU execution"
-                    )
-                # Retain the numerical contract; only the attempt deadline changes.
-                limits = EvalExecution.model_validate(
-                    {
-                        **result.execution.model_dump(),
-                        "deadline_unix": time.time() + args.seconds,
-                    }
+                result = continue_evaluation(
+                    directory, deadline=time.time() + args.seconds
                 )
-                result = continue_evaluation(directory, execution=limits)
             return _describe(result, directory)
         except Exception as exc:
             print(f"incomplete: {exc}; evidence: {directory}")
             return 1
     if args.out is None:
         parser.error("a fresh evaluation requires --out")
-    # EvalExecution rejects nonfinite/invalid budgets before creating output.
-    limits = EvalExecution(
-        device="cpu",
-        deadline_unix=time.time() + args.seconds,
-        max_active_games=args.workers if args.workers is not None else 2,
-        max_batch_rows=args.batch_rows if args.batch_rows is not None else 16,
-        resident_model_bytes=(
-            args.resident_mib if args.resident_mib is not None else 1024
-        )
-        * 2**20,
-    )
-    if args.seconds <= 0:
+    deadline = time.time() + args.seconds
+    if not math.isfinite(args.seconds) or args.seconds <= 0:
         parser.error("--seconds must be positive")
     args.out.mkdir(parents=True, exist_ok=False)
-    atomic_json(args.out / "limits.json", limits.model_dump(mode="json"))
+    atomic_json(args.out / "limits.json", {"deadline_unix": deadline})
     try:
         if args.request:
             request = EvaluationRequest.model_validate_json(args.request.read_bytes())
@@ -271,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 process.start()
                 sender.close()
-                if not receiver.poll(limits.remaining()):
+                if not receiver.poll(max(0, deadline - time.time())):
                     raise TimeoutError(
                         "allocation deadline exhausted during checkpoint admission"
                     )
@@ -287,14 +260,14 @@ def main(argv: list[str] | None = None) -> int:
                 sender.close()
                 receiver.close()
         atomic_json(args.out / "request.json", request.model_dump(mode="json"))
-        result = evaluate_local(request, limits=limits, out_dir=args.out / "panel")
+        result = evaluate_local(request, deadline=deadline, out_dir=args.out / "panel")
     except Exception as exc:
         atomic_json(
             args.out / "admission-failure.json",
             {
                 "status": "incomplete",
                 "error": f"{type(exc).__name__}: {exc}",
-                "execution": limits.model_dump(mode="json"),
+                "execution": {"deadline_unix": deadline},
             },
         )
         print(f"incomplete: {exc}; evidence: {args.out}")

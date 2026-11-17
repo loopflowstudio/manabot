@@ -12,9 +12,11 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.training.rollout.collection import (
+    Collector,
     RolloutBatch,
-    SeatRoutedCollector,
     _ObservationRows,
+    collect,
+    open_collector,
 )
 from manabot.verify.games import INTERACTIVE_DECK
 from tests.model.prepared_routes import device_input
@@ -25,8 +27,7 @@ def _make_collector(
     opponent_agent: ActorCritic | None = None,
     num_envs: int = 4,
     seed: int = 7,
-    recovery_max_game_microsteps: int | None = None,
-) -> SeatRoutedCollector:
+) -> Collector:
     obs_space = ObservationSpace()
     match = Match(
         MatchConfig(
@@ -37,7 +38,7 @@ def _make_collector(
         )
     )
     reward = Reward(RewardConfig())
-    return SeatRoutedCollector(
+    return open_collector(
         obs_space,
         match,
         reward,
@@ -47,7 +48,6 @@ def _make_collector(
         learning_seats="one",
         batch_closure="exact-quota",
         opponent_agent=opponent_agent,
-        recovery_max_game_microsteps=recovery_max_game_microsteps,
         numerics=TorchCollectionSession(device="cpu", seed=seed, precision="float32"),
     )
 
@@ -89,7 +89,7 @@ def _check_batch(batch: RolloutBatch, num_steps: int, num_envs: int) -> None:
 def test_collector_batch_shapes_and_reward_semantics(mode):
     collector = _make_collector(mode)
     agent = _make_agent()
-    batch = collector.collect(agent, num_steps=32)
+    batch = collect(collector, agent, num_steps=32)
     _check_batch(batch, 32, 4)
     # Seat balance: streams alternate learner seats.
     assert list(collector.learner_seat) == [0, 1, 0, 1]
@@ -99,8 +99,8 @@ def test_collector_frozen_opponent_and_streaming_continuity():
     opponent = _make_agent()
     collector = _make_collector("frozen", opponent_agent=opponent)
     agent = _make_agent()
-    first = collector.collect(agent, num_steps=16)
-    second = collector.collect(agent, num_steps=16)
+    first = collect(collector, agent, num_steps=16)
+    second = collect(collector, agent, num_steps=16)
     _check_batch(first, 16, 4)
     _check_batch(second, 16, 4)
     assert collector.stats.opponent_decisions > 0
@@ -132,15 +132,15 @@ def test_terminal_credit_and_bootstrap():
 
 
 def test_update_boundary_has_no_banked_or_sampled_actions() -> None:
-    collector = _make_collector("self", recovery_max_game_microsteps=10_000)
+    collector = _make_collector("self")
     agent = _make_agent()
-    first = collector.collect(agent, 7)
+    first = collect(collector, agent, 7)
     assert collector.stats.learner_transitions == 28
-    boundary = collector.snapshot()
-    assert boundary.stats.learner_transitions == 28
+    assert not any(collector._streams)
+    assert all(pending is None for pending in collector._pending)
     for key in first.next_obs:
         np.testing.assert_array_equal(first.next_obs[key], collector._buffers[key])
-    collector.collect(agent, 7)
+    collect(collector, agent, 7)
     assert collector.stats.learner_transitions == 56
 
 
@@ -160,12 +160,12 @@ def test_paused_buffer_rows_are_unchanged_and_clear_step_flags():
 def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     collector = _make_collector("self")
     agent = _make_agent()
-    first = collector.collect(agent, 7)
+    first = collect(collector, agent, 7)
     first_logs = first.observations().log_probabilities
     with torch.no_grad():
         agent.policy_head[-1].weight.mul_(-5)
         agent.value_head[-1].bias.add_(3.0)
-    second = collector.collect(agent, 7)
+    second = collect(collector, agent, 7)
     rows = second.observations()
     # Nonterminal streams resume at precisely the bootstrap state, under new
     # weights. Terminal streams may route the new episode's opponent first.

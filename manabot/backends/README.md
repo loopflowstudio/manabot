@@ -13,7 +13,7 @@ logits, values = policy.evaluate(batch)      # NumPy out: logits [B,A], values [
 `prepare` checks it and does every integer lookup on the host, returning a
 `Prepared` batch (`manabot.policy.prepare`); `evaluate` runs the forward and
 returns logits, -1e8 off the legal actions, and each row's value.
-`inference=True` lays the batch out as simulation and serving do (on CPU it
+`inference=True` lays the batch out as simulation and managed inference do (on CPU it
 drops object and fact columns no row uses); the default is the learning
 layout, whose outputs differ from it by float summation order. Every
 backend reads the same `Prepared` batch and the same checkpoint file, so the
@@ -37,7 +37,7 @@ checked against.
 
 Keep PyTorch in production and retain MLX as an experimental Apple backend:
 MLX half's measured speed advantage still needs learning-quality validation.
-See the [MPS retest](../../experiments/mps_retest.md) for results and limits.
+See the [MPS retest](../../experiments/reports/mps_retest.md) for results and limits.
 Both follow [one precision rule](../../docs/training.md#reduced-precision):
 bfloat16 forwards for models of width 256 or more on MPS and MLX, as on CUDA,
 with float32 log-probabilities, master weights and optimizer state.
@@ -92,10 +92,12 @@ learner = backend.learner.Learner(policy, "cpu", minibatch_rows=64)
 A loader calls `backend.load_policy(path)`, which returns
 the policy and its observation space. The
 policy supplies host `prepare`/`evaluate`, action sampling and guarded
-`inference_scope()` calls. Sampling stays in the backend so moving a caller
-preserves its seeded action stream. The serving child chooses Torch when it
-starts; a game child resolves it lazily only for an in-child checkpoint player.
-Code players and replay children keep importing no framework.
+`inference_scope()` calls. Scalar sampling stays in the backend to preserve its seeded action stream.
+Managed evaluation instead uses `eval.agent_loader.load`, the composition root
+that chooses Torch and the device. Etude batches its deterministic masked-logit
+forward; the Torch-free game-side agent uses NumPy PCG64 sampling. These have
+fresh registrations and tournament names. Standalone scalar game children
+resolve their backend lazily; code players and replay import no framework.
 
 `resolve(name, *, precision=None)` imports the framework on first use.
 MLX carries the selected compute precision on the returned backend; omitted
@@ -115,7 +117,7 @@ functions composition roots.
 
 Pass the selected backend through training execution, monitoring and
 verification. A caller that only runs inference takes a `BackendPolicy`; a
-caller that collects, learns or persists training state also needs the
+caller that collects, learns or captures a numerical incident also needs the
 capabilities for that work. These arguments are required: helpers do not
 default to Torch or resolve a backend themselves. The role contracts are
 `TrainingBackend` and `TrainingState` in `training/state/backend.py`, the
@@ -127,8 +129,8 @@ precision and sampling. Native game streams, seat routing and complete-game
 accounting stay in the collector. Rollout records contain NumPy arrays;
 packing validates them through the injected numerical capability. Torch
 collection uses its private generator seeded at `seed + 1`, shared by learner
-actions and current-self opponent actions. Recovery restores that generator's
-state to continue the same action stream.
+actions and current-self opponent actions. A resumed run starts a fresh
+stream; the generator's state is saved only in a numerical incident.
 
 Belief inference uses host observations and the policy's admission and
 evaluation methods. Search receives a hand sampler; the selected backend
@@ -267,6 +269,11 @@ documents them. A backend never carries its own copy of an update's loss:
 
 ## The torch backend
 
+`capture(out, settings, run)` records one damped-policy update from `SelfPlay`
+settings in an open Etude run. It writes `settings.json`, the initial policy,
+collection calls and learner minibatches. Frozen experiment capture commands
+require their original revision; retained captures remain readable.
+
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
@@ -330,7 +337,7 @@ Read card-program rows through `SemanticCardEncoder.lookup`
 repeat heavily in a batch; under CUDA autograd `lookup` uses embedding
 backward, which groups repeated rows, where advanced indexing accumulates each
 row separately and made PPO updates 2.17× slower on an L4
-(`experiments/ppo_cuda.md`). CPU results are identical either way.
+(`experiments/reports/ppo_cuda.md`). CPU results are identical either way.
 
 The reusable pieces in `rl.py`, `learner.py` and `arrays.py` depend only on
 their own backend, the shared host returns and the profiler at runtime;
@@ -452,7 +459,7 @@ parity: pass (torch, mlx)
 The check runs the PyTorch model in float32 on CPU as the reference and every
 installed backend, torch included, on the same inputs, each side computing
 the damped update's `minibatch_objective` through its own backend: a
-capture directory written by `experiments/mlx_pilot.py capture` (real learner
+retained capture directory written by the frozen MLX pilot (real learner
 minibatches with their targets and settings, and real collection calls). Each
 backend loads the reference's weights through the canonical names and is
 compared in its own parameter layout. The check compares logits on legal

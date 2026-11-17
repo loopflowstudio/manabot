@@ -1418,6 +1418,7 @@ class CapturedVector(_Capture):
                     )
                 ],
             )
+        # Journal the intent from synchronized inputs before any native read.
         proposed = [game.model_copy(deep=True) for game in self.games]
         for game, setup, seed in zip(
             proposed, players, self.native.current_game_seeds(), strict=True

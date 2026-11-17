@@ -21,50 +21,91 @@ comparison. The
 
 ## What an experiment is
 
-One experiment is one module beside its report:
-`experiments/<name>.py` and `experiments/<name>.md`. The module holds the
+One experiment is one module and its report:
+`experiments/<name>.py` and `experiments/reports/<name>.md`. The module holds the
 recipes, built from [`manabot.recipes.builders`](../manabot/recipes/builders.py),
 and anything only this experiment needs to run and report; `manabot/` keeps the
-reusable instruments. A file defining `report()` or `eval_jobs(state)` is an
+reusable instruments. A file defining `training_jobs()`, `eval_jobs(state)` or `report()` is an
 [Etude](https://github.com/loopflowstudio/etude) experiment, and its training
 runs track under its stem:
 
 ```sh
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --usd-per-run 7.27
+uv run etude launch experiments/elemental.py --revision COMMIT --updates 3200 \
+    --hours 11.9 --usd-per-run 9 --rent l4
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs     # play what is new
 uv run etude report experiments/elemental.py --source r2://manabot/jobs --serve  # draw what it played
 ```
 
-`training_jobs()` names the training runs, `eval_jobs(state)` returns the seatings still
-wanted so repeated passes play only new ones, and `report()` draws the figures.
-A seating is Etude's rule for who meets whom (`etude.eval.records.Seating`):
-its players in seat order, the conditions they play under and the tags a
-report selects them by. A `Benchmark` holds `seatings`, and a checkpoint says
-where it stood on each clock in `Checkpoint.at`, as in
-`checkpoint.at["updates"]`.
+`training_jobs()` returns every training job that should have been run by now,
+each a named `etude.jobs.TrainingJob`; `eval_jobs(state)` returns
+`etude.jobs.EvalJob`s holding the seatings still wanted, so repeated passes
+play only new ones; `report()` draws the figures. A training run's address is
+always `EXPERIMENT/JOB@SEED`. A file's eval jobs that can run together play as
+one run on one machine, `EXPERIMENT/evals-DIGEST`, and every tournament in it
+prints that name:
 
-Install the locked Etude client before using the shared launcher:
+```text
+eval heuristic-grid: 48 new, 0 running, 0 failed, running elemental/evals-1a2b3c4d5e6f
+eval checkpoint-pairs: 24 new, 0 running, 0 failed, running elemental/evals-1a2b3c4d5e6f
+```
+
+Each tournament keeps its own results below that run, keyed by tournament and
+match as before, so reports and `statsdb` queries read them unchanged. The
+run's hour and dollar limits are the sums of its jobs', and `--max-usd` admits
+it as one run. A game is `play(match, agents)`: one object per seated player,
+in seat order. Etude decides how many games play at once from the machine's
+CPUs and memory; an eval job declares no worker count. Every job uses the
+same `manabot.eval.agents.AGENTS`; Etude owns model loading, batching and
+residency. The loader only forwards Prepared rows to masked logits; each
+game-side agent owns host preparation and seeded sampling. New evaluation
+seatings use one config per native game group and `games=1`, under fresh
+`agents-v1` tournament names. Retained schedules and results keep their keys.
+Cooperative game limits and Command caps remain in the native loop; a true
+hang or process exit currently retries the grouped job pending Etude's
+per-match hard-deadline support (Task 2d1933). A match the machine
+failed rather than the game (the run's time limit, a lost machine, a failed
+delivery) is played again by the next pass; an error raised by the game waits
+for `--retry-failed`, and stops its own tournament while the others keep
+playing. A seating is Etude's rule for who meets whom
+(`etude.eval.records.Seating`): its players in seat order, the configs they
+play under and the tags a report selects them by. A `Benchmark` holds
+`seatings`, and a checkpoint says where it stood on each clock in
+`CheckpointRecord.at`, as in `checkpoint.at["updates"]`. A file may declare only
+`eval_jobs`: `experiments/llm_claude.py` and `llm_qwen.py` seat a language model
+against a frozen checkpoint of another run, and are not runnable until Etude
+EXP-70 lands. A seat names a checkpoint from any experiment, by its policy
+(`PolicyKey(experiment=..., job=..., seed=..., role=...)`, or `experiment=` on
+a relative seat such as `Final`) or by an outside address.
+
+Use the repository's locked Etude revision for these commands
+([development dependency](development.md#environment-and-commands)). Launch,
+status and eval commands keep their state in one launcher database,
+`~/.etude/launcher.sqlite`. Nothing creates or migrates it implicitly: after
+the locked revision moves, and before the first launch from a new home, say so:
 
 ```sh
-uv sync --locked --extra artifacts --extra reports
-uv run etude database status
+uv run etude database status     # which migrations are applied and pending; changes nothing
+uv run etude database upgrade    # backs the file up, then applies them
 uv run etude status
 ```
 
-The lock pins the merged single-database client. Older command-only GPU probes
-keep their frozen source and SDK; their old `runs()` helpers are not current
-experiment declarations. All experiments and compatible
-branches use `~/.etude/launcher.sqlite`; ordinary reads validate its schema
-without migrating it. When status reports pending migrations, use
-`uv run etude database upgrade` explicitly. Upgrades retain recovery backups
-and never launch or stop a worker. Installing an SDK does not migrate data.
-This machine's historical files have already been consolidated. Keep older
-clients confined to isolated homes: they use different files and would split
-the live ledger again. To leave `~/.etude` untouched, give a fixture command
-its own home: `ETUDE_HOME=$(mktemp -d) uv run etude ...`.
-
+Until then a command that needs the database refuses and names the upgrade.
+Machines already running keep running through an upgrade. This machine's
+historical launcher files have already been consolidated. Keep older clients
+confined to isolated homes; their different files would split the live ledger.
+Recovery snapshots remain evidence, not operational databases.
 `etude report` and `etude launch --quote` rent nothing; a report reads the job
-store and needs no launcher database.
+store and needs no launcher database. To leave `~/.etude` untouched, give a
+fixture command its own home: `ETUDE_HOME=$(mktemp -d) uv run etude ...`.
+
+When a provider declines to make a machine, a launch fails with the provider's
+words and records no run. A queued run keeps the reason in `etude status` and
+asks again no sooner than a minute later; refusals spend none of its attempts.
+`etude wait` returns once the selected runs have finished and the machines
+rented for them are deleted, so `launch`, `wait`, `launch` needs nothing in
+between. `uv run etude fetch RUN FILE DIRECTORY` copies one file a run kept,
+checked against its recorded digest, and lists the names that exist when
+`FILE` is not one of them.
 Raw results live in the artifact store, not in git; `experiments/data.manifest.json`
 records each file's digest ([data](../experiments/README.md#data)).
 
@@ -130,7 +171,7 @@ and refutations stay on the record, dated.
 
 ## A worked example
 
-[exp-04](../experiments/exp-04-potential-shaping.md) is from an earlier world,
+[exp-04](../experiments/reports/exp-04-potential-shaping.md) is from an earlier world,
 so read it for its shape rather than its numbers. The project believed that
 shaped rewards (pay per land, creature and damage) sped up learning, and an
 earlier run had shown those rewards training agents into cast-everything play.
@@ -155,123 +196,61 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 | What we believed | What happened | Lesson |
 | --- | --- | --- |
-| Shaped rewards speed up learning | Terminal reward matched potential shaping and beat pay-per-event shaping by about 14 points ([exp-04](../experiments/exp-04-potential-shaping.md)) | Test the obvious helper |
-| Expert iteration compounds | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/exp-07-expert-iteration.md)) | Distillation doesn't improve a weak teacher |
-| Win rate measures competence | A strong-looking search pilot couldn't play a control deck ([exp-09](../experiments/exp-09-control-competency.md)) | Test specific skills, not just outcomes |
-| Matchup tables measure the decks | A four-card swap moved a matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)) | The pilot and the cards are confounded |
+| Shaped rewards speed up learning | Terminal reward matched potential shaping and beat pay-per-event shaping by about 14 points ([exp-04](../experiments/reports/exp-04-potential-shaping.md)) | Test the obvious helper |
+| Expert iteration compounds | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/reports/exp-07-expert-iteration.md)) | Distillation doesn't improve a weak teacher |
+| Win rate measures competence | A strong-looking search pilot couldn't play a control deck ([exp-09](../experiments/reports/exp-09-control-competency.md)) | Test specific skills, not just outcomes |
+| Matchup tables measure the decks | A four-card swap moved a matchup by 55 points ([exp-08b](../experiments/reports/exp-08b-ancestral-dose.md)) | The pilot and the cards are confounded |
 | An N-game evaluation played N deals | A seed bug made every game replay one deal ([F1](../paper/understanding.md)) | Check the instrument before the result. Seat-advantage claims built on it were retracted. |
-| A borrowed technique helps by default | Actor-only filtering: +3.33 points, interval [−4.33, +11.33], at 1.45× wall time ([technique screen](../experiments/ataraxos-technique-screen.md)) | Keep it as a switch; promote only on evidence |
+| A borrowed technique helps by default | Actor-only filtering: +3.33 points, interval [−4.33, +11.33], at 1.45× wall time ([technique screen](../experiments/reports/ataraxos-technique-screen.md)) | Keep it as a switch; promote only on evidence |
 
 ## Declaring a comparison
 
-`manabot.experiment.config.Experiment` declares a typed comparison. `resolve()`
-returns complete validated `TrainingRegime` values plus a provenance receipt;
-it never builds a model, opens a store or launches work.
+An experiment file keeps its explicit `train(config)`, `training_jobs()`,
+`eval_jobs(state)` and `report()` functions. Training is an ordinary function that calls a loop;
+Etude supplies its run directory, seed, saved state, stopping, tracking and retry. `training_jobs()`
+returns `etude.jobs.TrainingJob(name=..., train=train, config=..., smoke=...)` values.
+Put each arm in that declaration under its own job name, with its hours and dollar cap, and its
+training seeds in `seeds=`; a config has no seed. Evaluation and reports continue to read the recorded checkpoints.
 
-```python
-from experiments.batched_baseline import batched_baseline
-from manabot.experiment.config import Axis, Baseline, Case, Experiment, ModelOverride
-from manabot.infra.config import ModelConfig
+For example, `experiments/elemental.py` launches the current Elemental recipe
+and evaluates its checkpoints on the existing paired-deal grid. A local run
+calls the same function:
 
-experiment = Experiment(
-    name="value-output",
-    baseline=Baseline.capture("control", batched_baseline()),
-    matrix=(Axis("output", (
-        Case("scalar", (ModelOverride(ModelConfig(value_kind="scalar")),), "Scalar"),
-        Case("wdl", (ModelOverride(ModelConfig(value_kind="categorical_wdl")),), "WDL"),
-    )),),
-)
-resolved = experiment.resolve()
-regime = resolved.regimes["value-output-wdl"]
-receipt = resolved.receipt()
+```bash
+uv run etude train manabot/recipes/elemental.py
+uv run etude train manabot/recipes/elemental.py --resume
 ```
 
-`cases` vary together; `matrix` axes cross, last axis fastest. IDs join
-experiment, case and choice names with hyphens; names are lowercase
-alphanumeric. Labels are presentation only.
+The first command starts the seed-0 run `elemental`; the second
+is another attempt of that run from its last saved state. `--resume
+--until updates=N` takes the same run to a later target, and `etude continue`
+starts a child of a launched run from its state; neither changes the recipe's settings. See [training](training.md#recovery) for the guarantees and limits.
 
-| Component | Owns |
-| --- | --- |
-| `ModelOverride(ModelConfig(...))` | Explicitly supplied `agent.*` fields. |
-| `Environment(world=, match=, observation=)` | World, matchup, input capacity; a supplied deck map replaces the whole map. |
-| `LearningRule(Learning(...) \| DampedPolicyLearning(...))` | The complete learning rule on every self-play stage. |
-| `Resources(execution=, wall_seconds=)` | Explicit execution fields on every stage and the run deadline. |
-| `Pipeline(stages=(...))` | The complete ordered stage list. |
-| `RunControl(...)` | `schedule_clock` (default `iteration_fraction`), `recovery_max_microsteps`, `selection`, `recovery_every_updates`. |
+The nightly baseline runs `manabot/recipes/baseline.py` with `etude train` and
+then calls `evaluate(config, directory)` on that run's `out`. Evaluation compares the initial and final raw
+checkpoints on the same four deck/seat legs per deal, runs the existing native
+choice inspection, and writes `learning.json` for aggregation across training
+seeds. Training time and evaluation time remain separate.
 
-Every setting has exactly one owner. Writes from common overrides, cases and
-axes may replace a baseline value but never each other, even with equal
-values; overlapping parent/child writes fail (so `Pipeline` cannot accompany
-`LearningRule`). There is no last-write-wins. Pydantic's explicitly-set fields
-define a patch, so an explicit default still counts as an override.
-Resolution runs `validate_regime`; artifact existence and runtime binding stay
-execution checks.
+### Retained comparisons
 
-`Baseline.capture(name, regime)` freezes all current serialized defaults into
-immutable bytes; its identity is the full snapshot. `ResolvedCase.digest` is
-the canonical regime digest; `ResolvedCase.identity` also hashes label,
-baseline and provenance. Tests use the small categorical-WDL baseline in
-`tests/training/wdl_baseline.py`, built with `ataraxos_baseline`. A
-declaration is not a study type: the arena studies in
-`manabot.experiment.study` admit only their own arms, seeds and budgets.
+Comparisons declared as `manabot.experiment.config.Experiment` snapshots
+resolved into saved regimes; neither the declarations nor their receipts are
+read on main. [Saved regimes](training.md#saved-regimes) names the revision
+that reads and runs them. Use an experiment's recorded revision and lock to
+reproduce it; do not translate its schedules or recovery contracts silently.
 
-### Execute locally
-
-`Experiment.schedule = ExperimentSchedule(...)` declares seeds, hardware,
-`wall_seconds`, `process_seconds`, `MonitoringBudget` and `checkpoint_updates`.
-`manabot.experiment.runner.run_experiment(experiment, hardware, out, backend=backend)` executes
-it and records actual attempts in `ExperimentRun`.
-
-```python
-from manabot.backends import resolve
-
-backend = resolve("torch")
-hardware = HardwareInventory.model_validate_json(Path("hardware.json").read_text())
-result = run_experiment(experiment, hardware, Path(".runs/my-comparison"), backend=backend)
-result = run_experiment(experiment, hardware, out, resume=True, backend=backend)              # pending work only
-result = run_experiment(experiment, hardware, out, resume=True, recover=(0,), backend=backend)  # recover attempt 0
-```
-
-`HardwareInventory` lists resource names, exact hostnames, `backend:
-"local-cpu"`, `cpu_threads` and optional `dollars_per_hour`. Only that host and
-CPU are admitted; there is no discovery, provisioning or device fallback. One
-learner and at most one evaluator run concurrently; reserve a thread for
-evaluation. `wall_seconds` bounds the whole execution; `process_seconds`
-bounds additive learner plus evaluator time. The full monitoring allocation
-is reserved before each learner; jobs that do not fit stay pending rather than
-shrink. Failed learners keep their exported checkpoints; stopped evaluations
-are not retried; resume grants no extra budget. `active_runtime=True` requires
-the [current-game recovery policy](training.md#current-game-recovery) on every
-learner. A `pause.request` file in the output directory requests a pause at
-the next learning boundary.
-
-The report is one editable `comparison.ipynb` per execution directory, created
-only when absent so edits survive; it reads retained files only and renders
-`comparison.html`. `demo_declaration()` in
-`tests/training/test_experiment_runner.py` is a complete small declaration;
-the retained [demo HTML](../tests/fixtures/experiment-demo/comparison.html)
-and [evidence note](../tests/fixtures/experiment-demo/README.md) show the
-output. Interpretation belongs to the experiment author, never the runner.
-
-Remote runs go through Etude ([remote training](training.md#remote-training)).
-
-### Freeze step targets
-
-`manabot.experiment.execution.StepCalibration.from_export(path)` reads a
-completed single-stage fresh self-play `run.json` and measures completed
-iterations per collection-plus-learning second; `updates_for(hours)` floors to
-whole iterations. Use a representative, separately authorized pilot per
-capacity; apply each target to `TrainSelfPlay.updates` and one shared interval
-to every `checkpoint_updates`; commit the declaration before launch.
-Execution never consults pilot rates. Equal steps do not mean equal
-transitions, exposures, active time or dollars.
+A new recipe fixes its learning horizon before launch and leaves the stopping
+target to Etude. To size that horizon from an earlier run, read its updates
+and training seconds from its Etude clocks. Equal updates do not imply equal
+transitions, exposures or dollars.
 
 ## Writing a report
 
 An experiment's `report()` returns an Etude `Report`. Build it from
 `manabot.training.report`, which knows how manabot jobs are named and which
 comparisons a training study asks, and add only what is specific to the
-experiment. The frontier study's report is four questions and a schedule:
+experiment. The frontier study's report is four questions:
 
 ```python
 from etude.report import Report, Score
@@ -281,18 +260,15 @@ from manabot.training.report import (
     against_fixed,
     head_to_head,
     job_labels,
-    learning_schedule,
 )
 
 
 def report() -> Report:
-    regimes, _ = frozen()
-    jobs = {_regime_id(label): regimes[label] for label in SIZES}
-    small, large = jobs
+    small, large = (job.name for job in training_jobs())
     return Report(
         score=Score(table="games", value="score", reference=0.5, unit="games"),
         clock="updates",
-        labels=job_labels({small: ("Small", jobs[small]), large: ("Large", jobs[large])}),
+        labels=job_labels({small: ("Small", MODELS[SMALL]), large: ("Large", MODELS[LARGE])}),
         evals=(
             against_earlier_self(
                 "Model vs itself at half training time",
@@ -306,14 +282,14 @@ def report() -> Report:
             head_to_head("Large vs Small at fixed # updates", EQUAL_UPDATE_SEATINGS),
         ),
         perf=PERF,
-        ml=(*learning_schedule(jobs), *ML),
+        ml=ML,
     )
 ```
 
 For an experiment whose evaluations were played from the same revision,
 `uv run etude report <experiment file> --source r2://manabot/jobs --serve`
 draws it. A finished experiment's page is rebuilt from the revision that ran
-it, or from a file with its `report()` and no `eval` over its own run prefixes:
+it, or from a file with its `report()` and no `eval_jobs` over its own run prefixes:
 `etude report` still calls `eval_jobs(state)`, and a seating derived from today's
 source digest no longer agrees with the held runs. The page then draws the
 tournament as its eval runs recorded it and says so in a note at the top
@@ -339,7 +315,7 @@ stronger. Small has no line of its own there, since it would be the same games
 read from the other seat. Fixed updates has ten points, from update 25 to 800,
 and fixed training time eleven, ending at Large's final checkpoint. Hovering a
 point reads like `0.66 · 95% interval 0.55–0.77 · 64 games · 16 matches`.
-The learning schedule opens ML details.
+ML details open with each run's logged learning rate and policy damping.
 
 | Helper | Draws |
 | --- | --- |
@@ -347,11 +323,13 @@ The learning schedule opens ML details.
 | `against_earlier_self(title, tags)` | Each checkpoint against an earlier checkpoint of its own job, a line per job. A point counts every such match its checkpoint sat in; a checkpoint that was also the earlier partner of a later one counts that role too, until Etude can score only the later side. |
 | `against_fixed(title, tags)` | Each checkpoint against one fixed player, such as the heuristic, a line per job. The tags select the seatings that hold that player. |
 | `head_to_head(title, seatings)` | Two jobs against each other, as one line: the first-seated job's score, drawn where its checkpoint stood. `seatings` are the names `eval_jobs(state)` gave the pairs, one per point, each played once. An empty sequence raises `ValueError`. |
-| `learning_schedule(regimes)` | Two charts, the configured learning rate and policy damping of each job on the update clock through its damping horizon, with each run's latest update marked. These are plans, not measurements. |
 
 Every helper returns an ordinary Etude panel, so a report mixes them with its
 own `Curve`, `Matrix` or `Series` panels, and an experiment that needs a
 different title or tag passes it rather than writing a new helper.
+A schedule is drawn from what a run logged, not from its configuration: `ML`
+holds `Series` charts of the `learning_rate` and `tau` each update recorded,
+so a chart ends where its run did.
 Equal training time is not yet an Etude clock: a fixed-time head-to-head is
 drawn at the first-seated job's update, and the report's text gives each
 pair's hours.
@@ -376,15 +354,19 @@ A Curve panel names seating 'w160l8 u1200 vs w64 u1200', which nothing holds.
 and the chart is missing that point: correct the name, or drop it if the pair
 was never played. Renaming a seating in `eval_jobs(state)` changes its tournament
 definition and the name reports select; the match keys still depend on the
-players, groups, conditions and game count. For a finished experiment, correct
+players, groups, configs and game count. For a finished experiment, correct
 the report selection and preserve the recorded seating names.
 
-A seating can also follow a job without listing pairs: an `Inference` first
-seat for each held checkpoint to fill and a relative second seat, such as
-`Aligned(job=OTHER, clock="updates", inference=...)` for the other job at the
-same update. One name then covers every checkpoint. `Earlier` and `Fraction`
-seat a checkpoint's own earlier self the same way, and every relative seat
-names the `Inference` it plays as.
+A seating can also follow a job without listing pairs: a `CheckpointSlot()`
+first seat for each held checkpoint to fill and a relative second seat, such
+as `Aligned(job=OTHER, clock="updates")` for the other job at the same update.
+One name then covers every checkpoint. `Earlier` and `Fraction` seat a
+checkpoint's own earlier self the same way. A bare slot or relative seat plays
+its checkpoint as is. To compare different ways of playing one checkpoint
+(sampling temperature, search), wrap the seat in a frozen record of the
+experiment's own, such as `Sampled(over=CheckpointSlot(), temperature=0.5)`:
+the record's type and fields are the player's identity, and results belong to
+the whole player. `checkpoint_player(ref)` seats one fixed checkpoint.
 
 `Crosstable(matches=Matches(tournament=NAME))` shows each checkpoint of one
 line against each other checkpoint of it, a tab per line. Etude has no panel

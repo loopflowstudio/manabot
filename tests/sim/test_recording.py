@@ -11,12 +11,11 @@ import pytest
 import torch
 from typer.testing import CliRunner
 
-from manabot.backends import resolve
 from manabot.env.failures import TrainingExposureReceipt
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.recording import TrainingGames, record_actions, record_games
 from manabot.sim.replay import read_trace, replay_games
-from manabot.training.loops.minimal import train
+from manabot.training.loops.minimal import MinimalConfig, train
 from managym.academy.launch import read_games
 from managym.recording import GameInputs
 
@@ -225,16 +224,24 @@ def test_export_game_cli_refuses_a_directory_without_complete_games(
     assert "--game" not in result.output
 
 
-def test_training_helper_writes_only_canonical_records(tmp_path: Path) -> None:
+def test_training_helper_writes_only_canonical_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from managym.recording import read_records
     from managym.replay import walk
 
+    # The identity `etude train` hands a local run, set here for an in-process call.
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "run" / "out"))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "recorded-games")
+    monkeypatch.setenv("ETUDE_RUN", "recorded-games-seed-3")
+    monkeypatch.setenv("ETUDE_SEED", "3")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "run" / "track"))
     previous = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
         with pytest.warns(DeprecationWarning, match="0.4.0"):
             with record_games(tmp_path, players=("learner", "learner")) as games:
-                train(1, streams=2, decisions=16, seed=3, backend=resolve("torch"))
+                train(MinimalConfig(updates=1, streams=2, decisions=16))
     finally:
         torch.set_num_threads(previous)
     records = list(read_records(tmp_path / "games"))

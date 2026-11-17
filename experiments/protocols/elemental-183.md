@@ -1,5 +1,7 @@
 # MTG-183: one long Elemental seed, rated against its own checkpoints, for $50
 
+> The code that ran this experiment was removed from main; the last commit with it is `b49df79b49`.
+
 Jack Heart, 2026-10-23. Question: is there a point where the ten Elemental decks
 have saturated against the heuristic but newer checkpoints still beat their
 past selves? If so, the heuristic stops being informative there and a

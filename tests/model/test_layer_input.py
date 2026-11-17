@@ -35,10 +35,11 @@ from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluate import validate_registered_player
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.policy import admission
-from manabot.recipes.local import local_smoke
+from manabot.recipes.baseline import settings
+from manabot.recipes.local import LocalConfig
 from manabot.semantic.text_observation import capture_text_decision, submit_response
-from manabot.training.regime import TrainingRegime
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.loops.self_play import SelfPlay
+from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.verify.representation import kellan_trigger_root, kellan_upgrade_root
 import managym
 from tests.model.prepared_routes import (
@@ -52,10 +53,10 @@ from tests.model.prepared_routes import (
 def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> None:
     """Exercise production selection/admission without launching an experiment."""
     torch.set_num_threads(1)
-    recipe = local_smoke(steps=1, device="cpu")
-    recipe = TrainingRegime.model_validate_json(recipe.model_dump_json())
+    recipe = settings(LocalConfig(updates=1))
+    recipe = SelfPlay.model_validate_json(recipe.model_dump_json())
     space = ObservationSpace(recipe.observation)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(recipe.match),
         Reward(RewardConfig()),
@@ -66,8 +67,8 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     try:
-        model = ActorCritic(space, recipe.agent)
-        batch = collector.collect(model, 1)
+        model = ActorCritic(space, recipe.model)
+        batch = collect(collector, model, 1)
         assert batch.ordered_obs()["effect_details"].shape == (1, 1, 4096, 3)
         assert batch.actions.size == 1
         path = tmp_path / "explicit.pt"
@@ -88,7 +89,7 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
         assert paths["layer-fixture"] == str(path)
         assert selected is not None and selected.encoder.config == recipe.observation
     finally:
-        collector.close()
+        close_collector(collector)
 
 
 def _assert_encoder_parity(

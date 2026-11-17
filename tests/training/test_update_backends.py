@@ -48,9 +48,13 @@ from manabot.policy.checkpoint import (
     from_torch_state,
 )
 from manabot.policy.protocol import Backend, Precision
-from manabot.training.regime import DampedPolicyLearning
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    collect,
+    open_collector,
+)
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
 import managym
@@ -89,7 +93,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         ),
     )
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(MatchConfig()),
         Reward(RewardConfig()),
@@ -99,7 +103,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         batch_closure="exact-quota",
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    batch = collector.collect(agent, 6)
+    batch = collect(collector, agent, 6)
     return from_torch_state(
         agent.config,
         space.encoder.config,

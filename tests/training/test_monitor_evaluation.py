@@ -2,31 +2,15 @@
 
 import json
 from pathlib import Path
-import time
 from typing import Any, Literal
 
 import pytest
-import torch
 
-from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
 from manabot.eval import monitor as monitor
 from manabot.eval.models import EvaluationKey
-from manabot.experiment import checkpoint_evaluation
-from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import runtime_fingerprints
 from manabot.reports.training import evaluation_dashboard
-from manabot.sim import anchors
-from manabot.sim.execution import EvalExecution
-from manabot.sim.matchup import AuthoredMatchup, selected_match
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.records import TrainingRun
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
-import managym
-from tests.eval.test_batched_eval import fixture_policy
 
 
 def failure_summary(result: monitor.MonitorResult) -> str:
@@ -191,53 +175,6 @@ def test_saved_rows_admission(tmp_path: Path, defect: str) -> None:
         monitor.import_saved_rows(manifest, source, tmp_path / "import")
 
 
-def test_block_failure_retains_prior_rows_and_costs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    manifest = _manifest()
-    monkeypatch.setattr(
-        checkpoint_evaluation,
-        "checkpoint_manifest",
-        lambda *args, **kwargs: manifest.model_copy(deep=True),
-    )
-
-    def play(
-        **kwargs: Any,
-    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
-        # Without an allocation the checkpoint plays scalar, one block per deal.
-        if kwargs["deal_seeds"] == (102,):
-            raise TimeoutError("retained block failure")
-        return _rows(manifest, (101,)), {"sha256": "trace"}, {"passed": True}
-
-    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play)
-    # The injected manifest isolates arena orchestration from checkpoint loading.
-    result = checkpoint_evaluation.evaluate_checkpoint(
-        TrainingRun.model_construct(),
-        manifest.artifact,
-        manifest.coordinates,
-        tmp_path / "attempt",
-        backend=TORCH_BACKEND,
-    )
-    assert result.status == "incomplete"
-    assert len(result.rows) == 4
-    assert result.error == "TimeoutError: retained block failure"
-    assert result.evaluation_seconds is not None and result.evaluation_seconds > 0
-    assert result.score is None
-    assert result.rows[0].trace_path.startswith("deal-000/")
-    saved = monitor.MonitorResult.model_validate_json(
-        (tmp_path / "attempt/monitor.json").read_text()
-    )
-    assert saved == result
-    with pytest.raises(FileExistsError):
-        checkpoint_evaluation.evaluate_checkpoint(
-            TrainingRun.model_construct(),
-            manifest.artifact,
-            manifest.coordinates,
-            tmp_path / "attempt",
-            backend=TORCH_BACKEND,
-        )
-
-
 def test_default_monitoring_cohort() -> None:
     protocol = monitor.MonitorProtocol()
     assert len(protocol.deal_seeds) * 4 == 100
@@ -276,152 +213,6 @@ def test_result_purpose_preserves_protocol_binding(
         monitor.MonitorResult.model_validate(data)
 
 
-@pytest.mark.parametrize(
-    "max_commands,opponent,explicit_matrix,shared",
-    [
-        (1, "scripted_greedy", False, False),
-        (10000, "scripted_greedy", False, False),
-        (10000, "random", False, False),
-        (10000, "scripted_greedy", True, False),
-        pytest.param(10000, "scripted_greedy", False, True, id="shared"),
-    ],
-)
-def test_real_arena_checkpoint_outcomes(
-    tmp_path: Path,
-    max_commands: int,
-    opponent: Literal["scripted_greedy", "random"],
-    explicit_matrix: bool,
-    shared: bool,
-) -> None:
-    previous_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    try:
-        matrix = (
-            AuthoredMatchup(
-                pack_key="ur-lessons-vs-gw-allies",
-                role_a="ur_lessons",
-                role_b="gw_allies",
-            )
-            if explicit_matrix
-            else None
-        )
-        match = matrix.match() if matrix else selected_match()
-        space = ObservationSpace()
-        config = ModelConfig(
-            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
-        )
-        torch.manual_seed(101)
-        checkpoint = tmp_path / "untrained.pt"
-        save_checkpoint(
-            ActorCritic(space, config),
-            space,
-            checkpoint,
-            player_configs=Match(match).to_rust(),
-        )
-        regime = TrainingRegime(
-            id="monitor-fixture",
-            world=managym.WORLD_VERSION,
-            match=match,
-            agent=config,
-            wall_seconds=10,
-            stages=[
-                TrainSelfPlay(
-                    id="unused",
-                    operation="train_self_play",
-                    updates=1,
-                    transitions=8,
-                    streams=2,
-                )
-            ],
-        )
-        run = TrainingRun(
-            id="fixture",
-            regime_digest=canonical_sha256(regime.model_dump(mode="json")),
-            regime=regime,
-            seed=17,
-            seed_streams={},
-            identities=runtime_fingerprints(
-                17, match_config=match, observation_space=space
-            ),
-        )
-        execution = EvalExecution(deadline_unix=time.time() + 360) if shared else None
-        result = checkpoint_evaluation.evaluate_checkpoint(
-            run,
-            {
-                "path": str(checkpoint),
-                "sha256": monitor.file_sha256(checkpoint),
-                "bytes": checkpoint.stat().st_size,
-            },
-            monitor.TrainingCoordinates(
-                stage_id="unused", updates=0, training_seconds=0
-            ),
-            tmp_path / "arena",
-            execution=execution,
-            protocol=monitor.MonitorProtocol(
-                deal_seeds=(1910101000,),
-                authored_matchup=matrix,
-                include_mirrors=explicit_matrix,
-                max_commands=max_commands,
-                # These are correctness allowances, not throughput thresholds.
-                # Shared games include queue waits and contend with one another;
-                # busy macOS hosts have reached 120s before a terminal result.
-                game_seconds=240 if shared else 120,
-                opponent=opponent,
-                comparison_sha256="a" * 64 if opponent == "random" else None,
-            ),
-            backend=TORCH_BACKEND,
-        )
-        assert (
-            result.started_unix is not None
-            and result.finished_unix >= result.started_unix
-        )
-        assert result.opponent.player_spec["kind"] == opponent
-        assert result.purpose == (
-            "predeclared-comparison-not-admission"
-            if opponent == "random"
-            else "monitoring-not-scientific-evaluation"
-        )
-        assert len(result.rows) == (8 if explicit_matrix else 4)
-        if max_commands == 1:
-            assert result.status == "incomplete"
-            assert all(row.failure is not None for row in result.rows)
-            assert result.score is None
-        else:
-            if result.status != "completed":
-                pytest.fail(failure_summary(result), pytrace=False)
-            assert all(row.valid for row in result.rows)
-            assert result.score is not None
-        assert all(
-            (tmp_path / "arena" / row.trace_path).is_file() for row in result.rows
-        )
-    finally:
-        torch.set_num_threads(previous_threads)
-
-
-def test_checkpoint_admission_failure_is_saved(tmp_path: Path) -> None:
-    manifest = _manifest()
-    match = selected_match()
-    run = TrainingRun.model_construct(
-        id="failed-admission",
-        seed=manifest.training_seed,
-        regime=TrainingRegime.model_construct(match=match),
-        identities={"matchup_sha256": canonical_sha256(match.model_dump())},
-    )
-    manifest.artifact["path"] = str(tmp_path / "missing.pt")
-    with pytest.raises(FileNotFoundError):
-        checkpoint_evaluation.evaluate_checkpoint(
-            run,
-            manifest.artifact,
-            manifest.coordinates,
-            tmp_path / "attempt",
-            backend=TORCH_BACKEND,
-        )
-    failure = json.loads((tmp_path / "attempt/admission-failure.json").read_text())
-    assert failure["run_id"] == "failed-admission"
-    assert failure["artifact"] == manifest.artifact
-    assert failure["error"].startswith("FileNotFoundError:")
-
-
 def test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts(
     tmp_path: Path,
 ) -> None:
@@ -439,60 +230,3 @@ def test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts(
     changed.protocol.deal_seeds = (200,)
     with pytest.raises(ValueError, match="same run"):
         evaluation_dashboard([complete, changed])
-
-
-def test_registration_extraction_preserves_frozen_monitor_identity(
-    tmp_path: Path,
-) -> None:
-    """The metadata wrapper retains every historical registration field."""
-    previous_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    try:
-        _, admitted, _, path = fixture_policy(tmp_path)
-        match = selected_match()
-        identities = runtime_fingerprints(match_config=match)
-        regime = TrainingRegime.model_construct(
-            world=managym.WORLD_VERSION, match=match
-        )
-        run = TrainingRun.model_construct(
-            id="fixture",
-            regime_digest="a" * 64,
-            seed=17,
-            regime=regime,
-            identities=identities,
-        )
-        result = checkpoint_evaluation.checkpoint_manifest(
-            run,
-            {
-                "path": str(path),
-                "bytes": path.stat().st_size,
-                "sha256": monitor.file_sha256(path),
-            },
-            monitor.TrainingCoordinates(
-                stage_id="unused", updates=0, training_seconds=0
-            ),
-            monitor.MonitorProtocol(deal_seeds=(101,)),
-            backend=TORCH_BACKEND,
-        )
-        # Freeze the pre-extraction schema, values and serialized null metadata.
-        expected = admitted.model_copy(
-            update={
-                "player_id": "monitor-checkpoint",
-                "information_boundary": "acting-viewer",
-                "display_name": "Monitored checkpoint",
-                "compute_class_id": "policy-cpu-one-thread-one-pass",
-                "training_seed": 17,
-                "artifact_id": f"monitor/{admitted.checkpoint_sha256}",
-                "evidence_class": "production",
-            }
-        )
-        assert result.candidate.model_dump() == expected.model_dump()
-        assert result.candidate.identity_sha256 == expected.identity_sha256
-        assert result.key.anchor_cohort_sha256 == canonical_sha256(
-            result.opponent.model_dump()
-        )
-        assert result.opponent.source_sha256 == monitor.file_sha256(
-            Path(anchors.__file__)
-        )
-    finally:
-        torch.set_num_threads(previous_threads)

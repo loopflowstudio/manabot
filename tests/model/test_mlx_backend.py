@@ -396,17 +396,15 @@ def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
         (384, "bfloat16"),
     ],
 )
-def test_omitted_precision_follows_the_shared_width_rule(
+def test_omitted_precision_follows_the_width_rule(
     width: int, expected: Precision
 ) -> None:
     """A policy, backend and learner built without a precision run bfloat16
-    from the width torch's GPU devices use, with float32 masters and outputs."""
+    from the threshold width, with float32 masters and outputs."""
     from manabot.backends.mlx.arrays import default_precision, precision_dtype
     from manabot.backends.mlx.checkpoint import MLXBackend, assemble
-    from manabot.training.regime import ladder_precision
 
     assert default_precision(width) == expected
-    assert (ladder_precision("mps", width) == "bf16") == (expected == "bfloat16")
     space = ObservationSpace(ObservationConfig(policy_input_version=9))
     agent = ActorCritic(
         space,

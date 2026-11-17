@@ -28,7 +28,7 @@ evaluation complete the recipe, which adapts
 [Ataraxos](https://doi.org/10.1038/s41586-026-11036-y). Each piece is a
 switch we test on Magic rather than adopt by default. Many games step in
 lockstep so inference is batched; the GPU baseline is
-`batched_baseline()` in `experiments/batched_baseline.py`. The mechanics are in
+`train` in `experiments/batched_baseline.py`. The mechanics are in
 [How a manabot learns](../docs/learning.md).
 
 ### Current questions
@@ -46,7 +46,7 @@ lockstep so inference is batched; the GPU baseline is
   whether the rule-based `heuristic` bot or frozen trained checkpoints order
   checkpoints of different strength, and playing chosen checkpoints against
   each other in head-to-head
-  [Tournaments](../experiments/head-to-head.md).
+  [Tournaments](../experiments/reports/head-to-head.md).
 - **More decks.** A ten-deck Elemental world is being built so training and
   evaluation can move beyond one matchup.
 - **Inspection.** Academy is being shaped into a lab for loading a trained
@@ -65,12 +65,12 @@ they guide the next experiment rather than settle a method.
 
 | Finding | Evidence | Consequence |
 | --- | --- | --- |
-| A 10,000-update self-play cohort improves on monitoring deals, mostly by learning to pilot Lessons. | Mean win rate against scripted greedy rose from 30.3% to 54.3%; Allies saturated near 87–88% by update 1,240 while Lessons rose from 5/150 to 32/150 ([current baseline](../experiments/current-baseline.md)). | The held-out final comparison is still pending. Lessons is where learning shows. |
-| Batching many games per update is a large, reliable speedup, and the smallest model learns as well as larger ones at this scale. | 64×2 took 109–111 minutes at 4 streams and 4.8–5.2 at 256 ([longer learning](../experiments/longer-learning-017.md)). | Batched collection is the default. Two seeds are not enough to rank model sizes. |
-| Opponent choice drives the measured gap between the decks. | Switching the greedy opponent's deck moved Lessons results by 40 to 60 points on five deals ([mirror curriculum](../experiments/mirror-curriculum.md)). | Curriculum and evaluation opponents are first-order questions. |
-| Several adapted techniques have not yet shown a benefit on Magic. | Actor-only advantage filtering: +3.33 points, interval [−4.33, +11.33], at 1.45× wall time ([technique screen](../experiments/ataraxos-technique-screen.md)); value-token and pooling variants unresolved ([value token](../experiments/value-token-screen.md), [pooling follow-up](../experiments/pooling-filter-followup.md)). | Keep them as switches; promote only on evidence. |
-| The observation encoding no longer hides decision-relevant differences. | The learnability search found 0 clean input collisions ([learnability](../experiments/learnability-search.md)). | A nightly check guards it; see [WORLDS.md](../WORLDS.md). |
-| Collection dominates GPU training time. | Collection was 82.5% of active time in the profiled run ([training time](../experiments/training-time.md)). | Engine and inference throughput are the cost levers. |
+| A 10,000-update self-play cohort improves on monitoring deals, mostly by learning to pilot Lessons. | Mean win rate against scripted greedy rose from 30.3% to 54.3%; Allies saturated near 87–88% by update 1,240 while Lessons rose from 5/150 to 32/150 ([current baseline](../experiments/reports/current-baseline.md)). | The held-out final comparison is still pending. Lessons is where learning shows. |
+| Batching many games per update is a large, reliable speedup, and the smallest model learns as well as larger ones at this scale. | 64×2 took 109–111 minutes at 4 streams and 4.8–5.2 at 256 ([longer learning](../experiments/reports/longer-learning-017.md)). | Batched collection is the default. Two seeds are not enough to rank model sizes. |
+| Opponent choice drives the measured gap between the decks. | Switching the greedy opponent's deck moved Lessons results by 40 to 60 points on five deals ([mirror curriculum](../experiments/reports/mirror-curriculum.md)). | Curriculum and evaluation opponents are first-order questions. |
+| Several adapted techniques have not yet shown a benefit on Magic. | Actor-only advantage filtering: +3.33 points, interval [−4.33, +11.33], at 1.45× wall time ([technique screen](../experiments/reports/ataraxos-technique-screen.md)); value-token and pooling variants unresolved ([value token](../experiments/reports/value-token-screen.md), [pooling follow-up](../experiments/reports/pooling-filter-followup.md)). | Keep them as switches; promote only on evidence. |
+| The observation encoding no longer hides decision-relevant differences. | The learnability search found 0 clean input collisions ([learnability](../experiments/reports/learnability-search.md)). | A nightly check guards it; see [WORLDS.md](../WORLDS.md). |
+| Collection dominates GPU training time. | Collection was 82.5% of active time in the profiled run ([training time](../experiments/reports/training-time.md)). | Engine and inference throughput are the cost levers. |
 
 Belief sampling and local search run end to end. In their
 pilots, 840 held-out sampled hands had no support violations and local search
@@ -78,7 +78,7 @@ replayed 183 commands with no mismatch. On MTG-183's frozen w13 policy,
 magnetic-mirror local search with playable uniform hand sampling beat the
 policy's own sampled play by +12.5 to +17.4 points from 4 to 16 shuffles, and
 beat PUCT-1024 at lower cost; knowing the true hand added at most +5.2 points
-([mirror search](../experiments/search-mirror.md), exploratory, one policy).
+([mirror search](../experiments/reports/search-mirror.md), exploratory, one policy).
 The learned belief sampler has not yet been tested in search.
 
 ### Earlier: the search era
@@ -88,11 +88,11 @@ checkpoints.
 
 | Finding | Evidence |
 | --- | --- |
-| Search supplies useful intelligence without training. | Flat search dominated early policies and scaled with simulations ([exp-02](../experiments/exp-02-flat-mc.md)). |
-| Distillation beat the early PPO recipe at equal cost. | 90.5% versus 52.7% against random ([exp-03](../experiments/exp-03-distillation.md)). |
-| Distillation does not improve a weak teacher. | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/exp-07-expert-iteration.md)). |
-| Reward shaping hurt. | Terminal-only reward beat shaped rewards by about 15 points ([exp-04](../experiments/exp-04-potential-shaping.md)). |
-| Win rate hid incompetence. | The search pilot could not play a control deck ([exp-09](../experiments/exp-09-control-competency.md)). |
+| Search supplies useful intelligence without training. | Flat search dominated early policies and scaled with simulations ([exp-02](../experiments/reports/exp-02-flat-mc.md)). |
+| Distillation beat the early PPO recipe at equal cost. | 90.5% versus 52.7% against random ([exp-03](../experiments/reports/exp-03-distillation.md)). |
+| Distillation does not improve a weak teacher. | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/reports/exp-07-expert-iteration.md)). |
+| Reward shaping hurt. | Terminal-only reward beat shaped rewards by about 15 points ([exp-04](../experiments/reports/exp-04-potential-shaping.md)). |
+| Win rate hid incompetence. | The search pilot could not play a control deck ([exp-09](../experiments/reports/exp-09-control-competency.md)). |
 | Information boundaries must be executable. | Hidden-pool ordering once changed search evidence between viewer-equivalent states. Viewer equivalence, replay and leakage checks are now hard gates. |
 
 ## What we plan to do later
@@ -142,7 +142,7 @@ Constraints that apply throughout:
 
 The protocols for sampler quality, search with learned sampling and exploiters
 are written down
-([transfer protocols](../experiments/ataraxos-transfer.md)).
+([transfer protocols](../experiments/reports/ataraxos-transfer.md)).
 
 ### Training dynamics
 
@@ -211,7 +211,7 @@ held-out opponents). The first two can improve while the third gets worse.
 
 Strength is a population rating, not a win rate against random. The arena
 (`manabot/eval/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
-parameters on the familiar Elo scale; [Tournament](../experiments/head-to-head.md)
+parameters on the familiar Elo scale; [Tournament](../experiments/reports/head-to-head.md)
 files play chosen checkpoints against each other on shared deals.
 
 A rating belongs to an exact tuple:

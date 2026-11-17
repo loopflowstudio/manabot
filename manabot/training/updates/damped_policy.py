@@ -25,7 +25,7 @@ import numpy as np
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.policy.prepare import reference_distribution
-from manabot.training.regime import DampedPolicyLearning
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.backend import (
     RL,

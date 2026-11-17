@@ -270,7 +270,7 @@ declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
 
 Collection was 75–83% of active time across the profiled training runs
-([training time](../experiments/training-time.md)), so engine and inference
+([training time](../experiments/reports/training-time.md)), so engine and inference
 throughput are the cost levers. CI keeps an
 [engine performance budget](development.md#engine-performance-budget): a
 change more than 10% slower than the reference, or one that moves the
@@ -1236,13 +1236,13 @@ A serialized match keeps each seat's admitted source privately as provenance
 and re-admits it on load, so a world that no longer admits the list rejects
 the record. `managym.check_decks(decks)` is the cheap check without a game.
 
-Training does not take deck files; it takes a **deck source** in the regime
-(`deck_source`, with `agent.world = "world"` and no `match`). `UniformDecks`
+Training does not take deck files; it takes a **deck source** in the
+self-play settings (`SelfPlay.deck_source`, with no `match`). `UniformDecks`
 (`uniform-distinct-v1`) draws two different decks per game uniformly over
-ordered pairs from its RNG domain, so exact resume reproduces decks, seats and
-seed; the TLA pilot's source is the frozen trophy corpus
-([training](training.md#regimes-and-stages)). Every deck a source lists is
-admitted when the regime validates, and again natively at each game root.
+ordered pairs from that game's native seed, so a seed reproduces decks and
+seats; the TLA pilot's source is the frozen trophy corpus
+([training](training.md#self-play-settings)). Every deck a source lists is
+admitted when the settings validate, and again natively at each game root.
 `UniformDecks(decklists="closed")` closes every game the source deals; each
 game has one setting shared by both seats. Use `decklists="mixed"` for a
 seeded, balanced per-game open/closed draw. A checkpoint from such a run binds the world and nothing about the decks, so it
@@ -1308,13 +1308,13 @@ saved training corpora or change their split assignments.
 
 - **Replay holds.** Evaluation cohorts replay exactly in practice. In the
   filter-scope screen all 3,600 monitoring and final games replayed
-  ([technique screen](../experiments/ataraxos-technique-screen.md)).
+  ([technique screen](../experiments/reports/ataraxos-technique-screen.md)).
 - **The encoding hides no decision.** The learnability search found no clean
   input collisions, and the fixed suite runs on relevant PR updates
-  ([learnability](../experiments/learnability-search.md)).
+  ([learnability](../experiments/reports/learnability-search.md)).
 - **Collection dominates cost.** 75–83% of active training time across the
   profiled runs, 82.5% in the L4 run
-  ([training time](../experiments/training-time.md)).
+  ([training time](../experiments/reports/training-time.md)).
 - **Hidden-pool ordering once leaked.** Reordering a hidden zone changed search
   evidence between viewer-equivalent states. Viewer equivalence, replay and
   leakage checks are now hard gates ([research program](../manabot/RESEARCH.md#earlier-the-search-era)).

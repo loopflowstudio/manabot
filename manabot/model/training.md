@@ -1,15 +1,15 @@
 # Training ownership and learning rules
 
-RL entry points resolve a `TrainingRegime` and call
-`manabot.training.execution.execute_regime`. Bounded diagnostics may use the
-same `SeatRoutedCollector` and update rules (`update_damped_iteration`,
+RL entry points build `SelfPlay` settings and call
+`manabot.training.loops.self_play.self_play`. Bounded diagnostics may use the
+same collector (`open_collector`, `collect`) and update rules (`update_damped_iteration`,
 `update_iteration`) directly. A new
 loop or optimizer implementation needs a concrete unsupported behavior and a
 current consumer; an old import or test is not a reason to retain one.
 
 `Learner` owns the admitted train-mode `ActorCritic`, Adam (epsilon 1e-5), device and
-native-stream minibatch width. The executor owns collection, EMA, schedules,
-tracking, checkpoint exports, failure receipts and recovery. Belief stages
+native-stream minibatch width. The loop owns collection, EMA and schedules;
+Etude owns tracking, checkpoints, saved state and resume. Belief stages
 retain their separate data/target contracts.
 
 ## Credit and behavior
@@ -70,11 +70,11 @@ The loader returns eval mode; `Learner` explicitly enables train mode, including
 recurrent encoders whose CUDA backward requires a training-mode forward. Starting
 from admitted weights is a new run, not exact recovery.
 
-Supported private recovery restores learner, Adam, EMA, collector, sampler,
-minibatch, Python, NumPy and Torch RNG state at a committed update boundary.
-It preserves attempts, prior costs and absolute schedule coordinates. No update
-is applied from an incomplete collection. Recovery remains subject to source,
-recipe and backend admission; CPU proof does not certify CUDA recovery.
+Etude saves the learner's weights, Adam, EMA and cumulative counts after each
+update, and a resumed run continues from that boundary with its absolute
+schedule coordinates. No native game or RNG state is saved: a resume starts
+fresh game, sampling and minibatch streams, so it does not reproduce the
+uninterrupted run. No update is applied from an incomplete collection.
 
 Automatic failure capture does not enable tolerance. Opted-in game-error
 recovery retains its attempt ledger independently of optimizer snapshots, so
@@ -89,11 +89,12 @@ decoder, serialized-tag override or old preset execution path remains.
 
 ## Entry points and retired routes
 
-`uv run manabot train` resolves `local-smoke-v1`: two CPU updates, two streams,
-16 combined decisions per stream as a floor, both seats and complete games,
-with a 120-second failure limit. It uses the baseline model and horizon-scaled
-damped objective. `--learning-seats one` selects exact quotas. `--recipe baseline`
-adds the ordinary baseline's independent evaluation. Neither smoke nor successful
+`uv run etude train manabot/recipes/local.py` is the local smoke: two CPU
+updates, two streams, 16 combined decisions per stream as a floor, both seats
+and complete games. It uses the baseline model and horizon-scaled damped
+objective. `--config '{"learning_seats": "one"}'` selects one learning seat.
+`manabot/recipes/baseline.py` is the ordinary baseline, whose evaluation is a
+separate call. Neither smoke nor successful
 export certifies playing strength.
 
 The old standalone `Trainer` and `NetOpponentTrainer` loops, fake environment

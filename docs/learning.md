@@ -43,7 +43,7 @@ for running training, see [training.md](training.md).
 
 ## 1. Play
 
-`SeatRoutedCollector` steps every stream in lockstep, so one forward pass
+`collect` steps every stream of a `Collector` in lockstep, so one forward pass
 chooses actions for all of them. The network sees only the acting seat's
 [viewer-safe observation](observation-and-model.md). Hidden cards and game
 outcomes never enter it.
@@ -64,16 +64,16 @@ opponent decisions came between them.
 
 ![An interleaved game of decisions by seats A and B, with one forced decision, splits into one row sequence per seat. Seat A's last row has reward +1 and seat B's has -1; all other rows have reward 0.](images/game-to-trajectories.svg)
 
-From `SeatRoutedCollector` in
+From `collect` in
 [`manabot/training/rollout/collection.py`](../manabot/training/rollout/collection.py):
 
 ```python
 slot = (
     2 * int(row) + int(acting[row])
-    if self.learning_seats == "both"
+    if collector.learning_seats == "both"
     else int(row)
 )
-self._pending[slot] = _Pending(...)
+collector._pending[slot] = _Pending(...)
 ```
 
 Each stream and seat has its own slot, and a row stays pending in it until that
@@ -348,7 +348,10 @@ update and declare $S$ as the updates the wall reaches at that cost
 absolute iteration.
 
 The PPO-style `Learning` rule remains as a control. It normalizes advantages
-and shuffles minibatches, and may take several epochs.
+and shuffles minibatches, and may take several epochs. Its learning rate and
+damping decay with the fraction of a declared `horizon` completed
+(`Learning(horizon=64)`), never with the update a run happens to stop at
+([schedules and clocks](training.md#schedules-and-clocks)).
 
 ## Weights, checkpoints and evaluation
 
@@ -415,7 +418,7 @@ That idle time is the price of having real outcomes on every trajectory.
 
 - **How far back should a result reach?** In one baseline, Allies reached
   87–88% against a scripted opponent while Lessons climbed slowly from 5/150
-  to 32/150 ([current baseline](../experiments/current-baseline.md)). Credit
+  to 32/150 ([current baseline](../experiments/reports/current-baseline.md)). Credit
   reach might be part of the reason, but that's untested.
 - **What does the advantage filter do?** Only about the top quarter of rows
   by |A| train, and both KL terms apply only to those rows. Filtering on a
@@ -435,14 +438,14 @@ one switch at a time. These are the results the guide leans on:
 
 - **Terminal reward only.** Potential shaping matched it and pay-per-event
   shaping lost to it by about 14 points
-  ([exp-04](../experiments/exp-04-potential-shaping.md)), in an earlier world.
+  ([exp-04](../experiments/reports/exp-04-potential-shaping.md)), in an earlier world.
 - **Technique screens.** Each Ataraxos component has its own status in the
-  [technique screen](../experiments/ataraxos-technique-screen.md) and
-  [ablations](../experiments/ataraxos-mtg-ablations.md). The recipe is not a
+  [technique screen](../experiments/reports/ataraxos-technique-screen.md) and
+  [ablations](../experiments/reports/ataraxos-mtg-ablations.md). The recipe is not a
   demonstrated strength result as a whole.
 - **Scale.** The largest run so far is MTG-183, one seed on ten decks for
   331M learner decisions ([protocol](../experiments/protocols/elemental-183.md));
-  the one-seat [scale ladder](../experiments/scale-ladder.md) is the largest
+  the one-seat [scale ladder](../experiments/reports/scale-ladder.md) is the largest
   exact-quota run. Both are summarized in the [README](../README.md#scale).
 
 ## Influences
@@ -488,7 +491,7 @@ becoming a draw; opponent actions are traversed, not trained on.
 
 Optional controls: `filter_scope="actor"` keeps all critic rows;
 `behavior="ema-self"` collects and bootstraps with averaged weights
-([protocol](../experiments/ataraxos-omitted-controls.md)). EMA evaluation
+([protocol](../experiments/reports/ataraxos-omitted-controls.md)). EMA evaluation
 outputs are selected explicitly at arena registration.
 
 ### Fidelity table
@@ -522,8 +525,8 @@ Before any scientific comparison of PPO, categorical and scalar move learning,
 freeze a protocol, independent seeds, budgets, world and code identities,
 held-out paired deals with both seat/deck assignments and the raw/EMA choice;
 keep all failures and compare overlapping cost intervals. The technique
-inventory is [ataraxos-technique-screen](../experiments/ataraxos-technique-screen.md);
-ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.md).
+inventory is [ataraxos-technique-screen](../experiments/reports/ataraxos-technique-screen.md);
+ablations are in [ataraxos-mtg-ablations](../experiments/reports/ataraxos-mtg-ablations.md).
 
 ## Where the code lives
 
@@ -532,13 +535,13 @@ each piece they are made of as a public function.
 
 | Step | Code |
 | --- | --- |
-| Iteration loop, checkpoints; which update a stage calls | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
-| Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
+| Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
+| Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
 | Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
 | Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
 | Magnet | `reference_distribution` in [`policy/prepare.py`](../manabot/policy/prepare.py) |
-| Defaults | `DampedPolicyLearning`, `TrainSelfPlay` in [`training/regime.py`](../manabot/training/regime.py) |
+| Defaults | `DampedPolicyLearning` in [`training/learning.py`](../manabot/training/learning.py), `SelfPlay` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

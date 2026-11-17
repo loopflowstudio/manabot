@@ -4,37 +4,37 @@ One match is the existing eight-leg authored arena matrix for one deal. Etude
 owns completion, retries and scalar tables; every eval run names the experiment
 whose database it joins. The replay worker hands each game's evidence over in a
 scratch folder; `play` returns it to Etude as a blob of its match
-(`etude.eval.match.Result`), named in `card_plays` by its SHA256, and the run
+(`etude.eval.result.Result`), named in `card_plays` by its SHA256, and the run
 declares `CARD_ROLLUPS` so its blocks carry the totals card queries read. Games
 are admitted one at a time: a crash, timeout or failed replay is an ineligible
 `card_plays` row, never a reason to drop the rest of its deal."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from itertools import combinations
 import os
 from pathlib import Path
 import tempfile
-from typing import Literal
+from typing import Literal, cast
 
-from etude.eval.match import EvalRun, Result, Tables
 from etude.eval.records import (
-    CheckpointKey,
+    Benchmark,
+    CheckpointPlayer,
     CheckpointRef,
     Code,
     Environment,
-    Inference,
     Match,
-    Model,
     Player,
-    RoundRobin,
+    Seating,
 )
-from etude.eval.run import Row
-from etude.eval.tournament import hold
+from etude.eval.result import EvalResult, Result, Row, Tables
+from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import Field, model_validator
 
+from manabot.eval.agents import AGENTS, registration
 from manabot.eval.card_metrics import (
     CARD_ROLLUPS,
     METRIC_VERSION,
@@ -54,11 +54,11 @@ from manabot.eval.evaluate import (
 )
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
-from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.source import source_commit, source_dirty
-from manabot.policy.protocol import Backend
+from manabot.policy.checkpoint import read_container
+from manabot.sim.agent import GamePlayer
 from manabot.sim.card_evidence import (
     CAPTURE_VERSION,
     EvidenceRef,
@@ -83,7 +83,6 @@ class CardEvaluationSpec(StrictModel):
     authored_matchup: AuthoredMatchup | None = None
     game_seconds: float = Field(default=120, gt=0, allow_inf_nan=False)
     max_commands: int = Field(default=10000, gt=0)
-    workers: int = Field(default=1, ge=1)
     capture_version: Literal[1] = CAPTURE_VERSION
     metric_version: Literal["gih-copies-v1"] = METRIC_VERSION
 
@@ -172,18 +171,10 @@ def _environment(values: dict[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
-def _entrants(spec: CardEvaluationSpec, backend: Backend | None) -> tuple[Player, ...]:
+def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
-    # Bind all Python inference code as well as the separately bound native
-    # runtime; a registration's human label never establishes byte identity.
     code = sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
-    spaces = []
-    for player in spec.players:
-        _, space = validate_registered_player(
-            player, spec.checkpoints.get(player.player_id), backend=backend
-        )
-        if space is not None:
-            spaces.append(space)
+    spaces = [read_container(path).space for path in spec.checkpoints.values()]
     if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
         raise ValueError("players have different observation ABIs")
     runtime = runtime_fingerprints(
@@ -192,42 +183,60 @@ def _entrants(spec: CardEvaluationSpec, backend: Backend | None) -> tuple[Player
     entrants: list[Player] = []
     for player in spec.players:
         validate_player_compatibility(player, spec.key, runtime)
-        config = {"registration": player.model_dump(mode="json")}
         if player.runner_kind == "checkpoint":
             path = spec.checkpoints[player.player_id].resolve()
-            checkpoint = CheckpointRef(
-                key=CheckpointKey(address=path.as_uri()),
-                artifact=ArtifactRef(
-                    uri=path.as_uri(),
-                    sha256=player.checkpoint_sha256,
-                    size_bytes=player.checkpoint_bytes,
+            leaf = CheckpointPlayer(
+                name=player.player_id,
+                checkpoint=CheckpointRef(
+                    address=path.as_uri(),
+                    artifact=ArtifactRef(
+                        uri=path.as_uri(),
+                        sha256=player.checkpoint_sha256,
+                        size_bytes=player.checkpoint_bytes,
+                    ),
                 ),
             )
+            admitted = registration(
+                leaf,
+                name=player.player_id,
+                match=setup,
+                content_suite=spec.key.content_suite,
+                role=player.role,
+            )
+            if admitted.parameter_count != player.parameter_count:
+                raise ValueError("checkpoint parameter count differs from registration")
             entrants.append(
-                Model(
-                    name=player.player_id,
-                    checkpoint=checkpoint,
-                    inference=Inference(source=code, config=config),
+                leaf.model_copy(
+                    update={
+                        "config": {"registration": admitted.model_dump(mode="json")}
+                    }
                 )
             )
         else:
-            entrants.append(Code(name=player.player_id, source=code, config=config))
+            validate_registered_player(player, None)
+            entrants.append(
+                Code(
+                    name=player.player_id,
+                    source=code,
+                    config={"registration": player.model_dump(mode="json")},
+                )
+            )
     return tuple(entrants)
 
 
-def play_card_match(match: Match) -> Result:
+def play_card_match(match: Match, agents: Sequence[object]) -> Result:
     players = card_match_players(match)
-    conditions = CardConditions.model_validate(match.conditions)
+    conditions = CardConditions.model_validate(match.config)
     paths: dict[str, str] = {}
     for entrant, player in zip(match.players, players, strict=True):
-        if isinstance(entrant, Model):
+        if isinstance(entrant, CheckpointPlayer):
             artifact = entrant.checkpoint.artifact
             if (
                 artifact.sha256 != player.checkpoint_sha256
                 or artifact.size_bytes != player.checkpoint_bytes
             ):
                 raise ValueError("checkpoint must be admitted local bytes")
-            paths[player.player_id] = str(local_checkpoint_file(entrant))
+            paths[player.player_id] = str(entrant.checkpoint.path)
     root = Path(os.environ["MANABOT_CARD_OUTPUT"])
     attempts = root / "arena" / match.key
     attempts.mkdir(parents=True, exist_ok=True)
@@ -244,6 +253,9 @@ def play_card_match(match: Match) -> Result:
         matchup_mode="all",
         authored_matchup=conditions.authored_matchup,
         card_evidence_dir=root,
+        agents={
+            p.player_id: cast(GamePlayer, agents[i]) for i, p in enumerate(players)
+        },
     )
     games = _handed_over(root, trace)
     return Result(
@@ -343,16 +355,14 @@ def _game_card_tables(
     }
 
 
-def evaluate_cards(
-    spec: CardEvaluationSpec, directory: Path, *, backend: Backend | None = None
-) -> EvalRun:
-    entrants = _entrants(spec, backend)
+def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalResult:
+    entrants = _entrants(spec)
     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
     runtime = runtime_fingerprints(match_config=setup)
     # File names and the compiled extension's platform bytes are not environment semantics.
     identity = {key: runtime[key] for key in RUNTIME_FIELDS}
-    tournament = RoundRobin(
-        name=spec.experiment,
+    tournament = Benchmark(
+        name=spec.experiment + "-agents-v1",
         environment=Environment(
             name=spec.experiment,
             files=canonical_sha256(identity),
@@ -362,29 +372,33 @@ def evaluate_cards(
                 "metric_version": METRIC_VERSION,
             },
         ),
-        conditions=tuple(
-            CardConditions(
-                deal=deal,
-                key=spec.key,
-                authored_matchup=spec.authored_matchup,
-                game_seconds=spec.game_seconds,
-                max_commands=spec.max_commands,
-            ).model_dump(mode="json")
+        seatings=tuple(
+            Seating(
+                name=f"players-{i}-{j}-deal-{deal}",
+                players=(first, second),
+                config=CardConditions(
+                    deal=deal,
+                    key=spec.key,
+                    authored_matchup=spec.authored_matchup,
+                    game_seconds=spec.game_seconds,
+                    max_commands=spec.max_commands,
+                ).model_dump(mode="json"),
+                games=1,
+            )
+            for (i, first), (j, second) in combinations(enumerate(entrants), 2)
             for deal in spec.deals
         ),
-        games=8,
+        rollups=CARD_ROLLUPS,
     )
     # Workers' attempt folders and evidence handoff; nothing here is kept.
     with (
         tempfile.TemporaryDirectory(prefix="manabot-cards-") as scratch,
         _environment({"MANABOT_CARD_OUTPUT": scratch, "ETUDE_RUN": spec.run}),
-    ):
-        return hold(
+        evaluating(
             tournament,
             experiment=spec.experiment,
-            play=play_card_match,
-            enter=entrants,
-            workers=spec.workers,
             directory=directory,
-            rollups=CARD_ROLLUPS,
-        )
+            resume=True,
+        ) as active,
+    ):
+        return active.play(play_card_match, agents=AGENTS)

@@ -34,7 +34,6 @@ import managym
 from managym.experience import UNVERSIONED_CONTENT_HASH, Command
 from managym.recording import GameRecord, read_record
 from managym.replay import (
-    RecordedDecision,
     ReplayAgreement,
     matches_retained_error,
     replay_failure_inputs,
@@ -166,59 +165,6 @@ def replay_environment(
         env._engine.enable_card_capture()
     observation, _ = env.reset(seed=int(game["deal_seed"]))
     return env, observation
-
-
-def replay_prefix(
-    game: dict[str, Any],
-    decisions: int,
-    observation_space: ObservationSpace | None = None,
-) -> tuple[Env, dict[str, Any]]:
-    """Reconstruct a retained decision root for matched-input calibration.
-
-    The caller owns closing the returned environment. This uses retained Commands
-    without invoking players; complete trace verification remains replay_games.
-    """
-    if decisions < 0 or decisions > len(game["decisions"]):
-        raise ValueError("replay prefix is outside the retained trace")
-    env, observation = replay_environment(game, observation_space)
-    try:
-        if "record" in game:
-            record = GameRecord.model_validate(game["record"])
-            record.games[0].actions = record.games[0].actions[:decisions]
-            record.games[0].committed = decisions
-            record.games[0].end = None
-            replay = walk(record)
-            replay.env = env._engine
-
-            def apply(decision: RecordedDecision) -> None:
-                nonlocal observation
-                if isinstance(decision.commitment, int):
-                    observation = env.step(decision.commitment)[0]
-                else:
-                    observation = env.step_semantic(decision.commitment)[0]
-
-            for _ in replay.run(apply=apply):
-                pass
-            if (
-                replay.stop is None
-                or replay.stop.status == "diverged"
-                or env._engine.is_game_over()
-            ):
-                raise ValueError(
-                    f"retained profile root diverged or terminated: {replay.stop}"
-                )
-            return env, observation
-        for expected in game["decisions"][:decisions]:
-            command = Command.model_validate(expected["command"])
-            observation, _, terminated, truncated, _ = env.step(int(command.offer_id))
-            if terminated or truncated:
-                raise RuntimeError(
-                    "retained profile root occurs after game termination"
-                )
-        return env, observation
-    except BaseException:
-        env.close()
-        raise
 
 
 def replay_games(

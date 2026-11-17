@@ -8,14 +8,13 @@ import hashlib
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from etude.errors import EtudeError
+from etude.records import Clock
 from etude.train.read import read_all
-from etude.train.records import Step
 from etude.train.tracking import track
 import pytest
 
-from manabot.backends import resolve
-from manabot.infra.config import RuntimeConfig
-from manabot.infra.runtime import RunContext
+from tests.fixtures.training_records import recording
 
 
 def test_public_sdk_records_and_retains_a_checkpoint(tmp_path: Path) -> None:
@@ -23,9 +22,15 @@ def test_public_sdk_records_and_retains_a_checkpoint(tmp_path: Path) -> None:
     payload = b"mtg122-sdk-admission-no-training"
     artifact.write_bytes(payload)
     directory = tmp_path / "records"
-    run = track(
+    run = recording(
         experiment="mtg122-sdk-admission",
-        clocks=[Step("updates", "completed collect/update iterations")],
+        clocks=[
+            Clock(
+                name="updates",
+                kind="step",
+                meaning="completed collect/update iterations",
+            )
+        ],
         directory=directory,
         strict=True,
     )
@@ -44,56 +49,12 @@ def test_public_sdk_records_and_retains_a_checkpoint(tmp_path: Path) -> None:
     assert len(data[0].checkpoints) == 1
 
 
-def test_run_context_records_update_clocks(
-    tmp_path: Path,
-) -> None:
-    with RunContext(
-        RuntimeConfig(name="sdk-fixture", runs_dir=tmp_path),
-        experiment="seat_comparison",
-        backend=resolve("torch"),
-    ) as experiment:
-        experiment.log_update({"loss": 0.25}, updates=2, transitions=512)
-    data = read_all(tmp_path / "sdk-fixture" / "etude")
-    assert len(data) == 1
-    assert data[0].experiment == "seat_comparison"
-    assert data[0].rows == 1
-    assert "loss" in data[0].metrics()
-    assert data[0].incomplete == 0
-    assert data[0].points("loss", "updates").x.tolist() == [2.0]
-    assert data[0].points("loss", "learner_transitions").x.tolist() == [512.0]
-    assert data[0].state is not None
-    assert data[0].state.state == "finished"
-
-
-def test_run_context_retains_failure_state(tmp_path: Path) -> None:
-    with pytest.raises(RuntimeError, match="fixture failure"):
-        with RunContext(
-            RuntimeConfig(name="failed-fixture", runs_dir=tmp_path),
-            experiment="failed-fixture",
-            backend=resolve("torch"),
-        ):
-            raise RuntimeError("fixture failure")
-    data = read_all(tmp_path / "failed-fixture" / "etude")
-    assert data[0].state is not None
-    assert data[0].state.state == "failed"
-
-
-def test_run_context_obeys_launcher_identity_and_directory(
+def test_training_without_assignment_refuses_before_creating_records(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    launched = tmp_path / "launched"
-    monkeypatch.setenv("ETUDE_RUN", "fixture-launched-run")
-    monkeypatch.setenv("ETUDE_TRACK_DIR", str(launched))
-    with RunContext(
-        RuntimeConfig(name="launched-fixture", runs_dir=tmp_path / "local"),
-        experiment="launched-fixture",
-        resolved_config={"fixture": "resolved-recipe"},
-        backend=resolve("torch"),
-    ) as experiment:
-        experiment.log_update({"loss": 0.5}, updates=1, transitions=16)
-    data = read_all(launched)
-    assert len(data) == 1
-    assert data[0].name == "fixture-launched-run"
-    assert data[0].file is not None
-    assert "resolved-recipe" in (data[0].file.config_json or "")
-    assert not (tmp_path / "local" / "launched-fixture" / "etude").exists()
+    monkeypatch.delenv("ETUDE_EXPERIMENT", raising=False)
+    monkeypatch.delenv("ETUDE_RUN", raising=False)
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
+    with pytest.raises(EtudeError, match="training_run_not_assigned"):
+        track(clocks=["updates"])
+    assert not (tmp_path / "home").exists()

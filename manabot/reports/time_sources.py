@@ -1,6 +1,6 @@
-"""Read-only discovery of native training artifacts and Etude tracking sources.
+"""Read-only discovery of Etude runs for the training-time report.
 
-The optional Etude SDK owns storage and metric decoding. A frozen read view records
+The Etude SDK owns storage and metric decoding. A frozen read view records
 full-file or byte-range digests, so the offline report identifies exactly what it
 used. Source failures remain coverage warnings; no launcher or provider is called.
 """
@@ -14,15 +14,12 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from manabot.reports.experiment import RetainedExecution, RetainedRun
 from manabot.reports.time_cohort import (
     CohortRun,
     TimeCohort,
     TimingSource,
-    lineage_roots,
-    native_cohort,
+    TrainingInterval,
 )
-from manabot.reports.time_profile import TimeSlice, TrainingInterval, TrainingProfile
 
 if TYPE_CHECKING:
     from etude.storage import Storage
@@ -37,15 +34,9 @@ class _ReadSnapshot:
         self.name = storage.name
         self.listed = storage.keys("")
         self.cache: dict[tuple[str, int | None, int | None], bytes] = {}
-        self.native_prefixes: list[str] = []
 
     def keys(self, prefix: str) -> list[str]:
-        return [
-            key
-            for key in self.listed
-            if key.startswith(prefix)
-            and not any(key.startswith(p) for p in self.native_prefixes)
-        ]
+        return [key for key in self.listed if key.startswith(prefix)]
 
     def uri(self, key: str) -> str:
         return self.storage.uri(key)
@@ -98,38 +89,78 @@ def _clock_endpoint(run: "RunData", writer: str, clock: str) -> float | None:
     return previous
 
 
+def _clock_before(
+    run: "RunData", writers: list[str], clock: str, value: float
+) -> float | None:
+    """Latest finite clock value below `value` that any of `writers` logged."""
+    latest: float | None = None
+    for block in run.blocks:
+        if block.header.writer not in writers:
+            continue
+        column = next((c for c in block.header.clocks if c.name == clock), None)
+        if column is None:
+            continue
+        for number in block.array(column.data, "<f8"):
+            logged = float(number)
+            if math.isfinite(logged) and logged < value:
+                latest = logged if latest is None else max(latest, logged)
+    return latest
+
+
 def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | None]:
     if run.file is None:
         raise ValueError("Etude declaration unavailable")
     declared = run.file
     identifier = "etude:" + declared.source_key.key()
     parent = "etude:" + declared.continues.parent.key() if declared.continues else None
-    warnings = [
-        "Detailed phase attribution and measured rental cost unavailable in these tracking logs."
-    ]
+    warnings: list[str] = []
     names = {c.name: c.kind for c in run.clocks}
     writers = sorted(
-        {a.writer for a in run.attempts} | {b.header.writer for b in run.blocks},
+        {a.writer for a in run.writers} | {b.header.writer for b in run.blocks},
         key=lambda w: next(
-            (a.started_ms for a in run.attempts if a.writer == w),
+            (a.started_ms for a in run.writers if a.writer == w),
             min(
                 (b.header.wall_first for b in run.blocks if b.header.writer == w),
                 default=0,
             ),
         ),
     )
-    attempts = {a.writer: a for a in run.attempts}
+    attempts = {a.writer: a for a in run.writers}
+    # New writers establish supersession with their first row. Opening and
+    # closing a tracking context alone neither replaces work nor measures time.
+    observed_writers = [
+        writer
+        for writer in writers
+        if any(b.header.writer == writer and b.header.rows for b in run.blocks)
+        or (writer in attempts and attempts[writer].resumed_at)
+    ]
+    silent = len(writers) - len(observed_writers)
+    if silent:
+        warnings.append(
+            f"{silent} attempt{'s' if silent > 1 else ''} logged no clock coordinates; "
+            "active time includes observed attempts only."
+        )
     active: float | None = (
-        0.0 if names.get(training_clock) == "time" and writers else None
+        0.0 if names.get(training_clock) == "time" and observed_writers else None
     )
     intervals = []
-    for index, writer in enumerate(writers):
+    for index, writer in enumerate(observed_writers):
         attempt = attempts.get(writer)
         blocks = [b for b in run.blocks if b.header.writer == writer]
         end = (
             _clock_endpoint(run, writer, training_clock) if active is not None else None
         )
         baseline = attempt.resumed_at.get(training_clock) if attempt else None
+        if attempt is not None and attempt.first_row and baseline is not None:
+            # Etude 0.4 records an attempt's first logged row, not the position
+            # it resumed from. A loop logs then saves each pass, so the position
+            # restored is the latest earlier row below that first row; the
+            # first attempt of a run with no parent starts its clock at zero.
+            baseline = (
+                _clock_before(run, observed_writers[:index], training_clock, baseline)
+                if index
+                else None
+            )
         if (
             baseline is None
             and index == 0
@@ -191,9 +222,9 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
         )
     if not intervals:
         warnings.append("Timeline unavailable: no retained metric observation windows.")
-    if run.state is not None and run.state.counters.dropped:
+    if run.outcome is not None and run.outcome.counters.dropped:
         warnings.append(
-            f"Etude reports {run.state.counters.dropped} dropped metric rows."
+            f"Etude reports {run.outcome.counters.dropped} dropped metric rows."
         )
     if run.incomplete:
         warnings.append(f"Etude reports {run.incomplete} rows with incomplete clocks.")
@@ -201,10 +232,12 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
     def count(clock: str) -> int | None:
         if names.get(clock) != "step":
             return None
-        value = _clock_endpoint(run, writers[-1], clock) if writers else None
-        if value is None and writers:
-            latest = attempts.get(writers[-1])
-            value = latest.resumed_at.get(clock) if latest else None
+        value = None
+        if observed_writers:
+            latest = observed_writers[-1]
+            value = _clock_endpoint(run, latest, clock)
+            if value is None and latest in attempts:
+                value = attempts[latest].resumed_at.get(clock)
         # Checkpoints carry explicit observed coordinates, not planned work.
         if not writers and run.checkpoints:
             value = max(run.checkpoints, key=lambda c: c.wall_ms).at.get(clock)
@@ -217,39 +250,49 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
             else None
         )
 
-    status = run.state.state if run.state else "running or unfinished"
-    profile = TrainingProfile(
-        identifier,
-        run.experiment,
-        status,
-        TimeSlice(
-            "Logged active training", active, (TimeSlice("Unattributed", active),)
-        )
-        if active is not None
-        else None,
-        tuple(warnings),
-    )
+    def label(metric: str) -> str:
+        # RunData.points reads numeric metrics only. Decode just this text
+        # column from the newest block carrying it, not every update metric.
+        for block in sorted(run.blocks, key=lambda b: b.header.wall_last, reverse=True):
+            for column in block.header.series:
+                if column.name == metric and column.kind == "text":
+                    codes = block.array(column.data, "<u4")
+                    if len(codes):
+                        return column.labels[int(codes[-1])] or ""
+        return ""
+
+    status = run.outcome.state if run.outcome else "running or unfinished"
     return CohortRun(
         id=identifier,
         label=declared.job_name or run.experiment,
         experiment=run.experiment,
-        kind=declared.kind or "unclassified",
-        hardware="unknown",
-        recipe=run.job or "",
+        kind=declared.kind or label("run/kind") or "unclassified",
+        recipe=run.job or label("run/recipe"),
         seed=declared.seed,
         status=status,
         members=tuple(f"{identifier}/{w}" for w in writers),
         active_seconds=active,
-        elapsed_seconds=None,
         learner_transitions=count("learner_transitions"),
         updates=count("updates"),
         environment_steps=count("steps"),
-        cost_usd=None,
-        phases={},
         intervals=tuple(intervals),
-        profiles=(profile,),
         warnings=tuple(warnings),
     ), parent
+
+
+def lineage_roots(parents: dict[str, str | None]) -> dict[str, str]:
+    """Keep missing ancestors as family identities; cycles are corrupt evidence."""
+    result: dict[str, str] = {}
+    for identifier in parents:
+        seen: set[str] = set()
+        root = identifier
+        while (parent := parents.get(root)) is not None:
+            if root in seen:
+                raise ValueError(f"Cyclic training ancestry: {identifier}")
+            seen.add(root)
+            root = parent
+        result[identifier] = root
+    return result
 
 
 def _etude_families(
@@ -285,7 +328,6 @@ def _etude_families(
                 updates=leaf.updates if complete else None,
                 environment_steps=leaf.environment_steps if complete else None,
                 intervals=tuple(i for r in members for i in r.intervals),
-                profiles=tuple(p for r in members for p in r.profiles),
                 warnings=tuple(warnings),
                 source_uris=tuple(
                     dict.fromkeys(uri for r in members for uri in r.source_uris)
@@ -298,21 +340,19 @@ def _etude_families(
 def load_time_sources(
     sources: Sequence[str], *, training_clock: str = "training_seconds"
 ) -> TimeCohort:
-    """Discover local/S3 native and Etude evidence; failed sources stay visible.
+    """Discover local/S3 Etude runs; failed sources stay visible.
 
     Local paths are explicit: a misspelled directory is a failure, not an empty
     history. Archives are listed as a coverage gap rather than silently expanded.
+    A `run.json` that is not an Etude declaration (a saved regime record, say)
+    is named in the warnings and holds no run.
     """
     # Optional report entry point: ordinary training does not require Etude.
     from etude.storage import storage_from_uri
     from etude.train.read import read_all
 
-    native: dict[str, RetainedRun] = {}
-    native_sources: dict[str, list[str]] = defaultdict(list)
-    conflicts: set[str] = set()
-    executions: list[RetainedExecution] = []
     tracked: dict[str, tuple[CohortRun, str | None]] = {}
-    tracked_conflicts: set[str] = set()
+    conflicts: set[str] = set()
     receipts: list[TimingSource] = []
     warnings: list[str] = []
     for source in dict.fromkeys(sources):
@@ -321,48 +361,31 @@ def load_time_sources(
             if not source.startswith("s3://") and not Path(source).is_dir():
                 raise FileNotFoundError("Evidence directory unavailable")
             snapshot = _ReadSnapshot(storage_from_uri(source))
-            for key in snapshot.listed:
-                if not (
-                    key.endswith("/run.json")
-                    or key == "run.json"
-                    or key.endswith("/experiment.json")
-                    or key == "experiment.json"
-                ):
-                    continue
+            declarations = [
+                key
+                for key in snapshot.listed
+                if key == "run.json" or key.endswith("/run.json")
+            ]
+            for key in declarations:
                 try:
-                    body = snapshot.get(key)
-                    data = json.loads(body)
-                    if isinstance(data, dict) and "regime" in data and "stages" in data:
-                        run = RetainedRun.model_validate_json(body)
-                        native_sources[run.id].append(snapshot.uri(key))
-                        snapshot.native_prefixes.append(key.removesuffix("run.json"))
-                        if run.id in conflicts:
-                            continue
-                        if run.id in native and native[run.id].model_dump(
-                            exclude_unset=True
-                        ) != run.model_dump(exclude_unset=True):
-                            conflicts.add(run.id)
-                            native.pop(run.id)
-                            warnings.append(
-                                f"Conflicting native snapshots excluded: {run.id}"
-                            )
-                        else:
-                            native[run.id] = run
-                    elif key.endswith("experiment.json"):
-                        executions.append(RetainedExecution.model_validate_json(body))
-                    elif not isinstance(data, dict) or not (
-                        "declaration" in data or data.get("schema_version") == 2
-                    ):
-                        warnings.append(f"Unrecognized run record: {snapshot.uri(key)}")
+                    data = json.loads(snapshot.get(key))
                 except (ValueError, OSError) as error:
                     warnings.append(
                         f"Unreadable record: {snapshot.uri(key)} ({type(error).__name__})"
                     )
+                    continue
+                # Etude's run.json: nested before 0.4, flat with an experiment since.
+                if (
+                    not isinstance(data, dict)
+                    or "regime" in data
+                    or not ("declaration" in data or "experiment" in data)
+                ):
+                    warnings.append(f"Unrecognized run record: {snapshot.uri(key)}")
             for run in read_all(snapshot):
                 projected, parent = _etude_run(run, training_clock)
                 row = (replace(projected, source_uris=(source,)), parent)
                 identifier = row[0].id
-                if identifier in tracked_conflicts:
+                if identifier in conflicts:
                     continue
                 if identifier in tracked and (
                     tracked[identifier][1] != parent
@@ -370,7 +393,7 @@ def load_time_sources(
                     != replace(row[0], source_uris=())
                 ):
                     tracked.pop(identifier)
-                    tracked_conflicts.add(identifier)
+                    conflicts.add(identifier)
                     warnings.append(
                         f"Conflicting Etude snapshots excluded: {identifier}"
                     )
@@ -398,10 +421,7 @@ def load_time_sources(
                 )
             if not snapshot.listed:
                 warnings.append(f"{source}: no stored objects found.")
-            elif not any(
-                key == "run.json" or key.endswith("/run.json")
-                for key in snapshot.listed
-            ):
+            elif not declarations:
                 warnings.append(
                     f"{source}: no run declarations found among {len(snapshot.listed)} stored objects."
                 )
@@ -414,20 +434,6 @@ def load_time_sources(
         finally:
             if snapshot is not None:
                 receipts.extend(snapshot.receipts())
-    cohort = native_cohort(tuple(native.values()), executions, receipts)
     return TimeCohort(
-        tuple(
-            replace(
-                run,
-                source_uris=tuple(
-                    uri
-                    for member in run.members
-                    for uri in native_sources.get(member, [])
-                ),
-            )
-            for run in cohort.runs
-        )
-        + _etude_families(tuple(tracked.values())),
-        cohort.sources,
-        tuple(warnings) + cohort.warnings,
+        _etude_families(tuple(tracked.values())), tuple(receipts), tuple(warnings)
     )
