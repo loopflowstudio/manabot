@@ -17,13 +17,7 @@ Reversible choices in use:
 - tla_frontier stays, with code settings and frozen JSON deck_source only;
   training-report stays as the Etude cross-run list. Notebook/profile reports
   and unused host schemas were deleted with the regime readers.
-- GPU calibration: alternating three-update Elemental arms, six-update resume
-  baseline stopped after update 3, 16 paired eight-leg deals per endpoint.
-  This small measurement cannot establish strength equivalence. Same GPU,
-  own locked SDK per source archive, direct SSH rather than queued launch.
-- Use fresh isolated launcher /tmp/mtg329-runpod-vast-etude. The old Lium intent
-  remains untouched evidence in /tmp/mtg329-performance-etude; its paid pod
-  was deleted and confirmed absent. Lium excluded by latest steer (73e1a9).
+- GPU measurement method, attempts and launcher state: experiments/reports/etude-execution.md.
 
 Etude questions, not Manabot blockers: same-seed dependent jobs in one command;
 whether Agents(build=) builds every seat; command/track job and kind metadata
@@ -39,8 +33,3 @@ LLM declarations await EXP-70 and compatible frozen checkpoints.
 Ideas outside this plan: move setup/numerics out of experiment/, move
 regime_tag to its single caller; simplify all-invalid admission only if Etude
 owns a declared minimum. No scope expansion authorized by these notes.
-
-For the A6000 retry, kept the already measured 3670249eb3 vs 3afd92d8f3
-Elemental arms. Both baseline trajectories use 5826f7502e after the five-token
-CUDA backward reproducer confirmed its live-attention fix. Kept the recipe's
-default layout and durable output for both.
