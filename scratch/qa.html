@@ -1,49 +1,92 @@
-<!doctype html><meta charset="utf-8"><title>MTG-329 QA — seventh pass</title>
+<!doctype html>
+<meta charset="utf-8">
+<title>MTG-329 QA — eighth pass</title>
 <style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em;color:#222}pre{background:#f5f2ea;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}img{max-width:100%;border:1px solid #ccc}</style>
-<h1>MTG-329 QA, seventh pass: report labels and silent attempts</h1>
-<p>Revision 7e20d6f7e4, 2026-11-17, laptop, Etude SDK 0.4.1. Covers what changed since the sixth pass
-(a361d8795c:scratch/qa.html): 3850764dd8 (silent retries, local smoke labels) and 54b67f6cd9 (labels only when supplied).
-Earlier passes: 31d18ac84b and 30cbca02ff.</p>
+<h1>MTG-329 QA, eighth pass: after the main merge</h1>
+<p>Revision 938993bdc8, 2026-11-17, laptop (CPU), Etude SDK 0.4.1. Since the seventh pass
+(ce7e15ca27:scratch/qa.html) the branch merged main's mana autotapper (Rust changes) and changed
+managed evaluation to use CUDA when available. The checked-in <code>_managym</code> extension predated the
+merge, so I rebuilt it first (release maturin, atomic replace) and ran everything on the merged engine.
+A fresh <code>ETUDE_HOME=/tmp/qa8/etude</code> throughout.</p>
 
-<h2>1. Local smoke, two resumes and an interrupted attempt</h2>
-<pre>$ ETUDE_HOME=/tmp/qa7/etude uv run etude train manabot/recipes/local.py           (5.6 s, exit 0)
-$ uv run etude train manabot/recipes/local.py --resume --until updates=4          (exit 0)
+<h2>1. Local smoke: train, extend, refuse, Ctrl-C, finish</h2>
+<pre>$ uv run etude train manabot/recipes/local.py                                  exit 0 (8.0 s)
+$ uv run etude train manabot/recipes/local.py --resume --until updates=4 --json
+{"run": "local", "experiment": "local", "outcome": "finished"}                   exit 0
 $ uv run etude train manabot/recipes/local.py --resume --until updates=4
-etude: run_already_finished: finished at updates=4, learner_transitions=837, training_seconds=5.81376; give --until with a later target   (exit 1)
-$ (--resume --until updates=6, SIGINT to the process group after 2 s, before its first row)   exit 130
-$ uv run etude train manabot/recipes/local.py --resume --until updates=6          (exit 0)</pre>
+etude: run_already_finished: finished at updates=4, learner_transitions=1428, training_seconds=9.1927; give --until with a later target   exit 1
+$ (--resume --until updates=8, SIGINT to the process group after 4 s)          exit 130
+$ uv run etude train manabot/recipes/local.py --resume --until updates=8 --json   finished, exit 0</pre>
+<p>Left behind: <code>outcome.json</code> finished, raw+EMA policies 0–8, checkpoint records updates-0…8.
+The interrupted attempt had already published update 5; the resumed attempt redid update 5 and
+recorded <code>updates-5.ordinal-7.json</code> beside it. Both point to the same file with the
+<b>same sha256</b> (45f6c1b5…) and the same 1,668 learner transitions: the resumed update reproduced the
+interrupted attempt's weights byte for byte.</p>
 
-<h2>2. A user's own recipe written from docs/training.md</h2>
-<p>A recipe file calling <code>self_play(inputs, run, updates=config.updates)</code> with no labels, as the guide's listing shows
-(placed temporarily under <code>manabot/recipes/</code>, removed after): <code>etude train</code> exit 0.</p>
+<h2>2. Two-job experiment (belief), as the training guide shows</h2>
+<pre>$ uv run etude train experiments/belief.py   → belief/policy@0                   (1.9 s)
+$ uv run etude train experiments/belief.py   → policy finished; belief/sampler@0  (4.1 s)
+$ uv run etude train experiments/belief.py   → both finished, nothing trained     (0.8 s)</pre>
+<p>Files are where docs/training.md says: <code>policy@0/out/policies/0000000{0,1}-raw.safetensors</code>,
+<code>sampler@0/out/{histories.json,belief.pt}</code>.</p>
 
-<h2>3. The training-time report</h2>
-<pre>$ uv run --extra reports manabot training-report --source $ETUDE_HOME/track --out default.html
-default.html: 2 logical runs; 0 source/coverage warnings</pre>
-<p>Driven in headless Chromium (no console errors). Default selection shows only the unlabeled run:</p>
-<pre>qa7_mine  etude:local:run:qa7_mine  unclassified  finished  3.174 s  448 transitions  2 updates
-Throughput: etude:local:run:qa7_mine  unknown  141.149 transitions / active second</pre>
-<p>Ticking "Include labeled benchmarks, smokes…" then Select largest adds the smoke:</p>
-<pre>local  etude:local:run:local  smoke  finished  10.37 s  1,496 transitions  6 updates  3 lanes; 1 warnings
-Throughput: etude:local:run:local  manabot.recipes.local  144.258</pre>
-<img src="qa7-report-included.png" alt="report with smokes included">
-<p>The interrupted attempt no longer blanks the run: totals reach update 6 and the coverage section warns once.
-Both defects the sixth pass listed (smoke labelled unclassified; a silent attempt making updates and active time unavailable) are gone.</p>
+<h2>3. Managed checkpoint evaluation (the production Agents path) on CPU</h2>
+<pre>$ uv run python experiments/etude_execution.py eval --path .../local/out/policies/00000008-ema.safetensors --out /tmp/qa8/eval1
+etude: agents: CPU inference in 16 game processes; 1 thread each
+... 16/16 matches played, 15s elapsed                                            exit 0 (17 s)</pre>
+<p>16 paired deals × 8 legs: 256 rows, all <code>valid</code>, no failures. The 8-update smoke policy scored
+0.086 against the heuristic, about what a barely trained policy should. Every forward ran on <code>cpu</code>
+with batch 1 (6,587 forwards), as expected when each CPU game process owns its inference. A second
+identical run gave identical outcomes for all 256 rows and <b>identical chosen offers at every decision</b>
+in all 16 Command traces; only latency/timing fields (and the trace digest that covers them) differ.</p>
+
+<h2>4. Documented Elemental preflight</h2>
+<pre>$ uv run etude smoke experiments/elemental.py --step train --keep
+etude: Missing option '--revision'.                                               exit 1
+$ uv run etude smoke experiments/elemental.py --step train --keep --revision HEAD --updates 3200 --hours 11.9 --usd-per-run 9
+smoke train elemental: passed in 143.8 s (2 checkpoints)                          exit 0</pre>
+<p>The first failure was mine; the guide's command includes <code>--revision</code>.</p>
+
+<h2>5. Training-time report over these runs</h2>
+<pre>$ uv run --extra reports manabot training-report --source /tmp/qa8/etude/track --out /tmp/qa8/report.html
+/tmp/qa8/report.html: 3 logical runs; 0 source/coverage warnings</pre>
+<p>Driven in headless Chromium, with no console errors. By default it shows policy and sampler (unclassified)
+and hides the labelled smoke. With benchmarks included and Select largest, the local smoke shows 4 lanes
+(the interrupted attempt included), 8 updates, 3,478 transitions and 0 warnings. The belief sampler logs no
+<code>training_seconds</code>, so it honestly shows "unavailable" with four warnings.</p>
+<img src="qa8-report.png" alt="Training run time report with local smoke and belief policy selected">
 
 <h2>Fixed in this pass</h2>
-<p>The coverage warning read "1 attempts logged no clock coordinates". <code>manabot/reports/time_sources.py</code> now
-pluralizes; re-rendered page says "1 attempt logged no clock coordinates; active time includes observed attempts only."
-<code>pytest tests/training/test_time_cohort.py tests/training/test_self_play_loop.py -q</code>: 23 passed before, test_time_cohort 11 passed after.</p>
+<p><code>manabot/reports/time_cohort.js</code> printed "1 lanes", "1 selected logical runs" and "1 recorded
+attempts/writers". A small <code>count(n, noun, plural)</code> now pluralizes the coverage cell, the
+"runs shown" line and the cohort summary. Rerendered page above: "1 lane; 0 warnings", "1 selected logical run ·
+1 recorded attempt/writer", "2 selected logical runs · 5 recorded attempts/writers".
+<code>pytest tests/training/test_time_cohort.py -q</code>: 11 passed.</p>
+<p>QA skill: the Playwright route now says to run <code>npm ci</code> in <code>academy/ui</code> for a fresh worktree and import
+<code>@playwright/test</code>, replacing the cross-checkout CommonJS workaround.</p>
 
 <h2>What works now</h2>
-<p>Fresh train, resume, already-finished refusal, Ctrl-C mid-resume and completion, labelled smoke excluded by default,
-an unlabeled user recipe shown as unclassified with "unknown" recipe, totals preserved across a silent attempt.</p>
+<p>On the merged engine: fresh train, extension, finished-run refusal, Ctrl-C and resume (byte-identical
+redone update), the two-job start= handoff, managed CPU evaluation through Agents with reproducible
+Commands, the Elemental training preflight and the report.</p>
 
 <h2>Not reached</h2>
-<p>Baseline/Elemental runs (unlabeled path checked through an equivalent user recipe instead); GPU and launched runs (capacity, see plan.md);
-cold clean-machine install; runs written before the label change mixed with new ones in one report.</p>
+<ul>
+<li>CUDA: managed eval's new CUDA branch (<code>agent_loader.load</code>) and GPU training/resume. No GPU on this laptop;
+the rented attempts are in experiments/reports/etude-execution.md.</li>
+<li>Elemental smoke eval (about 30 min, 600 matches on a laptop): skipped. Section 3 exercised the same Agents
+path at 16 deals.</li>
+<li>Launched (rented) runs, cold clean-machine install, the Academy table.</li>
+</ul>
 
 <h2>Still wrong, worst first</h2>
-<p>Carried over from the sixth pass: <code>tests/test_policy_container_support.py</code> collection error (predates the branch),
-the check_loopflow_workflows.py lf-drift failure, the encoder focus log, slow smoke eval on a laptop.
-Minor: the Coverage column still says "1 lanes".</p>
+<ol>
+<li><code>scripts/check_loopflow_workflows.py</code> fails its <code>coverage</code> graph assertion (lf drift; also listed
+in earlier passes, and unrelated to this branch's skills).</li>
+<li>Carried over: the <code>tests/test_policy_container_support.py</code> collection error (predates the branch) and the
+encoder focus log.</li>
+<li>Minor, Etude-side: a resumed attempt that redoes a published update adds a second checkpoint record
+(<code>updates-5.ordinal-7.json</code>) for the same bytes. Etude's <code>run.checkpoint</code> deduplicates only an identical
+<code>at</code>, which includes <code>training_seconds</code> (10.818 vs 10.800 here), so <code>run.checkpoints()</code> lists update 5 twice.
+This is an Etude question, not a manabot one.</li>
+</ol>

@@ -137,8 +137,9 @@ publish, land or choose the next Graph step from here.
   `connected` badge, then press Start game (an immediate click can leave "No
   game in progress").
   Without a connected browser, run a Node Playwright script from `academy/ui`
-  (its `playwright` package and cached Chromium resolve there; delete the
-  script afterwards). Click only `[data-testid=action-panel] button` offers:
+  (`import { chromium } from '@playwright/test'`; a fresh worktree first needs
+  `npm ci` there, about a minute; Chromium is cached; delete the script
+  afterwards). Click only `[data-testid=action-panel] button` offers:
   other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
@@ -373,10 +374,10 @@ publish, land or choose the next Graph step from here.
   After a train and a `--resume`, run `uv run --extra reports manabot
   training-report --source $ETUDE_HOME/track --out <f>.html` and read the
   page: learner transitions and transitions per active second must be numbers,
-  not "unavailable" (they come from the loop's declared clocks). A checkout
-  without `academy/ui/node_modules` can screenshot it with a CommonJS script
-  that `require`s Playwright by absolute path from another checkout's
-  `academy/ui/node_modules`; ESM imports ignore that path.
+  not "unavailable" (they come from the loop's declared clocks). Screenshot it
+  with the `academy/ui` Playwright script above (`npm ci` first in a fresh
+  worktree). A run without a `training_seconds` clock, such as belief's
+  sampler, honestly shows "unavailable" with four warnings.
   Set `ETUDE_HOME` to an ignored `.runs/` folder so QA runs stay out of
   `~/.etude`. `etude smoke experiments/elemental.py --keep --revision HEAD
   --updates 3200 --hours 11.9 --usd-per-run 9` trains for about 3 minutes, then

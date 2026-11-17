@@ -61,6 +61,7 @@ if (typeof module !== "undefined") module.exports = TrainingCohort;
 if (typeof document !== "undefined") {
   const D = JSON.parse(document.getElementById("cohort-data").textContent);
   const $ = id => document.getElementById(id), fmt = n => TrainingCohort.known(n) ? n.toLocaleString(undefined, {maximumFractionDigits: 3}) : "unavailable";
+  const count = (n, noun, plural = `${noun}s`) => `${n} ${n === 1 ? noun : plural}`;
   const labels = {active_seconds: "Active training seconds", learner_transitions: "Retained learner transitions", updates: "Retained learning iterations", environment_steps: "Recorded environment steps"};
   const el = (tag, text) => { const n = document.createElement(tag); if (text != null) n.textContent = text; return n; };
   let selected = new Set(D.selected ?? TrainingCohort.largest(D.runs, "active_seconds", D.top, D.include_benchmarks));
@@ -96,15 +97,15 @@ if (typeof document !== "undefined") {
       [r.label, r.id, r.kind, r.seed ?? "—", r.status,
         r.intervals.length ? new Date(Math.min(...r.intervals.map(i => i.start)) * 1000).toISOString() : "unavailable",
         fmt(r.active_seconds), fmt(r.learner_transitions), fmt(r.updates),
-        `${r.intervals.length} lanes; ${r.warnings.length} warnings`].forEach(v => row.append(el("td", v)));
+        `${count(r.intervals.length, "lane")}; ${count(r.warnings.length, "warning")}`].forEach(v => row.append(el("td", v)));
       body.append(row);
     });
-    $("shown").textContent = `${rows.length} runs shown. Filters do not remove already selected runs.`;
+    $("shown").textContent = `${count(rows.length, "run")} shown. Filters do not remove already selected runs.`;
   }
   function draw() {
     drawPicker();
     const runs = D.runs.filter(r => selected.has(r.id)), summary = TrainingCohort.aggregate(runs);
-    $("summary").replaceChildren(el("p", `${runs.length} selected logical runs · ${summary.attempts} recorded attempts/writers. Partial coverage is reported below.`));
+    $("summary").replaceChildren(el("p", `${count(runs.length, "selected logical run")} · ${count(summary.attempts, "recorded attempt/writer", "recorded attempts/writers")}. Partial coverage is reported below.`));
     if (!runs.length) $("summary").append(el("p", "No runs selected. Runs without active-time evidence remain available for manual selection or another sort. Labeled benchmarks are excluded by default."));
     $("summary").append(el("p", [...new Set(runs.map(r => r.status))].map(status => `${status}: ${runs.filter(r => r.status === status).length}`).join(" · ")));
     $("summary").append(table(["Quantity", "Observed total", "Covered runs", "Median", "Minimum", "Maximum"],
