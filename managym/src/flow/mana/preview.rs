@@ -421,16 +421,17 @@ mod tests {
         assert_eq!(result.state, PaymentPreviewState::Exact);
         assert!(!result.sources.is_empty());
         assert_eq!(before, witness(&game));
-        let cost = ManaCost::parse("U");
+        let frame = game.semantic_decision_frame().unwrap();
         assert!(game
             .payment_preview(
                 PlayerId(1),
-                game.semantic_decision_frame().unwrap().revision,
-                &game.semantic_decision_frame().unwrap().fingerprint,
+                frame.revision,
+                &frame.fingerprint,
                 cast_index(&game)
             )
             .is_err());
-        game.produce_mana(PlayerId(0), &cost).unwrap();
+        game.produce_mana(PlayerId(0), &ManaCost::parse("U"))
+            .unwrap();
         let actual = Observation::for_player(&game, PlayerId(0));
         for source in result.sources {
             let SubjectRef::Object { id } = source.source else {

@@ -1,5 +1,6 @@
 import { currentGame, rememberCurrentGame } from './current-game.svelte';
 import type { PlaySession } from './play-session';
+import type { PreviewAddress, PreviewResponse } from './payment-preview';
 import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
@@ -1034,7 +1035,7 @@ export function sendReturnToLive(): void {
   controller.sendReturnToLive();
 }
 
-export async function fetchPaymentPreview(address: import('./payment-preview').PreviewAddress, signal: AbortSignal): Promise<import('./payment-preview').PreviewResponse> {
+export async function fetchPaymentPreview(address: PreviewAddress, signal: AbortSignal): Promise<PreviewResponse> {
   const credentials = loadResumeCredentials();
   if (!credentials) throw new Error('No live session');
   const response = await fetch(`/api/sessions/${encodeURIComponent(credentials.session_id)}/payment-preview`, {
