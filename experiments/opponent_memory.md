@@ -47,6 +47,14 @@ gradient hashes. Control's total rate is 0.963–0.980× the incumbent on the
 two-stream fixture, while GRU remains 0.429–0.490×. No optimized CUDA-worker or
 learning result follows.
 
+The [execution-chunk learner fold](#execution-chunk-learner-fold--2026-11-17)
+then improves update medians at all three row limits, but total rates remain
+0.600/0.559/0.556× incumbent. [Collection attribution](#collection-fold-attribution-and-stop--2026-11-17)
+stops before implementing the collection cache: earlier-node work medians fall
+below the design's half-excess lines. Shared assembly and 256-row variability
+limit that conclusion; it is not a firm bound on possible savings. The next
+step is human review of the costs, with no paid admission or pilot.
+
 ## Current method and limits
 
 Jack Heart's 2026-11-17 direction is throughput first: "the major concern is
@@ -63,12 +71,14 @@ contains capture and must not be added to capture as disjoint time. The first
 vectorized program expansion preserved exact arrays, outputs, gradients and
 weights and improved this fixture. It did not establish acceptable worker cost.
 The current cut admits record-aligned immutable chunks by content and predecessor
-cursor, caches vocabulary-bound features, then assembles batch offsets and
-prefix-relative recency. Dense imports still receive complete validation.
+cursor, caches vocabulary-bound features, then assembles batch offsets. Record features are now prefix-independent;
+the transformer receives recency separately as a sequence-position signal.
+Dense imports still receive complete validation.
 
 The approximately 10% throughput guide informs review. After the host chunk cut,
-collection now uses native epochs/counts for suffix capture. Recency-independent
-record embeddings and collection/learner folds remain separate measured steps.
+collection now uses native epochs/counts for suffix capture. Prefix-independent
+record embeddings and the execution-chunk learner fold are implemented and
+measured. Collection remains stateless after its attribution stop.
 The Task session's engineering direction permits one admission at or below USD1
 inside the calibration allowance only after CPU GRU is within about 1.3× of the
 incumbent; current CPU results do not meet that gate. A pilot still needs a person
@@ -1818,3 +1828,96 @@ and source are retained in `.runs/decision-memory-attribution/` and
 No paid work, pilot or matched training/paired evaluation was launched. The
 Task's scientific comparison remains unrun. Next is the separately measured
 collection fold; paid admission and decision 1 remain unresolved.
+
+## Collection-fold attribution and stop — 2026-11-17
+
+**Stop before building the collection cache; return to decision 1.** On source
+`4a01b1507e31`, the measured earlier-node preparation plus arithmetic medians
+are **0.577/0.581/0.586 s** at 32/128/256 execution rows. They are below the
+eighth review's half-excess lines, **0.630/0.715/0.615 s**. This applies that
+agent-defined rule to medians, a headless engineering choice rather than a new
+human throughput requirement. No production code, model, cache or import
+structure changed in this slice. The proposed parameter-versioned collection
+fold remains unbuilt.
+
+Use the same two-stream complete-game CPU harness, fixed initialization, gates,
+seeds, mixed disclosure and real learner update as the learner-fold entry.
+Nine fresh sequential processes (three repeats per row limit) each retain 556
+learner decisions. No other measurement or check was launched concurrently.
+Inject wall timers into the existing `prepare_memory` call and retained
+preparation's node loop: earlier nodes have a successor in that supplied
+prefix; the last node is recomputed. Time canonical empty-shape construction
+separately; all remaining host work is shared assembly. The classification is
+per supplied prefix, preserving repeated rows.
+
+For forward attribution, first run the original `DecisionMemory.forward` and
+return its result to collection. Then recompute that same supplied input in a
+diagnostic partition: references introduced in earlier nodes versus the last
+node, followed by earlier versus last records with unchanged backwards
+reference joins. Advance the GRU over earlier records, then the last records
+from that hidden state. Time arithmetic separately from diagnostic slicing,
+route construction and packed-schedule construction; summaries are separate.
+Every diagnostic summary matches the original at atol=2e-6, rtol=2e-5,
+including empty histories. Reference embeddings remain shared across that
+partition; a last-chunk member can still use an earlier reference.
+
+This partition changes kernel batching and recomputes the input; its timers
+are **attribution measurements, not a cache speedup or unmodified collection
+throughput**. The raw collection wall times include that diagnostic work and
+must not be used for throughput ratios. Original full-forward timers below
+exclude it. Frozen source and per-call samples accompany the receipts.
+Medians [min, max], seconds per complete collection:
+
+| Rows | Preparation: earlier nodes | Forward arithmetic: earlier nodes | Their paired sum | Half-excess stop line |
+|---|---:|---:|---:|---:|
+| 32 | 0.012 [0.011, 0.012] | 0.565 [0.540, 0.577] | 0.577 [0.551, 0.589] | 0.630 |
+| 128 | 0.012 [0.011, 0.013] | 0.569 [0.555, 0.644] | 0.581 [0.567, 0.657] | 0.715 |
+| 256 | 0.012 [0.011, 0.015] | 0.574 [0.551, 0.695] | 0.586 [0.562, 0.710] | 0.615 |
+
+| Rows | Preparation: last node | Preparation: empty shapes | Preparation: shared assembly | Forward: last records/references | Forward: summary | Original full forward |
+|---|---:|---:|---:|---:|---:|---:|
+| 32 | 0.095 | 0.072 | 0.078 | 0.226 | 0.008 | 0.772 |
+| 128 | 0.098 | 0.074 | 0.079 | 0.230 | 0.008 | 0.777 |
+| 256 | 0.097 | 0.075 | 0.079 | 0.235 | 0.009 | 0.784 |
+
+Limits matter near this line. The 256-row earlier-node range crosses its stop
+line. The 0.078–0.079 s median shared assembly is not divided into avoidable
+and fixed work: charging all of it to the earlier-node sum would put 32 and
+256 rows above their lines. Partitioned arithmetic also has different kernel
+shapes from the original; its phase medians need not sum to the original
+forward median. Thus this is an operational stop using the measured node-work
+medians, **not proof that every possible collection optimization saves less
+than half the excess**. It does not establish that the remaining excess is
+all last-chunk or board-join arithmetic. No further cache implementation or
+measurement is inferred from this uncertainty in a headless run.
+
+All nine receipts match the corresponding existing learner-fold case exactly
+for collection output, prefix, final gradient and updated-state hashes, with
+556 decisions and the same release extension `94bb1e63…`. There are 395
+collection preparation/forward calls per process. The diagnostic cannot change
+sampling: only the original forward result is used and it consumes no RNG.
+Exploratory attempts before the final partition kept slice-construction costs
+inside its timing; those are superseded, retained separately and excluded from
+the tables. Final runs are repeats 8/9/10; the frozen runner and partition
+source identify that method. Host load and complete identities remain in each
+receipt. No learning, strength, CUDA, wider-stream host-fit or new end-to-end
+speedup result follows.
+
+The kept implementation's last unmodified total rates remain
+**0.600/0.559/0.556× incumbent** (previous entry). Even replacing collection
+with control's time leaves **1.343/1.367/1.435× incumbent time**, above the
+session's 1.3× admission gate. Decision 1 remains how much host cost must come
+off before paid work resumes, and whether a different model cost is acceptable.
+No paid admission, pilot or evaluation was launched; this Task is incomplete.
+
+Evidence: `experiments/data/opponent-memory/20261117-collection-attribution`
+contains source and measurement archives with per-member hash manifests and
+local archive verification. Publication and validation are recorded below.
+
+Publication/validation: five artifact manifest entries published; all 22 archive
+members verified locally (9 source, 13 measurement), no fresh remote fetch.
+`uv run --no-sync python .runs/decision-memory-collection-attribution/summarize.py`
+passed all nine exact original-result comparisons; 3,555 diagnostic forward
+comparisons passed inside the measurements. Only evidence/docs changed; native
+rebuild and model test reruns are unnecessary. `uv run --no-sync --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`
+passed (1 test); `git diff --check` passed. No background work remains.

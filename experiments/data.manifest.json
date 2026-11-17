@@ -41818,6 +41818,26 @@
    "sha256": "8659d185090e8d0e9f58de6b58449e652fddaa49362957bf2d182afdc0a8cc71",
    "bytes": 63195
   },
+  "experiments/data/opponent-memory/20261117-collection-attribution/measurement-files.json": {
+   "sha256": "ee99dc7215fc2795321771aef6e353ff9c474843067aae19487747acb8c0bb69",
+   "bytes": 2278
+  },
+  "experiments/data/opponent-memory/20261117-collection-attribution/measurement.tar.gz": {
+   "sha256": "f37c5f28d4d45acc2c8f082afe94a40e6ccd01a0f535b08d0414ed1c66abf47b",
+   "bytes": 454697
+  },
+  "experiments/data/opponent-memory/20261117-collection-attribution/source-files.json": {
+   "sha256": "78332084e5453943f74031314e8549a2c982660cdc2ef1821d690caafad15231",
+   "bytes": 1421
+  },
+  "experiments/data/opponent-memory/20261117-collection-attribution/source.tar.gz": {
+   "sha256": "8fdbf6c2c8184628e953b9820f4dbaa6162496158aeae32a3e58899b7279a4cf",
+   "bytes": 42442
+  },
+  "experiments/data/opponent-memory/20261117-collection-attribution/verification.json": {
+   "sha256": "7742e7387627504efd2a6838c4a27db9bc079b0f877cb11449f353465e3ee0bd",
+   "bytes": 184
+  },
   "experiments/data/opponent-memory/20261117-host-cost/stage1-members.json": {
    "sha256": "03f3a4cc4153f7c49e98356eca14460913f930d776af4bc7eae7609d4168a6a6",
    "bytes": 16492
