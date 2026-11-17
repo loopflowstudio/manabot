@@ -84,4 +84,3 @@ four debug Rust observation/reassignment checks, library Clippy with Python
 bindings, Ruff and diff whitespace checks passed. The Rust extension was
 rebuilt in release and replaced atomically before Python/vector measurements.
 Script: `experiments/vector_statistics_cost.py`.
-
