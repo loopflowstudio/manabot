@@ -171,6 +171,10 @@ one sampling call per original row group. A prefetch generator must release its
 previous Prepared input and completed Future before submitting another chunk;
 the completed Future also owns the host result.
 
+Profile observation retention separately from policy preparation: `_retain_obs_rows`
+runs before the preparation track and includes MemoryStore capture. Capture is
+nested under retention; do not add both as disjoint collection costs.
+
 Jagged CUDA attention's static sequence bound must not exceed the physical
 packed token total, even when a short execution chunk retains more padded
 slots. Bound it from host shape metadata; do not read a CUDA scalar for it.

@@ -41274,6 +41274,66 @@
    "sha256": "c4ba3258af68be7f0a65691df5cd9ca78703b2782c09a6205f08f77a11f53648",
    "bytes": 1805
   },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-00-control-receipt.json": {
+   "sha256": "46e8d972180e86f31e695642fbc094b491c2f2cb77a239360e679294681ac176",
+   "bytes": 4716
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-01-incumbent-receipt.json": {
+   "sha256": "c068b2179a0eba2661fe5a6d01ae881b55c64beb38163304bf51e9c06dec1349",
+   "bytes": 4711
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-02-control-receipt.json": {
+   "sha256": "17d9ec75e4d5d6b17a30eb79499a77f2253125630b3452523a22132bd03ae1dd",
+   "bytes": 5980
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-03-transformer-k1-receipt.json": {
+   "sha256": "4510a99a759428e34f4225cd08b5b7465aae3004d73ede64f6eb60ff198985fe",
+   "bytes": 6041
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-04-gru-k1-receipt.json": {
+   "sha256": "0ebbf60370ff8911e37b9cce4830b28a2d43b24dddfe290bdb91a8e725ecf069",
+   "bytes": 5980
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-05-incumbent-receipt.json": {
+   "sha256": "b54f376bdfc2e75a1835bf2245ac48eedcce121d18e1751177449ea70d1f4a9c",
+   "bytes": 4715
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-all-calibration-cleanup.json": {
+   "sha256": "38f9ca4132364677f858a652a62521cc70a99da7864a04d6797cfca3fecb9ecc",
+   "bytes": 2778
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-attempt.json": {
+   "sha256": "2d1a7717f26e0f7460600e693c42048598e2891b7f04ac7b004fb283a2b6d9d4",
+   "bytes": 35364
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-calibration.json": {
+   "sha256": "2340688fccc4d0791a418fea8366ada8d71c43e2b09679df95d86cac70d554b6",
+   "bytes": 294
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-cleanup.json": {
+   "sha256": "638508f4ad11d4e8fee7cab83a034cfa5ac35ad584888393d01c989701000dd3",
+   "bytes": 509
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-launcher-status.json": {
+   "sha256": "638508f4ad11d4e8fee7cab83a034cfa5ac35ad584888393d01c989701000dd3",
+   "bytes": 509
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-members.json": {
+   "sha256": "10d165f71d898d01d60cfb4ed6599cfc86822e24a5b1ab6bd40f8797ac54cc2f",
+   "bytes": 32340
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-output.tar.gz": {
+   "sha256": "f6170e4d48c4c6a2f834ee6e0c0691b3066067d0955689533d78bd08a66239f7",
+   "bytes": 97371259
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-record.json": {
+   "sha256": "d4afd466423234ad71c89a9f8e866c52ac1d1e04f30d793a3d02ead3e874ddca",
+   "bytes": 201736
+  },
+  "experiments/data/opponent-memory/20261116-cuda-admission/refs256-summary.json": {
+   "sha256": "b98d44208f77bacdab70aa6e942f47fce7b8b4d597ec94027c0581ef2d71338b",
+   "bytes": 738
+  },
   "experiments/data/opponent-memory/20261116-cuda-admission/rows2-launcher-status.json": {
    "sha256": "8777efd82b01f7857599a1f7d1798db38a2bce588a7366ed0aa40005763782dd",
    "bytes": 498

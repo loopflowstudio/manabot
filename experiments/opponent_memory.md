@@ -1713,3 +1713,61 @@ comparisons are identical (63 total with the first matrix); prepared fields
 also match exactly at all four tested row sizes. Keep vectorization, while
 reporting the remaining large cost against the true incumbent. Chunk admission
 and feature caching remain the next cut; no rental is authorized by this result.
+
+### Expanded-reference CUDA closeout — 2026-11-17
+
+Source `857fa4517996`, run `opponent_memory/cuda-calibration-refs256@39100`,
+attempt `cff5863d5ebc`, machine `mtg252-a40-010318be3ea1`: **all six workers
+completed two updates and finite raw/EMA reload on CUDA**. This was already
+running when the throughput-first steer arrived. Its frozen transformer worker
+finished; live declarations now select GRU and stop further paid work.
+
+The A40 host again reports Xeon Gold 6342 and a 49,999,998,976-byte host limit,
+this time through cgroup-v1 with CPU quota unreported (not claimed unlimited).
+GPU memory is 47,699,722,240 bytes. World w17, input v11, float32, 256 streams,
+four producers and 32-row execution are unchanged. References are 256; the
+new producer and branches use that layout, with no old-checkpoint rebinding.
+
+| Worker | Actual learner rows | Stage s | Collection s | Learning s | Decisions/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 00-control | 105,269 | 595.85 | 429.82 | 163.96 | 176.67 |
+| 01-incumbent | 107,267 | 304.40 | 168.30 | 134.04 | 352.39 |
+| 02-control | 104,906 | 558.11 | 398.36 | 157.45 | 187.96 |
+| 03-transformer-k1 | 104,396 | 832.99 | 608.99 | 221.97 | 125.33 |
+| 04-gru-k1 | 104,059 | 835.34 | 620.16 | 212.79 | 124.57 |
+| 05-incumbent | 105,558 | 303.40 | 156.22 | 145.40 | 347.92 |
+
+The two incumbent processes give **347.92–352.39 decisions/s**
+(median 350.15). The pretrained control is 0.537× that median;
+GRU is 0.356×. The frozen transformer is 0.358×. These are
+whole-training stage rates, not isolated encoder comparisons or confidence
+intervals. Faster absolute times than the first host are **not** attributed
+to the capacity change: quota reporting and actual trajectories differ.
+This source also predates the local profiler/vectorization changes, so these
+CUDA numbers are not a measurement of that optimization.
+
+Realized maxima across memory workers are **447/13,623/128/6,493** against
+**512/16,384/256/8,192**, so references now have observed headroom. No overflow
+occurred. Host process-tree peak across workers is 15.90 GB; CUDA allocator
+peaks are 1.112 GB allocated and 3.483 GB reserved. This admits these short
+trajectories, not arbitrary learned-game tails. Strict overflow failure remains.
+
+The launcher recorded this run's estimate at **USD0.58608**; deletion is
+confirmed. All **164 outputs / 231,354,814 original bytes** were downloaded
+through SDK digest checks, then every archive member hash was verified. Raw
+receipts, the complete calibration record, source/attempt records, summary and
+cleanup are published beside the earlier CUDA evidence. No fresh artifact-store
+archive-fetch round trip is claimed.
+
+At close, the launcher retains **USD1.94475 across all five calibration runs**,
+including the failures. The first three statuses are no longer estimated; the
+last two remain estimates. Earlier dated estimates and their bytes stay frozen;
+`refs256-all-calibration-cleanup.json` records the closeout observation. No cost
+is reconstructed from wall time or the price quote. All five rentals confirm
+ended, inside the original USD3 calibration allowance.
+
+Stop here under the new direction: no additional rental, pilot training or
+evaluation launch. No pilot horizon/gate scale or matched learning/strength
+result is frozen. The implemented first CPU step exposes retention/capture and
+keeps exact vectorized preparation; content-admitted chunk feature caching is
+still unfinished and remains the next implementation cut.
