@@ -60,7 +60,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (stage / "manabot/managym/decision.py").exists()
     assert (stage / "manabot/sim/match.py").is_file()
     assert (stage / "manabot/eval/cards.py").is_file()
-    assert (stage / "manabot/experiment/checkpoint_evaluation.py").is_file()
+    assert (stage / "manabot/recipes/baseline.py").is_file()
     assert not (stage / "manabot/arena").exists()
     assert not (engine / "managym/libmanagym.dylib.dSYM").exists()
     assert (stage / "content/semantic/current/setups.json").is_file()
@@ -134,7 +134,7 @@ def _artifacts(directory: Path) -> None:
                 "Requires-Dist: managym==0.2.0\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform == 'linux'\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform != 'linux'\n"
-                "Requires-Dist: etude-sdk<0.5,>=0.4.0\n"
+                "Requires-Dist: etude-sdk<0.5,>=0.4.1\n"
             )
             tags = ["py3-none-any"]
         for tag in tags:
@@ -206,7 +206,7 @@ def test_engine_wheel_ships_the_lockfile_training_provenance_hashes(
         (b"Name: manabot", b"Name: managym"),
         (b"Version: 0.2.0", b"Version: 9.9.9"),
         (b">=3.12, <3.14", b">=3.12, <3.13"),
-        (b"etude-sdk<0.5,>=0.4.0", b"etude-sdk==0.3.2"),
+        (b"etude-sdk<0.5,>=0.4.1", b"etude-sdk==0.3.2"),
     ],
 )
 def test_source_metadata_must_match_wheels(

@@ -12,7 +12,7 @@ their pieces and a loop to copy.
 ## Quickstart
 
 Start in the [checkout environment](../docs/development.md#environment-and-commands)
-with the Etude development revision needed by this training API.
+with Etude SDK 0.4.1 or newer.
 
 ```bash
 uv run etude train manabot/recipes/local.py      # local production-path smoke

@@ -1,10 +1,10 @@
 # MTG-329: adopt Etude execution and agents
 
-Design: design-train-api.md. Etude pin d9a6bc8f06b20948601d540be80e285d46010465;
-Pydantic required. Jack Heart, 2026-11-16: "the whole point is the adoption";
+Design: design-train-api.md. Etude SDK 0.4.1 from PyPI; Pydantic required. Jack Heart, 2026-11-16: "the whole point is the adoption";
 "These should be done/mainatined in this task". The 2026-11-17 steers approve
 the speed and learning measurements on one reasonable single GPU, total
-`--max-usd 10`; no landing with this pin. Publication and gate remain the caller's steps.
+`--max-usd 10`. The unreleased git pin has been replaced; publication and gate
+remain the caller's steps.
 Upstream (rechecked 2026-11-17): Etude v0.4.1 is on PyPI and differs from d9
 only in release metadata (`gh api .../compare/d9a6bc8f06...cd4ab8c5e9`), so it
 carries no Lium timestamp fix; it is the released form of this pin.
@@ -78,7 +78,7 @@ KeyError (permanent/stack alias of a focused card) is fixed in
 `manabot/verify/choice_corpus.py`, and the report test that shares
 `report_recipe` with the nightly baseline passes (choice corpus, learning
 regression, host facts: 9 passed). Not shown: CUDA batching, real Rust panic or native hang
-injection, launched/provider runs, browser proof, full suite, automatic
+injection, scored provider runs, browser proof, full suite, automatic
 policy→sampler scheduling. LLM experiments stay blocked on EXP-70/frozen
 checkpoints; their declarations share Agents but are not a runnable adoption
 proof. The branch's merge base is origin/main 3afd92d8f3 (rechecked at the
@@ -127,8 +127,7 @@ Etude's failed match. Nothing further to change; no new open choice.
   evaluation measurements otherwise). More than a few percent slower: say
   where the time goes, do not optimize unasked. Any reasonable single GPU (L4,
   4090 or similar price; .lf/prompts/20261117-065639-rst6T1-steer.md,
-  replacing the L4-only steer); the report names it. Lium rental is untested:
-  confirm start and termination. Terminate every machine and confirm.
+  replacing the L4-only steer); the report names it. Use RunPod or Vast for the next retry; Lium is excluded. Terminate every machine and confirm.
   Harness: experiments/etude_execution.py; method, ids, events and cost
   estimates: experiments/reports/etude-execution.md. Nothing measured yet:
   - Vast 4090 (15:36–15:53 UTC) went offline during native compilation;
@@ -138,7 +137,12 @@ Etude's failed match. Nothing further to change; no new open choice.
     `AwareDatetime`, so no receipt was kept. Pod deleted through Lium's API
     and confirmed absent; the isolated launcher
     (`/tmp/mtg329-performance-etude`) keeps an unresolved intent (~USD 0.01).
-  - Next: retry on RunPod or Vast (both readable by the pinned client) when
+  - Retry at 16:09–16:10 UTC on released 0.4.1: fresh isolated launcher
+    `/tmp/mtg329-runpod-vast-etude`, eight RunPod/Vast templates all reported
+    no capacity (L4/4090/A6000/A5000 on RunPod; L4/4090/3090 on Vast). No rent
+    issued; final inventory has only local, zero sessions/rentals/runs. No
+    added cost or GPU acceptance.
+  - Next: retry on RunPod or Vast (both readable by released 0.4.1) when
     either has a 4090/L4-class offer, from a fresh isolated `ETUDE_HOME` so the
     unresolved Lium intent in `/tmp/mtg329-performance-etude` stays as evidence
     and cannot hold the rental. Do not retry Lium or claim GPU acceptance until
@@ -153,11 +157,12 @@ Etude's failed match. Nothing further to change; no new open choice.
   as the gate's proof of that path. PR #500 (open, not draft) head is
   b2fd182b0b; `gh pr checks 500` showed preflight pending at realign
   (2026-11-17).
-- Replace the git pin (`tool.uv.sources`, pyproject.toml) and the
-  `etude-sdk==0.4.0` / `>=0.4.0` requirements with released 0.4.1, relock,
-  and run the isolated dependency integration check (CLAUDE.md, Testing).
-  Open decision: does the released pin lift "no landing with this pin", or
-  does landing also wait on Etude Task 2d1933 / the Lium fix?
+- Released dependency cut complete: removed the git source, raised all Etude
+  minimums and play-runtime pin to 0.4.1, relocked, and updated consumer release
+  installs, metadata validation and docs. Isolated integration: 12 passed;
+  release checks after retiring a stale deleted-module assertion: 39 passed.
+  Etude Task 2d1933 hard deadlines and the Lium fix remain external limitations;
+  landing remains the caller's decision.
 
 ## Built since the 2026-11-17 steers
 

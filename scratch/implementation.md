@@ -106,3 +106,20 @@ experiments/reports/etude-execution.md. Summary and blocker: plan.md, Remaining.
   unreadable by the pinned SDK, deleted directly and confirmed absent by
   16:03 UTC; `etude terminate` refused (`Lium create already attempted;
   awaiting reconciliation`). No server, watcher or rented machine remains.
+
+## Released SDK and capacity retry — 2026-11-17
+
+- Replaced Etude's git source with PyPI 0.4.1 in requirements, lock, consumer
+  release installs, metadata validation and docs. Release staging still named
+  deleted checkpoint_evaluation.py; its assertion now checks baseline.py.
+- `uv run --isolated --locked --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py tests/infra/test_release.py -q`:
+  50 passed, one stale deleted-module assertion failed (25.90s). After that
+  assertion's fix, isolated `pytest tests/infra/test_release.py -q`: 39 passed
+  (0.28s). All 12 dependency integration checks passed in the first command.
+  Ruff check/format for the changed Python files and `git diff --check` pass.
+- Fresh launcher `/tmp/mtg329-runpod-vast-etude`, released 0.4.1: all eight
+  RunPod/Vast templates report no capacity at 16:09 UTC. No rental, cost or
+  GPU result. Final inventory: local only, zero sessions/rentals/runs; no
+  server/watcher started. Full method and capacity table: experiment report.
+  Retry still needs rentable RunPod/Vast capacity under USD 9. Gate and
+  publication remain later steps.

@@ -3,7 +3,9 @@
 **Not yet measured.** Two rentals on 2026-11-17 ended before any scored GPU
 workload (a Vast host went offline; the pinned Etude client could not read
 Lium's pod). Both were terminated and confirmed absent; launcher estimates
-total about USD 0.13 of the USD 10 cap. The method below stands for a repeat.
+total about USD 0.13 of the USD 10 cap. A further RunPod/Vast capacity check
+found no rentable machine and incurred no new cost. The method below stands
+for a repeat.
 
 Exploratory, not a playing-strength claim. Does execution adoption change
 Elemental update throughput on the same GPU, do managed Manabot players batch
@@ -109,3 +111,31 @@ The launcher's retained estimate at 16:03 UTC was **~USD 0.01**, not a final
 settlement: it cannot reconcile this deleted pod with the pinned client.
 A retry needs a provider allocation whose lifecycle the client can read, or an
 Etude fix for the actual Lium timestamps and interrupted-creation recovery.
+
+## RunPod/Vast retry — 2026-11-17, 16:09–16:10 UTC
+
+Updated the branch to released Etude SDK 0.4.1 from PyPI and created a fresh
+isolated launcher at `/tmp/mtg329-runpod-vast-etude`, copying storage,
+RunPod/Vast provider configuration and their eight on-demand templates only.
+The earlier Lium intent was left untouched. No shared launcher was changed.
+
+Capacity queries used the same Doppler projects as above, this new
+`ETUDE_HOME`, and `uv run --no-sync etude availability TEMPLATE --timeout 30`
+after a locked sync to 0.4.1. Every template reported none available:
+
+| Provider | GPU | Minimum vCPUs / RAM | Hourly ceiling |
+| --- | --- | --- | --- |
+| RunPod | NVIDIA L4 | 6 / 48 GB | USD 0.70 |
+| RunPod | NVIDIA GeForce RTX 4090 | 6 / 32 GB | USD 1 |
+| RunPod | NVIDIA RTX A6000 | 4 / 24 GB | USD 1 |
+| RunPod | NVIDIA RTX A5000 | 4 / 24 GB | USD 1 |
+| Vast | NVIDIA L4 | 6 / 48 GB | USD 0.70 |
+| Vast | RTX 4090 | 6 / 32 GB | USD 1 |
+| Vast | RTX 4090 | 4 / 24 GB | USD 1 |
+| Vast | RTX 3090 | 4 / 24 GB | USD 1 |
+
+No rent was issued; the retry's USD 9 rental cap remains unused. The final
+launcher inventory contained only the owned local machine, with zero
+sessions, rentals and runs. No server, watcher or remote workload was started,
+so no new termination was needed. GPU speed, CUDA batching and stop/resume
+comparison remain unmeasured pending provider capacity.

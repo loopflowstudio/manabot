@@ -175,8 +175,6 @@ jobs:
         shell: bash
         run: |
           export PATH="$RUNNER_TEMP/no-rust:$PATH"
-          # Prepare the pure Python Git SDK before the binary-only engine check.
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" 'etude-sdk @ git+https://github.com/loopflowstudio/etude@d9a6bc8f06b20948601d540be80e285d46010465'
           uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cp scripts/release/academy_replay_smoke.py "$RUNNER_TEMP/academy_replay_smoke.py"
@@ -201,7 +199,7 @@ jobs:
       - name: Exercise latest compatible Torch with the pinned Etude client
         shell: bash
         run: |
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3] @ git+https://github.com/loopflowstudio/etude@d9a6bc8f06b20948601d540be80e285d46010465'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3]==0.4.1'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cd "$RUNNER_TEMP"
           rm -rf release-smoke

@@ -41,27 +41,22 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.4.0,<0.5`
-(also for its `eval` and `s3` extras) and `torch>=2.15.0`. The repository and
-release checks use the Git source in `[tool.uv.sources]`, currently
-`d9a6bc8f06b20948601d540be80e285d46010465`. PyPI's 0.4.0 predates the
-experiment-file and Agents APIs (`etude.controller.declarations`,
-`etude.eval.result`, `play(match, agents)` and assigned training runs).
-A downstream project needs the same source override until a registry release
-contains these APIs. Raise the public minimum to that release before publishing
-Manabot, then remove the Git source. The repository's `uv.lock` records the exact
-source; dedicated training and play runtime groups retain their backend choices.
+The `manabot` public dependency requirements are `etude-sdk>=0.4.1,<0.5`
+(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.1 carries
+the experiment-file and Agents APIs used by the recipes. The repository's
+`uv.lock` records the registry release; dedicated training and play runtime
+groups retain their backend choices.
 
-Install the pinned client and inspect its database:
+Install the locked client and inspect its database:
 
 ```bash
 uv sync --locked --python 3.13 --extra dev --extra artifacts
 uv run etude database status
 ```
 
-When changing the source, update `[tool.uv.sources]`, run `uv lock`, and commit
+When changing the dependency, update `pyproject.toml`, run `uv lock`, and commit
 both metadata and lock before preparing an experiment. Keep consumer install
-commands in `.github/workflows/release.yml` on the same source. Etude uses one
+commands in `.github/workflows/release.yml` on the same release. Etude uses one
 `~/.etude/launcher.sqlite` across experiments and compatible branches. Installing
 a client does not migrate data: explicitly run `uv run etude database upgrade`
 when status reports pending migrations. Upgrades keep recovery backups and
@@ -766,7 +761,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.0,<0.5`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.1,<0.5`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
