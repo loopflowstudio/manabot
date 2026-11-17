@@ -243,8 +243,14 @@ def gather_memory(prefixes: Sequence[Prefix]) -> dict[str, np.ndarray]:
     return result
 
 
+@dataclass(frozen=True)
+class _StreamCapture:
+    epoch: int
+    prefix: Prefix
+
+
 class MemoryStore:
-    """Weak exact-byte interning releases all unreachable game ownership."""
+    """Weak interning plus at most two current native prefixes per stream."""
 
     def __init__(self, capacities: MemoryCapacities) -> None:
         if len(capacities) != len(MEMORY_FIELDS) or min(capacities) < 1:
@@ -252,6 +258,8 @@ class MemoryStore:
         self.capacities = capacities
         self._tails: WeakValueDictionary[str, Tail] = WeakValueDictionary()
         self._chunks: WeakValueDictionary[str, Chunk] = WeakValueDictionary()
+        # At most two current prefixes per vector slot, never a game-wide index.
+        self._streams: dict[tuple[int, int], _StreamCapture] = {}
 
     def _intern(self, rows: tuple[np.ndarray, ...]) -> Chunk:
         digest = sha256()
@@ -310,10 +318,60 @@ class MemoryStore:
             tail = self._append(tail, self._intern(blocks))
         return Prefix(identity, tail)
 
+    def capture_live(
+        self,
+        buffers: Mapping[str, np.ndarray],
+        row: int,
+        identity: PrefixIdentity,
+        *,
+        epoch: int,
+        counts: Sequence[int],
+    ) -> Prefix:
+        """Extend a synchronous native stream read using its generation and counts.
+
+        Only native caller-owned buffers qualify: arbitrary imports use capture.
+        A generation changes on reset/fork/replacement, including repeated seeds.
+        Coalescing can rewrite only the last record, so always re-read its chunk.
+        The native read and buffer write must describe the same unstepped env.
+        """
+        if len(counts) != 4 or any(
+            n < 0 or n > cap for n, cap in zip(counts, self.capacities, strict=True)
+        ):
+            raise ValueError("decision-memory native counts exceed capacity")
+        for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
+            if buffers[key].dtype != np.float32 or buffers[key][row].shape != (
+                capacity,
+                MEMORY_WIDTHS[key],
+            ):
+                raise ValueError(
+                    "decision-memory capacity mismatch or non-float32 transport"
+                )
+        previous = self._streams.get((row, identity.viewer))
+        tail = None
+        if previous is not None and previous.epoch == epoch:
+            if previous.prefix.identity != identity or any(
+                n < old for n, old in zip(counts, previous.prefix.counts, strict=True)
+            ):
+                raise ValueError("decision-memory native stream regressed within epoch")
+            if previous.prefix.tail is not None:
+                tail = previous.prefix.tail.previous
+        cursor = tail.cursor if tail else MemoryCursor()
+        rows = tuple(
+            buffers[key][row, :count]
+            for key, count in zip(MEMORY_FIELDS, counts, strict=True)
+        )
+        for blocks in record_chunks(rows, _CHUNK_ROWS, cursor):
+            tail = self._append(tail, self._intern(blocks))
+        prefix = Prefix(identity, tail)
+        self._streams[row, identity.viewer] = _StreamCapture(epoch, prefix)
+        return prefix
+
     def measure(self, prefixes: Sequence[Prefix]) -> dict[str, int]:
         chunks: dict[str, Chunk] = {}
         tails: dict[str, Tail] = {}
-        for prefix in prefixes:
+        owned = {id(p): p for p in prefixes}
+        owned.update((id(c.prefix), c.prefix) for c in self._streams.values())
+        for prefix in owned.values():
             tail = prefix.tail
             while tail is not None and tail.key not in tails:
                 tails[tail.key] = tail
@@ -324,7 +382,7 @@ class MemoryStore:
             + sys.getsizeof(p.identity)
             + len(p.identity.game)
             + len(p.identity.branch)
-            for p in prefixes
+            for p in owned.values()
         )
         metadata += sum(
             sys.getsizeof(node)
@@ -352,6 +410,10 @@ class MemoryStore:
                 sys.getsizeof(index.data)
                 + sum(sys.getsizeof(ref) for ref in index.data.values())
                 for index in (self._tails, self._chunks)
+            ),
+            "stream_capture_bytes": sys.getsizeof(self._streams)
+            + sum(
+                sys.getsizeof(k) + sys.getsizeof(c) for k, c in self._streams.items()
             ),
             "selected_padding_bytes": gather_bytes(prefixes),
         }

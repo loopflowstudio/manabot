@@ -23,6 +23,8 @@ pub struct DecisionLog {
     len: usize,
     snapshots: Option<Arc<SnapshotChunk>>,
     snapshot_count: usize,
+    detail_count: usize,
+    member_count: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,28 +56,15 @@ impl DecisionLog {
         self.len == 0
     }
 
-    /// Exact projected size without allocating a policy tensor or selecting a
-    /// capacity. This cold-path read is for corpus census and diagnostics.
+    /// Projected table sizes maintained at commit, without prefix traversal.
     pub fn detail_count(&self) -> usize {
-        self.snapshots()
-            .map(|reference| {
-                (if definition_only(reference) {
-                    0
-                } else {
-                    reference.program.len()
-                }) + reference.mana.len() * 6
-            })
-            .sum()
+        self.detail_count
     }
     pub fn reference_count(&self) -> usize {
         self.snapshot_count
     }
     pub fn member_count(&self) -> usize {
-        self.iter()
-            .map(|row| {
-                row.context.mana_sources.len() + row.response.len() + row.choice.references.len()
-            })
-            .sum()
+        self.member_count
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &DecisionRecord> {
@@ -132,6 +121,11 @@ impl DecisionLog {
         chunk.buckets.entry(key).or_default().push(chunk.rows.len());
         chunk.rows.push(reference.clone());
         self.snapshot_count += 1;
+        self.detail_count += (if definition_only(&reference) {
+            0
+        } else {
+            reference.program.len()
+        }) + reference.mana.len() * 6;
         reference
     }
 
@@ -181,6 +175,8 @@ impl DecisionLog {
                 rows: Vec::new(),
             }));
         }
+        self.member_count +=
+            row.context.mana_sources.len() + row.response.len() + row.choice.references.len();
         Arc::make_mut(self.tail.as_mut().unwrap()).rows.push(row);
         self.len += 1;
     }
@@ -209,6 +205,8 @@ impl<'de> Deserialize<'de> for DecisionLog {
                     rows: Vec::new(),
                 }));
             }
+            log.member_count +=
+                row.context.mana_sources.len() + row.response.len() + row.choice.references.len();
             Arc::make_mut(log.tail.as_mut().unwrap()).rows.push(row);
             log.len += 1;
         }
@@ -1075,6 +1073,15 @@ mod tests {
         assert_eq!(old.decision_memory.iter().next().unwrap().count, 1);
         assert_eq!(game.decision_memory[1].iter().next().unwrap().count, 1);
         assert_eq!(fork.decision_memory[1].iter().next().unwrap().count, 2);
+        let encoded = encode(&fork.decision_memory[1]);
+        assert_eq!(
+            fork.decision_memory[1].detail_count(),
+            encoded.details.len()
+        );
+        assert_eq!(
+            fork.decision_memory[1].member_count(),
+            encoded.members.len()
+        );
         fork.state.players[0].life -= 1;
         let changed = pending_pass(&fork);
         commit(&mut fork, changed);
@@ -1265,6 +1272,9 @@ mod tests {
         assert_eq!(log.reference_count(), 1);
         let encoded = encode(log);
         assert_eq!(encoded.members.len(), 6);
+        assert_eq!(log.detail_count(), encoded.details.len());
+        assert_eq!(log.member_count(), encoded.members.len());
+        assert_eq!(log.reference_count(), encoded.references.len());
         assert!(encoded.members.iter().all(|row| row[0] == 1.));
         assert_eq!(encoded.members[2][1], 1.);
         let decoded: DecisionLog =

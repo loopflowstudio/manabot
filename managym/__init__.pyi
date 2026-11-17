@@ -275,6 +275,9 @@ class Env:
         rollouts: int,
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
+    def decision_memory_counts(self) -> list[list[int]]:
+        """Record/detail/reference/member counts for each viewer, transport only."""
+        ...
     def encode_observation(
         self,
         obs: Observation,
@@ -387,6 +390,9 @@ class VectorEnv:
         self, active: list[bool] | None = None
     ) -> list[str | None]: ...
     def current_game_seeds(self) -> list[int]: ...
+    def decision_memory_counts(self) -> list[list[list[int]]]:
+        """Per-stream, per-viewer counts; generations authorize prefix reuse."""
+        ...
     def current_game_generations(self) -> list[int]:
         """Opaque process-local game identities; every reset or replacement changes them."""
     def write_observations_for_players(

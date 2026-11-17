@@ -127,7 +127,7 @@ def live_memory(obs: "ObservationBuffers") -> list[tuple[np.ndarray, ...]]:
 
 
 def record_chunks(
-    rows: tuple[np.ndarray, ...], size: int = 32
+    rows: tuple[np.ndarray, ...], size: int = 32, cursor: MemoryCursor = MemoryCursor()
 ) -> list[tuple[np.ndarray, ...]]:
     """Partition records with their owned members and newly introduced snapshots.
 
@@ -136,8 +136,12 @@ def record_chunks(
     """
     records, details, references, members = rows
     result = []
-    member_start = reference_start = detail_start = 0
-    for start in range(0, len(records), size):
+    member_start, reference_start, detail_start = (
+        cursor.members,
+        cursor.references,
+        cursor.details,
+    )
+    for start in range(cursor.records, len(records), size):
         headers = records[start : start + size]
         count = headers[:, 15:18].sum(dtype=np.float64)
         if count < 0 or count > len(members) - member_start:

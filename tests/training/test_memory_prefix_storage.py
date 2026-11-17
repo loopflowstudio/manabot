@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from io import BytesIO
+import random
 from typing import Literal
 import weakref
 
@@ -35,6 +36,8 @@ from manabot.training.rollout.collection import (
     RecordedObservations,
     SeatRoutedCollector,
 )
+from manabot.training.rollout.producers import ShardedVectorEnv
+import managym
 from tests.model.test_decision_memory import memory_input, policy
 
 
@@ -343,3 +346,130 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
         assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows)
     finally:
         collector.close()
+
+
+def test_live_suffix_capture_preserves_chunk_boundaries_coalescing_and_epochs() -> None:
+    _, sample = memory_input()
+    capacities = (128, 1024, 1024, 16384)
+    buffers = {
+        key: np.zeros((1, cap, sample[key].shape[-1]), np.float32)
+        for key, cap in zip(MEMORY_FIELDS, capacities, strict=True)
+    }
+    store = MemoryStore(capacities)
+    dense_store = MemoryStore(capacities)
+    identity = PrefixIdentity("repeated-seed", 0, "root")
+    retained: list[Prefix] = []
+    for count in (0, 1, 31, 32, 33, 64, 65, 97):
+        for index in range(count):
+            header = buffers["decision_records"][0, index]
+            header[:] = sample["decision_records"][0, 0]
+            header[1] = header[7] = header[9] = index
+        prefix = store.capture_live(
+            buffers, 0, identity, epoch=1, counts=(count, 0, 0, 0)
+        )
+        expected = dense_store.capture(buffers, 0, identity)
+        assert prefix.tail is not None or count == 0
+        for key, value in gather_memory([expected]).items():
+            np.testing.assert_array_equal(gather_memory([prefix])[key], value)
+        retained.append(prefix)
+    before = retained[-1]
+    assert before.tail is not None and before.tail.previous is not None
+    # Same counts do not mean unchanged content: coalescing rewrites the tail.
+    buffers["decision_records"][0, 96, 3] = 2
+    buffers["decision_records"][0, 96, 9] = 97
+    after = store.capture_live(buffers, 0, identity, epoch=1, counts=(97, 0, 0, 0))
+    assert after.tail is not None
+    assert after.tail.previous is before.tail.previous
+    assert after.tail.chunk.rows[0][0, 3] == 2
+    assert before.tail.chunk.rows[0][0, 3] == 1
+    # Reset/replay with the same seed and row count must not reuse closed chunks.
+    buffers["decision_records"][0, 0, 21] = 19
+    reset = store.capture_live(buffers, 0, identity, epoch=2, counts=(97, 0, 0, 0))
+    expected = dense_store.capture(buffers, 0, identity)
+    assert reset.tail is not None and reset.tail.key == expected.tail.key
+    assert reset.tail.key != after.tail.key
+    with pytest.raises(ValueError, match="regressed"):
+        store.capture_live(buffers, 0, identity, epoch=2, counts=(96, 0, 0, 0))
+
+
+def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
+    capacities = (512, 16384, 256, 8192)
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=capacities[0],
+            max_decision_reference_details=capacities[1],
+            max_decision_references=capacities[2],
+            max_decision_members=capacities[3],
+        )
+    )
+    buffers = space.encoder.allocate(1)
+    buffers.update(
+        rewards=np.zeros(1, np.float64),
+        terminated=np.zeros(1, np.uint8),
+        truncated=np.zeros(1, np.uint8),
+    )
+    env = managym.VectorEnv(1, seed=11, player_policies=("agent", "agent"))
+    env.set_buffers(buffers)
+    env.reset_all_into_buffers(Match().to_rust())
+    store, dense_store = MemoryStore(capacities), MemoryStore(capacities)
+    rng = random.Random(19)
+    observed: set[int] = set()
+    for _ in range(140):
+        viewer = env.current_agent_indices()[0]
+        observed.add(viewer)
+        epoch = env.current_game_generations()[0]
+        counts = env.decision_memory_counts()[0][viewer]
+        identity = PrefixIdentity(str(env.current_game_seeds()[0]), viewer, "root")
+        prefix = store.capture_live(buffers, 0, identity, epoch=epoch, counts=counts)
+        expected = dense_store.capture(buffers, 0, identity)
+        assert prefix.counts == tuple(counts)
+        assert (prefix.tail.key if prefix.tail else None) == (
+            expected.tail.key if expected.tail else None
+        )
+        env.step_into_buffers([rng.randrange(int(buffers["actions_valid"][0].sum()))])
+    assert observed == {0, 1}
+
+
+def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
+    capacities = (512, 16384, 256, 8192)
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=512,
+            max_decision_reference_details=16384,
+            max_decision_references=256,
+            max_decision_members=8192,
+        )
+    )
+    buffers = space.encoder.allocate(2)
+    buffers.update(
+        rewards=np.zeros(2, np.float64),
+        terminated=np.zeros(2, np.uint8),
+        truncated=np.zeros(2, np.uint8),
+    )
+    env = ShardedVectorEnv(2, 11, workers=2)
+    try:
+        env.set_buffers(buffers)
+        env.reset_all_into_buffers(Match().to_rust())
+        generations = env.current_game_generations()
+        assert len(set(generations)) == 2
+        store = MemoryStore(capacities)
+        for _ in range(12):
+            for row, viewer in enumerate(env.current_agent_indices()):
+                counts = env.decision_memory_counts()[row][viewer]
+                prefix = store.capture_live(
+                    buffers,
+                    row,
+                    PrefixIdentity(str(env.current_game_seeds()[row]), viewer, "root"),
+                    epoch=env.current_game_generations()[row],
+                    counts=counts,
+                )
+                dense = store.capture(buffers, row, prefix.identity)
+                assert prefix.counts == dense.counts
+                assert (prefix.tail.key if prefix.tail else None) == (
+                    dense.tail.key if dense.tail else None
+                )
+            env.step_into_buffers([0, 0])
+        env.reset_all_into_buffers(Match().to_rust())
+        assert not set(generations) & set(env.current_game_generations())
+    finally:
+        env.close()

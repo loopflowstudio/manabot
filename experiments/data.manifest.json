@@ -41826,6 +41826,26 @@
    "sha256": "295af228b5ddb97d6648e3251bfcda034e95be045a327a99416476d3c305b8f8",
    "bytes": 2674809
   },
+  "experiments/data/opponent-memory/20261117-suffix-capture/measurement-files.json": {
+   "sha256": "59a45406f861e655abb6122ca2d63f121bf00e775741b56cc6d939052110c136",
+   "bytes": 20341
+  },
+  "experiments/data/opponent-memory/20261117-suffix-capture/measurement.tar.gz": {
+   "sha256": "246418e05b4da566f1bd65e8cfe2953e849c9a7755fb2bc3306ba774835a8f45",
+   "bytes": 153056
+  },
+  "experiments/data/opponent-memory/20261117-suffix-capture/source-files.json": {
+   "sha256": "a5504bc5767a86ce81e4d59a8980f4346ba634b02ccdb2d39099e09d73c5b1b9",
+   "bytes": 2928
+  },
+  "experiments/data/opponent-memory/20261117-suffix-capture/source.tar.gz": {
+   "sha256": "e24e1bec7f31578620561798a8a382d47af40f3681e6059a29a65e333dcdb3de",
+   "bytes": 4375082
+  },
+  "experiments/data/opponent-memory/20261117-suffix-capture/verification.json": {
+   "sha256": "afe796171c8a8c428b2528f12913f5114264c74ff1e483e37498d0467aaa380c",
+   "bytes": 63
+  },
   "experiments/data/pooling-filter/evidence.json": {
    "sha256": "5fd1af3f1c6897e87fd1014b30f79102b4fee4102a43a9f40773954c13a4219d",
    "bytes": 403261

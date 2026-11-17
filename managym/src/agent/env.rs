@@ -1116,6 +1116,24 @@ impl Env {
         ))
     }
 
+    /// Transport-only counts for both viewer logs. Pair with capture_generation;
+    /// neither seeds nor policy observations authorize append-only reuse.
+    pub fn decision_memory_counts(&self) -> Result<[[usize; 4]; 2], AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.decision_memory_counts called before reset".into()))?;
+        Ok(std::array::from_fn(|viewer| {
+            let log = &game.decision_memory[viewer];
+            [
+                log.len(),
+                log.detail_count(),
+                log.reference_count(),
+                log.member_count(),
+            ]
+        }))
+    }
+
     pub fn semantic_event_cursor(&self) -> Result<u64, AgentError> {
         self.game
             .as_ref()

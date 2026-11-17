@@ -260,6 +260,22 @@ class ShardedVectorEnv:
             seed for shard in self._shards for seed in shard.native.current_game_seeds()
         ]
 
+    def current_game_generations(self) -> list[int]:
+        self._check()
+        return [
+            epoch
+            for shard in self._shards
+            for epoch in shard.native.current_game_generations()
+        ]
+
+    def decision_memory_counts(self) -> list[list[list[int]]]:
+        self._check()
+        return [
+            counts
+            for shard in self._shards
+            for counts in shard.native.decision_memory_counts()
+        ]
+
     def get_last_info(self) -> list[dict[str, Any]]:
         self._check()
         return [info for shard in self._shards for info in shard.native.get_last_info()]

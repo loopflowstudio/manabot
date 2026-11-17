@@ -41,7 +41,11 @@ reduces CPU fixture preparation and yields 1.14–1.20× GRU fixture speedups wi
 exact feature/output/gradient/state comparisons. GRU remains 0.30–0.46× the
 matched incumbent fixture rate. Warm cache arrays add 61.6 MB for 256 prefixes;
 raw transport and cached features are now budgeted separately and the cache is
-kept. No optimized CUDA-worker or learning result follows.
+kept. The [native-epoch suffix capture](#native-epoch-suffix-capture--2026-11-17)
+cut then reduces whole-game CPU capture time 2.5–3.1×, with exact behavioral and
+gradient hashes. Control's total rate is 0.963–0.980× the incumbent on the
+two-stream fixture, while GRU remains 0.429–0.490×. No optimized CUDA-worker or
+learning result follows.
 
 ## Current method and limits
 
@@ -62,10 +66,13 @@ The current cut admits record-aligned immutable chunks by content and predecesso
 cursor, caches vocabulary-bound features, then assembles batch offsets and
 prefix-relative recency. Dense imports still receive complete validation.
 
-The approximately 10% throughput guide informs review; no agent-defined threshold
-authorizes another rental. Native suffix transport, recency-independent features
-and a per-game GRU are separate possible optimizations. Coalescing and its
-multiplicity, the neural architecture, capacities and world binding stay fixed.
+The approximately 10% throughput guide informs review. After the host chunk cut,
+collection now uses native epochs/counts for suffix capture. Recency-independent
+record embeddings and collection/learner folds remain separate measured steps.
+The Task session's engineering direction permits one admission at or below USD1
+inside the calibration allowance only after CPU GRU is within about 1.3× of the
+incumbent; current CPU results do not meet that gate. A pilot still needs a person
+to see the numbers. Coalescing/multiplicity, capacities and world binding stay fixed.
 
 If paid work resumes after reviewing these costs, use three independent seed
 labels with a common EMA trunk per label and control/GRU branches: three trunks
@@ -1528,3 +1535,84 @@ accounted transport ownership (30.7 MB cold, 28.7 MB of it raw chunk bytes) and 
 prefixes) reported as separate budgets. The measured numbers above are
 unchanged. Capture and per-decision whole-prefix encoding remain the next
 host-cost targets.
+
+
+## Native-epoch suffix capture — 2026-11-17
+
+**Keep the capture cut; the GRU is still too slow for paid admission.**
+Native log counts now remain current at commit/deserialization, and existing
+process-local game generations authorize reuse across synchronous reads.
+Collection extends each stream/viewer's previous prefix, reusing every node
+before the old last chunk. It always re-reads the last chunk, including when
+counts do not change, so coalescing retains its span and multiplicity. Repeated
+seeds cannot authorize reuse across resets, forks or replay restoration.
+Dense imports/archives retain complete admission. Native padded encoding is
+unchanged: this removes host scans/hashing/admission of the closed prefix,
+not native suffix encoding or neural full-prefix work.
+
+The pre-cut capture method is frozen from `35e3fe823055` (chunk-cache code
+`574112a0aa`). Baseline/candidate use the same rebuilt release engine and all
+other current Python code, isolating host capture. This does not isolate the
+small native cost of maintaining counts from the preceding engine. Evidence:
+`experiments/data/opponent-memory/20261117-suffix-capture` (source hashes,
+exact source files/patch, harness, every case, profiles, ranges and proofs).
+The extension is `94bb1e63d33a54d0582750cb52bb38f7f2eb0cf4372015a8e10120238cbfe8e7`.
+
+45 fresh sequential processes: three repeats per matched 32/128/256-row limit,
+incumbent plus baseline/candidate control and GRU-K1. Each uses the production
+collector, two streams, one complete game per stream, both learning seats,
+independently sampled Elemental decks, mixed disclosure, one actual damped
+policy update and a fixed randomly initialized width64/two-layer policy.
+GRU gates are opened to 0.5 to exercise its path. Every case collected 556
+learner decisions; observed maxima records/details/references/members were
+272/5,688/82/3,592. Collection sampling still uses the original two-row groups;
+32/128/256 bound learner execution. This is a CPU software-cost workload, not
+competence, learning equivalence, strength or 256-stream host-fit evidence.
+
+Medians in seconds (capture is nested in retention, itself in collection;
+never sum those three). Total is collection + update:
+
+| Rows | Arm | Capture before → after (s) | Retention before → after (s) | Collection before → after (s) | Update before → after (s) | Total before → after (s) | After / incumbent throughput |
+|---|---|---|---|---|---|---|---|
+| 32 | control | 0.136 → 0.054 | 0.153 → 0.073 | 1.568 → 1.642 | 2.681 → 2.640 | 4.261 → 4.160 | 0.963× |
+| 32 | gru-k1 | 0.151 → 0.057 | 0.171 → 0.076 | 3.023 → 2.885 | 5.365 → 5.339 | 8.295 → 8.176 | 0.490× |
+| 128 | control | 0.151 → 0.052 | 0.171 → 0.071 | 1.768 → 1.579 | 1.968 → 2.001 | 3.736 → 3.579 | 0.966× |
+| 128 | gru-k1 | 0.158 → 0.055 | 0.178 → 0.073 | 3.132 → 2.812 | 4.761 → 4.952 | 7.893 → 7.763 | 0.446× |
+| 256 | control | 0.148 → 0.048 | 0.167 → 0.065 | 1.711 → 1.500 | 1.953 → 1.973 | 3.664 → 3.474 | 0.980× |
+| 256 | gru-k1 | 0.157 → 0.055 | 0.178 → 0.074 | 3.128 → 2.825 | 5.003 → 5.119 | 8.131 → 7.943 | 0.429× |
+
+Capture ranges separate in all six pairs: before 0.131–0.240 s, after
+0.046–0.093 s across the entire matrix. Median speedups are 2.5–3.1×;
+retention medians improve 2.1–2.6×. Whole collection/update ranges overlap,
+so their median changes do not establish an end-to-end speedup. The
+history-disabled incumbent's total medians at 32/128/256 rows are
+4.005/3.459/3.404 s. Control's median total rate is within 4% on this fixture;
+GRU remains at 0.429–0.490×, below the session's conditional CPU gate for a
+single CUDA admission. No rental, pilot, training comparison or evaluation
+was launched. The roughly 10% adoption guide is not established generally.
+
+Raw unique chunks remain 1,744,008 bytes and the selected dense-gather bound
+139,195,712 bytes; GRU feature arrays remain 4,444,452 bytes. Live stream-owner
+index accounting is 640 bytes versus the empty baseline's 64 bytes, with
+110 more accounted prefix metadata bytes. These bounded active owners are
+included by `MemoryStore.measure`, alongside retained rollout nodes.
+The host has 16 logical CPUs, one Torch intra/inter-op thread and one native
+producer; CPU model, quota and schedulable CPU counts were unreported.
+Observed one-minute system load ranged 7.40–20.32, without induced load.
+
+Correctness: 72 exact output/gradient/updated-state/prefix hash comparisons;
+4,298 admission differential cases, zero mismatches, unchanged outcome digest
+`d2fed54e…`; 10 native debug tests; 15 focused Python checks including native
+viewer/count parity, chunk boundaries, same-count coalescing, repeated-seed
+epoch changes, sharded forwarding, collection/bootstrap/learning and existing
+archive/recovery behavior. Release build, Ruff and whitespace checks passed.
+
+Next is the separate prefix-independent record embedding and parameter-versioned
+collection fold, tested against stateless encoding and measured on this same
+whole-game harness before learner-side sharing. No model arithmetic changed
+in this capture slice; frozen probe and CUDA evidence keep their meaning.
+
+Evidence publication: five content-addressed manifest entries; all 131 source
+and measurement archive members verified locally. No fresh remote-fetch check.
+The experiment-data tracking guard passed. No server, watcher or measurement
+worker remains running.

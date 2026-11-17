@@ -661,6 +661,10 @@ ordinary action fields for reference distributions, never a second padded memory
 owner beside Prepared (including prefetch). Numerical incidents are bounded diagnostics,
 not collector snapshots, and must report omitted complete prefixes explicitly.
 
+Read-only native transport metadata must also be exposed through
+`managym.recording._VECTOR_READS` and flattened in `ShardedVectorEnv`;
+collectors use these wrappers rather than raw native vectors.
+
 ### Etude training records
 
 Etude preserves a checkpoint's source suffix. Worker tests wait for a registered

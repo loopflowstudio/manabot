@@ -362,6 +362,10 @@ impl PyVectorEnv {
         self.inner.current_game_seeds()
     }
 
+    fn decision_memory_counts(&self) -> PyResult<Vec<[[usize; 4]; 2]>> {
+        self.inner.decision_memory_counts().map_err(map_agent_err)
+    }
+
     fn current_game_generations(&self) -> Vec<u64> {
         self.inner.current_game_generations()
     }

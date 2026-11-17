@@ -366,6 +366,10 @@ impl VectorEnv {
         self.envs.iter().map(|env| env.capture_generation).collect()
     }
 
+    pub fn decision_memory_counts(&self) -> Result<Vec<[[usize; 4]; 2]>, AgentError> {
+        self.envs.iter().map(Env::decision_memory_counts).collect()
+    }
+
     /// Read all requested seats in slot order. After autoreset these describe the
     /// replacement games; no terminal hands are cached and no capacities apply.
     pub fn hand_snapshots(&self, players: &[usize]) -> Result<Vec<HandSnapshot>, AgentError> {

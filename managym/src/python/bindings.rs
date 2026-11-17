@@ -5029,6 +5029,14 @@ impl PyEnv {
         })
     }
 
+    fn decision_memory_counts(&self) -> PyResult<[[usize; 4]; 2]> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .decision_memory_counts()
+            .map_err(map_agent_err)
+    }
+
     #[pyo3(signature = (obs, max_facts=None))]
     fn encode_observation(
         &self,

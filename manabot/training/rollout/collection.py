@@ -897,11 +897,15 @@ class SeatRoutedCollector:
         with self.profiler.track("Memory capture"):
             seeds = self._env.current_game_seeds()
             seats = self._env.current_agent_indices()
+            epochs = self._env.current_game_generations()
+            counts = self._env.decision_memory_counts()
             return tuple(
-                self._memory_store.capture(
+                self._memory_store.capture_live(
                     self._buffers,
                     int(row),
                     PrefixIdentity(str(seeds[row]), int(seats[row]), str(seeds[row])),
+                    epoch=epochs[row],
+                    counts=counts[row][int(seats[row])],
                 )
                 for row in rows
             )

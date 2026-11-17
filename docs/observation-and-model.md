@@ -812,6 +812,13 @@ its input is admitted Prepared data, and it evaluates no action or value head.
 ### Starting from a control trunk
 
 All three arms start a fresh `TrainSelfPlay` stage through `pretrained`.
+Collection retains record-aligned immutable chunks. Native transport counts and
+process-local game generations let each stream extend its previous viewer prefix:
+closed chunks are reused, while the last chunk is re-read to preserve coalesced
+passes. Reset, fork and replay restoration change the generation even when a
+seed repeats. These cursors are transport metadata, never policy features or
+replay identities. Dense imports and archives still validate the complete prefix.
+
 A control is a log-enabled policy with `decision_memory="none"`: it retains and
 validates the log and reserves its vocabulary without encoding it. An incumbent
 has history disabled. The true history-disabled incumbent remains the throughput
