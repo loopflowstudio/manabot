@@ -406,7 +406,7 @@
   }
 
   function previewOffer(action: InteractionOffer): void {
-    if (canSubmitLive && tableFrame && ['PRIORITY_CAST_SPELL', 'PRIORITY_ACTIVATE_ABILITY', 'CHOOSE_TARGET', 'PAY_COST', 'TAP_FOR_COST', 'CHOOSE_MODE'].includes(action.action_type ?? '')) {
+    if (canSubmitLive && tableFrame && ['PRIORITY_CAST_SPELL', 'PRIORITY_ACTIVATE_ABILITY', 'CHOOSE_TARGET', 'PAY_COST', 'TAP_FOR_COST'].includes(action.action_type ?? '')) {
       void payments.select(tableFrame, action.id, action.label);
     } else {
       payments.clear();

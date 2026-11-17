@@ -62,7 +62,6 @@
         <details open={!preview.pool_after_spending}>
           <summary>Pool after production · {manaText(preview.pool_after_production.amounts)}</summary>
           {#each preview.pool_after_production.classes as part}<p>{pooledManaText(part)}</p>{/each}
-          <p class="text-ink-2">Choosing an action commits mana. Closing the preview leaves the game as it is.</p>
         </details>
       {/if}
     {:else}

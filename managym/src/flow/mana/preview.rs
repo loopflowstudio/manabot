@@ -230,19 +230,6 @@ impl Game {
                 }
                 None => None,
             },
-            Action::ChooseMode { .. } => {
-                if let Some(Decision::ManaSpend { cost, .. }) =
-                    self.state.suspended_decision.as_ref().map(|s| &s.decision)
-                {
-                    let mut preview = PaymentPreview::message(
-                        PaymentPreviewState::NeedsChoice,
-                        "Choose mana to finish paying this cost; the spending remainder is not yet determined.",
-                    );
-                    preview.cost = Some(cost_description(cost));
-                    return Ok(preview);
-                }
-                None
-            }
             Action::ActivateAbility {
                 permanent,
                 ability_index,
