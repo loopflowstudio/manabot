@@ -672,34 +672,37 @@ You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
 focus to it. A **Payment preview** opens beside the choices:
 
 ```text
-Payment preview · Cast Badgermole Cub
-Cost {1}{G}
-Would tap  Mountain → {R}
-           Forest → {G}
-Left over  nothing floating
+Payment preview
+Cast Badgermole Cub · Cost {1}{G}
+Would tap
+  1. Mountain · your battlefield · copy 1 of 2 → 1 {R}
+  2. Forest · your battlefield → 1 {G}
+Left over · nothing floating
 ```
 
 The same Mountain and Forest carry a proposal mark on the board. Nothing has
 happened yet. Hovering and focusing send no action. Cast the spell and
-choose **Pay cost** to tap the proposed lands.
+choose **Pay the cost** to tap the proposed lands.
 
 The preview is the automatic payer's own plan for the position in front of
 you. Academy asks the game for it; the browser never works one out. What it
-shows is what **Pay cost** does, including the lands it keeps back for other
+shows is what **Pay the cost** does, including the lands it keeps back for other
 cards in your hand and any mana it would produce beyond the cost.
 
 **Choosing sources yourself.** When a cost leaves a real choice of sources,
-the payment prompt lists **Pay cost** first, then each source you may tap.
-Focus arrives on **Pay cost** and shows its proposal without paying.
+the payment prompt lists **Pay the cost** first, then each source you may tap.
+Focus arrives on **Pay the cost** and shows its proposal without paying.
 
-1. To accept the proposal, activate **Pay cost**.
+1. To accept the proposal, activate **Pay the cost**.
 2. To choose a source, activate its tap. Tab moves through the sources and
    Shift+Tab moves back; each source is a separate choice even when several
    produce the same color. Focusing a source previews "tap this one, then pay
    the rest automatically", with your source listed first.
 3. After each tap the source shows as tapped, its mana appears in your
    floating pool, and the proposal for the rest is requested again. Tap
-   another source or activate **Pay cost** to finish.
+   another source or activate **Pay the cost** to finish. When your tap
+   leaves no choice for the rest, the game finishes the payment at once,
+   tapping what the focused preview listed.
 
 A cost that every available source is needed for has no source choice. The
 game pays it as soon as you cast, with no payment prompt, so the preview on
@@ -756,8 +759,8 @@ The player choosing can differ from the player whose turn it is. Target and
 cost prompts identify their source and required input. Finish a pending target
 or cost choice before trying another spell. Inspection and **Show all** keep
 the complete legal choices accessible. A pending cost can require a deliberate
-mana activation before **Pay cost** becomes available;
-[Previewing payments](#previewing-payments) covers what **Pay cost** would tap. Mana you have produced
+mana activation before **Pay the cost** becomes available;
+[Previewing payments](#previewing-payments) covers what **Pay the cost** would tap. Mana you have produced
 and not yet spent appears as a floating-mana readout beside the board, by
 color, until it is spent or empties. The list is the complete
 set of legal actions at this decision. Academy does not say why an action is

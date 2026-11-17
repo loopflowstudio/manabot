@@ -449,6 +449,15 @@ publish, land or choose the next Graph step from here.
   experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
   minutes and 2.2 GB and runs every stage as a real child process.
 
+- Payment previews (`[data-testid=payment-preview]`, `POST
+  /api/sessions/<id>/payment-preview`): the panel exists only once a payment
+  offer has been previewed in the current decision, so read it with a count
+  check. Arrival focus previews the first offer as soon as a game starts; a
+  `page.route` for failure or delay must be installed before Start game.
+  Compare `[data-payment-source]` ids with the frame's tapped permanent ids
+  after the commit. `trigger_order_server` with `payment_fixture: true` in the
+  `new_game` config gives a ready Lightning Strike payment with nine offers.
+  Rebuilding the SPA stops running `npm run preview` servers; restart them.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.

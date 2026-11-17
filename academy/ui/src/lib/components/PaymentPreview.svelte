@@ -13,14 +13,20 @@
   }
   let { state, observation, chosenSourceFirst, onClose, onRetry }: Props = $props();
   const preview = $derived(state?.preview);
+  let region: HTMLElement | null = null;
+  // Close and Retry remove their own button; keep keyboard focus in the panel.
+  function keepFocus(action: () => void): void {
+    region?.focus();
+    action();
+  }
 </script>
 
 <!-- Keep this scroll region stable as the pointer moves between offers. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to the scrolling payment explanation) -->
-<section aria-label="Payment preview" class="h-40 shrink-0 overflow-y-auto border-t border-line py-1.5 type-caption" tabindex="0" data-testid="payment-preview">
+<section bind:this={region} aria-label="Payment preview" class="h-40 shrink-0 overflow-y-auto border-t border-line py-1.5 type-caption" tabindex="0" data-testid="payment-preview">
   <div class="flex items-baseline justify-between gap-2">
     <h3 class="type-rubric text-display">Payment preview</h3>
-    {#if state}<button class="underline text-ink-2" aria-label="Close preview" onclick={onClose}>Close</button>{/if}
+    {#if state}<button class="underline text-ink-2" aria-label="Close preview" onclick={() => keepFocus(onClose)}>Close</button>{/if}
   </div>
   {#if !state}
     <p class="text-ink-2">Focus or point to a payment choice.</p>
@@ -28,9 +34,9 @@
     <p role="status">Reading automatic payment…</p>
   {:else if state.error}
     <p role="status">Couldn’t load this payment preview.</p>
-    <button class="btn btn-ghost btn-sm" onclick={onRetry}>Retry</button>
+    <button class="btn btn-ghost btn-sm" onclick={() => keepFocus(onRetry)}>Retry</button>
   {:else if preview}
-    <p>{state.label}{#if preview.cost} · Cost {preview.cost}{/if}</p>
+    <p>{state.label}{#if preview.cost}{` · Cost ${preview.cost}`}{/if}</p>
     {#if preview.state === 'exact'}
       {#if preview.sources.length}
         <p class="font-semibold">Would tap</p>
