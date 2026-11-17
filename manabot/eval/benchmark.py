@@ -11,43 +11,40 @@ from __future__ import annotations
 from collections.abc import Sequence
 import os
 from pathlib import Path
+from typing import cast
 
 from etude.eval.records import (
     Benchmark,
     CheckpointRef,
+    CheckpointSlot,
     Code,
+    Composition,
     Environment,
-    Inference,
     Match,
     Seating,
 )
-from etude.eval.run import Row, Tables
+from etude.eval.result import Row, Tables
 from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import BaseModel
 
-from manabot.eval.endpoint import (
-    EndpointPlay,
-    InferenceEndpoint,
-    callback_allocation,
-)
+from manabot.eval.agents import AGENTS, etude_registration
 from manabot.eval.evaluation import (
     EvaluationRequest,
     continue_evaluation,
     evaluate as evaluate_panel,
 )
-from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import MonitorResult
 from manabot.eval.results import EvaluationRow
-from manabot.infra.artifacts import local_checkpoint_file, verify_file
+from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.sim.execution import EvalExecution
+from manabot.sim.agent import GamePlayer
 from manabot.sim.matchup import AuthoredMatchup, selected_decks
-from manabot.sim.registration import PlayerRegistration
+from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 
-BENCHMARK = "two-seat-ladder-heuristic-deck-seats"
+BENCHMARK = "two-seat-ladder-heuristic-deck-seats-agents-v1"
 
 
 class Conditions(BaseModel):
@@ -67,7 +64,7 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
     # A model seat carries its fixed inference registration, with artifact facts
     # filled from Etude's checkpoint when played. Never put training coordinates
     # or host paths in the benchmark identity.
-    registration = manifest.candidate.model_copy(
+    registration = etude_registration(manifest.candidate).model_copy(
         update={
             "checkpoint_sha256": "0" * 64,
             "checkpoint_bytes": 1,
@@ -97,37 +94,45 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
             files=canonical_sha256(manifest.evaluation_identities),
             config={"purpose": "repeated-development-monitoring"},
         ),
-        seatings=(
+        seatings=tuple(
             Seating(
-                name="checkpoint vs heuristic",
+                name=f"checkpoint vs heuristic deal {seed}",
                 players=(
-                    Inference(
-                        source=code,
-                        config={"registration": registration.model_dump(mode="json")},
+                    Composition(
+                        type="etude:configured",
+                        fields={
+                            "over": CheckpointSlot().model_dump(mode="json"),
+                            "config": {
+                                "registration": registration.model_dump(mode="json")
+                            },
+                        },
                     ),
                     opponent,
                 ),
-                configs=tuple(
-                    Conditions(
-                        deal=seed,
-                        key=manifest.key,
-                        game_seconds=manifest.protocol.game_seconds,
-                        max_commands=manifest.protocol.max_commands,
-                    ).model_dump(mode="json")
-                    for seed in manifest.protocol.deal_seeds
-                ),
-                games=8,
-            ),
+                config=Conditions(
+                    deal=seed,
+                    key=manifest.key.model_copy(
+                        update={
+                            "evaluation_compute_envelope_id": ETUDE_COMPUTE_CLASS,
+                            "arena_version": "training-monitor-agents-v1",
+                        }
+                    ),
+                    game_seconds=manifest.protocol.game_seconds,
+                    max_commands=manifest.protocol.max_commands,
+                ).model_dump(mode="json"),
+                games=1,
+            )
+            for seed in manifest.protocol.deal_seeds
         ),
     )
 
 
-def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
-    """Play a complete deal; failed integrity leaves arena evidence and fails Etude."""
-    if len(match.players) != 2 or match.games != 8:
+def play(match: Match, agents: Sequence[object]) -> Tables:
+    """Etude game callback: one eight-leg deal of the checkpoint against its anchor."""
+    if len(match.players) != 2:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
     checkpoint, anchor = match.players
-    path = local_checkpoint_file(checkpoint)
+    path = checkpoint.checkpoint.path
     sha256 = file_sha256(path)
     candidate = PlayerRegistration.model_validate(checkpoint.config["registration"])
     candidate = candidate.model_copy(
@@ -138,6 +143,23 @@ def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
         }
     )
     opponent = PlayerRegistration.model_validate(anchor.config["registration"])
+    return play_deal(
+        match, candidate, opponent, {candidate.player_id: str(path)}, agents
+    )
+
+
+def play_deal(
+    match: Match,
+    candidate: PlayerRegistration,
+    opponent: PlayerRegistration,
+    checkpoint_paths: dict[str, str],
+    agents: Sequence[object],
+) -> Tables:
+    """Play or continue the match's deal with Etude's agents, in seating order.
+
+    Failed integrity leaves the arena evidence under the match's output
+    directory and fails the Etude match.
+    """
     conditions = Conditions.model_validate(match.config)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
     request = EvaluationRequest(
@@ -145,25 +167,22 @@ def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
         candidate=candidate,
         opponent=opponent,
         deal_seeds=(conditions.deal,),
-        checkpoint_paths={candidate.player_id: str(path)},
+        checkpoint_paths=checkpoint_paths,
         game_seconds=conditions.game_seconds,
         max_commands=conditions.max_commands,
         matchup_mode="all",
         purpose="repeated-development-comparison",
     )
+    seated = {
+        candidate.player_id: cast(GamePlayer, agents[0]),
+        opponent.player_id: cast(GamePlayer, agents[1]),
+    }
     result = (
-        continue_evaluation(out, request=request, inference=inference)
+        continue_evaluation(out, request=request, agents=seated)
         if out.exists()
-        else evaluate_panel(request, out_dir=out, inference=inference)
+        else evaluate_panel(request, out_dir=out, agents=seated)
     )
-    if result.error:
-        raise ValueError(result.error)
     return evaluation_tables(result.rows)
-
-
-def play(match: Match) -> Tables:
-    """Etude's play callback when the calling process runs inference itself."""
-    return play_match(match, None)
 
 
 def evaluation_tables(
@@ -181,11 +200,7 @@ def evaluation_tables(
     "<deck> v <deck>", over the first `legs` of its matrix: the four cross legs,
     or all eight with the mirrors.
     """
-    if (
-        {row.leg for row in rows} != set(range(legs))
-        or len(rows) != legs
-        or not all(row.valid for row in rows)
-    ):
+    if {row.leg for row in rows} != set(range(legs)) or len(rows) != legs:
         raise ValueError("arena deal incomplete or failed integrity; evidence retained")
     labels = {
         ("ur_lessons", "gw_allies"): "LvA",
@@ -202,9 +217,7 @@ def evaluation_tables(
             or extra.get("player_a_seat") != row.leg % 2
         ):
             raise ValueError("arena row differs from authored deck/seat assignment")
-        score = row.score_a
-        if score is None:
-            raise ValueError("valid arena row requires a score")
+        score = row.score_a if row.valid else None
         # Etude's seat is a tournament participant, not the native on-play
         # seat. Deck labels and on-play flags describe that row's participant:
         # `deck` is the deck it actually played, `opponent_deck` the other's.
@@ -215,7 +228,7 @@ def evaluation_tables(
                 {
                     "seat": seat,
                     "game": row.leg,
-                    "score": score if seat == 0 else 1.0 - score,
+                    "score": score if seat == 0 or score is None else 1.0 - score,
                     "deck": deck,
                     "opponent_deck": opponent_deck,
                     "matchup": labels[(deck, opponent_deck)]
@@ -223,51 +236,38 @@ def evaluation_tables(
                     else f"{deck} v {opponent_deck}",
                     "game_seat": game_seat,
                     "on_play": game_seat == 0,
-                    "valid": True,
+                    "valid": row.valid,
+                    "failure": row.failure,
                 }
             )
     return {"plays": plays}
 
 
-def evaluate(
-    manifest: MonitorResult, directory: Path, *, execution: EvalExecution | None = None
-) -> None:
+def evaluate(manifest: MonitorResult, directory: Path) -> None:
     """Hold one digest-bound benchmark; the parent owns the process deadline."""
     path = Path(manifest.artifact["path"]).resolve()
     verify_file(path, manifest.artifact["sha256"], manifest.artifact["bytes"])
     directory.mkdir(parents=True, exist_ok=True)
     os.environ["ETUDE_OUTPUT_DIR"] = str(directory)
     os.environ["ETUDE_RUN"] = "checkpoint-" + manifest.artifact["sha256"]
-    if execution is not None:
-        manifest = manifest.model_copy(deep=True)
-        manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
-            manifest.key, (manifest.candidate, manifest.opponent), execution
-        )
-        atomic_json(
-            directory / "execution-manifest.json", manifest.model_dump(mode="json")
-        )
-    with callback_allocation(execution, directory / "allocation") as inference:
-        with evaluating(
-            benchmark(manifest),
-            experiment=BENCHMARK,
-            # The training run's export, wherever its bytes are read from. A
-            # manabot run is no Etude policy: its address is the key it was
-            # always seated under, so retained matches keep their identity.
-            checkpoint=CheckpointRef(
-                address=f"{manifest.run_id}/checkpoints/{path.name}",
-                artifact=ArtifactRef(
-                    uri=path.as_uri(),
-                    sha256=manifest.artifact["sha256"],
-                    size_bytes=manifest.artifact["bytes"],
-                ),
+    with evaluating(
+        benchmark(manifest),
+        experiment=BENCHMARK,
+        # The training run's export, wherever its bytes are read from. A
+        # manabot run is no Etude policy: its address is the key it was
+        # always seated under, so retained matches keep their identity.
+        checkpoint=CheckpointRef(
+            address=f"{manifest.run_id}/checkpoints/{path.name}",
+            artifact=ArtifactRef(
+                uri=path.as_uri(),
+                sha256=manifest.artifact["sha256"],
+                size_bytes=manifest.artifact["bytes"],
             ),
-            directory=directory.parent.parent / "track",
-            workers=execution.max_active_games if execution else 1,
-            resume=True,
-        ) as active:
-            result = active.play(
-                EndpointPlay(play_match, inference) if inference else play
-            )
+        ),
+        directory=directory.parent.parent / "track",
+        resume=True,
+    ) as active:
+        result = active.play(play, agents=AGENTS)
 
     atomic_json(directory / "result.json", result.model_dump(mode="json"))
 
@@ -277,12 +277,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--execution", type=Path)
     args = parser.parse_args()
     evaluate(
         MonitorResult.model_validate_json(args.manifest.read_bytes()),
         args.manifest.parent,
-        execution=EvalExecution.model_validate_json(args.execution.read_bytes())
-        if args.execution
-        else None,
     )

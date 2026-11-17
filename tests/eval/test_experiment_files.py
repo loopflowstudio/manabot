@@ -13,7 +13,7 @@ from pathlib import Path
 from types import ModuleType
 
 from etude.checkpoints import CheckpointRecord
-from etude.declarations import asked, read_experiment, read_training_jobs
+from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
 from etude.eval.records import Match
 from etude.experiment_file import defined_functions
@@ -24,7 +24,6 @@ from etude.jobs import (
     TrainingJob,
     TrainingRunSummary,
     checkpoint_inputs,
-    evaluation_spec,
 )
 from etude.page import experiment_files
 from etude.records import ArtifactRef
@@ -101,7 +100,7 @@ def test_not_yet_runnable_files_are_eval_only() -> None:
 def test_claude_seats_the_outside_checkpoint_with_its_extras() -> None:
     (job,) = llm_claude.eval_jobs(ExperimentState(experiment="llm_claude"))
     assert "--extra evaluation --extra openrouter" in job.plain().command
-    matches = evaluation_spec(job).tournament.seatings[0].matches()
+    matches = job.recorded().tournament.seatings[0].matches()
     (seated,) = checkpoint_inputs(matches, ExperimentState(experiment="llm_claude"))
     assert seated == llm_claude.MTG183_FINAL
 
@@ -212,7 +211,7 @@ def test_elemental_eval_jobs_ask_for_the_rated_design(tmp_path: Path) -> None:
     state = ExperimentState(experiment="elemental", runs=(run,))
     declared = elemental.eval_jobs(state)
     assert all(isinstance(job, EvalJob) for job in declared)
-    specs = {job.name: evaluation_spec(job) for job in declared}
+    specs = {job.name: job.recorded() for job in declared}
     assert set(specs) == {elemental.GRID, elemental.SUBSET, elemental.PAIRS}
     file = EXPERIMENTS / "elemental.py"
     assert [job.name for job in asked(read_experiment(file).eval, state)] == list(specs)
@@ -228,18 +227,21 @@ def test_elemental_eval_jobs_ask_for_the_rated_design(tmp_path: Path) -> None:
         elemental.SUBSET: [u for u in rated if kinds[u] == "subset"],
         elemental.PAIRS: [],
     }
-    # A grid is one match per model deck for each held checkpoint.
-    (grid,) = specs[elemental.GRID].tournament.seatings
-    matches = grid.matches(run.checkpoints[0].ref)
-    assert [match.config["deck"] for match in matches] == list(DECKS)
-    assert {match.players[1].name for match in matches} == {"heuristic"}
+    # A new match owns one deck/seat group, never a whole grid row.
+    grid = specs[elemental.GRID].tournament.seatings
+    matches = [m for seating in grid for m in seating.matches(run.checkpoints[0].ref)]
+    assert {m.config["deck"] for m in matches} == set(DECKS)
+    assert all(len(m.config["groups"]) == 1 and m.games == 1 for m in matches)
+    assert len(matches) == len(DECKS) ** 2 * 2
+    assert {m.players[1].name for m in matches} == {"heuristic"}
+    assert all(job.agents == elemental.AGENTS for job in declared)
     # Each pair of the design is one fixed seating: newer checkpoint first.
     pairs: list[Match] = []
     for seating in specs[elemental.PAIRS].tournament.seatings:
         assert seating.fixed
         pairs += seating.matches()
     design = pair_design(rated, 500)
-    assert len(pairs) == len(design) * len(DECKS)
+    assert len(pairs) == len(design) * len(DECKS) ** 2 * 2
     assert {(match.players[0].name, match.players[1].name) for match in pairs} == {
         (f"updates-{pair.newer}.pt", f"updates-{pair.older}.pt") for pair in design
     }
@@ -258,11 +260,11 @@ def test_frontier_eval_jobs_declare_one_typed_pass(tmp_path: Path) -> None:
     (job,) = tla_frontier.eval_jobs(state)
     assert isinstance(job, EvalJob)
     plain = job.plain()
-    assert plain.name == "tla-frontier-c5fba4-paired-v1"
+    assert plain.name == "tla-frontier-c5fba4-paired-v1-agents-v1"
     assert "UV_NO_SYNC" not in {v.name for v in plain.environment}
     assert "--extra evaluation" in plain.command
     assert plain.setup is not None and "--extra evaluation" in plain.setup
-    seatings = evaluation_spec(job).tournament.seatings
+    seatings = job.recorded().tournament.seatings
     assert {tag for seating in seatings for tag in seating.tags} >= {
         "heuristic-w64",
         "heuristic-w160l8",

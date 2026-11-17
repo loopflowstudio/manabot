@@ -27,7 +27,7 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from etude.eval.records import CheckpointPlayer, Code, Match
-from etude.eval.run import Result, Row
+from etude.eval.result import Result, Row
 from pydantic import BaseModel, ConfigDict, Field
 
 from manabot.infra.artifacts import fetch_etude_checkpoint

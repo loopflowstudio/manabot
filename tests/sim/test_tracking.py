@@ -9,7 +9,6 @@ from urllib.parse import unquote, urlsplit
 from etude.checkpoints import CheckpointRecord
 from etude.storage import DirectoryStorage
 from etude.train.read import read, read_all
-from etude.train.tracking import track
 import pytest
 import torch
 
@@ -32,6 +31,7 @@ from manabot.policy.protocol import BackendPolicy
 from manabot.reports import training
 from manabot.sim import sim
 from manabot.sim.player import ModelPlayer, RandomPlayer
+from tests.fixtures.training_records import recording
 
 
 @pytest.mark.parametrize("remote", [False, True])
@@ -43,7 +43,7 @@ def test_simulation_admits_exact_etude_checkpoint(
     policy = tmp_path / "policy.pt"
     save_checkpoint(original, space, policy, player_configs=Match().to_rust())
     directory = tmp_path / "etude"
-    with track(
+    with recording(
         experiment="fixture",
         run="producer",
         clocks=["updates"],
@@ -188,7 +188,7 @@ def test_failed_game_aborts_evaluation_and_closes_environment(
     runs = read_all(tmp_path / "tracking")
     assert len(runs) == 1
     assert not list(runs[0].points("evaluation/hero_win_rate", "games").y)
-    assert runs[0].state is None or runs[0].state.state != "finished"
+    assert runs[0].outcome is not None and runs[0].outcome.state == "failed"
 
 
 def test_game_reaching_step_limit_records_timeout() -> None:

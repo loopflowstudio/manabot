@@ -1,55 +1,36 @@
-"""The native game child: one bounded game, its Commands and pre-command evidence.
+"""Native game stepping, Command binding and replay evidence.
 
-`supervise_game` launches `game_worker` as a `ChildProcess`. The child builds
-viewer-safe frames, sends each pending Command for durable acknowledgement
-before native execution, and reports the settled game. Under a declared
-allocation, checkpoint players are served: they reach their policy over the
-game's own connection to the allocation's inference service, not through the
-supervisor. Without one, they play scalar in-child. Code players (anchors,
-heuristic) are built Torch-free, so a game between them and served players
-never imports Torch. Scalar checkpoint and search players (flat-MC, PUCT,
-local update) keep their policy in-child; `_InChildPlayers` is the one place
-this module imports Torch-bearing code.
-
-Before reporting, the child counts its threads against the declared game
-budget; exceeding it is an infrastructure failure, not a forfeit.
+execute_game runs in Etude's owning game process with supplied GamePlayers.
+The standalone game_worker entry builds scalar/search players for local CPU
+inspection. The game algorithm, disclosure checks and Command journal events
+are shared; there is no inference service or model process here.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import replace
+from collections.abc import Callable, Mapping
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
 import traceback
 from typing import Any
-from uuid import uuid4
 
 from manabot.backends import resolve
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ObservationConfig
+from manabot.infra.config import MatchConfig
 from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
     runtime_fingerprints,
     source_bundle_sha256,
 )
 from manabot.policy.protocol import Backend
-from manabot.sim.execution import EvalExecution
+from manabot.sim.agent import GamePlayer
 from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration, require_open_decklists
 from manabot.sim.replay import replay_environment
-from manabot.sim.serving_protocol import (
-    DecisionReply,
-    DecisionRequest,
-    InferenceClient,
-    InferenceFailure,
-    PolicyKey,
-)
-from manabot.sim.supervision import failure_record, infrastructure_failure
-from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded, account_threads
+from manabot.sim.supervision import failure_record, is_game_error
 from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
 
@@ -59,10 +40,10 @@ class _InChildPlayers:
 
     Code players (anchors, heuristic, demo search) come from the Torch-free
     `players` module. Scalar checkpoint and search players load Torch on their
-    first build. Only
-    search players that track the whole game receive `start_game`, and only
-    local-update players observe each step, exactly as registered policies
-    always have.
+    first build. Only search players that track the whole game receive
+    `start_game`, and only local-update players observe each step; until a
+    backend is built there are no such players, so neither hook applies to
+    supplied agents.
     """
 
     def __init__(self, backend_factory: Callable[[], Backend] | None) -> None:
@@ -112,44 +93,32 @@ class _InChildPlayers:
         self._backend.seed(seed)
 
 
-def _census(game: dict[str, Any]) -> None:
-    """Count this child's threads into its result; over budget fails the game."""
-    try:
-        account_threads(GAME_BUDGET, game["worker_performance"]["counters"])
-    except ThreadBudgetExceeded as exc:
-        infrastructure_failure(game, str(exc))
-
-
 def execute_game(
     game: dict[str, Any],
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
     send: Callable[[tuple[str, Any]], None],
-    infer: Callable[[DecisionRequest], DecisionReply] | None = None,
     *,
     backend_factory: Callable[[], Backend] | None = None,
+    agents: Mapping[str, GamePlayer] | None = None,
+    deadline: float | None = None,
+    propagate_errors: tuple[type[BaseException], ...] = (),
 ) -> None:
     """Play one game, sending phase, pending and decision events, then its result.
 
-    Served players reach a policy only through `infer`; code and search players
-    are built in-process (`_InChildPlayers`); only search players import Torch.
+    Supplied agents own policy preparation/choice; standalone scalar players
+    are built in-process. Transport failures named by the caller propagate to
+    its retry owner instead of becoming invalid game rows.
     """
     responsible = None
     env = None
     perf = EvalPerformance(
         str(game.get("match_id", "game")),
         game.get("instrumentation", True),
-        latency_boundary="game worker submission through reply identity validation; excludes Command validation and native execution",
     )
     try:
         built = {}
-        execution = (
-            EvalExecution.model_validate(game["execution"])
-            if "execution" in game
-            else None
-        )
-        policies: dict[str, PolicyKey] = {}
         in_child = _InChildPlayers(backend_factory)
         if "match_hypers" in game:
             require_open_decklists(
@@ -159,25 +128,17 @@ def execute_game(
         for registration in registrations:
             responsible = registration.player_id
             send(("phase", responsible))
-            if "execution" in registration.player_spec:
-                if execution is None or infer is None:
-                    raise InferenceFailure(
-                        "served checkpoint requires an inference endpoint"
-                    )
-                policies[responsible] = PolicyKey.from_registration(
-                    registration, execution
+            if agents is not None:
+                player = agents[responsible]
+                player.admit(MatchConfig.model_validate(game["match_hypers"]))
+                built[responsible] = (player, player.space)
+                continue
+            with perf.span("player_startup"):
+                built[responsible] = in_child.build(
+                    registration,
+                    seed=game["player_seeds"][responsible],
+                    checkpoint_path=checkpoint_paths.get(responsible),
                 )
-                config = ObservationConfig.from_checkpoint(
-                    game["served_observations"][responsible]
-                )
-                built[responsible] = (None, ObservationSpace(config))
-            else:
-                with perf.span("player_startup"):
-                    built[responsible] = in_child.build(
-                        registration,
-                        seed=game["player_seeds"][responsible],
-                        checkpoint_path=checkpoint_paths.get(responsible),
-                    )
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -210,6 +171,11 @@ def execute_game(
         ]
         decision_counts = dict.fromkeys(built, 0)
         for revision in range(max_commands):
+            if deadline is not None and time.monotonic() >= deadline:
+                failure_record(
+                    game, "timeout", "game wall-clock budget exhausted", None
+                )
+                break
             raw = env.last_raw_obs
             actor = int(raw.agent.player_index)
             player_id = game["seat_players"][actor]
@@ -230,38 +196,11 @@ def execute_game(
             send(("phase", player_id))
             ordinal = decision_counts[player_id]
             policy_seed = (game["player_seeds"][player_id] + ordinal) % (2**63)
-            if registrations[actor].runner_kind == "checkpoint" and (
-                player_id not in policies
-            ):
+            if agents is None and registrations[actor].runner_kind == "checkpoint":
                 in_child.seed(policy_seed)
             started = time.perf_counter()
-            if player_id in policies:
-                assert execution is not None and infer is not None
-                request = DecisionRequest(
-                    uuid4().hex,
-                    policies[player_id],
-                    policy_seed,
-                    {k: v.copy() for k, v in obs.items()},
-                    min(
-                        execution.deadline_unix, time.time() + execution.request_seconds
-                    ),
-                    time.monotonic(),
-                )
-                with perf.span("inference_round_trip", request=request.request_id):
-                    try:
-                        reply = infer(request)
-                        action = reply.action
-                    except BaseException:
-                        perf.latency(
-                            time.monotonic() - request.submitted, outcome="failed"
-                        )
-                        raise
-                    else:
-                        perf.latency(time.monotonic() - request.submitted)
-                perf.count(
-                    "ipc_input_bytes",
-                    sum(v.nbytes for v in request.observation.values()),
-                )
+            if agents is not None:
+                action = agents[player_id].choose(env, obs, policy_seed)
             else:
                 with perf.span("scalar_policy"):
                     action = int(built[player_id][0].act(env, obs))
@@ -286,9 +225,6 @@ def execute_game(
                 "policy_rng_seed": policy_seed,
                 "latency_seconds": elapsed,
             }
-            if player_id in policies:
-                decision["inference_request_id"] = request.request_id
-                decision["inference_batch_id"] = reply.batch_id
             # The parent acknowledges durable pre-command evidence before native
             # execution. Successful Commands alone cannot reproduce a rejection.
             game["pending_decision"] = decision
@@ -351,8 +287,12 @@ def execute_game(
                 break
         else:
             failure_record(game, "command_cap", "game exceeded its Command cap", None)
+    except propagate_errors:
+        if env is not None:
+            env.close()
+        raise
     except BaseException as exc:
-        if not isinstance(exc, Exception) and type(exc).__name__ != "PanicException":
+        if not is_game_error(exc):
             raise
         game["failure_trace"] = traceback.format_exc()
         game["error_class"] = type(exc).__name__
@@ -360,7 +300,7 @@ def execute_game(
             game,
             "crash",
             f"{type(exc).__name__}: {exc}",
-            None if isinstance(exc, InferenceFailure) else responsible,
+            responsible,
         )
     if env is not None:
         if env.obs_space.encoder.config.action_overflow == "first-legal":
@@ -376,44 +316,20 @@ def game_worker(
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
-    inference: int | None,
     deadline_unix: float,
 ) -> None:
-    """Game child entry; `inference` is this game's service connection descriptor.
-
-    Inference waiting consumes the game's wall allowance, so each request's
-    deadline is clamped to `deadline_unix`. An inference failure is reported to
-    the supervisor before the game settles, so it fails the allocation.
-    """
+    """Standalone scalar child; Etude games call execute_game in their own process."""
 
     def backend_factory() -> Backend:
-        # Child composition root: code/served games never invoke this loader.
         import torch
 
         torch.set_num_threads(1)
         return resolve("torch")
 
-    client = None if inference is None else InferenceClient(inference)
-
     def send(event: tuple[str, Any]) -> None:
-        if event[0] == "result":
-            _census(event[1])
         connection.send(event)
         if event[0] == "pending" and connection.recv() != "retained":
             raise RuntimeError("pre-command evidence was not retained")
-
-    def infer(request: DecisionRequest) -> DecisionReply:
-        assert client is not None
-        try:
-            return client.infer(
-                replace(
-                    request,
-                    deadline_unix=min(request.deadline_unix, deadline_unix),
-                )
-            )
-        except InferenceFailure as exc:
-            connection.send(("inference_failure", str(exc)))
-            raise
 
     try:
         execute_game(
@@ -422,10 +338,8 @@ def game_worker(
             checkpoint_paths,
             max_commands,
             send,
-            None if client is None else infer,
             backend_factory=backend_factory,
+            deadline=time.monotonic() + max(0, deadline_unix - time.time()),
         )
     finally:
-        if client is not None:
-            client.close()
         connection.close()

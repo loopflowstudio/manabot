@@ -30,7 +30,13 @@ from decimal import Decimal
 from pathlib import Path
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.records import Benchmark, Inference, Player, Seating
+from etude.eval.records import (
+    Benchmark,
+    CheckpointSlot,
+    Player,
+    Seating,
+    checkpoint_player,
+)
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import (
     Anchors,
@@ -52,7 +58,6 @@ from experiments.elemental_long import (
     rated_updates,
 )
 from experiments.elemental_play import (
-    INFERENCE_CODE,
     Conditions,
     Kind,
     eval_environment,
@@ -61,6 +66,7 @@ from experiments.elemental_play import (
     play,
     rows,
 )
+from manabot.eval.agents import AGENTS
 from manabot.experiment.setup import machine_setup
 from manabot.recipes.elemental import ElementalConfig, train
 from manabot.training.panels import ML, PERF
@@ -68,18 +74,16 @@ from manabot.training.panels import ML, PERF
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
 # Benchmarks eval_jobs(state) holds; the report selects their matches by tag.
-GRID = "heuristic-grid"
-SUBSET = "heuristic-subset"
-PAIRS = "checkpoint-pairs"
-# Each grid row plays on one CPU worker per (opposing deck, seat) group.
-WORKERS = 10
+GRID = "heuristic-groups-agents-v1"
+SUBSET = "heuristic-subset-groups-agents-v1"
+PAIRS = "checkpoint-pair-groups-agents-v1"
 # Wall hours one evaluation pass may take on a launched machine.
 EVAL_HOURS = 12.0
 # The training seed `training_jobs()` launches; `--seed` is the launcher's own option.
 SEED = 18101
 
-# The checkpoint in the model's seat: the inference code is its version.
-INFERENCE = Inference(source=list(INFERENCE_CODE))
+# The held checkpoint uses the ordinary Manabot policy.
+CHECKPOINT = CheckpointSlot()
 
 
 # ---------------------------------------------------------------------------
@@ -132,31 +136,29 @@ def _rated(
 def _matchup(
     name: str,
     tags: tuple[str, ...],
-    players: tuple[Player | Inference, Player | Inference],
+    players: tuple[Player | CheckpointSlot, Player | CheckpointSlot],
     grid: list[Conditions],
-) -> Seating:
-    """One match per grid row; every row of a grid plays the same number of games."""
-    (games,) = {sum(len(group.deals) for group in row.groups) for row in grid}
-    return Seating(
-        name=name,
-        tags=tags,
-        players=players,
-        configs=tuple(grid),
-        games=games,
-    )
+) -> list[Seating]:
+    """One match per group; every row of a grid plays the same number of games."""
+    return [
+        Seating(
+            name=f"{name} group {i}", tags=tags, players=players, config=config, games=1
+        )
+        for i, config in enumerate(grid)
+    ]
 
 
 def _grid(name: str, kind: Kind, games: list[Game]) -> Benchmark:
     return Benchmark(
         name=name,
         environment=eval_environment(),
-        seatings=(
+        seatings=tuple(
             _matchup(
                 f"vs heuristic, {kind} grid",
                 ("heuristic",),
-                (INFERENCE, heuristic_code()),
+                (CHECKPOINT, heuristic_code()),
                 rows(kind, groups(games)),
-            ),
+            )
         ),
     )
 
@@ -167,13 +169,17 @@ def _pairs(
     """The run's pairing graph: each pair plays the 10×10 cross-checkpoint schedule."""
     grid = rows("pair", h2h_groups(h2h_schedule()))
     return [
-        _matchup(
+        seating
+        for pair in pair_design(tuple(sorted(rated)), endpoint)
+        for seating in _matchup(
             f"{run.name} u{pair.newer} vs u{pair.older}",
             (pair.role,),
-            (rated[pair.newer].player(INFERENCE), rated[pair.older].player(INFERENCE)),
+            (
+                checkpoint_player(rated[pair.newer].ref),
+                checkpoint_player(rated[pair.older].ref),
+            ),
             grid,
         )
-        for pair in pair_design(tuple(sorted(rated)), endpoint)
     ]
 
 
@@ -196,16 +202,16 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     jobs = [
         EvalJob(
             play=play,
+            agents=AGENTS,
             tournament=_grid(GRID, "full", schedule()),
             checkpoints=full,
-            workers=WORKERS,
             max_hours=EVAL_HOURS,
         ),
         EvalJob(
             play=play,
+            agents=AGENTS,
             tournament=_grid(SUBSET, "subset", heuristic_games(CADENCE, None)[1]),
             checkpoints=subset,
-            workers=WORKERS,
             max_hours=EVAL_HOURS,
         ),
     ]
@@ -214,7 +220,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             name=PAIRS, environment=eval_environment(), seatings=tuple(pairs)
         )
         jobs.append(
-            EvalJob(play=play, tournament=ladder, workers=WORKERS, max_hours=EVAL_HOURS)
+            EvalJob(play=play, agents=AGENTS, tournament=ladder, max_hours=EVAL_HOURS)
         )
     return jobs
 

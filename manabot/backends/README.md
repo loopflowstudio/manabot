@@ -13,7 +13,7 @@ logits, values = policy.evaluate(batch)      # NumPy out: logits [B,A], values [
 `prepare` checks it and does every integer lookup on the host, returning a
 `Prepared` batch (`manabot.policy.prepare`); `evaluate` runs the forward and
 returns logits, -1e8 off the legal actions, and each row's value.
-`inference=True` lays the batch out as simulation and serving do (on CPU it
+`inference=True` lays the batch out as simulation and managed inference do (on CPU it
 drops object and fact columns no row uses); the default is the learning
 layout, whose outputs differ from it by float summation order. Every
 backend reads the same `Prepared` batch and the same checkpoint file, so the
@@ -92,10 +92,12 @@ learner = backend.learner.Learner(policy, "cpu", minibatch_rows=64)
 A loader calls `backend.load_policy(path)`, which returns
 the policy and its observation space. The
 policy supplies host `prepare`/`evaluate`, action sampling and guarded
-`inference_scope()` calls. Sampling stays in the backend so moving a caller
-preserves its seeded action stream. The serving child chooses Torch when it
-starts; a game child resolves it lazily only for an in-child checkpoint player.
-Code players and replay children keep importing no framework.
+`inference_scope()` calls. Scalar sampling stays in the backend to preserve its seeded action stream.
+Managed evaluation instead uses `eval.agent_loader.load`, the composition root
+that chooses Torch and the device. Etude batches its deterministic masked-logit
+forward; the Torch-free game-side agent uses NumPy PCG64 sampling. These have
+fresh registrations and tournament names. Standalone scalar game children
+resolve their backend lazily; code players and replay import no framework.
 
 `resolve(name, *, precision=None)` imports the framework on first use.
 MLX carries the selected compute precision on the returned backend; omitted

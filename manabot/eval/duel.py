@@ -4,6 +4,7 @@ Each match contains all eight deck/seat legs of one deal."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import json
 import os
 from pathlib import Path
@@ -12,41 +13,33 @@ from etude.eval.records import (
     Benchmark,
     CheckpointPlayer,
     CheckpointRef,
+    CheckpointSlot,
+    Composition,
     Environment,
-    Inference,
     Match,
     Seating,
 )
-from etude.eval.run import EvalResult, Tables
+from etude.eval.result import EvalResult, Tables
 from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 import numpy as np
 from pydantic import BaseModel
 
-from manabot.eval.benchmark import Conditions, evaluation_tables
-from manabot.eval.endpoint import (
-    EndpointPlay,
-    InferenceEndpoint,
-    callback_allocation,
-)
+from manabot.eval.agents import AGENTS, etude_registration
+from manabot.eval.benchmark import Conditions, play_deal
 from manabot.eval.evaluation import (
-    EvaluationRequest,
-    continue_evaluation,
-    evaluate as evaluate_panel,
     evaluation_status,
 )
-from manabot.eval.execution import bind_execution
 from manabot.eval.monitor import MonitorResult
 from manabot.eval.results import EvaluationRow
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.execution import EvalExecution
-from manabot.sim.registration import PlayerRegistration
+from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 from manabot.training.records import TrainingCoordinates
 from manabot.training.regime import ArtifactReference
 
-EXPERIMENT = "two-seat-vs-one-seat-equal-updates"
+EXPERIMENT = "two-seat-vs-one-seat-equal-updates-agents-v1"
 
 
 class ScoreGroup(BaseModel):
@@ -109,7 +102,7 @@ class Duel(BaseModel):
 
 
 def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
-    return (
+    players = (
         duel.two_seat.candidate.model_copy(
             update={"player_id": "two-seat", "display_name": "Two-seat"}
         ),
@@ -118,8 +111,11 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
         ),
     )
 
+    return etude_registration(players[0]), etude_registration(players[1])
 
-def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
+
+def play(match: Match, agents: Sequence[object]) -> Tables:
+    """Etude game callback: one eight-leg deal between the two checkpoints."""
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)
     seated = match.players[0]
@@ -128,35 +124,16 @@ def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
         or seated.checkpoint.artifact.sha256 != candidate.checkpoint_sha256
     ):
         raise ValueError("Etude candidate differs from admitted checkpoint")
-    conditions = Conditions.model_validate(match.config)
-    out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    request = EvaluationRequest(
-        key=conditions.key,
-        candidate=candidate,
-        opponent=opponent,
-        deal_seeds=(conditions.deal,),
-        checkpoint_paths={
-            candidate.player_id: duel.two_seat.artifact["path"],
-            opponent.player_id: duel.one_seat.artifact["path"],
+    return play_deal(
+        match,
+        candidate,
+        opponent,
+        {
+            candidate.player_id: str(match.players[0].checkpoint.path),
+            opponent.player_id: str(match.players[1].checkpoint.path),
         },
-        game_seconds=conditions.game_seconds,
-        max_commands=conditions.max_commands,
-        matchup_mode="all",
-        purpose="repeated-development-comparison",
+        agents,
     )
-    result = (
-        continue_evaluation(out, request=request, inference=inference)
-        if out.exists()
-        else evaluate_panel(request, out_dir=out, inference=inference)
-    )
-    if result.error:
-        raise ValueError(result.error)
-    return evaluation_tables(result.rows)
-
-
-def play(match: Match) -> Tables:
-    """Etude's play callback when the calling process runs inference itself."""
-    return play_match(match, None)
 
 
 def summarize(directory: Path) -> dict[str, ScoreGroup]:
@@ -231,7 +208,7 @@ def _checkpoint(result: MonitorResult) -> CheckpointRef:
     )
 
 
-def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
+def evaluate(path: Path) -> None:
     duel = Duel.model_validate_json(path.read_bytes())
     duel.validate_inputs()
     _, original_opponent = registrations(duel)
@@ -240,15 +217,6 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
     key = duel.two_seat.key.model_copy(
         update={"anchor_cohort_sha256": original_opponent.identity_sha256}
     )
-    if execution is not None:
-        key, _ = bind_execution(key, (), execution)
-        for manifest in (duel.two_seat, duel.one_seat):
-            manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
-                manifest.key, (manifest.candidate, manifest.opponent), execution
-            )
-        derived = path.parent / "duel-execution.json"
-        atomic_json(derived, duel.model_dump(mode="json"))
-        path = derived
     directory = path.parent
     candidate, opponent = registrations(duel)
     os.environ["MANABOT_DUEL"] = str(path.resolve())
@@ -256,15 +224,6 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
     os.environ["ETUDE_RUN"] = "duel-" + canonical_sha256(
         [candidate.identity_sha256, opponent.identity_sha256]
     )
-    code = [
-        Path(__file__),
-        *sorted(Path("manabot/eval").glob("*.py")),
-        *sorted(Path("manabot/model").rglob("*.py")),
-        *sorted(Path("manabot/sim").glob("*.py")),
-        *sorted(Path("manabot/env").glob("*.py")),
-        *sorted(Path("manabot/infra").glob("*.py")),
-        Path("manabot/eval/benchmark.py"),
-    ]
     benchmark = Benchmark(
         name=EXPERIMENT,
         environment=Environment(
@@ -272,48 +231,49 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
             files=canonical_sha256(duel.two_seat.evaluation_identities),
             config={"purpose": "repeated-development-comparison"},
         ),
-        seatings=(
+        seatings=tuple(
             Seating(
-                name="two-seat vs one-seat",
+                name=f"two-seat vs one-seat deal {seed}",
                 players=(
-                    Inference(
-                        source=code,
-                        config={"registration": candidate.model_dump(mode="json")},
+                    Composition(
+                        type="etude:configured",
+                        fields={
+                            "over": CheckpointSlot().model_dump(mode="json"),
+                            "config": {
+                                "registration": candidate.model_dump(mode="json")
+                            },
+                        },
                     ),
                     CheckpointPlayer(
                         name="one-seat",
                         checkpoint=_checkpoint(duel.one_seat),
-                        inference=Inference(
-                            source=code,
-                            config={"registration": opponent.model_dump(mode="json")},
-                        ),
+                        config={"registration": opponent.model_dump(mode="json")},
                     ),
                 ),
-                configs=tuple(
-                    Conditions(
-                        deal=seed,
-                        key=key,
-                        game_seconds=600,
-                        max_commands=10000,
-                    ).model_dump(mode="json")
-                    for seed in duel.two_seat.protocol.deal_seeds
-                ),
-                games=8,
-            ),
+                config=Conditions(
+                    deal=seed,
+                    key=key.model_copy(
+                        update={
+                            "evaluation_compute_envelope_id": ETUDE_COMPUTE_CLASS,
+                            "arena_version": "direct-comparison-agents-v1",
+                        }
+                    ),
+                    game_seconds=600,
+                    max_commands=10000,
+                ).model_dump(mode="json"),
+                games=1,
+            )
+            for seed in duel.two_seat.protocol.deal_seeds
         ),
     )
-    with callback_allocation(execution, directory / "allocation") as inference:
-        with evaluating(
-            benchmark,
-            experiment=EXPERIMENT,
-            checkpoint=_checkpoint(duel.two_seat),
-            directory=directory.parent.parent / "track",
-            workers=execution.max_active_games if execution else 1,
-            resume=True,
-        ) as active:
-            result = active.play(
-                EndpointPlay(play_match, inference) if inference else play
-            )
+    with evaluating(
+        benchmark,
+        experiment=EXPERIMENT,
+        checkpoint=_checkpoint(duel.two_seat),
+        directory=directory.parent.parent / "track",
+        resume=True,
+    ) as active:
+        result = active.play(play, agents=AGENTS)
 
     atomic_json(
         directory / "result.json",

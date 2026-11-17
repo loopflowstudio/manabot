@@ -51,13 +51,16 @@ constraints exported to consumers.
 The repository itself resolves Etude from a pinned commit
 (`[tool.uv.sources]` in `pyproject.toml`), because the experiment files, their
 tests and the nightly baseline use the experiment-file API
-(`training_jobs`, `eval_jobs`, `etude.declarations`) that no Etude release
-carries yet. That commit still reports version 0.4.0, and the published
-`manabot` package imports only names the released 0.4.0 has, so the public
-requirements and the consumer installs in `.github/workflows/release.yml`,
-which take Etude from PyPI, are unchanged. Remove the source, and raise the
-minimum if the package comes to need the new API, at the Etude release that
-carries it.
+(`training_jobs`, `eval_jobs`, `etude.controller.declarations`) that no Etude
+release carries yet. That commit still reports version 0.4.0, but it is not
+0.4.0: Etude's main has moved and removed names without aliases
+(`etude.eval.result.Tables`, `CheckpointSlot`, `play(match, agents)`,
+`track` without a standalone identity), and the `manabot` package follows
+main. The public requirement lines stay version requirements, so a `manabot`
+release waits for the Etude release that carries these names; at that release
+remove the source and raise the minimum to it. After the pin moves, run
+`uv run etude database upgrade` once before launching
+([launcher database](experiments.md#what-an-experiment-is)).
 
 For an ordinary released Etude update without raising the public minimum, once
 no source pin is present:
@@ -70,11 +73,11 @@ uv sync --locked --python 3.13 --extra dev --extra artifacts
 Commit the lock change before preparing a new experiment. When raising a public
 minimum, update every requirement for that dependency, including consumer
 install commands in `.github/workflows/release.yml`, and commit the metadata
-with the lock. An Etude release that changes the launcher schema starts a new,
-empty `~/.etude/launcher-<schema>.db` beside the older file and leaves that
-file alone; runs launched by an older client stay with it. See
-[experiments](experiments.md#what-an-experiment-is) before launching from a
-shared home.
+with the lock. After moving the locked Etude revision, inspect
+`uv run etude database status` and explicitly run `uv run etude database upgrade`
+before launching against a home that needs migration. The launcher keeps
+`~/.etude/launcher.sqlite`; upgrade backs it up and no command migrates it
+implicitly. See [experiments](experiments.md#what-an-experiment-is).
 Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
 Retained experiments keep their original source and lock, including the v7
 representation study's historical Git source pin. Never downgrade the current

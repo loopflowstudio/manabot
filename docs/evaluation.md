@@ -15,7 +15,7 @@ Training-time monitoring that calls this machinery is in
 - [Beyond win rate](#beyond-win-rate)
 - [What we know](#what-we-know)
 - [Quick local evaluation](#quick-local-evaluation)
-- [Shared inference](#shared-inference)
+- [Etude agents](#etude-agents)
 - [Continuing an evaluation](#continuing-an-evaluation)
 - [Performance evidence and calibration](#performance-evidence-and-calibration)
 - [Card data](#card-data)
@@ -88,8 +88,8 @@ for _ in range(replicates):
 - A replay that doesn't finish within the deadline is unavailable, not a
   mismatch. Replay verifies Commands, not that two devices compute the same
   policy.
-- An infrastructure failure, such as a dead inference service, fails the
-  allocation. It is never recorded as a player's forfeit.
+- An infrastructure failure requests an Etude retry. It is never a player's
+  forfeit; invalid native games keep null scores and their failure evidence.
 - Game-level intervals describe one checkpoint's evaluation noise. A claim
   about a training method needs independent training seeds
   ([experiments](experiments.md#how-a-claim-gets-made)).
@@ -162,7 +162,7 @@ Allies/Lessons setup:
 ```sh
 uv run python -m manabot.eval.local \
   --checkpoint .runs/small/policy.safetensors --opponent heuristic \
-  --deal-seed 101 --out .runs/local-check --seconds 300 --workers 2
+  --deal-seed 101 --out .runs/local-check --seconds 300
 ```
 
 - `--opponent` also accepts another local policy file, `scripted_greedy` or
@@ -170,9 +170,8 @@ uv run python -m manabot.eval.local \
 - Repeat `--deal-seed` for more blocks; `--include-mirrors` plays all eight legs;
   `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster. The
   checkpoint must already admit that setup; nothing is converted.
-- `--workers`, `--batch-rows`, `--resident-mib`, `--game-seconds` and
-  `--max-commands` set limits. `--seconds` bounds the whole lifetime:
-  checkpoint preparation (in a killable child), serving startup, play and replay.
+- `--game-seconds` and `--max-commands` bound each game. `--seconds` bounds
+  checkpoint preparation, scalar play and replay, including child startup.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated
   seeds are not new samples.
 
@@ -185,14 +184,14 @@ a quick check, not promotion or held-out evidence.
 
 Typed callers pass a `Backend` to
 `manabot.eval.local.checkpoint_request(..., backend=backend)` and use
-`manabot.eval.evaluation.evaluate_local(request, limits=..., out_dir=...)`.
+`manabot.eval.evaluation.evaluate_local(request, deadline=..., out_dir=...)`.
 An unknown training seed stays `None`, never inferred from deals.
 
-`evaluate(request, out_dir=..., inference=...)` is the single execution entry
+`evaluate(request, out_dir=..., agents=...)` is the single execution entry
 point shared by the local CLI, training monitoring and Etude benchmark/Duel
 callbacks. Both public evaluators reject an existing output directory, empty or
-not, before writing anything. `evaluation.json` retains the request, effective
-execution, rows, status, elapsed time and paired-deal intervals; incomplete
+not, before writing anything. `evaluation.json` retains the request, retained
+execution when present, rows, status, elapsed time and paired-deal intervals; incomplete
 cohorts emit no interval. Journals, Commands, replay and performance records
 use arena formats under `<out>/panel`. Lower down, `eval.match.play_cell` plays
 explicit leg subsets.
@@ -201,112 +200,42 @@ Etude entry points are `manabot.eval.benchmark` (one Etude match is one deal
 with all eight legs; Etude owns match records, resume and uncertainty) and
 `manabot.eval.duel`.
 
-## Shared inference
+## Etude agents
 
-`manabot.sim.execution` declares a local allocation in three layers:
+Managed evaluations declare the same `manabot.eval.agents.AGENTS` on every
+`EvalJob`, and pass those agents to `active.play`. Etude owns game processes,
+checkpoint grouping, batching, model residency, retries and performance records.
+The callback is `play(match, agents)`, with objects in seat order; it runs the
+native game and Command replay in that Etude process.
 
-- `EvalCompute` (`shared-eval-v2`): device and dtype, i.e. how a served
-  policy's numbers are computed. This is part of registration identity.
-- `EvalAllocation`: active games, batch rows, batching delay, resident-model
-  bytes, request timeout, catalog cache, residency and forward layout
-  (`bucketed_shapes`, `live_tokens`).
-- `EvalExecution`: absolute Unix deadline plus instrumentation switches.
+`manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path`, chooses
+Torch and CPU or CUDA, and returns a deterministic forward:
+`list[Prepared] -> list[masked logits]`, preserving length and order. Host
+preparation and admission happen once in the game-side sampler. The loader
+merges admitted rows, rebasing their object, frame, fact and effect routes;
+it never selects an action. `build(player, leaves)` creates the heuristic or
+checkpoint sampler without importing Torch. Each decision's recorded seed
+controls NumPy PCG64 sampling in the game process.
 
-Allocation and attempt settings live in receipts, not registration hashes:
-batch composition already varies with arrival order and every row samples from
-its own decision seed, so more games or larger batches keep Etude model,
-benchmark and match identities. Changing device, dtype or contract version
-creates new identities. `seed_compute_envelope_id` preserves the original seed
-authority across serving changes. `shared-eval-v1` (through PR #389) also
-hashed allocation settings; its records stay readable as `EvalComputeV1` /
-`EvalExecutionV1` but are not reused or continued under v2.
+Managed checkpoint registrations name `etude-policy-f32-auto-v1` and
+`numpy-pcg64-v1`. New tournaments have fresh `agents-v1` names and one native
+game group per Etude match. Frozen tournament keys, compute contracts and
+receipts are unchanged. `manabot.sim.execution` reads retained
+`shared-eval-v1` and `shared-eval-v2` records; it no longer allocates execution.
+Standalone local evaluation and training monitoring retain scalar checkpoint
+play through bounded local children.
 
-**Forward layout.** An allocation can serve policies with
-[bucketed padding](observation-and-model.md#bucketed-padding) and
-[live-token attention](observation-and-model.md#live-token-attention):
-`EvalAllocation.bucketed_shapes` and `live_tokens`, both off by default.
+**Failure.** The game loop checks `game_seconds` between decisions and enforces
+`max_commands`. Before native execution it fsyncs the pending Command. Native
+`AgentError` and PyO3 `PanicException` produce invalid, score-null rows and retain
+the journal; later games in the group still run. Replay verifies Commands,
+not cross-device policy equivalence. Invalid rows never become forfeits.
 
-```python
-from manabot.sim.execution import EvalAllocation
-
-allocation = EvalAllocation(device="cuda", bucketed_shapes=True, live_tokens=True)
-```
-
-`live_tokens=True` requires `device="cuda"` (`live tokens require CUDA`). They
-are off because served batches are small: in one w384l8 pass on an L4, at about
-nine rows per forward, the padded forward took 23.7 ms against 27.3 ms with
-both on, and the pass took 118 s either way
-([measurement](../experiments/reports/eval_forward_layout.md)). The layout changes only
-the order of floating-point sums, as batch composition already does, so it is
-an allocation setting: the values are retained in the attempt receipt and
-leave `EvalCompute`, player, benchmark and match identities unchanged. Search
-players and range likelihoods load their policies padded.
-
-With an execution, flat stateless checkpoints are served; without one,
-`play_cell`, `evaluate` and the monitor play them scalar in the game child
-under their original registrations. Served and scalar players of one checkpoint
-therefore have distinct identities. Retiring scalar checkpoint play awaits a
-CPU measurement of served play after direct game connections. Code and search players always play in their game child.
-
-```python
-from pathlib import Path
-import time
-
-from manabot.eval.evaluation import EvaluationRequest, evaluate
-from manabot.sim.execution import EvalExecution
-from manabot.sim.serving_protocol import InferenceRuntime
-
-execution = EvalExecution(device="cpu", max_active_games=4, max_batch_rows=16,
-                          max_delay_seconds=0.005, resident_model_bytes=1 << 30,
-                          deadline_unix=time.time() + 300)
-with InferenceRuntime(execution, Path(".runs/eval/allocation")) as inference:
-    result = evaluate(EvaluationRequest(...), out_dir=Path(".runs/eval/panel"),
-                      inference=inference)
-```
-
-Each allocation needs a new directory; concurrent local callers may share one
-runtime and its game slots. `evaluate_checkpoint(..., execution=...)` runs a
-monitor panel this way; `benchmark.evaluate` and `duel.evaluate` connect Etude's
-spawned callbacks to one authenticated Unix-socket endpoint, so Etude worker
-count cannot multiply the allocation's limits. Each invocation retains its
-receipts under a fresh `allocation/<attempt>/`.
-
-**Processes.** One allocation runs one serving child (`manabot.sim.serving`),
-the only process that loads served weights. `PolicyKey` groups requests by
-checkpoint, observation/action ABI, world, device, dtype, determinism and
-implementation; matchup is not a model input, so games seating one checkpoint
-share its batches across matchups (setups are still validated at admission).
-Batches flush on row cap or delay. Each game child talks to the service over
-its own socket (`InferenceClient`); the supervisor keeps lifecycle, deadlines,
-failure classification and the Command journal, retaining each Command before
-native execution. CPU and CUDA share one serial service with one Torch thread;
-CPU-specific engine work waits for a calibration showing it saturated.
-
-**Checkpoint identity.** A checkpoint registration's observation and action
-ABI hashes describe the checkpoint's own `ObservationSpace`, not the fresh
-defaults for its matchup. Build registrations with
-`manabot.eval.admission.register_checkpoint(..., backend=backend)`, which loads
-the bytes once through the supplied backend and
-takes the world and both hashes from that space. Scalar play never compares
-these hashes; the serving child does when it first loads a checkpoint, and
-refuses a disagreeing registration's matches before play with an
-`InferenceFailure` naming `checkpoint observation ABI drift` (or
-`action/world ABI drift`). A passing CPU run therefore does not show a
-registration is right.
-
-Children start through `manabot.sim.child`, never `multiprocessing` spawn.
-Only search players (flat-MC, PUCT, local update) load Torch in a game child;
-replay children never do. `manabot.sim.threads` starts children single-threaded
-and enforces thread budgets (4 game/replay, 16 serving) as infrastructure
-failures; `effective_cpus()` honors affinity and cgroup quotas.
-
-**Failure.** Every inference call is capped by the request timeout, the game's
-remaining wall time and the allocation deadline. An unanswered request, dead
-service or failed handoff is an infrastructure failure that fails the
-allocation, never a player forfeit; unstarted identities go to
-`unattempted.json`. The deadline also bounds replay: incomplete replay is
-unavailable, not a mismatch. Replay verifies Commands, not cross-device policy
-equivalence.
+Cooperative clock checks cannot interrupt a stuck native call. At the pinned
+Etude revision, a true hang or process exit retries the grouped evaluation job;
+Etude Task 2d1933 owns per-match hard deadlines and isolated dead-process
+failure. The callback does not create nested game processes to replace that
+upstream behavior.
 
 ## Continuing an evaluation
 
@@ -318,8 +247,8 @@ uv run python -m manabot.eval.local --continue .runs/local-check/panel --seconds
 Continuation plays only the missing deals, rerunning any partial deal whole;
 only the deadline may change locally. Typed callers use
 `evaluation_status(directory)` and `continue_evaluation(directory,
-execution=...)`, or pass an existing runtime. Device, dtype, batching and
-residency must match; a changed request needs a fresh evaluation. Relocated
+deadline=...)`. A changed request needs a fresh evaluation. Retained served
+attempts name the original revision to run them from. Relocated
 checkpoints may be passed explicitly and are rechecked by digest and size.
 
 The first `evaluation.json` freezes identity and request; later attempts write
@@ -328,29 +257,22 @@ blocks are immutable. Filesystem claims admit one writer (not distributed
 leases), so move an evaluation with its whole directory. Re-entering an Etude
 benchmark or Duel continues a failed match; a cached success adds no sample.
 
-## Performance evidence and calibration
+## Performance evidence
 
-Cells write `performance.json`, `rows.json`, journals and traces; allocations
-write `execution.json`, `allocation.json` and `serving.json`.
-`diagnostic_batches` adds profiler traces, never mixed with ordinary
-throughput. Cell, allocation and evaluator elapsed times are separate
-intervals; none includes CLI checkpoint preparation or billing, and receipts
-carry no cost. Etude cache reuse adds no measurement.
+Cells write `performance.json`, `rows.json`, journals and traces. Etude records
+managed execution performance. Old allocation and serving receipts remain
+readable by the report viewer; they are historical evidence, not live settings.
+Elapsed intervals are kept separate and carry no bill; Etude cache reuse adds
+no measurement.
 
 ```sh
 uv run python -m experiments.report_prototype.build \
   --eval-receipt .runs/eval/panel --out .runs/eval/report
-uv run --extra evaluation python -m manabot.eval.serving_benchmark \
-  --plan .runs/eval-serving/plan.json --out .runs/eval-serving/result
 ```
 
-The report viewer never sums overlapping clocks;
+The report viewer never sums overlapping clocks.
 `./scripts/verify-eval-performance-report` is its headless proof (needs locked
-`academy/ui` dependencies and Playwright Chromium). The serving benchmark's `BenchmarkPlan` requires the variants
-`cold_scalar`, `resident_only`, `resident_catalog` and `batched`, three
-interleaved repetitions, tolerances, thresholds, a memory cap and a deadline. It
-reports whether declared thresholds were met, not an adoption decision; CPU
-fixture tests establish correctness only.
+`academy/ui` dependencies and Playwright Chromium).
 
 ## Card data
 
@@ -509,13 +431,13 @@ remain unselected designs; see
 
 ## Ownership
 
-Simulation (`manabot.sim`) owns serving, native games and bounded replay.
+Simulation (`manabot.sim`) owns native games, Commands and bounded local replay.
 Evaluation (`manabot.eval`) owns admission (`eval.admission`), requests and
 results (`eval.evaluation`, `eval.results`), paired cells (`eval.match`),
 ratings (`eval.rating`, seat-aware Bradley-Terry with paired-block bootstrap)
-and callback transport (`eval.endpoint`). Training monitoring is an adapter in
+and Etude player loading/building (`eval.agent_loader`, `eval.agents`). Training monitoring is an adapter in
 `manabot.experiment.checkpoint_evaluation`; local execution imports neither it
-nor callback transport. `manabot.eval.models` holds only the identities
+nor the managed player loader. `manabot.eval.models` holds only the identities
 `EvaluationKey` (the arena a game was played in) and `MatchRow` (one played
 leg); wire field names keep their recorded meanings because frozen evidence
 carries them. Tests load the INT-6 fixture's key and anchors through

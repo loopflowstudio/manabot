@@ -11,7 +11,6 @@ import psutil
 
 from manabot.eval.admission import register_anchor, register_checkpoint
 from manabot.eval.evaluation import evaluate
-from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import (
     MonitorProtocol,
@@ -24,9 +23,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, source_bundle_sha256
 from manabot.policy.protocol import Backend
 from manabot.sim import players
-from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
-from manabot.sim.serving_protocol import InferenceRuntime
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.training.regime import ArtifactReference, Strict
 
@@ -96,7 +93,6 @@ def checkpoint_manifest(
     protocol: MonitorProtocol,
     *,
     backend: Backend,
-    execution: EvalExecution | None = None,
 ) -> MonitorResult:
     """Admit exact checkpoint bytes and runtime identities before playing games."""
     path = Path(artifact["path"]).resolve()
@@ -161,10 +157,6 @@ def checkpoint_manifest(
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump()),
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
-    if execution is not None:
-        key, (candidate, opponent) = bind_execution(
-            key, (candidate, opponent), execution
-        )
     return MonitorResult(
         purpose=protocol.result_purpose,
         run_id=run.id,
@@ -190,12 +182,9 @@ def evaluate_checkpoint(
     protocol: MonitorProtocol | None = None,
     concurrent_activity: str = "unknown; host load is not contention attribution",
     backend: Backend,
-    execution: EvalExecution | None = None,
-    inference: InferenceRuntime | None = None,
 ) -> MonitorResult:
     """Run bounded arena games. Use a new directory per attempt; never overwrite failures."""
     protocol = protocol or MonitorProtocol()
-    execution = resolve_execution(execution, inference)
     output_dir.mkdir(parents=True, exist_ok=False)
     start, cpu = time.perf_counter(), time.process_time()
     started_unix = time.time()
@@ -208,7 +197,6 @@ def evaluate_checkpoint(
             coordinates,
             protocol,
             backend=backend,
-            execution=execution,
         )
     except Exception as exc:
         atomic_json(
@@ -228,20 +216,13 @@ def evaluate_checkpoint(
     result.host_load_before = os.getloadavg()
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
     try:
-        # A served panel covers every deal; scalar play keeps one block per deal.
-        panels = (
-            [result.protocol.deal_seeds]
-            if execution
-            else [(seed,) for seed in result.protocol.deal_seeds]
-        )
+        panels = [(seed,) for seed in result.protocol.deal_seeds]
         for block, seeds in enumerate(panels):
             directory = output_dir / f"deal-{block:03d}"
             # The arena persists command traces after every attempted game.
             panel = evaluate(
                 evaluation_request(result, tuple(seeds)),
                 out_dir=directory,
-                execution=execution,
-                inference=inference,
             )
             for row in panel.rows:
                 row.trace_path = str(Path(directory.name) / row.trace_path)

@@ -39,8 +39,34 @@ uv run etude report experiments/elemental.py --source r2://manabot/jobs --serve 
 `training_jobs()` returns every training job that should have been run by now,
 each a named `etude.jobs.TrainingJob`; `eval_jobs(state)` returns
 `etude.jobs.EvalJob`s holding the seatings still wanted, so repeated passes
-play only new ones; `report()` draws the figures. A run's address is always
-`EXPERIMENT/JOB@SEED`. A seating is Etude's rule for who meets whom
+play only new ones; `report()` draws the figures. A training run's address is
+always `EXPERIMENT/JOB@SEED`. A file's eval jobs that can run together play as
+one run on one machine, `EXPERIMENT/evals-DIGEST`, and every tournament in it
+prints that name:
+
+```text
+eval heuristic-grid: 48 new, 0 running, 0 failed, running elemental/evals-1a2b3c4d5e6f
+eval checkpoint-pairs: 24 new, 0 running, 0 failed, running elemental/evals-1a2b3c4d5e6f
+```
+
+Each tournament keeps its own results below that run, keyed by tournament and
+match as before, so reports and `statsdb` queries read them unchanged. The
+run's hour and dollar limits are the sums of its jobs', and `--max-usd` admits
+it as one run. A game is `play(match, agents)`: one object per seated player,
+in seat order. Etude decides how many games play at once from the machine's
+CPUs and memory; an eval job declares no worker count. Every job uses the
+same `manabot.eval.agents.AGENTS`; Etude owns model loading, batching and
+residency. The loader only forwards Prepared rows to masked logits; each
+game-side agent owns host preparation and seeded sampling. New evaluation
+seatings use one config per native game group and `games=1`, under fresh
+`agents-v1` tournament names. Retained schedules and results keep their keys.
+Cooperative game limits and Command caps remain in the native loop; a true
+hang or process exit currently retries the grouped job pending Etude's
+per-match hard-deadline support (Task 2d1933). A match the machine
+failed rather than the game (the run's time limit, a lost machine, a failed
+delivery) is played again by the next pass; an error raised by the game waits
+for `--retry-failed`, and stops its own tournament while the others keep
+playing. A seating is Etude's rule for who meets whom
 (`etude.eval.records.Seating`): its players in seat order, the configs they
 play under and the tags a report selects them by. A `Benchmark` holds
 `seatings`, and a checkpoint says where it stood on each clock in
@@ -53,26 +79,41 @@ a relative seat such as `Final`) or by an outside address.
 
 Use the repository's locked Etude revision for these commands
 ([development dependency](development.md#environment-and-commands)). Launch,
-status and eval commands keep their state in a launcher database named for its
-schema version: the development revision uses `~/.etude/launcher-20.db`
-(released 0.3.2 uses `launcher-17.db`). A database an
-older client wrote, such as the unversioned `~/.etude/launcher.db` of 0.2.x,
-stays where it is and is never opened, so both clients work from one home:
+status and eval commands keep their state in one launcher database,
+`~/.etude/launcher.sqlite`. Nothing creates or migrates it implicitly: after
+the locked revision moves, and before the first launch from a new home, say so:
 
 ```sh
-uv run etude status                                        # launcher-20.db
+uv run etude database status     # which migrations are applied and pending; changes nothing
+uv run etude database upgrade    # backs the file up, then applies them
+uv run etude status
+```
+
+Until then a command that needs the database refuses and names the upgrade.
+Machines already running keep running through an upgrade. The files earlier
+clients wrote (`launcher-17.db` of 0.3.2, the unversioned `launcher.db` of
+0.2.x) stay where they are and are never opened, so an older client still
+works from the same home:
+
+```sh
 uv run --with "etude-sdk[s3,eval]==0.2.15" etude status    # launcher.db
 ```
 
-There is no migration between them. A new database starts empty: `etude
-status` and `etude runs` list nothing, and launching needs its providers,
-storages and on-demand machines added again. A run stays with the client that
-launched it, so follow or stop it with that version, and keep the older file
-while its runs are still referenced, since it is the only record of how they
-ended. `etude report` and `etude launch --quote` rent nothing; a report reads
-the job store and needs no launcher database. To leave `~/.etude` untouched
-altogether, give a command its own home:
-`ETUDE_HOME=$(mktemp -d) uv run etude ...`.
+A run stays with the client that launched it, so follow or stop it with that
+version, and keep the older file while its runs are still referenced, since it
+is the only record of how they ended. `etude report` and
+`etude launch --quote` rent nothing; a report reads the job store and needs no
+launcher database. To leave `~/.etude` untouched altogether, give a command
+its own home: `ETUDE_HOME=$(mktemp -d) uv run etude ...`.
+
+When a provider declines to make a machine, a launch fails with the provider's
+words and records no run. A queued run keeps the reason in `etude status` and
+asks again no sooner than a minute later; refusals spend none of its attempts.
+`etude wait` returns once the selected runs have finished and the machines
+rented for them are deleted, so `launch`, `wait`, `launch` needs nothing in
+between. `uv run etude fetch RUN FILE DIRECTORY` copies one file a run kept,
+checked against its recorded digest, and lists the names that exist when
+`FILE` is not one of them.
 Raw results live in the artifact store, not in git; `experiments/data.manifest.json`
 records each file's digest ([data](../experiments/README.md#data)).
 
@@ -220,7 +261,7 @@ to Etude. Equal updates do not imply equal transitions, exposures or dollars.
 An experiment's `report()` returns an Etude `Report`. Build it from
 `manabot.training.report`, which knows how manabot jobs are named and which
 comparisons a training study asks, and add only what is specific to the
-experiment. The frontier study's report is four questions and a schedule:
+experiment. The frontier study's report is four questions:
 
 ```python
 from etude.report import Report, Score
@@ -230,7 +271,6 @@ from manabot.training.report import (
     against_fixed,
     head_to_head,
     job_labels,
-    learning_schedule,
 )
 
 
@@ -255,7 +295,7 @@ def report() -> Report:
             head_to_head("Large vs Small at fixed # updates", EQUAL_UPDATE_SEATINGS),
         ),
         perf=PERF,
-        ml=(*learning_schedule(jobs), *ML),
+        ml=ML,
     )
 ```
 
@@ -288,7 +328,7 @@ stronger. Small has no line of its own there, since it would be the same games
 read from the other seat. Fixed updates has ten points, from update 25 to 800,
 and fixed training time eleven, ending at Large's final checkpoint. Hovering a
 point reads like `0.66 · 95% interval 0.55–0.77 · 64 games · 16 matches`.
-The learning schedule opens ML details.
+ML details open with each run's logged learning rate and policy damping.
 
 | Helper | Draws |
 | --- | --- |
@@ -296,11 +336,13 @@ The learning schedule opens ML details.
 | `against_earlier_self(title, tags)` | Each checkpoint against an earlier checkpoint of its own job, a line per job. A point counts every such match its checkpoint sat in; a checkpoint that was also the earlier partner of a later one counts that role too, until Etude can score only the later side. |
 | `against_fixed(title, tags)` | Each checkpoint against one fixed player, such as the heuristic, a line per job. The tags select the seatings that hold that player. |
 | `head_to_head(title, seatings)` | Two jobs against each other, as one line: the first-seated job's score, drawn where its checkpoint stood. `seatings` are the names `eval_jobs(state)` gave the pairs, one per point, each played once. An empty sequence raises `ValueError`. |
-| `learning_schedule(regimes)` | Two charts, the configured learning rate and policy damping of each job on the update clock through its damping horizon, with each run's latest update marked. These are plans, not measurements. |
 
 Every helper returns an ordinary Etude panel, so a report mixes them with its
 own `Curve`, `Matrix` or `Series` panels, and an experiment that needs a
 different title or tag passes it rather than writing a new helper.
+A schedule is drawn from what a run logged, not from its configuration: `ML`
+holds `Series` charts of the `learning_rate` and `tau` each update recorded,
+so a chart ends where its run did.
 Equal training time is not yet an Etude clock: a fixed-time head-to-head is
 drawn at the first-seated job's update, and the report's text gives each
 pair's hours.
@@ -328,12 +370,16 @@ definition and the name reports select; the match keys still depend on the
 players, groups, configs and game count. For a finished experiment, correct
 the report selection and preserve the recorded seating names.
 
-A seating can also follow a job without listing pairs: an `Inference` first
-seat for each held checkpoint to fill and a relative second seat, such as
-`Aligned(job=OTHER, clock="updates", inference=...)` for the other job at the
-same update. One name then covers every checkpoint. `Earlier` and `Fraction`
-seat a checkpoint's own earlier self the same way, and every relative seat
-names the `Inference` it plays as.
+A seating can also follow a job without listing pairs: a `CheckpointSlot()`
+first seat for each held checkpoint to fill and a relative second seat, such
+as `Aligned(job=OTHER, clock="updates")` for the other job at the same update.
+One name then covers every checkpoint. `Earlier` and `Fraction` seat a
+checkpoint's own earlier self the same way. A bare slot or relative seat plays
+its checkpoint as is. To compare different ways of playing one checkpoint
+(sampling temperature, search), wrap the seat in a frozen record of the
+experiment's own, such as `Sampled(over=CheckpointSlot(), temperature=0.5)`:
+the record's type and fields are the player's identity, and results belong to
+the whole player. `checkpoint_player(ref)` seats one fixed checkpoint.
 
 `Crosstable(matches=Matches(tournament=NAME))` shows each checkpoint of one
 line against each other checkpoint of it, a tab per line. Etude has no panel

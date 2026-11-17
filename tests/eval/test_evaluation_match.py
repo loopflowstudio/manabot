@@ -1,4 +1,3 @@
-import json
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
@@ -68,9 +67,6 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
         for game in games
         for decision in game["decisions"]
     )
-    counters = json.loads((tmp_path / "performance.json").read_text())["counters"]
-    assert counters["threads/group_worker"] >= 1
-    assert counters["threads_budget/group_worker"] == 8
 
 
 def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) -> None:

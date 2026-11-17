@@ -19,7 +19,7 @@ from typing import Literal
 from uuid import uuid4
 
 from etude.train.records import Time
-from etude.train.tracking import Run
+from etude.train.tracking import TrainingRun
 import numpy as np
 import psutil
 from pydantic import (
@@ -392,7 +392,7 @@ def write_policy(
 
 def publish(
     settings: SelfPlay,
-    run: Run,
+    run: TrainingRun,
     learner: Learner,
     ema: ActorCritic | None,
     counts: Counts,
@@ -618,7 +618,7 @@ def game_ledger(
 
 @contextmanager
 def self_play_games(
-    settings: SelfPlay, run: Run, counts: Counts
+    settings: SelfPlay, run: TrainingRun, counts: Counts
 ) -> Iterator[Collector]:
     """Scope fresh native streams, append-only game ledgers and failure capture."""
     failures = CaptureScope(
@@ -647,7 +647,7 @@ def self_play_games(
         close_collector(collector)
 
 
-def self_play(settings: SelfPlay, run: Run, *, updates: int) -> Path:
+def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
     """Train to the run's update target and return its final world-bound policy."""
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:

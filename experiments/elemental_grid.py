@@ -7,12 +7,10 @@ the model is on the play (seat 0 takes the first turn), comes from one recorded
 random seed; deals are fixed per game. Every checkpoint therefore plays the same
 5,000 games, so checkpoints and training seeds are compared on paired deals.
 
-`schedule` is the frozen game list and `SCHEDULE_SHA256` pins it. `evaluate`
-plays one checkpoint by running bounded subprocess workers (`python -m
-experiments.elemental_grid`), one per (cell, seat) group, through the
-replay-checked arena `play_cell`. `summarize` turns retained rows into cell,
-row, column and overall scores with 95% Wilson intervals; `grid_table` renders
-that summary as HTML for the training report.
+`schedule` is the frozen game list and `SCHEDULE_SHA256` pins it. Etude's
+`elemental_play` callback plays one (cell, seat) group per match through the
+replay-checked arena. `summarize` reduces retained rows to cell, row, column
+and overall scores with 95% Wilson intervals; `grid_table` renders the report.
 
 Scores count a win as 1, a draw as 0.5 and a loss as 0. Only valid games count:
 terminated, no failure, and the trace replayed. Invalid games are reported
@@ -21,29 +19,18 @@ beside the score, never replaced or replayed.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
-from functools import partial
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from html import escape
 import json
 import math
-import os
 from pathlib import Path
 import random
-import subprocess
-import sys
-import time
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.execution import EvalAllocation, EvalExecution
-from manabot.sim.threads import child_environment
-
-if TYPE_CHECKING:
-    from manabot.sim.serving_protocol import InferenceRuntime
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -63,9 +50,6 @@ GAMES_PER_CELL = 50
 DEAL_BASE = 1_819_000_000
 GAME_SECONDS = 600.0
 MAX_COMMANDS = 10_000
-# One group is about 25 games; a group past this wall time is killed and its
-# games count as invalid. The bound protects the queue, not the score.
-GROUP_SECONDS = 3_600
 WORKERS = 10
 
 
@@ -118,19 +102,6 @@ class Group(BaseModel):
     deals: tuple[int, ...]
 
 
-class Request(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    checkpoint: Path
-    sha256: str
-    training_seed: int
-    group: Group
-    output: Path
-    # The eval run's folder: when given, each game's card evidence is retained there.
-    card_evidence: Path | None = None
-    # Shared batched inference for the group's games; None is the frozen scalar path.
-    compute: EvalAllocation | None = None
-
-
 class GameRow(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model_deck: str
@@ -172,258 +143,17 @@ def _legs(group: Group) -> tuple[str, str, int]:
     return x, partner, (4, 5)[group.model_seat]
 
 
-def play_group(
-    request: Request, *, inference: InferenceRuntime | None = None
-) -> list[GameRow]:
-    """Run the frozen deck/seat group, optionally on a caller-owned allocation."""
-    import torch
-
-    from manabot.backends.torch.checkpoint import load_checkpoint
-    from manabot.eval.models import EvaluationKey
-    from manabot.infra.identity import file_sha256
-    from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
-    from manabot.sim.heuristic import heuristic_source_paths
-    from manabot.sim.matchup import AuthoredMatchup
-    from manabot.sim.registration import PlayerRegistration
-    import managym
-
-    torch.set_num_threads(1)
-    role_a, role_b, leg = _legs(request.group)
-    matchup = AuthoredMatchup(pack_key=PACK, role_a=role_a, role_b=role_b)
-    common = dict(
-        world=managym.WORLD_VERSION,
-        content_suite=matchup.content_suite,
-        information_boundary="acting-viewer",
-        matchup_sha256=canonical_sha256(matchup.match().model_dump()),
-        player_seed_derivation_id="arena-pair-deal-player-v1",
-    )
-    if file_sha256(request.checkpoint) != request.sha256:
-        raise ValueError("checkpoint byte identity differs")
-    model, space = load_checkpoint(request.checkpoint)
-    # The checkpoint's own observation space (its saved policy-input version)
-    # names its ABI; served admission rejects any other. The heuristic plays
-    # in the runtime's default space.
-    own = runtime_fingerprints(match_config=matchup.match(), observation_space=space)
-    default = runtime_fingerprints(match_config=matchup.match())
-    candidate = PlayerRegistration(
-        **common,
-        observation_abi_sha256=own["observation_abi_sha256"],
-        action_abi_sha256=own["action_abi_sha256"],
-        player_id="model",
-        display_name="Checkpoint",
-        role="challenger",
-        compute_class_id="policy-cpu-one-thread-one-pass",
-        runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "device": "cpu",
-            "batch_size": 1,
-            "deterministic": False,
-            "allow_deck_repetition": True,
-        },
-        checkpoint_sha256=request.sha256,
-        checkpoint_bytes=request.checkpoint.stat().st_size,
-        parameter_count=sum(p.numel() for p in model.parameters()),
-        training_seed=request.training_seed,
-        artifact_id=f"mtg181/{request.sha256}",
-    )
-    heuristic = PlayerRegistration(
-        **common,
-        observation_abi_sha256=default["observation_abi_sha256"],
-        action_abi_sha256=default["action_abi_sha256"],
-        player_id="heuristic",
-        display_name="Heuristic",
-        role="anchor",
-        compute_class_id="heuristic-cpu-v1",
-        runner_kind="code",
-        player_spec={"kind": "heuristic"},
-        source_sha256=source_bundle_sha256(
-            [Path(path) for path in heuristic_source_paths()]
-        ),
-    )
-    key = EvaluationKey(
-        world=managym.WORLD_VERSION,
-        content_suite=matchup.content_suite,
-        viewer_boundary="acting-viewer",
-        arena_version="mtg181-elemental-grid-v1",
-        rating_model_version="unrated",
-        rating_prior_sha256=canonical_sha256({}),
-        anchor_cohort_sha256=canonical_sha256(heuristic.model_dump()),
-        evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
-    )
-    request.output.mkdir(parents=True, exist_ok=False)
-    rows, trace, replay = group_cell(request.compute)(
-        key=key,
-        player_a=candidate,
-        player_b=heuristic,
-        deal_seeds=request.group.deals,
-        out_dir=request.output,
-        checkpoint_paths={"model": str(request.checkpoint)},
-        game_seconds=GAME_SECONDS,
-        max_commands=MAX_COMMANDS,
-        authored_matchup=matchup,
-        matchup_mode="cross" if leg < 4 else "mirrors",
-        legs=(leg,),
-        inference=inference,
-        card_evidence_dir=request.card_evidence,
-    )
-    for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
-        (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
-    result = []
-    for row in rows:
-        decks = row["seat_decks"]
-        seat = row["player_a_seat"]
-        if decks[seat] != request.group.model_deck or decks[1 - seat] != (
-            request.group.heuristic_deck
-        ):
-            raise ValueError("arena leg did not assign the scheduled decks")
-        if seat != request.group.model_seat:
-            raise ValueError("arena leg did not assign the scheduled seat")
-        result.append(
-            GameRow(
-                model_deck=request.group.model_deck,
-                heuristic_deck=request.group.heuristic_deck,
-                model_seat=seat,
-                deal=row["deal_seed"],
-                score=row["score_a"],
-                valid=bool(
-                    row["terminated"]
-                    and not row["truncated"]
-                    and row["failure"] is None
-                    and row["replay_passed"]
-                ),
-                terminated=row["terminated"],
-                truncated=row["truncated"],
-                failure=None if row["failure"] is None else str(row["failure"]),
-                decisions=row["decisions"],
-                model_decisions=row["latency"]["model"]["count"],
-                seconds=row["game_seconds"],
-            )
-        )
-    return result
-
-
 # ---------------------------------------------------------------------------
 # One checkpoint: every group, durable per group, bounded workers
 
 
 # A machine-wide shared allocation's endpoint (`endpoint_environment`): when set,
 # every group plays its cell through it, so all games share one model batch.
-ENDPOINT = "MANABOT_EVAL_ENDPOINT"
 Cell = tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]
-
-
-def endpoint_environment(endpoint: Any) -> str:
-    """An `InferenceEndpoint` as the `ENDPOINT` value group workers read."""
-    found = asdict(endpoint)
-    return json.dumps(
-        {
-            "address": found["address"],
-            "authkey": found["authkey"].hex(),
-            "execution": endpoint.execution.model_dump(mode="json"),
-        }
-    )
-
-
-def group_cell(compute: EvalAllocation | None) -> Callable[..., Cell]:
-    """How a group plays its cell: through the machine's allocation when
-    `ENDPOINT` names one, else in this process (batched per group under `compute`)."""
-    from manabot.eval.endpoint import InferenceEndpoint
-    from manabot.eval.match import play_cell
-
-    found = os.environ.get(ENDPOINT)
-    if found:
-        if compute is not None:
-            raise ValueError("a group plays under one compute contract")
-        data = json.loads(found)
-        return InferenceEndpoint(
-            address=data["address"],
-            authkey=bytes.fromhex(data["authkey"]),
-            execution=EvalExecution.model_validate(data["execution"]),
-        ).play_cell
-    return partial(play_cell, execution=group_execution(compute))
-
-
-def group_execution(compute: EvalAllocation | None) -> EvalExecution | None:
-    """One group's allocation under `compute`, bounded by the group's wall time."""
-    if compute is None:
-        return None
-    return EvalExecution(
-        **compute.model_dump(), deadline_unix=time.time() + GROUP_SECONDS
-    )
 
 
 def _group_name(group: Group) -> str:
     return f"{group.model_deck}--{group.heuristic_deck}--seat{group.model_seat}"
-
-
-def evaluate(
-    checkpoint: Path,
-    sha256: str,
-    training_seed: int,
-    directory: Path,
-    *,
-    workers: int = WORKERS,
-    root: Path | None = None,
-    games: Sequence[Game] | None = None,
-) -> list[GameRow]:
-    """Play the whole grid (or a declared subset of its games); completed groups
-    are reused after an interruption.
-
-    A group's retained `games.json` is its durable result. A group that failed
-    or timed out is retained as `failed.json` and counts its games as invalid;
-    it is never replayed, including after a restart.
-    """
-    root = root or Path(__file__).resolve().parents[1]
-    directory.mkdir(parents=True, exist_ok=True)
-    games = schedule() if games is None else games
-    pending = []
-    for group in groups(games):
-        target = directory / _group_name(group)
-        if (
-            not (target / "games.json").exists()
-            and not (target / "failed.json").exists()
-        ):
-            pending.append(group)
-
-    def run(group: Group) -> None:
-        target = directory / _group_name(group)
-        attempt = target / f"attempt-{time.time_ns()}"
-        target.mkdir(parents=True, exist_ok=True)
-        request = Request(
-            checkpoint=checkpoint,
-            sha256=sha256,
-            training_seed=training_seed,
-            group=group,
-            output=attempt,
-        )
-        started = time.time()
-        try:
-            completed = subprocess.run(
-                [sys.executable, "-m", "experiments.elemental_grid"],
-                cwd=root,
-                input=request.model_dump_json(),
-                text=True,
-                capture_output=True,
-                timeout=GROUP_SECONDS,
-                env=child_environment(),
-            )
-            error = None if completed.returncode == 0 else completed.stderr[-4000:]
-            output = completed.stdout
-        except subprocess.TimeoutExpired:
-            error, output = "group wall-time bound reached", ""
-        if error is None:
-            rows = [GameRow.model_validate(r) for r in json.loads(output)]
-            _atomic(target / "games.json", [r.model_dump(mode="json") for r in rows])
-        else:
-            _atomic(
-                target / "failed.json",
-                {"error": error, "started": started, "finished": time.time()},
-            )
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        list(pool.map(run, pending))
-    return collect(directory, games)
 
 
 def collect(directory: Path, games: Sequence[Game] | None = None) -> list[GameRow]:
@@ -573,13 +303,3 @@ def grid_table(summary: Summary, caption: str) -> str:
         f'<table class="grid"><caption>{escape(caption)}</caption>'
         f"<tr><th>Model ↓ / Heuristic →</th>{head}<th>All</th></tr>{body}{foot}</table>"
     )
-
-
-def main() -> None:
-    request = Request.model_validate_json(sys.stdin.read())
-    rows = play_group(request)
-    print(json.dumps([r.model_dump(mode="json") for r in rows]))
-
-
-if __name__ == "__main__":
-    main()

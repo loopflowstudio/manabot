@@ -774,20 +774,14 @@ legal references, see the optional [LLM players](../docs/evaluation.md#llm-playe
 protocol recovery and inference evidence; observation rendering and Command
 execution remain outside it.
 
-### Shared evaluation inference
+### Managed evaluation inference
 
-Frozen arena policies can share a bounded, single-machine inference allocation
-through an explicit execution envelope. Monitoring, Etude benchmark and duel
-callers retain native isolation, Commands, replay and original training
-coordinates. See [shared evaluation inference](../docs/evaluation.md) for
-admission, real Perf receipts and the predeclared local calibration command.
-
-A quick local checkpoint comparison needs no TrainingRun or cloud setup:
-`uv run python -m manabot.eval.local --checkpoint policy.safetensors --opponent heuristic --deal-seed 101 --out .runs/local-check --seconds 300`.
-The [local evaluation API and CLI](../docs/evaluation.md)
-share arena admission, bounded inference, Commands, replay and Perf receipts with
-monitoring and managed comparisons. Pass another local checkpoint as `--opponent`
-for checkpoint-versus-checkpoint evaluation.
+Etude owns process allocation, model residency and batching. Every evaluation
+job uses `manabot.eval.agents.AGENTS`: the loader returns deterministic masked
+logits from Prepared rows, and Torch-free game agents prepare and sample with
+the decision seed. Native play and replay run in the Etude game process.
+Standalone local checks remain scalar. See [evaluation](../docs/evaluation.md#etude-agents)
+for failure limits and retained compute identities.
 
 ### Native decision text
 

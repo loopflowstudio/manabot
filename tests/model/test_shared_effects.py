@@ -3,7 +3,6 @@
 from copy import deepcopy
 from pathlib import Path
 
-from etude.train.tracking import track
 import numpy as np
 import pytest
 import torch
@@ -22,6 +21,7 @@ from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.verify.action_cases import reorder_objects
 from manabot.verify.representation import shared_effect_root
 import managym
+from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input, effect_rows, record_vocabulary
 
 
@@ -136,7 +136,7 @@ def test_shared_effect_policy_uses_ordinary_learner_and_export(
     inputs = SelfPlay.model_validate(inputs.model_dump())
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "training"))
     monkeypatch.setenv("ETUDE_SEED", "73200")
-    with track(
+    with recording(
         experiment="test", run="effects", clocks=CLOCKS, directory=tmp_path / "track"
     ) as run:
         path = self_play(inputs, run, updates=1)

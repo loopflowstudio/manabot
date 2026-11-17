@@ -240,9 +240,10 @@ What Etude asks of a recipe:
   at the top level of an importable file.
 - A job has no seed; a run is a job with a seed. The loop reads `run.seed`.
 
-Etude supplies identity when calling the recipe. Calling `train(config)`
-directly needs an explicit `track(experiment=..., run=..., config=config)`;
-without that identity it fails with `experiment_not_named`.
+Etude supplies the run's identity, seed, source and paths when it calls the
+recipe, through `etude train` or a launch. `track` records only that assigned
+run: calling `train(config)` from your own script or a test fails with
+`training_run_not_assigned` before any file is written.
 
 Calling `train(config)` is one attempt at the whole job. It returns (the run
 finished), raises `Stopped` (it saved and left on purpose; it is called
@@ -682,8 +683,23 @@ setup. Refresh it only through the
 [explicit dependency update workflow](development.md#environment-and-commands)
 before freezing a new run; never upgrade dependencies inside a training attempt.
 
+The launcher keeps its records in `~/.etude/launcher.sqlite`, which only
+`uv run etude database upgrade` creates or migrates; run it once after the
+locked Etude revision moves
+([launcher database](experiments.md#what-an-experiment-is)).
+
 Pick the machine at launch (`--pool`, `--rent`); read progress with
-`etude status`, `etude logs` and `etude usage`. To train an existing run
+`etude status`, `etude logs` and `etude usage`. A provider can report stock
+and still decline to make the machine. `etude launch` then fails with the
+provider's reason, rents nothing and records no run; `etude queue` keeps the
+run and asks again about once a minute, without spending the job's attempts,
+until capacity is admitted, its hours or dollars run out, or it is cancelled.
+A queue advances only while something schedules it, so leave
+`uv run etude wait` running: it returns when the selected runs have finished
+and their rented machines are deleted, which frees the on-demand's machine
+limit for the next launch. `uv run etude fetch elemental/elemental@197 FILE
+DIRECTORY` copies a file from the run's `out` to this computer, checked
+against its recorded digest. To train an existing run
 further, `uv run etude launch experiments/elemental.py --resume --seed 197 --until
 updates=6400` gives the same run a later target, finished or not; `run.steps`
 counts to it, so the config does not change. `etude continue --run RUN` makes
@@ -793,8 +809,10 @@ what a run has published, oldest first, the same records evaluation reads.
 Checkpoints are evaluated by Etude, in their own jobs whose compute is
 counted apart from training. An experiment file's `eval_jobs(state)` returns the
 benchmarks it wants for the checkpoints its runs have recorded, played by
-manabot's `play` function (`manabot.eval.monitor.play`), and each pass plays
-only the matches that are new:
+manabot's `play(match, agents)` function (`manabot.eval.monitor.play`), and
+each pass plays only the matches that are new. The file's eval jobs that can
+share a machine play together as one run, `EXPERIMENT/evals-DIGEST`
+([experiments](experiments.md#what-an-experiment-is)):
 
 ```bash
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs

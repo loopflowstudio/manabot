@@ -1,33 +1,35 @@
-# MTG-329 open work
+# MTG-329 live limits and decisions
 
-Historical details: 382c653ec8:scratch/questions.md; earlier exact remarks:
-bd14801a72:scratch/questions.md.
+Jack Heart, 2026-11-16: "the whole point is the adoption" and
+"These should be done/mainatined in this task". Full direction:
+.lf/prompts/20261116-151510-YzKGdb-steer.md,
+20261116-151754-HEl9sc-steer.md and 20261116-152021-ptKlWA-steer.md /
+20261116-152021-BI2RUI-steer.md.
 
-Reversible choice: start= takes a completed CheckpointRecord, not a Job.
-Finish belief_policy, then declare belief_sampler from its final checkpoint.
-Automatic same-seed scheduling still needs product review and Etude support.
-The real local probe failed `input not given: 'start'` after policy success;
-0.4.0 local._prepare still omits job inputs/environment. No paid fallback tried.
-Games in flight, random streams and in-run source repair are not recovered.
+Etude d9a6bc8 has only a job deadline: play_together uses ETUDE_DEADLINE;
+BrokenProcessPool requests grouped retry. Cooperative checks cannot interrupt
+native calls. The steer assigns per-match hard deadlines/isolated dead processes
+to Etude Task 2d1933, lifts the deletion stop and forbids nested Manabot children.
+Keep cooperative limits, durable Commands, native panic/AgentError score-null
+rows and subsequent games. No induced hang/load probe was run.
 
-Context exception: the Task steer says "Keep the scratch notes
-(design-train-api.md, ontology.md, positioning.md, exp-56-compat.md, sketch.html,
-explore.html, etude-readme-draft.md); do not delete or shorten them."
-Preserve those notes even if they exceed the compress target; do not raise limits.
+Frozen identity inventory: EvalCompute v2 hashes version/device/dtype, v1 also
+allocation. Player spec/compute hashes feed player and match keys. Preserve
+seed_compute_envelope_id for old paired seeds; never label auto CUDA as the old
+CPU contract. New tournaments/registrations have fresh names. Runtime schema 8
+cannot replay retained schema 7: run the named old revision, never rewrite it.
 
-Compression budget conflict: protected notes remain untouched. After realign,
-`lf context` reports about 2,900 tokens over the 12,000-token target; the
-98,304-byte limit is met. Further cuts would shorten protected context or
-discard live contrary findings. Limits are unchanged.
+Actual local d9 belief CLI completed policy, sampler, then nothing to train
+(exit 0 each). Automatic same-seed scheduling remains unsettled; explicit
+completed-CheckpointRecord handoff works. No in-flight game/RNG/source recovery
+claim. No CUDA, paid/provider, browser or real Rust panic injection proof.
+LLM experiments were already non-runnable until EXP-70 and use frozen worlds;
+keep that boundary explicit rather than claiming working managed LLM sessions.
 
-2026-11-14 sync: retain Etude execution and removal of collector snapshots;
-combine main's log-only packed actions, native player policies, GPU BF16
-admission and Academy packaging checks with the new loop. Retired-executor
-tests stay retired. Release smoke keeps the Etude recipe path.
-
-Sync validation: focused collector log retention, Etude save/resume and
-precision-width checks: 9 passed, 3 failed (3.55s). Every failure is the
-installed pre-sync native VectorEnv rejecting main's `player_policies`
-argument before collection. Gate needs a native rebuild; no second test run,
-build or push was performed by conflict resolution. Gate's rebuild and the
-remaining acceptance are ordered in plan.md; no tests were rerun by realign.
+Task steer: "Keep the scratch notes (design-train-api.md, ontology.md,
+positioning.md, exp-56-compat.md, sketch.html, explore.html,
+etude-readme-draft.md); do not delete or shorten them." These stay untouched;
+other notes are condensed. Never increase context limits. Budget conflict: those
+kept files alone are about 12k tokens, so scratch stays over its 12k target
+(see `lf context`) until that steer is lifted. Earlier exact remarks
+and findings: 4de3a76ba0:scratch/questions.md and 382c653ec8:scratch/questions.md.

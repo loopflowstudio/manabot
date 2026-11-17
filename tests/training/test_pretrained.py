@@ -2,13 +2,13 @@
 
 from pathlib import Path
 
-from etude.train.tracking import track
 import pytest
 import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.loops.self_play import CLOCKS, create, self_play
+from tests.fixtures.training_records import recording
 
 
 def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
@@ -17,7 +17,7 @@ def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
 ) -> None:
     settings = gray_ogre_self_play(horizon=1)
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "parent"))
-    with track(
+    with recording(
         experiment="test", run="pretrained", clocks=CLOCKS, directory=tmp_path / "track"
     ) as run:
         path = self_play(settings, run, updates=1)

@@ -17,7 +17,7 @@ import shutil
 import time
 from typing import Any
 
-from etude.train.tracking import Run
+from etude.train.tracking import TrainingRun
 import numpy as np
 import torch
 
@@ -31,7 +31,7 @@ from manabot.training.rollout.collection import Collector, RolloutBatch
 from manabot.training.updates.health import OptimizerHealth
 
 
-def capture(out: Path, settings: SelfPlay, run: Run) -> None:
+def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
     """Record one real damped update; restore hooks even when execution fails."""
     if not isinstance(settings.learning, DampedPolicyLearning):
         raise ValueError("backend capture requires damped-policy learning")

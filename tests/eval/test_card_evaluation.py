@@ -5,19 +5,19 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 import json
 from pathlib import Path
-import time
 from typing import Any
 
 import duckdb
-from etude.eval.match import Result, Tables, evaluate
-from etude.eval.records import Code, Environment, Match
+from etude.eval.records import Benchmark, Code, Environment, Match, Seating
+from etude.eval.result import Result, Tables
+from etude.eval.tournament import evaluating
 from etude.run import sync
 from etude.storage import DirectoryStorage
 from pydantic import JsonValue
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
+from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.card_capture import CapturedCards
 from manabot.env.match import Match as EnvMatch
@@ -59,10 +59,15 @@ from manabot.sim.card_evidence import (
     read_evidence,
     retain_evidence,
 )
-from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt
+from tests.fixtures.evaluation_callbacks import bridge_callbacks
+
+
+@pytest.fixture(autouse=True)
+def process_callbacks(monkeypatch: pytest.MonkeyPatch) -> None:
+    bridge_callbacks(monkeypatch)
 
 
 def card_fixture(
@@ -175,7 +180,7 @@ def _scheduled_fixture(
     match: Match, leg: int, runtime: dict[str, JsonValue]
 ) -> GameEvidence:
     """Synthetic metric facts with explicit schedule provenance; no replay claim."""
-    conditions = CardConditions.model_validate(match.conditions)
+    conditions = CardConditions.model_validate(match.config)
     game = card_fixture(deal=conditions.deal, leg=leg)
     names = tuple(player.name for player in match.players)
     seats = names if leg % 2 == 0 else names[::-1]
@@ -221,10 +226,10 @@ def _rebind_fixture(raw: dict[str, Any]) -> GameEvidence:
 def _fixture_play(
     runtime: dict[str, JsonValue],
     change: dict[int, dict[str, Any]] | None = None,
-) -> Callable[[Match], Result]:
+) -> Callable[[Match, Sequence[object]], Result]:
     """A `play` that keeps synthetic games for every leg as blobs, edited per leg."""
 
-    def play(match: Match) -> Result:
+    def play(match: Match, agents: Sequence[object]) -> Result:
         root = Path(evaluation.os.environ["MANABOT_CARD_OUTPUT"])
         games = []
         for leg in range(8):
@@ -252,8 +257,8 @@ def test_audit_preserves_card_position_before_game_seat_column(
         runtime_fingerprints(match_config=spec.authored_matchup.match())
     )
 
-    def play(match: Match) -> Result:
-        result = fixture(match)
+    def play(match: Match, agents: Sequence[object]) -> Result:
+        result = fixture(match, agents)
         for row in result.tables["card_plays"]:
             if native_column == "absent":
                 row.pop("game_seat")
@@ -266,7 +271,7 @@ def test_audit_preserves_card_position_before_game_seat_column(
         return result
 
     monkeypatch.setattr(evaluation, "play_card_match", play)
-    evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
+    evaluate_cards(spec, tmp_path)
     with card_db(spec.experiment, tmp_path) as db:
         result = audit(db, tmp_path)
     assert result.games == 8
@@ -280,8 +285,8 @@ def _db(
     """An experiment holding reducer rows, stored by Etude with the card rollups."""
     by_key = {key: normalize(rows) for key, _, rows in matches}
 
-    def play(match: Match) -> Result:
-        normal = by_key[str(match.conditions["fixture"])]
+    def play(match: Match, agents: Sequence[object]) -> Result:
+        normal = by_key[str(match.config["fixture"])]
         return Result(
             tables={
                 "card_plays": [{**row, "source_commit": "abc"} for row in normal.plays],
@@ -290,21 +295,26 @@ def _db(
             }
         )
 
-    evaluate(
+    with evaluating(
+        Benchmark(
+            name="fixture",
+            environment=Environment(name="fixture", files="a" * 64),
+            seatings=tuple(
+                Seating(
+                    name=key,
+                    players=(Code(name=pair[0]), Code(name=pair[1])),
+                    config={"fixture": key},
+                    games=1,
+                )
+                for key, pair, _ in matches
+            ),
+            rollups=CARD_ROLLUPS,
+        ),
         experiment="fixture",
-        environment=Environment(name="fixture", files="a" * 64),
-        matches=[
-            Match(
-                players=(Code(name=pair[0]), Code(name=pair[1])),
-                conditions={"fixture": key},
-            )
-            for key, pair, _ in matches
-        ],
-        play=play,
         run="run",
         directory=directory,
-        rollups=CARD_ROLLUPS,
-    )
+    ) as active:
+        active.play(play)
     return card_db("fixture", directory)
 
 
@@ -406,7 +416,7 @@ def test_execution_rejects_invalid_participant_schedule(
     match = Match(
         players=entrants,
         games=4 if corruption == "games" else 8,
-        conditions=CardConditions(
+        config=CardConditions(
             deal=spec.deals[0],
             key=spec.key,
             authored_matchup=spec.authored_matchup,
@@ -415,13 +425,13 @@ def test_execution_rejects_invalid_participant_schedule(
         ).model_dump(mode="json"),
     )
     with pytest.raises(ValueError, match=error):
-        evaluation.play_card_match(match)
+        evaluation.play_card_match(match, ())
 
 
 def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
     spec = verification_spec(8)
     source = tmp_path / "source"
-    result = evaluate_cards(spec, source, backend=TORCH_BACKEND)
+    result = evaluate_cards(spec, source)
     assert result.played == 1
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
@@ -441,8 +451,8 @@ def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
         # Capture leaves every command, frame, state and outcome unchanged.
         game = load_game(db, source, run, game_id)
         assert capture_verified_game(game.trace) == game
-    resumed = evaluate_cards(spec, source, backend=TORCH_BACKEND)
-    assert (resumed.played, resumed.skipped) == (0, 1)
+    resumed = evaluate_cards(spec, source)
+    assert resumed.played == 0
     # Ordinary Etude delivery carries the evidence with the tables.
     delivered = tmp_path / "delivered"
     assert sync(source, storages=[DirectoryStorage(delivered)]) == {}
@@ -468,7 +478,7 @@ def test_all_excluded_games_have_no_card_rates(
         "play_card_match",
         _fixture_play(runtime, {leg: {"outcome": outcome} for leg in range(8)}),
     )
-    evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
+    evaluate_cards(spec, tmp_path)
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
@@ -521,16 +531,16 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     )
     calls = 0
 
-    def play(match: Match) -> Result:
+    def play(match: Match, agents: Sequence[object]) -> Result:
         nonlocal calls
         calls += 1
         if calls == 2:
             raise RuntimeError("interrupted fixture")
-        return fixture(match)
+        return fixture(match, agents)
 
     monkeypatch.setattr(evaluation, "play_card_match", play)
     with pytest.raises(Exception, match="match_failed"):
-        evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
+        evaluate_cards(spec, tmp_path)
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
@@ -539,8 +549,8 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     # The crash and timeout leave six eligible games of their deal, not zero.
     assert data.games == 6 and data.excluded == {"crash": 1, "timeout": 1}
     assert data.failed_matches == 1
-    retried = evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
-    assert (retried.played, retried.skipped) == (1, 1)
+    retried = evaluate_cards(spec, tmp_path)
+    assert retried.played == 1
     with card_db(spec.experiment, tmp_path) as db:
         data = card_data(db, selection)
     assert data.games == 12 and data.failed_matches == 0
@@ -571,7 +581,6 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
                 update={"run": run, "deals": deals, "experiment": experiment}
             ),
             tmp_path,
-            backend=TORCH_BACKEND,
         )
     subject = spec.players[0].player_id
     with card_db(spec.experiment, tmp_path) as db:
@@ -646,7 +655,7 @@ def test_each_game_is_admitted_against_its_schedule(
             for p in spec.players
         ),
         games=8,
-        conditions=CardConditions(
+        config=CardConditions(
             deal=spec.deals[0],
             key=spec.key,
             authored_matchup=spec.authored_matchup,
@@ -694,7 +703,7 @@ def test_audit_binds_games_to_their_declared_runtime(field: str) -> None:
             for p in spec.players
         ),
         games=8,
-        conditions=CardConditions(
+        config=CardConditions(
             deal=spec.deals[0],
             key=spec.key,
             authored_matchup=spec.authored_matchup,
@@ -768,7 +777,7 @@ def test_tiny_checkpoint_match_captures_verified_native_facts(tmp_path: Path) ->
             "checkpoints": {candidate.player_id: path},
         }
     )
-    evaluate_cards(spec, tmp_path / "evaluation", backend=TORCH_BACKEND)
+    evaluate_cards(spec, tmp_path / "evaluation")
     with card_db(spec.experiment, tmp_path / "evaluation") as db:
         # The checkpoint digest selects the subject, as an artifact would.
         data = card_data(
@@ -820,17 +829,17 @@ def test_invalid_outcomes_never_receive_win_rate_credit(outcome: str) -> None:
 
 
 def test_outcome_only_experiment_has_no_card_data(tmp_path: Path) -> None:
-    def outcome_only(match: Match) -> Tables:
+    def outcome_only(match: Match, agents: Sequence[object]) -> Tables:
         return {"plays": [{"seat": 0, "score": 1.0}]}
 
-    evaluate(
+    with evaluating(
+        Environment(name="old", files="a" * 64),
         experiment="old",
-        environment=Environment(name="old", files="a" * 64),
         matches=[Match(players=(Code(name="one"),))],
-        play=outcome_only,
         run="old",
         directory=tmp_path,
-    )
+    ) as active:
+        active.play(outcome_only)
     with card_db("old", tmp_path) as db:
         with pytest.raises(ValueError, match="no card evaluations"):
             card_data(db, CardSelection(experiment="old"))
@@ -1007,55 +1016,50 @@ def test_card_page_with_no_matching_games(
         assert data[field] == []
 
 
-@pytest.mark.parametrize("shared", [False, True])
 def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
     tmp_path: Path,
-    shared: bool,
 ) -> None:
     """An eval that calls `play_cell` itself adds card tables with one call."""
     spec = verification_spec(8)
     first, second = spec.players
     root = tmp_path / "scratch"
 
-    def play(match: Match) -> Result:
+    def play(match: Match, agents: Sequence[object]) -> Result:
         out = root / "games" / match.key
         out.mkdir(parents=True)
         rows, trace, _ = play_cell(
             key=spec.key,
             player_a=first,
             player_b=second,
-            deal_seeds=(int(match.conditions["deal"]),),
+            deal_seeds=(int(match.config["deal"]),),
             out_dir=out,
             game_seconds=spec.game_seconds,
             max_commands=spec.max_commands,
             authored_matchup=spec.authored_matchup,
             matchup_mode="all",
             legs=(0, 1),
-            execution=EvalExecution(deadline_unix=time.time() + 120)
-            if shared
-            else None,
             card_evidence_dir=root,
         )
         own = {"games": [{"seat": 0, "score": float(r["score_a"] or 0)} for r in rows]}
         cards = trace_card_tables(root, trace, (first.player_id, second.player_id))
         return Result(tables={**own, **cards.tables}, blobs=cards.blobs)
 
-    evaluate(
+    with evaluating(
+        Environment(name="grid", files="a" * 64),
         experiment="grid-like",
-        environment=Environment(name="grid", files="a" * 64),
         matches=[
             Match(
                 players=(
                     Code(name=first.player_id),
                     Code(name=second.player_id),
                 ),
-                conditions={"deal": spec.deals[0]},
+                config={"deal": spec.deals[0]},
             )
         ],
-        play=play,
         run="grid",
         directory=tmp_path,
-    )
+    ) as active:
+        active.play(play)
     with card_db("grid-like", tmp_path) as db:
         data = card_data(
             db, CardSelection(experiment="grid-like", subjects=(first.player_id,))

@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-from etude.train.tracking import track
 import numpy as np
 import pytest
 import torch
@@ -17,6 +16,7 @@ from manabot.policy.checkpoint import from_torch_state
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.loops.self_play import CLOCKS, SelfPlay
 import managym
+from tests.fixtures.training_records import recording
 
 
 def test_capture_replays_both_seat_update(
@@ -49,7 +49,7 @@ def test_capture_replays_both_seat_update(
     out = tmp_path / "capture"
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "run"))
     monkeypatch.setenv("ETUDE_SEED", "197")
-    with track(
+    with recording(
         experiment="capture-test", clocks=CLOCKS, directory=tmp_path / "track"
     ) as run:
         capture(out, settings, run)

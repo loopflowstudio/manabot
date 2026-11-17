@@ -16,7 +16,6 @@ import time
 
 from etude.storage import default_root
 
-from manabot.backends import resolve
 from manabot.eval.arena_log import CardMapping, export_arena_log
 from manabot.eval.card_evaluation import (
     CardEvaluationSpec,
@@ -139,7 +138,6 @@ def main() -> None:
         result = evaluate_cards(
             CardEvaluationSpec.model_validate_json(args.spec.read_bytes()),
             args.out,
-            backend=resolve("torch"),
         )
         print(result.model_dump_json(indent=2))
     elif args.command == "data":

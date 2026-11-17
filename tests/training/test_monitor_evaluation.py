@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-import time
 from typing import Any, Literal
 
 import pytest
@@ -20,13 +19,12 @@ from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.reports.training import evaluation_dashboard
 from manabot.sim import anchors
-from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import AuthoredMatchup, selected_match
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
-from tests.eval.test_batched_eval import fixture_policy
+from tests.eval.test_evaluation_policy_inputs import fixture_policy
 
 
 def failure_summary(result: monitor.MonitorResult) -> str:
@@ -277,13 +275,12 @@ def test_result_purpose_preserves_protocol_binding(
 
 
 @pytest.mark.parametrize(
-    "max_commands,opponent,explicit_matrix,shared",
+    "max_commands,opponent,explicit_matrix",
     [
-        (1, "scripted_greedy", False, False),
-        (10000, "scripted_greedy", False, False),
-        (10000, "random", False, False),
-        (10000, "scripted_greedy", True, False),
-        pytest.param(10000, "scripted_greedy", False, True, id="shared"),
+        (1, "scripted_greedy", False),
+        (10000, "scripted_greedy", False),
+        (10000, "random", False),
+        (10000, "scripted_greedy", True),
     ],
 )
 def test_real_arena_checkpoint_outcomes(
@@ -291,7 +288,6 @@ def test_real_arena_checkpoint_outcomes(
     max_commands: int,
     opponent: Literal["scripted_greedy", "random"],
     explicit_matrix: bool,
-    shared: bool,
 ) -> None:
     previous_threads = torch.get_num_threads()
     torch.set_num_threads(1)
@@ -344,7 +340,6 @@ def test_real_arena_checkpoint_outcomes(
                 17, match_config=match, observation_space=space
             ),
         )
-        execution = EvalExecution(deadline_unix=time.time() + 360) if shared else None
         result = checkpoint_evaluation.evaluate_checkpoint(
             run,
             {
@@ -356,7 +351,6 @@ def test_real_arena_checkpoint_outcomes(
                 stage_id="unused", updates=0, training_seconds=0
             ),
             tmp_path / "arena",
-            execution=execution,
             protocol=monitor.MonitorProtocol(
                 deal_seeds=(1910101000,),
                 authored_matchup=matrix,
@@ -365,7 +359,7 @@ def test_real_arena_checkpoint_outcomes(
                 # These are correctness allowances, not throughput thresholds.
                 # Shared games include queue waits and contend with one another;
                 # busy macOS hosts have reached 120s before a terminal result.
-                game_seconds=240 if shared else 120,
+                game_seconds=120,
                 opponent=opponent,
                 comparison_sha256="a" * 64 if opponent == "random" else None,
             ),

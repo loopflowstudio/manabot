@@ -1,19 +1,17 @@
-"""Report helpers name jobs, ask one question per chart and draw planned schedules."""
+"""Report helpers name jobs, ask one question per chart."""
 
 from pathlib import Path
 
-from etude.report import Curve, Matches, Report, Score
+from etude.report import Curve, Matches, Report, Score, Series
 import pytest
 
 from experiments.tla_frontier import report
-from manabot.training.learning import DampedPolicyLearning, Learning
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import TrainingRegime
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
     head_to_head,
     job_labels,
-    learning_schedule,
 )
 
 REGIME = (
@@ -31,13 +29,6 @@ def _regime(*, width: int = 64, layers: int | None = None) -> TrainingRegime:
         }
     )
     return regime.model_copy(update={"agent": agent})
-
-
-def _learning(regime: TrainingRegime) -> DampedPolicyLearning:
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    assert isinstance(stage.learning, DampedPolicyLearning)
-    return stage.learning
 
 
 def test_labels_name_width_and_only_a_differing_depth() -> None:
@@ -78,7 +69,7 @@ def test_frontier_selects_only_recorded_head_to_head_seatings() -> None:
     assert isinstance(hours, Curve)
     assert isinstance(updates, Curve)
     assert hours.matches == tuple(
-        Matches(seating=name)
+        selection
         for name in (
             "w160l8 u25 vs w64 u50 at equal hours",
             "w160l8 u50 vs w64 u100 at equal hours",
@@ -92,35 +83,19 @@ def test_frontier_selects_only_recorded_head_to_head_seatings() -> None:
             "w160l8 u800 vs w64 u1525 at equal hours",
             "w160l8 final u925 vs w64 u1700 at equal hours",
         )
+        for selection in (Matches(seating=name), Matches(tag=name.replace(" ", "-")))
     )
     assert updates.matches == tuple(
-        Matches(seating=f"w160l8 u{update} vs w64 u{update}")
+        selection
         for update in (25, 50, 75, 100, 150, 200, 300, 400, 600, 800)
+        for selection in (
+            Matches(seating=f"w160l8 u{update} vs w64 u{update}"),
+            Matches(tag=f"w160l8-u{update}-vs-w64-u{update}"),
+        )
     )
 
 
-def test_schedule_draws_the_learners_own_rates_to_the_horizon() -> None:
-    regime = _regime()
-    learning = _learning(regime)
-    assert learning.iteration_schedule is not None
-    horizon = learning.iteration_schedule.steps
-
-    rate, damping = learning_schedule({"w64": regime})
-
-    points = rate.jobs["w64"]
-    assert (points[0].at, points[-1].at) == (1, horizon)
-    for point in (points[0], points[len(points) // 2], points[-1]):
-        assert point.value == learning.rates(int(point.at))[0]
-    assert damping.jobs["w64"][-1].value == learning.rates(horizon)[1]
-    assert rate.clock == damping.clock == "updates"
-
-
-def test_schedule_refuses_a_regime_without_damped_learning() -> None:
-    regime = _regime()
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    ppo = regime.model_copy(
-        update={"stages": [stage.model_copy(update={"learning": Learning()})]}
-    )
-    with pytest.raises(ValueError, match="damped"):
-        learning_schedule({"ppo": ppo})
+def test_frontier_opens_ml_with_logged_learning_rates() -> None:
+    rate, damping = report().ml[:2]
+    assert isinstance(rate, Series) and rate.keys == ("learning_rate",)
+    assert isinstance(damping, Series) and damping.keys == ("tau",)

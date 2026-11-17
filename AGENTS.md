@@ -697,10 +697,17 @@ while keeping new dependency imports (including Torch lazy registrations).
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
-namespace. Exercise discovery with `etude.declarations.read_experiment` in runner tests,
-or `etude.declarations.read_training_jobs` for a file's `training_jobs()`. Local
+namespace. Exercise discovery with `etude.controller.declarations.read_experiment` in runner tests,
+or `etude.controller.declarations.read_training_jobs` for a file's `training_jobs()`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
 only launched jobs receive that directory automatically.
+Etude imports evaluation callbacks by module and qualified name, including local
+runs; callbacks take `play(match, agents)`. A closure or callable instance is
+not a portable entry point. Managed jobs share `manabot.eval.agents.AGENTS`;
+`eval.agent_loader` alone chooses the framework/device, and game callbacks use
+the supplied agents in-process. Seating configs containing records with omitted fields must pass their JSON
+model dump, so a retained tournament compares alike on resume. Persistence fixtures that inject local outcomes use
+`tests/fixtures/evaluation_callbacks.py` across the real game process boundary.
 
 Etude hashes tracked source paths (`git add -N` admits new files for local
 implementation checks). Eval runs are sealed blocks: each game's card evidence

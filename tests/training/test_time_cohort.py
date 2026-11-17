@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 import subprocess
 
+from etude.records import Clock, Continuation
+from etude.train.read import read_all
+from etude.train.records import Time
 import pytest
 
 from manabot.reports.experiment import load_evidence, write_time_profile
@@ -12,6 +15,7 @@ from manabot.reports.records import RetainedRun
 from manabot.reports.time_cohort import native_cohort, write_cohort_report
 from manabot.reports.time_sources import load_time_sources
 from manabot.training.records import StageRecord
+from tests.fixtures.training_records import recording
 
 ROOT = Path(__file__).resolve().parents[2]
 DEMO = ROOT / "tests/fixtures/experiment-demo"
@@ -208,11 +212,9 @@ console.log(JSON.stringify({initial,cleared,restored:chart()}));
 def test_etude_written_logs_are_selectable_without_invented_phases(
     tmp_path: Path,
 ) -> None:
-    from etude.train.records import Step, Time
-    from etude.train.tracking import track
 
     for seed, seconds in [(1, 10.0), (2, 100.0)]:
-        run = track(
+        run = recording(
             experiment="real-training",
             run=f"seed-{seed}",
             job="recipe",
@@ -221,8 +223,12 @@ def test_etude_written_logs_are_selectable_without_invented_phases(
             directory=tmp_path,
             clocks=[
                 Time("training_seconds", "active training seconds"),
-                Step("learner_transitions", "retained learner rows"),
-                Step("updates", "learning iterations"),
+                Clock(
+                    name="learner_transitions",
+                    kind="step",
+                    meaning="retained learner rows",
+                ),
+                Clock(name="updates", kind="step", meaning="learning iterations"),
             ],
         )
         run.log(
@@ -328,20 +334,20 @@ def test_standalone_uses_cohort_page_and_escapes_untrusted_data(tmp_path: Path) 
 
 
 def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> None:
-    from etude.train.records import Step, Time
-    from etude.train.tracking import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
-        Step("learner_transitions", "retained rows"),
+        Clock(name="learner_transitions", kind="step", meaning="retained rows"),
     ]
-    first = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    first = recording(
+        experiment="resume", run="same", directory=tmp_path, clocks=clocks
+    )
     first.log({"loss": 1.0}, training_seconds=8, learner_transitions=80)
     first.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     first.finish()
     # The second attempt restored the save at 8 seconds; its first row replaces
     # the first attempt's row at 10, whose two seconds stay spent.
-    second = track(
+    second = recording(
         experiment="resume", run="same", directory=tmp_path, clocks=clocks, resume=True
     )
     second.log({"loss": 0.6}, training_seconds=10, learner_transitions=100)
@@ -390,23 +396,21 @@ def test_cli_creates_report_from_saved_native_records(tmp_path: Path) -> None:
 def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
     tmp_path: Path,
 ) -> None:
-    from etude.records import Continuation
-    from etude.train.read import read_all
-    from etude.train.records import Step, Time
-    from etude.train.tracking import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
-        Step("learner_transitions", "absolute retained rows"),
+        Clock(
+            name="learner_transitions", kind="step", meaning="absolute retained rows"
+        ),
     ]
-    parent = track(
+    parent = recording(
         experiment="continuation", run="parent", directory=tmp_path, clocks=clocks
     )
     parent.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     parent.finish()
     declaration = read_all(tmp_path)[0].file
     assert declaration is not None
-    child = track(
+    child = recording(
         experiment="continuation",
         run="child",
         directory=tmp_path,
@@ -425,18 +429,16 @@ def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
 
 
 def test_mixed_record_schemas_and_phase_coverage(tmp_path: Path) -> None:
-    from etude.train.records import Step
-    from etude.train.tracking import track
 
     native_dir = tmp_path / "native"
     native_dir.mkdir()
     (native_dir / "run.json").write_text(_run().model_dump_json(exclude_unset=True))
-    tracked = track(
+    tracked = recording(
         experiment="smoke",
         run="logged",
         kind="smoke",
         directory=tmp_path,
-        clocks=[Step("steps", "environment steps")],
+        clocks=[Clock(name="steps", kind="step", meaning="environment steps")],
     )
     tracked.log({"loss": 0.5}, steps=100)
     tracked.finish()

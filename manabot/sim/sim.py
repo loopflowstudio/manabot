@@ -21,8 +21,10 @@ import threading
 import time
 from typing import Any
 
-from etude.train.records import CheckpointRecord, Step
-from etude.train.tracking import track
+from etude.checkpoints import CheckpointRecord
+from etude.records import Clock
+from etude.run import declare, destinations
+from etude.train.tracking import TrainingRun
 import numpy as np
 
 # Local imports
@@ -555,15 +557,34 @@ def run_simulation(
             runtime_config.seed,
             torch_deterministic=runtime_config.torch_deterministic,
         )
-    with track(
+    previous_seed = os.environ.get("ETUDE_SEED")
+    os.environ["ETUDE_SEED"] = str(runtime_config.seed)
+    try:
+        declared = declare(
+            experiment=runtime_config.name,
+            clocks=(
+                Clock(name="games", kind="step", meaning="completed evaluation games"),
+            ),
+            config=sim_config.model_dump(mode="json"),
+            directory=None
+            if os.environ.get("ETUDE_TRACK_DIR")
+            else runtime_config.runs_dir / runtime_config.name / "etude",
+        )
+    finally:
+        if previous_seed is None:
+            os.environ.pop("ETUDE_SEED", None)
+        else:
+            os.environ["ETUDE_SEED"] = previous_seed
+    with TrainingRun(
         experiment=runtime_config.name,
-        clocks=[Step("games", "completed evaluation games")],
-        seed=runtime_config.seed,
-        config=sim_config.model_dump(mode="json"),
-        directory=None
-        if os.environ.get("ETUDE_TRACK_DIR")
-        else runtime_config.runs_dir / runtime_config.name / "etude",
+        name=declared.name,
+        root=declared.root,
+        clocks=declared.record.clocks,
+        destinations=destinations(declared.base, ()),
         strict=True,
+        closed_clocks=True,
+        inherited=None,
+        seed=runtime_config.seed,
     ) as tracked:
         logger = getLogger("manabot.sim.sim")
         logger.info(

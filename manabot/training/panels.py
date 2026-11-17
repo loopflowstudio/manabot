@@ -45,6 +45,8 @@ PERF: tuple[MetricPanel, ...] = (
 )
 
 ML: tuple[MetricPanel, ...] = (
+    Series(title="Learning rate", keys=("learning_rate",)),
+    Series(title="Policy damping", keys=("tau",)),
     # Expected to stay at zero; a nonzero value is a numerical incident.
     Counters(
         title="Numerical stability",
@@ -69,8 +71,6 @@ ML: tuple[MetricPanel, ...] = (
         keys=("numerical/parameter_relative_delta",),
         scale="log",
     ),
-    Series(title="Learning rate", keys=("learning_rate",)),
-    Series(title="Policy damping", keys=("tau",)),
     # Rows the update kept of those collected (Ataraxos-style filtering).
     Series(title="Retained rows", keys=("retained", "rows"), unit="rows"),
     Series(title="Clipped steps", keys=("numerical/clip_fraction",), unit="fraction"),

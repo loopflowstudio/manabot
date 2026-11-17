@@ -14,8 +14,8 @@ each, the model's seat alternating. `play` is one game through
 `manabot.verify.llm_match`. Its worker is a client: `VLLMRuntime` sends exact
 token prompts to the one server on the machine's GPU
 (`manabot.llm.vllm_server.VLLMServer`), which must already be serving
-`INFERENCE` and have written its identity under `output()`. `WORKERS` games
-run at once and share that server; each checkpoint plays on the CPU.
+`INFERENCE` and have written its identity under `output()`. Etude schedules
+game processes against that server; each checkpoint plays on the CPU.
 
 ```bash
 uv run etude launch experiments/llm_qwen.py --rent l4
@@ -26,6 +26,7 @@ Setup installs the game environment, the pinned vLLM environment
 (`configs/llm/vllm-0.17.1-linux.lock`) and the model snapshot.
 """
 
+from collections.abc import Sequence
 from functools import partial
 import os
 from pathlib import Path
@@ -36,11 +37,10 @@ from etude.eval.records import (
     Benchmark,
     CheckpointPlayer,
     Code,
-    Inference,
     Match,
     Seating,
 )
-from etude.eval.run import Result
+from etude.eval.result import Result
 from etude.jobs import EvalJob, ExperimentState
 from etude.records import ArtifactRef
 from etude.report import Matches, Matrix, Ranking, Report, Score
@@ -48,6 +48,7 @@ from etude.spec import Variable
 
 from experiments.elemental_grid import DECKS, PACK
 from manabot.backends import resolve
+from manabot.eval.agents import AGENTS
 from manabot.llm.schema import InferenceConfig
 from manabot.llm.session import InferenceSession
 from manabot.llm.vllm_runtime import VLLMRuntime
@@ -65,7 +66,6 @@ TOURNAMENT = "llm-qwen-v-mtg183"
 # Sampled reasoning, closed at 3,072 tokens before the answer.
 INFERENCE = ROOT / "configs/llm/qwen3.5-9b-reasoning-budget.json"
 # Games at once, which is also the server's request concurrency.
-WORKERS = 8
 # A long game waits on its neighbours' generations; ten hours bounds the pass.
 GAME_SECONDS = 10 * 3600.0
 
@@ -93,7 +93,6 @@ def players() -> tuple[Code, CheckpointPlayer]:
                 uri=MTG183_FINAL, sha256=MTG183_SHA256, size_bytes=MTG183_BYTES
             ),
         ),
-        inference=Inference(source=[ROOT / "manabot/verify/llm_game.py"]),
     )
     return llm, checkpoint
 
@@ -104,7 +103,7 @@ def output() -> Path:
     return Path(os.environ.get("ETUDE_OUTPUT_DIR", ROOT / ".runs/llm_qwen"))
 
 
-def play(match: Match[Game]) -> Result:
+def play(match: Match[Game], agents: Sequence[object]) -> Result:
     """One game: a client of the shared server against the checkpoint on the CPU."""
     _, llm, checkpoint = seated(match)
     opponent = checkpoint_opponent(checkpoint, output() / "checkpoints")
@@ -137,9 +136,9 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     )
     return [
         EvalJob(
+            agents=AGENTS,
             play=play,
             tournament=tournament,
-            workers=WORKERS,
             setup="sh scripts/qwen-mtg183-vllm-setup.sh",
             environment=(
                 # Setup installs no workspace package and places a prebuilt

@@ -27,6 +27,7 @@ fail admission. `OPENROUTER_API_KEY` comes from the environment and is never
 written.
 """
 
+from collections.abc import Sequence
 from decimal import Decimal
 import os
 from pathlib import Path
@@ -37,17 +38,17 @@ from etude.eval.records import (
     Benchmark,
     CheckpointPlayer,
     Code,
-    Inference,
     Match,
     Seating,
 )
-from etude.eval.run import Result
+from etude.eval.result import Result
 from etude.jobs import EvalJob, ExperimentState
 from etude.records import ArtifactRef
 from etude.report import Matches, Matrix, Ranking, Report, Score
 
 from experiments.elemental_grid import DECKS, PACK
 from manabot.backends import resolve
+from manabot.eval.agents import AGENTS
 from manabot.llm.budget import BudgetConfig, BudgetLedger
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterSession
 from manabot.verify.llm_match import (
@@ -98,7 +99,6 @@ def players() -> tuple[Code, CheckpointPlayer]:
                 uri=MTG183_FINAL, sha256=MTG183_SHA256, size_bytes=MTG183_BYTES
             ),
         ),
-        inference=Inference(source=[ROOT / "manabot/verify/llm_game.py"]),
     )
     return llm, checkpoint
 
@@ -109,7 +109,7 @@ def output() -> Path:
     return Path(os.environ.get("ETUDE_OUTPUT_DIR", ROOT / ".runs/llm_claude"))
 
 
-def play(match: Match[Game]) -> Result:
+def play(match: Match[Game], agents: Sequence[object]) -> Result:
     """One game: Claude through OpenRouter against the checkpoint on the CPU."""
     _, llm, checkpoint = seated(match)
     opponent = checkpoint_opponent(checkpoint, output() / "checkpoints")
@@ -143,6 +143,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     )
     return [
         EvalJob(
+            agents=AGENTS,
             play=play,
             tournament=tournament,
             extras=("evaluation", "openrouter"),

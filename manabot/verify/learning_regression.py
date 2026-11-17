@@ -27,7 +27,6 @@ from manabot.experiment.checkpoint_evaluation import checkpoints
 from manabot.experiment.records import Attempt, ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
@@ -486,6 +485,8 @@ def report_recipe(
         results: list[EvaluationResult] = []
         deadline = time.time() + seconds
         for point in (exported[0], exported[-1]):
+            if time.time() >= deadline:
+                raise TimeoutError("verification evaluation budget exhausted")
             request = checkpoint_request(
                 point.path, opponent="random", deal_seeds=deals, backend=backend
             )
@@ -494,14 +495,12 @@ def report_recipe(
                 result = EvaluationResult.model_validate_json(
                     (target / "evaluation.json").read_bytes()
                 )
-                if not isinstance(
-                    result.execution, EvalExecution
-                ) or result.request != request.bind(result.execution):
+                if result.execution is not None or result.request != request:
                     raise ValueError("evaluation belongs to another checkpoint")
             else:
                 result = evaluate_local(
                     request,
-                    limits=EvalExecution(deadline_unix=deadline),
+                    deadline=deadline,
                     out_dir=target,
                 )
             result.validate_cohort()

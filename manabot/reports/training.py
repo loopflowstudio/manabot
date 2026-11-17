@@ -16,9 +16,11 @@ import math
 from pathlib import Path
 from typing import Literal
 
+from etude.records import Clock
+from etude.run import declare, destinations
 from etude.storage import storage_from_uri
 from etude.train.read import RunData, read
-from etude.train.tracking import seal_runs, track
+from etude.train.tracking import TrainingRun, seal_runs
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from manabot.eval.monitor import MonitorResult
@@ -233,16 +235,27 @@ def publish_dashboard(
             for index, digest in recorded.items()
         ):
             raise ValueError("retained projection changed an already published prefix")
-        tracked = track(
+        declared = declare(
             experiment=experiment,
             run=dashboard.run_id,
             kind="retained-monitoring",
-            clocks=["observation"],
+            clocks=(Clock(name="observation", kind="step", meaning="retained row"),),
             config=dashboard.config,
             directory=directory,
-            storages=[storage_from_uri(destination)] if destination else (),
-            strict=True,
             resume=prior.file is not None,
+        )
+        tracked = TrainingRun(
+            experiment=experiment,
+            name=declared.name,
+            root=declared.root,
+            clocks=declared.record.clocks,
+            destinations=destinations(
+                declared.base, [storage_from_uri(destination)] if destination else ()
+            ),
+            strict=True,
+            closed_clocks=True,
+            inherited=None,
+            seed=declared.record.seed or 0,
         )
         try:
             for index in range(len(recorded), len(rows)):

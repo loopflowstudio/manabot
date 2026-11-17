@@ -249,9 +249,9 @@ _TORCH_FREE_MODULES = (
     "manabot.sim.replay",
     "manabot.sim.table_bots",
     "managym.academy.launch",
-    "manabot.sim.serving_protocol",
     "manabot.sim.supervision",
     "manabot.sim.threads",
+    "manabot.eval.game",
     "manabot.verify.games",
     "manabot.verify.scenarios",
 )
@@ -266,6 +266,11 @@ def test_evaluation_child_modules_import_without_torch() -> None:
             importlib.import_module(name)
         heavy = sorted(m for m in ("torch", "etude.train") if m in sys.modules)
         assert not heavy, heavy
+        # Etude's Agents declaration imports its own training record package;
+        # game-side builders must still load no array framework or Manabot trainer.
+        import manabot.eval.agents
+        assert "torch" not in sys.modules
+        assert "manabot.training" not in sys.modules
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
@@ -390,13 +395,12 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/env/vector_env.py",
         "manabot/eval/evaluate.py",
         "manabot/eval/local.py",
-        "manabot/eval/serving_benchmark.py",
+        "manabot/eval/agent_loader.py",
         "manabot/experiment/numerics.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
         "manabot/reports/belief.py",
         "manabot/sim/native_game.py",
-        "manabot/sim/serving.py",
         *_TORCH_LOOPS,
         "manabot/training/mps.py",
         "manabot/verify/action_cases.py",
@@ -543,11 +547,10 @@ _BACKEND_ROOTS = frozenset(
         "manabot/sim/policy_provider.py",
         "manabot/cli.py",
         "manabot/eval/cards.py",
+        "manabot/eval/agent_loader.py",
         "manabot/eval/evaluate.py",
         "manabot/eval/local.py",
-        "manabot/eval/serving_benchmark.py",
         "manabot/sim/native_game.py",
-        "manabot/sim/serving.py",
         "manabot/sim/sim.py",
     )
 )

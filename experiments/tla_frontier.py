@@ -54,17 +54,14 @@ mirrors, exists at revisions up to ac601834d.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
 import json
 import os
 from pathlib import Path
-import shutil
 from statistics import median
-from tempfile import TemporaryDirectory
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 from etude.checkpoints import CheckpointRecord
 from etude.eval.records import (
@@ -72,56 +69,53 @@ from etude.eval.records import (
     CheckpointPlayer,
     Code,
     Environment,
-    Inference,
     Match,
     Seating,
+    checkpoint_player,
 )
-from etude.eval.run import Row, Tables
+from etude.eval.result import Row, Tables
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.launch import client
-from etude.report import Report, Score
+from etude.report import Curve, Matches, Report, Score
 from etude.storage import Storage
 from etude.train.read import RunData
 from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict, Field
-import torch
 
 from experiments import tla_frontier
-from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
-from manabot.eval.admission import register_checkpoint
+from manabot.eval.agents import AGENTS, registration
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import machine_setup
-from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
+from manabot.policy.checkpoint import read_container
+from manabot.sim.agent import GamePlayer
 from manabot.sim.matchup import DeckMatchup
-from manabot.sim.registration import PlayerRegistration
+from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
-from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import ML, PERF
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
-    head_to_head,
     job_labels,
-    learning_schedule,
 )
 from manabot.training.state.game_errors import GameErrorState
 import managym
+
+if TYPE_CHECKING:
+    from manabot.training.loops.self_play import SelfPlay
 
 ROOT = Path(__file__).resolve().parents[1]
 # Etude names the experiment for this file.
 EXPERIMENT = Path(__file__).stem
 REGIME = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
 GAMES_PER_PAIR = 4
-# One single-threaded game per worker on a 32-vCPU rental, leaving room for its
-# host. At cpu32's USD0.96/hour, these hours and Etude's 15-minute setup
-# allowance fit the pass ceiling.
-EVALUATION_WORKERS = 28
+# Etude divides the rental's CPUs between game processes. At cpu32's
+# USD0.96/hour, these hours and Etude's 15-minute setup allowance fit the pass ceiling.
 EVALUATION_HOURS = 1.75
 EVALUATION_PASS_USD = Decimal("2")
 EVALUATION_ATTEMPTS = 3
@@ -322,6 +316,8 @@ def settings(config: FrontierConfig) -> SelfPlay:
     stage = _stage(regime)
     if any(update % protocol.export_every for update in protocol.milestones):
         raise ValueError("milestones must fall on the export cadence")
+    from manabot.training.loops.self_play import SelfPlay
+
     return SelfPlay(
         deck_source=regime.deck_source,
         observation=regime.observation,
@@ -343,6 +339,8 @@ def settings(config: FrontierConfig) -> SelfPlay:
 
 
 def train(config: FrontierConfig) -> None:
+    from manabot.training.loops.self_play import CLOCKS, self_play
+
     with track(clocks=CLOCKS, config=config) as run:
         self_play(settings(config), run, updates=config.updates)
 
@@ -376,11 +374,6 @@ def _source() -> list[Path]:
         Path(__file__),
         REGIME,
     ]
-
-
-def checkpoint_inference() -> Inference:
-    """How a stored checkpoint plays, for frontier passes and calibration's rehearsal."""
-    return Inference(source=_source())
 
 
 def environment(
@@ -506,7 +499,7 @@ class ScheduledComparison:
 
     tag: str
     update: int | None
-    matchup: Seating | None
+    matchup: tuple[Seating, ...] | None
     unreached: bool = False
     hours: tuple[float, float] | None = None
 
@@ -516,14 +509,17 @@ def paired_matchup(
     players: tuple[CheckpointPlayer, CheckpointPlayer | Code],
     tag: str,
     protocol: Protocol,
-) -> Seating:
-    """One comparison: every frozen pair, four legs each, as `play` admits."""
-    return Seating(
-        name=name,
-        players=players,
-        configs=protocol.pairs,
-        games=GAMES_PER_PAIR,
-        tags=(tag,),
+) -> tuple[Seating, ...]:
+    """One indexed Etude match per frozen deck/deal group, four native legs."""
+    return tuple(
+        Seating(
+            name=f"{name} group {i}",
+            players=players,
+            config=pair,
+            games=1,
+            tags=(tag, name.replace(" ", "-")),
+        )
+        for i, pair in enumerate(protocol.pairs)
     )
 
 
@@ -702,7 +698,6 @@ def comparison_schedule(
     endpoint is scheduled once, as a milestone. Equal-hours slots need `hours`
     for both sizes' checkpoints; without them they stay unplayable.
     """
-    inference = checkpoint_inference()
     heuristic = Code(name="heuristic", source=_source(), config=HEURISTIC)
     trained = {label: size_run(state, label) for label in SIZES}
     endpoints = {label: endpoint(run) for label, run in trained.items()}
@@ -713,7 +708,7 @@ def comparison_schedule(
 
     def model(label: SizeLabel, update: int | None) -> CheckpointPlayer | None:
         found = saved[label].get(update) if update is not None else None
-        return found.player(inference) if found else None
+        return checkpoint_player(found.ref) if found else None
 
     schedule: list[ScheduledComparison] = []
 
@@ -904,11 +899,12 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         "tla-frontier-c5fba4-paired-v1",
         environment(protocol),
         _distinct(
-            comparison.matchup
+            seating
             for comparison in comparison_schedule(
                 closed, protocol, checkpoint_hours(closed)
             )
             if comparison.matchup is not None
+            for seating in comparison.matchup
         ),
     )
 
@@ -939,7 +935,7 @@ def pass_name(name: str) -> str:
     leaves failed ones failed and changes nothing scored.
     """
     attempt = os.environ.get(PASS_ATTEMPT)
-    return f"{name}-attempt-{attempt}" if attempt else name
+    return f"{name}-agents-v1-attempt-{attempt}" if attempt else f"{name}-agents-v1"
 
 
 def evaluation_jobs(
@@ -950,13 +946,13 @@ def evaluation_jobs(
         return []
     return [
         EvalJob(
+            agents=AGENTS,
             # Etude discovers this file with runpy; callbacks need an importable
             # module identity even when eval_jobs itself came from <run_path>.
             play=tla_frontier.play,
             tournament=Benchmark(
                 name=pass_name(name), environment=env, seatings=tuple(matchups)
             ),
-            workers=EVALUATION_WORKERS,
             max_hours=EVALUATION_HOURS,
             # One pass's ceiling across its attempts; the operator keeps the
             # cumulative evaluation spend under `protocol.evaluation_usd`.
@@ -1019,49 +1015,22 @@ def _registration(
                 {str(p.relative_to(ROOT)): file_sha256(p) for p in _source()}
             ),
         ), None
-    path = local_checkpoint_file(player)
-    admission = register_checkpoint(
-        path,
-        match=setup,
-        content_suite=matchup.content_suite,
-        player_id=name,
-        display_name=player.name,
-        role=role,
-        artifact_prefix="c5fba4",
-        allow_deck_repetition=True,
-        backend=TORCH_BACKEND,
-    )
-    if admission.space.encoder.config != observation:
+    path = player.checkpoint.path
+    checkpoint = read_container(path)
+    if checkpoint.space.encoder.config != observation:
         raise ValueError("checkpoint observation differs from frontier protocol")
-    return admission.registration, path
+    return registration(
+        player, name=name, match=setup, content_suite=matchup.content_suite, role=role
+    ), path
 
 
-@contextmanager
-def _memory_journal(retained: Path) -> Iterator[Path]:
-    """A pair's arena directory in memory, copied to `retained` even on failure.
-
-    The arena syncs every record, which a rented container disk serves at about
-    .1 s, and that time counts against the game limit, so a game a slow size
-    could finish would fail instead.
-    """
-    memory = Path("/dev/shm")
-    with TemporaryDirectory(dir=memory if memory.is_dir() else None) as journal:
-        out_dir = Path(journal) / "deal"
-        try:
-            yield out_dir
-        finally:
-            if out_dir.is_dir():
-                shutil.copytree(out_dir, retained, dirs_exist_ok=True)
-
-
-def play(match: Match[Pair]) -> Tables:
+def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
     """One sampled pair/deal, four policy/deck/seat legs, with failure denominators."""
-    torch.set_num_threads(1)
     regimes, protocol = frozen()
     # The sizes share observation and population; only their models differ.
     regime = regimes[SMALL]
     pair = Pair.model_validate(match.config)
-    if pair not in protocol.pairs or match.games != GAMES_PER_PAIR:
+    if pair not in protocol.pairs:
         raise ValueError("evaluation conditions differ from frozen schedule")
     matchup = deck_matchup(regime, protocol, pair)
     candidate, candidate_path = _registration(
@@ -1079,29 +1048,33 @@ def play(match: Match[Pair]) -> Tables:
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version="tla-frontier-c5fba4-v1",
+        arena_version="tla-frontier-c5fba4-agents-v1",
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
-        evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
+        evaluation_compute_envelope_id=ETUDE_COMPUTE_CLASS,
     )
     retained = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    with _memory_journal(retained) as out_dir:
-        result = evaluate(
-            EvaluationRequest(
-                key=key,
-                candidate=candidate,
-                opponent=opponent,
-                checkpoint_paths=paths,
-                deal_seeds=(pair.deal,),
-                authored_matchup=matchup,
-                game_seconds=protocol.game_seconds,
-                max_commands=protocol.max_commands,
-                bootstrap_seed=protocol.bootstrap_seed,
-                purpose="tla-frontier-fixed-corpus",
-            ),
-            out_dir=out_dir,
-        )
+    out_dir = retained
+    result = evaluate(
+        EvaluationRequest(
+            key=key,
+            candidate=candidate,
+            opponent=opponent,
+            checkpoint_paths=paths,
+            deal_seeds=(pair.deal,),
+            authored_matchup=matchup,
+            game_seconds=protocol.game_seconds,
+            max_commands=protocol.max_commands,
+            bootstrap_seed=protocol.bootstrap_seed,
+            purpose="tla-frontier-fixed-corpus",
+        ),
+        out_dir=out_dir,
+        agents={
+            "candidate": cast(GamePlayer, agents[0]),
+            "opponent": cast(GamePlayer, agents[1]),
+        },
+    )
     by_leg = {row.leg: row for row in result.rows}
     rows: list[Row] = []
     for leg in range(GAMES_PER_PAIR):
@@ -1164,9 +1137,29 @@ def report() -> Report:
                 "Model vs heuristic",
                 tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
-            head_to_head("Large vs Small at fixed training time", EQUAL_HOURS_SEATINGS),
-            head_to_head("Large vs Small at fixed # updates", EQUAL_UPDATE_SEATINGS),
+            Curve(
+                title="Large vs Small at fixed training time",
+                matches=tuple(
+                    selection
+                    for n in EQUAL_HOURS_SEATINGS
+                    for selection in (
+                        Matches(seating=n),
+                        Matches(tag=n.replace(" ", "-")),
+                    )
+                ),
+            ),
+            Curve(
+                title="Large vs Small at fixed # updates",
+                matches=tuple(
+                    selection
+                    for n in EQUAL_UPDATE_SEATINGS
+                    for selection in (
+                        Matches(seating=n),
+                        Matches(tag=n.replace(" ", "-")),
+                    )
+                ),
+            ),
         ),
         perf=PERF,
-        ml=(*learning_schedule(jobs), *ML),
+        ml=ML,
     )

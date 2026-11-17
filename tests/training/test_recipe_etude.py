@@ -4,7 +4,6 @@ import hashlib
 from pathlib import Path
 
 from etude.experiment import observe
-from etude.train.tracking import track
 import pytest
 
 from experiments import belief
@@ -22,6 +21,7 @@ from manabot.training.loops.self_play import (
 )
 from manabot.training.regime import SelectionGameSpec
 from manabot.training.rollout.selection_data import SelectionDataset, collect_selection
+from tests.fixtures.training_records import recording
 
 
 def test_belief_sampler_uses_given_policy_and_restarts_its_work(
@@ -30,7 +30,7 @@ def test_belief_sampler_uses_given_policy_and_restarts_its_work(
     monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "policy"))
     monkeypatch.setenv("ETUDE_JOB_NAME", belief.POLICY)
-    with track(
+    with recording(
         experiment="belief",
         run="policy@0",
         clocks=CLOCKS,

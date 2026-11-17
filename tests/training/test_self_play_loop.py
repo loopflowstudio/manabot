@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from etude.train.read import read
-from etude.train.tracking import Stopped, track
+from etude.train.tracking import Stopped
 import numpy as np
 import pytest
 import torch
@@ -19,6 +19,7 @@ from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import CLOCKS, Counts, SelfPlay, self_play
 from manabot.training.rollout.collection import Collector, RolloutBatch
 from manabot.training.updates.selection import UpdateDiagnostics
+from tests.fixtures.training_records import recording
 
 SEED = 197
 
@@ -41,12 +42,12 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     )
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
     monkeypatch.setenv("ETUDE_SEED", str(SEED))
-    with track(
+    with recording(
         experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
     ) as run:
         earlier = self_play(settings, run, updates=1)
     before = earlier.read_bytes()
-    with track(
+    with recording(
         experiment="test",
         run="policy",
         clocks=CLOCKS,
@@ -58,7 +59,7 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert final.name == (
         "00000002-raw.safetensors" if averaging is None else "00000002-ema.safetensors"
     )
-    with track(
+    with recording(
         experiment="test",
         run="policy",
         clocks=CLOCKS,
@@ -115,7 +116,7 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
     with monkeypatch.context() as patch:
         patch.setattr(loop, "step", stop_after_step)
         with pytest.raises(Stopped):
-            with track(
+            with recording(
                 experiment="test",
                 run="stop",
                 clocks=CLOCKS,
@@ -128,7 +129,7 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
     )
     assert saved["extra"]["updates"] == saved["at"]["updates"] == 1
     stop.unlink()
-    with track(
+    with recording(
         experiment="test",
         run="stop",
         clocks=CLOCKS,
@@ -146,7 +147,7 @@ def test_numerical_failure_keeps_previous_policy_and_private_diagnostics(
         update={"learning": Learning(horizon=2, epochs=1, minibatches=1, ema=0.9)}
     )
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
-    with track(
+    with recording(
         experiment="test", run="failure", clocks=CLOCKS, directory=tmp_path / "track"
     ) as run:
         policy = self_play(settings, run, updates=1)
@@ -169,7 +170,7 @@ def test_numerical_failure_keeps_previous_policy_and_private_diagnostics(
     if capture_failure:
         (tmp_path / "out/numerical-incident").touch()
     with pytest.raises(NumericalError, match="fixture_nonfinite") as caught:
-        with track(
+        with recording(
             experiment="test",
             run="failure",
             clocks=CLOCKS,
