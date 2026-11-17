@@ -80,8 +80,8 @@ nobody answered these). The docs are written to them:
   index it). Open: is it current, or should the file go with the readers and
   its report stand as the record?
 - `manabot training-report` stays for Etude sources only. From Etude logs it
-  has no phase breakdown or cost (one warning per run), so it is a run list by
-  active time, throughput and a timeline. Open: keep that, or delete it too
+  has no phase breakdown, cost or hardware, so it is a run list by active
+  time, per-run throughput and a timeline. Open: keep that, or delete it too
   and rely on `etude report`'s PERF panels?
 - `SelfPlayPoint` loses `stage`; `self_play_points` takes one run's rows.
   `self_play_figures` (drew from the notebook evidence object) goes.

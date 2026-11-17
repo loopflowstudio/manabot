@@ -7,7 +7,6 @@ import subprocess
 from etude.records import Clock, Continuation
 from etude.train.read import read_all
 from etude.train.records import Time
-import pytest
 
 from manabot.reports.time_cohort import CohortRun, TimeCohort, write_cohort_report
 from manabot.reports.time_sources import load_time_sources
@@ -156,7 +155,6 @@ def _cohort_run(identifier: str, **fields: object) -> CohortRun:
         "label": identifier,
         "experiment": "fixture",
         "kind": "training",
-        "hardware": "GPU A",
         "recipe": "recipe",
         "seed": 1,
         "status": "finished",
@@ -187,7 +185,7 @@ def test_weighted_aggregation_and_snapshot_selection(tmp_path: Path) -> None:
         "max": 100,
         "median": 55,
     }
-    assert summary["rates"][0]["rate"] == pytest.approx(2100 / 110)
+    assert [row["rate"] for row in summary["rates"]] == [10, 20, None]
     assert _js("T.largest(d.runs, 'active_seconds', 5, false)", data) == [
         "second",
         "first",

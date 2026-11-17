@@ -36,6 +36,12 @@ saved_regimes.py and experiment-demo/, and the tests only for these.
 Report cleanup complete: deleted the phase/flamegraph views, synthetic profile
 hierarchy and unused CohortRun timing/cost fields. Removed the notebook extra,
 nbformat and matplotlib requirements, with workflow/install commands updated.
+Compress 2026-11-17: `CohortRun.hardware`/`model` (always "unknown") and the
+cross-run rate pooling they keyed are gone, so throughput is one row per run;
+the per-run "phase attribution unavailable" warning is gone; `lineage_roots`
+lives with its one caller in time_sources. The release smoke no longer imports
+`nbclient`, which left with the notebook extra (it would have failed the
+release workflow). `pytest tests/training/test_time_cohort.py -q`: 8 passed.
 
 ## Built
 

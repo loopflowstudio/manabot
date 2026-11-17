@@ -19,7 +19,6 @@ from manabot.reports.time_cohort import (
     TimeCohort,
     TimingSource,
     TrainingInterval,
-    lineage_roots,
 )
 
 if TYPE_CHECKING:
@@ -114,9 +113,7 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
     declared = run.file
     identifier = "etude:" + declared.source_key.key()
     parent = "etude:" + declared.continues.parent.key() if declared.continues else None
-    warnings = [
-        "Detailed phase attribution and measured rental cost unavailable in these tracking logs."
-    ]
+    warnings: list[str] = []
     names = {c.name: c.kind for c in run.clocks}
     writers = sorted(
         {a.writer for a in run.writers} | {b.header.writer for b in run.blocks},
@@ -243,7 +240,6 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
         label=declared.job_name or run.experiment,
         experiment=run.experiment,
         kind=declared.kind or "unclassified",
-        hardware="unknown",
         recipe=run.job or "",
         seed=declared.seed,
         status=status,
@@ -255,6 +251,21 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
         intervals=tuple(intervals),
         warnings=tuple(warnings),
     ), parent
+
+
+def lineage_roots(parents: dict[str, str | None]) -> dict[str, str]:
+    """Keep missing ancestors as family identities; cycles are corrupt evidence."""
+    result: dict[str, str] = {}
+    for identifier in parents:
+        seen: set[str] = set()
+        root = identifier
+        while (parent := parents.get(root)) is not None:
+            if root in seen:
+                raise ValueError(f"Cyclic training ancestry: {identifier}")
+            seen.add(root)
+            root = parent
+        result[identifier] = root
+    return result
 
 
 def _etude_families(

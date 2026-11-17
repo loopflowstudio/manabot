@@ -21,13 +21,13 @@ details{border-top:1px solid #80808055;padding:12px 0}summary{cursor:pointer}
 <label><input id="include-benchmarks" type="checkbox">Include labeled benchmarks, smokes, fixtures and evaluations</label>
 <label>Largest <input id="top" type="number" min="1" max="10000" value="5" style="width:70px"></label>
 <button id="select-top">Select largest</button><button id="select-visible">Add visible</button><button id="clear">Clear selection</button>
-</div><p id="shown"></p><div class="scroll"><table><thead><tr><th>Include</th><th>Experiment</th><th>Run</th><th>Kind</th><th>Model recipe</th><th>Hardware</th><th>Seed</th><th>Status</th><th>First observed (UTC)</th><th>Active seconds</th><th>Learner transitions</th><th>Learning iterations</th><th>Coverage</th></tr></thead><tbody id="run-rows"></tbody></table></div>
+</div><p id="shown"></p><div class="scroll"><table><thead><tr><th>Include</th><th>Experiment</th><th>Run</th><th>Kind</th><th>Seed</th><th>Status</th><th>First observed (UTC)</th><th>Active seconds</th><th>Learner transitions</th><th>Learning iterations</th><th>Coverage</th></tr></thead><tbody id="run-rows"></tbody></table></div>
 <div class="controls"><button id="export">Save selection</button><label>Restore selection <input id="import" type="file" accept="application/json"></label><a href="__SNAPSHOT_LINK__" download>Download evidence snapshot (JSON)</a></div><p id="selection-message" role="status"></p>
 <h2>Selected cohort</h2><div id="summary" class="scroll"></div>
-<h2>Throughput by recipe and hardware</h2><p>Retained work divided by observed active seconds, including failed/replayed work in the time denominator. These are descriptive rates, not independent-seed confidence intervals. Unknown hardware is not pooled across runs.</p><div id="rates" class="scroll"></div>
+<h2>Throughput by run</h2><p>Retained work divided by observed active seconds, including failed/replayed work in the time denominator. The logs name no hardware, so rates are not pooled across runs.</p><div id="rates" class="scroll"></div>
 <h2>Training attempts over time</h2><p>Each interval basis is accounted separately. Calendar spans may include downtime; logged observation windows are not complete process lifetimes. Cross-machine clock uncertainty is unavailable.</p><div id="timeline" class="scroll"></div>
 <h2>Coverage and attribution</h2><div id="warnings" class="warning"></div>
-<h2>Individual training profiles</h2><p>Evaluation lanes and detailed collection/learning traces are deferred. Unclassified runs are eligible; inspect their provenance before treating them as long training.</p>
+<h2>Selected run sources</h2><p>Unclassified runs are eligible; inspect their provenance before treating them as long training.</p>
 __DETAILS__
-<noscript><p>JavaScript is required for selection and aggregation. Individual profiles and the JSON snapshot remain available.</p></noscript>
+<noscript><p>JavaScript is required for selection and aggregation. Run sources and the JSON snapshot remain available.</p></noscript>
 </main><script id="cohort-data" type="application/json">__DATA__</script><script>__SCRIPT__</script></html>

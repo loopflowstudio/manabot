@@ -24,14 +24,14 @@ training-time.html: 12 logical runs; 12 source/coverage warnings
 ```
 
 The page provides search, sorting, run checkboxes, a largest-five selection,
-logged active training time, descriptive per-run statistics, throughput grouped
-by recipe/hardware, and a training-only timeline. It does not break a run's
-time into phases or report rental cost, and carries one warning per run saying
-so: read phases from the `PERF` panels of `etude report` ([costs](#costs)) and
-cost from the launcher's record. Selecting a recovered run includes
-its available attempts. Work counters come from the retained trajectory, while
-duration includes failed/replayed attempts. Incomplete or branching ancestry
-leaves ambiguous work counts unavailable. Unknown hardware is not pooled.
+logged active training time, descriptive per-run statistics, each run's
+throughput, and a training-only timeline. It does not break a run's time into
+phases or report rental cost: read phases from the `PERF` panels of
+`etude report` ([costs](#costs)) and cost from the launcher's record. The logs
+name no hardware, so throughput is not pooled across runs. Selecting a
+recovered run includes its available attempts. Work counters come from the
+retained trajectory, while duration includes failed/replayed attempts.
+Incomplete or branching ancestry leaves ambiguous work counts unavailable.
 
 The initial selection uses observed active training seconds and excludes explicitly
 labeled benchmarks, smokes, fixtures, tests and evaluations. Unclassified records

@@ -21,13 +21,8 @@ const TrainingCohort = (() => {
     return seconds;
   }
   function aggregate(runs) {
-    const groups = new Map(), calendars = new Map();
+    const calendars = new Map();
     for (const r of runs) {
-      // Unknown hardware/recipe cannot establish cross-run comparability.
-      const key = JSON.stringify([r.recipe, r.hardware,
-        r.hardware.includes("unknown") || !r.recipe ? r.id : null]);
-      if (!groups.has(key)) groups.set(key, {recipe: r.recipe, hardware: r.hardware, runs: []});
-      groups.get(key).runs.push(r);
       for (const i of r.intervals) {
         if (!calendars.has(i.basis)) calendars.set(i.basis, []);
         calendars.get(i.basis).push(i);
@@ -43,11 +38,9 @@ const TrainingCohort = (() => {
         median: n ? (xs[Math.floor((n - 1) / 2)] + xs[Math.floor(n / 2)]) / 2 : null};
     }
     return {count: runs.length, attempts: sum(runs.map(r => r.members.length)), metrics,
-      rates: [...groups.values()].map(g => {
-        const matched = g.runs.filter(r => known(r.learner_transitions) && r.active_seconds > 0);
-        return {recipe: g.recipe, hardware: g.hardware, covered: matched.length, count: g.runs.length,
-          rate: matched.length ? sum(matched.map(r => r.learner_transitions)) / sum(matched.map(r => r.active_seconds)) : null};
-      }),
+      // Etude logs name no hardware, so no rate is pooled across runs.
+      rates: runs.map(r => ({id: r.id, recipe: r.recipe,
+        rate: known(r.learner_transitions) && r.active_seconds > 0 ? r.learner_transitions / r.active_seconds : null})),
       calendars: [...calendars].map(([basis, rows]) => ({basis, count: rows.length,
         union: union(rows), additive: sum(rows.map(i => i.end - i.start))})),
       span: intervals.length ? Math.max(...intervals.map(i => i.end)) - Math.min(...intervals.map(i => i.start)) : null};
@@ -83,7 +76,7 @@ if (typeof document !== "undefined") {
   function candidates() {
     const query = $("search").value.toLowerCase();
     return D.runs.filter(r => TrainingCohort.eligible(r, $("include-benchmarks").checked)
-      && [r.id, r.label, r.experiment, r.hardware, r.model, r.status, r.kind, ...(r.source_uris ?? [])].join(" ").toLowerCase().includes(query));
+      && [r.id, r.label, r.experiment, r.status, r.kind, ...(r.source_uris ?? [])].join(" ").toLowerCase().includes(query));
   }
   function table(headings, rows) {
     const t = el("table"), head = el("tr"); headings.forEach(h => head.append(el("th", h)));
@@ -100,7 +93,7 @@ if (typeof document !== "undefined") {
       check.checked = selected.has(r.id); check.setAttribute("aria-label", `Include ${r.id}`);
       check.onchange = () => { check.checked ? selected.add(r.id) : selected.delete(r.id); draw(); };
       cell.append(check); row.append(cell);
-      [r.label, r.id, r.kind, r.model, r.hardware, r.seed ?? "—", r.status,
+      [r.label, r.id, r.kind, r.seed ?? "—", r.status,
         r.intervals.length ? new Date(Math.min(...r.intervals.map(i => i.start)) * 1000).toISOString() : "unavailable",
         fmt(r.active_seconds), fmt(r.learner_transitions), fmt(r.updates),
         `${r.intervals.length} lanes; ${r.warnings.length} warnings`].forEach(v => row.append(el("td", v)));
@@ -116,8 +109,8 @@ if (typeof document !== "undefined") {
     $("summary").append(el("p", [...new Set(runs.map(r => r.status))].map(status => `${status}: ${runs.filter(r => r.status === status).length}`).join(" · ")));
     $("summary").append(table(["Quantity", "Observed total", "Covered runs", "Median", "Minimum", "Maximum"],
       Object.entries(summary.metrics).map(([key, value]) => [labels[key], fmt(value.total), `${value.count}/${runs.length}`, fmt(value.median), fmt(value.min), fmt(value.max)])));
-    $("summary").append(el("p", `Active training hours: ${fmt(summary.metrics.active_seconds.total == null ? null : summary.metrics.active_seconds.total / 3600)}. Rates below use only runs with both work and active time.`));
-    $("rates").replaceChildren(table(["Recipe / job", "Hardware", "Covered runs", "Retained learner transitions / active second"], summary.rates.map(g => [g.recipe || "unknown", g.hardware, `${g.covered}/${g.count}`, fmt(g.rate)])));
+    $("summary").append(el("p", `Active training hours: ${fmt(summary.metrics.active_seconds.total == null ? null : summary.metrics.active_seconds.total / 3600)}. A rate needs both work and active time.`));
+    $("rates").replaceChildren(table(["Run", "Recipe / job", "Retained learner transitions / active second"], summary.rates.map(g => [g.id, g.recipe || "unknown", fmt(g.rate)])));
     $("timeline").replaceChildren(el("p", `First-to-last observed calendar span: ${fmt(summary.span)} s. This includes gaps.`));
     $("timeline").append(table(["Interval basis", "Lanes", "Calendar union (s)", "Additive lane duration (s)"], summary.calendars.map(c => [c.basis, c.count, fmt(c.union), fmt(c.additive)])));
     const intervals = runs.flatMap(r => r.intervals), origin = Math.min(...intervals.map(i => i.start));

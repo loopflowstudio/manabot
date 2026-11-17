@@ -41,7 +41,6 @@ class CohortRun:
     label: str
     experiment: str
     kind: str
-    hardware: str
     recipe: str
     seed: int | None
     status: str
@@ -53,7 +52,6 @@ class CohortRun:
     intervals: tuple[TrainingInterval, ...]
     warnings: tuple[str, ...]
     source_uris: tuple[str, ...] = ()
-    model: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -61,21 +59,6 @@ class TimeCohort:
     runs: tuple[CohortRun, ...]
     sources: tuple[TimingSource, ...] = ()
     warnings: tuple[str, ...] = ()
-
-
-def lineage_roots(parents: dict[str, str | None]) -> dict[str, str]:
-    """Keep missing ancestors as family identities; cycles are corrupt evidence."""
-    result: dict[str, str] = {}
-    for identifier in parents:
-        seen: set[str] = set()
-        root = identifier
-        while (parent := parents.get(root)) is not None:
-            if root in seen:
-                raise ValueError(f"Cyclic training ancestry: {identifier}")
-            seen.add(root)
-            root = parent
-        result[identifier] = root
-    return result
 
 
 def write_cohort_report(
