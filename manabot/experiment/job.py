@@ -39,6 +39,7 @@ find them. Etude preserves that experiment in the worker environment.
 
 from datetime import datetime, timezone
 from decimal import Decimal
+import hashlib
 import json
 import math
 import os
@@ -50,7 +51,7 @@ from typing import Literal
 
 from etude.jobs import TrainingJob as EtudeTrainingJob
 from etude.launch.records import Input, Job
-from etude.storage import SAFE_NAME
+from etude.storage import SAFE_NAME, S3Storage, Storage
 from pydantic import Field, model_validator
 
 from manabot.experiment.numerics import check_numerics
@@ -149,9 +150,63 @@ class PretrainedInitialization(Strict):
     """
 
     source_stage: str
+    source_seed: int
     source_run: StagedExport
     checkpoint: StagedExport
     weights: Literal["raw", "ema"] = "raw"
+
+    @classmethod
+    def from_storage(
+        cls,
+        storage: Storage,
+        record_key: str,
+        *,
+        source_stage: str,
+        weights: Literal["raw", "ema"] = "raw",
+    ) -> "PretrainedInitialization":
+        """Read a completed producer and verify its published weight bytes.
+
+        Exports live beside the worker's run.json, under their recorded file
+        names. Returned input keys include an S3 storage prefix because Etude
+        inputs address the bucket directly. Missing objects propagate storage
+        errors; incomplete producers and mismatched exports raise ValueError.
+        Model/world and cost admission still belongs to the worker.
+        """
+        if weights not in {"raw", "ema"}:
+            raise ValueError("pretrained weights must be raw or ema")
+        payload = storage.get(record_key)
+        producer = TrainingRun.model_validate_json(payload)
+        if producer.status != "completed":
+            raise ValueError("pretrained initialization requires a completed producer")
+        stage = next((s for s in producer.stages if s.id == source_stage), None)
+        if stage is None or stage.status != "completed":
+            raise ValueError("pretrained initialization requires a completed stage")
+        artifact = stage.artifacts.get(weights)
+        if artifact is None:
+            raise ValueError(f"producer published no {weights} weight export")
+        key = str(Path(record_key).parent / Path(artifact["path"]).name)
+        checkpoint = storage.get(key)
+        if (hashlib.sha256(checkpoint).hexdigest(), len(checkpoint)) != (
+            artifact["sha256"],
+            artifact["bytes"],
+        ):
+            raise ValueError("stored weight export hash/size mismatch with producer")
+        prefix = storage.prefix if isinstance(storage, S3Storage) else ""
+        return cls(
+            source_stage=source_stage,
+            source_seed=producer.seed,
+            source_run=StagedExport(
+                key=prefix + record_key,
+                sha256=hashlib.sha256(payload).hexdigest(),
+                bytes=len(payload),
+            ),
+            checkpoint=StagedExport(
+                key=prefix + key,
+                sha256=artifact["sha256"],
+                bytes=artifact["bytes"],
+            ),
+            weights=weights,
+        )
 
     def files(self) -> dict[str, tuple[str, StagedExport]]:
         return {

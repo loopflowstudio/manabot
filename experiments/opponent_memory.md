@@ -1312,3 +1312,26 @@ starting-state exclusivity, initial weights, continuation and job freezing.
 Ruff and whitespace checks passed. The new worker proof is included in the experiment CI group. This is USD0 software
 validation: no CUDA/resource, throughput, calibration, learnability or strength
 result; no Rust change, probe/census rerun, rental or background service.
+
+
+### Published-trunk reader and fixture identity — 2026-11-16
+
+`PretrainedInitialization.from_storage` connects published producer records to
+job inputs. It requires a completed run and named stage, selects raw or EMA,
+checks the stored checkpoint's SHA256 and size, and includes the S3 prefix in
+bucket-relative input keys. It returns the producer's seed; the branch builder
+refuses mismatched seed labels. The worker still owns ordinary policy, world
+and cost admission. Existing frozen experiment helpers are unchanged.
+
+The local worker proof now declares `TrainingJob(experiment="fixture", ...)`
+directly at fixture seed 197 for control and GRU. Only a pure declaration check
+uses the pilot builder; no training runs under the pilot identity. Initial
+weights and live-history outputs still equal the producer at zero tolerance.
+
+Validation: 18 final focused cases passed across the job-file and targeted
+reader/builder invocations (the first declaration check exposed missing fixture
+capacity/execution bounds, then passed after those were explicit). Coverage
+includes completion, absent stage/role, digest and size rejection, raw/EMA and
+S3 prefixes, worker initialization and pre-update refusals. Ruff, format and
+whitespace passed. USD0 software evidence only; CUDA admission and calibration
+remain next, with paid-pilot overflow handling still a separate decision.

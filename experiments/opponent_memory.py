@@ -67,7 +67,7 @@ def branch_jobs(
     Calibration supplies the shared branch recipe, horizon, gate scale and caps.
     Each seed maps to exactly one producer receipt and EMA export, reused by all
     three arms. The ordinary training declaration stays stopped until CUDA
-    admission and calibration; this builder also serves their bounded worker proof.
+    admission and calibration.
     """
     if not trunks or any(seed not in SEEDS for seed in trunks):
         raise ValueError("branches require declared pilot seed labels")
@@ -75,6 +75,8 @@ def branch_jobs(
         raise ValueError("the shared branch recipe must describe the control")
     if any(trunk.weights != "ema" for trunk in trunks.values()):
         raise ValueError("all branches use the same EMA trunk role")
+    if any(trunk.source_seed != seed for seed, trunk in trunks.items()):
+        raise ValueError("each branch seed label must match its producer seed")
     jobs: list[RunRequest] = []
     for seed, trunk in sorted(trunks.items()):
         for arm in ARMS:

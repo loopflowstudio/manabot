@@ -1,9 +1,12 @@
 """Published trunks reach fresh control/memory learners through staged job inputs."""
 
 from decimal import Decimal
+import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal
 
+from etude.storage import DirectoryStorage, S3Storage
 import numpy as np
 import pytest
 import torch
@@ -19,6 +22,7 @@ from manabot.experiment.job import (
     TrainingJob,
     run_worker,
 )
+from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -32,22 +36,22 @@ __all__ = ["memory_trunk"]
 
 def staged_trunk(parent: TrainingRun, directory: Path) -> PretrainedInitialization:
     """Use the run record and EMA bytes published by the actual executor."""
-    checkpoint = Path(parent.stages[0].artifacts["ema"]["path"])
-    sources = {
-        "source_run": directory / "memory-trunk/run.json",
-        "checkpoint": checkpoint,
-    }
-    staged = {
-        role: StagedExport(
-            key=f"trunks/39101/{path.name}",
-            sha256=file_sha256(path),
-            bytes=path.stat().st_size,
-        )
-        for role, path in sources.items()
-    }
-    return PretrainedInitialization(
-        source_stage=parent.stages[0].id, weights="ema", **staged
+    storage = published_trunk(parent, directory)
+    return PretrainedInitialization.from_storage(
+        storage,
+        "trunks/run.json",
+        source_stage=parent.stages[0].id,
+        weights="ema",
     )
+
+
+def published_trunk(parent: TrainingRun, directory: Path) -> DirectoryStorage:
+    storage = DirectoryStorage(directory / "published")
+    storage.put_file("trunks/run.json", directory / "memory-trunk/run.json")
+    for role in ("raw", "ema"):
+        path = Path(parent.stages[0].artifacts[role]["path"])
+        storage.put_file(f"trunks/{path.name}", path)
+    return storage
 
 
 def branch_recipe(parent: TrainingRun) -> TrainingRegime:
@@ -85,27 +89,9 @@ def test_worker_branches_from_one_published_trunk(
     encoder: Literal["none", "gru"],
 ) -> None:
     trunk = staged_trunk(memory_trunk, tmp_path)
-    requests = branch_jobs(
-        "HEAD",
-        regime=branch_recipe(memory_trunk),
-        trunks={39101: trunk},
-        max_hours=1,
-        max_usd=Decimal("0.25"),
-    )
-    specs = [
-        TrainingJob.model_validate_json(each.job.config or "") for each in requests
-    ]
-    assert {spec.regime.agent.decision_memory for spec in specs} == {
-        "none",
-        "transformer",
-        "gru",
-    }
-    assert all(each.seed == 39101 for each in requests)
-    assert all(spec.pretrained == trunk for spec in specs)
-    assert all(each.job.inputs == requests[0].job.inputs for each in requests)
-    spec = next(spec for spec in specs if spec.regime.agent.decision_memory == encoder)
-    # Local workers read this checkout's source instead of an unpacked archive.
-    spec.source_bundle = None
+    recipe = branch_recipe(memory_trunk)
+    recipe.agent.decision_memory = encoder
+    spec = TrainingJob(regime=recipe, experiment="fixture", pretrained=trunk)
     stage = spec.regime.stages[0]
     assert isinstance(stage, TrainSelfPlay) and stage.pretrained is None
     bound = spec.bound_regime(Path("/inputs")).stages[0]
@@ -114,7 +100,7 @@ def test_worker_branches_from_one_published_trunk(
     inputs = deliver(memory_trunk, tmp_path, spec)
     worker_environment(tmp_path, monkeypatch, spec)
     monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
-    monkeypatch.setenv("ETUDE_SEED", "39101")
+    monkeypatch.setenv("ETUDE_SEED", str(memory_trunk.seed))
     child = run_worker()
     record = child.stages[0]
     initial, _ = load_checkpoint(record.artifacts["initial_raw"]["path"])
@@ -192,7 +178,7 @@ def test_pretrained_worker_refuses_invalid_producer_before_updates(
 def test_pretrained_job_requires_one_unbound_starting_state() -> None:
     export = StagedExport(key="trunk", sha256="0" * 64, bytes=1)
     pretrained = PretrainedInitialization(
-        source_stage="fit", source_run=export, checkpoint=export
+        source_stage="fit", source_seed=197, source_run=export, checkpoint=export
     )
     for other in (
         {"initial_checkpoint": export},
@@ -219,3 +205,132 @@ def test_pretrained_job_requires_one_unbound_starting_state() -> None:
     ).bound_regime(Path("/inputs"))
     with pytest.raises(ValueError, match="bound from its inputs"):
         TrainingJob(regime=bound, experiment="fixture", pretrained=pretrained)
+
+
+@pytest.mark.parametrize("weights", ["raw", "ema"])
+@pytest.mark.parametrize("prefix", ["", "workspace/"])
+def test_reads_published_pretrained_initialization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    memory_trunk: TrainingRun,
+    weights: Literal["raw", "ema"],
+    prefix: str,
+) -> None:
+    storage = published_trunk(memory_trunk, tmp_path)
+    # Exercise bucket-relative input keys without credentials or a remote read.
+    bucket = S3Storage(
+        "fixture",
+        prefix=prefix,
+        client=SimpleNamespace(
+            meta=SimpleNamespace(endpoint_url="https://fixture.invalid")
+        ),
+    )
+    monkeypatch.setattr(bucket, "get", storage.get)
+    trunk = PretrainedInitialization.from_storage(
+        bucket,
+        "trunks/run.json",
+        source_stage=memory_trunk.stages[0].id,
+        weights=weights,
+    )
+    assert trunk.source_seed == memory_trunk.seed
+    assert trunk.weights == weights
+    assert trunk.source_stage == memory_trunk.stages[0].id
+    for export in (trunk.source_run, trunk.checkpoint):
+        assert export.key.startswith(prefix + "trunks/")
+        data = storage.get(export.key.removeprefix(prefix))
+        assert (hashlib.sha256(data).hexdigest(), len(data)) == (
+            export.sha256,
+            export.bytes,
+        )
+
+
+@pytest.mark.parametrize(
+    "fault", ["run", "stage", "missing-stage", "role", "digest", "size"]
+)
+def test_published_pretrained_reader_refuses_invalid_exports(
+    tmp_path: Path,
+    memory_trunk: TrainingRun,
+    fault: str,
+) -> None:
+    storage = published_trunk(memory_trunk, tmp_path)
+    producer = memory_trunk.model_copy(deep=True)
+    stage = producer.stages[0]
+    source_stage = stage.id
+    message = "completed"
+    if fault == "run":
+        producer.status = "failed"
+    elif fault == "stage":
+        stage.status = "failed"
+    elif fault == "missing-stage":
+        source_stage = "absent"
+    elif fault == "role":
+        del stage.artifacts["ema"]
+        message = "no ema weight export"
+    elif fault == "digest":
+        path = Path(stage.artifacts["ema"]["path"])
+        data = storage.get(f"trunks/{path.name}")
+        storage.put(f"trunks/{path.name}", bytes([data[0] ^ 1]) + data[1:])
+        message = "hash/size mismatch"
+    else:
+        stage.artifacts["ema"]["bytes"] += 1
+        message = "hash/size mismatch"
+    storage.put("trunks/run.json", producer.model_dump_json().encode())
+    with pytest.raises(ValueError, match=message):
+        PretrainedInitialization.from_storage(
+            storage,
+            "trunks/run.json",
+            source_stage=source_stage,
+            weights="ema",
+        )
+
+
+def test_branch_builder_declares_shared_inputs_and_matching_seed_labels() -> None:
+    export = StagedExport(key="trunk", sha256="0" * 64, bytes=1)
+    trunk = PretrainedInitialization(
+        source_stage="fit",
+        source_seed=39101,
+        source_run=export,
+        checkpoint=export,
+        weights="ema",
+    )
+    recipe = ema_regime(2)
+    recipe.observation = ObservationConfig(
+        max_decision_records=64,
+        max_decision_reference_details=65536,
+        max_decision_references=1024,
+        max_decision_members=16384,
+    )
+    recipe.agent.attention_on = True
+    recipe.agent.policy_film = True
+    stage = recipe.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.execution.collection_rows = 2
+    stage.execution.bootstrap_rows = 2
+    stage.execution.learner_rows = 2
+    requests = branch_jobs(
+        "HEAD",
+        regime=recipe,
+        trunks={39101: trunk},
+        max_hours=1,
+        max_usd=Decimal("0.25"),
+    )
+    specs = [
+        TrainingJob.model_validate_json(each.job.config or "") for each in requests
+    ]
+    assert {spec.regime.agent.decision_memory for spec in specs} == {
+        "none",
+        "transformer",
+        "gru",
+    }
+    assert all(each.seed == trunk.source_seed for each in requests)
+    assert all(spec.pretrained == trunk for spec in specs)
+    assert all(spec.experiment == "opponent_memory" for spec in specs)
+    assert all(each.job.inputs == requests[0].job.inputs for each in requests)
+    with pytest.raises(ValueError, match="match its producer seed"):
+        branch_jobs(
+            "HEAD",
+            regime=recipe,
+            trunks={39102: trunk},
+            max_hours=1,
+            max_usd=Decimal("0.25"),
+        )

@@ -342,6 +342,15 @@ through normal policy admission. Keep the frozen regime's starting-state fields
 empty. Choose only one of `pretrained`, `initial_checkpoint` or `continuation`.
 Pretrained branches start at iteration 1 with fresh Adam and EMA.
 
+Use `PretrainedInitialization.from_storage(storage, record_key,
+source_stage="fit", weights="ema")` to read a published producer from Etude
+Storage. It requires a completed run and stage and verifies the selected
+export's SHA256 and size against the record before returning input references.
+Exports must be beside `run.json`, under their recorded filenames; S3 input keys
+include the storage prefix. The returned `source_seed` identifies the producer
+for branch-label checks; it does not choose the new learner's seed. Missing
+objects and storage failures propagate rather than producing an empty result.
+
 `TrainingJob.continuation` (`LearnerContinuation`) continues another run's
 learner from its published `run.json` and raw/EMA/Adam exports, bound as a
 `LearningStateImport` (see [portable continuation](#portable-learner-continuation));
