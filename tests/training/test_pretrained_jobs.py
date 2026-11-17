@@ -1,6 +1,5 @@
 """Published trunks reach fresh control/memory learners through staged job inputs."""
 
-from decimal import Decimal
 import hashlib
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +12,6 @@ import pytest
 import torch
 
 from experiments import opponent_memory
-from experiments.opponent_memory import branch_jobs
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
@@ -24,7 +22,6 @@ from manabot.experiment.job import (
     TrainingJob,
     run_worker,
 )
-from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -295,60 +292,6 @@ def test_published_pretrained_reader_refuses_invalid_exports(
         )
 
 
-def test_branch_builder_declares_shared_inputs_and_matching_seed_labels() -> None:
-    export = StagedExport(key="trunk", sha256="0" * 64, bytes=1)
-    trunk = PretrainedInitialization(
-        source_stage="fit",
-        source_seed=39101,
-        source_run=export,
-        checkpoint=export,
-        weights="ema",
-    )
-    recipe = ema_regime(2)
-    recipe.observation = ObservationConfig(
-        max_decision_records=64,
-        max_decision_reference_details=65536,
-        max_decision_references=1024,
-        max_decision_members=16384,
-    )
-    recipe.agent.attention_on = True
-    recipe.agent.policy_film = True
-    stage = recipe.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.execution.collection_rows = 2
-    stage.execution.bootstrap_rows = 2
-    stage.execution.learner_rows = 2
-    requests = branch_jobs(
-        "HEAD",
-        regime=recipe,
-        trunks={39101: trunk},
-        max_hours=1,
-        max_usd=Decimal("0.25"),
-        milestones=(1,),
-    )
-    specs = [
-        TrainingJob.model_validate_json(each.job.config or "") for each in requests
-    ]
-    assert {spec.regime.agent.decision_memory for spec in specs} == {
-        "none",
-        "gru",
-    }
-    assert all(each.seed == trunk.source_seed for each in requests)
-    assert all(spec.pretrained == trunk for spec in specs)
-    assert all(spec.experiment == "opponent_memory" for spec in specs)
-    assert all(spec.milestones == (1,) for spec in specs)
-    assert all(each.job.inputs == requests[0].job.inputs for each in requests)
-    with pytest.raises(ValueError, match="match its producer seed"):
-        branch_jobs(
-            "HEAD",
-            regime=recipe,
-            trunks={39102: trunk},
-            max_hours=1,
-            max_usd=Decimal("0.25"),
-            milestones=(),
-        )
-
-
 @pytest.mark.parametrize("state", ["missing", "running", "finished"])
 def test_pilot_requires_completed_trunk_for_every_seed(
     tmp_path: Path,
@@ -450,7 +393,12 @@ def test_pilot_branches_from_three_published_ema_trunks(
             assert isinstance(stage, TrainSelfPlay)
             assert stage.target_learner_transitions == 4_400_000
             assert spec.milestones == (20, 40, 60)
+            assert spec.experiment == "opponent_memory"
+        assert [spec.regime.agent.decision_memory for spec in specs] == ["none", "gru"]
         assert specs[1].regime.agent.decision_memory_gate_scale == 2.0
+    assert requests[0].job.inputs == requests[1].job.inputs
+    with pytest.raises(ValueError, match="seed 39102: trunk receipt names seed 39101"):
+        opponent_memory._published_trunk(storage, "trunk-39101", 39102)
     runs.pop()
     with pytest.raises(ValueError, match="seed 39103: expected one trunk"):
         opponent_memory.training_jobs("HEAD", trunks=str(storage.root))

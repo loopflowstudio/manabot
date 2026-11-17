@@ -1,25 +1,25 @@
 """Exploratory whole-game opponent-memory pilot (Task 3dca91).
 
 The report (`opponent_memory.md`) owns the design, evidence and open decisions.
-`training_jobs` declares three trunks, or six EMA branches with `trunks`.
+`training_jobs` declares three trunks, or six EMA branches with `trunks`;
+each `PilotStage` owns its stage's horizon and caps.
 Frozen calibration runs retain their original source commits and receipts.
 `census` and `probe` are the USD0 commands. Nothing runs on import.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from itertools import combinations
 from pathlib import Path
 import random
-from typing import Literal
 
 from etude.eval.match import Tables
 from etude.eval.records import Benchmark, Environment, Inference, Match, Seating
 from etude.experiment import observe
 from etude.jobs import EvalJob, ExperimentState, TrainingRunSummary
+from etude.launch.records import Job
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
 from etude.spec import RunRequest
 from etude.storage import Storage, run_prefix, storage_from_uri
@@ -28,32 +28,27 @@ from pydantic import BaseModel, ConfigDict
 from experiments.elemental_grid import DECKS, PACK
 from experiments.learning_signal import Design, Pairing
 from manabot.experiment.job import PretrainedInitialization, TrainingJob, machine_setup
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
+from manabot.recipes.builders import sampled_self_play
 from manabot.sim.matchup import AuthoredMatchup
+from manabot.training.decks import UniformDecks
+from manabot.training.panels import ML, PERF
 from manabot.training.records import TrainingRun
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import (
+    DampedPolicyLearning,
+    LearnerDecisionSchedule,
+    TrainingRegime,
+    TrainSelfPlay,
+)
 import managym
 from managym.disclosure import DecklistDisclosure
 
-
-@dataclass(frozen=True)
-class Arm:
-    """One encoder/summary choice over the shared viewer decision log."""
-
-    name: str
-    encoder: Literal["none", "transformer", "gru"]
-    summaries: int
-
-
-# K=1 remains frozen; throughput-first direction keeps only the GRU encoder.
-ARMS = (
-    Arm("control", "none", 0),
-    Arm("gru-k1", "gru", 1),
-)
+# Arm name -> encoder over the shared viewer decision log. One summary (K=1)
+# is the model default; throughput-first direction keeps only the GRU encoder.
+ARMS = {"control": "none", "gru-k1": "gru"}
 SEEDS = (39101, 39102, 39103)
 DISCLOSURES: tuple[DecklistDisclosure, ...] = ("open", "closed")
-# Inclusive of calibration, training, evaluation, startup and failed attempts.
-MAX_USD = 50
 
 
 @dataclass(frozen=True)
@@ -74,58 +69,75 @@ EXPERIMENT = Path(__file__).stem
 
 
 def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
-    """Declare trunks, or branch both arms from every completed published trunk."""
-    if trunks:
-        storage = storage_from_uri(trunks)
-        state = observe(storage, EXPERIMENT)
-        parents: dict[int, PretrainedInitialization] = {}
-        for seed in SEEDS:
-            runs = [
-                run
-                for run in state.runs
-                if run.launch == "decision-memory-trunk" and run.seed == seed
-            ]
-            if len(runs) != 1:
-                raise ValueError(f"seed {seed}: expected one trunk, found {len(runs)}")
-            run = runs[0]
-            if run.state != "finished":
-                raise ValueError(f"seed {seed}: trunk is unfinished ({run.state})")
-            parents[seed] = _published_trunk(storage, run.name, seed)
-        return branch_jobs(
-            revision,
-            regime=pilot_recipe(BRANCH),
-            trunks=parents,
-            max_hours=BRANCH.max_hours,
-            max_usd=BRANCH.max_usd,
-            milestones=MILESTONES,
-        )
-    recipe = pilot_recipe(TRUNK)
-    recipe.id = "decision-memory-trunk"
-    return (
-        TrainingJob(regime=recipe, experiment=EXPERIMENT)
-        .job(
-            repo=ROOT,
-            revision=revision,
-            max_hours=TRUNK.max_hours,
-            max_usd=TRUNK.max_usd,
-        )
-        .runs(*SEEDS)
+    """Declare trunks, or branch both arms from every completed published trunk.
+
+    Each seed's two arms share one producer receipt and EMA export. Their
+    optimizer and learner-decision schedule start fresh at the branch point.
+    """
+    if not trunks:
+        return _job(revision, TRUNK, "trunk").runs(*SEEDS)
+    storage = storage_from_uri(trunks)
+    state = observe(storage, EXPERIMENT)
+    parents: dict[int, PretrainedInitialization] = {}
+    for seed in SEEDS:
+        runs = _runs(state, "trunk", seed)
+        if len(runs) != 1:
+            raise ValueError(f"seed {seed}: expected one trunk, found {len(runs)}")
+        if runs[0].state != "finished":
+            raise ValueError(f"seed {seed}: trunk is unfinished ({runs[0].state})")
+        parents[seed] = _published_trunk(storage, runs[0].name, seed)
+    return [
+        request
+        for seed, trunk in parents.items()
+        for arm in ARMS
+        for request in _job(revision, BRANCH, arm, trunk).runs(seed)
+    ]
+
+
+def _job(
+    revision: str,
+    limits: PilotStage,
+    name: str,
+    trunk: PretrainedInitialization | None = None,
+) -> Job:
+    """One capped Etude job: a trunk, or an arm started from a trunk's EMA."""
+    recipe = pilot_recipe(limits)
+    recipe.id = f"decision-memory-{name}"
+    if trunk is not None:
+        recipe.agent.decision_memory = ARMS[name]
+        if ARMS[name] != "none":
+            recipe.agent.decision_memory_gate_scale = 2.0
+    return TrainingJob(
+        regime=recipe,
+        experiment=EXPERIMENT,
+        pretrained=trunk,
+        milestones=MILESTONES if trunk is not None else (),
+    ).job(
+        repo=ROOT,
+        revision=revision,
+        max_hours=limits.max_hours,
+        max_usd=limits.max_usd,
     )
+
+
+def _runs(state: ExperimentState, name: str, seed: int) -> list[TrainingRunSummary]:
+    return [
+        run
+        for run in state.runs
+        if run.launch == f"decision-memory-{name}" and run.seed == seed
+    ]
 
 
 def _published_trunk(storage: Storage, run: str, seed: int) -> PretrainedInitialization:
     """Resolve the sole completed attempt; failed retries cannot supply weights."""
     folder = run_prefix(run)
-    records = [
-        key
-        for key in storage.keys(folder)
-        if key.startswith(f"{folder}attempts/") and key.endswith("/training/run.json")
-    ]
     try:
         completed = [
             key
-            for key in records
-            if TrainingRun.model_validate_json(storage.get(key)).status == "completed"
+            for key in storage.keys(folder)
+            if key.startswith(f"{folder}attempts/")
+            and key.endswith("/training/run.json")
+            and TrainingRun.model_validate_json(storage.get(key)).status == "completed"
         ]
         if len(completed) != 1:
             raise ValueError(
@@ -144,66 +156,19 @@ def _published_trunk(storage: Storage, run: str, seed: int) -> PretrainedInitial
     return trunk
 
 
-def branch_jobs(
-    revision: str,
-    *,
-    regime: TrainingRegime,
-    trunks: Mapping[int, PretrainedInitialization],
-    max_hours: float,
-    max_usd: Decimal,
-    milestones: tuple[int, ...],
-) -> list[RunRequest]:
-    """Freeze control/GRU branches from published trunk inputs without launching.
-
-    Each seed's two arms share one producer receipt and EMA export. Their
-    optimizer and learner-decision schedule start fresh at the branch point.
-    """
-    if not trunks or any(seed not in SEEDS for seed in trunks):
-        raise ValueError("branches require declared pilot seed labels")
-    if regime.agent.decision_memory != "none":
-        raise ValueError("the shared branch recipe must describe the control")
-    if any(trunk.weights != "ema" for trunk in trunks.values()):
-        raise ValueError("all branches use the same EMA trunk role")
-    if any(trunk.source_seed != seed for seed, trunk in trunks.items()):
-        raise ValueError("each branch seed label must match its producer seed")
-    jobs: list[RunRequest] = []
-    for seed, trunk in sorted(trunks.items()):
-        for arm in ARMS:
-            configuration = regime.model_copy(deep=True)
-            configuration.id = f"decision-memory-{arm.name}"
-            configuration.agent.decision_memory = arm.encoder
-            if arm.summaries:
-                configuration.agent.decision_memory_summaries = arm.summaries
-                configuration.agent.decision_memory_gate_scale = 2.0
-            job = TrainingJob(
-                regime=configuration,
-                experiment=EXPERIMENT,
-                pretrained=trunk,
-                milestones=milestones,
-            ).job(
-                repo=ROOT,
-                revision=revision,
-                max_hours=max_hours,
-                max_usd=max_usd,
-            )
-            jobs.extend(job.runs(seed))
-    return jobs
-
-
-def pilot_design() -> Design:
-    """Two hundred held-out deals; shorter readouts use the same first fifty."""
-    rng = random.Random(39100)
-    pairs = tuple(combinations(DECKS, 2))
-    return Design(
-        name="decision-memory-elemental-v1",
-        pack=PACK,
-        pairings=tuple(
-            Pairing(role_a=a, role_b=b, deal=3_910_000_000 + i)
-            for i, (a, b) in enumerate(rng.choices(pairs, k=200))
-        ),
-        matchup_mode="cross",
-        game_seconds=600,
-    )
+# Two hundred held-out deals; shorter readouts use the same first fifty.
+DESIGN = Design(
+    name="decision-memory-elemental-v1",
+    pack=PACK,
+    pairings=tuple(
+        Pairing(role_a=a, role_b=b, deal=3_910_000_000 + i)
+        for i, (a, b) in enumerate(
+            random.Random(39100).choices(tuple(combinations(DECKS, 2)), k=200)
+        )
+    ),
+    matchup_mode="cross",
+    game_seconds=600,
+)
 
 
 class Conditions(BaseModel):
@@ -221,67 +186,55 @@ def seating_name(seed: int, disclosure: str, tag: str, point: int | str) -> str:
     return f"seed-{seed}-{disclosure}-{tag}-{point}"
 
 
-def _branch(state: ExperimentState, seed: int, arm: str) -> TrainingRunSummary | None:
-    found = [
-        run
-        for run in state.runs
-        if run.launch == f"decision-memory-{arm}" and run.seed == seed
-    ]
-    if len(found) > 1:
-        raise ValueError(f"seed {seed}: multiple {arm} branches")
-    return found[0] if found else None
-
-
 def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
     """Equal-update interiors and each completed branch's own final checkpoint."""
-    design = pilot_design()
     source = [*sorted((ROOT / "manabot").rglob("*.py")), Path(__file__)]
     intact = Inference(source=source)
     blanked = Inference(source=source, config={"blank_decision_memory": True})
     found: list[Seating] = []
     for seed in SEEDS:
-        control, gru = (_branch(state, seed, arm.name) for arm in ARMS)
-        if control is None or gru is None:
+        branches: list[TrainingRunSummary] = []
+        for arm in ARMS:
+            runs = _runs(state, arm, seed)
+            if len(runs) > 1:
+                raise ValueError(f"seed {seed}: multiple {arm} branches")
+            branches += runs
+        if len(branches) != len(ARMS):
             continue
-        points = [
+        control, gru = branches
+        # (point, tag, checkpoint, opposing checkpoint, opposing inference, deals)
+        lines = [
             (
                 update,
+                "control",
                 gru.checkpoints.at("updates", update).last,
                 control.checkpoints.at("updates", update).last,
-                "control",
+                intact,
+                50,
             )
             for update in MILESTONES
         ]
-        points += [
-            ("final", gru.final, control.final, "control"),
-            ("final", gru.final, gru.final, "reliance"),
+        lines += [
+            ("final", "control", gru.final, control.final, intact, 200),
+            ("final", "reliance", gru.final, gru.final, blanked, 50),
         ]
-        for point, first, second, tag in points:
+        for point, tag, first, second, inference, deals in lines:
             if first is None or second is None:
                 continue
-            pairings = (
-                design.pairings
-                if point == "final" and tag == "control"
-                else design.pairings[:50]
-            )
             for disclosure in DISCLOSURES:
-                conditions = tuple(
-                    Conditions(
-                        design=design.name,
-                        decklists=disclosure,
-                        **pairing.model_dump(),
-                    ).model_dump()
-                    for pairing in pairings
-                )
                 found.append(
                     Seating(
                         name=seating_name(seed, disclosure, tag, point),
-                        players=(
-                            first.player(intact),
-                            second.player(blanked if tag == "reliance" else intact),
+                        players=(first.player(intact), second.player(inference)),
+                        configs=tuple(
+                            Conditions(
+                                design=DESIGN.name,
+                                decklists=disclosure,
+                                **pairing.model_dump(),
+                            ).model_dump()
+                            for pairing in DESIGN.pairings[:deals]
                         ),
-                        configs=conditions,
-                        games=design.legs,
+                        games=DESIGN.legs,
                         tags=(tag,),
                         # Fixed checkpoint pair: report this seed independently
                         # of the other runs grouped under the same job.
@@ -296,17 +249,16 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     seatings = evaluation_matchups(state)
     if not seatings:
         return []
-    design = pilot_design()
     return [
         EvalJob(
             tournament=Benchmark(
-                name=design.name,
+                name=DESIGN.name,
                 environment=Environment(
-                    name=design.name,
+                    name=DESIGN.name,
                     files=canonical_sha256(
                         {
                             "world": managym.world_identity(),
-                            "design": design.record(),
+                            "design": DESIGN.record(),
                             "disclosures": DISCLOSURES,
                         }
                     ),
@@ -333,32 +285,29 @@ def play(match: Match) -> Tables:
 
     torch.set_num_threads(1)
     conditions = Conditions.model_validate(match.config)
-    design = pilot_design()
     pairing = Pairing(
         role_a=conditions.role_a, role_b=conditions.role_b, deal=conditions.deal
     )
-    if conditions.design != design.name or pairing not in design.pairings:
+    if conditions.design != DESIGN.name or pairing not in DESIGN.pairings:
         raise ValueError("evaluation conditions differ from the frozen schedule")
     return play_pairing(
         match,
         matchup=AuthoredMatchup(
-            pack_key=design.pack,
+            pack_key=DESIGN.pack,
             role_a=pairing.role_a,
             role_b=pairing.role_b,
             decklists=conditions.decklists,
         ),
         deal=pairing.deal,
-        matchup_mode=design.matchup_mode,
-        game_seconds=design.game_seconds,
-        arena=design.name,
+        matchup_mode=DESIGN.matchup_mode,
+        game_seconds=DESIGN.game_seconds,
+        arena=DESIGN.name,
         backend=BACKEND,
     )
 
 
 def report() -> Report:
     """Use the existing Elemental matchup panels and the learner-decision clock."""
-    from manabot.training.panels import ML, PERF
-
     return Report(
         score=Score(table="plays", value="score", reference=0.5),
         clock="learner_transitions",
@@ -405,16 +354,6 @@ def report() -> Report:
 
 def pilot_recipe(limits: PilotStage) -> TrainingRegime:
     """Shared control recipe, bounded by the stage's horizon and job wall."""
-    from manabot.infra.config import ModelConfig, ObservationConfig
-    from manabot.recipes.builders import sampled_self_play
-    from manabot.training.decks import UniformDecks
-    from manabot.training.regime import (
-        DampedPolicyLearning,
-        LearnerDecisionSchedule,
-        TrainSelfPlay,
-    )
-    import managym
-
     # Reserve twenty minutes of the job for setup and publishing artifacts.
     wall_seconds = limits.max_hours * 3600 - 1200
     observation = ObservationConfig(
@@ -433,7 +372,6 @@ def pilot_recipe(limits: PilotStage) -> TrainingRegime:
             num_attention_heads=4,
             value_aggregation="masked_mean",
             policy_film=True,
-            decision_memory_summaries=1,
         ),
         # Bind the explicit execution limits before enabling memory capture.
         observation=ObservationConfig(),
@@ -488,8 +426,7 @@ def main() -> None:
         from manabot.verify.decision_memory_capacity import run_census
 
         run_census(args.out)
-        return
-    if args.operation == "probe":
+    else:
         from manabot.backends.torch.decision_memory_probe import (
             MAX_WALL_SECONDS,
             MIN_GAMES,
@@ -510,7 +447,6 @@ def main() -> None:
             max_games=args.max_games,
             wall_seconds=args.wall_seconds,
         )
-        return
 
 
 if __name__ == "__main__":
