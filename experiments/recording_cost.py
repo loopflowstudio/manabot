@@ -49,6 +49,18 @@ class Probe(BaseModel):
     source_bundle: SourceBundle
 
 
+def _cell_environment(repeat: int, arm: str, destination: Path) -> dict[str, str]:
+    """Keep each cell's tracking identity distinct within the one rental."""
+    environment = dict(os.environ)
+    name = f"{environment.get('ETUDE_RUN', 'recording-cost')}-r{repeat}-{arm}"
+    environment.update(
+        ETUDE_RUN=name,
+        ETUDE_RUN_ADDRESS=f"{EXPERIMENT}/{name}",
+        ETUDE_OUTPUT_DIR=str(destination),
+    )
+    return environment
+
+
 def cell(arm: str, output: Path) -> None:
     """Run one ordinary training cell; refuse a CPU fallback or failed stage."""
     if not torch.cuda.is_available():
@@ -100,6 +112,7 @@ def run(probe: Probe) -> None:
                 ],
                 check=True,
                 timeout=1500,
+                env=_cell_environment(repeat, arm, destination),
             )
             receipt = json.loads((destination / "receipt.json").read_text())
             stage = receipt["stages"][0]

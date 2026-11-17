@@ -127,3 +127,22 @@ with a fresh prospective source commit; earlier attempts above are unchanged.
 The $5 job cap and $25 total experiment cap remain. No rate is claimed before
 successful CUDA receipts. The expected report is the incremental collection
 and update cost of each option relative to off, with median and full range.
+
+Continuation launch `c305376580de`, requested run
+`recording_cost/measure-20261117-978cec8`, uses frozen source
+`978cec8bc245c07f74fbadb4ea159797479e1d7a`. A6000 quote: $0.69/hour,
+$2.2425 startup-inclusive window, $5 job cap. Machine
+`mtg338-a6000-6cc7927810d1`, attempt `7c76315579b7`, admitted at
+2026-11-17 02:33:42 UTC. Initial receipt retrieval hit a storage timeout;
+no duplicate acquisition was requested. Measurement and settlement pending.
+
+The continuation at `978cec8bc2` completed its baseline: 213,509 decisions,
+four updates, 1,029 completed games, zero crashed/abandoned games;
+1,790.827 collection decisions/s and 43.239 seconds/update. These are one
+unpaired cell, not an overhead estimate. The second cell failed with
+`run_identity_conflict`: the launcher tracking identity was shared across
+subprocess cells although their configurations differed. RunPod's complete
+inventory confirmed the pod absent after termination. A prospective repair
+gives each cell a distinct tracking identity inside the one rental. A local
+tracking-only admission creates both off and statistics declarations with
+separate configs successfully; no training ran in that check.
