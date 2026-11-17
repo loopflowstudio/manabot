@@ -25,6 +25,11 @@ Collection plus learning: **43.239 seconds/update**. This is n=1, no range,
 and no option-cost estimate. The repaired comparison at `a5afe273f3` must run
 fresh matched baselines on its eventual host; do not reuse this one across hosts.
 
+- 2026-11-17: the driver ran regimes through the retired regime executor, so
+  it was removed when run execution moved to Etude. It remains at
+  `dcee96ccd1:experiments/recording_cost.py`; a fresh measurement needs a
+  driver over `manabot.training.loops.self_play` with `SelfPlay.run_settings`.
+
 ## Earlier option-only method
 
 The frozen driver is `experiments/recording_cost.py` at

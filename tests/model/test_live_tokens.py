@@ -3,8 +3,10 @@
 import pytest
 import torch
 
+from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
+from manabot.training.rollout.collection import collect
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -31,7 +33,7 @@ def _pair(
 
 def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
     """Decisions from played turns, so boards hold different object counts."""
-    batch = case.collector.collect(case.agent, 24)
+    batch = collect(case.collector, case.agent, 24)
     return {
         key: torch.from_numpy(value[-8:, 0]).float()
         for key, value in batch.observations().observation.items()
@@ -92,3 +94,24 @@ def test_padded_policy_measures_no_live_count() -> None:
     with torch.no_grad(), PolicyInference(case.agent) as scope:
         batch = scope.prepare(host_inputs(case.obs))
         assert batch is not None and batch.live_index is None
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA attention backward")
+def test_short_packed_minibatch_cuda_backward() -> None:
+    attention = torch.nn.MultiheadAttention(64, 4, batch_first=True, device="cuda")
+    packed = torch.randn(5, 64, requires_grad=True, device="cuda")
+    live = LiveTokens(
+        torch.tensor([0, 1, 58, 59, 60], device="cuda"),
+        torch.tensor([0, 2, 5], device="cuda"),
+        batch=2,
+        slots=58,
+    )
+    (actual,) = torch.autograd.grad(
+        live.self_attention(attention, packed).sum(), packed
+    )
+    reference = sum(
+        attention(row, row, row, need_weights=False)[0].sum()
+        for row in packed.split((2, 3))
+    )
+    (expected,) = torch.autograd.grad(reference, packed)
+    torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-4)

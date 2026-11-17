@@ -119,10 +119,10 @@ checkpoints or experiment evidence.
 - An experiment whose whole cost is at or under USD25 launches under the
   launcher's cap (`--max-usd`). Above that, a person approves the amount first.
 - Etude rental admission includes the on-demand startup allowance in addition
-  to `Job.max_hours`. Size both job and cohort dollar caps for that whole
+  to `Job.max_hours`. Size both job and experiment dollar caps for that whole
   window; a price offer does not guarantee provider capacity.
 - An experiment is `experiments/<name>.py` at a commit with one report,
-  `experiments/<name>.md`. Do not add a protocol document, a serialized regime,
+  `experiments/reports/<name>.md`. Do not add a protocol document, a serialized regime,
   a digest check or a test suite for one experiment's schedule; reusable
   machinery belongs in `manabot/` or Etude, tested once there.
 - Paired deals, replay verification, world-bound checkpoints and training
@@ -143,8 +143,9 @@ checkpoints or experiment evidence.
 - Keep docstrings concise, but include non-obvious contracts, side effects,
   and failure behavior. Do not repeat signatures in `Args:` / `Returns:`
   boilerplate or narrate obvious statements. Update comments with behavior.
-- Put imports at the top; use explicit imports and underscore-prefixed private
-  helpers. Keep one implementation and one owner for each fact; use git for
+- Put imports at the top; use explicit imports. Do not prefix a function with
+  an underscore merely because it is used only within its module.
+  Keep one implementation and one owner for each fact; use git for
   old versions rather than `_new`, `_old`, or `_backup` variants.
 - Import names from their defining modules (`manabot.env.observation`, not
   `manabot.env`); package `__init__` files re-export nothing, so evaluation
@@ -166,6 +167,67 @@ checkpoints or experiment evidence.
   Integer lookups, masks and admission run once on the host in `prepare`; do
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
+
+### Functions and objects (Python)
+
+Use a class where it offers something genuinely valuable, and avoid one where
+it does not. An object is a thing; a function is what happens. A class earns
+its place as a value, a resource or an interchangeable part, where the type
+guarantees something every user relies on. Functions do the work: anything
+with steps, a loop or an order of operations. A class whose methods sequence the
+work (an executor, trainer, manager, runner or collector) is the shape to
+avoid; write the loop as a function whose body shows each step
+(`manabot/training/loops/self_play.py`:
+`row = step(settings, learner, ema, collector, counts, rng, out=run.out)`).
+That step updates the registered learner, EMA and counters in place because
+Etude saves those same objects through `run.resume`.
+
+Where classes are valuable here, with the examples to copy:
+
+- **Configurations and records** (`ObservationConfig`, `ModelConfig`,
+  `MatchConfig`, `Learning`, `GameErrorPolicy`, the `llm/schema.py`
+  records). A config is the model object: it refuses a bad value when it is
+  built, compares and hashes by content, serializes with stable keys into
+  checkpoints and frozen evidence, and is copied rather than edited
+  (`model_copy(update=...)`, `dataclasses.replace`). It may own validators
+  and pure derivations of its own fields (a digest, a derived size). It does
+  not open files, build runtime objects or run anything; a function that
+  takes the config does.
+- **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
+  construction and `forward` there; training logic is functions over the
+  module.
+- **A resource with a lifetime** (`VLLMServer`,
+  `PolicyInference`, `ChildProcess`, native `managym` environments, Etude's
+  `Run`): something opened, used and closed. Make it a context manager, or a
+  `@contextmanager` function when there is no state to hold. Do not wrap
+  another library's handle in our own class to add methods.
+- **A guarded invariant** (`BudgetLedger`: spend never exceeds the cap across
+  restarts; `AdmittedRollout`: rows admitted once; `Profiler`: nested
+  timers). The methods exist so no caller can break the invariant; name it
+  in the docstring and keep orchestration out.
+- **Interchangeable parts behind one small interface** (the LLM runtimes,
+  the scenario trackers in `verify/scenarios.py`, the loop's `Tracker`
+  protocol). Declare the interface as a `Protocol`; pick an implementation
+  with a table or an argument, not an `isinstance` chain.
+- **Exceptions** callers catch by type or that carry a typed payload.
+
+These are examples, not a closed list. For a class of another kind, ask what
+it gives a caller that a dataclass and a few functions would not; if the
+answer is real, write the class.
+
+Everything else is functions:
+
+- Pass what a function needs and return what it produces: the next state,
+  not a mutated argument. A function that must change its argument in place
+  says so in its docstring; Torch modules and optimizers are the usual case.
+- No hidden state: no module globals that change, no environment reads below
+  the entry point, no callbacks that reach back into a caller's object.
+- No operator overloading to make data act like something else, and no
+  `try/except/finish` repeated in callers where a `with` would scope it.
+
+Apply this to new and changed code. Convert an existing class when the
+change already touches it; do not rewrite a module only for style. Rust in
+`managym/` follows its own README.
 
 ### Python typing
 
@@ -371,11 +433,11 @@ admission. Admission-rejection fixtures must mark the config as submitted
   the local files. Verify with
   `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
 - After a world or observation-shape change, validate current-world arena
-  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`.
+  admission and monitoring with `uv run --extra dev --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`.
 - Artifact storage and Etude integration tests require the `artifacts` extra.
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
-  `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q`.
+  `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py -q`.
 - Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
   `bench_steps` in release for the change and for the reference commit of
   `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
@@ -638,6 +700,9 @@ with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
 the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
+CLI subcommands import their execution runtime at the command boundary when
+needed to keep migration/help available without the training SDK.
+
 ### Etude training records
 
 A launched training job's experiment label must match the label supplied to
@@ -655,6 +720,15 @@ references; they are never checkpoints. Resolve a reference through its selected
 metric block's Storage and run prefix, after attempt/update supersession, so
 relocated evidence and resumed runs keep the same meaning.
 
+Etude report labels are the text metrics `run/kind` and `run/recipe`; explicit
+declaration kind/job fields take precedence. `RunData.points` reads numeric
+metrics only: read text through the stored block's series columns without
+decoding the entire update history.
+
+Etude requires every declared clock on each row, table and checkpoint. A
+missing checkpoint clock warns and skips recording; verify the recorded
+checkpoint, including downstream recipe outputs, rather than file existence.
+
 ### Etude card evaluation
 
 Etude page builds reload repository neighbours, including imported helpers.
@@ -664,10 +738,18 @@ while keeping new dependency imports (including Torch lazy registrations).
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
-namespace. Exercise discovery with `read_experiment` in runner tests, or
-`etude.launch.job_file.read_job_file` for a launch file with no `eval`. Local
+namespace or a `python -m` invocation's `__main__`; the same holds for agent
+loaders. Exercise discovery with `etude.controller.declarations.read_experiment` in runner tests,
+or `etude.controller.declarations.read_training_jobs` for a file's `training_jobs()`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
 only launched jobs receive that directory automatically.
+Etude imports evaluation callbacks by module and qualified name, including local
+runs; callbacks take `play(match, agents)`. A closure or callable instance is
+not a portable entry point. Managed jobs share `manabot.eval.agents.AGENTS`;
+`eval.agent_loader` alone chooses the framework/device, and game callbacks use
+the supplied agents in-process. Seating configs containing records with omitted fields must pass their JSON
+model dump, so a retained tournament compares alike on resume. Persistence fixtures that inject local outcomes use
+`tests/fixtures/evaluation_callbacks.py` across the real game process boundary.
 
 Etude hashes tracked source paths (`git add -N` admits new files for local
 implementation checks). Eval runs are sealed blocks: each game's card evidence
@@ -697,11 +779,16 @@ keep its simulation dependencies off the LLM-only path. Check this boundary in a
 fresh process with those imports blocked, and exercise mixed reports through the
 actual builder CLI in the existing headless Perf proof.
 
-The repository pins Etude's merged migration build through `tool.uv.sources`;
-PyPI's 0.4.0 does not contain that API. Etude's shared records, storage and
+Etude launched source is an extracted commit without `.git`. Read its revision
+through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
+loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
+continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
+
+The repository depends on the released Etude SDK from PyPI (0.4.1 or newer;
+0.4.0 lacks the experiment-file API). Etude's shared records, storage and
 errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
 uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
-`eval_jobs(state)`; discovery is in `etude.declarations`, state in `etude.jobs`.
+`eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.
 A resumed tracker uses `resume=True`; its first logged row sets the supersession
 coordinate, and an attempt that logs nothing supersedes nothing. Retained
 nested tracker declarations still decode through Etude's `RunRecord`.

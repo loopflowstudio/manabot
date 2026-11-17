@@ -1,5 +1,7 @@
 # MTG-175: curriculum selection on the MTG-183 training recipe
 
+> The code that ran this experiment was removed from main; the last commit with it is `b49df79b49`.
+
 Updated 2026-10-26: the study builds on MTG-183. The intended
 outcome remains an actual report comparing uniform U, moderate-matchup M,
 value-error E, and their equal-rank mixture ME, at **$10 inclusive per arm,

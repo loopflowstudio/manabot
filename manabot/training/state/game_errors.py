@@ -1,7 +1,10 @@
 """Settled game accounting and immutable private gameplay failure inputs.
 
-GameErrorPolicy declares prospective tolerance. GameErrorLedger fsyncs every
-settled attempt independently of optimizer snapshots, so an interrupted update
+GameErrorPolicy declares prospective tolerance. `settle` returns the state
+after one more settled attempt. A ledger is an append-only JSONL file named by
+`GameErrorLedger`: `open_ledger` reads earlier attempts' ledgers into a state
+and creates this attempt's file, and `append_attempt` fsyncs a receipt before
+counting it, independently of saved learner state, so an interrupted update
 cannot erase its error allowance. Games cut off by the run itself (allocation
 deadline, wall allowance, cancellation) are retained as abandoned attempts; they
 are not game errors and never enter the error window. The replay CLI executes
@@ -10,8 +13,8 @@ overwrites failure evidence.
 """
 
 import argparse
-from collections.abc import Mapping
-from dataclasses import asdict
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass
 from itertools import islice
 import json
 import os
@@ -103,6 +106,8 @@ class GameErrorState(BaseModel):
 
     attempted = completed + crashed + abandoned. Abandoned attempts and their
     samples are counted apart from errors, discards and replacement debt.
+    `replacement_debt` and `error_rate` are computed fields because run
+    records serialize them.
     """
 
     attempted: int = 0
@@ -116,32 +121,6 @@ class GameErrorState(BaseModel):
     window: list[bool] = []
     by_cell: dict[str, dict[str, int]] = {}
     stop_reason: str | None = None
-
-    def settle(self, attempt: GameAttempt, policy: GameErrorPolicy) -> None:
-        self.attempted += 1
-        match = attempt.matchup
-        cell = ":".join(
-            (
-                managym.Deck(match.hero_deck, match.hero_sideboard).identity,
-                managym.Deck(match.villain_deck, match.villain_sideboard).identity,
-                str(attempt.seat),
-            )
-        )
-        counts = self.by_cell.setdefault(cell, {})
-        counts[attempt.outcome] = counts.get(attempt.outcome, 0) + 1
-        if attempt.outcome in _RUN_INTERRUPTIONS:
-            self.abandoned += 1
-            self.abandoned_samples += attempt.discarded_samples
-            return
-        failed = attempt.outcome != "completed"
-        self.completed += int(not failed)
-        self.crashed += int(failed)
-        self.discarded_samples += attempt.discarded_samples
-        self.learned_samples += attempt.learned_samples
-        self.replacement_samples += min(self.replacement_debt, attempt.valid_samples)
-        self.window = [*self.window, failed][-policy.window :]
-        if len(self.window) >= policy.warmup and self.error_rate > policy.threshold:
-            self.stop_reason = "game_error_rate_exceeded"
 
     @computed_field
     @property
@@ -158,53 +137,116 @@ class GameErrorLimit(RuntimeError):
     """A retained rolling game error allowance has been exhausted."""
 
 
-class GameErrorLedger:
-    """Append-only local receipts. Parent ledgers remain immutable on resume.
+def settle(
+    state: GameErrorState, attempt: GameAttempt, policy: GameErrorPolicy
+) -> GameErrorState:
+    """The state after `attempt` settles; `state` is unchanged."""
+    match = attempt.matchup
+    cell = ":".join(
+        (
+            managym.Deck(match.hero_deck, match.hero_sideboard).identity,
+            managym.Deck(match.villain_deck, match.villain_sideboard).identity,
+            str(attempt.seat),
+        )
+    )
+    counts = dict(state.by_cell.get(cell, {}))
+    counts[attempt.outcome] = counts.get(attempt.outcome, 0) + 1
+    update: dict[str, object] = {
+        "attempted": state.attempted + 1,
+        "by_cell": {**state.by_cell, cell: counts},
+    }
+    if attempt.outcome in _RUN_INTERRUPTIONS:
+        return state.model_copy(
+            update=update
+            | {
+                "abandoned": state.abandoned + 1,
+                "abandoned_samples": state.abandoned_samples
+                + attempt.discarded_samples,
+            }
+        )
+    failed = attempt.outcome != "completed"
+    discarded = state.discarded_samples + attempt.discarded_samples
+    # Valid samples repay the debt as it stands after this attempt's discards.
+    repaid = min(discarded - state.replacement_samples, attempt.valid_samples)
+    window = [*state.window, failed][-policy.window :]
+    exceeded = (
+        len(window) >= policy.warmup and sum(window) / len(window) > policy.threshold
+    )
+    return state.model_copy(
+        update=update
+        | {
+            "completed": state.completed + int(not failed),
+            "crashed": state.crashed + int(failed),
+            "discarded_samples": discarded,
+            "learned_samples": state.learned_samples + attempt.learned_samples,
+            "replacement_samples": state.replacement_samples + repaid,
+            "window": window,
+            "stop_reason": "game_error_rate_exceeded"
+            if exceeded
+            else state.stop_reason,
+        }
+    )
 
-    A malformed/torn ledger fails closed: no guessed counter can grant more
-    recovery allowance. These paths are private trusted TrainingRun artifacts.
+
+@dataclass(frozen=True)
+class GameErrorLedger:
+    """One attempt's append-only receipt file and the policy it records.
+
+    These paths are private trusted training artifacts.
     """
 
-    def __init__(
-        self,
-        path: Path,
-        policy: GameErrorPolicy,
-        *,
-        parents: list[str] | None = None,
-    ) -> None:
-        self.path = path
-        self.policy = policy
-        self.state = GameErrorState()
-        expected_policy = policy.model_dump(mode="json")
-        for parent in parents or []:
-            with Path(parent).open() as stream:
-                for line in stream:
-                    entry = json.loads(line)
-                    if entry["policy"] != expected_policy:
-                        raise ValueError("game error ledger policy mismatch")
-                    self.state.settle(
-                        GameAttempt.model_validate(entry["attempt"]), policy
-                    )
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.touch(mode=0o600, exist_ok=False)
+    path: Path
+    policy: GameErrorPolicy
 
-    def record(
-        self, attempt: GameAttempt, context: Mapping[str, object]
-    ) -> GameErrorState:
-        entry = {
-            "schema": 1,
-            "policy": self.policy.model_dump(mode="json"),
-            "attempt": attempt.model_dump(mode="json"),
-            "context": dict(context),
-        }
-        # Retain the original prefix before updating counters or resetting native
-        # state. A crash between this fsync and a snapshot still counts on restart.
-        with self.path.open("a") as stream:
-            stream.write(json.dumps(entry, sort_keys=True, allow_nan=False) + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        self.state.settle(attempt, self.policy)
-        return self.state
+
+# Persists one settled game and returns the state that counts it.
+RecordAttempt = Callable[[GameErrorState, GameAttempt], GameErrorState]
+
+
+def open_ledger(
+    path: Path, policy: GameErrorPolicy, *, parents: Sequence[str] = ()
+) -> tuple[GameErrorLedger, GameErrorState]:
+    """Create this attempt's ledger; return it with the state `parents` settled.
+
+    Parent ledgers stay immutable. A malformed or torn ledger fails closed: no
+    guessed counter can grant more allowance. `path` must not exist.
+    """
+    state = GameErrorState()
+    expected_policy = policy.model_dump(mode="json")
+    for parent in parents:
+        with Path(parent).open() as stream:
+            for line in stream:
+                entry = json.loads(line)
+                if entry["policy"] != expected_policy:
+                    raise ValueError("game error ledger policy mismatch")
+                state = settle(
+                    state, GameAttempt.model_validate(entry["attempt"]), policy
+                )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(mode=0o600, exist_ok=False)
+    return GameErrorLedger(path, policy), state
+
+
+def append_attempt(
+    ledger: GameErrorLedger,
+    state: GameErrorState,
+    attempt: GameAttempt,
+    context: Mapping[str, object],
+) -> GameErrorState:
+    """Fsync `attempt`'s receipt, then return the state that counts it."""
+    entry = {
+        "schema": 1,
+        "policy": ledger.policy.model_dump(mode="json"),
+        "attempt": attempt.model_dump(mode="json"),
+        "context": dict(context),
+    }
+    # Retain the original prefix before updating counters or resetting native
+    # state. A crash after this fsync still counts on restart.
+    with ledger.path.open("a") as stream:
+        stream.write(json.dumps(entry, sort_keys=True, allow_nan=False) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    return settle(state, attempt, ledger.policy)
 
 
 def replay_attempt(attempt: GameAttempt) -> dict[str, object]:

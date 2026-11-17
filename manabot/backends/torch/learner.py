@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     # them loads neither the player's network nor the training configuration.
     from manabot.backends.torch.policy import ActorCritic
     from manabot.policy.checkpoint import ParameterArrays
-    from manabot.training.regime import Precision
+    from manabot.training.learning import Precision
 
 # -- Update step ---------------------------------------------------------------
 
@@ -166,7 +166,7 @@ def update_ema(averaged: nn.Module, model: nn.Module, rate: float) -> None:
 
 
 # -- Precision -----------------------------------------------------------------
-# Numeric precision a training stage declares in `Execution.precision`.
+# Numeric precision the settings declare (`SelfPlay.precision`).
 #
 # - `float32`: nothing changes; every helper here is a no-op.
 # - `tf32`: for the stage, CUDA matmul and cuDNN may use TF32 tensor cores
@@ -178,10 +178,9 @@ def update_ema(averaged: nn.Module, model: nn.Module, rate: float) -> None:
 #   reductions are float32; weights and Adam state stay float32 and no gradient
 #   scaler is used, since bf16 keeps float32's exponent range.
 #
-# A regime's `auto` resolves to `bf16` for wide models on CUDA and MPS and to
-# `float32` otherwise (`manabot.training.regime.ladder_precision`). Both reduced
-# precisions change numerics, so a saved regime keeps the precision it recorded.
-# `Execution` rejects `tf32` off CUDA and `bf16` on CPU.
+# Both reduced precisions change numerics, so nothing chooses one from the
+# device or the model's width. `SelfPlay` rejects `tf32` off CUDA and `bf16`
+# on CPU.
 
 
 # The process's switches before any stage set them. float32 keeps them, so float32

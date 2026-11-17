@@ -3,7 +3,8 @@ real inputs.
 
     uv run --extra mlx python -m manabot.backends.parity CHECKPOINT.pt --capture DIR
 
-`DIR` is a capture written by `experiments/mlx_pilot.py capture`: learner
+`DIR` is a capture as the MLX pilot wrote it
+(experiments/reports/mlx_pilot.md; its capture code is at revision 83b77e6c64): learner
 minibatches (`learner/NNN.npz` with `minibatches.json`) and collection calls
 (`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU.
 Each backend whose framework is installed (`BACKENDS`) loads the same weights

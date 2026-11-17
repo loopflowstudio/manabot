@@ -11,7 +11,7 @@ from manabot.eval.match import derive_seed, play_cell
 from manabot.eval.models import MatchRow
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_trace, replay_games
-from managym import WORLD_VERSION
+from managym import WORLD_VERSION, AgentError
 from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -100,9 +100,6 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
         assert normalize(reduce_cards(captured, participants)) == normalize(
             reduce_cards(retained, participants)
         )
-    counters = json.loads((tmp_path / "performance.json").read_text())["counters"]
-    assert counters["threads/group_worker"] >= 1
-    assert counters["threads_budget/group_worker"] == 8
 
 
 def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) -> None:
@@ -300,21 +297,43 @@ def test_native_worker_crash_and_timeout_are_retained(
     assert timed_out["winner"] is None
 
 
-def test_policy_exception_retains_player_failure(monkeypatch):
+def play_with_failing_player_build(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    events: list[tuple[str, dict[str, object]]],
+) -> None:
+    """Run one game whose first player raises `error` while being built."""
     from manabot.sim.native_game import execute_game
 
     _, players = selected_players()
     game = {"player_seeds": {p.player_id: 1 for p in players}}
 
-    def fail(*args, **kwargs):
-        raise RuntimeError("policy failed")
+    def fail(*args: object, **kwargs: object) -> None:
+        raise error
 
     monkeypatch.setattr("manabot.sim.native_game.build_code_player", fail)
-    messages = []
-    execute_game(game, players, {}, 1, messages.append)
-    result = messages[-1][1]
+    execute_game(game, players, {}, 1, events.append)
+
+
+def test_python_policy_error_propagates_without_a_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[tuple[str, dict[str, object]]] = []
+    with pytest.raises(RuntimeError, match="policy failed"):
+        play_with_failing_player_build(
+            monkeypatch, RuntimeError("policy failed"), events
+        )
+    assert all(kind != "result" for kind, _ in events)
+
+
+def test_native_policy_error_retains_the_responsible_player(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[tuple[str, dict[str, object]]] = []
+    play_with_failing_player_build(monkeypatch, AgentError("policy failed"), events)
+    result = events[-1][1]
     assert result["termination_reason"] == "crash"
-    assert result["failed_player_id"] == players[0].player_id
+    assert result["failed_player_id"] == selected_players()[1][0].player_id
     assert "policy failed" in result["failure"]
 
 
@@ -532,7 +551,7 @@ def test_player_crash_is_an_interrupted_record(monkeypatch: pytest.MonkeyPatch) 
 
     class BrokenPlayer:
         def act(self, env: object, obs: object) -> int:
-            raise RuntimeError("private policy detail")
+            raise AgentError("private policy detail")
 
     monkeypatch.setattr(
         "manabot.sim.native_game.build_code_player", lambda *a, **kw: BrokenPlayer()

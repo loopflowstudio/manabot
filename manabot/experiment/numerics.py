@@ -53,7 +53,7 @@ _CHECKS: tuple[tuple[str, list[str]], ...] = (
             "--no-sync",
             "pytest",
             "tests/training/test_numerical_health.py",
-            "tests/training/test_learning_state.py::test_segments_keep_adam_ema_and_absolute_coordinates",
+            "tests/training/test_self_play_loop.py::test_a_rerun_resumes_and_a_finished_loop_returns_at_once",
             "-q",
         ],
     ),

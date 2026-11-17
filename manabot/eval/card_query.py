@@ -865,7 +865,7 @@ def _card_schedule(
 
 def _is_card_match(match: Match) -> bool:
     try:
-        CardConditions.model_validate(match.conditions)
+        CardConditions.model_validate(match.config)
     except ValueError:
         return False
     return True

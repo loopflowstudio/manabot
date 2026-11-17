@@ -19,19 +19,16 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.experiment.config import Case, Environment, Experiment, ModelOverride
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
     ObservationConfig,
     RewardConfig,
 )
-from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import collect, open_collector
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
-from tests.training.wdl_baseline import wdl_baseline
 
 PACK = "ur-lessons-vs-gw-allies"
 
@@ -54,7 +51,7 @@ def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
 
 
 def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space,
         _match(),
         Reward(RewardConfig()),
@@ -62,7 +59,7 @@ def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
         seed=111,
         numerics=TorchCollectionSession(device="cpu", seed=111, precision="float32"),
     )
-    batch = collector.collect(agent, 16)
+    batch = collect(collector, agent, 16)
     nonempty = np.flatnonzero(
         batch.ordered_obs()["events_valid"].sum(axis=(-1, -2)) >= 2
     )
@@ -244,7 +241,7 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
     ].any()
 
 
-def test_history_off_and_declarative_identity() -> None:
+def test_history_off_preserves_model_identity_and_outputs() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(9)
     baseline = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16))
@@ -272,31 +269,6 @@ def test_history_off_and_declarative_identity() -> None:
         expected, explicit(device_input(explicit, tensors)), strict=True
     ):
         torch.testing.assert_close(left, right, rtol=0, atol=0)
-    base = wdl_baseline()
-    comparison = Experiment(
-        "history-unexecuted",
-        base,
-        cases=(
-            Case("off", (ModelOverride(ModelConfig(recent_events=False)),)),
-            Case("on", (ModelOverride(ModelConfig(recent_events=True)),)),
-        ),
-    ).resolve()
-    off, on = (case.regime for case in comparison.cases)
-    for case in comparison.cases:
-        provenance = {setting.path: setting for setting in case.provenance}
-        assert provenance[("agent", "recent_events")].origin == "override"
-        assert (
-            provenance[("observation", "policy_history_version")].component == "model"
-        )
-    assert off.observation.policy_history_version == 0
-    assert on.observation.policy_history_version == 1
-    assert on.stages == off.stages
-    assert on.agent.hidden_dim == off.agent.hidden_dim
-    assert on.agent.value_aggregation == off.agent.value_aggregation
-    changed = with_recent_events(base.regime(), id="history-on", enabled=True)
-    restored = with_recent_events(changed, id=base.regime().id, enabled=False)
-    assert restored.model_dump() == base.regime().model_dump()
-    assert base.regime().agent.recent_events is False
 
 
 def test_short_window_native_collector_and_bad_contracts() -> None:
@@ -307,11 +279,3 @@ def test_short_window_native_collector_and_bad_contracts() -> None:
     assert obs["events_valid"].sum() == 3
     with pytest.raises(ValueError, match="policy_history_version"):
         _agent(ObservationSpace())
-    with pytest.raises(ValueError, match="history input is selected by ModelOverride"):
-        Experiment(
-            "bad",
-            wdl_baseline(),
-            overrides=(
-                Environment(observation=ObservationConfig(policy_history_version=1)),
-            ),
-        ).resolve()

@@ -5,7 +5,7 @@ produces: measured bottleneck, bounded comparison plan and checks in the existin
 Measure what training and evaluation spend time on, then select a worthwhile software improvement.
 
 1. Read `docs/workflows.md` (training and evaluation performance),
-   `experiments/training-update-time.md` and the relevant retained receipts before
+   `experiments/reports/training-update-time.md` and the relevant retained receipts before
    running anything. Separate observations from suspected causes. Use the current
    task's workload and model sizes; do not expand a speed question into a campaign.
    This skill grants no campaign, resource or spending authority. Preserve frozen
@@ -36,8 +36,10 @@ Measure what training and evaluation spend time on, then select a worthwhile sof
    - Training: use `scripts/bench_training_update.py` through the retained-output
      command in [Training and evaluation performance](../../docs/workflows.md#training-and-evaluation-performance).
      Select the declared `--recipe`, `--seed` and `--device` explicitly, with
-     separate baseline/candidate output paths. The tool re-pins its in-memory
-     recipe to the current world; it cannot reproduce frozen experiments.
+     separate baseline/candidate output paths. The builder must return
+     current-world `SelfPlay` settings without arguments;
+     regime JSON and `TrainingRun` output are retired. Read the JSON update
+     rows and summary; the tool does not rebind frozen experiments.
      Capacity failure stops the reading; do not truncate or shrink the workload.
    - When Task 855bff's standing size-ladder benchmark and retained baseline land,
      read its shipped documentation and use that command as the reference

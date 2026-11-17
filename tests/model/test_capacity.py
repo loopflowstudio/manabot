@@ -22,7 +22,7 @@ from manabot.model.architecture import (
     validate_architecture_receipt,
 )
 from manabot.policy import admission
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import collect, open_collector
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input, fact_rows, record_vocabulary
 
@@ -51,7 +51,7 @@ def test_capacity_export_and_real_legal_policy(
     assert receipt.parameters.trainable == receipt.parameters.total
     assert sum(p.total for p in receipt.components.values()) == receipt.parameters.total
     assert ("extra_attention" in receipt.components) == (depth == 2)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -60,7 +60,7 @@ def test_capacity_export_and_real_legal_policy(
         batch_closure="exact-quota",
         numerics=TorchCollectionSession(device="cpu", seed=102, precision="float32"),
     )
-    batch = collector.collect(agent, 2)
+    batch = collect(collector, agent, 2)
     obs = device_input(
         agent,
         {

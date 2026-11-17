@@ -1,15 +1,12 @@
-"""Outcome routing and count-weighted reporting, including historical absence."""
+"""Outcome routing and count-weighted reporting, including unrecorded history."""
 
 from copy import deepcopy
-from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
-from manabot.reports.experiment import load_evidence
-from manabot.reports.self_play import self_play_figures, self_play_points
+from manabot.reports.self_play import self_play_points
 from manabot.training.rollout.self_play import SelfPlayCounter
-from manabot.training.update_metrics import stage_rows
+from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
 import managym
 
 
@@ -53,30 +50,19 @@ def test_identity_includes_sideboard_and_ignores_dictionary_order() -> None:
     assert managym.Deck({"a": 2}).identity != managym.Deck({"a": 2}, {"b": 1}).identity
 
 
-def test_windows_pool_counts_and_old_reports_remain_unavailable() -> None:
-    evidence = load_evidence(Path("tests/fixtures/experiment-demo"))
-    run = evidence.runs[0].model_copy(deep=True)
-    stage = run.stages[0]
-    stage.diagnostics = []
-    assert self_play_points(stage_rows(run, {})) == []
+def test_windows_pool_counts_and_unrecorded_history_emits_nothing() -> None:
+    assert self_play_points([{"coordinates/updates": 1, "loss": 0.5}]) == []
     counter = SelfPlayCounter()
     counter.record(("a", "b"), 0)
-    stage.diagnostics.append(
-        {"coordinates": {"updates": 1}, "self_play_outcomes": counter.drain()}
-    )
+    rows = [metric_row({"coordinates": {"updates": 1}, OUTCOME_TABLE: counter.drain()})]
     for _ in range(9):
         counter.record(("a", "b"), 1)
-    stage.diagnostics.append(
-        {"coordinates": {"updates": 2}, "self_play_outcomes": counter.drain()}
+    rows.append(
+        metric_row({"coordinates": {"updates": 2}, OUTCOME_TABLE: counter.drain()})
     )
-    points = self_play_points(stage_rows(run, {}), 100)
+    points = self_play_points(rows, 100)
     first = next(p for p in points if p.deck == "a")
     assert (first.wins, first.games, first.update) == (1, 10, 2)
-    figures = self_play_figures(replace(evidence, runs=(run,)))
-    assert len(figures) == 1
-    assert figures[0].axes[0].lines[1].get_ydata()[0] in (0.1, 0.9)
-    stage.diagnostics = []
-    missing = self_play_figures(replace(evidence, runs=(run,)))
-    assert "unavailable" in missing[0].axes[0].texts[0].get_text()
+    assert len(self_play_points(rows, 1)) > len(points)
     with pytest.raises(ValueError, match="positive"):
-        self_play_points(stage_rows(run, {}), 0)
+        self_play_points(rows, 0)

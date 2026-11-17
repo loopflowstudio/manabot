@@ -2,7 +2,7 @@
 requires: completed runs and their retained results
 produces: the experiment's one report, updated
 ---
-Write what the runs showed in `experiments/<name>.md`, the experiment's only
+Write what the runs showed in `experiments/reports/<name>.md`, the experiment's only
 report.
 
 1. Order: question, method, results, what they support, recommendation,

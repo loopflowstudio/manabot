@@ -3434,6 +3434,10 @@
    "sha256": "70672959564c060d7f906c492fad4b5386dc7847047e051fc37baf608f801336",
    "bytes": 1973
   },
+  "experiments/data/etude-execution/a6000-results.tar.gz": {
+   "sha256": "5b5345e2adc0b234b8d3a956a1b10839c67e3122e2c1e9064f5de1af254c4827",
+   "bytes": 28574398
+  },
   "experiments/data/eval_forward_layout/cpu.json": {
    "sha256": "ef7e47c9ceddaa6248b86709e67f5ef9c026397df089ed0e34cc7a2170dd56ba",
    "bytes": 3639

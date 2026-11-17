@@ -136,7 +136,6 @@ def test_script_local_reducers_and_rows_survive_supervision(
 
         outcome = replay_retained(read_trace(Path(sys.argv[1])), 60, reducers=[LocalReducer()])
         assert outcome.error is None, outcome.error
-        assert outcome.process["torch_loaded/replay"] == 0
         assert all(isinstance(row, LocalRow) and row.count > 0 for row in outcome.statistics_rows[0])
         print("local reducer and dataclass rows returned")
     """)

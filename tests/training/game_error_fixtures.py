@@ -90,7 +90,6 @@ def _payment_game_worker(
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
-    inference: int | None,
     deadline_unix: float,
 ) -> None:
     managym.Env = PaymentMismatchEnv
@@ -100,7 +99,6 @@ def _payment_game_worker(
         registrations,
         checkpoint_paths,
         max_commands,
-        inference,
         deadline_unix,
     )
 
@@ -111,7 +109,6 @@ def _lost_payment_worker(
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
-    inference: int | None,
     deadline_unix: float,
 ) -> None:
     """Die or block inside a call whose canonical pending inputs are durable."""
@@ -137,7 +134,6 @@ def _lost_payment_worker(
         registrations,
         checkpoint_paths,
         max_commands,
-        inference,
         deadline_unix,
     )
 

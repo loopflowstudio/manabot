@@ -122,12 +122,17 @@ publish, land or choose the next Graph step from here.
   interrupted), then open each from an engine-only wheel venv in a fresh
   Playwright context: the launcher's `open` address carries no credential, so
   a 403 there is a real failure. `[data-testid=recorded-decision-evidence]`
-  holds Value/Update/Policy or "not retained". `manabot train --recipe local
-  --record-games 0.25` prints the games command; `play_cell` with two legs
+  holds Value/Update/Policy or "not retained". `etude train
+  manabot/recipes/local.py --config '{"record_games": 0.25}'` prints the games
+  command. Every self-play recipe takes the same flat keys: `etude train
+  manabot/recipes/elemental.py --config '{"updates": 2, "streams": 4,
+  "record_games": 1, "statistics": true}' --until updates=1` records eight
+  Elemental games and statistics in about 9 s on CPU; a changed key on
+  `--resume` must refuse with `run_identity_conflict`. `play_cell` with two legs
   writes `games/<cell>.jsonl`. Count `read_records(<dir>)` against the games
   played: duplicates mean a second file in that directory. A different-world
   record can be made by editing `identities.world`/`card_digest` in a copy.
-  Stall checks: `--stall-seconds 0.3` on the local recipe and
+  Stall checks: `"stall_seconds": 0.3` in the local recipe config and
   `touch <out>/diagnostics.request` exercise the watchdog without load; read
   `escalations.jsonl` for one line per real stall.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
@@ -151,8 +156,9 @@ publish, land or choose the next Graph step from here.
   `connected` badge, then press Start game (an immediate click can leave "No
   game in progress").
   Without a connected browser, run a Node Playwright script from `academy/ui`
-  (its `playwright` package and cached Chromium resolve there; delete the
-  script afterwards). Click only `[data-testid=action-panel] button` offers:
+  (`import { chromium } from '@playwright/test'`; a fresh worktree first needs
+  `npm ci` there, about a minute; Chromium is cached; delete the script
+  afterwards). Click only `[data-testid=action-panel] button` offers:
   other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
@@ -221,15 +227,24 @@ publish, land or choose the next Graph step from here.
   match and checkpoint; with equal player and reset seeds, every evidence and
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
-- Model or training-path changes: `uv run manabot train --recipe local --device
-  cpu --out .runs/<name>` writes `run.json` with per-phase
-  seconds (`learning_seconds`, collection and forward splits) for an A/B. The
-  complete-game default is bounded by its deadline, not a fixed duration. For
-  installed-wheel QA use `scripts/release/smoke.py`: it trains one tiny policy
-  on the native lethal-target root, reloads `self-play-raw.safetensors`, and
-  discovers that exact path through `managym.academy.bots`. Run from outside
-  the checkout with `uv run --no-project --python <venv>/bin/python <script>`.
-  Play checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
+- Trained-policy Play/Watch/Search: train a checkpoint at this checkout
+  (`uv run etude train manabot/recipes/local.py`, about 30 s) and register
+  `{"provider": "manabot", "artifact": "<abs path>/out/policies/<update>-raw.safetensors", "config": {}}`
+  with `managym academy --policy <file>.json play|watch`. A checkpoint trained
+  before syncing main can pass the picker yet fail Start with "Failed to load
+  the selected opponent." (catalog vocabulary grew); retrain rather than debug
+  it. Watch resume tokens live in that tab's storage, so reopen a live Watch
+  trace in the same browser context. A completed Play game's evidence opens
+  from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
+- Model or training-path changes: `uv run etude train manabot/recipes/local.py`
+  runs the local CPU smoke. Inspect metric rows for per-phase collection and
+  learning seconds; the command prints its run id. For installed-wheel QA use
+  `scripts/release/smoke.py`: it trains one tiny policy on the native
+  lethal-target root through `etude train`, reloads its
+  `out/policies/00000002-raw.safetensors`, and discovers that exact path
+  through `managym.academy.bots`. Run from outside the checkout with
+  `uv run --no-project --python <venv>/bin/python <script>`. Play
+  checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
   <f> --set sim.hero=<checkpoint.safetensors>
   --set sim.villain=<checkpoint.safetensors> --set sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
   checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
@@ -293,9 +308,9 @@ publish, land or choose the next Graph step from here.
   wheel. Never patch files inside the installed `managym`: manabot's training
   refuses a changed source bundle. Supervise `managym academy` from a Python
   `Popen(start_new_session=True)` that writes `p.wait()`, delete the old log
-  before relaunching, and wait for its `ACADEMY_PLAY_READY`. `manabot train
-  --recipe local --device cpu --out .runs/<x>` in that directory gives trained
-  opponents within a minute. Another project's server may hold `*:8000`; use
+  before relaunching, and wait for its `ACADEMY_PLAY_READY`. `uv run etude
+  train manabot/recipes/local.py` with `ETUDE_HOME` in that directory gives
+  trained opponents under `track/<experiment>/out/policies/` within a minute. Another project's server may hold `*:8000`; use
   your own port.
   With a current installed policy, set `ACADEMY_PLAY_CHECKPOINTS=<absolute path>`
   before launch. Read `/api/opponents` for its digest, then open
@@ -354,69 +369,56 @@ publish, land or choose the next Graph step from here.
   manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
   venv with `uv pip install <wheel> --index-url https://pypi.org/simple
   --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
-  unsafe-best-match`. If the checkout uses engine APIs newer than the same-version
-  PyPI wheel, supply the current engine wheel too: a version match alone does
-  not establish source compatibility. A wheel from `maturin develop` may contain
-  a `.pth` pointing back to the checkout; it is not an installed-wheel proof.
-  Use a release wheel from the build-and-verify procedure, then confirm both
-  packages' `__file__` paths are inside the fresh venv. Run user scripts from
-  `/tmp` with `uv run --no-project --python <venv>/bin/python python -I`.
-  Training CLI QA requires the staged manabot wheel from
-  `scripts/release/prepare.py`: its `.manabot-source.json` supplies verified
-  source provenance outside Git. A direct workspace wheel lacks that receipt
-  and training fails at `source_commit`; do not patch the installed files.
+  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
+  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
+  `save_checkpoint` prints a harmless `fatal: not a git repository`.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
-- Training recipes: write a regime JSON from Python
-  (`TrainingRegime(...).model_dump_json()`) and run
-  `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
-  fresh `--out` each time; success prints nothing, so read `<run>/run.json`
-  (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
-  64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
-  `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
-  an empty directory to act like a new machine. To A/B an `Execution` switch
-  the CLI lacks (such as `live_tokens`), start from
-  `manabot.recipes.local.local_smoke(steps=3, device="cpu")`, set
-  `stages[0].execution.<field>`, re-validate, and dump one regime per arm with
-  the same `--seed`. Equal layouts then give `run.json` files that differ only in
-  `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
-  `bucketed_shapes` makes learning about 7× slower than padded, so time
-  bucketed arms against a bucketed control. Rebuild a regime for another
-  device from `authored_dump()`, not `model_dump()`, so `auto` fields resolve
-  again. To resume, the regime needs `recovery` (e.g.
-  `{"checkpoint_updates": 2}`); without it `--resume-from` passes the digest
-  check, then fails with "no committed recovery boundary". Resume with the same
-  regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
-  time. macOS has no `timeout`; use the tool's own timeout.
-  For a public safe-pause proof, pass an existing `pause_path` to
-  `execute_regime(..., backend=resolve("torch"))`; catch `TrainingPaused` and
-  read the retained run from the store. It is recorded as `interrupted` with
-  a committed snapshot. Continue by ID through the CLI, then compare the
-  final `load_update(..., backend=resolve("torch").state)` payload against
-  uninterrupted execution, including Adam, EMA and collector sampling RNG.
-- Deck-source or `elemental-uniform` regimes from `local_smoke`: drop `match`
-  and set `deck_source` plus `agent.world = managym.WORLD_SETUP`, or keep an
-  authored Elemental `match` and set `agent.world = "elemental-world-v2"`;
-  either way validation refuses the local recipe's agent world. Give parallel
-  runs separate `--out` parents, since `training.sqlite` lives beside `--out`
-  and concurrent runs lock it. To see what training games actually were, wrap
-  `SeatRoutedCollector.collect` in a driver calling `execute_regime` and read
-  `self._env.current_player_configs()`, `self.stream_matches` and
-  `self._buffers` (e.g. `decklists`, `[streams, 2, cards, 5]`) after each
-  batch. The native `VectorEnv.set_training_decks(decks, distinct)` differs
-  from the collector wrapper's `(decks, digest, sampling)`. Without a driver,
-  `--training-game-logs` writes `game-journals/vector-0.jsonl`: full rows
-  carry `evidence` (`FailureEvidence`), delta rows carry `games[].replacement`
-  (`GameInputs`). Reset a `VectorEnv(num_envs=1, seed=game.seed,
-  seed_stride=…, skip_trivial=…, player_policies=evidence.resolved_player_policies)`
-  with `game.setup()` and step `game.actions` to replay each retained game.
+- Training recipes: run `uv run etude train manabot/recipes/local.py --experiment smoke`.
+  Inspect `~/.etude/track/smoke/` (or `$ETUDE_HOME/track/smoke/`):
+  `run.json`, logged rows, `out/state/current.json` and the save folder it
+  names (`state.json` with the framework state files), and
+  immutable `out/policies/`. A second new run with that name must refuse.
+  For a planned stop, use a larger config update count with `--seconds 1`;
+  expect exit 75, then `--experiment smoke --resume` to finish the same run. To extend a
+  finished run, use `--experiment smoke --resume --until updates=N`; without a later target
+  it must refuse. `etude continue --run RUN --until updates=N` makes a child
+  run for a launched parent and leaves the first unchanged.
+  Device and other recipe fields are passed with `--config JSON`; the seed
+  is the run's `--seed`, not a config field. Check raw/EMA checkpoint tensors
+  with matched small inputs. Fetch artifacts through Doppler without printing
+  credentials. `manabot train`, its `--out` identity and `state.pt` are retired.
+  After a train and a `--resume`, run `uv run --extra reports manabot
+  training-report --source $ETUDE_HOME/track --out <f>.html` and read the
+  page: learner transitions and transitions per active second must be numbers,
+  not "unavailable" (they come from the loop's declared clocks). Screenshot it
+  with the `academy/ui` Playwright script above (`npm ci` first in a fresh
+  worktree). A run without a `training_seconds` clock, such as belief's
+  sampler, honestly shows "unavailable" with four warnings.
+  Set `ETUDE_HOME` to an ignored `.runs/` folder so QA runs stay out of
+  `~/.etude`. `etude smoke experiments/elemental.py --keep --revision HEAD
+  --updates 3200 --hours 11.9 --usd-per-run 9` trains for about 3 minutes, then
+  evaluates for about 30 minutes on a laptop (600 one-game matches). A Python
+  error in a game fails smoke eval within seconds, naming the error; only native
+  failures become invalid rows, so still read the eval rows:
+  `etude.eval.query.statsdb("elemental", "<kept>/track")`, then group `games`
+  by `unit`, `valid` and `failure` (duckdb over
+  `<kept>/track/elemental/*/blocks/*/games.parquet` also works; there is no
+  pyarrow). The `failure` column is omitted when every value is null. Rerun only eval and report with
+  `--step eval --step report --source <kept>/track`. That eval-only report has
+  no training runs, so its heuristic panels stay empty; for the full picture,
+  copy the training and eval run folders into one track and run
+  `etude report experiments/elemental.py --source <it> --out <dir>`. Local eval
+  evidence goes to `.runs/elemental/arena/<match-key>/attempt-*`; a retry adds
+  an attempt beside earlier failed ones, so nothing needs deleting. To see a policy from `etude train` in Academy, start
+  `./scripts/play` with the same `ETUDE_HOME`; discovery searches Etude's local
+  track.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
-  `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
-  `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`; `experiments/tla_frontier.py` trains that record on the current loop.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,
   execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
   runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting
@@ -434,7 +436,7 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
-- Training game journals (`--training-game-logs`): run `manabot train --recipe local --steps 200 --training-game-logs` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `execution.workers=2` in a `local_smoke` regime gives sharded files.
+- Training game journals (`diagnostics: detailed`): run `etude train manabot/recipes/local.py --experiment NAME --config '{"updates": 200, "diagnostics": "detailed"}'` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `SelfPlay.workers=2` gives sharded files.
 - Standalone statistics/recording: stage and install an engine-only wheel into a
   fresh venv, then run the two Python examples in `docs/engine-python.md` outside
   the checkout. Play the same seeded authored game with neither option, statistics
@@ -446,10 +448,13 @@ publish, land or choose the next Graph step from here.
   unchanged. Empty/missing/corrupt inputs must fail, and a torn final append must
   warn while recovering the last complete boundary. `scripts/release/engine_smoke.py`
   additionally checks that manabot, Torch and Etude are absent.
-- Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
-  preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
-  `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang.
+- Ctrl-C a run as a terminal does: fork it on a pty (`pty.fork()`, then
+  write `\x03` to the master). The first SIGINT is Etude's saved stop (exit
+  75); a second is a hard interrupt. Without a tty, uv 0.9.22 forwards a
+  process-group SIGINT to its child, which gets two and ends `failed` with no
+  save, so `os.killpg` on `uv run etude …` does not show what a person sees.
+  Signal `.venv/bin/etude` directly, or use the pty. A job started with `&`
+  from a non-interactive shell ignores SIGINT.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
@@ -457,11 +462,7 @@ publish, land or choose the next Graph step from here.
   not word-split `$P`. Fetch only the files the figure code reads; whole
   evidence folders can exceed 1 GB. Redraw twice and compare digests, because a
   figure that changes bytes on every redraw also changes its manifest entry.
-  Render SVGs with `rsvg-convert -z 2 -b white` and look at them. The L4 profile
-  (`experiments/l4_step_profile.py`) has a CPU smoke job,
-  `ETUDE_OUTPUT_DIR=<dir> MTG301_WORK=<dir> MTG301_CANDIDATE=<c> uv run python
-  experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
-  minutes and 2.2 GB and runs every stage as a real child process.
+  Render SVGs with `rsvg-convert -z 2 -b white` and look at them.
 
 - Payment previews (`[data-testid=payment-preview]`, `POST
   /api/sessions/<id>/payment-preview`): the panel exists only once a payment
@@ -481,6 +482,27 @@ publish, land or choose the next Graph step from here.
   Each new browser context starts a new game from the same launch URL.
   **Open replay** is a link, not a button. Read the resume credentials from
   `sessionStorage['etude.gui.resume']` to probe the route from the page.
+- Search (search-capable policy in Play/Watch): `uv run etude train
+  manabot/recipes/local.py` gives a compatible
+  `out/policies/<update>-raw.safetensors` in about 90 s; save `{"provider": "manabot",
+  "artifact": "<abs path>", "config": {}}` as `<alias>.json` and launch `uv run managym
+  academy --policy <alias>.json play --opponent <alias> --search
+  '{"worlds":1,"depth":1}' --seed 7` (or `watch --player <alias> --player
+  random --search '[{...},null]'`, then press Start watching). Seed 7 puts the
+  bot on the play. The initial budget is 1×1 with a 30 s ceiling. With the
+  provider's cached card catalog, full games at 1×1 (Watch, both seats) and
+  4×2 (Play) completed with median decisions near 0.5 s and 1 s at load ~150;
+  16×20 still exceeded 30 s. If one evaluation takes seconds, profile it:
+  re-encoding the card catalog per forward (`_encode_programs`, `torch.gru`)
+  means the session is not using `inference_scope()`. To time decisions
+  without a browser, drive `create_watch`/`step_watch` in-process as
+  `tests/academy/test_search_baseline.py` does. Retained evidence is in
+  the attempts table's `trace_json`
+  (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
+  priority to the bot and reload about 1.5 s later while the table shows
+  `Search W×D· N s`; the game must stay `active` and resume at the
+  committed state. A reload before the first response has no resume
+  credentials and launches a new game by design.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.

@@ -110,7 +110,7 @@ uv run --no-project managym academy replay .runs/demo/games --game 3
 
 Any game managym recorded opens with only `managym` installed: one your own
 loop wrote through `managym.recording`, a training run's `games/` directory
-(`manabot train --record-games 0.25`) or an evaluation's. The browser opens in
+(a recipe config's `record_games`) or an evaluation's. The browser opens in
 **Replay** at the first recorded choice or this tab's saved position; use
 **Next**, **Previous** or **Play** to follow choices, consequences and the
 result. Each choice shows the probabilities, value and update the chooser
