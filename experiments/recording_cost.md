@@ -8,12 +8,14 @@ sampled? This is exploratory, with no playing-strength claim.
 
 ## Current verdict (2026-11-17)
 
-**Inconclusive: incremental option overhead is not measured.** A CUDA baseline
-completed, but the next cell exposed a shared tracking identity in the driver.
-That driver defect is repaired and locally admitted with distinct declarations.
-Two subsequent A6000 creates were refused; complete provider inventory confirmed
-both pods absent and the launcher reconciled both requests. L4 availability
-reported no stock. There is no live measurement rental and no paired result.
+**Inconclusive: pre-change versus edited performance is not measured.** The
+driver now builds both revisions and alternates five matched pairs on one GPU,
+requiring matching work counts and final tensor hashes. Its paired launch was
+refused before a worker started. Provider inventory confirmed the pod absent
+and the launcher reconciled the request. There is no live measurement rental.
+The earlier option-only attempt completed one edited-tree cell before its next
+cell exposed a tracking-identity defect, which is repaired. Neither that cell
+nor the refused launches estimates the change's overhead.
 
 The one completed edited-tree, recording-off cell at `978cec8bc2` ran on an
 RTX A6000 / AMD EPYC 7543. It is not a pre-change baseline:
@@ -23,7 +25,7 @@ Collection plus learning: **43.239 seconds/update**. This is n=1, no range,
 and no option-cost estimate. The repaired comparison at `a5afe273f3` must run
 fresh matched baselines on its eventual host; do not reuse this one across hosts.
 
-## Method
+## Earlier option-only method
 
 The frozen driver is `experiments/recording_cost.py` at
 `1a3777d18987a8a7bc8fa3d5e2b797e2cbcd9ade`. Seven arms run sequentially on
@@ -222,8 +224,8 @@ Paired submission: source `fe5d46d443eb47fa16c772843d885d8561dcca96`, launch
 `9f92d0c15f8d`, requested run `recording_cost/revisions-20261117-1`, A6000
 $2.2425 quoted window under the $5 job cap. Source publication completed, but
 provider create returned HTTP 400 before any worker started. Complete provider
-inventory confirmed no `etude-333576aaa9fa` pod; the request is being reconciled
-before any future acquisition. No paired timing exists. This is a capacity
+inventory confirmed no `etude-333576aaa9fa` pod; the launcher reconciled the
+request and returned the machine as terminated. No paired timing exists. This is a capacity
 blocker, not evidence that the edited revision is faster or slower.
 
 The next driver revision places baseline source/build products beside the
