@@ -44,7 +44,8 @@ The local recipe writes `run/kind=smoke` and
 `run/recipe=manabot.recipes.local` beside its update metrics, so new local smokes
 are excluded by default even under a different experiment or run name. Explicit
 Etude declaration kind/job fields take precedence over these logged labels.
-Older unlabeled runs remain unclassified; names alone do not establish purpose.
+Other recipes log no label, so their runs, like older ones, stay unclassified;
+names alone do not establish purpose.
 
 Use **Save selection** and **Restore selection** for exact membership tied to the
 report's evidence snapshot. Restoring against different source bytes is rejected;

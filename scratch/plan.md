@@ -159,6 +159,14 @@ resume measurements remain unrun.
 No open product choice: the smoke rows are throwaway and the Etude change
 is additive.
 
+Eighth concept review (089a6f80e1), covering 54b67f6cd9: the seventh
+direction is built as written. A recipe states a purpose or the run has none;
+`time_sources` reads record, then label, then `unclassified`. Nothing to
+change in code and no open choice. One sentence in docs/experiment-metrics.md
+said only "older" unlabeled runs are unclassified; corrected in this review
+(new baseline/Elemental runs are too). The Etude `job`/`kind` proposal stays
+unfiled and does not hold the PR.
+
 ## Report follow-up
 
 QA's two retained-report defects (scratch/qa.html) are fixed by 3850764dd8,
