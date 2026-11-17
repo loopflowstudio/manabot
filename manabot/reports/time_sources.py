@@ -231,14 +231,12 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
     def count(clock: str) -> int | None:
         if names.get(clock) != "step":
             return None
-        value = (
-            _clock_endpoint(run, observed_writers[-1], clock)
-            if observed_writers
-            else None
-        )
-        if value is None and observed_writers:
-            latest = attempts.get(observed_writers[-1])
-            value = latest.resumed_at.get(clock) if latest else None
+        value = None
+        if observed_writers:
+            latest = observed_writers[-1]
+            value = _clock_endpoint(run, latest, clock)
+            if value is None and latest in attempts:
+                value = attempts[latest].resumed_at.get(clock)
         # Checkpoints carry explicit observed coordinates, not planned work.
         if not writers and run.checkpoints:
             value = max(run.checkpoints, key=lambda c: c.wall_ms).at.get(clock)
@@ -253,22 +251,10 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
 
     def label(metric: str) -> str:
         # RunData.points reads numeric metrics only. Decode just this text
-        # column, newest writer first, rather than loading every update metric.
-        for writer in reversed(observed_writers):
-            for block in sorted(
-                (b for b in run.blocks if b.header.writer == writer),
-                key=lambda b: b.header.first,
-                reverse=True,
-            ):
-                column = next(
-                    (
-                        c
-                        for c in block.header.series
-                        if c.name == metric and c.kind == "text"
-                    ),
-                    None,
-                )
-                if column is not None:
+        # column from the newest block carrying it, not every update metric.
+        for block in sorted(run.blocks, key=lambda b: b.header.wall_last, reverse=True):
+            for column in block.header.series:
+                if column.name == metric and column.kind == "text":
                     codes = block.array(column.data, "<u4")
                     if len(codes):
                         return column.labels[int(codes[-1])] or ""

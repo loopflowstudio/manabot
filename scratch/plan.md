@@ -123,6 +123,9 @@ QA's retained-report defects are fixed: new local smokes carry explicit
   unmeasured time. Unlabeled historical runs stay unclassified. No config,
   checkpoint or frozen evidence was rewritten. Focused report, recipe and
   real resume checks: 14 passed (9.08s); evidence in implementation.md.
+  Compress: the label reader takes the newest block carrying the text column
+  and the AGENTS note sits under Etude training records; behavior unchanged.
+  `pytest tests/training/test_time_cohort.py tests/training/test_self_play_loop.py -q`: 22 passed.
 
 ## Remaining
 
