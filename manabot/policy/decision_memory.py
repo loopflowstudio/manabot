@@ -28,7 +28,9 @@ _WIDTHS = tuple(MEMORY_WIDTHS[key] for key in _FIELDS)
 
 
 @dataclass(frozen=True)
-class MemoryRows[A]:
+class MemoryFeatures[A]:
+    """Prefix-independent features owned by one record chunk."""
+
     numbers: A
     kinds: A
     choices: A
@@ -42,6 +44,12 @@ class MemoryRows[A]:
     member_references: A
     member_groups: A
     member_positions: A
+
+
+@dataclass(frozen=True)
+class MemoryRows[A](MemoryFeatures[A]):
+    """Features and sequence coordinates for selected policy rows."""
+
     record_batches: A
     record_slots: A
     nonempty_batches: A
@@ -500,18 +508,22 @@ def _prepare_retained(
     from manabot.policy.prepare import pack
 
     lengths = tuple(p.record_count for p in obs.prefixes)
-    arrays: dict[str, list[np.ndarray]] = {
-        f.name: []
-        for f in fields(MemoryRows)
-        if f.name not in ("schedule", "lengths", "width", "nonempty_batches")
-    }
+    arrays: dict[str, list[np.ndarray]] = {f.name: [] for f in fields(MemoryFeatures)}
+    batches: list[np.ndarray] = []
+    slots: list[np.ndarray] = []
     reference_base = record_base = 0
     for batch, prefix in enumerate(obs.prefixes):
         for node in prefix.tail.chunks() if prefix.tail else ():
             cached = node.features.prepared
             if cached is None or cached[0] != tables.memory_binding:
-                fragment = _prepare_dense_memory(chunk_observation(node), tables)
-                assert fragment is not None
+                prepared = _prepare_dense_memory(chunk_observation(node), tables)
+                assert prepared is not None
+                fragment = MemoryFeatures(
+                    **{
+                        f.name: getattr(prepared, f.name)
+                        for f in fields(MemoryFeatures)
+                    }
+                )
                 # All feature arrays are immutable, bounded by this chunk's life.
                 for f in fields(fragment):
                     value = getattr(fragment, f.name)
@@ -523,22 +535,15 @@ def _prepare_retained(
             cursor = node.previous.cursor if node.previous else MemoryCursor()
             for name in arrays:
                 value = getattr(fragment, name)
-                if name == "numbers":
-                    value = value.copy()
-                    value[:, 7] = (
-                        prefix.record_count - 1 - cursor.records - np.arange(len(value))
-                    ) / 128
-                elif name == "detail_references":
+                if name == "detail_references":
                     value = value + reference_base + cursor.references
                 elif name == "member_references":
                     value = value + reference_base + cursor.references
                 elif name == "member_groups":
                     value = value + (record_base + cursor.records) * 3
-                elif name == "record_batches":
-                    value = np.full(len(value), batch, np.int64)
-                elif name == "record_slots":
-                    value = value + cursor.records
                 arrays[name].append(value)
+        batches.append(np.full(prefix.record_count, batch, np.int64))
+        slots.append(np.arange(prefix.record_count, dtype=np.int64))
         reference_base += prefix.counts[2]
         record_base += prefix.record_count
     # The dense empty path owns the single canonical shape/dtype declaration.
@@ -558,6 +563,8 @@ def _prepare_retained(
     return replace(
         empty,
         **values,
+        record_batches=np.concatenate(batches) if batches else empty.record_batches,
+        record_slots=np.concatenate(slots) if slots else empty.record_slots,
         lengths=lengths,
         width=max(1, max(lengths, default=0)),
         nonempty_batches=nonempty,
@@ -606,7 +613,6 @@ def _prepare_dense_memory(
         (
             _scaled(temporal),
             selected[:, 10:12] / [4, 12],
-            (lengths[batches] - 1 - slots)[:, None] / 128,
             selected[:, 18:19] / 2,
             _scaled(context),
             selectors,

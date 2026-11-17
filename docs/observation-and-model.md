@@ -695,8 +695,11 @@ legality and focus; CUDA admission, throughput and learning remain to be measure
 Both encoders use record width 64 and zero dropout. The transformer has two
 layers, four heads and feedforward width 128. The GRU has one layer with hidden
 width 64 and projects its final valid state to the selected summaries. Both
-return zero summaries for an empty history. Memory requires the Torch backend;
-MLX raises `UnsupportedPolicy` for a memory-enabled configuration.
+return zero summaries for an empty history. Record embeddings use absolute
+ordinal and span features. The GRU reads their chronological order; the
+transformer adds a learned projection of prefix-relative recency (rank / 128)
+as a sequence position signal, outside the shared record embedding. Memory
+requires the Torch backend; MLX raises `UnsupportedPolicy` for a memory-enabled configuration.
 
 ### What a record means
 
@@ -740,7 +743,8 @@ sampled decisions keep their original count. Record-aligned chunks own consecuti
 they introduce and those snapshots' details. Each immutable node is admitted
 against its predecessor's ordinal/span/member/reference/detail cursor. Cached
 features bind the checkpoint vocabulary's immutable bytes and definition bounds;
-recency and batch offsets are assembled for the selected prefix. Dense imports
+sequence coordinates and batch offsets are assembled for the selected prefix.
+Cached record features do not change when the prefix grows. Dense imports
 and explicit dense exports still undergo complete content and padding checks. Ordinary collector recovery replays its bounded native
 journal and checks a compact chunk archive. Numerical incidents select rows and
 budget whole prefixes before copying them; evidence that cannot fit is explicitly

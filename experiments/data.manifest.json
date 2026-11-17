@@ -41826,6 +41826,26 @@
    "sha256": "295af228b5ddb97d6648e3251bfcda034e95be045a327a99416476d3c305b8f8",
    "bytes": 2674809
   },
+  "experiments/data/opponent-memory/20261117-sharing-recency/measurement-files.json": {
+   "sha256": "1fb55e29dcbd0b63086e55c580e122963f6163a5610703c653bf09c7e26d2221",
+   "bytes": 8047
+  },
+  "experiments/data/opponent-memory/20261117-sharing-recency/measurement.tar.gz": {
+   "sha256": "64d3ca80f48278c1d9e73b8450d6a2fcb6fdc30bac0d952bea37f7a4035bbfcc",
+   "bytes": 80794
+  },
+  "experiments/data/opponent-memory/20261117-sharing-recency/source-files.json": {
+   "sha256": "7313a531abde5949770321f36720576db545373c717b51814c42edc71ad2f9d3",
+   "bytes": 1874
+  },
+  "experiments/data/opponent-memory/20261117-sharing-recency/source.tar.gz": {
+   "sha256": "310baa05aa131f1a0558656e908b7fd6dd1f07a82867cbcc6bd1febc0652d2b9",
+   "bytes": 32541
+  },
+  "experiments/data/opponent-memory/20261117-sharing-recency/verification.json": {
+   "sha256": "039697d55f33b79057f6c403b012b2e8e7f62c08657678f48e7bb3180c15cf66",
+   "bytes": 185
+  },
   "experiments/data/opponent-memory/20261117-suffix-capture/measurement-files.json": {
    "sha256": "59a45406f861e655abb6122ca2d63f121bf00e775741b56cc6d939052110c136",
    "bytes": 20341

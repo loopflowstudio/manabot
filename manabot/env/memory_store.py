@@ -23,7 +23,7 @@ from manabot.policy.decision_memory import (
 )
 
 if TYPE_CHECKING:
-    from manabot.policy.decision_memory import MemoryRows
+    from manabot.policy.decision_memory import MemoryFeatures
 
 MemoryCapacities = tuple[int, int, int, int]
 _CHUNK_ROWS = 32
@@ -62,7 +62,7 @@ class ChunkFeatures:
     """One vocabulary's admitted immutable features, owned by a reachable node."""
 
     admission: tuple[str, int, bool] | None = None
-    prepared: "tuple[str, MemoryRows[np.ndarray]] | None" = None
+    prepared: "tuple[str, MemoryFeatures[np.ndarray]] | None" = None
 
     @property
     def nbytes(self) -> int:
@@ -72,9 +72,8 @@ class ChunkFeatures:
         fragment = cached[1]
         return sum(
             value.nbytes
-            for owner in (fragment, fragment.schedule)
-            for f in fields(owner)
-            if isinstance(value := getattr(owner, f.name), np.ndarray)
+            for f in fields(fragment)
+            if isinstance(value := getattr(fragment, f.name), np.ndarray)
         )
 
 

@@ -33,7 +33,7 @@ class DecisionMemory(nn.Module):
             nn.Linear(65, 64), nn.GELU(), nn.Linear(64, 64), nn.GELU()
         )
         self.record_output = nn.Sequential(
-            nn.Linear(39 + board_width * 3 + 3 * 65, 64), nn.GELU(), nn.LayerNorm(64)
+            nn.Linear(38 + board_width * 3 + 3 * 65, 64), nn.GELU(), nn.LayerNorm(64)
         )
         if encoder == "transformer":
             layer = nn.TransformerEncoderLayer(
@@ -42,6 +42,8 @@ class DecisionMemory(nn.Module):
             self.transformer = nn.TransformerEncoder(
                 layer, 2, enable_nested_tensor=False
             )
+            # Recency is a sequence position signal, never a record feature.
+            self.recency = nn.Linear(1, 64, bias=False)
             self.queries = nn.Parameter(torch.randn(1, summaries, 64) / 8)
             self.gru = None
             self.output = nn.Linear(64, board_width)
@@ -133,6 +135,9 @@ class DecisionMemory(nn.Module):
                 0, rows.nonempty_batches, self.join_norm(summaries + self.memory_type)
             )
         assert self.transformer is not None and self.queries is not None
+        lengths = records.new_tensor(rows.lengths)
+        recency = (lengths[rows.record_batches] - 1 - rows.record_slots)[:, None] / 128
+        records = records + self.recency(recency)
         sequence = records.new_zeros((batch, rows.width, 64))
         sequence = sequence.index_put((rows.record_batches, rows.record_slots), records)
         present = torch.zeros(

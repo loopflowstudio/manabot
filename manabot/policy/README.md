@@ -74,6 +74,6 @@ covers [saving and loading a container](../backends/README.md#policy-checkpoints
 
 `decision_memory.py` validates dense history through record-aligned chunks and a
 five-integer predecessor cursor. Retained prefixes reuse these content-bound
-certificates and vocabulary-bound immutable feature fragments. Preparation adds
-batch routes and prefix-relative recency without gathering dense history. The
+certificates and vocabulary-bound immutable feature fragments. Record features
+are prefix-independent; preparation adds sequence coordinates and batch routes without gathering dense history. The
 cache owns no trainable output; unreachable game nodes release their features.

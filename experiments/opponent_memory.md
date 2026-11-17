@@ -1616,3 +1616,101 @@ Evidence publication: five content-addressed manifest entries; all 131 source
 and measurement archive members verified locally. No fresh remote-fetch check.
 The experiment-data tracking guard passed. No server, watcher or measurement
 worker remains running.
+
+
+## Learner sharing and prefix-independent records — 2026-11-17
+
+**Sharing supports trying the learner fold; recency removal alone does not
+admit paid work.** This exploratory software slice measures the prerequisite
+and removes prefix-relative recency from the shared record embedding. GRU
+recurrence still starts from zero for every prefix. Neither learner sharing
+nor a learned collection cache is implemented in this slice.
+
+On the unchanged whole-game harness from the suffix-capture report, observe
+every `AdmittedRollout.rows` call consumed by `Learner.loss`. Count each row's
+chain-node visits and the distinct content-bound nodes in that actual execution
+chunk. Sum distinct counts across chunks: a node used in two chunks is charged
+twice because their backward graphs cannot share it. Each of three fresh
+processes collected the same 556 learner rows, with one actual damped-policy
+update, 256 logical minibatch rows, two native streams and both learning seats.
+The measurement changes neither row order nor the objective.
+
+| Execution rows | Actual chunks | Row × node visits | Distinct nodes, summed per chunk | Visits / distinct | Record visits / distinct records |
+|---|---:|---:|---:|---:|---:|
+| 32 | 18 | 1,355 | 199 | 6.809× | 34,969 / 4,520 = 7.737× |
+| 128 | 5 | 1,355 | 126 | 10.754× | 34,969 / 2,499 = 13.993× |
+| 256 | 3 | 1,355 | 117 | 11.581× | 34,969 / 2,242 = 15.597× |
+
+These are exact counts for this fixture, not measured fold speedups. They
+clear the design's near-1 stop condition at the planned non-smoke 32-row
+limit. Subdividing those same selected rows into two-row chunks gives only
+1.374× node sharing; this is a counterfactual count, not another update run.
+Complete-game collection packs seat trajectories consecutively
+(`SeatRoutedCollector._build_complete_batch`), so increasing stream count does
+not itself interleave every game's rows. Wider complete-game rollouts may
+retain sharing within a trajectory, but their history lengths, game boundaries
+and chunk alignment need measurement. Rectangular time-major rollouts can
+place different games in every execution row and approach 1× sharing. No
+256-stream sharing, host-fit or general training-throughput claim follows.
+
+The record input now has 38 numeric coordinates rather than 39. Ordinal and
+span remain absolute; prefix-relative recency is removed from the GRU's input.
+The transformer adds a bias-free learned 1→64 projection of recency
+`(prefix_length - 1 - record_slot) / 128` to record embeddings before its
+sequence attention. Cached `MemoryFeatures` contains only the thirteen feature
+arrays assembly reads; per-batch routes, packing schedules, lengths and width
+belong to `MemoryRows`. Assembly no longer copies numeric features to rewrite
+recency. Dense and retained full-prefix encoders remain the stateless reference
+for the next fold's behavior/gradient tests.
+
+This deliberately changes unmerged model arithmetic and parameter shapes.
+Frozen probe, calibration and CUDA checkpoints describe the earlier featurizer;
+their bytes and findings remain unchanged. No learning-equivalence claim is
+made. Ordinary current-code checkpoint round trips pass for both encoders;
+there is no compatibility loading path for the previous unmerged architecture.
+
+The same whole-game CPU harness was then run in 18 fresh sequential processes:
+one before/after case per arm and matched execution limit. Before uses the
+three exact production source files frozen at `e733d9fdfb`; after uses this
+slice. Both use the same release extension (`94bb1e63…`), fixed seeds, decks,
+full admission and native suffix capture. Every case still collected 556
+rows and identical retained prefixes; maxima remain 272/5,688/82/3,592.
+No compiler or test runner ran concurrently with these measurements.
+Single samples, seconds; total includes collection + actual update:
+
+| Rows | Arm | Collection before → after | Update before → after | Total before → after | After / matched incumbent rate |
+|---|---|---|---|---|---|
+| 32 | incumbent | 1.515 → 1.447 | 2.517 → 2.493 | 4.032 → 3.941 | 1.000× |
+| 32 | control | 1.614 → 1.639 | 2.499 → 2.508 | 4.113 → 4.147 | 0.950× |
+| 32 | gru-k1 | 2.799 → 2.874 | 5.298 → 5.291 | 8.097 → 8.166 | 0.483× |
+| 128 | incumbent | 1.295 → 1.319 | 2.052 → 1.995 | 3.346 → 3.314 | 1.000× |
+| 128 | control | 1.492 → 1.580 | 1.944 → 1.930 | 3.436 → 3.510 | 0.944× |
+| 128 | gru-k1 | 2.824 → 2.865 | 4.768 → 4.774 | 7.592 → 7.639 | 0.434× |
+| 256 | incumbent | 1.344 → 1.430 | 1.927 → 1.887 | 3.271 → 3.316 | 1.000× |
+| 256 | control | 1.659 → 1.621 | 1.885 → 1.900 | 3.544 → 3.521 | 0.942× |
+| 256 | gru-k1 | 2.854 → 2.817 | 5.013 → 4.916 | 7.867 → 7.734 | 0.429× |
+
+No statistical speedup is established by one sample per cell. GRU is still
+2.07–2.33× incumbent total time, outside the session's 1.3× CPU gate.
+Warm cached feature arrays decline 4,444,452 → 4,379,888 bytes; raw transport
+is unchanged. Incumbent/control output, gradient and updated-state hashes all
+match their before cases exactly. GRU hashes change as intended, while all
+prefix hashes match. Load, host facts, source hashes and complete profiles are
+retained in the evidence. This is a two-stream randomly initialized CPU policy,
+not learnability, strength, CUDA or wide-stream cost evidence.
+
+Validation: 27 focused Python checks passed (exact dense/retained features,
+outputs and gradients, immutable earlier-record inputs after appends, both
+encoders' mixed empty/live/compact forms, actor/value gradients, checkpoint
+round trips and real collection/bootstrap/update). Ruff and whitespace checks
+passed. Native code and admission rules were unchanged; the earlier 4,298-case
+proof was not rerun for this arithmetic-only slice.
+
+Evidence: `experiments/data/opponent-memory/20261117-sharing-recency` contains
+five published manifest entries: measurement/source bundles, per-file
+identities and verification. All 60 archive members were verified locally; the
+experiment-data tracking guard passed. No fresh remote-fetch verification is
+claimed. Next: the
+execution-chunk learner fold and its stateless-reference output/gradient proof,
+then the separately measured parameter-versioned collection fold. No paid
+admission, pilot or matched training/evaluation was launched.

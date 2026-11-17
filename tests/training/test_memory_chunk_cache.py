@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 import gc
+from typing import Literal
 import weakref
 
 import numpy as np
@@ -148,3 +149,36 @@ def test_selected_dense_export_retains_edits_and_rejects_corruption() -> None:
     exported["decision_records"][0, 32, 1] = 0
     with pytest.raises(ValueError, match="ordinal"):
         model.prepare(select_rows(exported, np.array([0])))
+
+
+@pytest.mark.parametrize("encoder", ["gru", "transformer"])
+def test_record_features_do_not_depend_on_selected_prefix_length(
+    encoder: Literal["gru", "transformer"],
+) -> None:
+    space, raw = chunk_input()
+    short = {key: value.copy() for key, value in raw.items()}
+    short["decision_records"][:, 32:] = 0
+    short["decision_members"][:, 32 * 4 :] = 0
+    model = policy(space, encoder, 1, bucketed=True)
+    before = model.prepare(short).memory
+    after = model.prepare(raw).memory
+    assert before is not None and after is not None
+    # Appending history changes sequence coordinates, never an earlier record's
+    # embedding input. The GRU's ordering and the transformer's position signal
+    # are sequence-level operations.
+    np.testing.assert_array_equal(before.numbers, after.numbers[:32])
+    assert before.numbers.shape[1] == 38
+    assert before.lengths == (32,) and after.lengths == (65,)
+    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    identity = PrefixIdentity("game", 0, "root")
+    earlier = store.capture(short, 0, identity)
+    later = store.capture(raw, 0, identity)
+    assert earlier.tail is later.tail.previous.previous
+    for prefix, dense in ((earlier, before), (later, after)):
+        retained = model.prepare(PrefixObservation(raw, [prefix], capacities)).memory
+        assert retained is not None
+        for name, expected in array_fields(dense, np.ndarray).items():
+            np.testing.assert_array_equal(
+                array_fields(retained, np.ndarray)[name], expected, err_msg=name
+            )
