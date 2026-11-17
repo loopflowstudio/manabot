@@ -41978,6 +41978,14 @@
    "sha256": "feca78680f905d9a21558154d016372d69f0e499218050fe2563c83266bb3469",
    "bytes": 14520
   },
+  "experiments/data/opponent-memory/20261117-retention/evidence.tar.gz": {
+   "sha256": "9e8125b20663a533ccfea4c8544d8bb27561ff1bf638423a46469c3205b887e4",
+   "bytes": 271206
+  },
+  "experiments/data/opponent-memory/20261117-retention/members.json": {
+   "sha256": "ff69643339af9be91e6b381f4741dfcb5013bd14eff92aa520ec95f3d615aea9",
+   "bytes": 14031
+  },
   "experiments/data/opponent-memory/20261117-sharing-recency/measurement-files.json": {
    "sha256": "1fb55e29dcbd0b63086e55c580e122963f6163a5610703c653bf09c7e26d2221",
    "bytes": 8047

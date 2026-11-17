@@ -188,3 +188,37 @@ def test_record_features_do_not_depend_on_selected_prefix_length(
                 getattr(dense, field.name),
                 err_msg=field.name,
             )
+
+
+@pytest.mark.parametrize(
+    "field,column,low,high",
+    [
+        ("decision_records", 10, 0, 4),
+        ("decision_records", 11, 0, 11),
+        ("decision_records", 18, 1, 2),
+        *(("decision_records", c, 0, 1) for c in (60, 63, 66, 69, 72, 73)),
+        ("decision_references", 0, 0, 2),
+        *(("decision_references", c, 0, 1) for c in (6, 7, 8, 9, 13)),
+    ],
+)
+def test_changed_native_chunk_still_rejects_invalid_integer_categories(
+    field: str, column: int, low: int, high: int
+) -> None:
+    space, raw = _two_reference_input()
+    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    # Native counts describe the live slices, independently of category values.
+    counts = (
+        int(raw["decision_records"][0, :, 19].sum()),
+        int(raw["decision_reference_details"][0, :, 5].sum()),
+        int(raw["decision_references"][0, :, 12].sum()),
+        int(raw["decision_records"][0, :, 15:18].sum()),
+    )
+    original = float(raw[field][0, 0, column])
+    for invalid in (low - 1, high + 1, low + 0.5, float("nan"), float("inf")):
+        raw[field][0, 0, column] = original
+        store = MemoryStore(capacities)
+        identity = PrefixIdentity("game", 0, "root")
+        store.capture_live(raw, 0, identity, epoch=1, counts=counts, tail_version=1)
+        raw[field][0, 0, column] = invalid
+        with pytest.raises(ValueError):
+            store.capture_live(raw, 0, identity, epoch=1, counts=counts, tail_version=2)

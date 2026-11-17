@@ -2144,3 +2144,87 @@ Validation: memory-model and collection/learner-fold files passed (119 cases);
 after matching reload execution options, gate and Prepared-row tests passed
 (72 cases). Ruff and whitespace checks passed. Gate/CI retain the broader
 backend/recovery and active-training checks; no Rust changed in this cut.
+
+### Retention attribution and integer admission cut — 2026-11-17
+
+A cProfile wrapper around `_capture_memory` in the unchanged whole-game CPU
+harness isolates retention without adding game work. The control game has
+556 decisions, 396 capture calls and 557 selected rows (including bootstrap).
+Only 91 row captures enter chunk partitioning; 100 new Tail nodes are admitted.
+Unchanged tail revisions already skip partitioning, hashing and admission.
+Before the cut, changed-chunk admission consumes 39.3 ms of 63.9 ms capture;
+800 small `np.isin` calls consume 15.1 ms cumulatively. About 6 ms is a cold
+NumPy import nested in that membership path, not a separate recurring cost.
+The four native seed/seat/generation/cursor methods together consume 0.47 ms;
+immutable interning consumes 5.4 ms. Identity/object churn and unchanged-tail
+hashing do not justify a new cache in this two-stream profile.
+
+Replaced exactly the contiguous integer-category membership checks with bounds
+checks **after** finite/integer admission. Phase, step, chooser, selectors,
+reference flags and boolean detail checks retain identical accepted sets and
+errors. Noncontiguous catalog membership, words, partitions, temporal continuity,
+first-occurrence/reachability, program/mana routes and all other checks remain.
+Dense/import/archive paths retain their admission. No capture is skipped and
+no coalescing, capacity, identity, sampling or game persistence changes.
+
+Afterward capture is 50.7 ms, admission 25.4 ms, and the 800 equivalent bounds
+checks 2.0 ms. The counts and every profile receipt's rollout, prefix, gradient
+and updated-state hash match exactly. Profiling includes instrumentation and
+cold imports; its timings are attribution, not the unprofiled cost estimate.
+Remaining capture includes full changed-chunk admission, immutable interning,
+per-row capacity/generation checks and profiler/identity construction. The
+256-stream CUDA retention excess is not fully apportioned by this two-stream
+CPU profile; new CUDA evidence is needed to measure its reduction.
+
+Unprofiled matrix: 27 sequential fresh processes, three per arm/row limit,
+556 decisions each, two whole-game streams, mixed disclosure, open gates and
+one real update. All four hashes match the additive-join receipts exactly for
+every arm and row limit, with unchanged extension/world identities. Times are
+medians [min, max], seconds, against fresh matched-row true incumbents.
+
+| Rows | Arm | Decisions | Collection s | Update s | Total s | Total / incumbent |
+|---|---|---:|---:|---:|---:|---:|
+| 32 | incumbent | 556 | 1.422 [1.368, 1.425] | 2.559 [2.555, 2.583] | 3.980 [3.927, 4.005] | 1.000 |
+| 32 | control | 556 | 1.524 [1.471, 1.525] | 2.569 [2.554, 2.589] | 4.078 [4.040, 4.113] | 1.025 |
+| 32 | gru-k1 | 556 | 2.068 [2.056, 2.079] | 2.774 [2.768, 2.810] | 4.853 [4.824, 4.878] | 1.219 |
+| 128 | incumbent | 556 | 1.419 [1.359, 1.426] | 2.044 [2.008, 2.046] | 3.435 [3.405, 3.463] | 1.000 |
+| 128 | control | 556 | 1.501 [1.463, 1.525] | 2.014 [1.998, 2.029] | 3.516 [3.492, 3.522] | 1.024 |
+| 128 | gru-k1 | 556 | 2.099 [2.055, 2.113] | 2.148 [2.133, 2.185] | 4.240 [4.232, 4.261] | 1.234 |
+| 256 | incumbent | 556 | 1.414 [1.396, 1.418] | 2.064 [2.051, 2.099] | 3.477 [3.468, 3.496] | 1.000 |
+| 256 | control | 556 | 1.506 [1.500, 1.510] | 2.030 [2.010, 2.070] | 3.530 [3.515, 3.579] | 1.015 |
+| 256 | gru-k1 | 556 | 2.080 [2.064, 2.116] | 2.106 [2.094, 2.130] | 4.194 [4.187, 4.210] | 1.206 |
+
+Control CPU time ratios are **1.025/1.024/1.015×** at 32/128/256 rows;
+GRU-K1 **1.219/1.234/1.206×**, versus 1.234/1.240/1.223× before this cut.
+Total ranges overlap at 32/128 rows, and host/update variation is larger than
+this small retention saving. No general end-to-end speedup is claimed from
+these near-line total ratios. Retention/capture ranges do separate:
+
+| Rows | Arm | Retention before s | Retention after s | Nested capture before s | Nested capture after s |
+|---|---|---:|---:|---:|---:|
+| 32 | control | 0.0560 [0.0547, 0.0566] | 0.0473 [0.0464, 0.0477] | 0.0381 [0.0377, 0.0388] | 0.0299 [0.0297, 0.0300] |
+| 32 | gru-k1 | 0.0576 [0.0568, 0.0580] | 0.0480 [0.0467, 0.0483] | 0.0395 [0.0391, 0.0398] | 0.0305 [0.0292, 0.0306] |
+| 128 | control | 0.0562 [0.0557, 0.0580] | 0.0474 [0.0445, 0.0479] | 0.0386 [0.0384, 0.0398] | 0.0298 [0.0278, 0.0304] |
+| 128 | gru-k1 | 0.0580 [0.0557, 0.0587] | 0.0490 [0.0475, 0.0492] | 0.0398 [0.0379, 0.0404] | 0.0310 [0.0301, 0.0311] |
+| 256 | control | 0.0559 [0.0549, 0.0571] | 0.0469 [0.0459, 0.0472] | 0.0382 [0.0379, 0.0392] | 0.0297 [0.0289, 0.0298] |
+| 256 | gru-k1 | 0.0569 [0.0555, 0.0595] | 0.0487 [0.0475, 0.0494] | 0.0388 [0.0377, 0.0409] | 0.0309 [0.0301, 0.0314] |
+
+Capture is nested inside retention; these are not disjoint costs to sum.
+Unprofiled capture falls by about 8–9 ms per 556 decisions in both arms;
+retention falls by the same amount. The remaining roughly 30 ms capture is
+retained work, not proof that no further safe optimization exists.
+
+Validation: prefix/chunk-storage checks passed (34 cases), including 75 corrupt
+changed-tail mutations across 15 category fields (below/above bounds, fractions,
+NaN and infinity). Existing dense/admission rejection cases passed (72); the
+explicit finite-first-gate-gradient check passed (4). Ruff and whitespace checks
+passed. No Rust, observation layout or native rebuild changed. Broader gate/CI
+checks remain with the caller.
+
+Evidence: `experiments/data/opponent-memory/20261117-retention`: before/after
+capture profiles and receipts, original admission source, unchanged whole-game
+harness, implemented source, runner, all 27 receipts/logs, derived phase tables
+and per-member SHA256/size manifest. Archive members verified locally and
+published. No paid launch, pilot, PR, job rename or Task completion. Matched
+training and paired strength evaluation remain unrun; this new arithmetic has
+no CUDA measurement yet. All three bounded parts are complete.

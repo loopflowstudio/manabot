@@ -108,6 +108,11 @@ def _integers(values: np.ndarray) -> None:
         raise ValueError("invalid decision-memory integer values")
 
 
+def _outside_integer_range(values: np.ndarray, low: int, high: int) -> bool:
+    """Bounds replace set membership only after finite integer admission."""
+    return not bool(((values >= low) & (values <= high)).all())
+
+
 def _words(values: np.ndarray) -> None:
     if not ((values >= 0) & (values <= 65535)).all():
         raise ValueError("invalid decision-memory integer words")
@@ -240,12 +245,12 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     _words(references[:, 2:6])
     _words(details[:, 2:4])
     if (
-        not np.isin(records[:, 10], range(5)).all()
-        or not np.isin(records[:, 11], range(12)).all()
-        or not np.isin(records[:, 18], (1, 2)).all()
+        _outside_integer_range(records[:, 10], 0, 4)
+        or _outside_integer_range(records[:, 11], 0, 11)
+        or _outside_integer_range(records[:, 18], 1, 2)
     ):
         raise ValueError("invalid decision-memory phase, step or chooser")
-    if not np.isin(records[:, [60, 63, 66, 69, 72, 73]], (0, 1)).all():
+    if _outside_integer_range(records[:, [60, 63, 66, 69, 72, 73]], 0, 1):
         raise ValueError("invalid decision-memory selector presence")
     for offset in (60, 63, 66, 69):
         if records[records[:, offset] == 0, offset + 1 : offset + 3].any():
@@ -307,7 +312,7 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     if joins[len(members) :].any() or len(identities) != len(references):
         raise ValueError("unowned decision-memory member or snapshot rows")
     if (
-        not np.isin(references[:, 13], (0, 1)).all()
+        _outside_integer_range(references[:, 13], 0, 1)
         or ((references[:, 13] == 1) & (references[:, 1] == 0)).any()
     ):
         raise ValueError("invalid decision-memory definition shortcut")
@@ -324,8 +329,8 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
         raise ValueError("unowned decision-memory reference details")
     if (
         (references[:, 1] < 0).any()
-        or not np.isin(references[:, 0], (0, 1, 2)).all()
-        or not np.isin(references[:, 6:10], (0, 1)).all()
+        or _outside_integer_range(references[:, 0], 0, 2)
+        or _outside_integer_range(references[:, 6:10], 0, 1)
     ):
         raise ValueError("invalid decision-memory reference features")
     unknown = references[:, 0] == 0
@@ -359,7 +364,7 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     if ((references[:, 13] == 1) & (programs > 0)).any():
         raise ValueError("definition-only snapshot also owns a program")
     boolean = details[:, 1] == 5
-    if ((details[boolean, 2] != 0) | ~np.isin(details[boolean, 3], (0, 1))).any():
+    if details[boolean, 2].any() or _outside_integer_range(details[boolean, 3], 0, 1):
         raise ValueError("invalid decision-memory boolean token")
     return MemoryCursor(
         cursor.records + len(records),
