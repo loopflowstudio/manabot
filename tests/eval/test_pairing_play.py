@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.records import Inference, Match
+from etude.eval.records import CheckpointPlayer, Inference, Match
 from etude.records import ArtifactRef
 import pytest
 import torch
@@ -45,7 +45,7 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
             max_decision_members=8192,
         )
     )
-    players = []
+    players: list[CheckpointPlayer] = []
     for seed in (19, 20):
         torch.manual_seed(seed)
         model = ActorCritic(

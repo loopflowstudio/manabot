@@ -21,6 +21,7 @@ from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import canonical_sha256
 from manabot.policy.protocol import Backend
 from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.registration import PlayerRegistration
 import managym
 
 
@@ -38,7 +39,7 @@ def play_pairing(
     legs = 4 if matchup_mode == "cross" else 8
     if match.games != legs or len(match.players) != 2:
         raise ValueError("a pairing requires two players and every declared leg")
-    players = []
+    players: list[PlayerRegistration] = []
     paths: dict[str, str] = {}
     for index, player in enumerate(match.players):
         if not isinstance(player, CheckpointPlayer):

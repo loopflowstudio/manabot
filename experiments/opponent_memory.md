@@ -81,18 +81,24 @@ Each command rents nothing with `--quote` and launches without it.
 # 1. Three trunks.
 uv run etude launch experiments/opponent_memory.py \
   --source r2://manabot/jobs/opponent_memory --job decision-memory-trunk \
-  --revision COMMIT --rent mtg252-a40 --max-usd 7.20 --quote
+  --revision COMMIT --rent mtg252-a40 --max-usd 10.20 --quote
 
 # 2. Six branches, once the trunks have finished.
 uv run etude launch experiments/opponent_memory.py \
   --source r2://manabot/jobs/opponent_memory \
   --trunks r2://manabot/jobs/opponent_memory \
-  --revision COMMIT --rent mtg252-a40 --max-usd 19.80 --quote
+  --revision COMMIT --rent mtg252-a40 --max-usd 30.00 --quote
 
 # 3. Play whatever stored checkpoints have not met yet, then draw it.
 uv run etude eval experiments/opponent_memory.py --source r2://manabot/jobs/opponent_memory
 uv run etude report experiments/opponent_memory.py --source r2://manabot/jobs/opponent_memory --open
 ```
+
+The launcher's `--max-usd` is cumulative for the experiment, including previous
+calibration spending. The command ceilings include that spending: USD10.20
+through trunks and USD30 through branches. Individual job caps remain USD2.40
+per trunk and USD3.30 per branch (USD27 total training). Read the retained
+commitment before launching; these ceilings are not additional allowances.
 
 Step 2 refuses a seed whose trunk is missing or unfinished, naming the seed.
 Step 3 plays nothing while no branch has a checkpoint, and can be repeated as
@@ -115,6 +121,26 @@ allowance per run. The quote replaces both assumptions.
 Calibration is the launcher's number for each run in the dated entries below.
 The evaluation rate is unpriced: the nearest receipt is a USD2 cap on a
 4,800-game Elemental pass, which is a cap and not a cost.
+
+### Trunk quote — 2026-11-17
+
+Source `2144305471` declares the three trunks and the branch/evaluation wiring.
+The quote-only command above, with that revision, selected all three seeds
+39101–39103 and refused:
+
+> cannot launch on mtg252-a40: provider reports no available machines; etude queue would wait
+
+At 2026-11-17 16:20:38 UTC the provider reported USD0.59/hour (ceiling USD0.60),
+none available, zero of nine in use and not rentable now. There is no admitted
+whole-rental quote; the hourly offer does not guarantee capacity or price the
+startup window. The planned-dollars table remains an estimate.
+
+The launcher reported 10 retained training runs, zero eval runs and USD2.95
+committed. Its run listing contained calibration runs only, with no trunk or
+branch. The initial quote used USD7.20 as the experiment ceiling and selected
+only one trunk because prior calibration spending also counts; the corrected
+USD10.20 ceiling selected all three. Both were quote-only refusals. Nothing was
+queued, launched or rented, and no pilot learning comparison has run.
 
 ## Limits
 
