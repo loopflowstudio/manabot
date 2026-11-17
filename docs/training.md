@@ -269,12 +269,14 @@ never masquerades as raw. Producers that themselves import policies, and
 legacy checkpoints without TrainingRun metadata, are rejected.
 
 `TrainSelfPlay.pretrained = PretrainedPolicy(...)` (same reference shape)
-starts self-play from a published policy instead of random weights. The world,
-`ModelConfig` and observation contract must equal the producer's; the learning
-rule, schedules, streams, transitions, updates, behavior, opponent, device and
-seed are free. Only the policy is inherited: Adam, EMA, streams and the
-schedule iteration start fresh, so choose a schedule meant for a trained
-policy. Remote jobs reject `pretrained`. To continue one recipe with its Adam
+starts self-play from a published policy instead of random weights. The world
+and observation contract must equal the producer's. `ModelConfig` must also
+match, except for a [control-to-memory branch](observation-and-model.md#starting-from-a-control-trunk):
+only the encoder, summary count and gate scale may change, with positive shared
+decision capacities. The learning rule, schedules, streams, transitions, updates,
+behavior, opponent, device and seed are free. Only the policy is inherited:
+Adam, EMA, streams and the schedule iteration start fresh, so choose a schedule
+meant for a trained policy. Remote jobs reject `pretrained`. To continue one recipe with its Adam
 and EMA, use [portable learner continuation](#portable-learner-continuation).
 
 `StageRecord.producer_cost` carries the producer's cumulative cost through

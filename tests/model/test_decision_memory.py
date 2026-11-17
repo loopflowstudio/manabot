@@ -303,7 +303,7 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
             torch.equal(before[name], parameter)
             for name, parameter in model.decision_memory.named_parameters()
         )
-        assert any(value != 0 for value in model.training_metrics().values())
+        assert any(value != 0 for value in model.memory_gates().values())
         update_damped_iteration(
             torch_backend,
             learner,

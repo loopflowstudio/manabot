@@ -9,12 +9,11 @@ from test_decision_memory import forward, memory_input, policy
 import torch
 
 from manabot.backends.torch.checkpoint import (
-    branch_from_trunk,
     load_checkpoint,
-    load_metadata,
     save_checkpoint,
 )
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.state import restore_policy
 from manabot.env.decision_memory import blank_memory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
@@ -52,9 +51,11 @@ def test_trunk_branch_is_exact_and_checkpoint_retains_gates(
     ).eval()
     path = tmp_path / "trunk.safetensors"
     save_checkpoint(trunk, space, path, player_configs=None)
-    arm, _ = branch_from_trunk(
-        str(path), template.config, live_tokens=live, bucketed_shapes=bucketed
-    )
+    admitted, _ = load_checkpoint(str(path))
+    arm = ActorCritic(
+        space, template.config, live_tokens=live, bucketed_shapes=bucketed
+    ).eval()
+    restore_policy(arm, admitted.state_dict(), source_config=admitted.config)
     longer = {key: value.copy() for key, value in obs.items()}
     for index in range(128):
         longer["decision_records"][0, index] = obs["decision_records"][0, 0]
@@ -71,15 +72,14 @@ def test_trunk_branch_is_exact_and_checkpoint_retains_gates(
                     forward(arm, rows), forward(trunk, rows), strict=True
                 ):
                     torch.testing.assert_close(actual, expected, atol=0, rtol=0)
-    assert arm.training_metrics() == {"gate_0": 0, "gate_1": 0}
+    assert arm.memory_gates() == {"gate_0": 0, "gate_1": 0}
     with torch.no_grad():
         assert arm.attention.memory_gate is not None
         arm.attention.memory_gate.fill_(0.25)
     saved = tmp_path / "arm.safetensors"
     save_checkpoint(arm, space, saved, player_configs=None)
     restored, _ = load_checkpoint(str(saved))
-    assert restored.training_metrics() == arm.training_metrics()
-    assert load_metadata(saved)["trunk_source"] == load_metadata(path)["source"]
+    assert restored.memory_gates() == arm.memory_gates()
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -117,26 +117,26 @@ def test_zero_gate_receives_gradient_then_encoder_learns(
     )
 
 
-def test_branch_refuses_other_architecture_and_nonmemory_space(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fault", ["unexpected", "missing", "shape", "strict"])
+def test_pretrained_restore_keeps_shared_state_strict(fault: str) -> None:
     space, _ = memory_input()
-    template = policy(space, "gru", 1)
+    arm = policy(space, "gru", 1)
     trunk = ActorCritic(
-        space, template.config.model_copy(update={"decision_memory": "none"})
+        space, arm.config.model_copy(update={"decision_memory": "none"})
     )
-    path = tmp_path / "trunk.safetensors"
-    save_checkpoint(trunk, space, path, player_configs=None)
-    with pytest.raises(ValueError, match="settings"):
-        branch_from_trunk(
-            str(path), template.config.model_copy(update={"hidden_dim": 32})
+    state = dict(trunk.state_dict())
+    # Choose a shared learned weight without depending on its local module name.
+    key = next(name for name, value in state.items() if value.ndim == 2)
+    if fault == "unexpected":
+        state["unowned"] = torch.zeros(())
+    elif fault == "missing":
+        del state[key]
+    elif fault == "shape":
+        state[key] = state[key][:0]
+    with pytest.raises((ValueError, RuntimeError)):
+        restore_policy(
+            arm, state, source_config=None if fault == "strict" else trunk.config
         )
-    with pytest.raises(ValueError, match="memory arm"):
-        branch_from_trunk(str(path), trunk.config)
-    ordinary = ObservationSpace()
-    save_checkpoint(
-        ActorCritic(ordinary, trunk.config), ordinary, path, player_configs=None
-    )
-    with pytest.raises(ValueError, match="capacities"):
-        branch_from_trunk(str(path), template.config)
 
 
 @pytest.mark.parametrize("scale", [0, -1, float("inf"), float("nan")])

@@ -15,6 +15,7 @@ import shutil
 from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_decks, validate_agent_setup
+from manabot.policy.checkpoint import pretrained_memory_branch
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -129,12 +130,14 @@ def admit_policy(
         raise ValueError("published checkpoint does not match producer weight artifact")
     if (
         source.regime.world != regime.world
-        or source.regime.agent != regime.agent
+        or (not pretrained and source.regime.agent != regime.agent)
         or source.regime.observation != regime.observation
     ):
         raise ValueError(
             "published producer model/observation/world differs from regime"
         )
+    if pretrained:
+        pretrained_memory_branch(source.regime.agent, regime.agent, regime.observation)
     admitted = copy_verified_artifact(
         stage.checkpoint, out / f"{name}-{stage.weights}.pt"
     )
@@ -142,7 +145,10 @@ def admit_policy(
     # Fork RNG so validation never shifts downstream initialization streams.
     with backend.state.preserve_rng():
         agent, space = backend.load_policy(admitted["path"])
-    if agent.config != regime.agent or space.encoder.config != regime.observation:
+    if (
+        agent.config != source.regime.agent
+        or space.encoder.config != regime.observation
+    ):
         raise ValueError("published checkpoint model/observation differs from regime")
     for setups in (source.regime, regime):
         admit_setups(agent, setups)

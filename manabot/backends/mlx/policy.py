@@ -486,7 +486,7 @@ class MLXActorCritic(nn.Module):
         finally:
             self.update(masters)
 
-    def training_metrics(self) -> dict[str, float]:
+    def memory_gates(self) -> dict[str, float]:
         """MLX does not implement decision memory."""
         return {}
 

@@ -81,7 +81,7 @@ class InferenceScope(Protocol):
 
 
 class BackendPolicy(Protocol):
-    def training_metrics(self) -> dict[str, float]:
+    def memory_gates(self) -> dict[str, float]:
         """Effective decision-memory gates at an update boundary."""
         ...
 

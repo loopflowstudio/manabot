@@ -32,13 +32,14 @@ class CapacityGame:
     error: str | None
 
 
-def run_census(out: Path, games: int = 20, max_decisions: int = 2000) -> None:
+def run_census(out: Path, max_decisions: int = 2000) -> None:
     """Retain incomplete games too; never recommend capacities after overflow.
 
-    An aligned 200-game block covers every ordered pair in both disclosure
-    modes. This exploratory census begins with 20 games; no strength inference.
+    All 200 cells cover every ordered pair in both disclosure modes; no
+    strength inference.
     """
-    if games <= 0 or max_decisions <= 0:
+    games = 200
+    if max_decisions <= 0:
         raise ValueError("census requires positive game and decision bounds")
     out.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()

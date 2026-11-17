@@ -8,11 +8,12 @@ learning? Census and controlled storage measurements are retained below;
 GPU calibration, training and paired evaluation have not run. The USD 50 allocation is a
 budget, not a measured cost. No playing-strength finding follows from this report.
 
-The incumbent is the current no-history policy. The best guess is a small
-transformer over the opponent's whole-game decision records, with four learned
-summary tokens joining the board transformer's token stream. Compare throughput
-and learning at matched learner decisions. Do not require a strength gain to
-recommend retaining memory as the next basis, but do not interpret a noisy short
+The incumbent has history disabled; the control retains and validates the log,
+reserving its vocabulary without encoding it. The true history-disabled incumbent
+remains the throughput reference. The selected design compares transformer and
+GRU encoders with one learned summary token joining the board transformer.
+Compare throughput and learning at matched learner decisions. Do not require a
+strength gain to recommend retaining memory as the next basis, but do not interpret a noisy short
 run as proof of non-inferiority. Report the size and uncertainty of regressions;
 the roughly 10% throughput cost mentioned in the task is context for that
 judgment, not a precomputed verdict.
@@ -21,7 +22,7 @@ judgment, not a precomputed verdict.
 
 A supervised probe comes first, then three paid arms across three independent
 seed labels, shared across arms for blocking: nine branch runs from three
-no-history trunks, not nine independent seeds. The seed, not
+control trunks, not nine independent seeds. The seed, not
 an evaluation game, is the unit of learning evidence. No factorial cross and no
 dedicated control-deck training arm in this pilot; stratify the existing
 Elemental matchups instead.
@@ -87,16 +88,16 @@ that reinforcement learning cannot use memory. Repeating the probe on the
 trunks' own self-play games is an optional check inside the budget and does not
 change the chosen K.
 
-| Arm | Changes from the incumbent |
+| Arm | Behavior on the shared log |
 | --- | --- |
-| No history | Incumbent; no memory tokens or recent events |
+| Control | No encoder or recent events; vocabulary reserved |
 | Transformer, K summaries | Two pre-norm bidirectional record-transformer layers |
 | GRU, K summaries | Single-layer GRU over the full prefix, same record width |
 
 Jack Heart selected transformer and GRU with extra board tokens (J1), then
 "Probe first; choose K, then run three arms", which replaces the five-arm pilot;
 see `scratch/questions.md` for the exact direction. The experiment module lists
-the four probe candidates and the control but stops before job construction
+the three pilot arms but stops before job construction
 until resource sizing, CUDA admission and calibrated job wiring are ready.
 Opponent-only records are the measured workload; the default-false
 `decision_memory_include_own` option adds no arm. The implementation plan is
@@ -113,22 +114,23 @@ heuristic Elemental census (3 of 60 probe games exceeded 8,192 reference rows);
 overflow is never truncated, and whether an overflowing paid game is aborted and
 counted per arm or ends the run is decided before launch. Keep parameter counts visible: these are
 design alternatives with different costs, not parameter-matched architecture claims.
-Use the true history-disabled incumbent as the throughput reference. A control
-that retains the log isolates encoder/join cost, but cannot establish the total
-cost of adding memory. Report native capture, encoding and host transport
+A control that retains the log isolates encoder/join cost, but cannot establish
+the total cost of adding memory. Report native capture, encoding and host transport
 separately; the shared engine still captures decisions with history input disabled.
 
 ### Common-trunk initialization (software implemented; pilot pending)
 
-Each seed label trains one no-history trunk on the memory-enabled observation
-space, then branches three arms from its checkpoint: no history, transformer-K
-and GRU-K. The log-enabled trunk reserves the same memory catalog vocabulary as both branches, so shared embedding weights copy without remapping. The history-disabled throughput incumbent retains its smaller vocabulary. The arms do not start as unrelated randomly initialized agents. The
-three seed labels 39101–39103 provide independent learning units; the three
+Each seed label trains one control trunk on the memory-enabled observation
+space, then branches three arms from its checkpoint: control, transformer-K1
+and GRU-K1. The log-enabled trunk reserves the same memory catalog vocabulary as
+both branches, so shared embedding weights copy without remapping. The
+history-disabled throughput incumbent retains its smaller vocabulary. The arms
+do not start as unrelated randomly initialized agents. The three seed labels 39101–39103 provide independent learning units; the three
 branches within each label form a blocked comparison. Older-world checkpoints
 cannot be rebound or admitted by bypassing world/shape checks.
 
 A memory arm starts as its trunk exactly: the
-[gated join](../docs/observation-and-model.md#starting-from-a-no-history-trunk)
+[gated join](../docs/observation-and-model.md#starting-from-a-control-trunk)
 blends each board layer's board-only and joint attention outputs by
 `tanh(scale * gate)`, with the gates at zero. Zero-valued summaries alone are
 not inert attention tokens, and a mask would be exact but could never learn.
@@ -214,7 +216,7 @@ this one experiment.
    before training. If three arms
    cannot fit meaningful learning, report that rather than covertly narrowing the
    comparison or making a learning claim from smoke updates.
-3. **Learning pilot, at most USD 27.** Twelve runs: one no-history trunk for
+3. **Learning pilot, at most USD 27.** Twelve runs: one control trunk for
    each independent seed label 39101–39103, then three branches from each. The
    per-run cap, including startup and finalization, is set at calibration so
    that all twelve fit the allowance. Inspect
@@ -234,7 +236,7 @@ this one experiment.
    exact matches or extrapolate a stopped run. Retain initialization, midpoint
    and endpoint checkpoints for early learning curves.
 4. **Paired evaluation, at most USD 12.** At each milestone, each history-arm
-   checkpoint plays its same-seed no-history checkpoint at matched learner
+   checkpoint plays its same-seed control checkpoint at matched learner
    decisions on the same held-out Elemental 10x10 grid, separately under open
    and closed decklists, with
    native `MatchConfig.decklists` as authority. Disclosure adds evaluation
@@ -298,7 +300,7 @@ same-host baseline variability; include common native-log overhead, model size,
 memory and phase breakdown. Treat differing trajectories and game lengths as
 part of whole-training cost; retained-input timings isolate encoder cost.
 
-Plot overall head-to-head score against the no-history control (neutral score
+Plot overall head-to-head score against the control (neutral score
 0.5) against actual learner decisions and elapsed training time,
 show all three seeds and paired differences, and give the 10x10 matchup table
 plus per-deck and play/draw breakdowns, separately for open and closed lists.
@@ -1183,12 +1185,17 @@ B1/B2 stay deferred until calibration shows what fits the same USD 50 total.
 
 ## Gated join and Elemental capacity census — 2026-11-16
 
-The three pilot arms are now no history, transformer-K1 and GRU-K1. All memory
-policies use the zero-initialized per-layer J1 gate; there is no ungated policy
-path. `branch_from_trunk` admits a compatible no-history checkpoint, checks the
-non-memory configuration and copies shared tensors strictly, initializing only
-the memory module and gates. Exports retain `trunk_source` alongside their own
-source. Update metrics report `decision_memory/gate_<layer>`.
+The three pilot arms are `control`, transformer-K1 and GRU-K1. All memory
+policies use the zero-initialized per-layer J1 gate.
+All three branches start through `TrainSelfPlay.pretrained` from a compatible
+control checkpoint. Admission checks the producer and non-memory configuration;
+the executor copies shared tensors strictly, initializing only memory and gates.
+Adam, EMA, streams and schedule start fresh. The run record retains
+`pretrained/source_run`, `pretrained/checkpoint` and `producer_cost`; checkpoint
+source continues to name the run that wrote it. Update metrics report
+`decision_memory/gate_<layer>`. The remote `TrainingJob` adapter still rejects
+pretrained stages; staging the producer run and selected checkpoint through
+its digest-checked inputs is a prerequisite to CUDA branch admission.
 
 One prerequisite changed after inspection: memory adds catalog embedding rows,
 so the old log-enabled control could not supply identical shared tensors. The
@@ -1225,7 +1232,7 @@ keeps its original 8,192 detail bound and exclusions; it was not rerun.
 Reproduce the census with:
 
 ```sh
-uv run python -m experiments.opponent_memory capacity-census --max-games 200 \
+uv run python -m experiments.opponent_memory census \
   --out .runs/decision-memory-capacity
 ```
 
@@ -1247,3 +1254,23 @@ update. Native debug decision-memory checks: **10 passed**. Ruff and
 The model CI invocation collected **1,215 tests**, including the new gate file.
 The first collection lacked the local LLM extra; installing the declared locked
 extra resolved those import errors. This was collection only, not a full CI run.
+
+
+### Pretrained executor validation — 2026-11-16
+
+Control, transformer-K1 and GRU-K1 now run through published `pretrained`
+admission and ordinary training execution. Bounded CPU fixtures use two streams
+and exact-quota collection; each memory branch's exported initialization matches
+its trained control's shared tensors and real-prefix outputs with zero tolerance.
+Different encoder producers and changed non-memory settings are rejected; missing
+shared keys, unexpected keys and incompatible shapes fail restoration.
+
+Focused validation: **265 distinct Python cases passed, 7 skipped** across the
+gate, pretrained executor, decision model, backend protocols/updates, container,
+Prepared, package boundaries and experiment discovery. The broad selection first
+reported 211 passes and one failure: gate diagnostics accessed an absent attention
+layer in a memory-disabled policy. Returning no gates for disabled memory fixed
+it; the failing integration and staged-gradient/scale selection then passed all
+9 cases. Ruff check/format and whitespace checks passed. These checks establish
+software wiring, not CUDA fit, throughput or learnability. No Rust changed, no
+probe/census was repeated and no rental or paid run was started.

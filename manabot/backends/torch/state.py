@@ -19,6 +19,8 @@ from torch import Tensor
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation, archive_memory
+from manabot.infra.config import ModelConfig
+from manabot.policy.checkpoint import pretrained_memory_branch
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
@@ -37,8 +39,32 @@ def policy_state(policy: BackendPolicy) -> dict[str, Any]:
     return cast(ActorCritic, policy).state_dict()
 
 
-def restore_policy(policy: BackendPolicy, state: dict[str, Any]) -> None:
-    cast(ActorCritic, policy).load_state_dict(state)
+def restore_policy(
+    policy: BackendPolicy,
+    state: dict[str, Any],
+    *,
+    source_config: ModelConfig | None = None,
+) -> None:
+    """Strict restoration; pretrained branches alone may initialize memory keys."""
+    agent = cast(ActorCritic, policy)
+    branch = source_config is not None and pretrained_memory_branch(
+        source_config, agent.config, agent.observation_space.encoder.config
+    )
+    if not branch:
+        agent.load_state_dict(state, strict=True)
+        return
+    target = agent.state_dict()
+    allowed = {
+        name
+        for name in target
+        if name.startswith("decision_memory.") or name.endswith(".memory_gate")
+    }
+    if set(target) - set(state) != allowed or set(state) - set(target):
+        raise ValueError(
+            "pretrained copy would leave non-memory parameters unused or uninitialized"
+        )
+    # Strict loading also checks every shared buffer and parameter shape.
+    agent.load_state_dict({**target, **state}, strict=True)
 
 
 def optimizer_state(learner: object) -> dict[str, Any]:

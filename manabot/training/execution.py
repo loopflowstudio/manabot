@@ -1184,7 +1184,9 @@ def _execute_regime(
                         # Only weights are inherited: Adam, the EMA average and
                         # the schedule iteration below all start fresh.
                         backend.state.restore_policy(
-                            agent, backend.state.policy_state(pretrained)
+                            agent,
+                            backend.state.policy_state(pretrained),
+                            source_config=pretrained.config,
                         )
                         pretrained = None
                     if snapshot is None:
@@ -1541,7 +1543,7 @@ def _execute_regime(
                     record.learner_transitions = (
                         collector.stats.learner_transitions - before.learner_transitions
                     )
-                    diagnostic["decision_memory"] = learner.agent.training_metrics()
+                    diagnostic["decision_memory"] = learner.agent.memory_gates()
                     diagnostic["coordinates"] = coordinates()
                     spent = phase_seconds(record)
                     # Etude holds update rows; the record keeps only counters.

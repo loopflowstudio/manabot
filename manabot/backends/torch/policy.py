@@ -130,7 +130,6 @@ class ActorCritic(nn.Module):
         live_tokens: bool = False,
     ) -> None:
         super().__init__()
-        self.trunk_source: dict[str, object] | None = None
         self.belief_binding: BeliefCheckpointBinding | None = None
         self.observation_space = observation_space
         self.config = config
@@ -215,6 +214,7 @@ class ActorCritic(nn.Module):
                 embed_dim,
                 num_heads=num_heads,
                 feedforward_dim=config.attention_feedforward_dim,
+                memory_gate_scale=config.decision_memory_gate_scale,
             )
             self.logger.info(
                 f"Attention: {embed_dim} -> {embed_dim} with {num_heads} heads"
@@ -296,6 +296,7 @@ class ActorCritic(nn.Module):
                 config.num_attention_heads,
                 ownership=False,
                 feedforward_dim=config.attention_feedforward_dim,
+                memory_gate_scale=config.decision_memory_gate_scale,
             )
             for _ in range(config.attention_layers - 1)
         )
@@ -314,7 +315,6 @@ class ActorCritic(nn.Module):
         if self.decision_memory is not None:
             for layer in (self.attention, *self.extra_attention):
                 layer.memory_gate = nn.Parameter(torch.zeros(()))
-                layer.memory_gate_scale = config.decision_memory_gate_scale
         self.memory_summaries = (
             config.decision_memory_summaries if self.decision_memory is not None else 0
         )
@@ -811,8 +811,10 @@ class ActorCritic(nn.Module):
             },
         )
 
-    def training_metrics(self) -> dict[str, float]:
+    def memory_gates(self) -> dict[str, float]:
         """Effective memory gates, read only at update reporting boundaries."""
+        if self.decision_memory is None:
+            return {}
         return {
             f"gate_{index}": float(
                 torch.tanh(layer.memory_gate_scale * layer.memory_gate).detach()
@@ -1341,10 +1343,11 @@ class GameObjectAttention(nn.Module):
         *,
         ownership: bool = True,
         feedforward_dim: int | None = None,
+        memory_gate_scale: float = 1.0,
     ) -> None:
         super().__init__()
         self.memory_gate: nn.Parameter | None = None
-        self.memory_gate_scale = 1.0
+        self.memory_gate_scale = memory_gate_scale
         self.embedding_dim = embedding_dim
         self.logger = getLogger(__name__).getChild("attention")
         self.logger.info(f"Creating perspective vector of size {embedding_dim}")

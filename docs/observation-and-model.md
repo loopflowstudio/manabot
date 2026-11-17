@@ -592,7 +592,7 @@ for its scope. Host residency of the new snapshot layout has not been measured;
 on the recorded CPU world before #547/#550 integration, log-control collection
 costs 1.73× the history-disabled median
 ([report](../experiments/opponent_memory.md#final-post-sync-admission-measurement--2026-11-16)).
-The gated join and [branching from a trunk](#starting-from-a-no-history-trunk)
+The gated join and [branching from a trunk](#starting-from-a-control-trunk)
 are implemented. CUDA worker admission and the three-arm pilot remain
 outstanding. The [completed supervised probe](../experiments/opponent_memory.md#supervised-probe-result--2026-11-16)
 selected one summary token for both pilot encoders.
@@ -643,7 +643,7 @@ can lose that context. The encoder produces summary tokens that join the board
 attention, allowing both legal-action probabilities and the value estimate to
 depend on the earlier choice. This does not establish a learning benefit; the
 [three-arm pilot](../experiments/opponent_memory.md) compares both encoders with
-a no-history control, after supervised probes select one shared summary count.
+a control, after supervised probes select one shared summary count.
 
 | Setting | Choices and behavior |
 | --- | --- |
@@ -653,11 +653,12 @@ a no-history control, after supervised probes select one shared summary count.
 | `recent_events` | Must be `False` when decision memory is enabled. The bounded event encoder remains a separate option. |
 | `decision_memory_gate_scale` | Positive float, default 1.0. Multiplies each board layer's learned gate parameter inside `tanh`; a larger scale opens the join in fewer updates. Ignored when memory is `"none"`. |
 
-A no-history control can use `decision_memory="none"` with the same positive
+A control can use `decision_memory="none"` with the same positive
 observation capacities. Native encoding, immutable prefix retention and input
 validation still carry the full log. The control creates no memory parameters
-or prepared memory features, and its current-state predictions match the
-incumbent. Checkpoints retain the declared observation capacities in every arm.
+or prepared memory features. Its vocabulary shape differs from the
+history-disabled incumbent, so the two do not share identical initialization.
+Checkpoints retain the declared observation capacities in every arm.
 
 The LLM text observation lists every opponent record chronologically. Repeated
 historical references and rules descriptions appear once in alias tables; the
@@ -747,7 +748,7 @@ admitting and preparing one execution chunk. Temporary raw arrays expire after
 preparation; only small predictions survive each chunk. Sampling still uses one
 RNG call in the original group order.
 
-A memory-enabled training stage (including a no-history control retaining the
+A memory-enabled training stage (including a control retaining the
 same logs) requires explicit positive `Execution.collection_rows`,
 `Execution.bootstrap_rows` and `Execution.learner_rows` limits. For example,
 `Execution(collection_rows=2, bootstrap_rows=2, learner_rows=2)` exercises the
@@ -804,48 +805,38 @@ production summaries as a differentiable `[batch, K, hidden_dim]` tensor for
 offline probes. It uses the policy's token, name and definition embeddings;
 its input is admitted Prepared data, and it evaluates no action or value head.
 
-### Starting from a no-history trunk
+### Starting from a control trunk
 
-A memory policy can continue a no-history policy trained on the same
-observation space, and it starts as exactly that policy:
+All three arms start a fresh `TrainSelfPlay` stage through `pretrained`.
+A control is a log-enabled policy with `decision_memory="none"`: it retains and
+validates the log and reserves its vocabulary without encoding it. An incumbent
+has history disabled. The true history-disabled incumbent remains the throughput
+reference.
 
-```python
-from manabot.backends.torch.checkpoint import branch_from_trunk
-from manabot.infra.config import ModelConfig
+Set the stage's `pretrained` to a `PretrainedPolicy` with the producer's exported
+`source_run`, `source_stage`, `checkpoint` and `weights` (`raw` or `ema`). Each
+artifact reference pins its path, SHA256 and byte count; the checkpoint must be
+the corresponding artifact of a completed producer self-play stage. Choose the
+memory encoder, summary count and gate scale in the new regime's `agent`.
+The control branch uses the producer's identical model settings. Remote
+`TrainingJob` does not yet bind pretrained inputs; this is the executor path
+described in [training](training.md#reuse-a-published-policy).
 
-policy, space = branch_from_trunk(
-    "trunk-39101.safetensors",
-    ModelConfig(
-        decision_memory="gru",
-        decision_memory_summaries=1,
-        attention_on=True,
-        attention_layers=2,
-        policy_film=True,
-        value_aggregation="masked_mean",
-    ),
-)
-```
+Admission verifies the producer receipt, artifact bytes, world and observation
+configuration. It permits a model change only from a control to a memory encoder,
+with only `decision_memory`, `decision_memory_summaries` and
+`decision_memory_gate_scale` differing. The trunk must declare the same positive
+decision capacities as the branch. Executor restoration copies every shared
+tensor with strict shape checks and initializes only `decision_memory.*` and
+the per-layer gates; missing shared or unexpected keys fail. Identical models
+and learning-state recovery still use ordinary strict restoration. A trunk from
+an older world or a different observation layout cannot be branched.
 
-On any input, including long and empty histories, the returned policy gives the
-trunk's action probabilities and value bit for bit. Its checkpoints record the
-trunk's `checkpoint_source` beside their own.
-
-The trunk reserves the memory catalog vocabulary without encoding the log. It
-is a `decision_memory="none"` policy whose
-`ObservationConfig` declares the same positive decision capacities as the
-branch, so the two share one world binding. `branch_from_trunk` copies every
-trunk parameter and initializes only the memory encoder and the join gates. A
-log-enabled control therefore has a larger catalog embedding than the
-history-disabled throughput incumbent. It raises, without returning a policy, when
-
-- the trunk's observation space differs in any buffer shape (the usual world
-  binding error, naming the trunk's revision and the differing buffers);
-- the trunk's other model settings differ from the requested configuration;
-- any parameter other than `decision_memory.*` and the gates would be left
-  uninitialized, or any trunk parameter would go unused.
-
-There is no tolerant variant: a trunk from an older world, or one trained
-without the decision capacities, cannot be branched. Train a new trunk.
+At initialization, including long and empty histories, a branch gives the
+trunk's action probabilities and value bit for bit. Adam, EMA, streams and the
+schedule start fresh at branch iteration one. The run record's
+`pretrained/source_run`, `pretrained/checkpoint` and `producer_cost` retain
+lineage and ancestor cost; checkpoints retain their own source identity.
 
 Summaries join the board as extra tokens. A token of zeros would still take
 attention weight and change every board row, so each board attention layer

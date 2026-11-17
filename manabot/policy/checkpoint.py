@@ -64,7 +64,6 @@ _ATTENTION_LEAVES = {
 # Checkpoint fields carried, JSON-encoded, in the container metadata.
 _METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
 _OPTIONAL_METADATA_KEYS = (
-    "trunk_source",
     "bc",
     "global_step",
     "belief_schema_identity",
@@ -80,6 +79,42 @@ class NotAContainer(ValueError):
 
 class UnsupportedPolicy(ValueError):
     """The checkpoint enables something the framework backends do not implement."""
+
+
+def pretrained_memory_branch(
+    source: ModelConfig, target: ModelConfig, observation: ObservationConfig
+) -> bool:
+    """Admit identical models or a memory encoder over a same-layout control.
+
+    Observation and world equality are checked by published-policy admission.
+    Only the three memory settings may differ; disabled history cannot supply
+    the reserved vocabulary required by a branch.
+    """
+    if source == target:
+        return False
+    excluded = {
+        "decision_memory",
+        "decision_memory_summaries",
+        "decision_memory_gate_scale",
+    }
+    if (
+        source.decision_memory != "none"
+        or target.decision_memory == "none"
+        or source.model_dump(exclude=excluded) != target.model_dump(exclude=excluded)
+    ):
+        raise ValueError("pretrained model settings differ from requested arm")
+    if not all(
+        (
+            observation.max_decision_records,
+            observation.max_decision_reference_details,
+            observation.max_decision_references,
+            observation.max_decision_members,
+        )
+    ):
+        raise ValueError(
+            "pretrained memory branch requires positive decision capacities"
+        )
+    return True
 
 
 # -- architecture --------------------------------------------------------------------
