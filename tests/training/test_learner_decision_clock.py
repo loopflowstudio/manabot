@@ -105,6 +105,24 @@ def test_update_ceiling_does_not_claim_the_decision_target(
         run_worker()
 
 
+def test_decision_target_keeps_complete_games(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = specification()
+    stage = spec.regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.learning_seats = "both"
+    stage.batch_closure = "complete-games"
+    stage.games_per_stream = 1
+    stage.target_learner_transitions = 1
+    worker_environment(tmp_path, monkeypatch, spec)
+    run = run_worker()
+    assert run.status == "completed", run.error
+    assert run.updates_through() == 1
+    assert run.stages[0].games == 2
+    assert run.learner_transitions_through() > 1
+
+
 def execute(recipe: TrainingRegime, root: Path, label: str) -> TrainingRun:
     with VerifyStore(root / "training.sqlite") as store:
         run = execute_regime(
