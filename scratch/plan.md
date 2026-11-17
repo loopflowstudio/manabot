@@ -110,8 +110,44 @@ passed). Commands and limits: implementation.md.
     Blocked 2026-11-17: RunPod quotes $0.69/hour but no available L4; Vast
     and Lium also report none. No machine rented, no spend, no CUDA or speed
     numbers. Shared launcher DB unchanged; isolated launcher has no rentals.
+    Rechecked 14:50 UTC through the isolated launcher: still none available.
     Retry when L4 capacity returns, keeping the approved USD 3 cap.
+- Steer 2026-11-17 on PR #500 (complete text:
+  .lf/prompts/20261117-065016-7oIWNJ-steer.md). Jack Heart: "i also would
+  have expected this pr to involve more deletion of the executor and training
+  regime code, no?"; offered keep / thin reader / delete, he answered "3".
+  Not started; comes after the L4 measurement, which stays pending, not abandoned.
+  - Delete the retained regime/stage records and code that exists only to read
+    them: `manabot/training/regime.py` (928 lines: TrainingRegime,
+    TrainSelfPlay, other Stages, Execution, RecoveryPolicy, CheckpointCadence,
+    import/origin records), reader-only parts of `manabot/experiment/` (1,367
+    lines), `manabot/reports/`, `manabot/training/records.py` (247),
+    `report.py` (72), `validation.py` (60), and tests only for them (~45 test
+    files import these modules; tests/fixtures/saved_regimes.py and
+    regime_builders.py among them).
+  - Check every name for live users first; move what live code needs to where
+    it is used and say what was kept and why. Known live users at 89fbdafed8:
+    `ladder_precision` (infra/config.py, backends/torch/learner.py);
+    `manabot.experiment.numerics` (recipes/elemental.py);
+    `manabot.experiment.setup.machine_setup` (experiments/elemental.py,
+    seat_comparison.py, batched_baseline.py, tla_frontier.py);
+    `training.records.StageRecord` (reports/update_metrics.py) and
+    `PhaseTiming` plus `experiment.records.ExperimentRun`
+    (reports/time_profile.py, time_cohort.py).
+  - Stop-and-say condition: `experiments/tla_frontier.py` still imports
+    TrainingRegime/TrainSelfPlay and training.report as its settings holder
+    for new launches (its executed runs are historical, report
+    tla-frontier-c5fba4-results.md). Settle whether it is current before
+    deleting that part. The nightly path (recipes/baseline.py,
+    verify/learning_regression.py) imports none of these modules;
+    `regime_digest` there is a serialized field name, kept.
+  - Name the last revision that reads the records in the guide beside the
+    state.pt revision; the PR says plainly which reports can no longer be
+    rebuilt from main. Frozen evidence, experiment ids, reports under
+    experiments/, serialized keys and checkpoint fields are untouched.
+    Report the line counts removed.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
-  as the gate's proof of that path.
+  as the gate's proof of that path. PR #500 CI was running at 89fbdafed8
+  (the policy-error split) when last checked; its result is not yet known.
