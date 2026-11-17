@@ -641,7 +641,7 @@
             state={paymentState?.preview?.state === 'not_applicable' ? null : paymentState}
             observation={tableFrame.projection}
             chosenSourceFirst={tableFrame.offers.some(offer => offer.id === paymentState?.offer && offer.action_type === 'TAP_FOR_COST')}
-            onClose={() => payments.clear()}
+            onClear={() => payments.clear()}
             onRetry={() => { if (tableFrame && paymentState) void payments.select(tableFrame, paymentState.offer, paymentState.label); }}
           />
         {/if}

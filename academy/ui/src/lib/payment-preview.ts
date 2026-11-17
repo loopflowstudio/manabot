@@ -16,7 +16,7 @@ export interface PaymentPreview {
 }
 export interface PreviewAddress {
   match_id: string; revision: number; prompt_id: number; frame_hash: string;
-  offer_id: number; request_id: string;
+  offer_id: number;
 }
 export interface PreviewResponse extends PreviewAddress { viewer: number; preview: PaymentPreview }
 export type PreviewFetcher = (address: PreviewAddress, signal: AbortSignal) => Promise<PreviewResponse>;
@@ -49,8 +49,7 @@ export class PaymentPreviewController {
     this.changed(this.state);
     if (cached) return;
     const address: PreviewAddress = { match_id: frame.match_id, revision: frame.revision,
-      prompt_id: frame.prompt.id, frame_hash: frame.frame_hash, offer_id: offer,
-      request_id: crypto.randomUUID() };
+      prompt_id: frame.prompt.id, frame_hash: frame.frame_hash, offer_id: offer };
     const controller = new AbortController();
     this.active = controller;
     try {

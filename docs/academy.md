@@ -711,7 +711,7 @@ readout. Restricted amounts are part of the pool totals, not extra mana.
 
 **Proposal and commitment.** A proposal mark means "would tap". A tapped
 source means "has tapped". The floating-mana readout beside the board is the
-only statement of mana you actually have. Closing the preview, moving focus or
+only statement of mana you actually have. Clearing the preview, moving focus or
 clearing a selection dismisses a proposal and changes nothing in the game.
 A tapped source stays tapped and its mana stays in your pool until it is spent
 or empties; there is no undo and no refund for a tap you regret.

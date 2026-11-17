@@ -4400,7 +4400,6 @@ class PaymentPreviewRequest(BaseModel):
     prompt_id: int
     frame_hash: str
     offer_id: int
-    request_id: str
 
 
 @app.post("/api/sessions/{session_id}/payment-preview")

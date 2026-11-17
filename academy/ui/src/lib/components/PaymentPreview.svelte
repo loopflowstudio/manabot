@@ -8,13 +8,13 @@
     state: PreviewState | null;
     observation: Observation;
     chosenSourceFirst: boolean;
-    onClose: () => void;
+    onClear: () => void;
     onRetry: () => void;
   }
-  let { state, observation, chosenSourceFirst, onClose, onRetry }: Props = $props();
+  let { state, observation, chosenSourceFirst, onClear, onRetry }: Props = $props();
   const preview = $derived(state?.preview);
   let region: HTMLElement | null = null;
-  // Close and Retry remove their own button; keep keyboard focus in the panel.
+  // Clear and Retry remove their own button; keep keyboard focus in the panel.
   function keepFocus(action: () => void): void {
     region?.focus();
     action();
@@ -26,7 +26,7 @@
 <section bind:this={region} aria-label="Payment preview" class="h-40 shrink-0 overflow-y-auto border-t border-line py-1.5 type-caption" tabindex="0" data-testid="payment-preview">
   <div class="flex items-baseline justify-between gap-2">
     <h3 class="type-rubric text-display">Payment preview</h3>
-    {#if state}<button class="underline text-ink-2" aria-label="Close preview" onclick={() => keepFocus(onClose)}>Close</button>{/if}
+    {#if state}<button class="underline text-ink-2" aria-label="Clear preview" onclick={() => keepFocus(onClear)}>Clear</button>{/if}
   </div>
   {#if !state}
     <p class="text-ink-2">Focus or point to a payment choice.</p>

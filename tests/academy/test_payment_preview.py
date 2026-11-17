@@ -65,7 +65,6 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 "prompt_id": frame.prompt.id,
                 "frame_hash": frame.frame_hash,
                 "offer_id": cast.id,
-                "request_id": "preview-one",
             }
             headers = {"x-etude-participant-token": initial["resume_token"]}
             assert client.post(endpoint, json=request).status_code == 403
