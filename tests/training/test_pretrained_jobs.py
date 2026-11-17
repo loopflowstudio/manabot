@@ -328,7 +328,6 @@ def test_branch_builder_declares_shared_inputs_and_matching_seed_labels() -> Non
     ]
     assert {spec.regime.agent.decision_memory for spec in specs} == {
         "none",
-        "transformer",
         "gru",
     }
     assert all(each.seed == trunk.source_seed for each in requests)

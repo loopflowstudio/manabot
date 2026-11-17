@@ -895,31 +895,33 @@ class SeatRoutedCollector:
     def _capture_memory(self, rows: np.ndarray) -> tuple[Prefix, ...]:
         if self._memory_store is None:
             return ()
-        seeds = self._env.current_game_seeds()
-        seats = self._env.current_agent_indices()
-        return tuple(
-            self._memory_store.capture(
-                self._buffers,
-                int(row),
-                PrefixIdentity(str(seeds[row]), int(seats[row]), str(seeds[row])),
+        with self.profiler.track("Memory capture"):
+            seeds = self._env.current_game_seeds()
+            seats = self._env.current_agent_indices()
+            return tuple(
+                self._memory_store.capture(
+                    self._buffers,
+                    int(row),
+                    PrefixIdentity(str(seeds[row]), int(seats[row]), str(seeds[row])),
+                )
+                for row in rows
             )
-            for row in rows
-        )
 
     def _retain_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
         """Freeze bootstrap fields and prefix versions without padded memory."""
-        obs = {
-            key: self._buffers[key][rows]
-            for key in self.observation_space.shapes
-            if key not in MEMORY_FIELDS
-        }
-        if self._memory_store is not None:
-            obs = PrefixObservation(
-                obs, self._capture_memory(rows), self._memory_store.capacities
-            )
-        # Training convention (VectorEnv): action_focus as float32.
-        obs["action_focus"] = obs["action_focus"].astype(np.float32)
-        return obs
+        with self.profiler.track("Observation retention"):
+            obs = {
+                key: self._buffers[key][rows]
+                for key in self.observation_space.shapes
+                if key not in MEMORY_FIELDS
+            }
+            if self._memory_store is not None:
+                obs = PrefixObservation(
+                    obs, self._capture_memory(rows), self._memory_store.capacities
+                )
+            # Training convention (VectorEnv): action_focus as float32.
+            obs["action_focus"] = obs["action_focus"].astype(np.float32)
+            return obs
 
     def _count_action_types(
         self, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray

@@ -1,5 +1,16 @@
 # Whole-game opponent memory
 
+**Current direction (2026-11-17): throughput first, control + GRU-K1 only.**
+Jack Heart: "the major concern is throufhput w decision memory";
+"we cannstart w gru only". No further paid calibration or pilot until host cost
+is reduced. The refs256 job was already running when this steer arrived and
+will finish on its frozen six-worker source, including its transformer worker;
+no additional transformer job is authorized. Earlier three-arm plans and
+transformer results below remain historical evidence. CPU work first exposes
+retention/capture, compares 128/256-row execution against matched-row incumbent
+rates, then caches fully admitted content-addressed chunks and prepared fragments.
+There is no coalescing/architecture change in the host-only cut.
+
 ## Question
 
 **Exploratory.** Can a learned memory of the opponent's past decisions become

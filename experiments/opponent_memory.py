@@ -35,10 +35,9 @@ class Arm:
     summaries: int
 
 
-# K=1 selected by the corrected supervised probe; three pilot arms.
+# K=1 remains frozen; throughput-first direction keeps only the GRU encoder.
 ARMS = (
     Arm("control", "none", 0),
-    Arm("transformer-k1", "transformer", 1),
     Arm("gru-k1", "gru", 1),
 )
 SEEDS = (39101, 39102, 39103)
@@ -48,35 +47,12 @@ MAX_USD = 50
 
 
 def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
-    """Declare calibration only; pilot allocation requires its measured results."""
-    if calibration:
-        from etude.jobs import TrainingJob as PythonJob
-
-        from experiments.opponent_memory import Calibration, calibrate
-        from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
-        from manabot.infra.source import bundle_at
-
-        root = Path(__file__).resolve().parents[1]
-        job = PythonJob(
-            name="cuda-calibration-refs256",
-            train=calibrate,
-            config=Calibration(source_bundle=bundle_at(root, revision)),
-            repo=str(root),
-            revision=revision,
-            setup=machine_setup(" --extra artifacts --extra dev"),
-            extras=("artifacts", "dev"),
-            max_hours=1.75,
-            max_usd=Decimal("1.20"),
-            max_attempts=1,
-        ).plain()
-        return job.model_copy(
-            update={"command": f"{TOOLCHAIN_ENV}\n{job.command}"}
-        ).runs(39100)
+    """No further paid work until CPU host-cost reductions have been measured."""
     raise RuntimeError(
-        "Opponent-memory CUDA peaks, worker/update and checkpoint-reload admission "
-        "have not passed admission. Calibrate a common learner-"
-        "decision horizon and wire jobs before allocating training. "
-        "See experiments/opponent_memory.md."
+        "Paid calibration and pilot launches are stopped pending CPU host-cost "
+        "reductions and matched-row measurements against the true incumbent. "
+        "The next comparison is control and GRU-K1; frozen transformer evidence "
+        "is unchanged. See experiments/opponent_memory.md."
     )
 
 

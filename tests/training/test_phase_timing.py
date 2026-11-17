@@ -17,7 +17,9 @@ import torch
 from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
-from manabot.infra.config import MatchConfig
+from manabot.backends.torch.policy import ActorCritic
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
 from manabot.training.panels import PERF
@@ -129,14 +131,34 @@ def test_nested_phases_never_exceed_their_parent() -> None:
     assert stats["Learning/Minibatches/Optimizer step"]["count"] == calls
 
 
-def test_collection_timers_leave_the_batch_identical() -> None:
+@pytest.mark.parametrize("memory", [False, True])
+def test_collection_timers_leave_the_batch_identical(memory: bool) -> None:
     agent = _agent()
-    timed, untimed = _collector(agent), _collector(agent)
+    if memory:
+        space = ObservationSpace(
+            ObservationConfig(
+                max_decision_records=512,
+                max_decision_reference_details=16384,
+                max_decision_references=256,
+                max_decision_members=8192,
+            )
+        )
+        agent = ActorCritic(space, agent.config)
+    timed, untimed = (
+        _collector(agent, scripted=not memory),
+        _collector(agent, scripted=not memory),
+    )
     timed.profiler, untimed.profiler = Profiler(), Profiler(enabled=False)
     a, b = timed.collect(agent, 1), untimed.collect(agent, 1)
     for field in ("actions", "logprobs", "rewards", "dones", "values"):
         np.testing.assert_array_equal(getattr(a, field), getattr(b, field))
     assert any(path.startswith("Collection/") for path in timed.profiler.get_stats())
+    assert "Collection/Observation retention" in timed.profiler.get_stats()
+    if memory:
+        assert (
+            "Collection/Observation retention/Memory capture"
+            in timed.profiler.get_stats()
+        )
 
 
 def test_self_play_stage_records_both_timing_trees_by_default(tmp_path: Path) -> None:
