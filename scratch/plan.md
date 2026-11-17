@@ -89,6 +89,13 @@ No stall on a throttled disk was confirmed, so no Etude fsync Task was filed.
 The timed arms predate 5826f7502e and the sync onto main dcee96ccd1 (merged
 at c7fd53704a; choices in questions.md); neither was re-timed.
 
+## Gate — 2026-11-17
+
+Ruff check/format: 191 changed Python files pass. CI 44173418697 on
+5583360199 failed only main's merged `test_player_crash_is_an_interrupted_record`
+(a Python RuntimeError from a player; this branch propagates those). 0d4b8ba77b
+raises a native AgentError there; CI 44175589618: all 25 checks pass.
+
 ## Remaining
 
 Jack Heart, 2026-11-17: "ok, approved for landing" (steer 1fb8f71a).
