@@ -669,3 +669,53 @@ native trivial-decision skipping. These ordinary choices are on by default
 for every consumer. Source taps use the existing `TapForCost` policy action
 with the source as focus; the native Command verb is `tap_for_mana`, distinct
 from waterbend. They do not expose free-form production at priority or undo.
+
+### Inspecting automatic payment
+
+Ask what automatic payment would tap for one legal action, without taking it:
+
+```python
+from managym.decision import DecisionFrame
+from managym.payment import preview_payment
+
+frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+preview = preview_payment(
+    env,
+    viewer=frame.actor,
+    revision=frame.revision,
+    fingerprint=frame.fingerprint,
+    action_index=pay_cost_index,  # position in the current action space
+)
+preview.state                       # "exact"
+[s.label for s in preview.sources]  # ["Mountain", "Forest"]
+preview.pool_after_spending         # the pool once {1}{G} is paid
+```
+
+Stepping that action next taps exactly those permanents in that order. The
+preview is the first half of the payment itself (`Game::automatic_taps`, which
+`produce_mana` calls and then taps), so it cannot propose a plan execution
+does not use. The call is read-only: the state digest, RNG, revision, trace
+and pending decision are the same before and after it.
+
+`viewer`, `revision` and `fingerprint` bind the question to one decision. A
+viewer who is not the chooser, a revision that has moved on or a fingerprint
+from another offer set raises `managym.AgentError` and returns no plan.
+
+| `state` | Meaning |
+| --- | --- |
+| `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
+| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost. `explanation` names the choice; there are no sources. |
+| `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
+| `not_applicable` | The action pays no mana, or is a mana ability with its own fee. |
+
+`scope` says which cost was planned: `current_payment` for `PayCost` or a
+source tap at a pending payment, `spell_cost` for a cast offer or the target
+that completes it, `activation_fee` for a non-mana activated ability. A
+source-tap offer previews tapping that source and then paying automatically,
+with the chosen source first. Each source carries its object reference, name
+and output; pools carry the six amounts and the restriction, spend-effect and
+combat-expiry classes of the mana in them.
+
+This is an inspection API for Academy and tools. It adds no action,
+observation field or encoder column, and nothing in `Env.step`, `VectorEnv`,
+search or training calls it.

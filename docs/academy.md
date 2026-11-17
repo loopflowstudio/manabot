@@ -14,6 +14,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
+- [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
 - [Playing a series against a model](#playing-a-series-against-a-model)
@@ -647,7 +648,8 @@ for the creature named by the current prompt: attack or decline, or select one
 of its legal blocks or decline. Each choice commits separately before the next
 creature's prompt; there is no draft of a whole attack or block to edit and
 confirm. Mana-source choices likewise follow the offered decisions;
-dragging a spell does not configure manual tapping.
+dragging a spell does not configure manual tapping. See
+[Previewing payments](#previewing-payments).
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
 offer. Card selection narrows navigation; **Show all** restores the full list.
@@ -662,6 +664,82 @@ unavailable while disconnected, awaiting a submitted action or changing settings
 These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
 use their own decision controls. Cancellation only discards local selection:
 after commitment, costs and revealed information remain committed.
+
+### Previewing payments
+
+You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
+(`{1}{G}`). Hover its cast action in **Your choices**, or move keyboard
+focus to it. A **Payment preview** opens beside the choices:
+
+```text
+Payment preview · Cast Badgermole Cub
+Cost {1}{G}
+Would tap  Mountain → {R}
+           Forest → {G}
+Left over  nothing floating
+```
+
+The same Mountain and Forest carry a proposal mark on the board. Nothing has
+happened yet: hovering and focusing send no action. Cast the spell and those
+two lands are the ones that tap.
+
+The preview is the automatic payer's own plan for the position in front of
+you. Academy asks the game for it; the browser never works one out. What it
+shows is what **Pay cost** does, including the lands it keeps back for other
+cards in your hand and any mana it would produce beyond the cost.
+
+**Choosing sources yourself.** When a cost leaves a real choice of sources,
+the payment prompt lists **Pay cost** first, then each source you may tap.
+Focus arrives on **Pay cost** and shows its proposal without paying.
+
+1. To accept the proposal, activate **Pay cost**.
+2. To choose a source, activate its tap. Tab moves through the sources and
+   Shift+Tab moves back; each source is a separate choice even when several
+   produce the same color. Focusing a source previews "tap this one, then pay
+   the rest automatically", with your source listed first.
+3. After each tap the source shows as tapped, its mana appears in your
+   floating pool, and the proposal for the rest is requested again. Tap
+   another source or activate **Pay cost** to finish.
+
+A cost that every available source is needed for has no source choice. The
+game pays it as soon as you cast, with no payment prompt, so the preview on
+the cast action is where you see those taps beforehand.
+
+**Reading the preview.**
+
+| The preview says | Meaning |
+| --- | --- |
+| Sources and their output | The automatic plan for this cost, in tapping order. **Left over** is the pool after the cost when the spending is forced. When several spends are legal it shows the pool after production and says which choices you will be prompted for. |
+| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. The preview names the missing choice and marks no sources. Follow the prompts; the preview at the payment is exact. |
+| No sources needed | The cost is zero or your floating mana already covers it. |
+| No automatic payment | The automatic payer cannot fund this cost from fixed sources. Use an offered mana ability and make its choices first. |
+| Nothing | The action has no mana payment. Using a mana ability that itself has a fee is also not previewed. |
+
+Mana with a spending restriction, an effect when spent or an end-of-combat
+expiry is labeled as such in the preview, as it is in the floating-mana
+readout. Restricted amounts are part of the pool totals, not extra mana.
+
+**Proposal and commitment.** A proposal mark means "would tap". A tapped
+source means "has tapped". The floating-mana readout beside the board is the
+only statement of mana you actually have. Closing the preview, moving focus or
+clearing a selection dismisses a proposal and changes nothing in the game.
+A tapped source stays tapped and its mana stays in your pool until it is spent
+or empties; there is no undo and no refund for a tap you regret.
+
+Source taps are offered only while a cost is being paid. Academy has no action
+for tapping lands at priority to float mana before choosing a spell.
+
+**When a preview goes away.** A preview belongs to one decision. Submitting
+an action, a new decision, a change of viewed player or a lost connection
+clears it, and an answer that arrives late for an earlier decision is
+discarded. If the request fails, the panel says so and offers **Retry**; every
+legal choice stays usable without it. After a reload or reconnect in the same
+tab the pending payment is restored and its proposal is requested again.
+Nothing about a preview is saved in the recording or the browser.
+
+Replay, Watch history and Study show the taps and spending that were recorded.
+They show no proposal: a preview was never part of the recording, and a live
+game is never consulted to decorate a recorded position.
 
 ### Pending input, waits and recovery
 
@@ -678,7 +756,8 @@ The player choosing can differ from the player whose turn it is. Target and
 cost prompts identify their source and required input. Finish a pending target
 or cost choice before trying another spell. Inspection and **Show all** keep
 the complete legal choices accessible. A pending cost can require a deliberate
-mana activation before **Pay cost** becomes available. Mana you have produced
+mana activation before **Pay cost** becomes available;
+[Previewing payments](#previewing-payments) covers what **Pay cost** would tap. Mana you have produced
 and not yet spent appears as a floating-mana readout beside the board, by
 color, until it is spent or empties. The list is the complete
 set of legal actions at this decision. Academy does not say why an action is
