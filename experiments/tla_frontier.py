@@ -61,7 +61,7 @@ import json
 import os
 from pathlib import Path
 from statistics import median
-from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from etude.checkpoints import CheckpointRecord
 from etude.eval.records import (
@@ -83,7 +83,7 @@ from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict, Field
 
 from experiments import tla_frontier
-from manabot.eval.agents import AGENTS, registration
+from manabot.eval.agents import AGENTS, game_players, registration
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import machine_setup
@@ -92,7 +92,6 @@ from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
 from manabot.policy.checkpoint import read_container
-from manabot.sim.agent import GamePlayer
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
@@ -1070,10 +1069,13 @@ def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
             purpose="tla-frontier-fixed-corpus",
         ),
         out_dir=out_dir,
-        agents={
-            "candidate": cast(GamePlayer, agents[0]),
-            "opponent": cast(GamePlayer, agents[1]),
-        },
+        agents=dict(
+            zip(
+                ("candidate", "opponent"),
+                game_players(match.players, agents),
+                strict=True,
+            )
+        ),
     )
     by_leg = {row.leg: row for row in result.rows}
     rows: list[Row] = []

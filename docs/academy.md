@@ -1100,8 +1100,9 @@ unavailable selection rather than substituting a newer model. Keyboard navigatio
 uses the browser's select controls.
 
 With manabot installed, its provider discovers `.pt` and portable `.safetensors`
-checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`) and explicit
-`ACADEMY_PLAY_CHECKPOINTS` sources. Python can supply provider-owned discovery
+checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`), explicit
+`ACADEMY_PLAY_CHECKPOINTS` sources and the runs `etude train` keeps on this
+computer (`~/.etude/track`, moved by `ETUDE_HOME`). Python can supply provider-owned discovery
 without changing the environment:
 
 ```python

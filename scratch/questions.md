@@ -48,3 +48,8 @@ identity of permanent 103 (Water Tribe Rallier) during waterbend payment. The
 corpus must resolve both aliases to one descriptor, as the v11 encoders do.
 Spell card/stack aliases also share a row; collision checks must include stack.
 No native rule, observation layout, frozen evidence or strategic label changes.
+
+2026-11-16 retry choice: each Elemental callback invocation gets a retained
+`attempt-*` directory under its match key, locally and in launched output.
+Use atomic directory allocation rather than replacing journals or resuming a
+partly played game. Existing flat match evidence stays untouched.

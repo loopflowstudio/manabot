@@ -265,6 +265,10 @@ readable by the report viewer; they are historical evidence, not live settings.
 Elapsed intervals are kept separate and carry no bill; Etude cache reuse adds
 no measurement.
 
+Elemental keeps each match invocation in its own `arena/<match-key>/attempt-*`
+directory under `ETUDE_OUTPUT_DIR`, or `.runs/elemental` for local evaluation
+and smoke runs. Retrying a match preserves earlier failure journals and traces.
+
 ```sh
 uv run python -m experiments.report_prototype.build \
   --eval-receipt .runs/eval/panel --out .runs/eval/report

@@ -15,7 +15,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.eval.agent_loader import load
-from manabot.eval.agents import Sampler, build
+from manabot.eval.agents import Sampler, build, game_players
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import prepare
@@ -38,6 +38,9 @@ def test_loader_batches_prepared_rows_without_sampling(tmp_path: Path) -> None:
     forward = load(ref)
     sampler = build(checkpoint_player(ref), {ref.key: forward})
     assert isinstance(sampler, Sampler)
+    # Etude passes a config-less checkpoint seat its bare forward, never built.
+    [seated] = game_players([checkpoint_player(ref)], [forward])
+    assert isinstance(seated, Sampler)
     env = Env(match, space, Reward(RewardConfig()), seed=71)
     try:
         obs, _ = env.reset()
@@ -50,6 +53,7 @@ def test_loader_batches_prepared_rows_without_sampling(tmp_path: Path) -> None:
             np.testing.assert_allclose(output, single, atol=1e-6, rtol=1e-5)
             assert np.isneginf(output[~row.legal[0]]).all()
         assert sampler.choose(env, obs, 123) == sampler.choose(env, obs, 123)
+        assert seated.choose(env, obs, 123) == sampler.choose(env, obs, 123)
     finally:
         env.close()
 

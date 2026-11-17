@@ -4,13 +4,13 @@ Model forwards belong to Etude. Builders read only local checkpoint metadata;
 no Torch, device probe, remote fetch or sampling happens in the loader protocol.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 import json
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from etude.eval.agents import Forward
-from etude.eval.records import CheckpointPlayer, Code
+from etude.eval.records import CheckpointPlayer, Code, Player
 from etude.jobs import Agents
 import numpy as np
 
@@ -129,6 +129,25 @@ def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
 
 
 AGENTS = Agents(load=load, build=build)
+
+
+def game_players(
+    players: Sequence[Player], agents: Sequence[object]
+) -> list[GamePlayer]:
+    """A match's Etude agents as game players, in seating order.
+
+    Etude gives a checkpoint player without config its bare forward instead of
+    calling `build`, so build that seat's sampler here; every other seat
+    already arrives built.
+    """
+    if len(players) != len(agents):
+        raise ValueError("one agent per seated player")
+    return [
+        build(player, {player.checkpoint.key: cast(Forward, agent)})
+        if isinstance(player, CheckpointPlayer) and not player.config
+        else cast(GamePlayer, agent)
+        for player, agent in zip(players, agents, strict=True)
+    ]
 
 
 def registration(

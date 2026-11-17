@@ -76,6 +76,19 @@ def test_catalog_lists_admissible_and_refused_checkpoints(runs: Path) -> None:
     assert older["reason"] == f"trained in w5, engine is {WORLD}"
 
 
+def test_catalog_lists_policies_etude_trained_here(
+    runs: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "etude"))
+    trained = tmp_path / "etude/track/local/out/policies/00000002-ema.pt"
+    _write_tiny_checkpoint(trained)
+    with TestClient(app) as client:
+        catalog = client.get("/api/opponents").json()
+    shas = {entry["sha256"] for entry in catalog["opponents"] if entry["available"]}
+    assert _id(trained) in shas
+    assert _id(runs / "self-play" / "step_0.pt") in shas
+
+
 @pytest.mark.parametrize("kind", ["heuristic", "greedy"])
 @pytest.mark.parametrize("extra_alias", [None, "challenger"])
 def test_anchor_names_omit_case_only_aliases(

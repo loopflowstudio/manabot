@@ -9,8 +9,8 @@ from collections.abc import Sequence
 from functools import cache
 import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from typing import Literal, cast
+from tempfile import TemporaryDirectory, mkdtemp
+from typing import Literal
 
 from etude.eval.match import environment
 from etude.eval.records import CheckpointPlayer, Code, Environment, Match
@@ -27,12 +27,11 @@ from experiments.elemental_grid import (
 )
 from experiments.elemental_long import H2HGame
 from manabot.eval.admission import register_anchor
-from manabot.eval.agents import registration
+from manabot.eval.agents import game_players, registration
 from manabot.eval.card_evaluation import trace_card_tables
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS
@@ -56,6 +55,14 @@ def eval_environment() -> Environment:
             "game_seconds": GAME_SECONDS,
             "max_commands": MAX_COMMANDS,
         },
+    )
+
+
+def evidence_directory() -> Path:
+    """Arena evidence: a launched attempt's `$ETUDE_OUTPUT_DIR/arena`, else
+    `.runs/elemental/arena` for local `etude eval` and `etude smoke`."""
+    return (
+        Path(os.environ.get("ETUDE_OUTPUT_DIR") or ROOT / ".runs/elemental") / "arena"
     )
 
 
@@ -180,8 +187,11 @@ def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
         evaluation_compute_envelope_id=ETUDE_COMPUTE_CLASS,
     )
-    output = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    output.mkdir(parents=True, exist_ok=True)
+    # One directory per invocation: a retry keeps earlier journals and traces,
+    # including those of an interrupted attempt.
+    attempts = evidence_directory() / match.key
+    attempts.mkdir(parents=True, exist_ok=True)
+    output = Path(mkdtemp(prefix="attempt-", dir=attempts))
     with TemporaryDirectory() as scratch:
         cards = Path(scratch)
         played, trace, _ = play_cell(
@@ -196,7 +206,7 @@ def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
             matchup_mode="cross" if leg < 4 else "mirrors",
             legs=(leg,),
             card_evidence_dir=cards,
-            agents={names[i]: cast(GamePlayer, agents[i]) for i in range(2)},
+            agents=dict(zip(names, game_players(match.players, agents), strict=True)),
         )
         found = trace_card_tables(cards, trace, names)
         games = [

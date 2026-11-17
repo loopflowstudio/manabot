@@ -56,6 +56,12 @@ policy→sampler scheduling. LLM experiments stay blocked on EXP-70/frozen
 checkpoints; their declarations share Agents but are not a runnable adoption
 proof. origin/main equals the merge base (c035d5566a); no upstream sync needed.
 
+QA retry fix: each Elemental callback invocation writes its own
+`arena/<match-key>/attempt-*` (`elemental_play.evidence_directory`), so failed
+and interrupted attempts keep their journals while a retry completes.
+`uv run --extra dev --extra artifacts pytest tests/eval/test_elemental_play.py -q`:
+6 passed (2.81s) after compress, local and launched-style paths.
+
 ## Remaining
 
 - Gate and publication are the caller's steps. The full nightly baseline

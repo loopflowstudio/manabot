@@ -370,12 +370,23 @@ publish, land or choose the next Graph step from here.
   is the run's `--seed`, not a config field. Check raw/EMA checkpoint tensors
   with matched small inputs. Fetch artifacts through Doppler without printing
   credentials. `manabot train`, its `--out` identity and `state.pt` are retired.
-  These checks require EXP-56's new train API and its release pin; SDK 0.2.16
-  and source `105abdd` do not provide it. Do not stub the SDK for QA. Until the
-  API lands, report the missing real-path proof and stop dependent checks.
-  `etude smoke experiments/elemental.py --step train --revision HEAD` needs
-  `training_jobs()`'s `--updates/--hours/--usd-per-run`; it builds the revision's own
-  locked venv, so an overlay does not prove the committed dependency works.
+  Set `ETUDE_HOME` to an ignored `.runs/` folder so QA runs stay out of
+  `~/.etude`. `etude smoke experiments/elemental.py --keep --revision HEAD
+  --updates 3200 --hours 11.9 --usd-per-run 9` trains for about 3 minutes, then
+  evaluates for about 30 minutes on a laptop (600 one-game matches). Smoke
+  prints "passed" even when every game is an invalid row, so read the eval
+  rows: `etude.eval.query.statsdb("elemental", "<kept>/track")`, then group
+  `games` by `unit`, `valid` and `failure`. The `failure` column is omitted when
+  every value is null. Rerun only eval and report with
+  `--step eval --step report --source <kept>/track`. That eval-only report has
+  no training runs, so its heuristic panels stay empty; for the full picture,
+  copy the training and eval run folders into one track and run
+  `etude report experiments/elemental.py --source <it> --out <dir>`. Local eval
+  evidence goes to `.runs/elemental/arena`. Delete it before replaying the same
+  matches after failed games, or the retained failure journals raise
+  `FileExistsError`. To see a policy from `etude train` in Academy, start
+  `./scripts/play` with the same `ETUDE_HOME`; discovery searches Etude's local
+  track.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
@@ -409,10 +420,13 @@ publish, land or choose the next Graph step from here.
   unchanged. Empty/missing/corrupt inputs must fail, and a torn final append must
   warn while recovering the last complete boundary. `scripts/release/engine_smoke.py`
   additionally checks that manabot, Torch and Etude are absent.
-- Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
-  preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
-  `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang.
+- Ctrl-C a run as a terminal does: fork it on a pty (`pty.fork()`, then
+  write `\x03` to the master). The first SIGINT is Etude's saved stop (exit
+  75); a second is a hard interrupt. Without a tty, uv 0.9.22 forwards a
+  process-group SIGINT to its child, which gets two and ends `failed` with no
+  save, so `os.killpg` on `uv run etude …` does not show what a person sees.
+  Signal `.venv/bin/etude` directly, or use the pty. A job started with `&`
+  from a non-interactive shell ignores SIGINT.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch

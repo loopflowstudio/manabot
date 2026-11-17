@@ -45,3 +45,16 @@ fixtures prove neither native-hang handling nor in-flight collection recovery.
   unsorted import in tests/verify/test_input_v10.py is not from this branch.
 - `lf context`: scratch stays over 12k tokens because of the protected notes
   (questions.md); no limit changed. Gate and publication remain later steps.
+
+2026-11-16 local retry follow-up:
+- Reproduced QA's FileExistsError by replaying the same Elemental match after
+  an injected AgentError. Callback output now uses an atomically allocated,
+  retained attempt directory under the match key; no old evidence is removed.
+- `uv run --extra dev --extra artifacts pytest tests/eval/test_elemental_play.py -q`:
+  6 passed (2.80s). Failed-game and RetryRequested journals remain byte-identical
+  after a successful native-game/replay retry, for local and launched-style
+  output paths. Controlled uniform logits avoid a costly model evaluation.
+- Ruff check/format pass for the two changed Python files. No new provider run
+  or full smoke; the nightly baseline stays a gate obligation.
+- `uv run --extra dev --extra artifacts pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`:
+  1 passed (9.88s).
