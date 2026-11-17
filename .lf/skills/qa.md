@@ -370,6 +370,13 @@ publish, land or choose the next Graph step from here.
   is the run's `--seed`, not a config field. Check raw/EMA checkpoint tensors
   with matched small inputs. Fetch artifacts through Doppler without printing
   credentials. `manabot train`, its `--out` identity and `state.pt` are retired.
+  After a train and a `--resume`, run `uv run --extra reports manabot
+  training-report --source $ETUDE_HOME/track --out <f>.html` and read the
+  page: learner transitions and transitions per active second must be numbers,
+  not "unavailable" (they come from the loop's declared clocks). A checkout
+  without `academy/ui/node_modules` can screenshot it with a CommonJS script
+  that `require`s Playwright by absolute path from another checkout's
+  `academy/ui/node_modules`; ESM imports ignore that path.
   Set `ETUDE_HOME` to an ignored `.runs/` folder so QA runs stay out of
   `~/.etude`. `etude smoke experiments/elemental.py --keep --revision HEAD
   --updates 3200 --hours 11.9 --usd-per-run 9` trains for about 3 minutes, then

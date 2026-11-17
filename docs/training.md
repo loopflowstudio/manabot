@@ -283,13 +283,15 @@ Calling `train(config)` is one attempt at the whole job. It returns (the run
 finished), raises `Stopped` (it saved and left on purpose; it is called
 again), or raises anything else (the run failed).
 
-`CLOCKS` are the two x-axes every self-play run declares:
+`CLOCKS` are the three x-axes every self-play run declares:
 
 ```python
+from etude.records import Clock
 from etude.train.records import Time
 
 CLOCKS = [
     "updates",
+    Clock(name="learner_transitions", kind="step", meaning="collected learner transitions"),
     Time("training_seconds", "active collection and learning seconds"),
 ]
 ```
@@ -297,6 +299,7 @@ CLOCKS = [
 The `updates` clock counts collection/update iterations: one batch collected
 and learned from. It is not a count of `optimizer.step()` calls, which a run
 logs separately ([costs and counters](#costs-and-counters)).
+`learner_transitions` counts the rows learned from across every update.
 
 `self_play` (`manabot.training.loops.self_play`) is the loop every current
 recipe uses. Read it as the template for your own; its body is the loop you
@@ -327,12 +330,12 @@ def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
                 row = step(
                     settings, learner, ema, collector, counts, rng, out=run.out
                 )
-                run.log(row, training_seconds=counts.training_seconds)
+                run.log(row, **clocks(counts))
                 if settings.behavior != "random":
                     run.log_table(
                         OUTCOME_TABLE,
                         collector.stats.self_play.drain(),
-                        training_seconds=counts.training_seconds,
+                        **clocks(counts),
                     )
                 run.save()
                 if is_checkpoint(settings, update):
@@ -351,7 +354,7 @@ branch, stop check or state file in it. Those are the run's:
 | `run.resume(**objects, extra=)` | Registers what the run keeps, anything with `state_dict()` and `load_state_dict()`, and loads the last save into it. `extra` is a Pydantic model for the loop's own numbers, here `Counts`; it comes back with the saved values loaded, or as given on a fresh run, and Etude saves that object as it stands, so the loop changes its fields in place. |
 | `run.steps("updates", to=)` | Counts from the resumed update to the target: the launch's (`--until`) or else `to`. When a stop is asked for or the deadline is near, the current pass finishes and the next raises `Stopped`, so the lines after the loop run only when the target was reached. |
 | `run.save()` | Called every pass. Etude writes the registered objects when a save is due and always on the last pass before a stop; each save is a new folder that `current.json` names only once it is complete, so the next attempt loads weights, Adam and EMA from one save. |
-| `run.log`, `run.log_table` | Metric rows and row tables on the declared clocks. The stepped clock is filled in; the loop passes `training_seconds`. |
+| `run.log`, `run.log_table` | Metric rows and row tables on the declared clocks. The stepped clock is filled in; the loop passes `learner_transitions` and `training_seconds` (`clocks(counts)`). |
 | `run.checkpoint(path)` | Publishes an immutable policy with where every clock stood. Evaluations, reports and other runs read these. |
 | `run.out` | The run's directory, the same on every attempt. Under a launch Etude carries it to storage as it is written and restores it before an attempt on another machine. |
 | `run.input(name)` | A file this run was given at launch, checked by digest ([starting from another run](#a-recipe-that-starts-from-another-run)). |
@@ -745,13 +748,12 @@ costs, logged rows and recorded checkpoints; `state/` and the policies
 under `run.out` are the learner. Checkpoint evaluation is a separate Etude
 evaluation that reads those checkpoints. No account is needed to train.
 
-The recipes declare `updates` and `training_seconds` clocks. Every update row,
-outcome table and checkpoint carries both. `training_seconds` is the sum of each
+The recipes declare `updates`, `learner_transitions` and `training_seconds`
+clocks. Every update row, outcome table and checkpoint carries all three. `training_seconds` is the sum of each
 completed update's `time/collection` and `time/learning`, and the saved `Counts`
 keep it across attempts; startup, checkpoint writes, reporting and failed partial
 updates are excluded. The belief sampler's run declares its own `steps` clock. The training report's default active-time clock
-therefore works for loop runs. No transitions clock is declared; cumulative
-learner transitions remain a metric.
+and its transitions per active second therefore work for loop runs.
 
 ### Update metrics
 
@@ -776,7 +778,7 @@ one-minute host load (`coordinates/host_load_1m`) and
 absent on other devices. CUDA peaks cover the process lifetime; MPS allocations
 are current observations, not peaks. Completed self-play
 outcomes are a row table, logged once per update with Etude's
-`run.log_table("self_play_outcomes", rows, updates=..., training_seconds=...)`. Each row has `deck`
+`run.log_table("self_play_outcomes", rows, **clocks(counts))`. Each row has `deck`
 and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
 `losses` and `draws`, so deck pairs add rows rather than metric columns. Etude
 stores the table as an immutable JSON file under the metric run's `artifacts/` and carries it with the

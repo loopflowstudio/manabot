@@ -1,67 +1,74 @@
-<!doctype html>
-<html><head><meta charset="utf-8"><title>MTG-329 QA — fifth pass</title>
-<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em;color:#222}pre{background:#f5f2ea;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}</style></head>
-<body>
-<h1>MTG-329 QA, fifth pass: what a person sees when evaluation breaks</h1>
-<p>Revision 0432b57906, 2026-11-16, laptop (load average around 70 from other sessions). Etude d9a6bc8 (pinned).
-No code has changed since the fourth pass, which followed the guides; see 928ee3f4bc:scratch/qa.html. Earlier passes
-(retired command, resume, Ctrl-C, Academy) are at 30cbca02ff:scratch/qa.html. This pass checks the new
-error handling (05bdc978da) and the retry attempt directories through the real <code>etude smoke</code>, which neither earlier pass did.</p>
+<!doctype html><meta charset="utf-8"><title>MTG-329 QA — sixth pass</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em;color:#222}pre{background:#f5f2ea;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}img{max-width:100%;border:1px solid #ccc}</style>
+<h1>MTG-329 QA, sixth pass: released Etude 0.4.1, regime readers deleted</h1>
+<p>Revision a361d8795c plus this pass's uncommitted fix, 2026-11-17, on the laptop. Etude SDK 0.4.1 from PyPI (<code>etude-sdk 0.4.1</code> in the venv).
+Earlier passes: 31d18ac84b:scratch/qa.html (fifth: evaluation errors and retries), 30cbca02ff:scratch/qa.html (retired command, resume, Ctrl-C, Academy).
+This pass covers what changed since then: the released dependency, the saved-regime deletion and the report cleanup.</p>
 
-<h2>1. A broken policy no longer reads as "passed"</h2>
-<p>The third pass's worst finding: with a policy bug, every game became an invalid row and smoke still printed "passed".
-I put back that exact bug as a temporary edit: <code>game_players</code> handed bare forwards to the game, so every
-checkpoint game raises <code>AttributeError</code>. Then I ran the full smoke from a clean state:</p>
-<pre>$ uv run etude smoke experiments/elemental.py --keep --revision &lt;HEAD&gt; --updates 2 --hours 1 --usd-per-run 1
-smoke train elemental: passed in 421.4 s (2 checkpoints)
-etude.errors.EtudeError: match_failed: AttributeError: '_LocalForward' object has no attribute 'admit'
-etude: smoke eval: failed after 0.8 s (AttributeError: '_LocalForward' object has no attribute 'admit'); nothing was submitted
-exit 1</pre>
-<p>It now fails within a second, names the real cause and exits non-zero. Evidence is kept: 22
-<code>.runs/elemental/arena/&lt;match-key&gt;/attempt-*/failures/*.jsonl</code> journals.
-(Forgetting the experiment's own <code>--revision/--updates/--hours/--usd-per-run</code> gives a clear
-<code>Missing option '--revision'</code>; <code>-h</code> lists them.) I then reverted the bug (<code>git checkout manabot/eval/agents.py</code>).</p>
+<h2>1. A new user trains, resumes and evaluates</h2>
+<pre>$ ETUDE_HOME=/tmp/qa6-etude uv run etude train manabot/recipes/local.py
+local                                   (6.2 s, exit 0)
+$ uv run etude train manabot/recipes/local.py
+etude: run_name_taken: local; use --resume; to train further give --resume --until CLOCK=TARGET   (exit 1)
+$ uv run etude train manabot/recipes/local.py --resume --until updates=4
+local                                   (exit 0; policies 00000000..00000004, raw and EMA)
+$ uv run python -m manabot.eval.local --checkpoint …/00000004-ema.safetensors --opponent heuristic --deal-seed 101 --out … --seconds 300
+completed: 1/1 complete deals; 4/4 games; evidence: …/panel
+score: 0.000 (1 deal block; uncertainty unavailable from a single deal); local-check-not-admission   (10.6 s)</pre>
+<p><code>out/state/current.json</code> names <code>save-00000001</code>. Its <code>state.json</code> holds the clocks, seed, commit and counts, as docs/training.md describes.
+Save folders are numbered by save, not by update. The guide's <code>save-00000012</code> example is only illustrative.</p>
 
-<h2>2. Retrying after failures, with the old journals left in place</h2>
-<p>The third pass had to delete <code>.runs/elemental/arena</code> because retained journals raised <code>FileExistsError</code>.
-This time I left all 22 failed attempts in place and ran the fixed code's eval and report against the kept training run:</p>
-<pre>$ uv run etude smoke experiments/elemental.py --step eval --step report --source &lt;kept&gt;/track --keep --revision … (stopped by SIGINT at 540 s)
-etude: heuristic-groups-agents-v1-ecd57a3a6138: 119/400 matches played, 534s elapsed
-etude: checkpoint-pair-groups-agents-v1-97de54d8e6a0: 125/200 matches played, 537s elapsed
-log: 0 lines matching error|failed|Traceback|FileExists</pre>
-<p>Match keys that failed before now hold two attempts. One example:</p>
-<pre>arena/0156e8f4…/attempt-t1j_9f92/failures/newer__older.1839039001.0.jsonl     (the failed attempt, untouched)
-arena/0156e8f4…/attempt-ri_v76jt/{blocks,failures(empty),performance.json,rows.json,traces,unattempted.json}
-  rows.json: deal_seed 1839039001, decisions 239, failed_player_id null</pre>
-<p>Games stored in the eval blocks (duckdb over <code>games.parquet</code>):</p>
-<pre>heuristic-groups        5,942 rows: 5,942 valid, 5,942 terminated, 0 truncated, mean 199.6 decisions
-checkpoint-pair-groups  1,252 rows: 1,252 valid, 1,252 terminated, 0 truncated, mean 195.8 decisions</pre>
-<p>The same deal that failed before plays through on retry, and the earlier attempt's journal stays alongside it. I stopped the run partway
-on purpose, as the third pass did; at about 30 minutes, the full smoke eval costs too much on a contended laptop.</p>
+<h2>2. The training-time report: found and fixed</h2>
+<pre>$ uv run --extra reports manabot training-report --source $ETUDE_HOME/track --out training-time.html
+training-time.html: 1 logical runs; 0 source/coverage warnings</pre>
+<p>The page renders without console errors, but for a run trained by the current loop <b>Retained learner transitions</b> and
+<b>Throughput by run</b> both said "unavailable":</p>
+<img src="qa6-report-before.png" alt="report before: transitions unavailable">
+<p>Cause: the report reads work from declared step clocks, as docs/experiment-metrics.md says. Main's executor declared
+<code>learner_transitions</code> (<code>main:manabot/infra/runtime.py</code>), but the branch's loop declared only <code>updates</code> and
+<code>training_seconds</code>, so the page's throughput section could never show a number for a new run.
+The existing report test used a hand-declared transitions clock, so it couldn't catch this.</p>
+<p>Fix: <code>manabot/training/loops/self_play.py</code> declares <code>Clock(name="learner_transitions", kind="step", …)</code> and passes it,
+through a small <code>clocks(counts)</code>, on every row, outcome table and checkpoint. docs/training.md is updated (CLOCKS, the loop listing,
+"Costs and counters"). <code>test_resume_keeps_adam_ema_counts_and_immutable_policies</code> now reads the real loop's run through
+<code>load_time_sources</code> and requires updates, transitions and active seconds. Without the fix it fails with <code>None == 352</code>.
+After the fix (fresh run + resume):</p>
+<pre>Retained learner transitions   837   1/1
+etude:local:run:local   unknown   143.034 transitions / active second</pre>
+<img src="qa6-report-after.png" alt="report after: transitions reported">
+<pre>$ uv run --extra dev --extra artifacts --extra reports pytest tests/training/test_train_command.py tests/training/test_self_play_loop.py \
+  tests/training/test_recipe_etude.py tests/training/test_training_game_journals.py tests/training/test_time_cohort.py tests/training/test_pretrained.py \
+  tests/training/test_monitor_evaluation.py tests/eval/test_elemental_play.py tests/test_package_boundaries.py tests/training/test_outcome_tables.py -q
+163 passed in 31.31s</pre>
+
+<h2>3. A returning user with saved regimes</h2>
+<pre>$ uv run python -c "from manabot.training.regime import TrainingRegime"
+ModuleNotFoundError: No module named 'manabot.training.regime'      (as docs/training.md "Saved regimes" shows)
+$ uv run manabot train --recipe local
+manabot train is removed. Use: uv run etude train FILE (for example, manabot/recipes/local.py). Resume an unfinished run with --resume.   (exit 2)</pre>
+<p>The named revision f4e1822faf has <code>manabot/training/regime.py</code>, <code>manabot/reports/notebook.py</code> and the
+<code>dev</code>/<code>reports</code>/<code>notebook</code> extras that the guide's <code>uv sync</code> line installs. I did not run that sync, which builds a full old environment.
+I tried to train main's local recipe beside the branch for comparison. Main's code fails on the branch's Etude
+(<code>cannot import name 'Run' from etude.launch.records</code>). Main needs its own pinned environment, which is expected.</p>
 
 <h2>Fixed in this pass</h2>
-<p>No product code. <code>.lf/skills/qa.md</code>'s Elemental smoke entry claimed that smoke prints "passed" for all-invalid games
-and that arena evidence must be deleted before a retry. Both claims are no longer true, so I rewrote that entry to match what this pass showed.
-It also says to read games with duckdb, because pyarrow isn't installed.</p>
+<ul><li>The learner-transitions clock (above). Recorded as a reversible choice in questions.md.</li>
+<li><code>.lf/skills/qa.md</code>: the training entry now checks the report's transitions, and says how to screenshot it without <code>node_modules</code> in this checkout.</li></ul>
 
 <h2>What works now</h2>
-<p>From the guides (fourth pass): train, train a second named run, evaluate locally against the heuristic, read outcome tables, run the update benchmark
-and snapshot. From this pass: a Python error in managed evaluation fails smoke quickly and names the cause. Failed attempts keep their evidence.
-A retry over that evidence plays valid games with no collision.</p>
+<p>Fresh-home training, name refusal, resume with a later target, local evaluation, the training-time report with real throughput,
+the retired-command message and the saved-regime refusal. All run against the released Etude 0.4.1.</p>
 
 <h2>Not reached</h2>
-<p>A real native AgentError or Rust panic mid-game (still covered only by injected tests). A completed full smoke eval and its report on this
-host (I stopped it at 540 s). Launched or provider runs, CUDA, the full Elemental grid, <code>etude eval --source r2://…</code> and the nightly
-baseline workflow, which belongs to the gate.</p>
+<p>Installing f4e1822faf's environment; a cold clean-machine install; a launched or GPU run (still waiting on capacity, see plan.md);
+resuming a run that was created before this fix (two declared clocks) under the new three-clock code; the full Elemental smoke eval (covered by the fifth pass).</p>
 
 <h2>Still wrong, worst first</h2>
-<ul>
-<li><code>uv run python scripts/check_loopflow_workflows.py</code> fails at HEAD with an <code>AssertionError</code> in <code>_coverage</code>:
-under the installed lf 0.16.0+528ccd8ed, the coverage graph's <code>implement</code> step ids differ from
-<code>implement-working/-scalable/-performance</code>. This branch touches neither <code>.lf/graphs</code> nor the script, so the failure predates
-it and comes from lf drift. It is outside this change and not fixed here. The other graphs compile.</li>
-<li>Carried over: the Python encoder still logs "Invalid focus object ID 81/41 for action 12" during smoke, while the games are valid (focus alias,
-outside this change). The snapshot error is a raw sqlite traceback. Elemental smoke eval is slow on a laptop. The endpoint-tag warning appears in thin
-smoke reports. Scripted SIGINT through uv.</li>
-</ul>
-</body></html>
+<ol>
+<li><code>tests/test_policy_container_support.py</code> fails to collect: <code>require_supported</code> is not in
+<code>manabot.policy.checkpoint</code> (it lives in <code>manabot.backends.mlx.checkpoint</code>). The file and module are identical on main, so this predates the branch.
+It breaks <code>pytest tests -k …</code> collection.</li>
+<li>The report labels the local smoke "unclassified" and its recipe "unknown". The run record has <code>kind: null</code> and <code>job: null</code>, so smokes are not excluded by default.</li>
+<li>If a resume attempt ends before its first row (the loop test's inspection attempt), the report shows updates and active time as unavailable for the whole run.</li>
+<li>Carried over: the <code>check_loopflow_workflows.py</code> lf-drift failure, the encoder focus log, and slow smoke eval on a laptop.</li>
+</ol>

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
+from etude.records import Clock
 from etude.train.records import Time
 from etude.train.tracking import TrainingRun
 import numpy as np
@@ -96,6 +97,9 @@ COLLECTION_SEED = 10_000
 MINIBATCH_SEED = 20_000
 CLOCKS = [
     "updates",
+    Clock(
+        name="learner_transitions", kind="step", meaning="collected learner transitions"
+    ),
     Time("training_seconds", "active collection and learning seconds"),
 ]
 
@@ -295,6 +299,14 @@ class Counts(BaseModel):
     optimizer_exposures: int = 0
 
 
+def clocks(counts: Counts) -> dict[str, float]:
+    """CLOCKS coordinates other than `updates`, which `run.steps` sets for rows."""
+    return {
+        "learner_transitions": counts.learner_transitions,
+        "training_seconds": counts.training_seconds,
+    }
+
+
 def behavior(
     settings: SelfPlay, learner: Learner, ema: ActorCritic | None
 ) -> ActorCritic:
@@ -425,9 +437,7 @@ def publish(
             "ema",
             seed=run.seed,
         )
-    run.checkpoint(
-        path, updates=counts.updates, training_seconds=counts.training_seconds
-    )
+    run.checkpoint(path, updates=counts.updates, **clocks(counts))
     return path
 
 
@@ -682,12 +692,12 @@ def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
         with self_play_games(settings, run, counts) as collector:
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out)
-                run.log(row, training_seconds=counts.training_seconds)
+                run.log(row, **clocks(counts))
                 if settings.behavior != "random":
                     run.log_table(
                         OUTCOME_TABLE,
                         collector.stats.self_play.drain(),
-                        training_seconds=counts.training_seconds,
+                        **clocks(counts),
                     )
                 run.save()
                 if is_checkpoint(settings, update):

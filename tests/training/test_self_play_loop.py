@@ -14,6 +14,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.recipes.builders import gray_ogre_self_play
+from manabot.reports.time_sources import load_time_sources
 from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import CLOCKS, Counts, SelfPlay, self_play
@@ -84,6 +85,7 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert final.name == (
         "00000002-raw.safetensors" if averaging is None else "00000002-ema.safetensors"
     )
+    (reported,) = load_time_sources([str(tmp_path / "track")]).runs
     with recording(
         experiment="test",
         run="policy",
@@ -113,6 +115,10 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     recorded = read(tmp_path / "track", "test", "policy")
     assert list(recorded.points("coordinates/updates", "updates").x) == [1, 2]
     assert {cp.at["updates"] for cp in recorded.checkpoints} == {0, 1, 2}
+    # The training-time report reads work and active time from the loop's clocks.
+    assert reported.updates == 2
+    assert reported.learner_transitions == counts.learner_transitions > 0
+    assert reported.active_seconds is not None and reported.active_seconds > 0
 
 
 def test_stop_keeps_registered_counts_at_the_completed_boundary(

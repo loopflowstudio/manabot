@@ -144,3 +144,10 @@ still carry the retired names, each small enough for a later compress.
   the main arm runs only from 3afd92d8f3.
 The two "Open:" items above (tla_frontier, `training-report`) keep their
 defaults; either deletion is its own later change and loses nothing now.
+
+2026-11-17 QA reversible choice: the self-play loop declares a
+`learner_transitions` step clock again (main's executor did), so
+`manabot training-report` shows transitions and transitions per active second
+for recipe runs. It replaces the docs' earlier "No transitions clock is
+declared" choice, which had no recorded reason. A run created before this
+change declares two clocks; resuming one under three was not tested.
