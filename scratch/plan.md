@@ -48,6 +48,13 @@ can no longer read. tla_frontier keeps its code settings and reads only the
 134-deck deck_source from its frozen JSON. training-report remains the Etude
 cross-run list. These reversible choices stand; no open Manabot product choice.
 
+All shipped self-play recipe configs subclass `RunSettings` (frozen, extra keys
+forbidden), so the four instrumentation keys are flat config keys and
+`config.run_settings` passes the plain value to SelfPlay (8606b72454,
+a23f14a56d). The collector's `no_operation` yields a NoOperation, so the
+self-play step has no None guard.
+Focused check: `uv run pytest -q tests/training/test_recipe_etude.py::test_elemental_records_games_for_one_update tests/training/test_training_game_journals.py::test_recipe_forwards_runtime_flag` — 3 passed, including a one-update CPU Elemental run that wrote game records.
+
 ## Validation
 
 Evidence: implementation.md and experiments/reports/etude-execution.md. Focused
@@ -81,11 +88,6 @@ terminated and confirmed absent; cumulative launcher estimate ~USD 0.62.
 No stall on a throttled disk was confirmed, so no Etude fsync Task was filed.
 The timed arms predate 5826f7502e and the sync onto main dcee96ccd1 (merged
 at c7fd53704a; choices in questions.md); neither was re-timed.
-
-All shipped self-play recipe configs subclass `RunSettings` (frozen, extra keys
-forbidden), so the four instrumentation keys are flat config keys and
-`config.run_settings` passes the plain value to SelfPlay.
-Focused check: `uv run pytest -q tests/training/test_recipe_etude.py::test_elemental_records_games_for_one_update tests/training/test_training_game_journals.py::test_recipe_forwards_runtime_flag` — 3 passed, including a one-update CPU Elemental run that wrote game records.
 
 ## Remaining
 
