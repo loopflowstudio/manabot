@@ -47,13 +47,9 @@ DISCLOSURES = ("open", "closed")
 MAX_USD = 50
 
 
-def training_jobs(
-    revision: str, calibration: bool = False, calibration_reference: bool = False
-) -> list[RunRequest]:
+def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
     """Declare calibration only; pilot allocation requires its measured results."""
-    if calibration and calibration_reference:
-        raise ValueError("select one calibration workload")
-    if calibration or calibration_reference:
+    if calibration:
         from etude.jobs import TrainingJob as PythonJob
 
         from experiments.opponent_memory import Calibration, calibrate
@@ -62,19 +58,15 @@ def training_jobs(
 
         root = Path(__file__).resolve().parents[1]
         job = PythonJob(
-            name="cuda-calibration-reference"
-            if calibration_reference
-            else "cuda-calibration-full",
+            name="cuda-calibration-refs256",
             train=calibrate,
-            config=Calibration(
-                source_bundle=bundle_at(root, revision), reference=calibration_reference
-            ),
+            config=Calibration(source_bundle=bundle_at(root, revision)),
             repo=str(root),
             revision=revision,
             setup=machine_setup(" --extra artifacts --extra dev"),
             extras=("artifacts", "dev"),
-            max_hours=0.65 if calibration_reference else 3.0,
-            max_usd=Decimal("0.60") if calibration_reference else Decimal("2.00"),
+            max_hours=1.75,
+            max_usd=Decimal("1.20"),
             max_attempts=1,
         ).plain()
         return job.model_copy(
@@ -176,8 +168,6 @@ class Calibration(BaseModel):
     """Exploratory real-worker calibration, separate from pilot training."""
 
     model_config = ConfigDict(extra="forbid")
-    reference: bool = False
-
     source_bundle: SourceBundle | None = None
     smoke: bool = False
 
@@ -197,7 +187,7 @@ def calibration_recipe(name: str, *, smoke: bool) -> TrainingRegime:
     observation = ObservationConfig(
         max_decision_records=0 if incumbent else 512,
         max_decision_reference_details=0 if incumbent else 16384,
-        max_decision_references=0 if incumbent else 128,
+        max_decision_references=0 if incumbent else 256,
         max_decision_members=0 if incumbent else 8192,
     )
     recipe = sampled_self_play(
@@ -420,14 +410,11 @@ def calibrate(config: Calibration) -> None:
                 timeout=180,
             )
         print("calibration: CUDA backward preflight passed", flush=True)
-    sequence = ["incumbent", *(arm.name for arm in ARMS)]
+    # The 128-reference measurement reached its bound. Re-admit the expanded
+    # layout and retain two same-host incumbent processes within the dollar cap.
+    sequence = ["control", "incumbent", *(arm.name for arm in ARMS)]
     if not config.smoke:
-        sequence += list(reversed(sequence))
-    sequence.insert(0, "control")  # one shared EMA producer before any branches
-    if config.reference:
-        # Complete the missing reference variability without rerunning admitted
-        # memory workers. This is a separately labelled, fresh-host measurement.
-        sequence = ["incumbent", "control", "incumbent"]
+        sequence.append("incumbent")
     receipts: list[str] = []
     try:
         for ordinal, name in enumerate(sequence):
@@ -447,7 +434,7 @@ def calibrate(config: Calibration) -> None:
                     str(directory),
                     config.smoke,
                     str(out / "00-control/output/training/run.json")
-                    if ordinal and name != "incumbent" and not config.reference
+                    if ordinal and name != "incumbent"
                     else None,
                 ),
             )
@@ -477,7 +464,6 @@ def calibrate(config: Calibration) -> None:
                 {
                     "receipts": receipts,
                     "smoke": config.smoke,
-                    "reference": config.reference,
                     "wall_seconds": time.monotonic() - started,
                     "complete": len(receipts) == len(sequence),
                 },

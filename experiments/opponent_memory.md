@@ -1557,3 +1557,68 @@ The first reference quote refused the USD0.50 cap because it did not cover
 the whole window plus startup. Increase only that ceiling to USD0.60 before
 launch; the quote must still fit the unchanged cumulative USD3 cap. No machine
 was acquired by the refused quote.
+
+### Two-update CUDA measurements and capacity revision — 2026-11-16
+
+Source `469339f50885`, run `opponent_memory/cuda-calibration-full@39100`,
+attempt `eb98cd76fb06`, A40 `mtg252-a40-d351c44bf214`: eight workers completed
+two updates and admitted finite raw/EMA reloads; the final incumbent repeat
+was not started because of the conservative reserve. The run therefore failed
+its nine-worker completion target. The retained launcher estimate is
+**USD1.21337**, not settled billing; deletion is confirmed. Its delivered
+manifest names 230 outputs, now being fetched with SDK digest checks.
+
+Xeon Gold 6342, 7.65 CPU quota, 49,999,998,976-byte cgroup-v2 host limit;
+A40 has 47,699,722,240 bytes. Same-source mixed-disclosure workload, 32-row
+execution, float32. Rates below use committed learner rows / stage seconds
+(including collection, learning and export); reload adds about one second.
+These are differing actual self-play trajectories, not isolated encoder costs.
+
+| Worker | Rows | Stage s | Collection s | Learning s | Decisions/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Producer control | 105,216 | 764.22 | 581.10 | 180.14 | 137.68 |
+| Incumbent | 106,298 | 335.51 | 200.88 | 132.39 | 316.82 |
+| Control 1 | 105,189 | 745.29 | 561.15 | 181.46 | 141.14 |
+| Transformer 1 | 105,599 | 1,154.09 | 861.48 | 289.75 | 91.50 |
+| GRU 1 | 105,770 | 1,162.84 | 853.46 | 306.55 | 90.96 |
+| GRU 2 | 105,331 | 1,124.34 | 836.42 | 284.96 | 93.68 |
+| Transformer 2 | 106,167 | 1,159.87 | 868.95 | 287.94 | 91.53 |
+| Control 2 | 104,194 | 751.79 | 560.34 | 188.29 | 138.60 |
+
+Branch medians are 139.87/91.52/92.32 decisions/s for control/transformer/GRU:
+44.1%/28.9%/29.1% of the one measured incumbent process. The roughly 10% cost
+guide is clearly unmet on this workload. There is only one same-host incumbent
+process, so no repeated-baseline interval follows; the report makes no policy
+adoption or strength claim. Preparation alone took 218–221 s in the control
+branches and 439–457 s in memory branches; native step/encoding took 34–41 s.
+Collection and whole-training costs stay distinct.
+
+| Arm (process peak across repeats) | Host tree GB | CUDA allocated GB | CUDA reserved GB | Records/details/references/members maximum |
+| --- | ---: | ---: | ---: | --- |
+| Incumbent | 15.60 | 0.180 | 0.256 | 0/0/0/0 |
+| Log control | 15.93 | 0.187 | 0.258 | 447/13,623/123/6,493 |
+| Transformer | 15.95 | 1.112 | 3.483 | 447/13,623/123/6,493 |
+| GRU | 15.97 | 1.106 | 3.473 | 447/13,623/**128**/6,493 |
+
+GB are decimal bytes, process peaks include ordinary reload, and GPU peaks
+are allocator peaks rather than whole-device usage. No capacity error occurred,
+but one GRU repeat filled **128 of 128 reference rows**. Freezing that bound
+for longer learned games would leave no observed headroom. Revise only reference
+capacity to **256**, keeping records/details/members at 512/16,384/8,192 and
+strict run failure on overflow. Existing evidence and checkpoints stay bound to
+their original layout; do not load/rebind them into the expanded layout.
+
+This finding supersedes the quoted reference-only completion plan: that job
+was never launched. Delete its unused selector and instead re-admit the expanded
+layout with fresh producer/incumbent/control/transformer/GRU/incumbent workers
+(two updates each), all memory branches from the new producer EMA. A 1.75-hour
+job with USD1.20 ceiling includes startup and must be admitted by Etude under
+the unchanged USD3 cumulative calibration cap before launch. This measures every
+pilot arm on the selected capacity and two incumbent processes on one new host.
+The original host remains a separate stratum; its missing repeat stays missing.
+
+Operational note: R2 confirmed the attempt delivered before local launcher
+state updated. The global wait was stopped; the launcher's existing per-supply
+collection and termination helpers were invoked under its normal lock for
+`mtg252-a40` only. They retained the failed outcome, 230-output manifest and
+confirmed rental deletion. No unrelated supply or SDK source was changed.
