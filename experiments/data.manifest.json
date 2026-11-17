@@ -41838,6 +41838,30 @@
    "sha256": "7742e7387627504efd2a6838c4a27db9bc079b0f877cb11449f353465e3ee0bd",
    "bytes": 184
   },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-retry/lost-attempt.json": {
+   "sha256": "90bd5c9bcf083b8f84d436228a913fd347309babb515b093b3d5b1b5dce93bc5",
+   "bytes": 388
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-retry/optimized-retry-attempt.json": {
+   "sha256": "5292a20b61da1ff7c9f40b85948609c9a88a226c6a8bddad483b8b9180be0889",
+   "bytes": 28830
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-retry/optimized-retry-launcher-status.json": {
+   "sha256": "40fac9e40784bead193860629a95421720a2b868025770ca099db1f033cc9f4c",
+   "bytes": 517
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-retry/optimized-retry-members.json": {
+   "sha256": "54644e30392db959b2aa01485fc045591c380f2fbf47a99eba2f0ef5b157ee1a",
+   "bytes": 26246
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-retry/optimized-retry-output.tar.gz": {
+   "sha256": "f552f03f98d1eef317070482616010b43928a889cce184d7f0ec6d25359109d1",
+   "bytes": 75634925
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-retry/optimized-retry-record.json": {
+   "sha256": "288a18cb7d689da5dfab94e50f520c02e7440bec95d887821abc0d1fa9912f6e",
+   "bytes": 201965
+  },
   "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/availability.log": {
    "sha256": "a9fbb7b48a573a696c1ba79781d9fa265bc3dffd04c624e3d7579e1d3fc92b17",
    "bytes": 162

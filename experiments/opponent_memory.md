@@ -1981,3 +1981,30 @@ and their manifest entries retained; no fresh artifact-store fetch is claimed.
 Experiment discovery passed (5 tests), the shared-input branch declaration check
 passed (1 test), and the artifact-tracking guard passed (1 test). Ruff, format
 and `git diff --check` passed. No background work remains.
+
+### Optimized CUDA calibration and next host cuts — 2026-11-17
+
+Run `opponent_memory/cuda-calibration-optimized-retry@39100`, source `4641c7686b`, NVIDIA A40 (`mtg252-a40-e33ad664e01d`). Five sequential fresh workers, unchanged refs256 workload, two updates each; raw and EMA reloads admitted. Times below are verified from the fetched receipts. Incumbent reference is the median of its two workers, 286.126 s. This is exploratory cost evidence, not learning or strength evidence.
+
+| Worker | Decisions | Stage s | Collection s | Learning s | Time / incumbent | Decisions/s | Host tree peak GB | CUDA allocated peak GB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0: control | 106321 | 321.890 | 197.750 | 122.282 | 1.125 | 330.30 | 15.874 | 0.181 |
+| 1: incumbent | 105912 | 276.680 | 153.279 | 121.437 | 0.967 | 382.80 | 15.543 | 0.177 |
+| 2: control | 105872 | 327.051 | 202.736 | 122.167 | 1.143 | 323.72 | 15.889 | 0.182 |
+| 3: gru-k1 | 105915 | 442.850 | 275.416 | 165.169 | 1.548 | 239.17 | 16.324 | 0.253 |
+| 4: incumbent | 106113 | 295.571 | 163.783 | 129.722 | 1.033 | 359.01 | 15.568 | 0.177 |
+
+| Phase s | Incumbent median | Pretrained control | GRU-K1 |
+|---|---:|---:|---:|
+| Retention (includes capture) | 3.538 | 27.814 | 26.824 |
+| Memory capture (nested) | 0.000 | 23.974 | 22.981 |
+| Native observation encoding | 1.780 | 9.109 | 9.613 |
+| Preparation | 48.808 | 59.657 | 96.391 |
+| Inference/action selection | 62.531 | 63.934 | 99.629 |
+| Learner forward/loss (includes backward/step) | 115.939 | 112.121 | 155.279 |
+
+Launcher estimate USD0.2958674063638888861128685272; rental ended. The earlier `cuda-calibration-optimized` attempt ended `capacity_refused` at USD0, consuming its single attempt; the successful job therefore uses a new name. The Task session launched with `--max-usd 3.10` because the lost attempt left USD2.06 committed, drawing about USD0.10 from the Task reserve, within USD50. These allowance figures describe session accounting, not reconstructed billing.
+
+Control is 1.143× incumbent time and GRU-K1 1.548× (rates 0.875× and 0.646× using stage seconds); earlier refs256 rates were 0.537× and 0.356×. Worker decision counts differ, so time ratios and decisions/s are both shown. Retention plus native observation encoding remains about 37 s in the GRU; GRU preparation and inference each add about 37 s over control. The CUDA split supersedes the earlier CPU collection stop for the two authorized host cuts. Model shape, capacities, coalescing and transformer evidence stay fixed.
+
+Evidence: `experiments/data/opponent-memory/20261117-cuda-optimized-retry`: all 134 outputs fetched with SDK digest checks (182,529,894 bytes), archived and each archive member verified against the retained SHA256/size manifest; launcher status, attempt and record plus lost-attempt status retained. No new rental, pilot, evaluation or PR. Optimization continues with native suffix transport and a parameter-versioned collection fold.
