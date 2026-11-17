@@ -8,8 +8,8 @@ import pytest
 
 from manabot.reports.experiment import load_evidence
 from manabot.reports.self_play import self_play_figures, self_play_points
+from manabot.reports.update_metrics import stage_rows
 from manabot.training.rollout.self_play import SelfPlayCounter
-from manabot.training.update_metrics import stage_rows
 import managym
 
 

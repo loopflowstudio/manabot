@@ -156,14 +156,19 @@ sit beside it:
 
 ## Quick local evaluation
 
-Score a current-world flat checkpoint against the heuristic on the selected
-Allies/Lessons setup:
+Train the two-update local recipe, then score its final EMA policy against the
+heuristic on the selected Allies/Lessons setup. With the default Etude home:
 
 ```sh
+uv run etude train manabot/recipes/local.py
 uv run python -m manabot.eval.local \
-  --checkpoint .runs/small/policy.safetensors --opponent heuristic \
+  --checkpoint ~/.etude/track/local/out/policies/00000002-ema.safetensors --opponent heuristic \
   --deal-seed 101 --out .runs/local-check --seconds 300
 ```
+
+The local recipe writes under `$ETUDE_HOME/track/local` when `ETUDE_HOME` is
+set. If `local` already exists, use `--experiment NAME` to train another run
+and replace `local` in the checkpoint path with that name.
 
 - `--opponent` also accepts another local policy file, `scripted_greedy` or
   `random`. Policy files are `.safetensors`, or `.pt` from an earlier revision.

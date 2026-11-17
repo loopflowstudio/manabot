@@ -9,7 +9,7 @@ returns an ordinary Etude record, so a report mixes them with its own panels:
 - `head_to_head`: an eval `Curve` of named pairs, one line for the first seat;
 
 
-Jobs are keyed by their Etude name, which for a `TrainingJob` is its regime id.
+Jobs are keyed by their Etude name; retained declarations use their regime id.
 Matches are selected by the tags or names `eval_jobs(state)` gives its seatings.
 """
 

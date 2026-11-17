@@ -8,8 +8,9 @@ from etude.storage import DirectoryStorage
 from etude.train.read import read
 import pytest
 
+from manabot.reports.update_metrics import updates_from_run
 from manabot.training.rollout.self_play import SelfPlayCounter, SelfPlayOutcome
-from manabot.training.update_metrics import OUTCOME_TABLE, metric_row, updates_from_run
+from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
 from tests.fixtures.training_records import recording
 
 

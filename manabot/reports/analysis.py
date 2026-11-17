@@ -7,7 +7,8 @@ from typing import Any
 
 from manabot.infra.files import atomic_json
 from manabot.reports.records import RetainedRun
-from manabot.training.update_metrics import MetricValue, read_updates, stage_rows
+from manabot.reports.update_metrics import read_updates, stage_rows
+from manabot.training.update_metrics import MetricValue
 
 
 def valid_game(row):

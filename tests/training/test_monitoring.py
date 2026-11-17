@@ -11,9 +11,9 @@ from manabot.reports.training import (
     Dashboard,
     training_dashboard,
 )
+from manabot.reports.update_metrics import stage_rows
 from manabot.training.records import RegimeRun, StageRecord
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.training.update_metrics import stage_rows
 import managym
 from tests.fixtures.saved_regimes import direct_self_play
 

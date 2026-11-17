@@ -23,14 +23,12 @@ from manabot.env.replay import require_replay_runtime
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim import rollout
-from manabot.training.regime import (
-    SelectionGameSpec,
-)
 from manabot.training.rollout import selection_data
 from manabot.training.rollout.collection import (
     close_collector,
     open_collector,
 )
+from manabot.training.rollout.selection_data import SelectionGameSpec
 import managym
 from managym.decision import Command
 from managym.recording import read_failure

@@ -29,9 +29,9 @@ keep that boundary explicit rather than claiming working managed LLM sessions.
 Task steer: "Keep the scratch notes (design-train-api.md, ontology.md,
 positioning.md, exp-56-compat.md, sketch.html, explore.html,
 etude-readme-draft.md); do not delete or shorten them." These stay untouched;
-other notes are condensed. Never increase context limits. Budget conflict: those
-kept files alone are about 12k tokens, so scratch stays over its 12k target
-(see `lf context`) until that steer is lifted. Earlier exact remarks
+other notes are condensed. Never increase context limits. `lf context` on
+2026-11-16 reports the default 16k-token/131072-byte targets and no usage
+entries; the earlier 12k-target warning is historical. Earlier exact remarks
 and findings: 4de3a76ba0:scratch/questions.md and 382c653ec8:scratch/questions.md.
 
 2026-11-16 main sync: preserve the Etude d9 pin and retired execution/experiment

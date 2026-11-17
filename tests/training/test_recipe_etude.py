@@ -19,8 +19,11 @@ from manabot.training.loops.self_play import (
     self_play,
     write_policy,
 )
-from manabot.training.regime import SelectionGameSpec
-from manabot.training.rollout.selection_data import SelectionDataset, collect_selection
+from manabot.training.rollout.selection_data import (
+    SelectionDataset,
+    SelectionGameSpec,
+    collect_selection,
+)
 from tests.fixtures.training_records import recording
 
 

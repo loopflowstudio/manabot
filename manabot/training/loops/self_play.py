@@ -504,12 +504,12 @@ def step(
     before = phase_seconds(collector.profiler, learner.profiler)
     batch: RolloutBatch | None = None
     try:
-        with collector._operation("collection"):
+        with collector.operation("collection"):
             batch = collect(
                 collector, behavior(settings, learner, ema), settings.transitions
             )
         synchronize(device)
-        with collector._operation("learning"), learner.profiler.track("Learning"):
+        with collector.operation("learning"), learner.profiler.track("Learning"):
             metrics = learn(settings, learner, ema, counts, batch, rng)
             synchronize(device)
     except NumericalError as error:

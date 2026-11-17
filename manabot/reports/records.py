@@ -1,7 +1,7 @@
-"""Read retained recipes as evidence, without granting execution admission.
+"""Read retained regimes as evidence.
 
 Recorded stage parameters stay JSON, including unknown historical learning tags.
-No recipe is translated, repaired or passed to an executor. Measured run fields
+No regime is translated or repaired. Measured run fields
 share RegimeRunRecord validation with saved regime readers; original exports
 remain unchanged.
 """
@@ -29,7 +29,7 @@ class RecordedRegime(BaseModel):
 
 
 class RetainedRun(RegimeRunRecord[RecordedRegime]):
-    """Reporting projection with opaque recipe parameters, never an executable run."""
+    """Reporting projection with opaque regime parameters, never an executable run."""
 
     model_config = ConfigDict(extra="allow", allow_inf_nan=False)
     __pydantic_extra__: dict[str, JsonValue]

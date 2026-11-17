@@ -25,12 +25,21 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
-from manabot.training.regime import SelectionGameSpec
 import managym
 from managym.decision import Command, DecisionFrame, Observation
 
 if TYPE_CHECKING:
     from manabot.training.state.backend import TrainingBackend
+
+
+class SelectionGameSpec(Strict):
+    """Population and split membership frozen before observing any outcome."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+    seed: int = Field(ge=0, le=2**32 - 1)
+    action_seed: int = Field(ge=0, le=2**32 - 1)
+    assignment: Literal[0, 1]
+    split: Literal["development", "held_out"]
 
 
 @dataclass(frozen=True)

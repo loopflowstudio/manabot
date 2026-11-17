@@ -379,7 +379,7 @@ class Collector:
     _game_actions: list[list[int]]
     _self_play_decks: list[tuple[str, str]]
     # RandomBatchController or BatchedSampler; None when the live model plays both seats.
-    _operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+    operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
         nullcontext()
     )
     _opponent: Any = None
@@ -575,7 +575,7 @@ def open_collector(
             _game_started=[time.perf_counter()] * num_envs,
             _game_actions=[[] for _ in range(num_envs)],
             _self_play_decks=[("", "")] * num_envs,
-            _operation=operation,
+            operation=operation,
             _sampler=sampler,
             _assignments=assignments,
             _ordinals=[0] * num_envs,
@@ -697,7 +697,7 @@ def _expose(collector: Collector, row: int, kind: ExposureKind, count: int = 1) 
 def _opponent_actions(
     collector: Collector, rows: np.ndarray, inference: CollectionScope
 ) -> np.ndarray:
-    with collector._operation("opponent_inference"):
+    with collector.operation("opponent_inference"):
         if collector.opponent_mode == "self":
             return inference.opponent_actions(_slice_obs_rows(collector, rows))
         return collector._opponent.select(collector._buffers, rows)
@@ -1349,7 +1349,7 @@ def _sample_learning_rows(
     inference: CollectionScope,
     operation: str = "learner_inference",
 ) -> np.ndarray:
-    with collector._operation(operation):
+    with collector.operation(operation):
         sampled = inference.sample(_slice_obs_rows(collector, rows), collector.profiler)
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs

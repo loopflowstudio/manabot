@@ -53,8 +53,8 @@ calls and rows per call as well, since phase rows hold only seconds.
 Distinguish one seed's progress from aggregate throughput or cost: packing can
 improve the latter while slowing every seed. Compare overlapping post-warmup
 packed samples to matched solo ordinals, keeping both latency and throughput.
-Retained runs' `TrainingRun.host` supplies CPU and quota facts; record them for
-new runs, and keep GPU, source, world, input,
+Saved regime run records (`RegimeRun.host`) supply retained CPU and quota facts.
+For new runs, keep CPU, quota, GPU, source, world, input,
 precision, model size and workload identities with each comparison. Read
 evaluation's `performance.json` alongside training to show its share of the
 workload's time. Evaluation clocks can overlap and exclude preparation and billing;
@@ -73,7 +73,7 @@ This prints seconds, decisions and games per update and phase timings in
 microseconds per decision. `--json` retains the per-update rows, validated
 settings, seed and summary. Each reading trains a new local Etude run and
 prints its id; the learner state and policies are in that run's folder, and
-no `TrainingRun` receipt is written. Use separate `--json`
+no saved regime run record (`RegimeRun`) receipt is written. Use separate `--json`
 paths for baseline and candidate, matching input capacities and explicit
 `--recipe`, `--seed` and `--device` settings. `--recipe` is a zero-argument
 `module:function` returning `SelfPlay`; its default is

@@ -11,10 +11,9 @@ import managym
 def validate_regime(
     regime: TrainingRegime | Mapping[str, object], *, require_current_world: bool = True
 ) -> TrainingRegime:
-    """Validate a recipe; execution additionally requires the native world.
+    """Validate a saved regime against its schema and, by default, the native world.
 
-    Offline authoring can resolve historical recipes without relabeling them.
-    Every execution entry point retains the current-world check by default.
+    Offline readers may accept historical worlds without relabeling them.
     """
     regime = TrainingRegime.model_validate(
         regime.model_dump() if isinstance(regime, TrainingRegime) else regime

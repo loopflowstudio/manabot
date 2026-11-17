@@ -270,7 +270,7 @@ recipe uses. Read it as the template for your own; its body is the loop you
 would write:
 
 ```python
-def self_play(settings: SelfPlay, run: Run, *, updates: int) -> Path:
+def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
     """Train to the run's update target and return its final world-bound policy."""
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
@@ -338,8 +338,8 @@ The pieces that are manabot's:
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
 | `publish(settings, run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
-The loop takes Etude's `Run`; there is no untracked path through it. The
-updates and pieces it calls need no run
+The loop takes Etude's `TrainingRun` (`etude.train.tracking`); there is no
+untracked path through it. The updates and pieces it calls need no run
 ([training loops](training-loop.md)), and
 [`loops/minimal.py`](training-loop.md#a-complete-self-play-loop) is a whole
 resumable loop in about ninety lines to copy from.
@@ -847,7 +847,7 @@ versioned). Use the standard AWS credential
 chain; never put keys in recipes. Training exports are retained as Etude
 checkpoints; experiment results are published with
 `uv run --extra artifacts python -m manabot.data publish <path>`. Older
-TrainingRun manifests remain readable as `StoredArtifact`
+saved regime run record (`RegimeRun`) manifests remain readable as `StoredArtifact`
 (`manabot.infra.artifacts`), which `load_checkpoint` accepts directly, caching
 under `MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`) and rehashing
 on every hit. Storage never relaxes world, architecture or setup admission.

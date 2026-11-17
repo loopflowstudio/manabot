@@ -208,7 +208,8 @@ seconds are already included and must not be added again. They are occupied
 process time, not CPU utilization or hardware-normalized compute. Host dollars
 are available only when an hourly rate was configured; absent prices are unknown.
 
-TrainingRun stage costs give collection, optimization, export and diagnostics.
+Saved regime run records (`RegimeRun`) give stage costs for collection,
+optimization, export and diagnostics.
 Resource curves expose sampled process RSS in bytes; the summary uses MiB.
 Sampling misses peaks and does not measure the whole host. Load averages measure
 contention but do not correct throughput. Failures, interrupted attempts and
@@ -316,8 +317,8 @@ in `manabot.reports.learning` expose the same calculations to notebooks.
 ## Portable snapshots
 
 For an actively written experiment, take a read-only SQLite online backup and
-export its TrainingRun rows before reporting. Do not copy a live `.sqlite` file
-without its transaction state:
+export its saved regime run record (`RegimeRun`) rows before reporting. Do not
+copy a live `.sqlite` file without its transaction state:
 
 ```bash
 uv run python -m manabot.reports.snapshot SOURCE_DIRECTORY SNAPSHOT_DIRECTORY

@@ -62,6 +62,19 @@ and interrupted attempts keep their journals while a retry completes.
 `uv run --extra dev --extra artifacts pytest tests/eval/test_elemental_play.py -q`:
 6 passed (2.81s) after compress, local and launched-style paths.
 
+## Concept follow-up
+
+The five directions from design-train-api.md (97338108bc review) are built:
+TrainingRun names the live handle throughout docs; retained readers describe
+saved regimes; report update readers live in reports/update_metrics.py;
+SelectionGameSpec lives in rollout/selection_data.py; Collector.operation is
+public. Live loop, Torch collection/runtime and duel/monitor import without
+training.regime or training.records (fresh-interpreter boundary check).
+The evaluation guide uses the local recipe's actual final EMA policy path.
+Serialized keys and frozen records are unchanged. Focused import/outcome/timing
+and resume/recipe/retained-reader checks: 25 passed; local recipe completed
+two updates. Commands and evidence: implementation.md.
+
 ## Remaining
 
 - Gate and publication are the caller's steps. The full nightly baseline

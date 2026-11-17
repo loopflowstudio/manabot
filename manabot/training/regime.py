@@ -28,6 +28,7 @@ from manabot.training.learning import (
     Precision,
 )
 from manabot.training.rollout.adaptive import AdaptiveConfig
+from manabot.training.rollout.selection_data import SelectionGameSpec
 from manabot.training.state.game_errors import GameErrorPolicy
 
 
@@ -511,16 +512,6 @@ class TrainSelfPlay(Stage):
                 "frozen opponent training requires even streams for both decks"
             )
         return self
-
-
-class SelectionGameSpec(Strict):
-    """Population and split membership frozen before observing any outcome."""
-
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
-    seed: int = Field(ge=0, le=2**32 - 1)
-    action_seed: int = Field(ge=0, le=2**32 - 1)
-    assignment: Literal[0, 1]
-    split: Literal["development", "held_out"]
 
 
 class CollectSelection(Stage):

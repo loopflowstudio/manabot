@@ -644,3 +644,15 @@ game needs more than a forward must rebuild the first shape itself
 (`game_players`). Should `Agents(build=)` build every seat? It matters for any
 second adopter (Jace); it does not block this Task. The same-seed
 policy→sampler pairing question above is also still open and non-blocking.
+
+## Concept follow-up implementation — 2026-11-16
+
+The five directions in the 97338108bc review are implemented. Report update
+readers moved to `reports/update_metrics.py`; the selection spec moved to
+`rollout/selection_data.py`; the collector's `operation` scope is public.
+The guide names the actual `TrainingRun` handle and saved `RegimeRun` records.
+The local recipe completed two updates and wrote
+`track/local/out/policies/00000002-ema.safetensors`; evaluation docs use that
+path. A fresh-process check rejects saved-regime imports from live training
+and evaluation. Commands/results are in implementation.md; gate obligations
+and unanswered Etude product choices are unchanged.

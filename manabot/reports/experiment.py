@@ -33,12 +33,8 @@ from manabot.reports.time_profile import (
     training_time_report,
 )
 from manabot.reports.training import Scalar, training_dashboard
-from manabot.training.update_metrics import (
-    MetricRow,
-    Updates,
-    read_updates,
-    stage_rows,
-)
+from manabot.reports.update_metrics import Updates, read_updates, stage_rows
+from manabot.training.update_metrics import MetricRow
 
 
 def read_run_record(path: Path) -> RetainedRun | RunRecord:
