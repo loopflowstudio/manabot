@@ -30,7 +30,7 @@ class NavigationFixture(BaseModel):
 
 FIXTURE = (
     Path(__file__).parents[2]
-    / "managym/academy/fixtures/choice-navigation-w17-manual-payment.json"
+    / "managym/academy/fixtures/choice-navigation-w17-smart-payment.json"
 )
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 

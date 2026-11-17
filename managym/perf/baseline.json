@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "d35d1a421d6c11f66bb30c7f3c60276d9276460f",
+    "commit": "657deddd8f20b2b47ab15742c56acba65d3e5cc6",
     "date": "2026-11-17",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44134904565",
-    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 9V45 96-Core Processor (4 vCPU), release",
-    "reason": "Default manual mana-source choices (MTG-382, PR #554) change all search and step digests and add payment decisions (127974 vs 102209 steps). Accepted manual-choice cost: same-runner total search +13.5%, worst reply +26.1%, faster stepping; correctness checks pass. Keep the 10% tolerance."
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44140856590",
+    "runner": "GitHub-hosted ubuntu-24.04, INTEL(R) XEON(R) PLATINUM 8573C (4 vCPU), release",
+    "reason": "Smarter automatic source selection combined with default manual payments changes all search and step digests (124687 vs 127974 steps). This PR head passes every same-runner timing limit; retain the 10% tolerance."
   },
   "bench_search": {
-    "worst_s": 2.8927750485,
-    "total_s": 94.262,
+    "worst_s": 4.7568773905,
+    "total_s": 164.071,
     "seeds": {
       "1": {
-        "worst_s": 2.8927750485,
-        "total_s": 27.184132903,
-        "digest": 4051366041796879401
+        "worst_s": 4.3592151470000005,
+        "total_s": 65.81617575550001,
+        "digest": 12973536517339955137
       },
       "2": {
-        "worst_s": 1.5113576245,
-        "total_s": 35.9778166965,
-        "digest": 9472986584244995320
+        "worst_s": 4.7568773905,
+        "total_s": 52.577839800999996,
+        "digest": 15798565271346578031
       },
       "3": {
-        "worst_s": 1.7220414265,
-        "total_s": 31.100387613499993,
-        "digest": 9803279045364310380
+        "worst_s": 2.5637301470000002,
+        "total_s": 45.6773221415,
+        "digest": 5569117671639805731
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 26401.45282965269,
-    "steps": 127974,
+    "steps_per_s": 16214.137997983244,
+    "steps": 124687,
     "games": 512,
-    "digest": 9071483575535938828
+    "digest": 3471185654390571689
   }
 }

@@ -1,9 +1,11 @@
 """Terminal release-stack authority evidence for the selected authored match."""
 
 import json
+from pathlib import Path
 
 from conformance.authored_match_receipt import (
     DEFAULT_RECEIPT_PATH,
+    DeterministicServerOfferPolicy,
     _program_index,
     generate_authored_match_receipt,
 )
@@ -81,3 +83,28 @@ def test_compatibility_action_is_counted_as_legacy_fallback(tmp_path):
     session.hero_action(message["actions"][0]["index"])
     assert session.authority_fallback_counters["legacy_fixed_action"] == 1
     assert session.authority_fallback_counters["client_legality"] == 1
+
+
+def test_automatic_source_payments_preserve_strategic_random_stream() -> None:
+    fixture = json.loads(
+        (
+            Path(__file__).parents[2]
+            / "managym/academy/fixtures/choice-navigation-w17-smart-payment.json"
+        ).read_text()
+    )["positions"]
+    policy = DeterministicServerOfferPolicy(0, automatic_source_payments=True)
+    payment = fixture["PAY_OR_NOT"]["frame"]["offers"]
+    assert (
+        policy.choose(payment, actor=0, revision=0, prompt_family="PAY_OR_NOT")[
+            "action_type"
+        ]
+        == "PAY_COST"
+    )
+    target = fixture["CHOOSE_TARGET"]["frame"]["offers"]
+    reference = DeterministicServerOfferPolicy(0)
+    assert policy.choose(
+        target, actor=0, revision=1, prompt_family="CHOOSE_TARGET"
+    ) == reference.choose(target, actor=0, revision=1, prompt_family="CHOOSE_TARGET")
+    # Mandatory tap costs have no automatic payment: retain their legal choice.
+    taps = [offer for offer in payment if offer["action_type"] == "TAP_FOR_COST"]
+    assert policy.choose(taps, actor=0, revision=2, prompt_family="PAY_OR_NOT") in taps

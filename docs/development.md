@@ -444,7 +444,23 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference: MTG-382 manual source choices.** Commit `d35d1a421d` is
+**Current reference: smart automatic payments with manual source choices.**
+Commit `657deddd8f` is adopted from
+[PR #524 CI run 44140856590](https://github.com/loopflowstudio/manabot/actions/runs/44140856590)
+(2026-11-17 UTC, Intel Xeon Platinum 8573C). Smarter automatic source selection changes
+all three search digests and the step digest, with 124,687 decisions instead
+of 127,974 across 512 games. The rebuilt previous reference reproduces every
+committed digest. Every same-runner timing limit passes; the **10% tolerance**
+is unchanged. Changed gameplay means these figures compare different workloads,
+rather than isolating the cost of source selection.
+
+| Metric | Previous reference `d35d1a421d` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.652 s | 4.757 s (+2.3%) |
+| Total search | 153.379 s | 164.071 s (+7.0%) |
+| Step throughput | 16,316.8/s | 16,214.1/s |
+
+**Previous reference: MTG-382 manual source choices.** Commit `d35d1a421d` is
 adopted from [PR #554 CI run 44134904565](https://github.com/loopflowstudio/manabot/actions/runs/44134904565)
 (2026-11-17 UTC, AMD EPYC 9V45). Default manual mana-source choices change
 all three search digests and the step digest, with 127,974 decisions instead
