@@ -438,7 +438,41 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference: MTG-297 mana spending.** Commit `d53220d36` is adopted
+**Current reference: smart automatic payments with manual source choices.**
+Commit `657deddd8f` is adopted from
+[PR #524 CI run 44140856590](https://github.com/loopflowstudio/manabot/actions/runs/44140856590)
+(2026-11-17 UTC, Intel Xeon Platinum 8573C). Smarter automatic source selection changes
+all three search digests and the step digest, with 124,687 decisions instead
+of 127,974 across 512 games. The rebuilt previous reference reproduces every
+committed digest. Every same-runner timing limit passes; the **10% tolerance**
+is unchanged. Changed gameplay means these figures compare different workloads,
+rather than isolating the cost of source selection.
+
+| Metric | Previous reference `d35d1a421d` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.652 s | 4.757 s (+2.3%) |
+| Total search | 153.379 s | 164.071 s (+7.0%) |
+| Step throughput | 16,316.8/s | 16,214.1/s |
+
+**Previous reference: MTG-382 manual source choices.** Commit `d35d1a421d` is
+adopted from [PR #554 CI run 44134904565](https://github.com/loopflowstudio/manabot/actions/runs/44134904565)
+(2026-11-17 UTC, AMD EPYC 9V45). Default manual mana-source choices change
+all three search digests and the step digest, with 127,974 decisions instead
+of 102,209 across 512 games; neither candidate sample caps a game. The previous
+reference reproduces every committed digest. Both candidate search samples
+(93.186 s, 95.423 s wall time) exceed both reference samples (82.702 s,
+83.408 s), with user CPU time tracking wall time. This is accepted engine cost,
+not an attribution to runner noise. Changed gameplay prevents interpreting
+these timings as an isolated algorithm comparison. All correctness checks on
+the measured head pass; the **10% tolerance** is unchanged.
+
+| Metric | Previous reference `1ad670d8f` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 2.295 s | 2.893 s (+26.1%) |
+| Total search | 83.022 s | 94.262 s (+13.5%) |
+| Step throughput | 24,706.7/s | 26,401.5/s |
+
+**Previous reference: MTG-297 mana spending.** Commit `d53220d36` was adopted
 from [dedicated run 43417765062](https://github.com/loopflowstudio/manabot/actions/runs/43417765062)
 (2026-11-13 UTC, AMD EPYC 7763). Native unit/class spending adds decisions to
 these decks: all three search digests and the step digest change, with 102,209
