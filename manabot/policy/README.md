@@ -71,3 +71,9 @@ counts and signed program integers, so the product with a count and the
 
 Backends live in [`manabot/backends/`](../backends/README.md), which also
 covers [saving and loading a container](../backends/README.md#policy-checkpoints).
+
+`decision_memory.py` validates dense history through record-aligned chunks and a
+five-integer predecessor cursor. Retained prefixes reuse these content-bound
+certificates and vocabulary-bound immutable feature fragments. Preparation adds
+batch routes and prefix-relative recency without gathering dense history. The
+cache owns no trainable output; unreachable game nodes release their features.

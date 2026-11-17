@@ -41810,6 +41810,14 @@
    "sha256": "c2998cdeb774ef19c6b6f9a7d5b20cf2ae569cad31dce881cc5bbd4cee555b41",
    "bytes": 14533131
   },
+  "experiments/data/opponent-memory/20261117-chunk-cache/evidence.tar.gz": {
+   "sha256": "cfe3c9eac1de8bbee378ece986f60fb41d6d0b5a007465eee2bae392ea73f5a3",
+   "bytes": 588868
+  },
+  "experiments/data/opponent-memory/20261117-chunk-cache/summary.json": {
+   "sha256": "8659d185090e8d0e9f58de6b58449e652fddaa49362957bf2d182afdc0a8cc71",
+   "bytes": 63195
+  },
   "experiments/data/opponent-memory/20261117-host-cost/stage1-members.json": {
    "sha256": "03f3a4cc4153f7c49e98356eca14460913f930d776af4bc7eae7609d4168a6a6",
    "bytes": 16492

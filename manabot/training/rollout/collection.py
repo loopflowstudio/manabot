@@ -35,7 +35,6 @@ from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
-    CompactObservation,
     MemoryArchive,
     MemoryStore,
     Prefix,
@@ -226,7 +225,7 @@ class RecordedObservations:
         recorded = self.index[indexes]
         rows = {key: value[recorded] for key, value in self.rows.items()}
         if self.memory_capacities is not None:
-            return CompactObservation(
+            return PrefixObservation(
                 rows, [self.memory[int(i)] for i in recorded], self.memory_capacities
             )
         return rows
@@ -286,7 +285,7 @@ class RolloutBatch:
             indexes = np.arange(self.actions.size)
         rows = self.action_data.unpack(indexes)
         observed = self.recorded.gather(indexes)
-        if isinstance(observed, CompactObservation):
+        if isinstance(observed, PrefixObservation):
             observed.update(rows.observation)
             rows.observation = observed
         else:

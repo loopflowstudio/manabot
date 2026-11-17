@@ -1,455 +1,112 @@
-# Whole-game opponent memory
-
-**Current direction (2026-11-17): throughput first, control + GRU-K1 only.**
-Jack Heart: "the major concern is throufhput w decision memory";
-"we cannstart w gru only". No further paid calibration or pilot until host cost
-is reduced. The refs256 job was already running when this steer arrived and
-will finish on its frozen six-worker source, including its transformer worker;
-no additional transformer job is authorized. Earlier three-arm plans and
-transformer results below remain historical evidence. CPU work first exposes
-retention/capture, compares 128/256-row execution against matched-row incumbent
-rates, then caches fully admitted content-addressed chunks and prepared fragments.
-There is no coalescing/architecture change in the host-only cut.
+# Whole-game decision memory
 
 ## Question
 
-**Exploratory.** Can a learned memory of the opponent's past decisions become
-an affordable training basis without materially hurting throughput or early
-learning? Census and controlled storage measurements are retained below;
-CUDA admission has begun; no complete calibration, training pilot or paired
-evaluation result exists. The USD 50 allocation is a
-budget, not a measured cost. No playing-strength finding follows from this report.
+**Exploratory.** Can viewer-safe memory of the opponent's past decisions become
+an affordable training basis without materially hurting throughput or learning?
+The true incumbent has history disabled. The control retains and validates the
+log and reserves its vocabulary but has no memory encoder. The active comparison
+is control versus GRU-K1, with the incumbent retained as the throughput reference.
+Opponent-only is primary; own-seat inclusion remains built and default off.
 
-The incumbent has history disabled; the control retains and validates the log,
-reserving its vocabulary without encoding it. The true history-disabled incumbent
-remains the throughput reference. The selected design compares transformer and
-GRU encoders with one learned summary token joining the board transformer.
-Compare throughput and learning at matched learner decisions. Do not require a
-strength gain to recommend retaining memory as the next basis, but do not interpret a noisy short
-run as proof of non-inferiority. Report the size and uncertainty of regressions;
-the roughly 10% throughput cost mentioned in the task is context for that
-judgment, not a precomputed verdict.
+## Answer so far
 
-## Method (paid pilot planned)
+The software works, but the required matched-learning comparison has not run.
+The frozen supervised probe selected K1 by its validation/CPU tie-break rule:
+57 completed heuristic games, 1,812 decision rows, three capacity exclusions,
+94 hand targets, whole-game splits and separate open/closed readouts. K4−K1
+validation loss was +0.002763 [−0.000620, +0.006803]. This is a scripted proxy
+with a limited state baseline, not evidence of playing strength or adoption.
+The probe protocol, outputs and competence limits are in the
+[dated result](#supervised-probe-result--2026-11-16).
 
-A supervised probe comes first, then three paid arms across three independent
-seed labels, shared across arms for blocking: nine branch runs from three
-control trunks, not nine independent seeds. The seed, not
-an evaluation game, is the unit of learning evidence. No factorial cross and no
-dedicated control-deck training arm in this pilot; stratify the existing
-Elemental matchups instead.
+Gated summary tokens preserve exact control initialization; finite gate gradients
+precede encoder gradients after the gate opens. Common-trunk transfer, published
+producer binding, ordinary checkpoint persistence and blank-memory evaluation
+intervention are implemented. Native snapshots remain the sole viewer-safe
+fact authority; hidden probe labels never enter policy inputs or caches.
 
-### Supervised probe
+The expanded-reference CUDA run completed two updates and finite raw/EMA reload
+for all six frozen workers. Its matched-host incumbent median was 350.15 learner
+decisions/s, control 187.96 (0.537×) and GRU 124.57 (0.356×). References had
+observed headroom at 128 of 256 slots; all memory-worker maxima fit
+512/16,384/256/8,192 record/detail/reference/member capacities. These are short
+worker/resource admissions, not matched learning or strength results.
+The [CUDA closeout](#expanded-reference-cuda-closeout--2026-11-17) retains full
+host, source, trajectory and resource limits. Its source predates CPU host
+optimizations, so those worker rates do not measure the chunk cache.
 
-Do summaries of the opponent's past decisions improve hand prediction over the
-coarse current-state vector below? The probe runs locally, at no rental cost,
-and fixes the summary count K for the paid arms:
+The [chunk-cache candidate](#record-aligned-chunk-cache-candidate--2026-11-17)
+reduces CPU fixture preparation and yields 1.14–1.20× GRU fixture speedups with
+exact feature/output/gradient/state comparisons. GRU remains 0.30–0.46× the
+matched incumbent fixture rate. Warm cache arrays add 61.6 MB for 256 prefixes,
+so the original retained-byte no-growth condition is unmet; the candidate is
+returned for design review. No optimized CUDA-worker or learning result follows.
 
-```bash
-uv run python -m experiments.opponent_memory probe --out .runs/decision-memory-probe
-```
+## Current method and limits
 
-The command prints held-out per-card log loss and paired differences from the
-state-only baseline, separately by disclosure, then the selected K and counts.
-It writes `summary.json`, `selection.json`, sampled inputs, separate labels,
-action journals, fitted weights, predictions and source/runtime receipts. Use a
-fresh directory. The [completed local probe](#supervised-probe-result--2026-11-16)
-selected K=1 for both paid memory arms.
+Jack Heart's 2026-11-17 direction is throughput first: "the major concern is
+throufhput w decision memory" and "we cannstart w gru only". No further paid
+calibration or pilot launches until host cost is reduced. The already-running
+refs256 run finished unchanged, including its frozen transformer worker; all
+rentals ended. Transformer implementation and frozen evidence remain available,
+but no transformer rerun or paid arm is planned.
 
-- **Games.** The native heuristic plays both seats over the Elemental 10-deck
-  roster, with a separate stateful selector per native seat, uniform ordered
-  pairs, half with open and half with closed decklists,
-  forced decisions skipped. No trained policy can read this layout before the
-  pilot's own trunks exist, and none may be rebound to it. Games split 70/15/15
-  into fit, validation and test by game seed, stratified by disclosure in fixed
-  40-game seed blocks (14/3/3 per mode); no game appears in two splits and
-  appending games never moves one to another split.
-- **Rows.** Each acting decision of each viewer with a non-empty log, at most
-  16 per viewer per game. Capacities are the census bounds; a game exceeding
-  them is a typed capacity error and is counted, never truncated.
-- **Label.** Which card definitions the opponent holds, from the privileged
-  native hand snapshot, over the union of roster main decks and sideboards.
-  An unrepresented hand definition stops collection. The recorder stores labels beside the observation,
-  never in an observation key, a prepared policy input, a cache or a replay.
-- **Candidates.** The production memory encoder and the embeddings it reads,
-  fitted from scratch for transformer and GRU at K=1 and K=4, each with a linear
-  head over its summaries joined to a public state vector (opponent hand and
-  library size, turn, per-definition public-zone counts, decklist counts when
-  open). Baselines on the same rows: that state vector alone through the same
-  head, and the analytic hand size × unseen-deck frequency. Three fitting seeds.
-- **Fitting.** Adam at 0.003, batches of 16 decisions, eight epochs, retaining
-  the epoch with the lowest game-weighted validation loss. Training averages
-  per-card Bernoulli log loss over decisions; readouts give each game equal
-  weight and average the three fitting seeds. The test split is scored after
-  K selection. `--epochs` and `--max-games` allow predeclared smaller runs;
-  defaults are eight and 120, with the 20-game smoke sizing the actual count.
-- **Choosing K.** Select K=4 when its validation loss beats K=1, averaged over
-  both encoders, with an interval excluding zero. Otherwise select whichever K
-  has the lower aggregate CPU fit time; an exact CPU-time tie selects K=1.
-  Thus inconclusive validation can also select K=4 when it is cheaper on CPU.
-  The test split is read once, for the table. This clarifies the accepted
-  validation/CPU rule; it does not change the frozen K=1 result below.
-- **Cost.** Local CPU, no rental. The game count is sized from a 20-game timing
-  smoke so that all fits finish within two hours.
+CPU work uses the frozen 256-prefix fixture drawn from replayed Elemental census
+Commands. Compare incumbent, control and GRU at the same 32/128/256 execution-row
+limits. Record preparation separately from inference and learning; retention
+contains capture and must not be added to capture as disjoint time. The first
+vectorized program expansion preserved exact arrays, outputs, gradients and
+weights and improved this fixture. It did not establish acceptable worker cost.
+The current cut admits record-aligned immutable chunks by content and predecessor
+cursor, caches vocabulary-bound features, then assembles batch offsets and
+prefix-relative recency. Dense imports still receive complete validation.
 
-Limits: these are scripted games, not learned play, so the probe can mislead K.
-The state vector omits current known-hand minima, exact library positions,
-stack and sideboard knowledge; improvement over it cannot establish information
-beyond the full native observation. The frequency baseline approximates hand
-presence and uses the roster-wide main-deck prior for closed lists. Capacity
-exclusions remove whole games and can bias the sample against long prefixes.
-Hand presence is one use of memory among several; a weak probe does not show
-that reinforcement learning cannot use memory. Repeating the probe on the
-trunks' own self-play games is an optional check inside the budget and does not
-change the chosen K.
+The approximately 10% throughput guide informs review; no agent-defined threshold
+authorizes another rental. Native suffix transport, recency-independent features
+and a per-game GRU are separate possible optimizations. Coalescing and its
+multiplicity, the neural architecture, capacities and world binding stay fixed.
 
-| Arm | Behavior on the shared log |
-| --- | --- |
-| Control | No encoder or recent events; vocabulary reserved |
-| Transformer, K summaries | Two pre-norm bidirectional record-transformer layers |
-| GRU, K summaries | Single-layer GRU over the full prefix, same record width |
+If paid work resumes after reviewing these costs, use three independent seed
+labels with a common EMA trunk per label and control/GRU branches: three trunks
+plus six branches. Freeze trunk length, gate scale and learner-decision horizon
+from affordable execution measurements first. Strict capacity failure ends a run;
+never truncate history or discard failed games while continuing scored training.
+Train mixed per-game disclosure through the landed native API. Compare branches
+at matched actual learner decisions, retaining overshoot and explicit checkpoint
+interpolation rather than relabeling update counts.
 
-Jack Heart selected transformer and GRU with extra board tokens (J1), then
-"Probe first; choose K, then run three arms", which replaces the five-arm pilot;
-see `scratch/questions.md` for the exact direction. The experiment module lists
-the three pilot arms but stops before job construction
-until resource sizing, CUDA admission and calibrated job wiring are ready.
-Opponent-only records are the measured workload; the default-false
-`decision_memory_include_own` option adds no arm. The implementation plan is
-`scratch/opponent-memory-design.md`.
+Evaluate paired deals with seats swapped, separately for open and closed lists;
+retain descriptive matchup intervals, one heterogeneity test and endpoint intact
+versus blank-memory reliance. Whole training seeds are the evidence unit. There
+are no completed pilot seed comparisons, paired evaluation deals, learning curves
+or strength intervals. Disclosure-only training arms (B1) and full-layout input
+ablations (B2) remain deferred inside the same budget. Earlier five/three-arm
+plans and evaluation game counts in dated entries are historical declarations,
+not observed samples or current launch authority.
 
-Torch only; MLX support is outside this task. Assumption: memory width 64,
-four attention heads, feedforward width 128;
-keep the current small Elemental board model, optimizer, precision and learning
-rule fixed across arms. Use the baseline's 64-wide two-layer board attention,
-masked-mean value and FiLM in every arm, so J1 also reaches objectless actions.
-Override sampled_self_play's per-wall fitted schedule with one calibrated
-learner-decision schedule across arms. Pilot capacities come from a USD0
-heuristic Elemental census (3 of 60 probe games exceeded 8,192 reference rows);
-overflow is never truncated, and whether an overflowing paid game is aborted and
-counted per arm or ends the run is decided before launch. Keep parameter counts visible: these are
-design alternatives with different costs, not parameter-matched architecture claims.
-A control that retains the log isolates encoder/join cost, but cannot establish
-the total cost of adding memory. Report native capture, encoding and host transport
-separately; the shared engine still captures decisions with history input disabled.
+## Cost
 
-### Common-trunk initialization (software implemented; pilot pending)
-
-Each seed label trains one control trunk on the memory-enabled observation
-space, then branches three arms from its checkpoint: control, transformer-K1
-and GRU-K1. The log-enabled trunk reserves the same memory catalog vocabulary as
-both branches, so shared embedding weights copy without remapping. The
-history-disabled throughput incumbent retains its smaller vocabulary. The arms
-do not start as unrelated randomly initialized agents. The three seed labels 39101–39103 provide independent learning units; the three
-branches within each label form a blocked comparison. Older-world checkpoints
-cannot be rebound or admitted by bypassing world/shape checks.
-
-A memory arm starts as its trunk exactly: the
-[gated join](../docs/observation-and-model.md#starting-from-a-control-trunk)
-blends each board layer's board-only and joint attention outputs by
-`tanh(scale * gate)`, with the gates at zero. Zero-valued summaries alone are
-not inert attention tokens, and a mask would be exact but could never learn.
-Before the pilot, tests show that
-
-- an arm built from a trunk gives the trunk's logits and value with zero
-  tolerance on padded, live, compact and empty-history inputs, for both
-  encoders and K=1 and 4;
-- at initialization the gates have non-zero gradient and every memory-encoder
-  gradient is exactly zero, and after one real damped update the encoder
-  gradients are non-zero;
-- a checkpoint round trip keeps the gates.
-
-The gate scale is fixed once for all arms from the calibrated horizon, so that
-a gate pushed consistently in one direction can reach 0.5 within the first 10%
-of a run. Each layer's gate value is a logged training metric. If the gates stay
-near zero, the pilot compared three copies of the control and says nothing
-about memory; report that rather than the curves.
-
-### Shared software before a paid run
-
-Build on integrated main, inspect PRs #549 and #550 and reconcile their edits to
-policy history, observation encoders and search. Do not rewrite their frozen
-evidence or add a checkpoint compatibility path.
-
-Native records each opponent decision for each viewer before applying the
-choice, then appends only its viewer-safe public outcome. Include public decision
-kind, turn/step, untapped mana-source characteristics, hand size, life totals,
-board summary, the attack/spell/source it responds to, and the public choice.
-Never encode hidden alternatives or private legal-action counts. Card identities
-use native viewer entitlement at the time; future reveals cannot retrospectively
-label earlier unknown cards. Own decisions are excluded. Record eligible passes
-only with priority, an untapped mana source and a card in hand. Coalesce adjacent
-passes only if their entire viewer-safe context and response are identical;
-retain their count and chronological span. Nontrivial opponent choices are
-included; trivial skipping remains enabled, and no model sees forced decisions.
-
-Use immutable historical snapshots, not joins that accidentally read a changed
-live object. Preserve public object identity across references without turning
-raw storage IDs into learning tokens. Keep records at native authority so forks,
-replay, resume and Academy reconnect reconstruct the same input without carried
-neural state. New state must reach native and Python tensors in parity, learning
-tokens, LLM text, and exhaustive observability/privacy guards for both seats.
-
-Encode record chronology with relative order and turn/step; padding is masked.
-The transformer summarizes the records into learned queries. The GRU reads the
-same records in order and projects its final state to K summary tokens. Board
-tokens can attend to these summaries; actions cannot attend to individual
-records. Recompute from the full game for the pilot. Defer caching unless real
-measurements demand it; any future cache is derived and invalidated by game,
-viewer, prefix and model weights. Gradients must reach the record encoder from
-the ordinary policy/value losses. Empty history has defined masked behavior.
-
-The native log is whole-game. Tensor capacity is sized after the census; overflow
-is a typed Capacity error, never truncation, dropping old decisions or silently
-recovering away the longest games. Variable-length preparation or padding buckets
-must preserve every record and companion shape. Publish ordinary software tests
-for privacy, coalescing, ordering, scalar/vector parity, replay/fork identity,
-empty histories, overflow and encoder gradients. Do not add schedule tests for
-this one experiment.
-
-### Smallest execution sequence
-
-1. **No rental: replay census.** Locate PR #549's retained 512 random games and
-   replay their original Commands under a compatible engine; record exact source
-   identities. Count per-viewer qualifying records from pre-choice public state,
-   not presentation-event rows. Report decision-prefix and terminal p50/p90/p95/
-   p99/max lengths, eligible passes before/after coalescing, no-pass lengths,
-   records by kind, game length and matchup, and projected buffer bytes. If those
-   bytes or replay compatibility are unavailable, say so; do not invent counts,
-   rebind old worlds or substitute freshly played games without dating the change.
-   Random games size the first capacity; the paid pilot must also report its own
-   lengths, failures and peak memory because learned play can be longer.
-2. **Probe, then calibration at most USD 3.** Run the probe locally and date the
-   chosen K here. Then, on one authorized GPU host, interleave real
-   no-history repeats with the selected memory arms using retained replay inputs and
-   short production-path updates. Include initialization/checkpoint reload and
-   native encoding, preparation, collection inference, learner and peak memory.
-   No artificial load. Separate replayed phase timings from whole-update rates.
-   Record host CPU/quota, GPU, source/world/input and precision. Use these readings
-   to choose one common learner-decision horizon, trunk length, gate scale and
-   milestone spacing that fit the training allowance; date that choice here
-   before training. If three arms
-   cannot fit meaningful learning, report that rather than covertly narrowing the
-   comparison or making a learning claim from smoke updates.
-3. **Learning pilot, at most USD 27.** Twelve runs: one control trunk for
-   each independent seed label 39101–39103, then three branches from each. The
-   per-run cap, including startup and finalization, is set at calibration so
-   that all twelve fit the allowance. Inspect
-   PR #547 / Task 4b0591 before freezing: it merged on 2026-11-16 as
-   `c035d5566a4a6546f212deabb67524c47bc8a7d6`. Sync its game-level
-   `decklists_open` input and mixed per-game disclosure, plus #550's native
-   library/hand knowledge, before training. Use a balanced open/closed mix
-   identically across arms (`UniformDecks(decklists="mixed")`).
-   Build the
-   current-world Elemental uniform 10-deck self-play recipe with
-   `manabot.recipes.builders`, both learner seats and ordinary complete-game
-   closure. Fix the damping schedule across arms. Record actual learner counts;
-   equal updates or equal wall limits do not establish a matched-decision
-   comparison. Use shared decision milestones with retained absolute counts and
-   compare the common supported range. If complete batches overshoot, show the
-   actual neighboring counts and interpolation explicitly, never relabel them as
-   exact matches or extrapolate a stopped run. Retain initialization, midpoint
-   and endpoint checkpoints for early learning curves.
-4. **Paired evaluation, at most USD 12.** At each milestone, each history-arm
-   checkpoint plays its same-seed control checkpoint at matched learner
-   decisions on the same held-out Elemental 10x10 grid, separately under open
-   and closed decklists, with
-   native `MatchConfig.decklists` as authority. Disclosure adds evaluation
-   conditions, not training arms; neither direction of its interaction with
-   memory is assumed. Assumption: one deal per unordered deck pair including mirrors,
-   seeds `3_910_000_000 + 2*pair_index + deal_index`, lexicographic pair order.
-   (`deal_index=0`). Cross-deck pairs play all four deck/seat legs; mirrors play
-   two seats. This gives 200 games per disclosure, 400 per checkpoint pair, and covers
-   every ordered matchup in both conditions. Keep deals
-   disjoint from training/monitoring, retain exact seats, Commands and replay
-   validation, and report failures beside scores. If this exceeds the allowance,
-   report incomplete coverage rather than silently changing deals. Reuse the
-   arena's replay-checked game path; do not duplicate a game runner here.
-   At the endpoint also play each history checkpoint against a copy of itself
-   with history blanked before preparation, on the same paired deals and both
-   disclosures. Preserve shapes and all current board/legality information;
-   blank that arm's records, including length/count/presence cues. Tag
-   these `reliance`, separately from primary `control` games. This is a test of
-   reliance under an intervention, not evidence that memory improves learning.
-   One checkpoint pair per milestone gives 7,200 primary games and 2,400
-   endpoint reliance games at three milestones and three seeds. This corrects
-   arithmetic retained from the earlier four-memory-arm plan; the declared
-   deals and legs are unchanged. If complete-batch checkpoints bracket a
-   milestone, retain their actual counts and schedule the required checkpoint
-   pairs for explicit interpolation; price those additional games too.
-   Quote/calibrate their cost before allocating;
-   retain partial coverage explicitly if the allowance cannot finish them.
-   A heuristic curve is optional context only, after the primary comparisons.
-
-If affordable from the same allocation, repeat the supervised probe on the
-trunks' own self-play games, with the same recorder, split, candidates and
-baselines. No additional rental solely for it, and no change to the chosen K.
-Mark this check deferred if collection and fitting do not fit the cap.
-
-USD 8 remains for failures/retries and unresolved startup cost, inside the same
-USD 50 total, not an additional budget. The task already authorizes this amount.
-
-### Disclosure and input comparisons to consider
-
-Jack Heart's 2026-11-16 direction was to consider the remaining #547/#550
-experiments in this series after both landed. The history layout must settle
-first, and these share the same USD 50 total. The core probe, K selection and
-three-arm pilot retain priority.
-
-- **B1:** compare the mixed-training control with open-only and closed-only
-  training, evaluating each in both disclosure modes. This would inform whether
-  one player should serve both modes and the default training disclosure mix.
-- **B2:** mask one admitted viewer-safe input at a time at Prepared on the full
-  layout: initial main/sideboard counts, decklist rows, `known_library` facts,
-  and `decklists_open`. Preserve native observations, legality and layout
-  identity. A null result can reflect redundant information retained in history.
-
-Both allocations are deferred until CUDA calibration prices the primary pilot;
-no extra arms or ablation implementation are added speculatively. Report which
-fit the remaining allowance and which remain deferred. Native knowledge stays
-sound single-card facts; inference beyond those facts belongs to the model.
-Etude owns launch/admission/recovery; inspect existing runs before allocating,
-quote full startup plus `Job.max_hours`, launch with `--max-usd` bounded by the
-remaining total, record each launcher's cost once, and verify rentals ended.
-Never start an unsupported arm or substitute a no-history policy for it.
-
-### Planned analysis
-
-Report learner decisions/second and the candidate/incumbent ratio with repeated
-same-host baseline variability; include common native-log overhead, model size,
-memory and phase breakdown. Treat differing trajectories and game lengths as
-part of whole-training cost; retained-input timings isolate encoder cost.
-
-Plot overall head-to-head score against the control (neutral score
-0.5) against actual learner decisions and elapsed training time,
-show all three seeds and paired differences, and give the 10x10 matchup table
-plus per-deck and play/draw breakdowns, separately for open and closed lists.
-Carry a `decklists` column into the evaluation `plays` table; compare each
-history arm against the incumbent within disclosure, not just pooled scores.
-The matchup table is descriptive: show intervals, including the question of
-whether an arm wins from both decks of a pair. Test heterogeneity once across
-all matchups with paired deal blocks and seed strata; do not select the largest
-cell or claim effects this small pilot cannot resolve. Use seed-level uncertainty for learning
-and paired-deal uncertainty within each seed; hundreds of games do not supply
-hundreds of independent training replicates. Report numerical health, gradient
-flow and loss/entropy/value diagnostics separately from durable strength.
-The report's Etude clock is `learner_transitions`, the existing learner-decision
-coordinate; attach it to checkpoint exports when wiring the run.
-
-Separate learned skill from deck strength by retaining every deck/seat leg of a
-whole deal. Keep rules, world, exposure and disclosure matched across arms;
-a rule change or disclosure shift is not a memory effect. Use policy-only
-inference for the primary comparison; any search-assisted result needs separate
-compute accounting and cannot stand in for it. Report paired whole-deal score
-differences and uncertainty within seeds, then use training seeds as the unit of
-evidence for the method.
-
-## Results
-
-The effect on playing strength is unmeasured: there is no paired score difference
-in percentage points and no uncertainty interval. There are no trained seeds or
-completed evaluation deals from which to estimate either. The planned 19,200
-games are a design count, not an observed sample; no score denominator has been
-populated. In a partial evaluation, missing games must remain identified as
-missing in the planned denominator, never scored as zero or dropped.
-
-The 2026-11-16 no-rental census regenerated the source seed workload: 512 games,
-102,209 decisions, zero capped games and step digest `17459788495858550277`,
-matching the retained reference. This is the original two-deck matchup, not an
-Elemental 10-deck or learned-game capacity certificate. It is not retained-Command
-replay. There are 102,209 acting-decision prefixes and 1,024 terminal viewer logs.
-
-| Rows | p50 | p90 | p95 | p99 | Max |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Prefix records | 46 | 121 | 164 | 313.92 | 582 |
-| Terminal records | 68 | 192.70 | 302.70 | 442.08 | 595 |
-| Prefix details | 14,504 | 56,546 | 83,419 | 255,418.88 | 616,295 |
-| Terminal details | 26,571.50 | 107,218.30 | 250,918.15 | 420,561.22 | 665,431 |
-
-Eligible passes numbered 17,748 before and after coalescing; none in this workload
-had identical consecutive contexts. Power-of-two candidate capacities are 1,024
-records and 1,048,576 details, or 33,628,160 bytes per padded observation. At the
-planned 256-stream × 64-decision minimum, the existing dense `_ObservationRows`
-store requires **513.125 GiB for memory alone**, before its 25% spare allocation,
-native buffers, other observations and complete-game overshoot. The recipe's
-declared limit is 40 GiB. This is a storage counterexample, not a safe capacity
-configuration to launch.
-
-The [manifest-backed census receipt](data/opponent-memory/20261116-census/native.jsonl),
-[summary](data/opponent-memory/20261116-census/summary.json) and
-[source identity](data/opponent-memory/20261116-census/source.json) retain the
-measurements; the engine patch is stored beside them. Reproduce the analysis with
-`uv run python -m experiments.opponent_memory census experiments/data/opponent-memory/20261116-census/native.jsonl --out .runs/opponent-memory-census/summary.json`.
-
-Whole-training throughput, GPU memory, CUDA admission and baseline timing noise
-remain unmeasured. The census run includes diagnostic reads and is not an ordinary
-throughput comparison. Focused CPU checks exercise both encoder choices, both
-summary counts, independent actor/value gradients, checkpoint reload, padded/live/
-compact/bucketed paths and bounded ordinary updates. Those fixtures establish
-implementation health, not learnability or readiness at the intended load.
-
-Shared viewer snapshots now replace repeated reference programs: the padded
-memory payload falls from 33,628,160 to 645,120 bytes per viewer (98.1%) at
-capacities 1,024 records, 8,192 details, 256 snapshots and 16,384 members. With
-table-wide admission, CPU log-control collection is **1.44×** its history-disabled
-incumbent median (2.203 s versus 1.528 s per 250 decisions), so the roughly 10%
-guide is not met on CPU; see the
-[dated entry](#shared-snapshots-and-table-wide-admission-2026-11-16).
-
-Training/evaluation declarations still stop before constructing jobs. Dependent
-wiring is stopped pending full resource admission; there was no paid run
-or rental, and there is no launcher run ID or cost to record.
-
-## What the results support
-
-The census establishes that dense whole-rollout history storage does not fit the
-planned load. The shared-prefix implementation below removes dense rollout
-ownership, while selected-batch resource sizing remains unresolved.
-There is no basis
-to compare any candidate with today's no-history incumbent, choose a transformer
-over a GRU, choose the number of summary tokens, or judge the value of passes.
-Open versus closed decklists, matchup-specific advantages, the learning noise
-floor and memory reliance all remain unresolved. Absence of runs supports
-neither equivalence nor a regression.
+Launcher closeout records **USD1.94475 across five calibration runs**, including
+failed attempts. The first three statuses are final; the last two remain launcher
+estimates. All five rentals ended. Costs are not reconstructed from rates or
+wall times. The frozen probe and CPU work used no rental. The inclusive authorized
+ceiling remains USD50; its allocation is a budget, not measured spending.
+No further paid work is launched by this report.
 
 ## Recommendation
 
-Keep the no-history incumbent. Shared immutable game/viewer prefixes now back
-collection, selected gathers, bootstrap and recovery. Bootstrap retains prefixes
-without keeping padded memory through the update. The original controlled proof
-combined host and device bytes; the new proof separates them and establishes
-finite one-row CPU execution, not pilot fit.
-Collection, frozen-opponent, bootstrap and learner execution now use explicit
-2/2/2 row limits with output and gradient parity. The independent CPU cohort's
-27.33 GiB host peak covers its recorded histories and one logical minibatch;
-it does not admit an on-policy CUDA worker. Measure separate host RSS and CUDA
-peaks, worker/update and checkpoint reload before job wiring and horizon
-calibration. Preserve every record and typed overflow.
-Do not adopt memory or remove recent events. This report launches no new run.
+Keep the history-disabled incumbent as the default. The software and short CUDA
+admissions support continuing host optimization, but current worker evidence
+shows a substantial throughput regression and supplies no learning comparison.
+Do not adopt memory or remove recent events on this evidence. Review the matched
+CPU chunk-cache costs before repricing a control/GRU pilot. A default change needs
+affordable whole-training cost and the missing matched-learning and paired
+strength evidence, with failures and uncertainty retained.
 
-Evidence that would change this recommendation is a measured comparison at
-matched learner decisions across independent training seeds, with whole-deal
-paired uncertainty, affordable whole-training cost and disclosed failures.
-Comparable early learning at an acceptable cost could justify keeping memory
-available even without a resolved strength gain; noisy curves alone would not
-establish non-inferiority. The roughly 10% throughput guide informs that judgment
-rather than deciding it automatically.
-
-## Caveats
-
-The strongest confound is that short self-play horizons can hide small effects
-inside training variance. Open lists could make past choices more interpretable or reduce
-their usefulness; report the interaction without assuming either. Learning
-failure on all arms is an uninformative pilot. Similar-looking noisy curves do
-not establish equivalence. Broad regressions favor the incumbent; comparable
-learning with affordable throughput supports keeping memory available and the
-best supported design as the next basis. A localized benefit or cost calls for
-its matchup-specific explanation. Inconclusive remains a legitimate outcome.
-
-Adopting the basis has a **separate follow-up**: replace the recent-event window
-and its option and reconcile PR #549's event kinds with decision records, keeping
-any independent public knowledge needed by observations, text, replay and Academy.
-Do not remove those surfaces in this task or treat replacement as already done.
+The dated appendix retains original observations, including results superseded
+by later measurements. The earlier undated protocol and storage counterexample
+can be recovered from `7d680aac170f12ca60e60dfb812e0c00d7cda7fa:experiments/opponent_memory.md`.
 
 ## Appendix: execution evidence and dated changes
 
@@ -1771,3 +1428,96 @@ evaluation launch. No pilot horizon/gate scale or matched learning/strength
 result is frozen. The implemented first CPU step exposes retention/capture and
 keeps exact vectorized preparation; content-admitted chunk feature caching is
 still unfinished and remains the next implementation cut.
+
+### Record-aligned chunk cache candidate — 2026-11-17
+
+The working implementation replaces four independent table chains with a
+32-record chunk owning its members, newly introduced snapshots and their details.
+An immutable node's exact predecessor binds its five-integer admission cursor.
+Dense/import validation folds the same checks over chunks after shapes, integers
+and padding are checked. Retained collection, frozen inference, bootstrap and
+learning assemble vocabulary-bound host feature fragments without dense history.
+Recency remains prefix-relative; coalescing gets a new tail and certificate.
+No learned embedding or GRU state is cached. Explicit dense exports remain
+mutable inputs and selected exports preserve their supplied bytes.
+
+**Correctness is supported; the original footprint acceptance is not met.**
+The final 4,298-case differential proof has zero mismatches and outcome digest
+`d2fed54e780521122ab1a06dcb63fad4f4eafed0306121f81be3cefe2fd13a92`.
+All 2,189 prepared-array comparisons over the frozen 256-prefix fixture and
+all 81 sampled-output/gradient/post-update-state hash comparisons match exactly.
+Directed tests cover cross-chunk backward joins, changed predecessor spans,
+changed detail companions, coalesced versions, vocabulary rejection, mutable
+dense exports, archives, replay recovery and weak cache lifetimes.
+
+The final CPU matrix uses the unchanged frozen census-derived fixture and
+baseline `7d680aac170f12ca60e60dfb812e0c00d7cda7fa`. Each arm/row-limit/source runs
+in a fresh process with three successive 256-row sampling + learner updates,
+Torch intra/inter-op threads both one. The first sample includes cold feature
+preparation; later samples reuse cached features and have updated weights.
+These are medians of three successive samples, **not three independent runs**.
+Source order is before/after at 32/256 and after/before at 128. The initial
+matrix is retained separately; it predates the explicit-dense-selection fix and
+is not pooled with this final source. No artificial contention was induced.
+
+| Execution rows | Arm | Before sampling + learning s | After s | Speedup | After / matched incumbent rate |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 32 | Incumbent | 1.986 | 1.902 | 1.044× | 1.000× |
+| 32 | Control | 2.377 | 1.957 | 1.214× | 0.971× |
+| 32 | GRU-K1 | 5.194 | 4.544 | 1.143× | 0.419× |
+| 128 | Incumbent | 1.308 | 1.718 | 0.761× | 1.000× |
+| 128 | Control | 1.829 | 1.295 | 1.413× | 1.326× |
+| 128 | GRU-K1 | 4.529 | 3.764 | 1.203× | 0.456× |
+| 256 | Incumbent | 1.188 | 1.169 | 1.016× | 1.000× |
+| 256 | Control | 1.779 | 1.251 | 1.422× | 0.934× |
+| 256 | GRU-K1 | 4.650 | 3.859 | 1.205× | 0.303× |
+
+GRU collection preparation medians are 0.324/0.304/0.307 seconds before and
+0.054/0.039/0.037 after at 32/128/256 rows. Its total sample ranges at 128
+rows overlap: [4.412, 4.849] before, [3.703, 4.552] after; at 32 and 256
+they separate in this finite fixture. Incumbent variation, especially at 128,
+prevents attributing every whole-fixture timing difference to caching. The
+control's 1.326× incumbent rate there is not evidence that logging accelerates
+training. GRU still costs substantially more than the true incumbent.
+No CUDA, whole-game collection or on-policy worker speedup is established.
+
+Cold import/capture of these 256 mostly independent prefixes takes
+0.195–0.279 seconds before and 0.273–0.311 after across memory-enabled cases;
+this phase is outside the table. The cold capture cost did not improve. Full
+transport hashing, shape/padding reads and new-node admission remain; native
+suffix transport is not implemented. These cold imports do not measure reuse
+across all decisions of a game.
+
+| Accounted ownership, 256 prefixes | Before | Candidate cold | Candidate warm |
+| --- | ---: | ---: | ---: |
+| Unique raw chunk bytes | 18,596,416 | 28,701,632 | 28,701,632 |
+| Python metadata estimate | 14,209,319 | 1,788,266 | 1,788,266 |
+| Weak index estimate | 5,813,544 | 242,672 | 242,672 |
+| Cached feature/schedule array bytes | 0 | 0 | 61,558,036 |
+| Accounted sum | 38,619,279 | 30,732,570 | 92,290,606 |
+| Explicit selected dense gather bound | 128,311,296 | 128,311,296 | 128,311,296 |
+
+The sum is component accounting, not process RSS, and the metadata estimate
+does not include every warmed fragment's Python object header. Record alignment
+loses some independent table sharing but reduces chain metadata: 31,407 nodes
+become 1,083. Warm cached features add 61.6 MB, so the original unconditional
+retained-byte no-growth criterion fails. This candidate is returned for design
+review; that criterion is not silently reinterpreted as cold-only acceptance.
+A proposed revision would budget raw transport and cached features separately;
+it is not treated as an accepted design change. All weak nodes/chunks expire
+once the fixture's prefixes and prepared arrays are released (observed 0/0).
+No global game or full-prefix feature cache remains.
+
+Final focused regression command: memory chunk/prefix/execution tests, shared
+preparation/admission tests, active-training tests and the three affected
+package-boundary selections: **84 passed**. Earlier full memory model checks
+passed during the cut; Ruff and whitespace pass. No Rust was changed or rebuilt.
+The candidate remains uncommitted for the Graph's review; software publication,
+landing and scientific Task completion are separate. No additional paid work
+was launched. Matched training and evaluation remain absent.
+
+Evidence: `experiments/data/opponent-memory/20261117-chunk-cache/` records the
+frozen before/candidate sources, fixture identity, harnesses, both timing
+matrices, exact hashes, differential proof and ownership accounting. Its corpus
+is the existing `20261117-host-cost` fixture; the evidence bundle does not
+regenerate it or change frozen probe/CUDA bytes.

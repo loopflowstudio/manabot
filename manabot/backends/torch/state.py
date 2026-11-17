@@ -18,7 +18,8 @@ from torch import Tensor
 
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation, archive_memory
+from manabot.env.decision_memory import MEMORY_FIELDS
+from manabot.env.memory_store import PrefixObservation, archive_memory
 from manabot.infra.config import ModelConfig
 from manabot.policy.checkpoint import pretrained_memory_branch
 from manabot.policy.protocol import BackendPolicy
@@ -288,8 +289,9 @@ def capture_incident(
             if archive.nbytes <= evidence_bytes:
                 memory_bytes = archive.nbytes
                 memory_tensors = {
-                    f"memory/chunks/{i}": torch.from_numpy(rows.copy())
-                    for i, rows in enumerate(archive.chunks)
+                    f"memory/chunks/{i}/{field}": torch.from_numpy(rows.copy())
+                    for i, chunk in enumerate(archive.chunks)
+                    for field, rows in zip(MEMORY_FIELDS, chunk, strict=True)
                 }
                 memory_tensors.update(
                     {

@@ -48,13 +48,13 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     dense["decision_records"][0, 0, 9] = 1
     after = store.capture(dense, 0, identity)
     assert before.tail is not None and after.tail is not None
-    assert before.tail.tables[1:] == after.tail.tables[1:]
+    assert before.tail.previous is after.tail.previous
     assert store.capture(dense, 0, identity).tail is after.tail
-    assert before.tail.tables[0] is not after.tail.tables[0]
+    assert before.tail.chunk is not after.tail.chunk
     dense["decision_records"][0, 0, 21] = 9
     fork = store.capture(dense, 0, PrefixIdentity("game-1", 0, "fork"))
     assert fork.tail is not None
-    assert fork.tail.tables[0] is not after.tail.tables[0]
+    assert fork.tail.chunk is not after.tail.chunk
     for key in MEMORY_FIELDS:
         dense[key].fill(0)  # Later games overwrite native buffers.
     empty = store.capture(dense, 0, PrefixIdentity("game-2", 1, "root"))
@@ -65,7 +65,8 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
         memory_capacities=(4, 1024, 1024, 16384),
     )
     selected = recorded.gather(np.array([2, 0, 2, 3, 1]))
-    assert isinstance(selected, CompactObservation)
+    assert isinstance(selected, PrefixObservation)
+    selected = selected.materialize()
     np.testing.assert_array_equal(
         selected["decision_records"][:, 0, 3], [2, 1, 2, 0, 2]
     )
@@ -78,14 +79,14 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     restored = gather_memory(restore_memory(archive))
     for key in MEMORY_FIELDS:
         np.testing.assert_array_equal(restored[key], selected[key])
-    bad = archive.chunks[0].copy()
-    bad.flat[0] += 1
+    bad = tuple(a.copy() for a in archive.chunks[0])
+    bad[0].flat[0] += 1
     with pytest.raises(ValueError, match="corrupt"):
         restore_memory(replace(archive, chunks=(bad, *archive.chunks[1:])))
     with pytest.raises(ValueError, match="missing"):
         restore_memory(replace(archive, chunks=archive.chunks[:-1]))
     with pytest.raises(ValueError):
-        before.tail.tables[0].chunk.rows.setflags(write=True)
+        before.tail.chunk.rows[0].setflags(write=True)
     assert space.encoder.shapes["decision_records"] == (4, 74)
 
 
@@ -164,7 +165,7 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
     original, resumed = collector(), collector()
     try:
         first = original.collect(model, 16)
-        before = first.observations(np.array([15, 0, 15])).observation
+        before = first.observations(np.array([15, 0, 15])).observation.materialize()
         assert isinstance(first.next_obs, PrefixObservation)
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         bootstrap_before = first.next_obs.materialize()
@@ -191,7 +192,7 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
                 assert not set(MEMORY_FIELDS).intersection(behavior.observation)
                 assert torch.isfinite(model.get_value(learner_input)).all()
             # Prepared input cannot keep temporary raw padded arrays alive.
-            assert gathered and all(ref() is None for ref in gathered)
+            assert not gathered  # retained preparation never gathers dense history
             prefix = first.next_obs.prefixes[0]
             selected = PrefixObservation(
                 {
@@ -249,11 +250,14 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
             )
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
-                first.observations(np.array([15, 0, 15])).observation[key], before[key]
+                first.observations(np.array([15, 0, 15])).observation.materialize()[
+                    key
+                ],
+                before[key],
             )
             np.testing.assert_array_equal(
-                second.observations(np.arange(8)).observation[key],
-                replayed.observations(np.arange(8)).observation[key],
+                second.observations(np.arange(8)).observation.materialize()[key],
+                replayed.observations(np.arange(8)).observation.materialize()[key],
             )
         learner = Learner(model, "cpu", minibatch_rows=4)
         error = NumericalError(

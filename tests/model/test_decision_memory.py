@@ -277,7 +277,7 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
         assert batch.actions.size == 16
         assert (
             batch.observations(np.arange(batch.actions.size))
-            .observation["decision_records"][..., 19]
+            .observation.materialize()["decision_records"][..., 19]
             .any()
         )
         assert model.decision_memory is not None

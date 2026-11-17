@@ -22,7 +22,7 @@ from manabot.backends.torch.rl import (
     legal_mask,
     require,
 )
-from manabot.env.memory_store import PrefixObservation, materialize, select_rows
+from manabot.env.memory_store import PrefixObservation, select_rows
 from manabot.policy.buckets import row_needs
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
@@ -83,11 +83,9 @@ class AdmittedRollout:
         if size < 1:
             raise ValueError("bootstrap rows must be positive")
         for start in range(0, len(self.batch.next_done), size):
-            raw = materialize(
-                select_rows(
-                    self.batch.next_obs,
-                    np.arange(start, min(start + size, len(self.batch.next_done))),
-                )
+            raw = select_rows(
+                self.batch.next_obs,
+                np.arange(start, min(start + size, len(self.batch.next_done))),
             )
             prepared = self.agent.prepare(raw, inference=True)
             del raw

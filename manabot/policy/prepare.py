@@ -21,6 +21,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from functools import cached_property
+from hashlib import sha256
 
 import numpy as np
 
@@ -122,6 +123,42 @@ class Tables:
     record_buckets: int = 4096
     # Preserve a backend's existing tie order while sorting only host lengths.
     order_lengths: Callable[[Array], Array] | None = None
+
+    def __post_init__(self) -> None:
+        # Memory certificates bind exact immutable lookup bytes, never weights
+        # or a mutable backend buffer's Python identity.
+        for name in self._MEMORY_LOOKUPS:
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(
+                    self,
+                    name,
+                    np.frombuffer(value.tobytes(), value.dtype).reshape(value.shape),
+                )
+
+    _MEMORY_LOOKUPS = (
+        "definition_rows",
+        "record_name_keys",
+        "record_name_rows",
+        "record_token_keys",
+        "record_token_rows",
+        "record_number_rows",
+        "name_definitions",
+    )
+
+    @cached_property
+    def memory_binding(self) -> str:
+        from managym.decision_memory import definition_programs
+
+        digest = sha256(str(self.record_buckets).encode())
+        digest.update(repr(definition_programs()).encode())
+        for name in self._MEMORY_LOOKUPS:
+            value = getattr(self, name)
+            digest.update(name.encode())
+            if value is not None:
+                digest.update(str((value.dtype, value.shape)).encode())
+                digest.update(value.tobytes())
+        return digest.hexdigest()
 
     @cached_property
     def full_programs(self) -> "CatalogPrograms[Array]":
@@ -535,6 +572,7 @@ def prepare(
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
+    memory = prepare_memory(obs, tables) if memory_summaries else None
     obs = {key: np.asarray(value) for key, value in obs.items()}
     facts = obs["facts"]
     if inference and not bucketed:
@@ -720,9 +758,7 @@ def prepare(
         is_agent=ownership,
         # Full-catalog preparation skips the scan for referenced definitions.
         programs=tables.programs(
-            _referenced_definitions(
-                obs, tables, candidates, include_memory=bool(memory_summaries)
-            )
+            _referenced_definitions(obs, tables, candidates, memory=memory)
             if select_programs
             else None
         )
@@ -730,7 +766,7 @@ def prepare(
         else None,
         belief=belief,
         events=_events(obs, tables, objects),
-        memory=prepare_memory(obs, tables) if memory_summaries else None,
+        memory=memory,
         memory_join=_memory_join(present, columns, memory_summaries, value_token)
         if memory_summaries
         else None,
@@ -742,7 +778,11 @@ def prepare(
 
 
 def _referenced_definitions(
-    obs: ObservationBuffers, tables: Tables, candidates: Array, *, include_memory: bool
+    obs: ObservationBuffers,
+    tables: Tables,
+    candidates: Array,
+    *,
+    memory: MemoryRows[Array] | None,
 ) -> Array:
     """Catalog subset read by learning, in sorted row order (zero is padding)."""
     references = [
@@ -759,8 +799,6 @@ def _referenced_definitions(
         references.extend(
             obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)
         )
-    if include_memory and "decision_references" in obs:
-        references.append(obs["decision_references"][..., 1])
     if "stack" in obs:
         references.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     if tables.catalog_records:
@@ -775,6 +813,8 @@ def _referenced_definitions(
     referenced = np.unique(
         tables.rows(np.concatenate([ids.reshape(-1) for ids in references]))
     )
+    if memory is not None:
+        referenced = np.union1d(referenced, memory.reference_definitions)
     return referenced[referenced > 0]
 
 

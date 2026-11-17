@@ -16,7 +16,7 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.backends.torch.rollout import check_packed, packing_mask
-from manabot.env.memory_store import materialize, select_rows
+from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared, reference_distribution
@@ -107,10 +107,8 @@ class CollectionScope:
             for start in range(0, count, width):
                 with profiler.track("Observation preparation"):
                     obs = self.inference.prepare(
-                        materialize(
-                            select_rows(
-                                observation, np.arange(start, min(start + width, count))
-                            )
+                        select_rows(
+                            observation, np.arange(start, min(start + width, count))
                         )
                     )
                 with profiler.track("Policy inference and action selection"):

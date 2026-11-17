@@ -27,7 +27,7 @@ import numpy as np
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
-from manabot.env.memory_store import materialize, select_rows
+from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.model.world import validate_agent_setup
@@ -82,9 +82,7 @@ class BatchedSampler:
         width = self.execution_rows or max(1, len(rows))
         with self.agent.inference_scope() as scope:
             for start in range(0, len(rows), width):
-                selected = materialize(
-                    select_rows(buffers, rows[start : start + width])
-                )
+                selected = select_rows(buffers, rows[start : start + width])
                 logits.append(scope.infer(selected).logits)
                 del selected
         actions = self.agent.sample_logits(

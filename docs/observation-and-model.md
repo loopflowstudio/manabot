@@ -736,16 +736,20 @@ restore a game in progress.
 
 Collection retains immutable game/viewer prefixes, sharing unchanged records and
 details across decisions. Coalescing creates a new tail version; previously
-sampled decisions keep their original count. Only selected learner prefixes are
-padded for preparation. Ordinary collector recovery replays its bounded native
+sampled decisions keep their original count. Record-aligned chunks own consecutive records, their members, the snapshots
+they introduce and those snapshots' details. Each immutable node is admitted
+against its predecessor's ordinal/span/member/reference/detail cursor. Cached
+features bind the checkpoint vocabulary's immutable bytes and definition bounds;
+recency and batch offsets are assembled for the selected prefix. Dense imports
+and explicit dense exports still undergo complete content and padding checks. Ordinary collector recovery replays its bounded native
 journal and checks a compact chunk archive. Numerical incidents select rows and
 budget whole prefixes before copying them; evidence that cannot fit is explicitly
 marked incomplete. These diagnostics do not resume games.
 
 Bootstrap retains immutable prefixes with ordinary next-state fields. Collection,
-frozen opponents and bootstrap select prefix references before materializing,
-admitting and preparing one execution chunk. Temporary raw arrays expire after
-preparation; only small predictions survive each chunk. Sampling still uses one
+frozen opponents and bootstrap select prefix references and assemble one execution
+chunk directly from admitted fragments. Feature caches expire with unreachable
+chunks and hold no learned embeddings or recurrent state. Sampling still uses one
 RNG call in the original group order.
 
 A memory-enabled training stage (including a control retaining the

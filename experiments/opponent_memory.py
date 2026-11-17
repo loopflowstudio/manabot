@@ -200,7 +200,7 @@ def calibration_recipe(name: str, *, smoke: bool) -> TrainingRegime:
     stage.updates = 1 if smoke else 2
     stage.streams = 2 if smoke else 256
     stage.learning.iteration_schedule = IterationSchedule(steps=100)
-    # Calibration fails on capacity; paid-pilot recovery is still undecided.
+    # Capacity overflow fails the run: no truncation and no abort-and-continue.
     stage.game_errors = None
     stage.execution.collection_rows = 2 if smoke else 32
     stage.execution.bootstrap_rows = 2 if smoke else 32

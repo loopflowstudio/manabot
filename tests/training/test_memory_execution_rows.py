@@ -215,7 +215,7 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
         assert (
             actual_diag["optimizer_exposures"] == expected_diag["optimizer_exposures"]
         )
-    assert gathered and max(gathered) == 2
+    assert not gathered  # cached fragments replace dense history gathers
     assert not set(MEMORY_FIELDS).intersection(rows)
 
 
