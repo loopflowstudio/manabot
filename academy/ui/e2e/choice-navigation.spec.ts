@@ -1,6 +1,6 @@
 import { tableSnapshot } from './fixtures/table';
 import { expect, test, type Page } from '@playwright/test';
-import positionsJson from '../../../managym/academy/fixtures/choice-navigation-w17-token-cards.json' with { type: 'json' };
+import positionsJson from '../../../managym/academy/fixtures/choice-navigation-w17-manual-payment.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 
