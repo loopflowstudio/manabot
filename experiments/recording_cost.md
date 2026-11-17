@@ -15,7 +15,8 @@ Two subsequent A6000 creates were refused; complete provider inventory confirmed
 both pods absent and the launcher reconciled both requests. L4 availability
 reported no stock. There is no live measurement rental and no paired result.
 
-The one completed baseline at `978cec8bc2` ran on an RTX A6000 / AMD EPYC 7543:
+The one completed edited-tree, recording-off cell at `978cec8bc2` ran on an
+RTX A6000 / AMD EPYC 7543. It is not a pre-change baseline:
 213,509 decisions, four updates and 1,029 completed games, zero crashes or
 abandoned games. Collection: **1,790.827 decisions/s** (119.224 seconds total).
 Collection plus learning: **43.239 seconds/update**. This is n=1, no range,
@@ -182,3 +183,37 @@ receipt and narrowed local logs are under `.runs/recording-cost-evidence/`
 and `.runs/recording-cost-live.log`; launcher-retained artifacts are the durable
 source. Comparison is blocked on rental capacity, with the repaired driver
 frozen for the next attempt.
+
+## Revision comparison, directed 2026-11-17
+
+Jack Heart: "ok well we need to get a baseline v edited for thar to mean anythitn".
+The primary comparison is now the last main revision merged into this checkout,
+`5af8490a1c9bd5e9e7bda1d789e04a6f6de259fb`, versus the prospectively frozen
+edited revision. The earlier "off" cell is explicitly an edited-tree option
+baseline, not a before-change baseline, and cannot estimate the change's cost.
+
+One rental builds both native extensions in release with the same pinned
+Rust toolchain, interpreter and shared locked dependency environment. The
+baseline is a digest-checked git archive supplied as a launcher Input;
+`SourceBundle` verifies it and binds its own native extension. Each subprocess
+checks its training implementation came from the selected source directory.
+Both revisions read one identical current-world v11 recipe JSON, seed 80161,
+256 streams, 64x2 model and four updates. Setup/build time is excluded from
+collection/update timing but included in rental cost. Five pairs alternate
+baseline/edited and edited/baseline; the baseline uses its unchanged defaults,
+and the edited tree uses its unchanged defaults (standard diagnostics,
+recording/statistics off). Cells have distinct tracking identities.
+
+The comparison refuses a speed claim if decision counts or final policy tensor
+hashes differ. Tensor hashes exclude checkpoint metadata, including revision
+and run identity. Each hash includes names, dtypes, shapes and tensor bytes.
+Report median and full range for collection decisions/s and update time;
+the option comparisons are secondary and run separately with `comparison=options`.
+No new overhead conclusion exists until the paired CUDA receipts complete.
+
+Preflight for the revision comparison: built the baseline's CPython 3.13
+release wheel locally (4m29s build, not a training measurement), installed its
+matching extension into the extracted baseline, verified its source manifest,
+and imported the common harness against the baseline training implementation.
+The staged archive's size/digest and alternating five-pair order passed checks;
+Ruff and `git diff --check` passed. No local training timing is used.
