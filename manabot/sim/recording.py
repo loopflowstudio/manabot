@@ -1,27 +1,32 @@
-"""Export actual collector games as policy-free Command traces.
+"""Deprecated training-record helpers and retained exposure-receipt export.
 
-TrainingGames reads immutable exposure receipts; record_games enables that same
-capture for collectors created inside its scope. Export reconstructs a completed
-game, never a policy, and checks each retained choice before writing the trace.
+New collectors write managym records directly. The receipt-to-Command transform
+remains only for historical exposure bytes; it never writes new exposure facts.
 """
 
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+import gzip
 import hashlib
+import json
+import os
 from pathlib import Path
 import random
 from typing import Any
+import warnings
 
 from manabot.env.failures import CaptureScope, TrainingExposureReceipt, capture_scope
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
+from manabot.infra.run_settings import RunSettings
 from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.replay import replay_environment, write_trace
 import managym
 from managym.experience import UNVERSIONED_CONTENT_HASH
-from managym.recording import GameInputs
+from managym.journal import json_line
+from managym.recording import GameInputs, GameRecord, read_records, record_from_row
 
 
 def record_actions(
@@ -97,7 +102,7 @@ def record_actions(
 
 @dataclass(frozen=True)
 class TrainingGame:
-    """One digest-bound receipt; export rereads the bytes to detect later edits."""
+    """One digest-bound game; export rereads the bytes to detect later edits."""
 
     path: Path
     receipt_sha256: str
@@ -105,15 +110,32 @@ class TrainingGame:
     stream: int
     decks: tuple[dict[str, int], dict[str, int]]
     decisions: int
+    record_index: int | None = None
 
     def export(self, path: Path, players: tuple[str, str] | None = None) -> Path:
-        """Write this game as one Command trace, leaving the receipt untouched.
+        """Write one selected record, or transform a retained receipt into a Command trace.
 
-        Seat names are `players`, else the names `record_games` retained in the
-        receipt, else the receipt's deck seat names.
+        Seat names come from `players`, the recorded context or the setup.
+        The selected source bytes stay untouched.
         """
         if path.resolve() == self.path.resolve():
             raise ValueError("export must not overwrite its receipt")
+        if self.record_index is not None:
+            record = list(read_records(self.path))[self.record_index]
+            if record.sha256 != self.receipt_sha256:
+                raise ValueError("record changed after selection")
+            if players is not None:
+                record.context = {**record.context, "players": list(players)}
+            body = json_line(record.model_dump(mode="json", by_alias=True))
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            with os.fdopen(
+                os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb"
+            ) as output:
+                os.fchmod(output.fileno(), 0o600)
+                output.write(
+                    gzip.compress(body, mtime=0) if path.suffix == ".gz" else body
+                )
+            return path
         receipt = _read_receipt(self.path)
         if receipt.sha256 != self.receipt_sha256:
             raise ValueError("receipt changed after selection")
@@ -170,37 +192,55 @@ class TrainingGames:
     """Read a capture directory or one receipt, without importing a learner."""
 
     def __init__(self, source: Path) -> None:
+        warnings.warn(
+            "TrainingGames is deprecated; use managym.recording.read_records; removal in 0.4.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.source = source
 
-    def _receipts(self) -> list[tuple[Path, TrainingExposureReceipt]]:
+    def _records(self) -> Iterator[tuple[Path, int | None, GameRecord, str]]:
         if not self.source.exists():
-            raise ValueError(f"receipt source does not exist: {self.source}")
+            raise ValueError(f"record source does not exist: {self.source}")
         paths = (
             [self.source]
             if self.source.is_file()
             else sorted(self.source.glob("*.jsonl"))
         )
-        return [(path, _read_receipt(path)) for path in paths]
+        for path in paths:
+            with path.open() as source:
+                first = json.loads(source.readline())
+            if first.get("schema") == "training-exposure-v1":
+                receipt = _read_receipt(path)
+                yield path, None, record_from_row(first), receipt.sha256
+            else:
+                for index, record in enumerate(read_records(path)):
+                    yield path, index, record, record.sha256
 
     @property
     def cut_off(self) -> int:
         """Games the loop stopped before finishing; they are never exported."""
-        return sum(not receipt.game.terminal for _, receipt in self._receipts())
+        return sum(
+            record.games[0].end is None or record.games[0].end.status != "complete"
+            for _, _, record, _ in self._records()
+        )
 
     def games(self) -> list[TrainingGame]:
-        """Every complete game, in receipt-digest order."""
+        """Every complete game, in file and row order."""
         games: list[TrainingGame] = []
-        for path, receipt in self._receipts():
-            if receipt.game.terminal:
-                first, second = receipt.game.trace.player_configs
+        for path, index, record, digest in self._records():
+            inputs = record.games[0]
+            if inputs.end is not None and inputs.end.status == "complete":
+                first, second = inputs.players
                 games.append(
                     TrainingGame(
                         path=path,
-                        receipt_sha256=receipt.sha256,
-                        seed=receipt.game.seed,
-                        stream=receipt.stream,
+                        receipt_sha256=digest,
+                        seed=inputs.seed,
+                        stream=inputs.stream,
                         decks=(first.decklist, second.decklist),
-                        decisions=len(receipt.game.trace.actions),
+                        decisions=len(inputs.actions),
+                        record_index=index,
                     )
                 )
         return games
@@ -221,9 +261,14 @@ def record_games(
 ) -> Iterator[TrainingGames]:
     """Capture collectors constructed in this scope; close them before leaving it.
 
-    `players` and `context()` are retained in each receipt's context.
+    `players` and `context()` are retained in each record's context.
     """
-    directory.mkdir(parents=True, exist_ok=True)
+    warnings.warn(
+        "record_games is deprecated; use managym recording games_path; removal in 0.4.0",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    (directory / "games").mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def coordinates() -> dict[str, object]:
         return {
@@ -235,8 +280,7 @@ def record_games(
         CaptureScope(
             directory / "failures",
             context=coordinates,
-            training_exposure=True,
-            exposure_directory=directory,
+            settings=RunSettings(record_games=1.0),
         )
     ):
-        yield TrainingGames(directory)
+        yield TrainingGames(directory / "games")

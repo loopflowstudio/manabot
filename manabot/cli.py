@@ -5,6 +5,7 @@ import inspect
 from pathlib import Path
 import pkgutil
 from typing import Literal, Optional, Sequence
+import warnings
 
 import typer
 
@@ -12,6 +13,7 @@ from manabot.backends import resolve
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
+from manabot.infra.run_settings import RunSettings
 from manabot.training.regime import TrainingRegime
 import managym
 
@@ -82,6 +84,18 @@ def train_command(
         "--padded-shapes",
         help="Train local/baseline recipes on CUDA without bucketed shapes or live tokens",
     ),
+    diagnostics: Literal["off", "standard", "detailed"] = typer.Option(
+        "standard", "--diagnostics"
+    ),
+    stall_seconds: float = typer.Option(600, "--stall-seconds", min=0.001),
+    record_games: str = typer.Option(
+        "off",
+        "--record-games",
+        help="Record off, all, or a fraction of games for Academy",
+    ),
+    statistics: bool = typer.Option(
+        False, "--statistics", help="Collect native per-game counters"
+    ),
     training_game_logs: bool = typer.Option(
         False,
         "--training-game-logs",
@@ -128,6 +142,28 @@ def train_command(
 ) -> None:
     from manabot.backends import resolve
 
+    try:
+        record_fraction = {"off": 0.0, "all": 1.0}.get(record_games)
+        if record_fraction is None:
+            record_fraction = float(record_games)
+        if not 0 <= record_fraction <= 1:
+            raise ValueError
+    except ValueError:
+        raise typer.BadParameter(
+            "--record-games must be off, all, or a fraction in [0, 1]"
+        ) from None
+    if training_game_logs:
+        warnings.warn(
+            "--training-game-logs is deprecated; use --diagnostics detailed; removal in 0.4.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    settings = RunSettings(
+        record_games=record_fraction,
+        diagnostics="detailed" if training_game_logs else diagnostics,
+        stall_seconds=stall_seconds,
+        statistics=statistics,
+    )
     if preset is not None or set_values:
         raise typer.BadParameter(
             "training --preset/--set are retired; use --recipe local, --recipe baseline, "
@@ -171,12 +207,22 @@ def train_command(
                 learning_seats=learning_seats or "both",
                 device=device,
                 padded_shapes=padded_shapes,
-                training_game_logs=training_game_logs,
+                settings=settings,
             )
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
             if status == "completed":
-                typer.echo(f"checkpoint: {result.stages[-1].artifacts['raw']['path']}")
+                artifacts = result.stages[-1].artifacts
+                typer.echo(f"checkpoint: {artifacts['raw']['path']}")
+                games = [
+                    v["path"] for k, v in artifacts.items() if k.startswith("games/")
+                ]
+                if games:
+                    directory = Path(games[0]).parent
+                    typer.echo(
+                        f"games: {directory} (open one with: "
+                        f"managym academy replay {directory} --game 0)"
+                    )
             elif result.error:
                 typer.echo(result.error, err=True)
         else:
@@ -190,7 +236,7 @@ def train_command(
                 learning_seats=learning_seats or "both",
                 device=device,
                 padded_shapes=padded_shapes,
-                training_game_logs=training_game_logs,
+                settings=settings,
             )
             status = baseline_result.status
             typer.echo(
@@ -229,7 +275,7 @@ def train_command(
             checkpoint_seconds=checkpoint_seconds,
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,
-            training_game_logs=training_game_logs,
+            settings=settings,
             backend=resolve("torch"),
         )
 
@@ -372,6 +418,11 @@ def export_game_command(
     players: tuple[str, str] | None = typer.Option(None, help="Names of the two seats"),
 ) -> None:
     """Export one complete training game without loading its policy."""
+    warnings.warn(
+        "export-game is deprecated; open records directly with managym academy replay; removal in 0.4.0",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from manabot.sim.recording import TrainingGames
 
     try:

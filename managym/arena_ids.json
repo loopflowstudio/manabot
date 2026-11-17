@@ -1,0 +1,2762 @@
+{
+  "004be4bc-ac3c-4026-8d36-f4687ab18c70": {
+    "arena_id": 97346,
+    "collector_number": "71",
+    "name": "Sokka's Haiku",
+    "set": "tla"
+  },
+  "02212bd8-0c0f-4e8e-99f1-a8477476c03a": {
+    "arena_id": null,
+    "collector_number": "143",
+    "name": "Treetop Village",
+    "set": "ulg"
+  },
+  "023e7ad4-6af0-4f29-a716-27a313974227": {
+    "arena_id": 97325,
+    "collector_number": "51",
+    "name": "Forecasting Fortune Teller",
+    "set": "tla"
+  },
+  "02d7ea78-d539-4c34-8bb3-941353e3da46": {
+    "arena_id": null,
+    "collector_number": "159",
+    "name": "Beastmaster Ascension",
+    "set": "zen"
+  },
+  "039cb105-f8f7-4d04-a137-34b13491ee9a": {
+    "arena_id": 98181,
+    "collector_number": "219",
+    "name": "Sokka, Wolf Cove's Protector",
+    "set": "tle"
+  },
+  "03bdcf52-50b8-42c0-9665-931d83f5f314": {
+    "arena_id": null,
+    "collector_number": "39",
+    "name": "Black Sun's Zenith",
+    "set": "mbs"
+  },
+  "04c85150-269e-4158-a1b9-bd11bc6b7d79": {
+    "arena_id": 97405,
+    "collector_number": "129",
+    "name": "Crescent Island Temple",
+    "set": "tla"
+  },
+  "0568f28f-e830-4a7a-91d3-43e78bb86c8f": {
+    "arena_id": 98190,
+    "collector_number": "228",
+    "name": "Elephant-Rat",
+    "set": "tle"
+  },
+  "060966f9-5e56-4512-9ef3-2b216daf093c": {
+    "arena_id": 97298,
+    "collector_number": "25",
+    "name": "Jeong Jeong's Deserters",
+    "set": "tla"
+  },
+  "060d24e0-1567-41f1-ae8c-2d3b1834df3c": {
+    "arena_id": 97506,
+    "collector_number": "225",
+    "name": "Hei Bai, Spirit of Balance",
+    "set": "tla"
+  },
+  "0613afb5-4cee-4132-8adf-404767ed8d07": {
+    "arena_id": 97294,
+    "collector_number": "21",
+    "name": "Glider Kids",
+    "set": "tla"
+  },
+  "061ac694-610c-479f-b038-a4ef5270d5d7": {
+    "arena_id": 97557,
+    "collector_number": "276",
+    "name": "Realm of Koh",
+    "set": "tla"
+  },
+  "067bd117-04e6-410e-89c4-6d431d627751": {
+    "arena_id": 97432,
+    "collector_number": "155",
+    "name": "Tiger-Dillo",
+    "set": "tla"
+  },
+  "06b7675e-e665-49cb-a8d9-7092a654d464": {
+    "arena_id": 97386,
+    "collector_number": "111",
+    "name": "Northern Air Temple",
+    "set": "tla"
+  },
+  "082f4abc-c09f-42cf-977f-060875dfd411": {
+    "arena_id": 97456,
+    "collector_number": "179",
+    "name": "Flopsie, Bumi's Buddy",
+    "set": "tla"
+  },
+  "087a445c-5f63-45d6-83e8-20d22650db20": {
+    "arena_id": 97400,
+    "collector_number": "124",
+    "name": "Boar-q-pine",
+    "set": "tla"
+  },
+  "0a0cdf97-1927-47c6-8ef1-29969e3567ee": {
+    "arena_id": 97315,
+    "collector_number": "41",
+    "name": "Water Tribe Captain",
+    "set": "tla"
+  },
+  "0a838009-b115-4497-b35d-682e41ead7db": {
+    "arena_id": 97479,
+    "collector_number": "201",
+    "name": "Unlucky Cabbage Merchant",
+    "set": "tla"
+  },
+  "0b98ba34-f251-4bd0-9d75-1d4445be5cfd": {
+    "arena_id": 97546,
+    "collector_number": "265",
+    "name": "Airship Engine Room",
+    "set": "tla"
+  },
+  "0c019e76-c88e-4d1b-a546-0f4e462ef44a": {
+    "arena_id": 97348,
+    "collector_number": "73",
+    "name": "Spirit Water Revival",
+    "set": "tla"
+  },
+  "0ddb98e8-13fe-4786-83f7-b72c56db135a": {
+    "arena_id": null,
+    "collector_number": "157",
+    "name": "Hill Giant",
+    "set": "lea"
+  },
+  "0df55e3f-14de-46ef-b6b1-616618724d9e": {
+    "arena_id": null,
+    "collector_number": "54",
+    "name": "Counterspell",
+    "set": "lea"
+  },
+  "0ebaf0bf-7aa2-469d-bdbb-0fbf6741eede": {
+    "arena_id": 97540,
+    "collector_number": "259",
+    "name": "Planetarium of Wan Shi Tong",
+    "set": "tla"
+  },
+  "0ecd8b38-9ee5-41a5-9b93-21c33fc1a6ff": {
+    "arena_id": 97352,
+    "collector_number": "77",
+    "name": "The Unagi of Kyoshi Island",
+    "set": "tla"
+  },
+  "0f34de05-39a9-425f-a3b4-3a9d46c917ac": {
+    "arena_id": 97530,
+    "collector_number": "249",
+    "name": "Vindictive Warden",
+    "set": "tla"
+  },
+  "0f79a7fc-36b1-4397-8e67-6638379d3a38": {
+    "arena_id": 97322,
+    "collector_number": "48",
+    "name": "Ember Island Production",
+    "set": "tla"
+  },
+  "0ff7c993-ba29-43b0-9639-7c4bc0292fa2": {
+    "arena_id": 97406,
+    "collector_number": "130",
+    "name": "Cunning Maneuver",
+    "set": "tla"
+  },
+  "10874416-fa4c-4aa3-b885-4351d011d208": {
+    "arena_id": 97486,
+    "collector_number": "206",
+    "name": "Air Nomad Legacy",
+    "set": "tla"
+  },
+  "10dc44c7-634f-4210-9c22-ce9e8860568b": {
+    "arena_id": 98233,
+    "collector_number": "88",
+    "name": "Toucan-Puffin",
+    "set": "tle"
+  },
+  "11a77897-2aba-4a9b-bbe6-1768ca9f12cb": {
+    "arena_id": 97441,
+    "collector_number": "164",
+    "name": "Allies at Last",
+    "set": "tla"
+  },
+  "1256d22d-a2a9-41fb-b669-0661ba230bc7": {
+    "arena_id": 94997,
+    "collector_number": "195",
+    "name": "Caradora, Heart of Alacria",
+    "set": "dft"
+  },
+  "1326c5db-4615-495f-8e30-376243d91352": {
+    "arena_id": 97522,
+    "collector_number": "241",
+    "name": "Sokka, Lateral Strategist",
+    "set": "tla"
+  },
+  "1335a145-248a-4f1e-8760-9a5d531e14e3": {
+    "arena_id": 97360,
+    "collector_number": "85",
+    "name": "Azula, On the Hunt",
+    "set": "tla"
+  },
+  "1349465f-d29f-4d4b-a653-f4388574c336": {
+    "arena_id": 82620,
+    "collector_number": "136",
+    "name": "Giant Cindermaw",
+    "set": "bro"
+  },
+  "1397f689-dca1-4d35-864b-92c5606afb9a": {
+    "arena_id": 91645,
+    "collector_number": "109",
+    "name": "Savor",
+    "set": "blb"
+  },
+  "13c66fce-8f8e-4a98-8413-9f05aebf6e13": {
+    "arena_id": 97397,
+    "collector_number": "121",
+    "name": "Tundra Tank",
+    "set": "tla"
+  },
+  "140e567c-6e4a-42b0-8084-d6c9695ae802": {
+    "arena_id": null,
+    "collector_number": "182",
+    "name": "Wall of Stone",
+    "set": "lea"
+  },
+  "1447ebce-7e48-4b21-a39c-740920538bdd": {
+    "arena_id": 97324,
+    "collector_number": "50",
+    "name": "Flexible Waterbender",
+    "set": "tla"
+  },
+  "148bbaab-bc7b-46ab-8e18-ade69d71d847": {
+    "arena_id": 97381,
+    "collector_number": "106",
+    "name": "June, Bounty Hunter",
+    "set": "tla"
+  },
+  "14eadf46-90c2-4376-8183-6a922a60174d": {
+    "arena_id": 97392,
+    "collector_number": "117",
+    "name": "The Rise of Sozin // Fire Lord Sozin",
+    "set": "tla"
+  },
+  "14f2ed5a-042b-4cce-82ad-cfb4bd511d98": {
+    "arena_id": 97407,
+    "collector_number": "131",
+    "name": "Deserter's Disciple",
+    "set": "tla"
+  },
+  "16be5cc4-b15a-4c5e-8a6e-05c87b519127": {
+    "arena_id": 97496,
+    "collector_number": "215",
+    "name": "Dragonfly Swarm",
+    "set": "tla"
+  },
+  "17416926-168b-49b3-9231-acbb8f8a1d13": {
+    "arena_id": 69653,
+    "collector_number": "204",
+    "name": "Mayhem Devil",
+    "set": "war"
+  },
+  "17ab958a-abc6-472e-ad6a-97c731d89c74": {
+    "arena_id": 97320,
+    "collector_number": "46",
+    "name": "Boomerang Basics",
+    "set": "tla"
+  },
+  "17d71522-b133-4003-b787-0c742a2fd70e": {
+    "arena_id": 97343,
+    "collector_number": "68",
+    "name": "Rowdy Snowballers",
+    "set": "tla"
+  },
+  "18d15fed-1f8f-4407-a221-a47ce75001a8": {
+    "arena_id": 97417,
+    "collector_number": "141",
+    "name": "Iroh's Demonstration",
+    "set": "tla"
+  },
+  "1958d96e-ec44-48ab-80b1-5b01a24ac7b8": {
+    "arena_id": 76434,
+    "collector_number": "41",
+    "name": "Divide by Zero",
+    "set": "stx"
+  },
+  "19adde22-e5eb-4815-beb6-c520b3274cc9": {
+    "arena_id": null,
+    "collector_number": "168",
+    "name": "Lotus Cobra",
+    "set": "zen"
+  },
+  "1a3a862c-9c9a-41cd-94d1-2d0cff22a6cd": {
+    "arena_id": 97410,
+    "collector_number": "134",
+    "name": "Fire Nation Cadets",
+    "set": "tla"
+  },
+  "1affba6d-2cca-4cdf-8690-1e23ffbe8462": {
+    "arena_id": 97395,
+    "collector_number": "119",
+    "name": "Sold Out",
+    "set": "tla"
+  },
+  "1c2e2220-54d1-4180-93a0-964e3b0ba8b8": {
+    "arena_id": 97548,
+    "collector_number": "267",
+    "name": "Boiling Rock Prison",
+    "set": "tla"
+  },
+  "1d70f9ec-fdc1-4219-b89b-c030d712c1fc": {
+    "arena_id": 97543,
+    "collector_number": "262",
+    "name": "White Lotus Tile",
+    "set": "tla"
+  },
+  "1ee4bc92-1101-4652-be27-65450abebf00": {
+    "arena_id": 98202,
+    "collector_number": "240",
+    "name": "Iroh, Firebending Instructor",
+    "set": "tle"
+  },
+  "1f4d1bb6-cb8f-4d01-9879-0b3a0585cbf4": {
+    "arena_id": 76463,
+    "collector_number": "70",
+    "name": "Eyetwitch",
+    "set": "stx"
+  },
+  "211045e1-85c7-4088-b830-a2afa0fe520b": {
+    "arena_id": 97299,
+    "collector_number": "26",
+    "name": "Kyoshi Warriors",
+    "set": "tla"
+  },
+  "21f52564-9820-42dc-a08d-459d51afc397": {
+    "arena_id": 97448,
+    "collector_number": "171",
+    "name": "Diligent Zookeeper",
+    "set": "tla"
+  },
+  "224a2241-0dce-4008-8d9c-86db40ec5f8b": {
+    "arena_id": 97504,
+    "collector_number": "223",
+    "name": "Guru Pathik",
+    "set": "tla"
+  },
+  "2262f24b-db6b-4f86-96d0-47a20fc015ab": {
+    "arena_id": 97391,
+    "collector_number": "116",
+    "name": "Raven Eagle",
+    "set": "tla"
+  },
+  "226af626-873d-4bd2-b889-000f8316786f": {
+    "arena_id": 97550,
+    "collector_number": "269",
+    "name": "Foggy Bottom Swamp",
+    "set": "tla"
+  },
+  "22cad680-d46a-4589-a633-b6ee9a78d61e": {
+    "arena_id": 97388,
+    "collector_number": "113",
+    "name": "Ozai's Cruelty",
+    "set": "tla"
+  },
+  "233f4a05-057b-48f4-8f56-8d4a060a40e4": {
+    "arena_id": 97447,
+    "collector_number": "170",
+    "name": "Cycle of Renewal",
+    "set": "tla"
+  },
+  "23b3bf1e-ea85-47f5-8473-4d16615f68d7": {
+    "arena_id": 97416,
+    "collector_number": "140",
+    "name": "How to Start a Riot",
+    "set": "tla"
+  },
+  "2402d759-84b6-41d2-ad78-9333974e9222": {
+    "arena_id": 97287,
+    "collector_number": "14",
+    "name": "Curious Farm Animals",
+    "set": "tla"
+  },
+  "245e008c-e073-443f-9592-6f628c0026ec": {
+    "arena_id": 97277,
+    "collector_number": "4",
+    "name": "Aang, the Last Airbender",
+    "set": "tla"
+  },
+  "24a14ac5-0b7e-4441-9963-782a7cda3f4a": {
+    "arena_id": 97542,
+    "collector_number": "261",
+    "name": "The Walls of Ba Sing Se",
+    "set": "tla"
+  },
+  "24ca6ca8-e239-4fe5-8711-24098b74e2fe": {
+    "arena_id": 98214,
+    "collector_number": "252",
+    "name": "Hippo-Cows",
+    "set": "tle"
+  },
+  "24d1e22c-0d99-4ed5-94f0-fd055fd8e2be": {
+    "arena_id": 97562,
+    "collector_number": "281",
+    "name": "White Lotus Hideout",
+    "set": "tla"
+  },
+  "25749f9a-260d-4bdc-bd28-429c12faa4a5": {
+    "arena_id": 97465,
+    "collector_number": "187",
+    "name": "Origin of Metalbending",
+    "set": "tla"
+  },
+  "257e6862-96fe-4312-aff2-509d0696843a": {
+    "arena_id": 97538,
+    "collector_number": "257",
+    "name": "Kyoshi Battle Fan",
+    "set": "tla"
+  },
+  "26bcff57-428e-4f30-a153-a778fbfc437d": {
+    "arena_id": 97357,
+    "collector_number": "82",
+    "name": "Watery Grasp",
+    "set": "tla"
+  },
+  "27baccc0-7e25-4f39-be0d-31cd98ca0dc5": {
+    "arena_id": 97519,
+    "collector_number": "238",
+    "name": "Professor Zei, Anthropologist",
+    "set": "tla"
+  },
+  "27c6330d-49f6-4707-b4d4-d1411fa422eb": {
+    "arena_id": 97460,
+    "collector_number": "183",
+    "name": "Invasion Tactics",
+    "set": "tla"
+  },
+  "28f6fa32-5058-4c29-9ba8-9d8f2057eb6d": {
+    "arena_id": 97382,
+    "collector_number": "107",
+    "name": "Koh, the Face Stealer",
+    "set": "tla"
+  },
+  "2929b702-03c6-4cf0-a3f7-61b27f4803be": {
+    "arena_id": 97413,
+    "collector_number": "137",
+    "name": "Firebender Ascension",
+    "set": "tla"
+  },
+  "2ae83b4e-e5a4-4c98-8d16-eef3c71b8ff2": {
+    "arena_id": 97398,
+    "collector_number": "122",
+    "name": "Wolfbat",
+    "set": "tla"
+  },
+  "2b5b14a7-1fdd-4efc-b197-cadfa7f7c860": {
+    "arena_id": 97428,
+    "collector_number": "151",
+    "name": "Redirect Lightning",
+    "set": "tla"
+  },
+  "2d39a0e1-6484-409c-ab05-5b276925a949": {
+    "arena_id": 97559,
+    "collector_number": "278",
+    "name": "Secret Tunnel",
+    "set": "tla"
+  },
+  "2d543d35-945a-4ffa-beb7-7c5d4f894f79": {
+    "arena_id": 97497,
+    "collector_number": "216",
+    "name": "Earth Kingdom Soldier",
+    "set": "tla"
+  },
+  "2dd354dd-939e-4b1a-8ed6-fe89a7fd64bf": {
+    "arena_id": 71140,
+    "collector_number": "73",
+    "name": "Bastion of Remembrance",
+    "set": "iko"
+  },
+  "2de25ea4-284a-4c16-b823-048ff00c6a03": {
+    "arena_id": 75268,
+    "collector_number": "221",
+    "name": "Koma, Cosmos Serpent",
+    "set": "khm"
+  },
+  "2de43b03-9ac5-4292-ab29-2dc6210ef3d9": {
+    "arena_id": null,
+    "collector_number": "11",
+    "name": "Soldier",
+    "set": "ttla"
+  },
+  "2fea0356-6684-4730-9eb4-0262856bc1f9": {
+    "arena_id": 98279,
+    "collector_number": "134",
+    "name": "The Cabbage Merchant",
+    "set": "tle"
+  },
+  "30375d24-ccfe-47a2-babd-1bda0a6298fe": {
+    "arena_id": null,
+    "collector_number": "329",
+    "name": "Tarnished Citadel",
+    "set": "ody"
+  },
+  "308cc687-9cb2-4e3a-98db-c5ba2a7da115": {
+    "arena_id": 97351,
+    "collector_number": "76",
+    "name": "Ty Lee, Chi Blocker",
+    "set": "tla"
+  },
+  "30a30bfb-f0f3-425b-b37d-20079ee27046": {
+    "arena_id": 97365,
+    "collector_number": "90",
+    "name": "Canyon Crawler",
+    "set": "tla"
+  },
+  "3313bd5c-b657-47a3-822a-dd0d9165492a": {
+    "arena_id": 68475,
+    "collector_number": "14",
+    "name": "Healer's Hawk",
+    "set": "grn"
+  },
+  "3343933d-4425-4ede-8d92-876bd0c6df60": {
+    "arena_id": 97372,
+    "collector_number": "97",
+    "name": "Fatal Fissure",
+    "set": "tla"
+  },
+  "33b97433-e16c-422e-a0ca-f6b1e98d8681": {
+    "arena_id": 97311,
+    "collector_number": "37",
+    "name": "Suki, Courageous Rescuer",
+    "set": "tla"
+  },
+  "340c5799-4964-44dd-8c48-8f3f3aba5211": {
+    "arena_id": 97444,
+    "collector_number": "167",
+    "name": "Badgermole Cub",
+    "set": "tla"
+  },
+  "3489930a-208d-4bb2-b200-58a0dd4f6e81": {
+    "arena_id": 98229,
+    "collector_number": "84",
+    "name": "Sokka's Sword Training",
+    "set": "tle"
+  },
+  "367d5f8b-77ee-47f7-bc71-972d62c280a9": {
+    "arena_id": 103499,
+    "collector_number": "119",
+    "name": "Beorn the Fierce",
+    "set": "hob"
+  },
+  "36d3da9c-cb7a-4cea-b6e6-6722bd16c73c": {
+    "arena_id": null,
+    "collector_number": "218",
+    "name": "Sundial of the Infinite",
+    "set": "m12"
+  },
+  "37bce60d-2cb0-4772-9f5c-122a7ed426a0": {
+    "arena_id": null,
+    "collector_number": "228",
+    "name": "Valakut, the Molten Pinnacle",
+    "set": "zen"
+  },
+  "388180bd-cc96-4b18-9ddd-18a3f7e06282": {
+    "arena_id": null,
+    "collector_number": "14",
+    "name": "Monk",
+    "set": "tdmu"
+  },
+  "3938ec1f-979c-48e5-bb13-bebace006a8f": {
+    "arena_id": 97327,
+    "collector_number": "53",
+    "name": "Giant Koi",
+    "set": "tla"
+  },
+  "395b6ce4-143f-4eed-b565-98aa3d6208ef": {
+    "arena_id": 77219,
+    "collector_number": "114",
+    "name": "Power Word Kill",
+    "set": "afr"
+  },
+  "3a144e7f-e0f7-4346-a4e8-f4a358c3b4a9": {
+    "arena_id": 98188,
+    "collector_number": "226",
+    "name": "Turtle-Seals",
+    "set": "tle"
+  },
+  "3a1b1329-531c-47ed-9802-c505501f8fd9": {
+    "arena_id": 97347,
+    "collector_number": "72",
+    "name": "The Spirit Oasis",
+    "set": "tla"
+  },
+  "3a46deaa-88f7-4eec-aa99-b85073847918": {
+    "arena_id": 97377,
+    "collector_number": "102",
+    "name": "Foggy Swamp Visions",
+    "set": "tla"
+  },
+  "3b366f59-16fe-43cb-888d-1f93ef8fd332": {
+    "arena_id": 97415,
+    "collector_number": "139",
+    "name": "Firebending Student",
+    "set": "tla"
+  },
+  "3da81dbd-dc80-47ff-a33b-270d23a24e0a": {
+    "arena_id": 97531,
+    "collector_number": "250",
+    "name": "Wandering Musicians",
+    "set": "tla"
+  },
+  "3dc08461-bec6-4a18-b782-da4c92abb789": {
+    "arena_id": 86982,
+    "collector_number": "250",
+    "name": "Scarecrow Guide",
+    "set": "woe"
+  },
+  "3e311480-04f8-4b8f-938e-1cc6d06b9902": {
+    "arena_id": 97524,
+    "collector_number": "243",
+    "name": "Suki, Kyoshi Warrior",
+    "set": "tla"
+  },
+  "3e4a042c-f2a6-45e7-9444-acd1ca838b87": {
+    "arena_id": 97302,
+    "collector_number": "28",
+    "name": "Master Piandao",
+    "set": "tla"
+  },
+  "3e8de6a9-9859-4ed2-8ece-ef80a7209be9": {
+    "arena_id": 97491,
+    "collector_number": "210",
+    "name": "Bitter Work",
+    "set": "tla"
+  },
+  "3ede3f6f-e642-4fe4-aa37-0f01cdf4d149": {
+    "arena_id": null,
+    "collector_number": "102",
+    "name": "Standstill",
+    "set": "ody"
+  },
+  "3ee3fc2b-c2e4-421d-ac1d-6a111bb44f44": {
+    "arena_id": null,
+    "collector_number": "244",
+    "name": "Fevered Visions",
+    "set": "soi"
+  },
+  "3f57e0f9-e232-489c-b991-d0d23f75d8dd": {
+    "arena_id": 97354,
+    "collector_number": "79",
+    "name": "Waterbender Ascension",
+    "set": "tla"
+  },
+  "3f5d2c38-663c-4f64-8cfc-c102462e82ef": {
+    "arena_id": 97558,
+    "collector_number": "277",
+    "name": "Rumble Arena",
+    "set": "tla"
+  },
+  "3f6e5869-ca25-4b98-a844-8a498cb40aab": {
+    "arena_id": 97376,
+    "collector_number": "101",
+    "name": "Foggy Swamp Hunters",
+    "set": "tla"
+  },
+  "3fa5e806-3cf2-4241-b45d-a05d2b715efd": {
+    "arena_id": null,
+    "collector_number": "40",
+    "name": "Prosperity",
+    "set": "vis"
+  },
+  "3fd48a57-b0bb-4177-a0f3-bd317a179cbe": {
+    "arena_id": 97533,
+    "collector_number": "252",
+    "name": "Zhao, Ruthless Admiral",
+    "set": "tla"
+  },
+  "416b9207-a2af-44d1-9b87-4943f6e46d42": {
+    "arena_id": 97359,
+    "collector_number": "84",
+    "name": "Azula Always Lies",
+    "set": "tla"
+  },
+  "41ecc1de-353e-4131-b735-d2ce18c9c2d5": {
+    "arena_id": 97537,
+    "collector_number": "256",
+    "name": "Fire Nation Warship",
+    "set": "tla"
+  },
+  "42d83229-0555-4361-8964-4b525c825843": {
+    "arena_id": 97363,
+    "collector_number": "88",
+    "name": "Buzzard-Wasp Colony",
+    "set": "tla"
+  },
+  "43f4b10e-165b-4100-82f3-728e1b0c78ed": {
+    "arena_id": 97317,
+    "collector_number": "43",
+    "name": "Yip Yip!",
+    "set": "tla"
+  },
+  "4490ce65-c73a-4809-abd1-ccc3175bd2a4": {
+    "arena_id": null,
+    "collector_number": "120",
+    "name": "Typhoid Rats",
+    "set": "isd"
+  },
+  "4533d155-5c56-41a5-9d76-2d1414ac47c9": {
+    "arena_id": 97498,
+    "collector_number": "217",
+    "name": "Earth King's Lieutenant",
+    "set": "tla"
+  },
+  "45c6a201-1d4d-4ae5-a84e-098e094eaf61": {
+    "arena_id": null,
+    "collector_number": "48",
+    "name": "Clone Legion",
+    "set": "dtk"
+  },
+  "4620867c-a3a6-4c81-b923-24007367132e": {
+    "arena_id": null,
+    "collector_number": "152",
+    "name": "Taunting Challenge",
+    "set": "ptk"
+  },
+  "4661daf6-d960-4278-8946-70948efaf99d": {
+    "arena_id": 97370,
+    "collector_number": "95",
+    "name": "Deadly Precision",
+    "set": "tla"
+  },
+  "46b60d95-b9bc-40f8-b986-bfa8e3eb74f3": {
+    "arena_id": null,
+    "collector_number": "6",
+    "name": "Spirit",
+    "set": "p04"
+  },
+  "47c25e41-f43c-4447-81b5-b9631448bd29": {
+    "arena_id": 97332,
+    "collector_number": "58",
+    "name": "It'll Quench Ya!",
+    "set": "tla"
+  },
+  "480b6279-bb34-4b3f-a639-868b52af92b9": {
+    "arena_id": 97342,
+    "collector_number": "67",
+    "name": "Otter-Penguin",
+    "set": "tla"
+  },
+  "4811072d-fac0-40dd-a5cf-9694d51b12cf": {
+    "arena_id": 97285,
+    "collector_number": "12",
+    "name": "Avatar's Wrath",
+    "set": "tla"
+  },
+  "4887ce64-7c98-4bd7-95db-0c43ab71cc6e": {
+    "arena_id": 97463,
+    "collector_number": "186",
+    "name": "The Legend of Kyoshi // Avatar Kyoshi",
+    "set": "tla"
+  },
+  "49180301-f72f-48ca-8be1-df295e89cdd7": {
+    "arena_id": null,
+    "collector_number": "12",
+    "name": "Elf Warrior",
+    "set": "tshm"
+  },
+  "49ae7f36-4b37-415e-ab39-5fa1e3f2e3e9": {
+    "arena_id": 98182,
+    "collector_number": "220",
+    "name": "Tundra Wall",
+    "set": "tle"
+  },
+  "4a1f1472-55b4-450d-8e4d-7297130a0cf3": {
+    "arena_id": 97521,
+    "collector_number": "240",
+    "name": "Sokka, Bold Boomeranger",
+    "set": "tla"
+  },
+  "4b5ad895-be8d-476b-91ca-22fad7a3cc58": {
+    "arena_id": 97309,
+    "collector_number": "35",
+    "name": "South Pole Voyager",
+    "set": "tla"
+  },
+  "4b7e33a8-765b-4909-a5c6-5fe8f8774a51": {
+    "arena_id": null,
+    "collector_number": "136",
+    "name": "Mirrorwing Dragon",
+    "set": "emn"
+  },
+  "4ba682a6-1045-4ed6-ae95-bd5af8bd7224": {
+    "arena_id": 98198,
+    "collector_number": "236",
+    "name": "Explosive Shot",
+    "set": "tle"
+  },
+  "4bb0c13f-6cea-48b4-a5c8-2c0cfcfea7fd": {
+    "arena_id": null,
+    "collector_number": "104",
+    "name": "Humble Defector",
+    "set": "frf"
+  },
+  "4c7e3e2f-d7ac-4d40-ab84-cb7efe06a316": {
+    "arena_id": 97532,
+    "collector_number": "251",
+    "name": "White Lotus Reinforcements",
+    "set": "tla"
+  },
+  "4d25428d-e5a5-43c4-8544-43120ed1c4d5": {
+    "arena_id": 97326,
+    "collector_number": "52",
+    "name": "Geyser Leaper",
+    "set": "tla"
+  },
+  "4d37c84c-80e5-453d-bd2e-4f77ff864c89": {
+    "arena_id": null,
+    "collector_number": "3",
+    "name": "Empty City Ruse",
+    "set": "ptk"
+  },
+  "4d74da72-8443-4fce-9d64-d2041f6a3292": {
+    "arena_id": 97442,
+    "collector_number": "165",
+    "name": "Avatar Destiny",
+    "set": "tla"
+  },
+  "4dbf9bf9-75cd-4b25-a3a1-43b7e029700b": {
+    "arena_id": null,
+    "collector_number": "37",
+    "name": "Man-o'-War",
+    "set": "vis"
+  },
+  "4e744b6c-1c2f-451a-818a-5ee7785b5213": {
+    "arena_id": 97316,
+    "collector_number": "42",
+    "name": "Water Tribe Rallier",
+    "set": "tla"
+  },
+  "4f442970-5355-4abf-8684-17daaa8e469b": {
+    "arena_id": 97379,
+    "collector_number": "104",
+    "name": "Hog-Monkey",
+    "set": "tla"
+  },
+  "4f81e3b5-a0a9-4764-8c2d-b499ce1740b4": {
+    "arena_id": 97355,
+    "collector_number": "80",
+    "name": "Waterbending Lesson",
+    "set": "tla"
+  },
+  "4f88ec3a-44a7-4ae5-a68c-24294dabaeed": {
+    "arena_id": 97490,
+    "collector_number": "209",
+    "name": "Beifong's Bounty Hunters",
+    "set": "tla"
+  },
+  "4fa3c0d8-0a3e-43b0-b81e-a3d22ce6a4b2": {
+    "arena_id": null,
+    "collector_number": "123",
+    "name": "Fists of Flame",
+    "set": "mh1"
+  },
+  "4fd83083-3779-41f0-90a0-a00e3270e4e6": {
+    "arena_id": 97535,
+    "collector_number": "254",
+    "name": "Barrels of Blasting Jelly",
+    "set": "tla"
+  },
+  "509ce648-fb76-486d-8b39-183e368b7cb7": {
+    "arena_id": null,
+    "collector_number": "130",
+    "name": "Blasphemous Act",
+    "set": "isd"
+  },
+  "50bf5c8b-f218-46b7-843c-8d8083f02fd2": {
+    "arena_id": 97402,
+    "collector_number": "126",
+    "name": "The Cave of Two Lovers",
+    "set": "tla"
+  },
+  "50d0be73-a2c8-44a0-9178-9949f342f6f9": {
+    "arena_id": 97356,
+    "collector_number": "81",
+    "name": "Waterbending Scroll",
+    "set": "tla"
+  },
+  "51352127-1f86-42e9-b4ca-2fd58b14e86b": {
+    "arena_id": 97408,
+    "collector_number": "132",
+    "name": "Fated Firepower",
+    "set": "tla"
+  },
+  "520f5a03-ff5a-43ed-8f15-cf24596d60cd": {
+    "arena_id": 97475,
+    "collector_number": "197",
+    "name": "Sparring Dummy",
+    "set": "tla"
+  },
+  "52b213d3-6f68-43e6-91e9-435d8fe1f34c": {
+    "arena_id": 97470,
+    "collector_number": "192",
+    "name": "Rockalanche",
+    "set": "tla"
+  },
+  "52fd910f-6d42-41f5-a4be-f375aa254ea2": {
+    "arena_id": 97471,
+    "collector_number": "193",
+    "name": "Rocky Rebuke",
+    "set": "tla"
+  },
+  "53161747-c82b-41e8-90ea-7791ea262a85": {
+    "arena_id": 97394,
+    "collector_number": "118",
+    "name": "Ruinous Waterbending",
+    "set": "tla"
+  },
+  "543c64ff-2c51-4a63-a940-dc8645717c85": {
+    "arena_id": 76492,
+    "collector_number": "99",
+    "name": "Enthusiastic Study",
+    "set": "stx"
+  },
+  "5486d2dc-9a5d-4f58-a5ec-d94de54b852f": {
+    "arena_id": null,
+    "collector_number": "77",
+    "name": "Wind Drake",
+    "set": "por"
+  },
+  "54a1c6a9-3531-4432-9157-e4400dbc89fd": {
+    "arena_id": null,
+    "collector_number": "7",
+    "name": "Koma's Coil",
+    "set": "tkhm"
+  },
+  "54d762f6-e131-480f-b294-10f5a63d9c98": {
+    "arena_id": 97373,
+    "collector_number": "98",
+    "name": "The Fire Nation Drill",
+    "set": "tla"
+  },
+  "54ec5233-6b27-4655-b68c-4c1aaf64d89b": {
+    "arena_id": 98259,
+    "collector_number": "114",
+    "name": "Deer-Dog",
+    "set": "tle"
+  },
+  "554a8769-c840-4c9d-9959-b075c174457b": {
+    "arena_id": null,
+    "collector_number": "174",
+    "name": "Elemental Bond",
+    "set": "ori"
+  },
+  "55724dab-93c8-4a7f-89c2-13e94820635b": {
+    "arena_id": 98701,
+    "collector_number": "73",
+    "name": "Uncle's Musings",
+    "set": "tle"
+  },
+  "56b30a99-601b-40b9-b012-30fa4be5fd3c": {
+    "arena_id": 78594,
+    "collector_number": "229",
+    "name": "Join the Dance",
+    "set": "mid"
+  },
+  "56d4e0b7-232f-4953-84a3-e6f17781aa45": {
+    "arena_id": 97500,
+    "collector_number": "219",
+    "name": "Earth Village Ruffians",
+    "set": "tla"
+  },
+  "571bc9eb-8d13-4008-86b5-2e348a326d58": {
+    "arena_id": null,
+    "collector_number": "24",
+    "name": "Dockside Extortionist",
+    "set": "c19"
+  },
+  "5781ad7b-dc1b-4cc1-9e72-6e714b9ba1de": {
+    "arena_id": 76500,
+    "collector_number": "107",
+    "name": "Igneous Inspiration",
+    "set": "stx"
+  },
+  "57e0ccb0-22f0-4e4d-9a47-c4fec2c7f251": {
+    "arena_id": 97329,
+    "collector_number": "55",
+    "name": "Honest Work",
+    "set": "tla"
+  },
+  "58e59eba-3cf5-4ebe-8bc1-28568921650b": {
+    "arena_id": 98200,
+    "collector_number": "238",
+    "name": "Fire Nation Soldier",
+    "set": "tle"
+  },
+  "58e93dff-b774-4765-b7bd-d3957e42ff4a": {
+    "arena_id": null,
+    "collector_number": "87",
+    "name": "Mystic Remora",
+    "set": "ice"
+  },
+  "590a58ab-5e98-4031-8aa6-ce396dc1429f": {
+    "arena_id": 97452,
+    "collector_number": "175",
+    "name": "Earthbender Ascension",
+    "set": "tla"
+  },
+  "59327a58-cd41-479c-81c7-31c9d3b29508": {
+    "arena_id": null,
+    "collector_number": "237",
+    "name": "Rhys the Redeemed",
+    "set": "shm"
+  },
+  "5c172f9b-2184-4736-9f90-74ce08596292": {
+    "arena_id": 97310,
+    "collector_number": "36",
+    "name": "Southern Air Temple",
+    "set": "tla"
+  },
+  "5c5be54d-660e-42ab-b5ea-5e1cf3bad0bc": {
+    "arena_id": null,
+    "collector_number": "180",
+    "name": "Tireless Provisioner",
+    "set": "mh2"
+  },
+  "5c88672c-0eba-4e93-a0ec-30bbb1bb7661": {
+    "arena_id": 97529,
+    "collector_number": "248",
+    "name": "Uncle Iroh",
+    "set": "tla"
+  },
+  "5c998994-6c3b-4f34-9b31-babba2b17266": {
+    "arena_id": 97390,
+    "collector_number": "115",
+    "name": "Pirate Peddlers",
+    "set": "tla"
+  },
+  "5ca3fd45-9301-44ef-afc0-4d7999d66d36": {
+    "arena_id": 97466,
+    "collector_number": "188",
+    "name": "Ostrich-Horse",
+    "set": "tla"
+  },
+  "5d0ee441-a057-41b5-abb8-dc86864ac248": {
+    "arena_id": 97507,
+    "collector_number": "226",
+    "name": "Hermitic Herbalist",
+    "set": "tla"
+  },
+  "5daba108-277d-46c8-ac35-7610f4786813": {
+    "arena_id": 97374,
+    "collector_number": "99",
+    "name": "Fire Nation Engineer",
+    "set": "tla"
+  },
+  "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15": {
+    "arena_id": 97274,
+    "collector_number": "1",
+    "name": "Aang's Journey",
+    "set": "tla"
+  },
+  "5e9a53d3-7f2f-4a9c-9516-0713da740478": {
+    "arena_id": 97335,
+    "collector_number": "61",
+    "name": "The Legend of Kuruk // Avatar Kuruk",
+    "set": "tla"
+  },
+  "6176936d-72e2-4205-8871-4c5a4f1cb2d8": {
+    "arena_id": null,
+    "collector_number": "290",
+    "name": "Swamp",
+    "set": "lea"
+  },
+  "6180c476-dadf-4c03-ab1e-639386bd4319": {
+    "arena_id": null,
+    "collector_number": "108",
+    "name": "Diaochan, Artful Beauty",
+    "set": "ptk"
+  },
+  "61eaebc6-7575-48ed-b212-ff8b0c7ae694": {
+    "arena_id": 97420,
+    "collector_number": "144",
+    "name": "The Last Agni Kai",
+    "set": "tla"
+  },
+  "62730505-56f1-4043-a8b9-4fb7bc508b47": {
+    "arena_id": 97451,
+    "collector_number": "174",
+    "name": "Earth Rumble",
+    "set": "tla"
+  },
+  "62a983b4-ac73-4949-9317-05a75a8ce164": {
+    "arena_id": 97306,
+    "collector_number": "32",
+    "name": "Rabaroo Troop",
+    "set": "tla"
+  },
+  "6348b6bf-08a7-45f0-8b2d-2827ab89f21c": {
+    "arena_id": 97396,
+    "collector_number": "120",
+    "name": "Swampsnare Trap",
+    "set": "tla"
+  },
+  "63da83fe-fa59-40cb-a42e-e1b14b650bc8": {
+    "arena_id": 70232,
+    "collector_number": "85",
+    "name": "Epic Downfall",
+    "set": "eld"
+  },
+  "6436e2d0-989f-47e3-90bc-9cde82a2ddb4": {
+    "arena_id": 97427,
+    "collector_number": "150",
+    "name": "Ran and Shaw",
+    "set": "tla"
+  },
+  "649e50e5-299b-4191-87a8-36e9378795be": {
+    "arena_id": 97431,
+    "collector_number": "154",
+    "name": "Sozin's Comet",
+    "set": "tla"
+  },
+  "66906ed4-baac-4be0-9359-34f453d1a04a": {
+    "arena_id": 97349,
+    "collector_number": "74",
+    "name": "Teo, Spirited Glider",
+    "set": "tla"
+  },
+  "67483891-36d1-46f2-8b4f-b8b7bd54bdcc": {
+    "arena_id": 69861,
+    "collector_number": "76",
+    "name": "Spectral Sailor",
+    "set": "m20"
+  },
+  "67a87278-4c82-4056-8354-253d86b0ef3d": {
+    "arena_id": 82718,
+    "collector_number": "233",
+    "name": "Cityscape Leveler",
+    "set": "bro"
+  },
+  "6829b20d-c2fa-41a6-89ca-f21c522d8866": {
+    "arena_id": 97436,
+    "collector_number": "159",
+    "name": "War Balloon",
+    "set": "tla"
+  },
+  "68b1c746-a4b8-4a45-9f0e-3962f0ae40e3": {
+    "arena_id": 97539,
+    "collector_number": "258",
+    "name": "Meteor Sword",
+    "set": "tla"
+  },
+  "68bba622-a0ab-4c0e-88b1-9120690ea5a0": {
+    "arena_id": 71207,
+    "collector_number": "140",
+    "name": "Weaponize the Monsters",
+    "set": "iko"
+  },
+  "6a2946c0-0a40-4cdb-92c8-af2bafecca09": {
+    "arena_id": 97515,
+    "collector_number": "234",
+    "name": "Messenger Hawk",
+    "set": "tla"
+  },
+  "6a73b372-9c0e-4a85-89d2-440163330687": {
+    "arena_id": 97440,
+    "collector_number": "163",
+    "name": "Zuko, Exiled Prince",
+    "set": "tla"
+  },
+  "6b7078e4-2892-4b5f-83ab-90369e0d6dba": {
+    "arena_id": 97280,
+    "collector_number": "7",
+    "name": "Airbender's Reversal",
+    "set": "tla"
+  },
+  "6b885829-a323-4f7d-87c9-aa4615dcbe5c": {
+    "arena_id": 97545,
+    "collector_number": "264",
+    "name": "Agna Qel'a",
+    "set": "tla"
+  },
+  "6be3ba05-dce0-463b-bfe6-d51df63cc1a8": {
+    "arena_id": null,
+    "collector_number": "212",
+    "name": "Heartbeat of Spring",
+    "set": "chk"
+  },
+  "6c05bfb5-dd36-44c5-a60d-43f7f8c68a6b": {
+    "arena_id": null,
+    "collector_number": "87",
+    "name": "Cruel Tutor",
+    "set": "por"
+  },
+  "6c085441-e023-4032-89a0-d24ce5060ac3": {
+    "arena_id": 97275,
+    "collector_number": "2",
+    "name": "Energybending",
+    "set": "tla"
+  },
+  "6d4a1712-d19e-4475-9614-a0b1af4da610": {
+    "arena_id": 97536,
+    "collector_number": "255",
+    "name": "Bender's Waterskin",
+    "set": "tla"
+  },
+  "6f1c8cb0-38eb-408b-94e8-16db83999b3b": {
+    "arena_id": null,
+    "collector_number": "294",
+    "name": "Forest",
+    "set": "lea"
+  },
+  "6fa1197d-7b19-4d86-81e2-5c87de87757b": {
+    "arena_id": 97505,
+    "collector_number": "224",
+    "name": "Hama, the Bloodbender",
+    "set": "tla"
+  },
+  "70b6670f-a9fa-4d75-b0a7-c01b5071a514": {
+    "arena_id": 97528,
+    "collector_number": "247",
+    "name": "Toph, the First Metalbender",
+    "set": "tla"
+  },
+  "70e7ddf2-5604-41e7-bb9d-ddd03d3e9d0b": {
+    "arena_id": null,
+    "collector_number": "47",
+    "name": "Ancestral Recall",
+    "set": "lea"
+  },
+  "714c3a1f-7b30-4ed8-8f38-6176758741fb": {
+    "arena_id": null,
+    "collector_number": "89",
+    "name": "Sakashima of a Thousand Faces",
+    "set": "cmr"
+  },
+  "71a9fa44-306f-417a-a9d9-991aff95025c": {
+    "arena_id": 97412,
+    "collector_number": "136",
+    "name": "Fire Sages",
+    "set": "tla"
+  },
+  "720f3e68-84c0-462e-a0d1-90236ccc494a": {
+    "arena_id": null,
+    "collector_number": "7",
+    "name": "Treasure",
+    "set": "txln"
+  },
+  "720fbd87-b1c1-4b3b-97a1-46b943b115e3": {
+    "arena_id": 97278,
+    "collector_number": "5",
+    "name": "Aang's Iceberg",
+    "set": "tla"
+  },
+  "7292e5f2-d5a1-4e39-8f75-eba471819f04": {
+    "arena_id": 97284,
+    "collector_number": "11",
+    "name": "Avatar Enthusiasts",
+    "set": "tla"
+  },
+  "732e6bc9-0798-4c00-aea0-5ef4298b45f5": {
+    "arena_id": 97424,
+    "collector_number": "147",
+    "name": "Mai, Jaded Edge",
+    "set": "tla"
+  },
+  "7373fe95-ad1c-44b9-8c7f-464ce8cbffc6": {
+    "arena_id": 77199,
+    "collector_number": "94",
+    "name": "Deadly Dispute",
+    "set": "afr"
+  },
+  "739653cc-35c8-4a66-95d8-3e80fa6114f0": {
+    "arena_id": 97362,
+    "collector_number": "87",
+    "name": "Boiling Rock Rioter",
+    "set": "tla"
+  },
+  "73ae5276-b607-4f23-a9d2-e8cc7b8e3693": {
+    "arena_id": null,
+    "collector_number": "156",
+    "name": "Gray Ogre",
+    "set": "lea"
+  },
+  "73f4c4b7-5c05-48a5-adb2-ca850df8cd03": {
+    "arena_id": 98213,
+    "collector_number": "251",
+    "name": "Frog-Squirrels",
+    "set": "tle"
+  },
+  "74ca45a4-97ab-4255-9129-884e8b42b984": {
+    "arena_id": 97485,
+    "collector_number": "205",
+    "name": "Abandon Attachments",
+    "set": "tla"
+  },
+  "74dd4c0e-27b8-4c47-b7a6-a281413cd6b4": {
+    "arena_id": 97384,
+    "collector_number": "109",
+    "name": "Mai, Scornful Striker",
+    "set": "tla"
+  },
+  "74fca0b8-12e1-405f-b999-160d65fe0ade": {
+    "arena_id": 97499,
+    "collector_number": "218",
+    "name": "Earth Rumble Wrestlers",
+    "set": "tla"
+  },
+  "7517f2eb-a24d-49f6-82bf-08de55d3789a": {
+    "arena_id": 97295,
+    "collector_number": "22",
+    "name": "Glider Staff",
+    "set": "tla"
+  },
+  "752ffa24-93b6-4b33-bf10-7222357ac472": {
+    "arena_id": 97385,
+    "collector_number": "110",
+    "name": "Merchant of Many Hats",
+    "set": "tla"
+  },
+  "75657d26-b0f8-4892-8684-533c103c921d": {
+    "arena_id": null,
+    "collector_number": "80",
+    "name": "Visions of Beyond",
+    "set": "m12"
+  },
+  "77636b4c-faea-4bf5-b88c-dd5bb88dc930": {
+    "arena_id": null,
+    "collector_number": "198",
+    "name": "Giant Spider",
+    "set": "lea"
+  },
+  "7785ddfe-f8ae-473a-8064-549884c5aabc": {
+    "arena_id": 98225,
+    "collector_number": "80",
+    "name": "Koala-Sheep",
+    "set": "tle"
+  },
+  "77f130c7-0138-4a1a-9f67-62d2c302dc48": {
+    "arena_id": null,
+    "collector_number": "8",
+    "name": "Teferi's Protection",
+    "set": "c17"
+  },
+  "78a75317-94f7-47a4-b4da-5a027fa73248": {
+    "arena_id": 97457,
+    "collector_number": "180",
+    "name": "Foggy Swamp Vinebender",
+    "set": "tla"
+  },
+  "7990ebba-e9f2-4ba4-a352-e26ec81d4bed": {
+    "arena_id": null,
+    "collector_number": "65",
+    "name": "Imprisoned in the Moon",
+    "set": "emn"
+  },
+  "7a2acb28-c0e2-492b-a227-ef49e905e0fb": {
+    "arena_id": 98178,
+    "collector_number": "216",
+    "name": "Kyoshi Warrior Guard",
+    "set": "tle"
+  },
+  "7ae1439f-a0c4-42c2-a4f3-8851defa981e": {
+    "arena_id": 97380,
+    "collector_number": "105",
+    "name": "Joo Dee, One of Many",
+    "set": "tla"
+  },
+  "7aef2891-1269-4a1a-acea-0aa37ef544c4": {
+    "arena_id": 97350,
+    "collector_number": "75",
+    "name": "Tiger-Seal",
+    "set": "tla"
+  },
+  "7bc6966c-18d9-4675-9594-6f0b2d11c405": {
+    "arena_id": 76454,
+    "collector_number": "61",
+    "name": "Waterfall Aerialist",
+    "set": "stx"
+  },
+  "7cc29ddb-8f44-4493-985d-2fac35f9f34d": {
+    "arena_id": 97554,
+    "collector_number": "273",
+    "name": "Misty Palms Oasis",
+    "set": "tla"
+  },
+  "7d13a93a-a43d-4cf5-8300-8341f3b7f1b1": {
+    "arena_id": null,
+    "collector_number": "1",
+    "name": "Human",
+    "set": "tvow"
+  },
+  "7d40b9cb-82ef-44c5-8d3c-c8bb4ce9891c": {
+    "arena_id": 97425,
+    "collector_number": "148",
+    "name": "Mongoose Lizard",
+    "set": "tla"
+  },
+  "7dbeced9-d27d-476c-92d4-3c14d8a40458": {
+    "arena_id": 98183,
+    "collector_number": "221",
+    "name": "Wolf Cove Villager",
+    "set": "tle"
+  },
+  "7e55f653-0952-4713-8d43-ca50acff9e3b": {
+    "arena_id": null,
+    "collector_number": "34",
+    "name": "Intruder Alarm",
+    "set": "sth"
+  },
+  "7ebf742a-3995-4b22-9dc7-b05f57889683": {
+    "arena_id": 97517,
+    "collector_number": "236",
+    "name": "Platypus-Bear",
+    "set": "tla"
+  },
+  "7faa3e3d-c08a-4908-85ef-1370d3f90815": {
+    "arena_id": 97330,
+    "collector_number": "56",
+    "name": "Iguana Parrot",
+    "set": "tla"
+  },
+  "7ffb79cd-d170-4047-89c8-6e85188f30da": {
+    "arena_id": 97319,
+    "collector_number": "45",
+    "name": "Benevolent River Spirit",
+    "set": "tla"
+  },
+  "811458c7-dcdc-43ef-8c3e-a90e21ce315e": {
+    "arena_id": null,
+    "collector_number": "137",
+    "name": "Rites of Flourishing",
+    "set": "fut"
+  },
+  "8234090e-9df1-4915-90ef-8a4bc6212655": {
+    "arena_id": null,
+    "collector_number": "150",
+    "name": "Rending Volley",
+    "set": "dtk"
+  },
+  "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4": {
+    "arena_id": 97483,
+    "collector_number": "204",
+    "name": "Aang, Swift Savior // Aang and La, Ocean's Fury",
+    "set": "tla"
+  },
+  "829d91e9-4878-4e55-a262-ac0d55b65d4e": {
+    "arena_id": 97283,
+    "collector_number": "10",
+    "name": "Appa, Steadfast Guardian",
+    "set": "tla"
+  },
+  "84332812-367a-4ac4-9be5-2adc57562c9d": {
+    "arena_id": 98224,
+    "collector_number": "79",
+    "name": "Kindly Customer",
+    "set": "tle"
+  },
+  "8491585c-81d0-48be-8ed0-832e42fad9c6": {
+    "arena_id": 97513,
+    "collector_number": "232",
+    "name": "The Lion-Turtle",
+    "set": "tla"
+  },
+  "8554e862-f78a-42f5-b876-076aac6c9504": {
+    "arena_id": 97334,
+    "collector_number": "60",
+    "name": "Knowledge Seeker",
+    "set": "tla"
+  },
+  "8688fce5-74b1-41e1-a59a-05a3878a75cb": {
+    "arena_id": 97450,
+    "collector_number": "173",
+    "name": "Earth Kingdom General",
+    "set": "tla"
+  },
+  "86f7399d-6876-4e85-ba34-ff1f97dc144a": {
+    "arena_id": 97403,
+    "collector_number": "127",
+    "name": "Combustion Man",
+    "set": "tla"
+  },
+  "87595843-15bc-48bb-8a81-3e6ad924ed44": {
+    "arena_id": 97345,
+    "collector_number": "70",
+    "name": "Serpent of the Pass",
+    "set": "tla"
+  },
+  "879b73d3-4552-4fdc-baee-c4d097ae9a4f": {
+    "arena_id": 97508,
+    "collector_number": "227",
+    "name": "Iroh, Grand Lotus",
+    "set": "tla"
+  },
+  "88040748-ad76-4b9a-bd4e-87e5980e9816": {
+    "arena_id": null,
+    "collector_number": "214",
+    "name": "Pyroclasm",
+    "set": "ice"
+  },
+  "88d5f8fd-d4de-4e64-9b74-e53719ffbcdc": {
+    "arena_id": 97286,
+    "collector_number": "13",
+    "name": "Compassionate Healer",
+    "set": "tla"
+  },
+  "8a347283-eb16-4339-945e-316a5ce9e2c5": {
+    "arena_id": 98175,
+    "collector_number": "213",
+    "name": "Allied Teamwork",
+    "set": "tle"
+  },
+  "8c55b333-dc8b-4332-895b-eec5eb45543f": {
+    "arena_id": 97477,
+    "collector_number": "199",
+    "name": "True Ancestry",
+    "set": "tla"
+  },
+  "8cabb6ed-5c80-4dab-b96c-9d4d9fe72db7": {
+    "arena_id": 97314,
+    "collector_number": "40",
+    "name": "Vengeful Villagers",
+    "set": "tla"
+  },
+  "8d5f3008-2af8-4e81-8847-1c91f524e747": {
+    "arena_id": 97552,
+    "collector_number": "271",
+    "name": "Kyoshi Village",
+    "set": "tla"
+  },
+  "8f5a620c-fde7-4b72-bf8a-efc4f14560c5": {
+    "arena_id": null,
+    "collector_number": "109",
+    "name": "Heroic Intervention",
+    "set": "aer"
+  },
+  "8f5c3863-c876-48a8-9bc8-be20cd61074c": {
+    "arena_id": null,
+    "collector_number": "1",
+    "name": "Marit Lage",
+    "set": "pcsp"
+  },
+  "9047075e-9fca-484d-bb79-32c0d6821281": {
+    "arena_id": null,
+    "collector_number": "31",
+    "name": "Glory Seeker",
+    "set": "ons"
+  },
+  "9090b055-3406-4fed-a8c6-3f6353a9600e": {
+    "arena_id": 97276,
+    "collector_number": "3",
+    "name": "Zuko's Exile",
+    "set": "tla"
+  },
+  "90a57c0e-fa61-45ef-955d-d296403967d5": {
+    "arena_id": null,
+    "collector_number": "288",
+    "name": "Island",
+    "set": "lea"
+  },
+  "91cbed11-3b5c-4e7a-9b13-125c1fe5f22f": {
+    "arena_id": 98196,
+    "collector_number": "234",
+    "name": "Capital Guard",
+    "set": "tle"
+  },
+  "91e30df5-63f7-4281-8d64-8d522d663652": {
+    "arena_id": 97338,
+    "collector_number": "63",
+    "name": "Master Pakku",
+    "set": "tla"
+  },
+  "9202c044-15e4-4218-a94d-16287ba19d69": {
+    "arena_id": 97510,
+    "collector_number": "229",
+    "name": "Jet, Freedom Fighter",
+    "set": "tla"
+  },
+  "9207362c-3605-4794-803f-ad1d0175fcca": {
+    "arena_id": 97289,
+    "collector_number": "16",
+    "name": "Earth Kingdom Jailer",
+    "set": "tla"
+  },
+  "92409c3a-fb1a-4205-9fe1-0f5affc7b21d": {
+    "arena_id": null,
+    "collector_number": "145",
+    "name": "Dark Depths",
+    "set": "csp"
+  },
+  "9350bf4a-fa12-4867-b31f-1f1394d99571": {
+    "arena_id": 97304,
+    "collector_number": "30",
+    "name": "Momo, Playful Pet",
+    "set": "tla"
+  },
+  "95f2f5af-d405-4534-8683-5a9001f997b4": {
+    "arena_id": 97421,
+    "collector_number": "145",
+    "name": "The Legend of Roku // Avatar Roku",
+    "set": "tla"
+  },
+  "9657a0c0-2c26-4331-8e62-f032265a01af": {
+    "arena_id": 97459,
+    "collector_number": "182",
+    "name": "Haru, Hidden Talent",
+    "set": "tla"
+  },
+  "96e2b3d0-f060-4f3c-9d12-a0444b202008": {
+    "arena_id": 97293,
+    "collector_number": "20",
+    "name": "Gather the White Lotus",
+    "set": "tla"
+  },
+  "98b0a4a8-9319-451b-9b79-b0bca7a41e91": {
+    "arena_id": 71078,
+    "collector_number": "11",
+    "name": "Drannith Magistrate",
+    "set": "iko"
+  },
+  "99244462-a996-4a5b-91fb-947045647d6d": {
+    "arena_id": 97438,
+    "collector_number": "161",
+    "name": "Yuyan Archers",
+    "set": "tla"
+  },
+  "998bad32-1927-4e12-9527-efa55b86cae0": {
+    "arena_id": null,
+    "collector_number": "213",
+    "name": "Insurrection",
+    "set": "ons"
+  },
+  "99a90d13-891c-45cc-b1d5-6080ebae5862": {
+    "arena_id": 97279,
+    "collector_number": "6",
+    "name": "Airbender Ascension",
+    "set": "tla"
+  },
+  "9aef3ddb-9bb7-42c8-975b-b1917955a416": {
+    "arena_id": 97296,
+    "collector_number": "23",
+    "name": "Hakoda, Selfless Commander",
+    "set": "tla"
+  },
+  "9bb928ae-f636-4aee-9146-a7885e6a8976": {
+    "arena_id": 97344,
+    "collector_number": "69",
+    "name": "Secret of Bloodbending",
+    "set": "tla"
+  },
+  "9bfe0f7c-6dac-41d4-a013-109445158a5e": {
+    "arena_id": 97520,
+    "collector_number": "239",
+    "name": "Sandbender Scavengers",
+    "set": "tla"
+  },
+  "9c0433f9-8f1e-4a19-a83f-a41925f1b1a9": {
+    "arena_id": 97544,
+    "collector_number": "263",
+    "name": "Abandoned Air Temple",
+    "set": "tla"
+  },
+  "9c25ea98-9823-4487-bf6b-ee29ce5a4ed8": {
+    "arena_id": 97461,
+    "collector_number": "184",
+    "name": "Kyoshi Island Plaza",
+    "set": "tla"
+  },
+  "9c59f8c5-4063-4e5a-b684-fde175c4a981": {
+    "arena_id": 97292,
+    "collector_number": "19",
+    "name": "Fancy Footwork",
+    "set": "tla"
+  },
+  "9cc10845-8989-46ca-a57a-fd728fca0729": {
+    "arena_id": 97409,
+    "collector_number": "133",
+    "name": "Fire Nation Attacks",
+    "set": "tla"
+  },
+  "9d3ba2e3-e680-47cd-81c5-555deea7d00f": {
+    "arena_id": null,
+    "collector_number": "71",
+    "name": "Corrupt Court Official",
+    "set": "ptk"
+  },
+  "9d555cab-ec86-4f27-bca2-7d01f79c3f46": {
+    "arena_id": 97534,
+    "collector_number": "253",
+    "name": "Zuko, Conflicted",
+    "set": "tla"
+  },
+  "9d70707b-2e25-40b1-80a8-9a5492bca7e2": {
+    "arena_id": 97494,
+    "collector_number": "213",
+    "name": "Cruel Administrator",
+    "set": "tla"
+  },
+  "9d735ebf-61a4-4507-9399-6d32c8903ded": {
+    "arena_id": null,
+    "collector_number": "133",
+    "name": "Boggart Brute",
+    "set": "ori"
+  },
+  "9ddb8715-341b-400a-b6eb-f3f90518157c": {
+    "arena_id": 97495,
+    "collector_number": "214",
+    "name": "Dai Li Agents",
+    "set": "tla"
+  },
+  "9ec03308-59a2-417a-938f-bdda75080e43": {
+    "arena_id": 97512,
+    "collector_number": "231",
+    "name": "Katara, Water Tribe's Hope",
+    "set": "tla"
+  },
+  "9f86e5fe-8723-4494-b4cc-b7ac3a047bd1": {
+    "arena_id": null,
+    "collector_number": "96",
+    "name": "Noxious Gearhulk",
+    "set": "kld"
+  },
+  "9fbe94e9-a71d-4a31-9210-c599abe08e3f": {
+    "arena_id": 97426,
+    "collector_number": "149",
+    "name": "Price of Freedom",
+    "set": "tla"
+  },
+  "9fd02eb4-1ef5-4a14-89a8-b25e720e8016": {
+    "arena_id": 97321,
+    "collector_number": "47",
+    "name": "Crashing Wave",
+    "set": "tla"
+  },
+  "a20aaa6c-7032-43c1-9e7c-57cf8c8ecfd4": {
+    "arena_id": 98191,
+    "collector_number": "229",
+    "name": "Fire Nation Ambushers",
+    "set": "tle"
+  },
+  "a211d505-4d40-4914-a9da-220770d6ddbc": {
+    "arena_id": 78374,
+    "collector_number": "44",
+    "name": "Consider",
+    "set": "mid"
+  },
+  "a268697b-22b0-4e1b-a5b6-d9be95025e57": {
+    "arena_id": 97446,
+    "collector_number": "169",
+    "name": "Bumi, King of Three Trials",
+    "set": "tla"
+  },
+  "a32338e8-1f6a-49b9-bd93-26578adab6b3": {
+    "arena_id": 76526,
+    "collector_number": "133",
+    "name": "Gnarled Professor",
+    "set": "stx"
+  },
+  "a3e6ff4d-bf7d-488f-a02f-f40e7f8761ca": {
+    "arena_id": 98273,
+    "collector_number": "128",
+    "name": "Animal Attendant",
+    "set": "tle"
+  },
+  "a3eb92fe-bc59-4472-9028-f368bd015609": {
+    "arena_id": 97514,
+    "collector_number": "233",
+    "name": "Long Feng, Grand Secretariat",
+    "set": "tla"
+  },
+  "a42d3066-f4ec-4d28-83ab-e48141206c72": {
+    "arena_id": null,
+    "collector_number": "11",
+    "name": "Fencing Ace",
+    "set": "rtr"
+  },
+  "a60e8f23-90b2-4bc6-bd54-a95055556389": {
+    "arena_id": 97300,
+    "collector_number": "27",
+    "name": "The Legend of Yangchen // Avatar Yangchen",
+    "set": "tla"
+  },
+  "a6335319-6c92-40d4-ab2d-c06c79049c30": {
+    "arena_id": 97318,
+    "collector_number": "44",
+    "name": "Accumulate Wisdom",
+    "set": "tla"
+  },
+  "a7b93c2a-c478-4734-8aca-03f3e9c11b20": {
+    "arena_id": 97473,
+    "collector_number": "195",
+    "name": "Seismic Sense",
+    "set": "tla"
+  },
+  "a8bc29cf-f6f8-4bb8-b722-f016b58b6d2d": {
+    "arena_id": 97429,
+    "collector_number": "152",
+    "name": "Rough Rhino Cavalry",
+    "set": "tla"
+  },
+  "a8d5dca6-381a-4361-b265-27de8d04335c": {
+    "arena_id": 97449,
+    "collector_number": "172",
+    "name": "The Earth King",
+    "set": "tla"
+  },
+  "a8f3d2cb-d073-4df8-8769-49612628a377": {
+    "arena_id": 97291,
+    "collector_number": "18",
+    "name": "Enter the Avatar State",
+    "set": "tla"
+  },
+  "a9394200-7ffc-440f-8b5f-c08b7930133c": {
+    "arena_id": 97433,
+    "collector_number": "156",
+    "name": "Treetop Freedom Fighters",
+    "set": "tla"
+  },
+  "a98b1550-4609-4a2f-9371-4afe1cdc613e": {
+    "arena_id": 97516,
+    "collector_number": "235",
+    "name": "Ozai, the Phoenix King",
+    "set": "tla"
+  },
+  "a9a5f6f7-f04d-477f-b67f-fd01a5dcc0f5": {
+    "arena_id": 97312,
+    "collector_number": "38",
+    "name": "Team Avatar",
+    "set": "tla"
+  },
+  "a9b2a843-c6fe-4d19-801e-1538e4381ab0": {
+    "arena_id": 97282,
+    "collector_number": "9",
+    "name": "Appa, Loyal Sky Bison",
+    "set": "tla"
+  },
+  "a9f63d3b-bee5-48bc-8b04-d8b24b0bda6e": {
+    "arena_id": 97418,
+    "collector_number": "142",
+    "name": "Jeong Jeong, the Deserter",
+    "set": "tla"
+  },
+  "aa213dbb-c52a-4084-92aa-d0b5d97a97d9": {
+    "arena_id": null,
+    "collector_number": "82",
+    "name": "Bloodchief Ascension",
+    "set": "zen"
+  },
+  "aabbd420-b7fc-496f-9168-bad823d51d9e": {
+    "arena_id": 97443,
+    "collector_number": "166",
+    "name": "Badgermole",
+    "set": "tla"
+  },
+  "ad87bff5-9b8c-44e4-a6d3-8cc71be9640a": {
+    "arena_id": 97560,
+    "collector_number": "279",
+    "name": "Serpent's Pass",
+    "set": "tla"
+  },
+  "ad8933d6-cdc7-4d60-a78e-b43ffecfb136": {
+    "arena_id": 97399,
+    "collector_number": "123",
+    "name": "Zuko's Conviction",
+    "set": "tla"
+  },
+  "ae04c862-095f-41d2-8aef-21036d5a0cdc": {
+    "arena_id": 97561,
+    "collector_number": "280",
+    "name": "Sun-Blessed Peak",
+    "set": "tla"
+  },
+  "aecdc315-95e5-450c-bedc-998eea46cf8c": {
+    "arena_id": 69794,
+    "collector_number": "9",
+    "name": "Brought Back",
+    "set": "m20"
+  },
+  "aefcd734-3916-4c77-9d98-3ea2c2795658": {
+    "arena_id": 97478,
+    "collector_number": "200",
+    "name": "Turtle-Duck",
+    "set": "tla"
+  },
+  "af5299f5-1633-4c07-ade5-fd47e29ea4aa": {
+    "arena_id": 97331,
+    "collector_number": "57",
+    "name": "Invasion Submersible",
+    "set": "tla"
+  },
+  "af5b29b3-974c-4200-8df8-b072c11e1600": {
+    "arena_id": 88986,
+    "collector_number": "67",
+    "name": "Proft's Eidetic Memory",
+    "set": "mkm"
+  },
+  "af915ed2-1f34-43f6-85f5-2430325b720f": {
+    "arena_id": 70308,
+    "collector_number": "161",
+    "name": "The Great Henge",
+    "set": "eld"
+  },
+  "b05cfee5-ee59-4df6-a5f6-d9ef0fa7f98a": {
+    "arena_id": 97307,
+    "collector_number": "33",
+    "name": "Razor Rings",
+    "set": "tla"
+  },
+  "b0a18f8b-7364-4375-b2e1-e2f15978517f": {
+    "arena_id": 97511,
+    "collector_number": "230",
+    "name": "Katara, the Fearless",
+    "set": "tla"
+  },
+  "b15acc09-dd32-4e93-a788-7c0ae965a0c8": {
+    "arena_id": 98698,
+    "collector_number": "70",
+    "name": "Toph, Greatest Earthbender",
+    "set": "tle"
+  },
+  "b15f302d-c451-4e79-a5af-75ee3ba4cadf": {
+    "arena_id": 97472,
+    "collector_number": "194",
+    "name": "Saber-Tooth Moose-Lion",
+    "set": "tla"
+  },
+  "b1623d57-4729-4796-b3f7-f1837a05c6ed": {
+    "arena_id": null,
+    "collector_number": "286",
+    "name": "Plains",
+    "set": "lea"
+  },
+  "b16443df-52c6-4c9d-a7ff-89a37e593a0a": {
+    "arena_id": null,
+    "collector_number": "160",
+    "name": "Warstorm Surge",
+    "set": "m12"
+  },
+  "b17e8bdb-4b91-4a9d-bfe1-8a55f0bd040b": {
+    "arena_id": 97419,
+    "collector_number": "143",
+    "name": "Jet's Brainwashing",
+    "set": "tla"
+  },
+  "b18995c2-efe3-46ca-8204-e2dc0e42f6e3": {
+    "arena_id": 97462,
+    "collector_number": "185",
+    "name": "Leaves from the Vine",
+    "set": "tla"
+  },
+  "b1a95982-be16-465a-9c1b-1f4d875c0c40": {
+    "arena_id": 98206,
+    "collector_number": "244",
+    "name": "Warship Scout",
+    "set": "tle"
+  },
+  "b20a5185-7e31-4fc9-be11-9423bfc389bf": {
+    "arena_id": 97492,
+    "collector_number": "211",
+    "name": "Bumi, Unleashed",
+    "set": "tla"
+  },
+  "b3bf4a25-4329-4318-870a-2b06aa620dc4": {
+    "arena_id": 97308,
+    "collector_number": "34",
+    "name": "Sandbenders' Storm",
+    "set": "tla"
+  },
+  "b45c4bbf-2c61-4d49-96c8-34a0fb0d6d02": {
+    "arena_id": null,
+    "collector_number": "9",
+    "name": "Release to Memory",
+    "set": "nec"
+  },
+  "b4df70ea-2b6b-4e25-a564-655989ef16fa": {
+    "arena_id": null,
+    "collector_number": "99",
+    "name": "Fervor",
+    "set": "wth"
+  },
+  "b51d3259-c41c-4f64-9666-0a9e676c812f": {
+    "arena_id": 97389,
+    "collector_number": "114",
+    "name": "Phoenix Fleet Airship",
+    "set": "tla"
+  },
+  "b57c57a8-d72b-4c6c-a2db-a7ef61190f42": {
+    "arena_id": 97378,
+    "collector_number": "103",
+    "name": "Heartless Act",
+    "set": "tla"
+  },
+  "b6fcdc4c-547a-4df4-93c8-911fd400c837": {
+    "arena_id": 98201,
+    "collector_number": "239",
+    "name": "Fire Nation's Conquest",
+    "set": "tle"
+  },
+  "b7f90eef-2393-4e44-9895-00489d3eaa92": {
+    "arena_id": 98193,
+    "collector_number": "231",
+    "name": "Gilacorn",
+    "set": "tle"
+  },
+  "b81c6c8b-a9cf-4866-89ba-7f8ad077b836": {
+    "arena_id": 58173,
+    "collector_number": "118",
+    "name": "Monastery Swiftspear",
+    "set": "ktk"
+  },
+  "b841bfa8-7c17-4df2-8466-780ab9a4a53a": {
+    "arena_id": 70391,
+    "collector_number": "244",
+    "name": "Fabled Passage",
+    "set": "eld"
+  },
+  "b8845bba-d116-43cd-8ae0-e553f3324d66": {
+    "arena_id": 97297,
+    "collector_number": "24",
+    "name": "Invasion Reinforcements",
+    "set": "tla"
+  },
+  "b88a4943-bd1b-4d10-9cd3-b2ab91b25c10": {
+    "arena_id": 70319,
+    "collector_number": "172",
+    "name": "Return of the Wildspeaker",
+    "set": "eld"
+  },
+  "b910851e-9332-4c83-a790-d379667cabfc": {
+    "arena_id": 97339,
+    "collector_number": "64",
+    "name": "The Mechanist, Aerial Artisan",
+    "set": "tla"
+  },
+  "b9d70342-9d3c-44cb-9026-db5e5941b9fc": {
+    "arena_id": null,
+    "collector_number": "8",
+    "name": "Ballistic Boulder",
+    "set": "tltr"
+  },
+  "bac81940-d717-49ff-83b2-16a22bb2c988": {
+    "arena_id": 97437,
+    "collector_number": "160",
+    "name": "Wartime Protestors",
+    "set": "tla"
+  },
+  "bb43fd07-d281-447d-88bf-c53498c2cf20": {
+    "arena_id": null,
+    "collector_number": "111",
+    "name": "Searing Blood",
+    "set": "bng"
+  },
+  "bbb03f2e-2b92-4aa1-afae-301ed5d151d3": {
+    "arena_id": null,
+    "collector_number": "127",
+    "name": "Lightning Strike",
+    "set": "ths"
+  },
+  "bc2ec498-54eb-41a7-bdf2-8772430e177f": {
+    "arena_id": 98177,
+    "collector_number": "215",
+    "name": "Katara, Heroic Healer",
+    "set": "tle"
+  },
+  "bc6146bf-f0c6-4557-af6a-74c643d5fc01": {
+    "arena_id": 97501,
+    "collector_number": "220",
+    "name": "Fire Lord Azula",
+    "set": "tla"
+  },
+  "bcf7b9da-d35d-4338-b4d9-83e47dc058ee": {
+    "arena_id": 97555,
+    "collector_number": "274",
+    "name": "North Pole Gates",
+    "set": "tla"
+  },
+  "bdf3b2be-d0cd-4a3c-a10e-82d32c12d3bd": {
+    "arena_id": 97547,
+    "collector_number": "266",
+    "name": "Ba Sing Se",
+    "set": "tla"
+  },
+  "bf36408d-ed85-497f-8e68-d3a922c388a0": {
+    "arena_id": null,
+    "collector_number": "15",
+    "name": "Food",
+    "set": "teld"
+  },
+  "bfed1a95-bd67-4e16-a781-81866028af2f": {
+    "arena_id": null,
+    "collector_number": "190",
+    "name": "Craw Wurm",
+    "set": "lea"
+  },
+  "c21e413b-96ed-4ded-b567-f1647074ce5f": {
+    "arena_id": 97556,
+    "collector_number": "275",
+    "name": "Omashu City",
+    "set": "tla"
+  },
+  "c2c0c138-5b61-4949-8431-4a6d458ead6a": {
+    "arena_id": 97340,
+    "collector_number": "65",
+    "name": "North Pole Patrol",
+    "set": "tla"
+  },
+  "c2eed79f-38c1-4aac-9525-d54cb114f17f": {
+    "arena_id": 97361,
+    "collector_number": "86",
+    "name": "Beetle-Headed Merchants",
+    "set": "tla"
+  },
+  "c36820fa-ee86-4206-9a0d-737a67cf5208": {
+    "arena_id": null,
+    "collector_number": "247",
+    "name": "Sunbaked Canyon",
+    "set": "mh1"
+  },
+  "c4300d24-1cae-4dd5-be7e-38cc677cf5bd": {
+    "arena_id": null,
+    "collector_number": "269",
+    "name": "Sol Ring",
+    "set": "lea"
+  },
+  "c472ef84-a632-4ad7-853c-60588a7a4b12": {
+    "arena_id": 97303,
+    "collector_number": "29",
+    "name": "Momo, Friendly Flier",
+    "set": "tla"
+  },
+  "c7e71299-98f6-494e-b187-8d22ce5f50af": {
+    "arena_id": null,
+    "collector_number": "158",
+    "name": "Doubling Season",
+    "set": "rav"
+  },
+  "c8d6081e-f686-4263-a0a2-21c0d9af5fdb": {
+    "arena_id": null,
+    "collector_number": "227",
+    "name": "War Mammoth",
+    "set": "lea"
+  },
+  "c91ac3f2-9fcd-4b41-a168-ae7f70b67d3c": {
+    "arena_id": 97549,
+    "collector_number": "268",
+    "name": "Fire Nation Palace",
+    "set": "tla"
+  },
+  "ca3dae7d-3880-4c0a-acfb-8fd227cf9fab": {
+    "arena_id": null,
+    "collector_number": "8",
+    "name": "Bear",
+    "set": "tktk"
+  },
+  "cac8ac35-6860-4839-ab85-93d409206c08": {
+    "arena_id": 97455,
+    "collector_number": "178",
+    "name": "Elemental Teachings",
+    "set": "tla"
+  },
+  "cba9260d-ef07-4429-99f9-6004cc1fea0f": {
+    "arena_id": 97383,
+    "collector_number": "108",
+    "name": "Lo and Li, Twin Tutors",
+    "set": "tla"
+  },
+  "cc078fc6-4470-473f-9e24-d2c470e09141": {
+    "arena_id": 97553,
+    "collector_number": "272",
+    "name": "Meditation Pools",
+    "set": "tla"
+  },
+  "cc3063ec-5ea6-46c1-8331-c740cbaf6c76": {
+    "arena_id": 97458,
+    "collector_number": "181",
+    "name": "Great Divide Guide",
+    "set": "tla"
+  },
+  "cc6686e6-4535-49be-b0b3-e76464656cd2": {
+    "arena_id": 69828,
+    "collector_number": "43",
+    "name": "Agent of Treachery",
+    "set": "m20"
+  },
+  "ccb61a51-cff6-4f88-ac17-f10852a27d06": {
+    "arena_id": 98185,
+    "collector_number": "223",
+    "name": "Flying Dolphin-Fish",
+    "set": "tle"
+  },
+  "ccd03ec3-0fae-48b2-9f04-9c57d2f94267": {
+    "arena_id": 97468,
+    "collector_number": "190",
+    "name": "Raucous Audience",
+    "set": "tla"
+  },
+  "cd624be9-e960-4485-a8a9-2d5f2dd51777": {
+    "arena_id": 97503,
+    "collector_number": "222",
+    "name": "Foggy Swamp Spirit Keeper",
+    "set": "tla"
+  },
+  "cddc0746-6d3e-441f-866f-28587bf54801": {
+    "arena_id": null,
+    "collector_number": "9",
+    "name": "Dragon",
+    "set": "ttla"
+  },
+  "ce96a826-53a0-4029-bf34-46779d133b13": {
+    "arena_id": 97341,
+    "collector_number": "66",
+    "name": "Octopus Form",
+    "set": "tla"
+  },
+  "cfb90d44-8cb1-4b83-b2f2-92c19d6304fb": {
+    "arena_id": null,
+    "collector_number": "222",
+    "name": "Prophetic Prism",
+    "set": "roe"
+  },
+  "d05b92bd-797e-413f-a8b0-32e0937a1ee0": {
+    "arena_id": null,
+    "collector_number": "38",
+    "name": "Savannah Lions",
+    "set": "lea"
+  },
+  "d0e24797-3e45-4c2b-b4b0-1ef44d42eaee": {
+    "arena_id": 97369,
+    "collector_number": "94",
+    "name": "Day of Black Sun",
+    "set": "tla"
+  },
+  "d16892d8-9d10-45de-ab79-0e645c4b5588": {
+    "arena_id": 76442,
+    "collector_number": "49",
+    "name": "Pop Quiz",
+    "set": "stx"
+  },
+  "d1af91a5-8681-4a05-910d-96f7a819bfaa": {
+    "arena_id": 97518,
+    "collector_number": "237",
+    "name": "Pretending Poxbearers",
+    "set": "tla"
+  },
+  "d1f5e10d-0a89-4129-9717-a921f20d3616": {
+    "arena_id": 97509,
+    "collector_number": "228",
+    "name": "Iroh, Tea Master",
+    "set": "tla"
+  },
+  "d24d441c-f37f-44fe-8a93-f5c89df807e4": {
+    "arena_id": null,
+    "collector_number": "237",
+    "name": "Captain Sisay",
+    "set": "inv"
+  },
+  "d263472e-1d75-4cb9-8f7b-986fa22bc841": {
+    "arena_id": 97290,
+    "collector_number": "17",
+    "name": "Earth Kingdom Protectors",
+    "set": "tla"
+  },
+  "d347caf8-0c12-401f-9e33-9978cb347f89": {
+    "arena_id": 97313,
+    "collector_number": "39",
+    "name": "United Front",
+    "set": "tla"
+  },
+  "d3e0f159-029d-4177-8f20-c96eca0a421c": {
+    "arena_id": 98180,
+    "collector_number": "218",
+    "name": "Sledding Otter-Penguin",
+    "set": "tle"
+  },
+  "d3f2aa2c-deec-4927-a2d6-f5dce5967e26": {
+    "arena_id": 67384,
+    "collector_number": "140",
+    "name": "Run Amok",
+    "set": "dom"
+  },
+  "d3fe8a5b-4166-46cc-b910-71cd1a19ae1b": {
+    "arena_id": 97937,
+    "collector_number": "119",
+    "name": "Supportive Parents",
+    "set": "spm"
+  },
+  "d45fe4b6-aeaf-4f84-b660-c7b482ed8512": {
+    "arena_id": null,
+    "collector_number": "7",
+    "name": "Powerstone",
+    "set": "tbro"
+  },
+  "d4605cf7-03bc-4a7f-b50a-49b83b09b54d": {
+    "arena_id": 97288,
+    "collector_number": "15",
+    "name": "Destined Confrontation",
+    "set": "tla"
+  },
+  "d4f1cc9e-4f99-4c26-ac1b-8ef069fa8ceb": {
+    "arena_id": null,
+    "collector_number": "210",
+    "name": "Llanowar Elves",
+    "set": "lea"
+  },
+  "d573ef03-4730-45aa-93dd-e45ac1dbaf4a": {
+    "arena_id": null,
+    "collector_number": "161",
+    "name": "Lightning Bolt",
+    "set": "lea"
+  },
+  "d6dcff21-5900-43c4-a38b-cdc19c704ce4": {
+    "arena_id": null,
+    "collector_number": "75",
+    "name": "Shattering Spree",
+    "set": "gpt"
+  },
+  "d7a0f2d9-efa4-4a53-a24b-36694457bd1c": {
+    "arena_id": 97454,
+    "collector_number": "177",
+    "name": "Earthen Ally",
+    "set": "tla"
+  },
+  "d7a39c1a-7615-4ac8-8984-b8459d201cb2": {
+    "arena_id": null,
+    "collector_number": "221",
+    "name": "Meteorite",
+    "set": "m15"
+  },
+  "d7df3391-dbe5-4eb4-85c1-037c5f3ea971": {
+    "arena_id": 97493,
+    "collector_number": "212",
+    "name": "Cat-Owl",
+    "set": "tla"
+  },
+  "d822b9ad-a787-4355-88c2-07ae2bd3a78e": {
+    "arena_id": 97526,
+    "collector_number": "245",
+    "name": "Tolls of War",
+    "set": "tla"
+  },
+  "d9cbf36e-4044-4f08-9bae-f0dcb2455716": {
+    "arena_id": null,
+    "collector_number": "2",
+    "name": "Human Soldier",
+    "set": "tsoi"
+  },
+  "da2c83d4-a95f-47ff-a08f-694eb78d6b9b": {
+    "arena_id": 97551,
+    "collector_number": "270",
+    "name": "Jasmine Dragon Tea Shop",
+    "set": "tla"
+  },
+  "daf30e1c-436d-4f23-b1d2-570619a4b7f5": {
+    "arena_id": 97489,
+    "collector_number": "208",
+    "name": "Azula, Cunning Usurper",
+    "set": "tla"
+  },
+  "db8e88e3-0931-403f-90e7-3c22c0b61dac": {
+    "arena_id": 97337,
+    "collector_number": "62",
+    "name": "Lost Days",
+    "set": "tla"
+  },
+  "dc399ae0-36b5-4c92-9fe2-138caf8d7a86": {
+    "arena_id": 97434,
+    "collector_number": "157",
+    "name": "Twin Blades",
+    "set": "tla"
+  },
+  "dcb59045-2743-48ae-8063-727e551b1c41": {
+    "arena_id": null,
+    "collector_number": "44",
+    "name": "Dramatic Reversal",
+    "set": "kld"
+  },
+  "dcb79f39-5ef3-4ad6-9a43-04beb27d8480": {
+    "arena_id": null,
+    "collector_number": "106",
+    "name": "Eladamri's Call",
+    "set": "pls"
+  },
+  "dcd9df24-272b-4aa1-b05f-6ee6b3d3dfe7": {
+    "arena_id": 97435,
+    "collector_number": "158",
+    "name": "Ty Lee, Artful Acrobat",
+    "set": "tla"
+  },
+  "dda6b4d0-1b60-46b0-b321-b9ffe15afff4": {
+    "arena_id": 96067,
+    "collector_number": "200",
+    "name": "Sazh's Chocobo",
+    "set": "fin"
+  },
+  "ddd4bbfb-80c9-4bdd-86c6-96fba00d3d12": {
+    "arena_id": null,
+    "collector_number": "G49",
+    "name": "Three Dreams",
+    "set": "psal"
+  },
+  "df99a166-6d58-4d92-9037-2fdfbaf65629": {
+    "arena_id": 97541,
+    "collector_number": "260",
+    "name": "Trusty Boomerang",
+    "set": "tla"
+  },
+  "dfc0ea8a-62f6-49e8-8eec-9748870bc596": {
+    "arena_id": null,
+    "collector_number": "62",
+    "name": "Bribery",
+    "set": "mmq"
+  },
+  "e16365a2-4969-4ad5-af95-9dd2d0499f06": {
+    "arena_id": 98174,
+    "collector_number": "212",
+    "name": "Aardvark Sloth",
+    "set": "tle"
+  },
+  "e20da6b5-1057-4a28-9e85-07de714e262f": {
+    "arena_id": 97353,
+    "collector_number": "78",
+    "name": "Wan Shi Tong, Librarian",
+    "set": "tla"
+  },
+  "e2b84af1-b40b-476a-87b2-ee8e3a018171": {
+    "arena_id": 98203,
+    "collector_number": "241",
+    "name": "Komodo Rhino",
+    "set": "tle"
+  },
+  "e2bcd0a6-e94d-4a21-a334-a57459c1b8cc": {
+    "arena_id": 97281,
+    "collector_number": "8",
+    "name": "Airbending Lesson",
+    "set": "tla"
+  },
+  "e2cf16f8-6e69-46b3-8453-1d1a2a5670e2": {
+    "arena_id": null,
+    "collector_number": "91",
+    "name": "Training Grounds",
+    "set": "roe"
+  },
+  "e37da81e-be12-45a2-9128-376f1ad7b3e8": {
+    "arena_id": null,
+    "collector_number": "244",
+    "name": "Prismatic Vista",
+    "set": "mh1"
+  },
+  "e3ba3395-39db-4330-9801-53def924f253": {
+    "arena_id": 97527,
+    "collector_number": "246",
+    "name": "Toph, Hardheaded Teacher",
+    "set": "tla"
+  },
+  "e477d750-42d2-48c8-bc1f-8148d15d5f53": {
+    "arena_id": 97525,
+    "collector_number": "244",
+    "name": "Sun Warriors",
+    "set": "tla"
+  },
+  "e55f1c63-58f6-4e2b-aaeb-f2d5faca47a2": {
+    "arena_id": 97480,
+    "collector_number": "202",
+    "name": "Walltop Sentries",
+    "set": "tla"
+  },
+  "e58372cc-9a89-47a4-a0db-df5435e26cd3": {
+    "arena_id": 97375,
+    "collector_number": "100",
+    "name": "Fire Navy Trebuchet",
+    "set": "tla"
+  },
+  "e62d3bcc-7bb4-42be-90a9-caf3c1caa29d": {
+    "arena_id": 97502,
+    "collector_number": "221",
+    "name": "Fire Lord Zuko",
+    "set": "tla"
+  },
+  "e64a4a8b-323c-4c8b-92af-1a3295799e65": {
+    "arena_id": 97469,
+    "collector_number": "191",
+    "name": "Rebellious Captives",
+    "set": "tla"
+  },
+  "e6639e3d-b0c4-4c08-83d5-f3fc58fac9b2": {
+    "arena_id": null,
+    "collector_number": "16",
+    "name": "Scout's Warning",
+    "set": "fut"
+  },
+  "e7847ba5-e85e-417f-96c0-aef2e6f83994": {
+    "arena_id": 97474,
+    "collector_number": "196",
+    "name": "Shared Roots",
+    "set": "tla"
+  },
+  "e8372167-383f-4302-a8ea-b6bf495c870c": {
+    "arena_id": 97333,
+    "collector_number": "59",
+    "name": "Katara, Bending Prodigy",
+    "set": "tla"
+  },
+  "e837e29c-d241-43c8-8f45-05056e082b60": {
+    "arena_id": 97387,
+    "collector_number": "112",
+    "name": "Obsessive Pursuit",
+    "set": "tla"
+  },
+  "e8895479-26cb-4ee8-98ca-6d46c43f0dbd": {
+    "arena_id": 97401,
+    "collector_number": "125",
+    "name": "Bumi Bash",
+    "set": "tla"
+  },
+  "e9be371c-c688-44ad-ab71-bd4c9f242d58": {
+    "arena_id": 71393,
+    "collector_number": "52",
+    "name": "Force of Negation",
+    "set": "mh1"
+  },
+  "ea22d29d-3a62-4ae2-91d5-21a678be9b48": {
+    "arena_id": 97323,
+    "collector_number": "49",
+    "name": "First-Time Flyer",
+    "set": "tla"
+  },
+  "eace2c85-976c-425e-9800-5a6ccbd91b56": {
+    "arena_id": null,
+    "collector_number": "292",
+    "name": "Mountain",
+    "set": "lea"
+  },
+  "eb586da6-670d-4c50-9d9b-f320f1c288d7": {
+    "arena_id": null,
+    "collector_number": "208",
+    "name": "Volcanic Torrent",
+    "set": "cmr"
+  },
+  "ec27a466-5457-44c6-a842-1de7d3788d66": {
+    "arena_id": 97445,
+    "collector_number": "168",
+    "name": "The Boulder, Ready to Rumble",
+    "set": "tla"
+  },
+  "ec83a825-79e6-42a4-919c-3bc498ff4433": {
+    "arena_id": 97366,
+    "collector_number": "91",
+    "name": "Cat-Gator",
+    "set": "tla"
+  },
+  "eca652b8-44f1-4bd9-b4bf-036eeead13aa": {
+    "arena_id": 97368,
+    "collector_number": "93",
+    "name": "Dai Li Indoctrination",
+    "set": "tla"
+  },
+  "eccd63b3-3a3a-4661-9d6e-fb8152429bdb": {
+    "arena_id": 97453,
+    "collector_number": "176",
+    "name": "Earthbending Lesson",
+    "set": "tla"
+  },
+  "ecdac50f-c639-43fc-a03e-d488fac96ae2": {
+    "arena_id": 97358,
+    "collector_number": "83",
+    "name": "Yue, the Moon Spirit",
+    "set": "tla"
+  },
+  "ede1bbdb-c726-46e3-aaf1-b8cf2be2c341": {
+    "arena_id": 97411,
+    "collector_number": "135",
+    "name": "Fire Nation Raider",
+    "set": "tla"
+  },
+  "ee8e9928-d9b2-4570-adb8-44b34115decd": {
+    "arena_id": null,
+    "collector_number": "233",
+    "name": "Tireless Tracker",
+    "set": "soi"
+  },
+  "efc6eea1-9872-47e5-a3bc-3c8c1b9705be": {
+    "arena_id": 98209,
+    "collector_number": "247",
+    "name": "Zuko's Offense",
+    "set": "tle"
+  },
+  "f00d33dd-4eb2-4446-9813-1923d8e2d2f3": {
+    "arena_id": null,
+    "collector_number": "51",
+    "name": "Clone",
+    "set": "lea"
+  },
+  "f0fa5897-1da7-488f-bb19-1632e969c050": {
+    "arena_id": 97523,
+    "collector_number": "242",
+    "name": "Sokka, Tenacious Tactician",
+    "set": "tla"
+  },
+  "f1015bf5-de98-41f3-b6b1-ed95f7465944": {
+    "arena_id": 97439,
+    "collector_number": "162",
+    "name": "Zhao, the Moon Slayer",
+    "set": "tla"
+  },
+  "f177e9cc-0c41-417d-9215-5ff23a1a0657": {
+    "arena_id": 97467,
+    "collector_number": "189",
+    "name": "Pillar Launch",
+    "set": "tla"
+  },
+  "f22610e9-6b14-4914-bb67-bd6723bec9aa": {
+    "arena_id": 97364,
+    "collector_number": "89",
+    "name": "Callous Inspector",
+    "set": "tla"
+  },
+  "f22ac19f-66fb-4d54-9f09-495a20a29577": {
+    "arena_id": 97430,
+    "collector_number": "153",
+    "name": "Solstice Revelations",
+    "set": "tla"
+  },
+  "f235060a-eb49-4a73-bb5f-01228c3c4070": {
+    "arena_id": 76524,
+    "collector_number": "131",
+    "name": "Field Trip",
+    "set": "stx"
+  },
+  "f2c859e1-181e-44d1-afbd-bbd6e52cf42a": {
+    "arena_id": null,
+    "collector_number": "11",
+    "name": "Clue",
+    "set": "tsoi"
+  },
+  "f369827d-e4cd-4bc7-8c5e-72882eff0908": {
+    "arena_id": 98172,
+    "collector_number": "210",
+    "name": "Aang, Air Nomad",
+    "set": "tle"
+  },
+  "f3a5a044-d474-43f4-95a9-e67808908e6c": {
+    "arena_id": null,
+    "collector_number": "6",
+    "name": "Lita, Mechanical Engineer",
+    "set": "j22"
+  },
+  "f3fa493e-b58a-4b77-88e8-b8890eefb2b7": {
+    "arena_id": 98207,
+    "collector_number": "245",
+    "name": "Zhao, the Seething Flame",
+    "set": "tle"
+  },
+  "f427cf73-9f5e-4ef5-bc4f-29ffbfda9d57": {
+    "arena_id": 76417,
+    "collector_number": "24",
+    "name": "Professor of Symbology",
+    "set": "stx"
+  },
+  "f46a9329-7b91-441d-8653-50c1152c9120": {
+    "arena_id": 93804,
+    "collector_number": "91",
+    "name": "Kellan, Planar Trailblazer",
+    "set": "fdn"
+  },
+  "f59eba51-458a-40e0-b754-999f91d5d839": {
+    "arena_id": null,
+    "collector_number": "3",
+    "name": "Spirit",
+    "set": "ttla"
+  },
+  "f60a2091-fb97-4f04-911b-fce9b6351044": {
+    "arena_id": 17047,
+    "collector_number": "132",
+    "name": "Entomb",
+    "set": "ody"
+  },
+  "f7569861-5b68-4265-bb45-3d54992bfe66": {
+    "arena_id": 98187,
+    "collector_number": "225",
+    "name": "The Terror of Serpent's Pass",
+    "set": "tle"
+  },
+  "f842c52a-04b6-4625-ba58-45b043ada340": {
+    "arena_id": null,
+    "collector_number": "4",
+    "name": "Ally",
+    "set": "ttla"
+  },
+  "f8ac5006-91bd-4803-93da-f87cf196dd2f": {
+    "arena_id": null,
+    "collector_number": "39",
+    "name": "Serra Angel",
+    "set": "lea"
+  },
+  "f936d64a-0db4-49c1-8a57-6d99e012a555": {
+    "arena_id": 97305,
+    "collector_number": "31",
+    "name": "Path to Redemption",
+    "set": "tla"
+  },
+  "fa434b41-e5f7-4989-865a-95db67b05cb1": {
+    "arena_id": 97328,
+    "collector_number": "54",
+    "name": "Gran-Gran",
+    "set": "tla"
+  },
+  "fa940e68-010e-4b68-be8a-555d7068f7b4": {
+    "arena_id": 97414,
+    "collector_number": "138",
+    "name": "Firebending Lesson",
+    "set": "tla"
+  },
+  "fada29c0-5293-40a4-b36d-d073ee99e650": {
+    "arena_id": 91627,
+    "collector_number": "91",
+    "name": "Diresight",
+    "set": "blb"
+  },
+  "fcd3b7a7-c5e8-4179-ade3-31625620f3a9": {
+    "arena_id": null,
+    "collector_number": "25",
+    "name": "Youthful Knight",
+    "set": "sth"
+  },
+  "fd61f469-5377-4bc1-a42b-dd66ca4ede1d": {
+    "arena_id": 98197,
+    "collector_number": "235",
+    "name": "Dragon Moose",
+    "set": "tle"
+  },
+  "fdcca576-2ef2-44cc-9944-a92bd146444a": {
+    "arena_id": 97404,
+    "collector_number": "128",
+    "name": "Combustion Technique",
+    "set": "tla"
+  },
+  "fe29e909-50e9-4f04-b1a3-2cc5d7e3efe8": {
+    "arena_id": 97487,
+    "collector_number": "207",
+    "name": "Avatar Aang // Aang, Master of Elements",
+    "set": "tla"
+  },
+  "fea89ca0-8070-4f28-9851-994314f9d248": {
+    "arena_id": 97481,
+    "collector_number": "203",
+    "name": "Aang, at the Crossroads // Aang, Destined Savior",
+    "set": "tla"
+  },
+  "fed57a17-7847-4e60-bc40-4452880f12a3": {
+    "arena_id": null,
+    "collector_number": "145",
+    "name": "Raging Goblin",
+    "set": "por"
+  },
+  "fefbf149-f988-4f8b-9f53-56f5878116a6": {
+    "arena_id": null,
+    "collector_number": "174",
+    "name": "Shivan Dragon",
+    "set": "lea"
+  },
+  "ff68fa7b-8065-407b-a8b4-bfbb14f1c99c": {
+    "arena_id": 97476,
+    "collector_number": "198",
+    "name": "Toph, the Blind Bandit",
+    "set": "tla"
+  }
+}

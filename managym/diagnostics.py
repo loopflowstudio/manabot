@@ -1,0 +1,256 @@
+"""Runner phases and adaptive diagnostics over the engine's recording boundary.
+
+Diagnostics owns the watchdog and signal handler; callers own its lifetime and
+supply phase names. Escalation snapshots cached inputs without reading native
+state, so it can run while a buffered call has released the interpreter lock.
+"""
+
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+import faulthandler
+import json
+from pathlib import Path
+import signal
+import threading
+import time
+from typing import BinaryIO, Literal, Protocol
+import weakref
+
+from managym.journal import DurableJournal
+from managym.recording import GameRecord, atomic_private_json
+
+type Level = Literal["off", "standard", "detailed"]
+
+_SIGNAL_OWNER = threading.Lock()
+
+
+class Capture(Protocol):
+    producer: str
+
+    def snapshot(self) -> GameRecord: ...
+    def enable_journal(self, path: Path) -> None: ...
+
+
+@dataclass
+class Operation:
+    """Progress belongs to this phase's elapsed time, independent of its name."""
+
+    diagnostics: "Diagnostics"
+    started: float
+
+    def progress(self, decisions: int) -> None:
+        self.diagnostics._progress(decisions, self.diagnostics._clock() - self.started)
+
+
+class Diagnostics:
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        captures: Sequence[Capture] = (),
+        level: Level = "standard",
+        stall_seconds: float = 600,
+        slow_fraction: float = 0.25,
+        clock: Callable[[], float] = time.monotonic,
+        context_provider: Callable[[], dict[str, object]] = dict,
+    ) -> None:
+        if level not in {"off", "standard", "detailed"}:
+            raise ValueError("unknown diagnostics level")
+        if stall_seconds <= 0 or not 0 < slow_fraction < 1:
+            raise ValueError(
+                "stall_seconds must be positive and slow_fraction in (0, 1)"
+            )
+        self.directory = directory
+        self.level = level
+        self.stall_seconds = stall_seconds
+        self.slow_fraction = slow_fraction
+        self._context_provider = context_provider
+        self._clock = clock
+        self._captures: dict[str, weakref.ReferenceType[Capture]] = {}
+        for capture in captures:
+            self._register_capture(capture)
+        self._lock = threading.RLock()
+        self._stop = threading.Event()
+        # Open operation names, innermost last.
+        self._operations: list[str] = []
+        self._sequence = 0
+        # A stall is measured from the last recorded transition, so a long
+        # collection whose per-step markers keep returning is not stalled.
+        self._marked_at = clock()
+        self._rate: float | None = None
+        self._progress_at = clock()
+        self._stalled_sequence: int | None = None
+        self._stacks: BinaryIO | None = None
+        self._signal_installed = False
+        self._thread: threading.Thread | None = None
+        if level == "off":
+            return
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self._stacks = (directory / "stacks.txt").open("ab")
+        (directory / "stacks.txt").chmod(0o600)
+        # Own SIGUSR1 while open, leaving a pre-existing Python handler alone.
+        if hasattr(signal, "SIGUSR1") and not faulthandler.is_enabled():
+            faulthandler.enable()
+        if (
+            hasattr(signal, "SIGUSR1")
+            and signal.getsignal(signal.SIGUSR1) == signal.SIG_DFL
+            and _SIGNAL_OWNER.acquire(blocking=False)
+        ):
+            faulthandler.register(
+                signal.SIGUSR1, file=self._stacks, all_threads=True, chain=False
+            )
+            self._signal_installed = True
+        if level == "detailed":
+            self.escalate("started with detailed diagnostics")
+        self._thread = threading.Thread(
+            target=self._watch, name="managym-watchdog", daemon=True
+        )
+        self._thread.start()
+
+    def _register_capture(self, capture: Capture) -> str:
+        for name, reference in self._captures.items():
+            if reference() is capture:
+                return name
+        base = capture.producer
+        name = base
+        suffix = 1
+        while name in self._captures:
+            name = f"{base}-{suffix}"
+            suffix += 1
+        self._captures[name] = weakref.ref(capture)
+        return name
+
+    def add_capture(self, capture: Capture) -> None:
+        with self._lock:
+            name = self._register_capture(capture)
+            if self.level == "detailed":
+                capture.enable_journal(self.directory / f"{name}.jsonl")
+
+    def _mark(self, name: str, state: str) -> None:
+        self._sequence += 1
+        self._marked_at = self._clock()
+        atomic_private_json(
+            self.directory / "operation.json",
+            {
+                "operation": name,
+                "state": state,
+                "sequence": self._sequence,
+                "timestamp": time.time(),
+                "context": self._context_provider(),
+            },
+        )
+
+    @contextmanager
+    def operation(self, name: str, *, per_step: bool = False) -> Iterator[Operation]:
+        operation = Operation(self, self._clock())
+        if self.level == "off" or (per_step and self.level == "standard"):
+            yield operation
+            return
+        with self._lock:
+            self._operations.append(name)
+            self._mark(name, "pending")
+        try:
+            yield operation
+        except BaseException:
+            with self._lock:
+                self._operations.pop()
+            raise
+        else:
+            with self._lock:
+                self._operations.pop()
+                self._mark(name, "returned")
+                if self._operations:
+                    self._mark(self._operations[-1], "pending")
+
+    def progress(self, decisions: int) -> None:
+        """Report progress since the preceding report outside a phase context."""
+        now = self._clock()
+        self._progress(decisions, now - self._progress_at)
+        self._progress_at = now
+
+    def _progress(self, decisions: int, elapsed: float) -> None:
+        if self.level == "off" or elapsed <= 0 or decisions <= 0:
+            return
+        with self._lock:
+            rate = decisions / elapsed
+            if self._rate is not None and rate < self.slow_fraction * self._rate:
+                self.escalate(
+                    f"collection rate {rate:.6g} below {self.slow_fraction:g} of trailing {self._rate:.6g}"
+                )
+            self._rate = rate if self._rate is None else 0.8 * self._rate + 0.2 * rate
+
+    def escalate(self, reason: str) -> None:
+        if self.level == "off":
+            return
+        with self._lock:
+            self.level = "detailed"
+            DurableJournal(self.directory / "escalations.jsonl").append(
+                {
+                    "reason": reason,
+                    "timestamp": time.time(),
+                    "operation": self._operations[-1] if self._operations else None,
+                },
+                create=not (self.directory / "escalations.jsonl").exists(),
+            )
+            for name, reference in self._captures.items():
+                capture = reference()
+                if capture is None:
+                    continue
+                atomic_private_json(
+                    self.directory / f"{name}.snapshot.json",
+                    capture.snapshot().model_dump(mode="json", by_alias=True),
+                )
+                capture.enable_journal(self.directory / f"{name}.jsonl")
+            if self._stacks is not None:
+                faulthandler.dump_traceback(file=self._stacks, all_threads=True)
+
+    def check(self) -> None:
+        """One watchdog tick, also usable with an injected clock."""
+        if self.level == "off":
+            return
+        with self._lock:
+            if (
+                self._operations
+                and self._clock() - self._marked_at >= self.stall_seconds
+            ):
+                if self._stalled_sequence != self._sequence:
+                    self._stalled_sequence = self._sequence
+                    self.escalate(
+                        f"operation has not returned for {self.stall_seconds:g} seconds"
+                    )
+            request = self.directory.parent / "diagnostics.request"
+            if request.exists():
+                request.unlink()
+                self.escalate("operator requested diagnostics")
+
+    def _watch(self) -> None:
+        while not self._stop.wait(min(1.0, self.stall_seconds / 4)):
+            try:
+                self.check()
+            except (OSError, ValueError) as error:
+                # Preserve watchdog failures as evidence without terminating the runner.
+                if self._stacks is not None:
+                    self._stacks.write(
+                        (json.dumps({"diagnostics_error": str(error)}) + "\n").encode()
+                    )
+                    self._stacks.flush()
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join()
+            self._thread = None
+        if self._signal_installed:
+            faulthandler.unregister(signal.SIGUSR1)
+            self._signal_installed = False
+            _SIGNAL_OWNER.release()
+        if self._stacks is not None:
+            self._stacks.close()
+            self._stacks = None
+
+    def __enter__(self) -> "Diagnostics":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()

@@ -17,7 +17,7 @@ uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --learning-seats one  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
-uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz  # one recorded training game, for Academy
+uv run manabot train --recipe local --record-games 0.25 --out .runs/demo  # keep a quarter of the games, for Academy
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
@@ -151,15 +151,17 @@ simulation retain pending Commands before execution. The same bounded replay com
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
-To diagnose a future training stall, opt into durable pending-call journals
-with `uv run manabot train --recipe local --training-game-logs --out .runs/journal-demo`.
-The private `game-journals/` directory retains compacting producer replay journals
-and an active operation marker that distinguishes native work from inference
-and learning. Game recording and independent in-game statistics are owned by
-[managym](../docs/engine-python.md#collect-in-game-statistics); training adds
-producer coordination and phase markers. Logging defaults off and can reduce throughput;
-see [diagnosing stalled training](../docs/training.md#diagnosing-stalled-training)
-for remote job configuration, inspection, replay and retention limits.
+A stalled run has already left its phase, every thread's stack and the games
+in progress under the private `game-journals/` directory: an operation marker
+and a watchdog are on by default, and the run raises itself to durable
+per-call journals when it stalls or slows. Ask for them from the start with
+`--diagnostics detailed`, or in a running job with `touch <out>/diagnostics.request`.
+`--record-games <off|all|fraction>` keeps finished games under `<out>/games/`
+for Academy and statistics. Recording, statistics and diagnostics are owned by
+[managym](../docs/engine-python.md#record-games); training supplies paths, run
+coordinates and phase names. See
+[diagnosing stalled training](../docs/training.md#diagnosing-stalled-training)
+for levels, remote jobs, inspection, replay and retention limits.
 
 The TLA frontier run uses `experiments/tla_corpus.py` for the fixed admitted
 corpus and `experiments/tla_frontier.py` for Etude training and paired
@@ -470,44 +472,30 @@ the reusable instruments. The experiment discipline and ledger are in
 
 ### Watch a game the loop played
 
-```python
-from pathlib import Path
-
-from manabot.sim.recording import record_games
-from manabot.training.loops.minimal import train
-
-with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
-    train(8)
-path = games.sample(seed=0).export(Path("jace.game.jsonl.gz"))
-```
-
 ```bash
-uv run --no-project managym academy replay jace.game.jsonl.gz
+uv run manabot train --recipe local --record-games 0.25 --out .runs/demo
+uv run --no-project managym academy replay .runs/demo/games --game 0
 ```
 
-`record_games` keeps a receipt of every game the collectors inside the block
-play (seed, decks, chosen actions) without changing the loop. `sample` picks
-one complete game; `export` replays its actions through the engine, checks
-each decision's option count against the receipt and writes one Command game
-bound to the current world, labelled a training game with the player names you
-gave. Academy steps through it with no policy or checkpoint. `uv run manabot
-export-game <directory> --out <path>` lists a recorded directory's games and exports one,
-including a `training/exposure` directory downloaded from a run. Games cut off
-when the loop stopped are counted and not exported. A fresh game between
-current policies is an evaluation game, not a training game; evaluation writes
-those. The
+`--record-games` writes each selected game to `<out>/games/` when it ends:
+seed, decks, chosen actions, state digests, and the policy's probabilities,
+value and update at each decision. Academy plays it again through the engine
+and steps through it with no policy, checkpoint or manabot. A loop of your own
+passes `games_path=` to its collector. Games cut off when the run stopped open
+as interrupted. A fresh game between current policies is an evaluation game,
+not a training game; evaluation records those the same way. `record_games(...)`
+and `manabot export-game` warn and are removed in 0.4.0. The
 [Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
 selection, naming the seats and failures.
 
-The reference league's TrainingJob enables private exposure capture through the
-ordinary native vector collector. Digest-bound game receipts preserve actual
-sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
-card draws and completed effect frames. They live under `training/exposure`,
-separate from checkpoints and evaluation evidence. The offline analysis accepts
-these downloaded directories with `--training-evidence`; missing or interrupted
-capture leaves the report incomplete. Focus opportunities and completed frames
-are measurements of decisions/program completion, not strategic benefit. Other
-jobs keep capture disabled unless they explicitly select it.
+`TrainingJob(training_exposure=True)` is a deprecated alias for recording all
+games. New jobs write `training/games` records; sampled card and choice facts
+are obtained by replaying those records with `walk(..., capture_cards=True)`
+and reading `cards()`, or through the built-in reducers. Retained
+`training/exposure` receipts remain readable. Native counters are independent:
+use `--statistics` to write every game’s native summary to private
+`<out>/statistics/` stage artifacts. `managym.statistics.read_statistics` and
+`CardPerformance.from_statistics` produce the card table without replay.
 
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in

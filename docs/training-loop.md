@@ -305,8 +305,8 @@ uv run python -c "from manabot.backends import resolve; from manabot.training.lo
 ```
 
 Three iterations take a few seconds on a laptop CPU and return a policy;
-they teach it almost nothing. To see what it did, wrap the call in
-`record_games` and open one of its games in Academy
+they teach it almost nothing. To see what it did, give the collector a
+`games_path` and open one of its games in Academy
 ([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)). Keep a run with `save_checkpoint(policy,
 policy.observation_space, "policy.safetensors",
 player_configs=Match().to_rust())`
