@@ -2,128 +2,142 @@
 
 ## Question
 
-**Exploratory.** Can viewer-safe memory of the opponent's past decisions become
-an affordable training basis without materially hurting throughput or learning?
-The true incumbent has history disabled. The control retains and validates the
-log and reserves its vocabulary but has no memory encoder. The active comparison
-is control versus GRU-K1, with the incumbent retained as the throughput reference.
-Opponent-only is primary; own-seat inclusion remains built and default off.
+**Exploratory.** Does a learned memory of the opponent's past decisions change
+what a policy learns from the same number of learner decisions? The memory is
+the viewer-safe log of the opponent's whole game, read by a GRU with one summary
+that every board layer adds through a gate. The comparison is `control` (the log
+is kept and validated, no encoder reads it) against `gru-k1`, on mixed-disclosure
+Elemental 10v10. The history-disabled incumbent is the throughput reference only.
 
 ## Answer so far
 
-The software works, but the required matched-learning comparison has not run.
-The frozen supervised probe selected K1 by its validation/CPU tie-break rule:
-57 completed heuristic games, 1,812 decision rows, three capacity exclusions,
-94 hand targets, whole-game splits and separate open/closed readouts. K4−K1
-validation loss was +0.002763 [−0.000620, +0.006803]. This is a scripted proxy
-with a limited state baseline, not evidence of playing strength or adoption.
-The probe protocol, outputs and competence limits are in the
-[dated result](#supervised-probe-result--2026-11-16).
+**The learning comparison has not run.** No trunk, branch or evaluation game of
+the pilot exists; the design below is what will be launched.
 
-Gated summary tokens preserve exact control initialization; finite gate gradients
-precede encoder gradients after the gate opens. Common-trunk transfer, published
-producer binding, ordinary checkpoint persistence and blank-memory evaluation
-intervention are implemented. Native snapshots remain the sole viewer-safe
-fact authority; hidden probe labels never enter policy inputs or caches.
+What is measured is cost. On one A40 (`cuda-calibration-suffix@39100`, two
+updates per worker, 32 execution rows) the incumbent trained at 346 learner
+decisions/s, the control at 313–318 and the GRU at 288: 1.105× and 1.201× the
+incumbent's time. With history off, this source matches main on CPU (1.0044×
+total time, identical decisions, gradients and weights). The supervised probe
+chose K=1 over K=4 by its tie-break rule; it is a scripted proxy and says
+nothing about playing strength. Each of these has a dated entry in the appendix.
 
-The expanded-reference CUDA run completed two updates and finite raw/EMA reload
-for all six frozen workers. Its matched-host incumbent median was 350.15 learner
-decisions/s, control 187.96 (0.537×) and GRU 124.57 (0.356×). References had
-observed headroom at 128 of 256 slots; all memory-worker maxima fit
-512/16,384/256/8,192 record/detail/reference/member capacities. These are short
-worker/resource admissions, not matched learning or strength results.
-The [CUDA closeout](#expanded-reference-cuda-closeout--2026-11-17) retains full
-host, source, trajectory and resource limits. Its source predates CPU host
-optimizations, so those worker rates do not measure the chunk cache.
+## Method
 
-The [chunk-cache candidate](#record-aligned-chunk-cache-candidate--2026-11-17)
-reduces CPU fixture preparation and yields 1.14–1.20× GRU fixture speedups with
-exact feature/output/gradient/state comparisons. GRU remains 0.30–0.46× the
-matched incumbent fixture rate. Warm cache arrays add 61.6 MB for 256 prefixes;
-raw transport and cached features are now budgeted separately and the cache is
-kept. The [native-epoch suffix capture](#native-epoch-suffix-capture--2026-11-17)
-cut then reduces whole-game CPU capture time 2.5–3.1×, with exact behavioral and
-gradient hashes. Control's total rate is 0.963–0.980× the incumbent on the
-two-stream fixture, while GRU remains 0.429–0.490×. No optimized CUDA-worker or
-learning result follows.
+Committed 2026-11-17, before any pilot run. The launch commit and the Etude run
+IDs freeze it.
 
-The [execution-chunk learner fold](#execution-chunk-learner-fold--2026-11-17)
-then improves update medians at all three row limits, but total rates remain
-0.600/0.559/0.556× incumbent. [Collection attribution](#collection-fold-attribution-and-stop--2026-11-17)
-stops before implementing the collection cache: earlier-node work medians fall
-below the design's half-excess lines. Shared assembly and 256-row variability
-limit that conclusion; it is not a firm bound on possible savings. The next
-step is human review of the costs, with no paid admission or pilot.
+Three training seeds (39101–39103) each train one control trunk for 3,300,000
+learner decisions. Both arms then branch from that trunk's EMA weights with
+fresh Adam and train 4,400,000 further learner decisions, so a seed's two
+branches share everything up to the branch point and differ only in the encoder.
+The GRU branch starts as exactly the control: its gates are zero. Gate scale is
+2.0 for every GRU branch, because at 1.0 the gate could reach at most 0.73 over
+this horizon; `decision_memory/gate_<layer>` in the training panels shows
+whether it opened.
 
-## Current method and limits
+Every run uses 256 streams, 4 producers, complete-game collection, float32, a
+64 × 2 model, 128 execution rows and record/detail/reference/member capacities
+of 512/16,384/256/8,192. Each game draws open or closed decklists with equal
+probability. A game that overflows a capacity fails its run; history is never
+truncated.
 
-Jack Heart's 2026-11-17 direction is throughput first: "the major concern is
-throufhput w decision memory" and "we cannstart w gru only". No further paid
-calibration or pilot launches until host cost is reduced. The already-running
-refs256 run finished unchanged, including its frozen transformer worker; all
-rentals ended. Transformer implementation and frozen evidence remain available,
-but no transformer rerun or paid arm is planned.
+Branches stop on a learner-decision target. Complete-game collection overshoots
+it by under one update (about 1.2%), so checkpoints are compared at equal update
+index and the report shows each side's actual learner decisions.
 
-CPU work uses the frozen 256-prefix fixture drawn from replayed Elemental census
-Commands. Compare incumbent, control and GRU at the same 32/128/256 execution-row
-limits. Record preparation separately from inference and learning; retention
-contains capture and must not be added to capture as disjoint time. The first
-vectorized program expansion preserved exact arrays, outputs, gradients and
-weights and improved this fixture. It did not establish acceptable worker cost.
-The current cut admits record-aligned immutable chunks by content and predecessor
-cursor, caches vocabulary-bound features, then assembles batch offsets. Record features are now prefix-independent;
-the transformer receives recency separately as a sequence-position signal.
-Dense imports still receive complete validation.
+Evaluation plays raw checkpoints on paired deals, both seats and both decks per
+pairing, separately with open and closed decklists:
 
-The approximately 10% throughput guide informs review. After the host chunk cut,
-collection now uses native epochs/counts for suffix capture. Prefix-independent
-record embeddings and the execution-chunk learner fold are implemented and
-measured. Collection remains stateless after its attribution stop.
-The Task session's engineering direction permits one admission at or below USD1
-inside the calibration allowance only after CPU GRU is within about 1.3× of the
-incumbent; current CPU results do not meet that gate. A pilot still needs a person
-to see the numbers. Coalescing/multiplicity, capacities and world binding stay fixed.
+| Line | Checkpoints | Pairings per seed and disclosure | Games |
+|---|---|---:|---:|
+| GRU against control, final | last update of each branch | 200 | 4,800 |
+| GRU against control, curve | updates 20, 40 and 60 | 50 | 3,600 |
+| GRU against its blanked self | last update | 50 | 1,200 |
 
-If paid work resumes after reviewing these costs, use three independent seed
-labels with a common EMA trunk per label and control/GRU branches: three trunks
-plus six branches. Freeze trunk length, gate scale and learner-decision horizon
-from affordable execution measurements first. Strict capacity failure ends a run;
-never truncate history or discard failed games while continuing scored training.
-Train mixed per-game disclosure through the landed native API. Compare branches
-at matched actual learner decisions, retaining overshoot and explicit checkpoint
-interpolation rather than relabeling update counts.
+A blanked player is the same checkpoint with its four memory tables zeroed
+before every decision; the board, legal actions and native game are untouched.
+It measures whether the trained policy uses the log.
 
-Evaluate paired deals with seats swapped, separately for open and closed lists;
-retain descriptive matchup intervals, one heterogeneity test and endpoint intact
-versus blank-memory reliance. Whole training seeds are the evidence unit. There
-are no completed pilot seed comparisons, paired evaluation deals, learning curves
-or strength intervals. Disclosure-only training arms (B1) and full-layout input
-ablations (B2) remain deferred inside the same budget. Earlier five/three-arm
-plans and evaluation game counts in dated entries are historical declarations,
-not observed samples or current launch authority.
+**What this can resolve.** Treating games as independent, which is slightly
+optimistic because a pairing's legs share a deal, the final head-to-head is
+±1.4 points at 95% pooled, ±2.0 per disclosure and ±3.5 per seed and disclosure;
+blanked-memory reliance is ±2.8 pooled; each curve point is ±6.9. Those intervals
+describe these six checkpoint pairs. A statement about the method rests on
+three training seeds, so only a difference that all three seeds show is read as
+the method's. No verdict threshold is set in advance.
+
+**Confounds.** Branches restart the learning-rate schedule and Adam, both arms
+alike. The control branch is about 9% faster per decision, so it finishes
+earlier in wall time, not in decisions. The gate scale was chosen from two
+updates of gate data, not a comparison of scales. Opponents are self-play; no
+arm trains against decks chosen to make past decisions matter.
+
+### Running it
+
+Each command rents nothing with `--quote` and launches without it.
+
+```sh
+# 1. Three trunks.
+uv run etude launch experiments/opponent_memory.py \
+  --source r2://manabot/jobs/opponent_memory --job decision-memory-trunk \
+  --revision COMMIT --rent mtg252-a40 --max-usd 7.20 --quote
+
+# 2. Six branches, once the trunks have finished.
+uv run etude launch experiments/opponent_memory.py \
+  --source r2://manabot/jobs/opponent_memory \
+  --trunks r2://manabot/jobs/opponent_memory \
+  --revision COMMIT --rent mtg252-a40 --max-usd 19.80 --quote
+
+# 3. Play whatever stored checkpoints have not met yet, then draw it.
+uv run etude eval experiments/opponent_memory.py --source r2://manabot/jobs/opponent_memory
+uv run etude report experiments/opponent_memory.py --source r2://manabot/jobs/opponent_memory --open
+```
+
+Step 2 refuses a seed whose trunk is missing or unfinished, naming the seed.
+Step 3 plays nothing while no branch has a checkpoint, and can be repeated as
+milestones arrive: an evaluation pass that reaches its cap keeps its finished
+matches and the next pass plays the rest.
 
 ## Cost
 
-Launcher closeout records **USD1.94475 across five calibration runs**, including
-failed attempts. The first three statuses are final; the last two remain launcher
-estimates. All five rentals ended. Costs are not reconstructed from rates or
-wall times. The frozen probe and CPU work used no rental. The inclusive authorized
-ceiling remains USD50; its allocation is a budget, not measured spending.
-No further paid work is launched by this report.
+Planned dollars, A40 at the last observed USD0.59/h with a 0.25 h startup
+allowance per run. The quote replaces both assumptions.
+
+| Stage | Runs | Planned USD | Cap USD |
+|---|---:|---:|---:|
+| Calibration (spent) | | ≈2.97 | |
+| Trunks, 3.5 h each | 3 | 6.64 | 7.20 |
+| Branches, 5.0 h each | 6 | 18.59 | 19.80 |
+| Evaluation | up to 3 passes | up to 12.00 | 12.00 |
+| Total | | ≈40.20 | 41.97 of 50 |
+
+Calibration is the launcher's number for each run in the dated entries below.
+The evaluation rate is unpriced: the nearest receipt is a USD2 cap on a
+4,800-game Elemental pass, which is a cap and not a cost.
+
+## Limits
+
+- Horizons come from 32-row A40 rates. The 128-row setting and the two
+  record-cache commits after that calibration have no CUDA measurement; the
+  first trunk is their admission for the control, and the first GRU branch for
+  the GRU.
+- Evaluation plays raw weights; EMA weights are used only to start branches.
+- The transformer encoder, own-seat records, disclosure-only training arms and a
+  hand-content probe on the summaries are built or designed and not in this
+  pilot.
 
 ## Recommendation
 
-Keep the history-disabled incumbent as the default. The software and short CUDA
-admissions support continuing host optimization, but current worker evidence
-shows a substantial throughput regression and supplies no learning comparison.
-Do not adopt memory or remove recent events on this evidence. Review the matched
-CPU chunk-cache costs before repricing a control/GRU pilot. A default change needs
-affordable whole-training cost and the missing matched-learning and paired
-strength evidence, with failures and uncertainty retained.
+Keep the history-disabled incumbent as the default until the pilot reports.
+With history off the CPU fixture matches main, so the memory can stay available
+at its measured cost whatever the pilot shows; a default change needs the
+matched-learning and paired-strength result, with failures and uncertainty kept.
 
 The dated appendix retains original observations, including results superseded
-by later measurements. The earlier undated protocol and storage counterexample
-can be recovered from `7d680aac170f12ca60e60dfb812e0c00d7cda7fa:experiments/opponent_memory.md`.
+by later measurements and the throughput-first plans this method replaces. The
+earlier undated protocol and storage counterexample can be recovered from
+`7d680aac170f12ca60e60dfb812e0c00d7cda7fa:experiments/opponent_memory.md`.
 
 ## Appendix: execution evidence and dated changes
 

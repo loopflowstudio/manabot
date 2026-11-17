@@ -112,7 +112,9 @@ records native seats and rejects differing worlds. The old
 `PlayerConfig.disclosure` alias warns and will be removed in 0.4.0; disagreeing
 legacy seat values or hints conflicting with the game setting raise when
 creating a game. Evaluation matchups take
-`MatchConfig.decklists`, open or closed, never mixed.
+`MatchConfig.decklists`, open or closed, never mixed; an
+[`AuthoredMatchup`](#explicit-research-evaluation-matrices) sets it for all of
+its legs.
 
 A sampled source can also use `decklists="mixed"`: each game draws open or
 closed with equal probability from its reset seed, separately from deck and
@@ -715,6 +717,25 @@ include_mirrors=True)` to evaluate A–B, B–A, A–A and B–B, each with both
 seat assignments. The training match must equal `matrix.match()`; arbitrary
 renaming or substituting a different setup fails admission. Simple roles retain
 their own names, never Allies/Lessons labels.
+
+A matchup plays with open decklists unless it says otherwise:
+
+```python
+from manabot.sim.matchup import AuthoredMatchup
+
+closed = AuthoredMatchup(
+    pack_key="elemental-world-v2", role_a="elemental_ug", role_b="elemental_bg",
+    decklists="closed",
+)
+closed.match().decklists            # 'closed'
+```
+
+Every leg of a closed matchup hides each player's list from the other, through
+the same native setting as [closed training](#closed-decklists): the opponent's
+`decklists` rows are zero and search players are refused. `decklists` is
+`"open"` or `"closed"`, never mixed; play both matchups to compare them. An
+open matchup serializes without the key, so existing matchups keep their
+`content_suite`; a closed one has its own.
 
 The simulator records the actual decks and Commands;
 its ordinary replay checks still apply. The matrix identity is separate from

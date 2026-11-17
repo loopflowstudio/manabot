@@ -292,7 +292,9 @@ these hashes; the serving child does when it first loads a checkpoint, and
 refuses a disagreeing registration's matches before play with an
 `InferenceFailure` naming `checkpoint observation ABI drift` (or
 `action/world ABI drift`). A passing CPU run therefore does not show a
-registration is right.
+registration is right. `blank_decision_memory=True` registers the same bytes as
+a separate player whose opponent-decision memory is zeroed at every decision
+([reliance comparison](observation-and-model.md#whole-game-decision-memory)).
 
 Children start through `manabot.sim.child`, never `multiprocessing` spawn.
 Only search players (flat-MC, PUCT, local update) load Torch in a game child;

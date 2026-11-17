@@ -924,13 +924,27 @@ so a short run can end before it opens. Raise
 `decision_memory_gate_scale` for the whole comparison in that case, never for
 one run.
 
-For an endpoint reliance comparison, a checkpoint evaluation registration may
-explicitly set `player_spec.blank_decision_memory=True`. Scalar and shared
-inference zero all four memory tables before ordinary input admission and
-preparation. The checkpoint, table shapes, current board, legal actions and
-native game history stay intact. The intervention has a distinct registration
-and serving key; omitting it retains intact memory. This measures use of the
-retained history, not the incremental value of every fact already on the board.
+To measure whether a trained policy uses its memory, play the checkpoint
+against itself with the memory blanked:
+
+```python
+from manabot.eval.admission import register_checkpoint
+
+intact = register_checkpoint(path, backend=backend, match=match,
+    content_suite=suite, player_id="gru", display_name="GRU")
+blanked = register_checkpoint(path, backend=backend, match=match,
+    content_suite=suite, player_id="gru-blanked", display_name="GRU, memory blanked",
+    blank_decision_memory=True)
+```
+
+The blanked registration carries `player_spec.blank_decision_memory=True`.
+Scalar and shared inference zero all four memory tables before ordinary input
+admission and preparation. The checkpoint, table shapes, current board, legal
+actions and native game history stay intact. The two registrations have
+distinct registration and serving keys, and are two Etude players; the default
+`False` leaves the registration exactly as it was. A score near one half means
+the policy plays the same without its memory. This measures use of the retained
+history, not the incremental value of every fact already on the board.
 
 Overflow or mismatched companion shapes raise a typed Capacity error with the
 required counts. Keep the failed game's evidence, increase the relevant
