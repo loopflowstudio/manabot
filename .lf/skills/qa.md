@@ -373,18 +373,19 @@ publish, land or choose the next Graph step from here.
   Set `ETUDE_HOME` to an ignored `.runs/` folder so QA runs stay out of
   `~/.etude`. `etude smoke experiments/elemental.py --keep --revision HEAD
   --updates 3200 --hours 11.9 --usd-per-run 9` trains for about 3 minutes, then
-  evaluates for about 30 minutes on a laptop (600 one-game matches). Smoke
-  prints "passed" even when every game is an invalid row, so read the eval
-  rows: `etude.eval.query.statsdb("elemental", "<kept>/track")`, then group
-  `games` by `unit`, `valid` and `failure`. The `failure` column is omitted when
-  every value is null. Rerun only eval and report with
+  evaluates for about 30 minutes on a laptop (600 one-game matches). A Python
+  error in a game fails smoke eval within seconds, naming the error; only native
+  failures become invalid rows, so still read the eval rows:
+  `etude.eval.query.statsdb("elemental", "<kept>/track")`, then group `games`
+  by `unit`, `valid` and `failure` (duckdb over
+  `<kept>/track/elemental/*/blocks/*/games.parquet` also works; there is no
+  pyarrow). The `failure` column is omitted when every value is null. Rerun only eval and report with
   `--step eval --step report --source <kept>/track`. That eval-only report has
   no training runs, so its heuristic panels stay empty; for the full picture,
   copy the training and eval run folders into one track and run
   `etude report experiments/elemental.py --source <it> --out <dir>`. Local eval
-  evidence goes to `.runs/elemental/arena`. Delete it before replaying the same
-  matches after failed games, or the retained failure journals raise
-  `FileExistsError`. To see a policy from `etude train` in Academy, start
+  evidence goes to `.runs/elemental/arena/<match-key>/attempt-*`; a retry adds
+  an attempt beside earlier failed ones, so nothing needs deleting. To see a policy from `etude train` in Academy, start
   `./scripts/play` with the same `ETUDE_HOME`; discovery searches Etude's local
   track.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
