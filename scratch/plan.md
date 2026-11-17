@@ -5,7 +5,7 @@ Design: design-train-api.md. Etude SDK 0.4.1 from PyPI; Pydantic required. Jack 
 the speed and learning measurements on one reasonable single GPU, total
 `--max-usd 10`. The unreleased git pin has been replaced; publication and gate
 remain the caller's steps.
-Upstream (rechecked 2026-11-17 16:13 UTC): PyPI's latest is 0.4.1 and Etude
+Upstream (rechecked 2026-11-17 17:14 UTC): PyPI's latest etude-sdk is 0.4.1 and Etude
 main has nothing after its release commit cd4ab8c5e9, which differs from d9
 only in release metadata, so no Lium timestamp fix exists. Manabot main is
 still 3afd92d8f3, the merge base.
@@ -117,7 +117,8 @@ implement directions.
 
 ## Report follow-up
 
-QA's retained-report defects are fixed: new local smokes carry explicit
+QA's two retained-report defects (scratch/qa.html) are fixed by 3850764dd8,
+  committed after that QA pass: new local smokes carry explicit
   kind/recipe text labels and are excluded by default. Empty attempts retain
   earlier observed work/time and remain counted, with a coverage warning for
   unmeasured time. Unlabeled historical runs stay unclassified. No config,
@@ -169,7 +170,7 @@ QA's retained-report defects are fixed: new local smokes carry explicit
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
   as the gate's proof of that path. PR #500 (open, not draft) head is
-  b698a8e5a4, this branch's HEAD, at the 16:13 UTC realign.
+  eef697a757, this branch's HEAD, at the 17:14 UTC realign.
 - Released dependency cut complete (pyproject, lock, release workflow,
   metadata validation, docs, AGENTS.md); evidence in implementation.md. Etude
   Task 2d1933 hard deadlines and the Lium fix remain external limitations;
