@@ -17,6 +17,8 @@
 // bounded exact queries (PaymentCache); debug builds recompute every hit.
 
 mod autotapper;
+mod preview;
+pub use preview::PaymentPreview;
 
 use std::{cell::RefCell, collections::VecDeque, num::NonZeroUsize, sync::Arc};
 
@@ -2622,6 +2624,18 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
+        for permanent in self.automatic_taps(player, cost)? {
+            self.tap_fixed_mana_source(player, permanent);
+        }
+        Ok(())
+    }
+
+    /// The exact production prefix shared by execution and inspection.
+    fn automatic_taps(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+    ) -> Result<impl Iterator<Item = PermanentId> + use<>, AgentError> {
         let model = self.payment_model(player, None);
         let path = model
             .plan(
@@ -2644,12 +2658,11 @@ impl Game {
             || self.source_reluctance(&model),
             || self.payment_followups(player, cost, &model),
         );
-        let sources = model.sources.clone();
-        for index in choice.taps {
-            self.tap_fixed_mana_source(player, sources[index].permanent);
-        }
-
-        Ok(())
+        let sources = model.sources;
+        Ok(choice
+            .taps
+            .into_iter()
+            .map(move |index| sources[index].permanent))
     }
 
     /// Costs of the callers suspended behind the payment now being made.
