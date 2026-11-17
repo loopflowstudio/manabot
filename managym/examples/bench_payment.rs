@@ -9,7 +9,7 @@
 //! `cargo run --release --features benchmark --example bench_payment --manifest-path managym/Cargo.toml -- boards`.
 use managym::agent::env::Env;
 use managym::benchmark_payments::{reset, snapshot, Metrics};
-use managym::state::player::{DecklistDisclosure, PlayerConfig};
+use managym::state::player::{DecklistMode, GameSetup, PlayerConfig};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
@@ -28,14 +28,14 @@ fn replay(path: &str) {
     let players = decks
         .into_iter()
         .enumerate()
-        .map(|(seat, deck)| {
-            let mut player = PlayerConfig::new(format!("seat {seat}"), deck).submit_to_world();
-            player.disclosure = DecklistDisclosure::Closed;
-            player
-        })
+        .map(|(seat, deck)| PlayerConfig::new(format!("seat {seat}"), deck).submit_to_world())
         .collect();
     let mut env = Env::new(seed, true, false, false);
-    env.reset(players).unwrap();
+    env.reset(GameSetup {
+        players,
+        decklists: DecklistMode::Closed,
+    })
+    .unwrap();
     let mut digest = env.action_count().unwrap() as u64;
     let mut total = Metrics::default();
     let mut steps: Vec<(u64, usize, Metrics, f64)> = Vec::new();

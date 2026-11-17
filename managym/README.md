@@ -11,6 +11,22 @@ each native seat can use an external agent, random play or the built-in
 heuristic, without installing `manabot`. See
 [per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
 
+## Statistics and private recording
+
+Call `game.enable_statistics()` before `game.reset(players)`, play normally,
+then read `game.statistics()` for per-game card counts and completion state.
+Drain completed/replaced summaries with `game.take_statistics()`. Statistics
+need no detailed logs, replay or disk writes; both statistics and recording
+default off.
+
+For durable diagnostic inputs, use `managym.recording.ScalarCapture` or
+`CapturedVector` with an explicit journal path before reset. These retain
+pending native calls even if the engine never returns. They work without
+manabot, Torch or Etude. Private journals contain hidden information and must
+not be used as Academy viewer exports. See the
+[standalone examples and recovery guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#collect-in-game-statistics)
+for independent options, costs, partial counts and replay.
+
 ## Play in the browser
 
 The distribution includes Academy, a browser table for playing a game against
@@ -267,7 +283,11 @@ frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
 Missing historical frequency is unknown.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
-not a set of revealed physical cards. Search forks by full clone: clone the
+not a set of revealed physical cards. Exact library positions are retained
+per viewer in `Player.known_library`, and projected as `PlayerData.known_library`
+([library knowledge](../docs/engine.md#remembered-library-positions)).
+Private moves discard uncertain locations; both world samplers preserve the
+remaining facts. Search forks by full clone: clone the
 `Game` before a normal Command `apply` and compare `search_state::witness` to
 check that the source is unchanged. Exercise nested choices through Commands,
 not by direct calls to resolution helpers.

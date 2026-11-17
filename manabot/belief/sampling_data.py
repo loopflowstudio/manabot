@@ -177,6 +177,20 @@ def _counts(value: object) -> dict[str, int]:
     return cast(dict[str, int], value)
 
 
+def hand_sampling_pool(pool: object, known_library: object) -> dict[str, int]:
+    """Reserve positional copies before drawing a hand from the residual pool.
+
+    Native constraints retain the full unseen pool for materialization authority;
+    count distributions use only copies that can actually occupy the hand.
+    """
+    counts = _counts(pool).copy()
+    for name, count in _counts(known_library).items():
+        if count > counts.get(name, 0):
+            raise ValueError("known library copies exceed the unseen pool")
+        counts[name] -= count
+    return counts
+
+
 def history_features(
     history: ViewerHistory, schema: SamplerSchema
 ) -> tuple[float, ...]:
@@ -218,7 +232,7 @@ def public_sampler_input(
         raise ValueError(
             "count-only belief sampler cannot represent retained selections or foretold slots"
         )
-    pool = _counts(projected["pool"])
+    pool = hand_sampling_pool(projected["pool"], projected.get("known_library", {}))
     known = _counts(projected["known_hand"])
     if (set(pool) | set(known)) - set(schema.card_names):
         raise ValueError("native constraint vocabulary changed")

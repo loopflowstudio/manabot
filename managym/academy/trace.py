@@ -18,6 +18,7 @@ from pydantic import TypeAdapter
 
 import managym
 from managym.bots import BotDecision
+from managym.disclosure import DecklistDisclosure
 from managym.experience_projection import redact_observation
 from managym.search import SearchConfig
 
@@ -64,7 +65,7 @@ class GameConfig:
     mirror: SearchConfig | None = None
     # "open": each player knows the other's main deck and sideboard;
     # "closed": neither. Traces that predate the option were open.
-    decklists: Literal["open", "closed"] = "open"
+    decklists: DecklistDisclosure = "open"
     # Private import provenance: each seat's decklist (``managym.Decklist``
     # JSON form), admitted by the world. Viewer exports strip them.
     hero_source: dict[str, Any] | None = None
@@ -77,12 +78,13 @@ class GameConfig:
         if self.decklists == "closed" and self.mirror is not None:
             raise ValueError("Search requires open decklists.")
 
-    def to_rust(self) -> list[managym.PlayerConfig]:
+    def to_rust(self) -> managym.GameSetup:
         """Order human/opponent setup roles by their recorded native seats."""
         configs = self._role_configs()
-        for config in configs:
-            config.disclosure = self.decklists
-        return configs if self.human_seat == 0 else list(reversed(configs))
+        return managym.GameSetup(
+            configs if self.human_seat == 0 else list(reversed(configs)),
+            decklists=self.decklists,
+        )
 
     def _role_configs(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""

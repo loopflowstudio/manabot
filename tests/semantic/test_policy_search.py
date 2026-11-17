@@ -96,19 +96,15 @@ class IndependentSession:
 def _game(*, closed: bool = False) -> tuple[managym.Env, managym.Observation]:
     engine = managym.Env(seed=42)
     observation, _ = engine.reset(
-        [
-            managym.PlayerConfig(
-                "a",
-                {"Mountain": 12, "Gray Ogre": 12},
-                disclosure="closed" if closed else "open",
-            ),
-            managym.PlayerConfig(
-                "b",
-                {"Forest": 12, "Llanowar Elves": 12},
-                disclosure="closed" if closed else "open",
-            ),
-        ]
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("a", {"Mountain": 12, "Gray Ogre": 12}),
+                managym.PlayerConfig("b", {"Forest": 12, "Llanowar Elves": 12}),
+            ],
+            decklists="closed" if closed else "open",
+        )
     )
+    assert observation.decklists_closed is closed
     return engine, observation
 
 
@@ -135,7 +131,7 @@ def test_independent_search_preserves_live_game_rng_and_zero_support() -> None:
     assert decision.mirror is not None and decision.belief is not None
     assert decision.mirror.worlds == decision.belief.sampled_worlds == 2
     assert decision.mirror.rollouts == 2 * sum(p > 0 for p in decision.mirror.prior)
-    assert decision.belief.model == "managym.determinize/physical-deal/v1"
+    assert decision.belief.model == "managym.determinize/physical-deal/v2"
     prior = np.array(decision.mirror.prior)
     np.testing.assert_allclose(
         decision.probabilities,

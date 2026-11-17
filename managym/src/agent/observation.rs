@@ -71,6 +71,9 @@ pub struct PlayerData {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
     pub known_hand: BTreeMap<u32, u32>,
+    /// Exact definitions at zero-based library positions, counted from top.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub known_library: BTreeMap<u32, u32>,
     /// Decklist counts by definition id, present when the viewer knows this
     /// player's decklist: always its own, and an opponent's open decklist
     /// (`DecklistDisclosure`). `None` means hidden; `Some` of an empty map
@@ -79,8 +82,8 @@ pub struct PlayerData {
     /// The initial main deck.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub main_counts: Option<BTreeMap<u32, u32>>,
-    /// Owned cards whose identity the viewer does not know: the library,
-    /// plus for an opponent its hand less revealed `known_hand` copies and
+    /// Owned cards whose location the viewer does not know: the library less
+    /// exact known positions, plus an opponent's hand less `known_hand` and
     /// face-down foretold exile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unseen_counts: Option<BTreeMap<u32, u32>>,
@@ -906,6 +909,9 @@ pub struct ActionSpaceData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Observation {
+    /// One public game setting, shared by both seats.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub decklists_closed: bool,
     /// Absent only in historical captures; v7 must not invent missing provenance.
     #[serde(default)]
     pub shared_effects: Option<Vec<super::shared_effects::SharedEffectData>>,
@@ -1066,6 +1072,7 @@ impl Observation {
         let mut obs = Self {
             shared_effects: Some(super::shared_effects::project(game)),
             continuation: game.continuation_frames(agent_player),
+            decklists_closed: !game.state.disclosure.is_open(),
             game_over,
             won,
             turn,
@@ -1104,10 +1111,11 @@ impl Observation {
     /// an opponent's hand. The possible-world pool keeps those copies, since
     /// a sampled world must still place them in the hand.
     fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
+        let unseen = game.unseen_objects(player, viewer);
         let mut counts = Self::definition_counts(
-            game.unseen_objects(player, viewer)
-                .into_iter()
-                .map(|object| game.state[object].definition_id.0),
+            unseen
+                .iter()
+                .map(|object| game.state[*object].definition_id.0),
         );
         if player != viewer {
             for (definition, known) in &game.state.players[player.0].known_hand {
@@ -1116,6 +1124,23 @@ impl Observation {
                     if *count == 0 {
                         counts.remove(&definition.0);
                     }
+                }
+            }
+        }
+        for (position, definition) in game.library_facts(player, viewer) {
+            let object = game
+                .library_from_top(player)
+                .nth(position)
+                .expect("known library position");
+            // Active inspections already remove their exact objects from the
+            // unseen pool; do not subtract a second same-definition copy.
+            if !unseen.contains(&object) {
+                continue;
+            }
+            if let Some(count) = counts.get_mut(&definition.0) {
+                *count = count.saturating_sub(1);
+                if *count == 0 {
+                    counts.remove(&definition.0);
                 }
             }
         }
@@ -1226,6 +1251,11 @@ impl Observation {
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),
             no_maximum_hand_size: game.has_no_maximum_hand_size_effect(player),
+            known_library: game
+                .library_facts(player, viewer)
+                .into_iter()
+                .map(|(position, definition)| (position as u32, definition.0))
+                .collect(),
             known_hand: p
                 .known_hand
                 .iter()

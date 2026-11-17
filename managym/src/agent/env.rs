@@ -25,7 +25,11 @@ use crate::{
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
-    state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
+    state::{
+        game_object::PlayerId,
+        player::{DecklistDisclosure, GameSetup, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 use rand::Rng;
 use std::{
@@ -119,13 +123,40 @@ pub struct FlatMcResult {
 }
 
 /// Private scalar replay input for failure diagnostics and training exposure.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug)]
 struct NativeActionTrace {
-    #[serde(skip)]
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
+    disclosure: DecklistDisclosure,
     actions: Vec<usize>,
+}
+
+// Retained evidence predates game-level ownership. Preserve its seat spelling
+// at serialization only; no player carries this value in the live game.
+impl serde::Serialize for NativeActionTrace {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        #[derive(serde::Serialize)]
+        struct RetainedSeat<'a> {
+            #[serde(flatten)]
+            player: &'a PlayerConfig,
+            #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
+            disclosure: DecklistDisclosure,
+        }
+        let players: Vec<_> = self
+            .player_configs
+            .iter()
+            .map(|player| RetainedSeat {
+                player,
+                disclosure: self.disclosure,
+            })
+            .collect();
+        let mut record = serializer.serialize_struct("NativeActionTrace", 2)?;
+        record.serialize_field("player_configs", &players)?;
+        record.serialize_field("actions", &self.actions)?;
+        record.end()
+    }
 }
 
 #[derive(Debug)]
@@ -137,6 +168,9 @@ pub struct Env {
     // must reuse the live projection's events, especially combat declarations.
     heuristic_events: Vec<EventData>,
     action_trace: Option<NativeActionTrace>,
+    collect_statistics: bool,
+    retained_statistics: Vec<crate::flow::statistics::GameStatistics>,
+    drained_generation: Option<u64>,
     capture_cards: bool,
     capture_exposure: bool,
     retained_exposure: Vec<String>,
@@ -230,6 +264,9 @@ impl Env {
             heuristic_events: Vec::new(),
             player_policies: [PlayerPolicy::Agent; 2],
             action_trace: None,
+            collect_statistics: false,
+            retained_statistics: Vec::new(),
+            drained_generation: None,
             capture_cards: false,
             capture_exposure: false,
             retained_exposure: Vec::new(),
@@ -275,8 +312,9 @@ impl Env {
 
     pub fn reset(
         &mut self,
-        player_configs: Vec<PlayerConfig>,
+        player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
+        let player_configs = player_configs.into();
         // Admit submitted decks at the fallible environment boundary, before
         // Game construction can panic on them.
         crate::cards::deck_admission::admit_submitted(&player_configs)
@@ -285,16 +323,24 @@ impl Env {
         if self.capture_exposure && self.game.is_some() {
             self.retained_exposure.push(self.exposure_json()?);
         }
+        if self.drained_generation != Some(self.capture_generation) {
+            if let Some(summary) = self.statistics() {
+                self.retained_statistics.push(summary);
+            }
+        }
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
-            player_configs: Arc::from(player_configs.clone()),
+            disclosure: player_configs.decklists.resolve(self.seed),
+            player_configs: Arc::from(player_configs.players.clone()),
             actions: Vec::new(),
         });
-        let mut game = if self.capture_cards {
-            Game::new_capturing(player_configs, self.seed, self.skip_trivial)
-        } else {
-            Game::new(player_configs, self.seed, self.skip_trivial)
-        };
+        let mut game = Game::construct(
+            player_configs,
+            self.seed,
+            self.skip_trivial,
+            self.capture_cards,
+            self.collect_statistics,
+        );
         if self.capture_exposure {
             game.card_capture
                 .as_mut()
@@ -312,6 +358,37 @@ impl Env {
         let (observation, _, _, _, info) =
             self.settle_players(observation, 0.0, false, false, empty_info_dict())?;
         Ok((observation, info))
+    }
+
+    pub fn enable_statistics(&mut self) -> Result<(), AgentError> {
+        if self.game.is_some() {
+            return Err(AgentError("statistics must be enabled before reset".into()));
+        }
+        self.collect_statistics = true;
+        Ok(())
+    }
+
+    pub fn statistics(&self) -> Option<crate::flow::statistics::GameStatistics> {
+        let game = self.game.as_ref()?;
+        let stats = game.statistics.as_ref()?;
+        Some(crate::flow::statistics::GameStatistics {
+            seed: self.reset_seed,
+            generation: self.capture_generation,
+            stream: 0,
+            terminal: game.is_game_over(),
+            winner: game.winner_index(),
+            cards: stats.rows(),
+        })
+    }
+
+    pub fn take_statistics(&mut self) -> Vec<crate::flow::statistics::GameStatistics> {
+        if self.is_game_over() && self.drained_generation != Some(self.capture_generation) {
+            if let Some(summary) = self.statistics() {
+                self.retained_statistics.push(summary);
+                self.drained_generation = Some(self.capture_generation);
+            }
+        }
+        std::mem::take(&mut self.retained_statistics)
     }
 
     /// Must be enabled before reset so setup facts cannot be missed.
@@ -382,6 +459,13 @@ impl Env {
     /// Seed the live game was reset with; a pending `set_seed` does not change it.
     pub(crate) fn reset_seed(&self) -> u64 {
         self.reset_seed
+    }
+
+    /// The current game's resolved disclosure; open before the first reset.
+    pub fn decklists(&self) -> DecklistDisclosure {
+        self.game
+            .as_ref()
+            .map_or(Default::default(), |game| game.state.disclosure)
     }
 
     /// Setups this game was reset with; empty before the first reset.

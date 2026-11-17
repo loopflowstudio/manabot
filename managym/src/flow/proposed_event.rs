@@ -42,13 +42,16 @@ pub(crate) struct ZoneEntry {
     /// v16, and `PendingEvent::copy_chosen` records the answered choice.
     #[serde(skip)]
     pub entry_copy: bool,
+    /// The instruction removes the publicly identified top position.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub library_top_departure: bool,
 }
 
 impl ZoneEntry {
     /// The terms `zone` takes: battlefield terms only for the battlefield,
     /// face down only for exile.
     pub(crate) fn for_zone(&self, zone: ZoneType) -> Self {
-        match zone {
+        let mut entry = match zone {
             ZoneType::Battlefield => Self {
                 face_down: false,
                 ..self.clone()
@@ -58,7 +61,9 @@ impl ZoneEntry {
                 ..Self::default()
             },
             _ => Self::default(),
-        }
+        };
+        entry.library_top_departure = self.library_top_departure;
+        entry
     }
 }
 
@@ -683,6 +688,13 @@ impl Game {
             } else {
                 None
             };
+            let known_before = reveal.map(|(owner, definition)| {
+                self.state.players[owner.0]
+                    .known_hand
+                    .get(&definition)
+                    .copied()
+                    .unwrap_or(0)
+            });
             if let Some((owner, definition)) = reveal {
                 self.emit(GameEvent::CardRevealed { owner, definition });
             }
@@ -710,12 +722,11 @@ impl Game {
                     }
                 }
                 if let Some((owner, definition)) = reveal {
-                    let count = self.state.players[owner.0]
-                        .known_hand
-                        .get(&definition)
-                        .copied()
-                        .unwrap_or(0);
-                    self.set_known_hand_count(owner, definition, count + 1);
+                    self.set_known_hand_count(
+                        owner,
+                        definition,
+                        known_before.expect("revealed entrant") + 1,
+                    );
                 }
                 died.extend(death);
                 hits.extend(hit);

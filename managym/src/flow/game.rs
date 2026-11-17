@@ -23,11 +23,12 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        card::ActivatedAbilityDefinition,
+        card::{ActivatedAbilityDefinition, CardDefId},
         game_object::{
             CardId, CardVec, IdGenerator, ObjectId, ObjectLkiLog, ObjectLookupError, ObjectVec,
             PermanentId, PermanentVec, PlayerId, Target,
         },
+        knowledge::LibraryKnowledge,
         mana::Mana,
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
@@ -37,6 +38,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
+    pub disclosure: crate::state::player::DecklistDisclosure,
     /// Immutable physical cards, in deal order, including both sideboards.
     pub cards: CardVec,
     /// Every object a game has made: its cards, tokens and copies of spells,
@@ -450,6 +452,16 @@ impl TrackedState {
 
     // Fields no cached derivation reads: writing them keeps every revision.
 
+    // Viewer knowledge changes neither legality nor layered characteristics or
+    // mana production. Keep rule caches when only these projections change.
+    pub(crate) fn known_hand_mut(&mut self, player: PlayerId) -> &mut BTreeMap<CardDefId, u32> {
+        &mut self.state.players[player.0].known_hand
+    }
+
+    pub(crate) fn known_library_mut(&mut self, player: PlayerId) -> &mut LibraryKnowledge {
+        &mut self.state.players[player.0].known_library
+    }
+
     pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {
         &mut self.state.priority
     }
@@ -714,7 +726,12 @@ pub(crate) enum CombatDamagePass {
 
 #[derive(Debug)]
 pub struct Game {
-    /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
+    /// Optional private counters and facts. Search clones omit them; rollback
+    /// snapshots preserve them. Never hashed or exposed to policies.
+    pub(crate) statistics: Option<crate::flow::statistics::Statistics>,
+    pub(crate) capture_originals:
+        std::collections::BTreeMap<usize, crate::flow::card_capture::CardSnapshot>,
+    pub(crate) capture_drawing: Option<ObjectId>,
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
     pub state: TrackedState,
     /// Characteristics, static sources and trigger sources derived from
@@ -763,6 +780,9 @@ impl Clone for Game {
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),
             card_capture: None,
+            statistics: None,
+            capture_drawing: None,
+            capture_originals: Default::default(),
         }
     }
 }

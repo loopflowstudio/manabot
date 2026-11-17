@@ -153,7 +153,8 @@ decision count in this repository excludes forced choices.
 
 **Observations are viewer-safe at the source.** `Observation::for_player`
 holds everything one seat may see and nothing else; legal actions appear only
-in the chooser's view; decklist disclosure lives on `PlayerConfig.disclosure`.
+in the chooser's view; decklist disclosure lives on the game
+(`GameSetup.decklists`, resolved to `GameState.disclosure`).
 Viewer-equivalent states produce byte-identical observations. The policy
 tensor, the LLM text and the learning tokens all derive from the same
 observation, and a mechanic reaches all three in the change that adds it
@@ -179,7 +180,9 @@ aggregated at the root, with no claim to information-set consistency.
 
 **Hidden information has one domain.** `managym/src/possible_worlds.rs` owns
 the hidden-hand domain, the five-variant `WorldQuery`, compatible-deal weights
-and materialization; `manabot.belief` owns probability over that domain. A
+and materialization; `manabot.belief` owns probability over that domain.
+Native hand minima and exact viewer-known library positions constrain both
+world consumers ([library knowledge](docs/engine.md#remembered-library-positions)). A
 query never reveals whether the actual hidden hand satisfies it, and empty
 support is an explicit result.
 

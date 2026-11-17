@@ -13,12 +13,7 @@ from pathlib import Path
 import random
 from typing import Any
 
-from manabot.env.failures import (
-    CaptureScope,
-    GameInputs,
-    TrainingExposureReceipt,
-    capture_scope,
-)
+from manabot.env.failures import CaptureScope, TrainingExposureReceipt, capture_scope
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
@@ -26,6 +21,7 @@ from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.replay import replay_environment, write_trace
 import managym
 from managym.experience import UNVERSIONED_CONTENT_HASH
+from managym.recording import GameInputs
 
 
 def record_actions(
@@ -39,23 +35,15 @@ def record_actions(
     """Reconstruct one complete game, refusing missing or unoffered decisions."""
     if len(setup.players) != 2:
         raise ValueError("a game requires two player setups")
-    first, second = setup.players
-    if first.world != second.world or first.disclosure != second.disclosure:
-        raise ValueError("player setups require the same world and disclosure")
+    native = setup.setup()
+    first, second = native
     game: dict[str, Any] = {
         "match_id": f"recorded:{canonical_sha256({'setup': setup.model_dump(), 'source': source})}",
         "deal_seed": setup.seed,
         "leg": 0,
         "seat_players": list(players),
-        "match_hypers": MatchConfig(
-            hero=first.name,
-            villain=second.name,
-            hero_deck=first.decklist,
-            villain_deck=second.decklist,
-            hero_sideboard=first.sideboard,
-            villain_sideboard=second.sideboard,
-            world=first.world,
-            decklists=first.disclosure,
+        "match_hypers": MatchConfig.from_players(
+            first, second, decklists=native.decklists
         ).model_dump(),
         "observation_hypers": ObservationConfig().model_dump(),
         "world": managym.world_identity(),

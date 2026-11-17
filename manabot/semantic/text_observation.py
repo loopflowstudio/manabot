@@ -827,6 +827,10 @@ class _Renderer:
             if state.shared_effects is None:
                 for effect in player.effects:
                     lines.append(f"Effect: {self._effect(effect)}.")
+            for position, definition in sorted(player.known_library.items()):
+                lines.append(
+                    f"Known library position {int(position) + 1} from top: {self.definition(int(definition))}."
+                )
             counts: list[tuple[str, dict[int, int]]] = [
                 ("Publicly known hand minima", player.known_hand)
             ]
@@ -1123,6 +1127,7 @@ class _Renderer:
             f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
             f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
             "",
+            f"Decklists: {'closed (neither player knows the opponent list)' if state.decklists_closed else 'open (both players know both lists)'}.",
             "Players:",
         ]
         lines.extend(self._players_lines())

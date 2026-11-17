@@ -382,6 +382,22 @@ publish, land or choose the next Graph step from here.
   a committed snapshot. Continue by ID through the CLI, then compare the
   final `load_update(..., backend=resolve("torch").state)` payload against
   uninterrupted execution, including Adam, EMA and collector sampling RNG.
+- Deck-source or `elemental-uniform` regimes from `local_smoke`: drop `match`
+  and set `deck_source` plus `agent.world = managym.WORLD_SETUP`, or keep an
+  authored Elemental `match` and set `agent.world = "elemental-world-v2"`;
+  either way validation refuses the local recipe's agent world. Give parallel
+  runs separate `--out` parents, since `training.sqlite` lives beside `--out`
+  and concurrent runs lock it. To see what training games actually were, wrap
+  `SeatRoutedCollector.collect` in a driver calling `execute_regime` and read
+  `self._env.current_player_configs()`, `self.stream_matches` and
+  `self._buffers` (e.g. `decklists`, `[streams, 2, cards, 5]`) after each
+  batch. The native `VectorEnv.set_training_decks(decks, distinct)` differs
+  from the collector wrapper's `(decks, digest, sampling)`. Without a driver,
+  `--training-game-logs` writes `game-journals/vector-0.jsonl`: full rows
+  carry `evidence` (`FailureEvidence`), delta rows carry `games[].replacement`
+  (`GameInputs`). Reset a `VectorEnv(num_envs=1, seed=game.seed,
+  seed_stride=…, skip_trivial=…, player_policies=evidence.resolved_player_policies)`
+  with `game.setup()` and step `game.actions` to replay each retained game.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
@@ -404,6 +420,18 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
+- Training game journals (`--training-game-logs`): run `manabot train --recipe local --steps 200 --training-game-logs` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `execution.workers=2` in a `local_smoke` regime gives sharded files.
+- Standalone statistics/recording: stage and install an engine-only wheel into a
+  fresh venv, then run the two Python examples in `docs/engine-python.md` outside
+  the checkout. Play the same seeded authored game with neither option, statistics
+  only, recording only and both; compare observation digests and summary counts.
+  Exclude `generation` from cross-Env summary comparison: it intentionally names
+  each distinct game. Check terminal drain-once and replaced partial summaries.
+  Copy a journal and run `uv run --no-project --python <venv>/bin/python python -m
+  managym.replay <copy> --seconds 30 --statistics`; confirm source bytes remain
+  unchanged. Empty/missing/corrupt inputs must fail, and a torn final append must
+  warn while recovering the last complete boundary. `scripts/release/engine_smoke.py`
+  additionally checks that manabot, Torch and Etude are absent.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell

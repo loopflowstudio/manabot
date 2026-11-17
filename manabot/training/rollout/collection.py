@@ -23,7 +23,7 @@ Collection never updates model weights; the regime executor owns learning.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import time
@@ -48,7 +48,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     allocate_buffers,
 )
-from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.decks import UniformDecks
 from manabot.training.regime import BatchClosure
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
@@ -77,7 +77,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     GameOutcome,
 )
-from managym import WORLD_SETUP, Deck
+from managym import WORLD_SETUP, Deck, GameSetup
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -391,6 +391,9 @@ class SeatRoutedCollector:
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
         adaptive: AdaptiveConfig | None = None,
+        operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+            nullcontext()
+        ),
     ) -> None:
         if adaptive is not None and (
             opponent_mode != "self"
@@ -403,6 +406,7 @@ class SeatRoutedCollector:
             raise ValueError(
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
+        self._operation = operation
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
             [self._sampler.draw() for _ in range(num_envs)] if self._sampler else []
@@ -440,6 +444,15 @@ class SeatRoutedCollector:
                 raise ValueError("a deck source cannot be combined with a curriculum")
             if match.config.world != WORLD_SETUP:
                 raise ValueError("deck-source games play in the world")
+            if (
+                deck_source.decklists != "mixed"
+                and match.config.decklists != deck_source.decklists
+            ):
+                raise ValueError(
+                    "the deck source's disclosure decides every game: match has "
+                    f"decklists={match.config.decklists!r}, deck source has "
+                    f"decklists={deck_source.decklists!r}"
+                )
             self._uniform_roster = deck_source.players()
         elif matchup_curriculum == "elemental-uniform":
             self._uniform_roster = elemental_roster(match)
@@ -562,7 +575,10 @@ class SeatRoutedCollector:
                     [m.to_rust() for m in self.stream_matches]
                 )
             elif matchup_curriculum in ("fixed", "elemental-uniform"):
-                self._env.reset_all_into_buffers(match.to_rust())
+                setup = match.to_rust()
+                if deck_source is not None:
+                    setup = GameSetup(setup, decklists=deck_source.decklists)
+                self._env.reset_all_into_buffers(setup)
             else:
                 self._env.reset_each_into_buffers(
                     [m.to_rust() for m in self.stream_matches]
@@ -734,7 +750,11 @@ class SeatRoutedCollector:
             # the run submitted, even one outside the supply it began with.
             setups = self._env.current_player_configs()
             for row in rows:
-                self.stream_matches[row] = Match(pair_match(*setups[row]))
+                self.stream_matches[row] = Match(
+                    MatchConfig.from_players(
+                        *setups[row], decklists=setups[row].decklists
+                    )
+                )
         for row in rows:
             match = self.stream_matches[row]
             self._self_play_decks[row] = (
@@ -769,9 +789,10 @@ class SeatRoutedCollector:
     def _opponent_actions(
         self, rows: np.ndarray, inference: CollectionScope
     ) -> np.ndarray:
-        if self.opponent_mode == "self":
-            return inference.opponent_actions(self._slice_obs_rows(rows))
-        return self._opponent.select(self._buffers, rows)
+        with self._operation("opponent_inference"):
+            if self.opponent_mode == "self":
+                return inference.opponent_actions(self._slice_obs_rows(rows))
+            return self._opponent.select(self._buffers, rows)
 
     def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
         """Host observation rows with the training action-focus dtype."""
@@ -961,7 +982,7 @@ class SeatRoutedCollector:
                     if self.opponent_mode == "learning":
                         assert opponent_inference is not None
                         opp_acts = self._sample_learning_rows(
-                            opp_rows, acting, opponent_inference
+                            opp_rows, acting, opponent_inference, "opponent_inference"
                         )
                     else:
                         opp_acts = self._opponent_actions(opp_rows, inference)
@@ -1390,8 +1411,10 @@ class SeatRoutedCollector:
         rows: np.ndarray,
         acting: np.ndarray,
         inference: CollectionScope,
+        operation: str = "learner_inference",
     ) -> np.ndarray:
-        sampled = inference.sample(self._slice_obs_rows(rows), self.profiler)
+        with self._operation(operation):
+            sampled = inference.sample(self._slice_obs_rows(rows), self.profiler)
         acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
         outcomes, needs = sampled.outcomes, sampled.needs
         with self.profiler.track("Rollout recording"):
