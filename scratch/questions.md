@@ -53,3 +53,8 @@ No native rule, observation layout, frozen evidence or strategic label changes.
 `attempt-*` directory under its match key, locally and in launched output.
 Use atomic directory allocation rather than replacing journals or resuming a
 partly played game. Existing flat match evidence stays untouched.
+
+2026-11-16 idea, not planned: `manabot.training.report.job_labels` takes
+`(word, TrainingRegime)` but reads only `regime.agent` (width, layers). Taking
+a `ModelConfig` would let a recipe-only experiment label its jobs and drop the
+module's saved-regime import; one caller (`experiments/tla_frontier.py`).

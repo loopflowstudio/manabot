@@ -656,3 +656,24 @@ The local recipe completed two updates and wrote
 path. A fresh-process check rejects saved-regime imports from live training
 and evaluation. Commands/results are in implementation.md; gate obligations
 and unanswered Etude product choices are unchanged.
+
+## Concept review of the implemented change — 2026-11-16 (a50d2ffefb)
+
+Read against the code and the guides, not run. The five directions of the
+97338108bc review are in the code (checked: `docs/training.md:273,341` name
+`TrainingRun`; no `_operation` read; `update_metrics.py` writer and
+`reports/update_metrics.py` reader are separate; the evaluation quick start
+uses the local recipe's real policy path; the boundary test refuses
+`training.regime`/`training.records` from the live loop, Torch collection and
+runtime, duel and monitor). Walked train → interrupt → `--resume` → later
+target → `continue` → local evaluation through the guides: one command per
+intent, one meaning per word, recovery table matches the loop. Nothing to
+change in this Task.
+
+One idea noticed and not made a direction (questions.md): `job_labels` in
+`training/report.py` takes a `TrainingRegime` though it reads only its
+`ModelConfig`.
+
+Open product choices: the two Etude questions above (same-seed policy→sampler
+pairing in one command; whether `Agents(build=)` builds every seat) are still
+unanswered by anyone, belong to Etude, and do not block this Task. No new one.
