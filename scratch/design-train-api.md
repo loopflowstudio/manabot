@@ -13,9 +13,8 @@ us get there."
 This document replaces the client-facing shape of EXP-56 (PR #103 at
 `105abdd`) and the loop and recipe shape of MTG-329. The launcher machinery
 PR #103 built (out carriage, planned-stop retries, attempt cutoffs,
-continuation, digest-checked inputs) is kept and built on. The independent
-Manabot CLI retirement is implemented (plan.md); the proposed loop and recipe client cut is now written but has not run
-against the required SDK. See plan.md for the dependency boundary.
+continuation, digest-checked inputs) is kept and built on. The Manabot cut is implemented and runs on released Etude SDK 0.4.1.
+See plan.md for remaining measurement limits.
 
 ## Where this is going
 
@@ -473,246 +472,28 @@ Status on 2026-11-13 after Jack Heart was asked each point again.
 5. When `run.save()` writes outside a stop. Not answered. Taken for now: by
    wall time, or by step count when `every=` is given.
 
-## Landed API question exposed by the docs — 2026-11-14
+## Historical API gap
 
-Should the belief recipe still launch policy and sampler in one command,
-with the sampler waiting for the matching policy seed, or should it require
-a completed policy checkpoint before declaring the sampler job?
+At pin 5708e14 the local launcher did not deliver Job.inputs/environment;
+the two-command belief probe failed with `input not given: 'start'`. This was
+fixed upstream and completed on d9a6bc8 (released as 0.4.1). Exact earlier
+counterexample and reviews: 3670249eb3:scratch/design-train-api.md. Keep the
+completed-checkpoint two-pass form; one-command same-seed dependency scheduling
+remains unsettled and belongs to Etude.
 
-Etude 5708e14 training(start=) accepts a CheckpointRecord, not a Job; the
-current Manabot recipe passes a Job. The shipping guide now shows the
-supported explicit checkpoint handoff as a reversible documentation choice.
-The automatic dependency remains an implementation gap; nobody has selected
-a replacement product contract here.
+## Implemented direction and archived reviews
 
-## Implementation counterexample — 2026-11-14
+The historical concept reviews are retained in
+3670249eb3:scratch/design-train-api.md. Their directions are complete:
+TrainingRun names the live handle, selection types and metric readers have
+current owners, Collector.operation is public, guides use actual policy paths,
+and saved-regime schemas/readers are deleted. Optional recipe labels are logged
+only when supplied: local declares smoke, baseline/Elemental remain unclassified.
+No serialized keys or frozen records changed. The loop, recipes and managed
+Agents API now run on released Etude SDK 0.4.1; the old unbuilt-API status above
+is historical. Belief's completed-checkpoint delivery works in two explicit
+commands; automatic same-seed dependency scheduling remains an Etude question.
 
-At the pinned 5708e14, training(start=) takes a completed CheckpointRecord,
-not a Job. Implement only that explicit handoff in the declaration; the
-automatic dependency remains unmet. A real local two-command probe then
-failed: belief_policy finished, belief_sampler printed its address and exited
-with `input not given: 'start'`. Etude local._prepare ignores Job.inputs and
-Job.environment. Stop dependent runtime work here: Etude must deliver the
-checkpoint before the documented local belief workflow can be proved. The
-recipe's given-input provenance check is not proof of real start= carriage.
-
-## Concept review of the implemented change — 2026-11-16 (f6a2660745)
-
-Read against the code, not run. The loop, recipes and commands match the
-design: `train(config)` opens the run, `self_play` reads top to bottom,
-new/resume/continue are separate commands, the guide states what a resume
-keeps and what starts again. The two sections above ("Landed API question",
-"Implementation counterexample") describe pin 5708e14 and are superseded: at
-d9a6bc8 `experiments/belief.py` declares `training_jobs(state)`, the sampler
-appears once a policy run is finished, and local `start=` delivery completed
-(questions.md).
-
-What a reader still has to learn for no benefit. Next implement direction, in
-this order; none changes behavior or serialized keys:
-
-1. **"Stage" is taught as a noun.** `docs/training.md` "Recipes in stages"
-   (and its three anchors, plus `manabot/README.md:461`, `experiments/README.md`),
-   `experiments/belief.py` and `recipes/belief_sampler.py` docstrings say
-   stage. The design has no stage noun: these are two jobs, the second
-   started from the first's checkpoint. Retitle to what happens ("A recipe
-   that starts from another run") and say job/run. Retained regime `stages`
-   keep their spelling.
-2. **`TrainingRun` names two things in Manabot.** Etude's live handle
-   (`loops/self_play.py`, `backends/torch/capture.py`, `sim/sim.py`,
-   `reports/training.py`) and the saved-regime record
-   `manabot.training.records.TrainingRun` (`experiment/checkpoint_evaluation.py`,
-   `verify/`, `reports/records.py`), whose docstring still says "passes current
-   execution admission" though nothing executes a regime. `RunRecord[RegimeT]`
-   likewise shadows Etude's `RunRecord` (imported as `EtudeRunRecord`). Rename
-   the retained pair for what they are (proposed: `RegimeRunRecord`,
-   `RegimeRun`; `RetainedRun` stays) and rewrite the module docstrings as
-   readers of saved records. Class names only; no alias (Task constraint).
-3. **Current code imports the retained module.** `backends/torch/collection.py`
-   and `runtime.py` take `Precision` from `training.regime` (defined in
-   `training.learning`); `eval/duel.py` and `eval/monitor.py` take `Strict`,
-   `ArtifactReference` and `TrainingCoordinates` from `training.regime` /
-   `training.records`. Give those three a non-regime owner so "regime.py reads
-   saved regimes" is true and live evaluation does not depend on it.
-4. **`manabot/recipes/` holds things that are not recipes**, which is why the
-   guide must say "the files that define `train`". `recipes/builders.py` mixes
-   current `SelfPlay` settings with `TrainingRegime` builders used only by
-   tests (`tests/fixtures/saved_regimes.py`, `test_builders.py`,
-   `wdl_baseline.py`): move those beside their users. `recipes/belief.py` is
-   the population-supervision demo behind `manabot belief-learn-demo`, not the
-   belief recipe next to it (on the base too): move it under `manabot/belief/`.
-5. **Leftover of the retired executor:** `VerifyStore.claim_training_recovery`
-   has no caller; `save_training_run`/`training_run` are called only by
-   `tests/training/test_regimes.py`. Delete with the exclusive test unless a
-   retained reader needs them.
-6. **AGENTS.md cites a line that no longer exists**:
-   `state, row = step(state, ...)`. The loop is
-   `row = step(settings, learner, ema, collector, counts, rng, out=run.out)`,
-   updating in place because Etude saves the objects registered with
-   `run.resume`. Quote the real line and say why it mutates.
-
-Left alone on purpose: `experiment/config.py::Experiment` and
-`experiment/attacks.py` (documented retained declarations); the `manabot train`
-refusal; `resource_metrics` (until EXP-58).
-
-Open, not settled by anyone, and Etude's to decide rather than this Task's:
-a job declared from stored state needs the same command typed twice (policy,
-then sampler), and `experiments/belief.py` takes the first finished policy of
-any seed, so with several seeds every sampler would start from one policy.
-Should a dependent job wait for and pair with its same-seed parent in one
-command? It matters when the belief experiment gets more than seed 0 or runs
-unattended. Today's two-pass, one-seed form is the reversible choice in use.
-
-## Concept review of the implemented change — 2026-11-16 (ffbd701ccb)
-
-Read against the code, not run. The six directions above are in the code
-(9336e7aa08, 852c0d866b). The interaction is the designed one: one `train(config)`,
-one visible loop, new/resume/continue as separate commands, saves read without
-Etude or Manabot. What is left is words that point the wrong way. Next
-implement direction, in this order; no behavior or serialized key changes:
-
-1. **The guide teaches a class name the code does not use.** `docs/training.md`
-   quotes `def self_play(settings: SelfPlay, run: Run, ...)` and says "The loop
-   takes Etude's `Run`"; the loop is annotated `TrainingRun`
-   (`etude.train.tracking`, the only exported handle at d9a6bc8). The loop is
-   offered as the template to copy, so quote the real signature and name.
-   In the same docs `TrainingRun` still means the retired record
-   (`docs/workflows.md:56,76`, `docs/experiment-metrics.md:211,319`,
-   `docs/training.md:850`): say "saved regime run record (`RegimeRun`)" there,
-   so the word has one meaning.
-2. **"Recipe" and "regime" are crossed in the retained readers.** A recipe is a
-   `train(config)` function; a regime is a saved record nothing executes.
-   `reports/records.py` ("Read retained recipes ... No recipe is ... passed to
-   an executor"), `training/validation.py` ("Validate a recipe; execution
-   additionally requires ...", "Every execution entry point"),
-   `training/report.py` ("for a `TrainingJob` is its regime id") and
-   `experiment/__init__.py` ("allocation and execution above the training run")
-   describe the retired executor. Rewrite as readers of saved regimes.
-3. **The live loop still imports the regime schema.** `loops/self_play.py` →
-   `training/update_metrics.py` → `training.records` → `training.regime`, only
-   because the row writer (`metric_row`, `phase_seconds`, `time_since`,
-   `OUTCOME_TABLE`) shares a file with the retained-run readers (`read_updates`,
-   `updates_from_run`, `stage_rows`; one user, `reports/analysis.py`). Move the
-   readers under `manabot/reports/`. Likewise `backends/torch/collection.py`
-   and `training/state/backend.py` reach `regime.SelectionGameSpec` through
-   `rollout/selection_data.py`: define it there and let `regime.py` import it,
-   as `Precision` already is. Then "regime.py reads saved regimes" holds for
-   every live import; add that to the boundary test if cheap.
-4. **`step` reads the collector's private `_operation`** (`self_play.py:507,512`),
-   the scope the loop itself passed in as `operation=`. Make the field public.
-
-Left alone on purpose: `experiment/checkpoint_evaluation.py` (still exercised
-by `tests/training/test_monitor_evaluation.py` and the release stage);
-`experiment/numerics.py` and `setup.py` staying in `manabot/experiment/`;
-`recipes/local.py` inheriting `BaselineConfig`.
-
-Open product choice: unchanged from the review above (a dependent job pairing
-with its same-seed parent in one command). Nobody has answered it; it is
-Etude's, and the two-pass, one-seed form stays the reversible choice in use.
-It does not block this Task. No new open choice.
-
-## Concept review of the implemented change — 2026-11-16 (97338108bc)
-
-Read against the code, not run. Since the review above only the QA fixes
-landed (retained `attempt-*` evidence, `game_players`, Academy finding
-`~/.etude/track`). The four directions of the review above are **not yet in
-the code** (checked: `docs/training.md:273,341` still say `Run`;
-`reports/records.py`, `training/validation.py`, `training/report.py:12`,
-`experiment/__init__.py` unchanged; `update_metrics.py` still imports
-`training.records`; `selection_data.py` still imports `regime.SelectionGameSpec`;
-`self_play.py:507,512` still read `collector._operation`). They remain the
-next implement direction, followed by one more:
-
-5. **The path from training to using the policy breaks in the docs.** Train
-   (`etude train manabot/recipes/local.py`) writes
-   `~/.etude/track/<experiment>/[<run>/]out/policies/<update>-ema.safetensors`;
-   Academy now finds it there unasked. But `docs/evaluation.md` "Quick local
-   evaluation" still passes `--checkpoint .runs/small/policy.safetensors`, a
-   file only the removed `manabot train --out .runs/small` wrote. Run the local
-   recipe once, read the path it actually wrote, and use that in the example
-   (and say it is the local recipe's policy). Check the other `.runs/...policy`
-   mentions the same way; `manabot/README.md:207` ("your existing compatible
-   checkpoint") is fine.
-
-Settled as it stands: `game_players` is the one owner of "a seat's agent as a
-game player", used by both callbacks; `evidence_directory` is the one owner of
-where Elemental evidence goes.
-
-For Etude, not this Task, and unanswered by anyone: at d9a6bc8 a callback
-receives two shapes for a checkpoint seat, the bare forward when the player
-has no config and the `build` result when it has one, so every callback whose
-game needs more than a forward must rebuild the first shape itself
-(`game_players`). Should `Agents(build=)` build every seat? It matters for any
-second adopter (Jace); it does not block this Task. The same-seed
-policy→sampler pairing question above is also still open and non-blocking.
-
-## Concept follow-up implementation — 2026-11-16
-
-The five directions in the 97338108bc review are implemented. Report update
-readers moved to `reports/update_metrics.py`; the selection spec moved to
-`rollout/selection_data.py`; the collector's `operation` scope is public.
-The guide names the actual `TrainingRun` handle and saved `RegimeRun` records.
-The local recipe completed two updates and wrote
-`track/local/out/policies/00000002-ema.safetensors`; evaluation docs use that
-path. A fresh-process check rejects saved-regime imports from live training
-and evaluation. Commands/results are in implementation.md; gate obligations
-and unanswered Etude product choices are unchanged.
-
-## Concept review of the implemented change — 2026-11-16 (a50d2ffefb)
-
-Read against the code and the guides, not run. The five directions of the
-97338108bc review are in the code (checked: `docs/training.md:273,341` name
-`TrainingRun`; no `_operation` read; `update_metrics.py` writer and
-`reports/update_metrics.py` reader are separate; the evaluation quick start
-uses the local recipe's real policy path; the boundary test refuses
-`training.regime`/`training.records` from the live loop, Torch collection and
-runtime, duel and monitor). Walked train → interrupt → `--resume` → later
-target → `continue` → local evaluation through the guides: one command per
-intent, one meaning per word, recovery table matches the loop. Nothing to
-change in this Task.
-
-One idea noticed and not made a direction (questions.md): `job_labels` in
-`training/report.py` takes a `TrainingRegime` though it reads only its
-`ModelConfig`.
-
-Open product choices: the two Etude questions above (same-seed policy→sampler
-pairing in one command; whether `Agents(build=)` builds every seat) are still
-unanswered by anyone, belong to Etude, and do not block this Task. No new one.
-
-## Concept review of the implemented change — 2026-11-16 (928ee3f4bc)
-
-Read against the code and `docs/evaluation.md`, not run. Since the review
-above only the two QA fixes landed (05bdc978da, 928ee3f4bc). Both make the
-model smaller and are settled as they stand:
-
-- **One meaning for an invalid game.** `supervision.is_game_error` is now
-  "a native failure" (`managym.AgentError` or PyO3 `PanicException`), not "any
-  `Exception`". A game row with `valid: false` therefore always means the
-  engine failed, never that Manabot's Python did; everything else fails the
-  match. `execute_game` lost its `propagate_errors` argument and `eval/game.py`
-  its `RetryRequested` special case: transport retry is just one more error
-  that is not a game outcome.
-- **An all-invalid Elemental group is Etude's failed match.** Checked at
-  d9a6bc8 (`etude/eval/records.py`): a callback that raises leaves a `failed`
-  match record, other matches continue, and a later `done` record replaces it.
-  So the new check adds no state of its own; a deterministic native failure
-  leaves a failed match naming its retained `attempt-*` directory, and never a
-  forfeit or a silent pass.
-- `snapshot_report` opens its source before creating the output: a refusal
-  leaves nothing to clean up.
-
-Walked failure and recovery through the guide's Failure paragraph: native
-failure in one game → score-null row, later games play; Python error → failed
-match, evidence kept, retry writes a new attempt; every game invalid → failed
-match. The text matches the code. Nothing to change in this Task.
-
-Noticed and not made a direction (questions.md): "no valid game" is refused in
-three places by three rules. Elemental refuses in its callback; Duel's reader
-demands 200 valid rows (`eval/duel.py:154`); the shared deal callback
-(`benchmark.play_deal`, monitor and Duel) returns an all-invalid deal as
-score-null rows. Each is defensible where it sits; they are one fact only if
-Etude lets a job declare how many valid results a match must return.
-
-Open product choices: unchanged. The two Etude questions (same-seed
-policy→sampler pairing in one command; whether `Agents(build=)` builds every
-seat) are still unanswered by anyone, belong to Etude, and do not block this
-Task. No new one.
+Remaining acceptance is the GPU comparison and resume calibration in plan.md;
+method/results are experiments/reports/etude-execution.md. Hard match deadlines
+are Etude Task 2d1933; Lium lifecycle is Task 73e1a9. No new product decision.

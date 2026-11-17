@@ -1,51 +1,7 @@
 # MTG-329 evidence
 
-## Retained report fixes — 2026-11-17
-
-- Local smokes now log explicit text kind/recipe labels alongside existing
-  updates. The report reads those columns, preferring declaration fields.
-  Config bytes and resume equality are unchanged; old unlabeled runs remain
-  unclassified. First focused check exposed that Etude `RunData.points` reads
-  only numeric metrics; the reader now decodes only the matching text column.
-- Empty attempts no longer erase earlier observed work and duration. They
-  stay in membership with a warning that their time is unmeasured. Fixtures
-  cover silence before, between and after observed attempts, a wholly silent
-  run, and the actual loop's saved-state inspection attempt.
-- `uv run --extra dev --extra artifacts pytest tests/training/test_time_cohort.py tests/training/test_recipe_etude.py tests/training/test_self_play_loop.py::test_resume_keeps_adam_ema_counts_and_immutable_policies -q`:
-  14 passed (9.08s). The local recipe test uses renamed experiment/run names,
-  checks generated report selection through its actual JavaScript, and proves
-  a smoke can still be explicitly included. Declaration kind/job precedence
-  is covered separately. Ruff check/format and `git diff --check` pass.
-- Fresh isolated `ETUDE_HOME`, actual `uv run etude train
-  manabot/recipes/local.py --config '{"updates":1}' --json` then
-  `uv run --extra reports manabot training-report --source <home>/track --out
-  <home>/report.html`: both exit 0; generated JSON names
-  `kind=smoke`, `recipe=manabot.recipes.local`, `updates=1`. No servers,
-  watchers or rentals started. GPU measurements remain unrun for gate/CI.
-
-## Earlier evidence (full text: ce688b24d3:scratch/implementation.md)
-
-- 2026-11-16 evaluation errors: injected native AgentError/PyO3-shaped panic
-  retain score-null games and continue the group through Etude's real game
-  process; Python errors propagate from play and replay; all-invalid Elemental
-  callbacks fail with retained rows/journals (24 passed). No real Rust panic.
-- 2026-11-16 local recipe: `uv run etude train manabot/recipes/local.py --json`
-  on a fresh ETUDE_HOME finished; final EMA policy
-  `track/local/out/policies/00000002-ema.safetensors`. QA fourth pass
-  (scratch/qa.html): evaluation, training and workflows guides run as written.
-- 2026-11-17 L4: RunPod $0.69/hour, Vast and Lium, none available at
-  14:45-14:50 UTC; nothing rented. The shared `~/.etude/launcher.sqlite` needs
-  `provider_refusal_lookup` and was left unchanged; the isolated launcher is
-  `/tmp/mtg329-performance-etude` (Doppler etude/prd + manabot/prd).
-- 2026-11-17 regime-reader deletion: 21 affected test files, 187 passed, 3
-  skipped; report importers 119 passed; tla_frontier w64 and w160l8 settings
-  dumps equal the record-derived ones. Whole-tree collection has one error
-  that is on main too: tests/test_policy_container_support.py imports
-  `manabot.policy.checkpoint.require_supported` (it lives in
-  `manabot.backends.mlx.checkpoint`); not in the CI lists, not changed.
-  `scripts/check_loopflow_workflows.py` asserts in `_coverage` (graph step
-  ids) with no `.lf` or script change here. `test_cuda_semantic_policy_admission`
-  was validated on CPU only.
+Full earlier commands/results: 3670249eb3:scratch/implementation.md. GPU method,
+provider attempts and results: experiments/reports/etude-execution.md.
 
 ## Learning comparison method — 2026-11-17, before runs
 
@@ -83,66 +39,29 @@ measurement has run. Resume strength and CUDA speed/admission remain separate.
   268 optimizer updates. Branch cumulative optimizer updates: 89, 148, 268.
   Step 2 is unnecessary for this short uninterrupted case under the approved
   method; no broader strength or resume equivalence is implied.
-- Main used its unchanged `local_smoke(steps=3, seconds=180, device='cpu')`
-  through `execute_regime`; branch used `LocalConfig(updates=3)` through the
-  real `etude train` CLI, declared seed 197. Main's SDK was its d60236d pin;
-  the archived source was verified with its supported `.manabot-source.json`
-  bundle. The shared native implementation has no main/branch diff. Outputs
-  and comparison JSON remain in `/tmp/mtg329-learning`, CLI scripts/logs in
-  `/tmp/mtg329-learning-{main,branch}*`; these temporary paths are not archival
-  evidence. The numbers and method above are the retained result.
-- Broader GPU capacity check, 2026-11-17 15:25:25 UTC, isolated
-  `ETUDE_HOME=/tmp/mtg329-performance-etude`, Doppler etude/prd + manabot/prd:
-  `uv run --extra artifacts etude availability mtg329-speed-4090{,-vast,-lium} --timeout 30`
-  (three separate commands). RunPod NVIDIA GeForce RTX 4090: $0.89/hour,
-  none available. Vast RTX 4090: available, 24 vCPUs/64 GB,
-  $0.42702738444444444/hour. Lium: `reply is missing valid required fields`;
-  capacity is unknown, not absent. Each template has a $1/hour ceiling.
-  No rent/launch was issued; no paid cost or machine to terminate. The
-  same-GPU speed/CUDA/resume workload remains to be prepared and run under
-  the total USD 10 cap; this capacity check is not a failed GPU measurement.
-- Required isolated dependency integration check:
-  `uv run --isolated --locked --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py -q`:
-  12 passed (15.73s). `node --check manabot/reports/time_cohort.js` and
-  `git diff --check` pass. `lf context` retains default targets (16k tokens,
-  131072 bytes), reports no usage entries; protected scratch notes untouched.
-  Final isolated `etude machines` lists only owned local; no watcher/server
-  was started. Gate, publication, CUDA/resume and nightly remain unrun.
+- Main used unchanged local_smoke through execute_regime; branch used the real
+  etude train CLI. Full commands and temporary paths: 3670249eb3:scratch/implementation.md.
+- Required isolated artifact/Etude/recipe integration: 12 passed (15.73s).
+  Report JavaScript and diff checks passed. Provider capacity/termination
+  evidence is in experiments/reports/etude-execution.md; the original command
+  transcript remains at the git reference above.
 
-## GPU attempts — 2026-11-17
+## Latest dependency and focused checks
 
-Method, machine ids, exact events and launcher estimates:
-experiments/reports/etude-execution.md. Summary and blocker: plan.md, Remaining.
+Released Etude 0.4.1 replaces git pin in requirements, lock, release installs,
+metadata validation and docs. Isolated artifact/SDK/source/recipe and release
+checks: 50 passed, one stale deleted-module assertion failed; after replacing
+that assertion with baseline.py, isolated test_release.py: 39 passed. Installed
+CPython 3.12/3.13 smoke passed in earlier record. Local real CLI resume and
+16-game replay preflight passed; no CUDA claim from those checks.
 
-- Harness preflight: actual `etude train` at seed 197, CPU, two updates,
-  stop-file request after update 1: exit 75; `--resume`: exit 0. Reader returns
-  updates [1, 2], final 1,012 decisions. Production managed callback on an
-  existing checkpoint: 2 deals, 16/16 valid/replayed games, 645 CPU forwards,
-  max batch 1. A harness check, not CUDA or main/branch performance. The main
-  archive's resolved Elemental config validated against its historical schema.
-- After compress: `python -m experiments.etude_execution settings` wrote 3,218
-  bytes; `etude train experiments/etude_execution.py --config
-  '{"workload":"baseline","device":"cpu","updates":1}' --json`: finished, one
-  timed save (0.034 s).
-- Vast 4090: SSH, upload and native compilation, then offline; no scored
-  workload; termination confirmed 15:53 UTC. Lium 4090 (16:01 UTC): created,
-  unreadable by the pinned SDK, deleted directly and confirmed absent by
-  16:03 UTC; `etude terminate` refused (`Lium create already attempted;
-  awaiting reconciliation`). No server, watcher or rented machine remains.
+Current implement read CI run 44136662771: only failure was extra discovered
+experiment etude_execution (1 failed, 197 passed). Added it to expected set.
+`uv run --no-sync pytest tests/eval/test_experiment_files.py -q -k etude_finds_each_current_experiment_and_nothing_else`: 1 passed, 12 deselected (8.54s).
 
-## Released SDK and capacity retry — 2026-11-17
-
-- Replaced Etude's git source with PyPI 0.4.1 in requirements, lock, consumer
-  release installs, metadata validation and docs. Release staging still named
-  deleted checkpoint_evaluation.py; its assertion now checks baseline.py.
-- `uv run --isolated --locked --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py tests/infra/test_release.py -q`:
-  50 passed, one stale deleted-module assertion failed (25.90s). After that
-  assertion's fix, isolated `pytest tests/infra/test_release.py -q`: 39 passed
-  (0.28s). All 12 dependency integration checks passed in the first command.
-  Ruff check/format for the changed Python files and `git diff --check` pass.
-- Fresh launcher `/tmp/mtg329-runpod-vast-etude`, released 0.4.1: all eight
-  RunPod/Vast templates report no capacity at 16:09 UTC. No rental, cost or
-  GPU result. Final inventory: local only, zero sessions/rentals/runs; no
-  server/watcher started. Full method and capacity table: experiment report.
-  Retry still needs rentable RunPod/Vast capacity under USD 9. Gate and
-  publication remain later steps.
+Latest retry (18:57–19:19 UTC): CUDA check passed on Vast 4090; durable-write
+stall prevented any update (faulthandler: Etude run.py:412 os.fsync). Rental
+terminated, provider lookup confirmed absent; estimate ~USD 0.14. Follow-up
+checks found no alternate capacity. Full evidence: experiment report. PR #500
+body corrected for deleted regime readers and actual GPU attempts; CI rerun
+remains for gate. Training precision guide now matches managed CUDA selection.

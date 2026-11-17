@@ -78,6 +78,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "batched_baseline",
         "belief",
         "elemental",
+        "etude_execution",
         "seat_comparison",
         "tla_frontier",
     }

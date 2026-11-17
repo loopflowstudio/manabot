@@ -993,7 +993,8 @@ precision they ran with, and a checkpoint keeps what its run recorded.
 | `tf32` | For the loop, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
 | `bf16` | `torch.autocast(device, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
 
-Checkpoint evaluation and search run on CPU in float32. TF32 requires CUDA;
+Managed checkpoint evaluation uses CUDA when available, otherwise CPU, in
+float32; standalone evaluation and search use CPU. TF32 requires CUDA;
 BF16 requires CUDA or MPS. The field is serialized in every
 `SelfPlay`, so a run's recorded config names the precision it trained under,
 and a reduced-precision run is a declared recipe variant, never an edit of a

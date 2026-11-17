@@ -1,10 +1,10 @@
 # Etude execution comparison
 
-**Not yet measured.** Two rentals on 2026-11-17 ended before any scored GPU
-workload (a Vast host went offline; the Etude client could not read Lium's
-pod). Both were terminated and confirmed absent; launcher estimates total
-about USD 0.13 of the USD 10 cap. A later RunPod/Vast capacity check found
-nothing to rent. The method below stands for a repeat.
+**Not yet measured.** Three rentals on 2026-11-17 ended before a scored GPU
+update: one Vast host went offline, Lium's pod could not be read by Etude, and
+a later Vast 4090 blocked on durable writes. Every machine was terminated and
+confirmed absent. The latest retry reached CUDA successfully, but no alternate
+RunPod/Vast capacity was available afterward. Method and exact attempts below.
 
 The repeat rents from RunPod or Vast only, taking any reasonable single GPU
 on offer (L4, 4090, 3090, A5000 or A6000 class) under the remaining cap. Lium
@@ -140,3 +140,58 @@ eight on-demand templates only), `uv run --no-sync etude availability TEMPLATE
 Nothing was rented or started: the launcher lists only the owned local
 machine, with zero sessions, rentals and runs. The launcher holding the Lium
 intent and the shared launcher were not touched.
+
+## Retry — 2026-11-17, 18:57 UTC
+
+Released Etude 0.4.1 found Vast RTX 4090 capacity at
+USD 0.42702738444444444/hour. Rented machine
+`mtg329-speed-4090-vast-711bee426992`, instance `61113127`, for two hours
+with `--max-usd 9`, using the isolated RunPod/Vast launcher above. Source
+archives: main `3afd92d8f3bf48b87d873693580f0d5f8ccf3612`, branch
+`3670249eb38de3bf89de7dd834b8408028759f9b`, current harness overlaid on each,
+verified source manifests and each archive's own lockfile.
+
+The provider reported running before SSH was available. Its gateway refused
+connections; its direct mapped SSH endpoint became usable around 19:00 UTC.
+The host reported NVIDIA GeForce RTX 4090, 24,564 MiB, driver 595.71.05.
+Uploaded source and started the sequential setup/measurement script at
+19:01 UTC. Results and final termination follow below.
+
+No update completed. The first branch arm exported its initial raw/EMA policies
+and recorded update zero, then spent over six minutes with about 18 CPU seconds,
+0% sampled GPU utilization and kernel waits `flush_workqueue` / `rq_qos_wait`.
+Stopped that unscored process and retained its directory as `elemental-stalled`.
+A fresh identical invocation with stdlib `faulthandler.dump_traceback_later(45)`
+showed the main thread blocked at Etude 0.4.1 `run.py:412`,
+`os.fsync(stream.fileno())` in `declare`, before learning. An external py-spy
+snapshot had been refused by the container's ptrace permissions. The Python
+wrapper changed no model, settings, SDK or persistence code. These observations
+identify a durable-write stall on this host; they do not measure training speed.
+RAM-backed output was not substituted for the durable save path.
+
+Terminated the rental at 19:17 UTC. Etude lists it deleted and ended; Vast's
+individual lookup confirmed instance `61113127` absent at 19:17:48 UTC. The
+launcher's retained cost estimate is **~USD 0.14**. Deletion stopped all remote
+work; the remaining local SSH client was stopped explicitly. No scored policy,
+resume comparison, save-time sample or managed CUDA evaluation was produced.
+The CUDA availability/scalar check alone passed (Torch 2.15.0+cu132).
+
+Follow-up capacity checks, each capped at 30 seconds, were:
+
+| UTC | Provider / template | Outcome |
+| --- | --- | --- |
+| 19:17:08 | RunPod 4090, 6 vCPUs / 32 GB | none available |
+| 19:17:48 | Vast 3090, 4 vCPUs / 24 GB | none available |
+| 19:17:58 | RunPod A6000, 4 vCPUs / 24 GB | none available |
+| 19:18:27 | Vast 4090 in US, 4 vCPUs / 24 GB | none available |
+| 19:18 | Vast unrestricted 4090 offer read | only offer 58865929, China/CN; no alternate host |
+| 19:18:55 | RunPod A5000, 4 vCPUs / 24 GB | none available |
+| 19:18:56 | RunPod L4, 6 vCPUs / 48 GB | none available |
+| 19:19:12 | Vast A5000, 4 vCPUs / 24 GB | none available |
+| 19:19:21 | Vast L4, 6 vCPUs / 48 GB | none available |
+| 19:19:46 | Vast A6000, 4 vCPUs / 24 GB | none available |
+
+No alternate machine was rented. GPU speed, durable save cost, managed CUDA
+batching and resumed-versus-uninterrupted GPU learning remain unmeasured.
+A repeat needs a rentable host with working durable storage. No server,
+watcher or rented machine remains from this run.
