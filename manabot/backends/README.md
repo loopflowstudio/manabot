@@ -117,7 +117,7 @@ functions composition roots.
 
 Pass the selected backend through training execution, monitoring and
 verification. A caller that only runs inference takes a `BackendPolicy`; a
-caller that collects, learns or persists training state also needs the
+caller that collects, learns or captures a numerical incident also needs the
 capabilities for that work. These arguments are required: helpers do not
 default to Torch or resolve a backend themselves. The role contracts are
 `TrainingBackend` and `TrainingState` in `training/state/backend.py`, the
@@ -129,8 +129,8 @@ precision and sampling. Native game streams, seat routing and complete-game
 accounting stay in the collector. Rollout records contain NumPy arrays;
 packing validates them through the injected numerical capability. Torch
 collection uses its private generator seeded at `seed + 1`, shared by learner
-actions and current-self opponent actions. Recovery restores that generator's
-state to continue the same action stream.
+actions and current-self opponent actions. A resumed run starts a fresh
+stream; the generator's state is saved only in a numerical incident.
 
 Belief inference uses host observations and the policy's admission and
 evaluation methods. Search receives a hand sampler; the selected backend

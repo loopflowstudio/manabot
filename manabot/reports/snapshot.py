@@ -15,7 +15,17 @@ from pathlib import Path
 import sqlite3
 
 from manabot.infra.identity import file_sha256
-from manabot.verify.store import training_stage_payloads
+
+
+def training_stage_payloads(con: sqlite3.Connection, run_id: str) -> list[dict]:
+    """Read one saved run's retained stage records in execution order."""
+    return [
+        json.loads(payload)
+        for (payload,) in con.execute(
+            "SELECT payload FROM training_stages WHERE run_id=? ORDER BY rowid",
+            (run_id,),
+        )
+    ]
 
 
 def export_database(database: Path, output: Path) -> None:

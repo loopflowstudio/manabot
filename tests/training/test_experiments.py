@@ -343,7 +343,6 @@ def test_resolution_allocates_no_model_training_or_store(
         raise AssertionError("resolution attempted execution")
 
     monkeypatch.setattr("manabot.backends.torch.policy.ActorCritic.__init__", forbidden)
-    monkeypatch.setattr("manabot.verify.store.VerifyStore.__init__", forbidden)
     monkeypatch.setattr("managym.Env", forbidden)
     monkeypatch.chdir(tmp_path)
     result = Experiment(

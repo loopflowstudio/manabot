@@ -152,16 +152,6 @@ class Hardware(Strict):
     dollars_per_hour: float | None = Field(default=None, ge=0)
 
 
-class HardwareInventory(Strict):
-    resources: tuple[Hardware, ...]
-
-    @model_validator(mode="after")
-    def unique(self) -> "HardwareInventory":
-        if len({r.name for r in self.resources}) != len(self.resources):
-            raise ValueError("hardware names must be unique")
-        return self
-
-
 class ExperimentSchedule(CheckpointCadence):
     """Frozen launch intent. Monitoring is exploratory and has its own deals."""
 

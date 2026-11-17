@@ -40,3 +40,15 @@ collectors. Private training journals use the Etude recipe's `training_game_logs
 config field; old CLI/TrainingJob forwarding tests become recipe/loop checks.
 Exact native snapshot/restore assertions remain retired; preserve auto-reset,
 resolved-disclosure and export/replay checks. No launcher database was touched.
+
+Open after the second compress pass (for gate):
+- `test_recipe_report_preserves_paired_deals_and_policy_inspection` still fails,
+  now in the choice-corpus audit: `native corpus audit incomplete or failed ...
+  'error': 'KeyError: 79'` at `objects[index] for index in action.focus`
+  (verify/choice_corpus.py, unchanged on this branch; seed 82000, family 10,
+  focus of a type-11 action). The nightly baseline's `evaluate` takes the same
+  path, so it would report software error until this is fixed.
+- Nothing records host facts now: `infra.host.host_facts()` has no caller since
+  the executor went. Left in place with its tests; wire it into the loop's rows
+  or delete it.
+

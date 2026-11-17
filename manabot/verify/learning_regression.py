@@ -21,22 +21,15 @@ from pydantic import Field
 from manabot.env.observation import ActionEnum
 from manabot.eval.evaluation import EvaluationResult, evaluate_local
 from manabot.eval.local import checkpoint_request
-from manabot.eval.monitor import MonitorResult
 from manabot.eval.results import EvaluationRow
-from manabot.experiment.checkpoint_evaluation import checkpoints
-from manabot.experiment.records import Attempt, ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
-from manabot.training.records import RegimeRun
-from manabot.training.regime import TrainSelfPlay
 from manabot.training.state.backend import TrainingBackend
-from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.choice_corpus import Case, collect_choices, input_collisions
-import managym
 
 Verdict = Literal["learning", "regression", "inconclusive", "error"]
 
@@ -190,17 +183,6 @@ class BaselineReport(Strict):
     error: str | None = None
 
 
-def _paired(initial: MonitorResult, final: MonitorResult) -> list[PairedDeal]:
-    if initial.status != "completed" or final.status != "completed":
-        raise ValueError("arena evaluation incomplete")
-    if (
-        initial.protocol != final.protocol
-        or initial.training_seed != final.training_seed
-    ):
-        raise ValueError("arena protocol/seed changed between checkpoints")
-    return paired_rows(initial.rows, final.rows, initial.protocol.deal_seeds)
-
-
 def paired_rows(
     initial_rows: Sequence[EvaluationRow],
     final_rows: Sequence[EvaluationRow],
@@ -235,94 +217,6 @@ def paired_rows(
             )
         )
     return result
-
-
-def report_baseline(directory: Path, *, backend: TrainingBackend) -> BaselineReport:
-    """Retain an honest report even when training, evaluation or probes failed."""
-    experiment = ExperimentRun.model_validate_json(
-        (directory / "experiment.json").read_text()
-    )
-    (attempt,) = experiment.attempts
-    previous_threads = backend.runtime.threads()
-    backend.runtime.configure(1, "float32", "cpu")
-    report = BaselineReport(
-        seed=attempt.seed,
-        regime_digest="unavailable",
-        world=managym.WORLD_VERSION,
-        steps=0,
-        learning=learning_evidence([]),
-    )
-    try:
-        run = RegimeRun.model_validate_json(
-            (Path(attempt.path) / "run.json").read_text()
-        )
-        report.regime_digest = run.regime_digest
-        report.steps = run.updates_through(run.stages[-1].id)
-        report.source = experiment.runtime["source"]
-        if experiment.status != "completed" or attempt.status != "completed":
-            evaluations = [
-                Attempt.model_validate_json(path.read_text())
-                for path in (directory / "monitoring").glob("attempt-*/attempt.json")
-            ]
-            reasons = [item.error for item in evaluations if item.status != "completed"]
-            raise ValueError(
-                f"experiment incomplete: {experiment.error or attempt.error or reasons}"
-            )
-        (declared,) = run.regime.stages
-        if (
-            run.status != "completed"
-            or not isinstance(declared, TrainSelfPlay)
-            or report.steps != declared.updates
-        ):
-            raise ValueError("training did not reach its declared horizon")
-        if not sum(stage.optimizer_updates or 0 for stage in run.stages):
-            raise ValueError("no optimizer updates were executed")
-        exported = checkpoints(run, include_initial=True)
-        if (
-            not exported
-            or exported[0].coordinates.updates != 0
-            or exported[-1].coordinates.updates != report.steps
-        ):
-            raise ValueError("missing initial or endpoint checkpoint")
-        monitors = [
-            MonitorResult.model_validate_json(path.read_text())
-            for path in (directory / "monitoring").rglob("monitor.json")
-        ]
-        (initial,) = [item for item in monitors if item.coordinates.updates == 0]
-        (final,) = [
-            item for item in monitors if item.coordinates.updates == report.steps
-        ]
-        if (
-            initial.run_id != run.id
-            or final.run_id != run.id
-            or initial.artifact != exported[0].artifact
-            or final.artifact != exported[-1].artifact
-        ):
-            raise ValueError(
-                "arena evidence does not bind this run's initial/final checkpoints"
-            )
-        report.paired = _paired(initial, final)
-        points = [
-            PolicyPoint(
-                Path(c.artifact["path"]), c.coordinates.updates, c.artifact["sha256"]
-            )
-            for c in exported
-        ]
-        rows = stage_rows(run, read_updates(Path(attempt.path), [run]))
-        inspect_baseline(
-            report,
-            directory,
-            points,
-            [row for stage in rows.values() for row in stage],
-            backend=backend,
-        )
-    except Exception as error:
-        report.error = f"{type(error).__name__}: {error}"
-        report.learning = LearningEvidence(
-            verdict="error", seeds=1, deals=0, reason=report.error
-        )
-    backend.runtime.configure(previous_threads, "float32", "cpu")
-    return write_baseline_report(report, directory)
 
 
 @dataclass(frozen=True)
@@ -455,7 +349,8 @@ def report_recipe(
     """Evaluate the loop's initial/final raw policies and retain the nightly evidence.
 
     This is an explicit post-training evaluation; all four deck/seat legs share
-    the same deals. Etude remains the owner of training attempts and metric rows.
+    the same deals. Etude remains the owner of training attempts and metric rows:
+    `directory` is the `out` folder of the Etude run directory they are read from.
     """
     report = BaselineReport(
         seed=seed,
@@ -511,8 +406,11 @@ def report_recipe(
                 )
             results.append(result)
         report.paired = paired_rows(results[0].rows, results[1].rows, deals)
+        run_directory = directory.parent
         (tracked,) = [
-            run for run in read_all(directory / "etude") if run.experiment == "baseline"
+            run
+            for run in read_all(run_directory.parent)
+            if run.name == run_directory.name
         ]
         exposure = {
             name: int(np.nansum(tracked.points(name, "updates").y))

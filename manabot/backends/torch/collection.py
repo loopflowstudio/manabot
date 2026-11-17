@@ -43,11 +43,6 @@ class CollectionSession:
     def snapshot_rng(self) -> object:
         return self.rng.get_state().clone()
 
-    def restore_rng(self, state: object) -> None:
-        if not isinstance(state, torch.Tensor):
-            raise TypeError("Torch collector RNG state requires a tensor")
-        self.rng.set_state(state)
-
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:
         with PolicyInference(cast(ActorCritic, agent)) as inference:

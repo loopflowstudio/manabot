@@ -122,14 +122,15 @@ def test_recipe_report_preserves_paired_deals_and_policy_inspection(
 ) -> None:
 
     config = BaselineConfig(updates=1, device="cpu")
-    monkeypatch.setenv("ETUDE_OUT", str(tmp_path))
+    out = tmp_path / "track" / "baseline" / "baseline-seed-197" / "out"
+    monkeypatch.setenv("ETUDE_OUT", str(out))
     monkeypatch.setenv("ETUDE_EXPERIMENT", "baseline")
     monkeypatch.setenv("ETUDE_RUN", "baseline-seed-197")
     monkeypatch.setenv("ETUDE_SEED", "197")
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
     train(config)
     report = report_recipe(
-        tmp_path,
+        out,
         settings(config),
         seed=197,
         updates=1,

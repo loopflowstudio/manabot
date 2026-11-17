@@ -2,7 +2,6 @@
 
 One experiment = one module and one report: `<name>.py` here, `reports/<name>.md`
 for what it showed. Raw data in `data/`.
-Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 The [Haiku versus MTG-183 evaluation](reports/haiku-mtg183.md) reports a completed
 100-game hosted-model comparison, with full evidence in the experiment cache.

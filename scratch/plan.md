@@ -16,6 +16,13 @@ service in managed evaluation. Keep scalar standalone inspection, frozen compute
 readers, replay, Commands, admission, paired deals, cards and frozen identities.
 Old execution revision f4e1822faf46bbc9cdc43909293f8cbc8de4a300; state.pt revision
 f577362135562e569033fe33e48c7ef0411a829d. No old-folder loader.
+Second cut (orphans of the retired executor): TrainingState/TrainingRuntime
+recovery members and their Torch functions (policy/optimizer/RNG state, Adam
+admission, clone/validate, device metrics), collector restore_rng, VerifyStore
+(stage reader now in reports/snapshot.py), reports/selection.py,
+training/clock.py and its test, report_baseline, local_checkpoint_file,
+HardwareInventory, replay_prefix. Kept: StepCalibration (documented retained
+reader), infra/host.py (see questions.md).
 
 ## Built
 

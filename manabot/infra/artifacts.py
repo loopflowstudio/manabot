@@ -15,16 +15,12 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 from urllib.parse import unquote, urlsplit
 
 from etude.records import ArtifactRef
 from etude.storage import storage_from_uri
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-if TYPE_CHECKING:
-    # Artifact verification must not import managed evaluation machinery.
-    from etude.eval.records import Player
 
 Scheme = Literal["s3", "r2"]
 
@@ -201,21 +197,6 @@ def materialize_artifact(reference: StoredArtifact) -> Path:
     """Resolve a pinned artifact through the environment's credentials and local cache."""
     cache = Path(os.environ.get("MANABOT_ARTIFACT_CACHE", ".runs/artifact-cache"))
     return fetch_artifact(reference, cache)
-
-
-def local_checkpoint_file(seated: "Player") -> Path:
-    """The verified file a model plays; raises for code or a remote checkpoint."""
-    if seated.kind != "model":
-        raise ValueError("expected a model with a digest and byte count")
-    artifact = seated.checkpoint.artifact
-    if artifact.sha256 is None or artifact.size_bytes is None:
-        raise ValueError("expected a model with a digest and byte count")
-    uri = urlsplit(artifact.uri)
-    if uri.scheme != "file" or uri.netloc:
-        raise ValueError("checkpoint must be a verified local file")
-    path = Path(unquote(uri.path))
-    verify_file(path, artifact.sha256, artifact.size_bytes)
-    return path
 
 
 def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:

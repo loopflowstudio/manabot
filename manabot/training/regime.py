@@ -526,7 +526,7 @@ class SelectionGameSpec(Strict):
 class CollectSelection(Stage):
     """Diagnostic complete games from a fixed admitted self-play policy.
 
-    source_run refers to VerifyStore, never an unverified run JSON export.
+    source_run names a stored run, never an unverified run JSON export.
     Selection is recomputed per partition over its complete rows, not fitted.
     """
 

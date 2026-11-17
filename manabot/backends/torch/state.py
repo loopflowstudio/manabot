@@ -1,23 +1,21 @@
-"""Torch training-state codec, Adam admission and exact RNG continuation.
+"""Torch tensors for a numerical incident, and their serialization.
 
-Payloads retain their historical nested Torch schema. The host owns artifact
-hashing, immutable publication, lineage and restoration order.
+`capture_incident` bounds the evidence it keeps; the host owns the incident
+directory and its metadata (`training/state/incidents.py`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from copy import deepcopy
 import random
-from typing import TYPE_CHECKING, Any, BinaryIO, cast
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 import numpy as np
 import torch
 from torch import Tensor
 
 from manabot.backends.torch.learner import Learner
-from manabot.backends.torch.policy import ActorCritic
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
@@ -31,116 +29,8 @@ def preserve_rng() -> Iterator[None]:
         yield
 
 
-def policy_state(policy: BackendPolicy) -> dict[str, Any]:
-    """Serialization view; snapshot owners copy it before publishing."""
-    return cast(ActorCritic, policy).state_dict()
-
-
-def restore_policy(policy: BackendPolicy, state: dict[str, Any]) -> None:
-    cast(ActorCritic, policy).load_state_dict(state)
-
-
-def optimizer_state(learner: object) -> dict[str, Any]:
-    """Serialization view; ordinary synchronous exports need no tensor copy."""
-    return cast(Learner, learner).optimizer.state_dict()
-
-
-def restore_optimizer(learner: object, state: dict[str, Any]) -> None:
-    cast(Learner, learner).optimizer.load_state_dict(state)
-
-
-def framework_rng() -> object:
-    return torch.get_rng_state()
-
-
-def restore_rng(state: object) -> None:
-    if not isinstance(state, torch.Tensor):
-        raise TypeError("Torch RNG state requires a tensor")
-    torch.set_rng_state(state)
-
-
 def save(value: object, stream: BinaryIO) -> None:
     torch.save(value, stream)
-
-
-def load(stream: BinaryIO) -> object:
-    return torch.load(stream, map_location="cpu", weights_only=False)
-
-
-def parameter_names(policy: BackendPolicy) -> list[str]:
-    return list(dict(cast(ActorCritic, policy).named_parameters()))
-
-
-def validate_policy(policy: BackendPolicy, *, label: str = "learning-state") -> None:
-    if any(
-        not torch.isfinite(value).all()
-        for value in cast(ActorCritic, policy).state_dict().values()
-    ):
-        raise ValueError(f"{label} policy contains nonfinite tensors")
-
-
-def clone_policy(policy: BackendPolicy) -> BackendPolicy:
-    return deepcopy(policy)
-
-
-def validate_adam(optimizer: torch.optim.Adam) -> None:
-    """Reject absent/corrupt moments; unused parameters may legitimately lack state."""
-    if not optimizer.state:
-        raise ValueError("learning-state Adam has no populated state")
-    for parameter, state in optimizer.state.items():
-        if not isinstance(parameter, torch.Tensor) or not isinstance(state, dict):
-            raise ValueError("invalid Adam parameter state")
-        step = state.get("step")
-        if (
-            not isinstance(step, torch.Tensor)
-            or step.numel() != 1
-            or not torch.isfinite(step).all()
-            or step.item() <= 0
-            or step.item() != int(step.item())
-        ):
-            raise ValueError("invalid Adam step counter")
-        for name in ("exp_avg", "exp_avg_sq"):
-            value = state.get(name)
-            if (
-                not isinstance(value, torch.Tensor)
-                or value.shape != parameter.shape
-                or not torch.isfinite(value).all()
-                or (name == "exp_avg_sq" and (value < 0).any())
-            ):
-                raise ValueError(f"invalid Adam moment: {name}")
-
-
-def admit_adam(path: str, policy: BackendPolicy) -> dict[str, Any]:
-    state = torch.load(path, map_location="cpu", weights_only=True)
-    if not isinstance(state, dict) or set(state) != {"state", "param_groups"}:
-        raise ValueError("invalid Adam artifact")
-    optimizer = torch.optim.Adam(cast(ActorCritic, policy).parameters(), eps=1e-5)
-    groups = state["param_groups"]
-    expected_group = optimizer.state_dict()["param_groups"][0]
-    if (
-        not isinstance(groups, list)
-        or len(groups) != 1
-        or not isinstance(groups[0], dict)
-        or groups[0].get("params") != expected_group["params"]
-        or not isinstance(state["state"], dict)
-        or not set(state["state"]).issubset(expected_group["params"])
-        or any(
-            groups[0].get(key) != expected_group[key]
-            for key in (
-                "betas",
-                "eps",
-                "weight_decay",
-                "amsgrad",
-                "maximize",
-                "capturable",
-                "differentiable",
-            )
-        )
-    ):
-        raise ValueError("learning-state Adam parameter groups or settings mismatch")
-    optimizer.load_state_dict(state)
-    validate_adam(optimizer)
-    return state
 
 
 def _tensor_bytes(value: object) -> int:
@@ -286,7 +176,3 @@ def capture_incident(
             for name, value in batch_tensors.items()
         ),
     )
-
-
-def validate_optimizer(learner: object) -> None:
-    validate_adam(cast(Learner, learner).optimizer)

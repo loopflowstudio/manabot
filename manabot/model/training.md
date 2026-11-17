@@ -70,11 +70,11 @@ The loader returns eval mode; `Learner` explicitly enables train mode, including
 recurrent encoders whose CUDA backward requires a training-mode forward. Starting
 from admitted weights is a new run, not exact recovery.
 
-Supported private recovery restores learner, Adam, EMA, collector, sampler,
-minibatch, Python, NumPy and Torch RNG state at a committed update boundary.
-It preserves attempts, prior costs and absolute schedule coordinates. No update
-is applied from an incomplete collection. Recovery remains subject to source,
-recipe and backend admission; CPU proof does not certify CUDA recovery.
+Etude saves the learner's weights, Adam, EMA and cumulative counts after each
+update, and a resumed run continues from that boundary with its absolute
+schedule coordinates. No native game or RNG state is saved: a resume starts
+fresh game, sampling and minibatch streams, so it does not reproduce the
+uninterrupted run. No update is applied from an incomplete collection.
 
 Automatic failure capture does not enable tolerance. Opted-in game-error
 recovery retains its attempt ledger independently of optimizer snapshots, so
