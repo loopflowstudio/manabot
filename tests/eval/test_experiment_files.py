@@ -270,7 +270,11 @@ def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> Non
     runs = experiment.training(revision="HEAD")
     assert [run.seed for run in runs] == [39101, 39102, 39103]
     for run in runs:
-        assert run.job.name == "decision-memory-trunk-2"
+        assert run.job.name == (
+            "decision-memory-trunk-3"
+            if run.seed == 39103
+            else "decision-memory-trunk-2"
+        )
         spec = TrainingJob.model_validate_json(run.job.config or "")
         stage = spec.regime.stages[0]
         assert isinstance(stage, TrainSelfPlay)

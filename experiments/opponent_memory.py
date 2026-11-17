@@ -67,6 +67,9 @@ MILESTONES = (20, 40, 60)
 # Trunk launch label. "trunk" names the 2026-11-17 runs that overflowed the
 # 16,384-detail layout; their failed records stay as evidence.
 TRUNK_NAME = "trunk-2"
+# Seed 39103 lost its only trunk-2 attempt to a provider capacity refusal
+# before any work; its trunk is the same recipe under a fresh run identity.
+TRUNK_NAMES = {39101: TRUNK_NAME, 39102: TRUNK_NAME, 39103: "trunk-3"}
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
 
@@ -78,15 +81,19 @@ def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
     optimizer and learner-decision schedule start fresh at the branch point.
     """
     if not trunks:
-        return _job(revision, TRUNK, TRUNK_NAME).runs(*SEEDS)
+        return [
+            request
+            for seed, name in TRUNK_NAMES.items()
+            for request in _job(revision, TRUNK, name).runs(seed)
+        ]
     storage = storage_from_uri(trunks)
     state = observe(storage, EXPERIMENT)
     parents: dict[int, PretrainedInitialization] = {}
     for seed in SEEDS:
-        runs = _runs(state, TRUNK_NAME, seed)
+        runs = _runs(state, TRUNK_NAMES[seed], seed)
         if len(runs) != 1:
             raise ValueError(
-                f"seed {seed}: expected one decision-memory-{TRUNK_NAME} run in {trunks}, "
+                f"seed {seed}: expected one decision-memory-{TRUNK_NAMES[seed]} run in {trunks}, "
                 f"found {len(runs)}; launch and finish the trunks first"
             )
         if runs[0].state != "finished":
