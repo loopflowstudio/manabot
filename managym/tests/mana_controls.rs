@@ -114,7 +114,10 @@ fn floating_after_a_pass_reopens_priority_for_the_other_player() {
             .unwrap();
     }
     env.scenario_refresh().unwrap();
-    env.enable_mana_controls();
+    let first = env.current_agent_index().unwrap();
+    let second = 1 - first;
+    env.enable_mana_controls_for(second).unwrap();
+    assert!(env.mana_controls(first).unwrap().offers.is_empty());
     let pass = |env: &mut Env, name| {
         let frame = env.semantic_decision_frame().unwrap();
         let offer = frame
@@ -125,9 +128,7 @@ fn floating_after_a_pass_reopens_priority_for_the_other_player() {
         env.execute_semantic_command(&command(name, frame.revision, offer.id.0))
             .unwrap()
     };
-    let first = env.current_agent_index().unwrap();
     pass(&mut env, "first-pass");
-    let second = 1 - first;
     assert_eq!(env.current_agent_index(), Some(second));
     let before = env.state_digest().unwrap();
     let float = |env: &mut Env, name| {

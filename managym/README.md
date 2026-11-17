@@ -704,7 +704,10 @@ encoders, `Env.step`, `VectorEnv`, search forks and `semantic_decision_frame_jso
 are the same whether or not controls are enabled, and a fork or clone of an
 enabled `Env` starts with controls off. Calling either method on an `Env` that
 did not enable them is an error. `managym.mana_controls` gives the same two
-calls typed models.
+calls typed models. Academy enables controls for the human seat with
+`enable_mana_controls(viewer=seat)`. It passes `with_observation=True` to
+`execute_mana_control_json` to receive the JSON transition and the live acting
+observation, including the events produced by that Command.
 
 A control is answered with the native `Command`, bound to the published
 revision. Control offer ids continue the decision frame's numbering (action

@@ -12,7 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 from pydantic import TypeAdapter
 
@@ -152,12 +152,23 @@ class GameConfig:
         ]
 
 
+class RecordedManaControl(TypedDict):
+    verb: Literal["float", "undo"]
+    source: dict[str, Any]
+    label: str
+    native_command: dict[str, Any]
+    receipt: dict[str, Any]
+    state_before: str
+    revision: int
+    reverses: str | None
+
+
 @dataclass
 class TraceEvent:
     actor: str
     observation: dict[str, Any]
     actions: list[dict[str, Any]]
-    action: int
+    action: int | None
     action_description: str
     reward: float
     # Authoritative semantic beats caused by this exact engine step. Live play,
@@ -176,6 +187,7 @@ class TraceEvent:
     bot_decision: BotDecision | None = None
     # Authority-private analysis view; never included in ordinary trace reads.
     analysis_observation: dict[str, Any] | None = None
+    control: RecordedManaControl | None = None
 
 
 @dataclass(frozen=True)
@@ -214,7 +226,11 @@ class Trace:
         record["config"] = asdict(self.config)
         record["events"] = [
             {
-                **{item.name: getattr(event, item.name) for item in fields(event)},
+                **{
+                    item.name: getattr(event, item.name)
+                    for item in fields(event)
+                    if item.name != "control" or event.control is not None
+                },
                 "bot_decision": (
                     None if event.bot_decision is None else asdict(event.bot_decision)
                 ),
@@ -321,6 +337,10 @@ def prepare_trace_payload(
     prepared.pop("canonical_replay", None)
     for event in prepared.get("events", []):
         event.pop("analysis_observation", None)
+        if event.get("control"):
+            event["control"] = {
+                key: event["control"][key] for key in ("verb", "source", "label")
+            }
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
     checkpoint = config.get("opponent_checkpoint")

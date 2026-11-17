@@ -26,6 +26,7 @@ class UndoOffer(ProtocolModel):
 
 
 class ManaActivation(ProtocolModel):
+    command_id: str
     label: str
     sources: list[ObjectSubject]
     mana: Amounts

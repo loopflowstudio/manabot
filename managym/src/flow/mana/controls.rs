@@ -78,6 +78,7 @@ pub enum ControlOffer {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Activation {
+    command_id: String,
     label: String,
     sources: Vec<SubjectRef>,
     mana: Amounts,
@@ -154,6 +155,7 @@ struct Entry {
 /// the tap events and use limits can be reversed, even if more state changed.
 #[derive(Debug)]
 struct ManaActivation {
+    command_id: String,
     name: String,
     source: SubjectRef,
     source_permanent: PermanentId,
@@ -196,7 +198,7 @@ impl Reason {
 }
 
 impl ManaActivation {
-    fn start(game: &Game, action: &Action) -> Option<Self> {
+    fn start(game: &Game, action: &Action, command_id: &str) -> Option<Self> {
         if game.state.suspended_decision.is_some()
             || (game.pending_choice.is_some() && !payment_pending(game))
         {
@@ -257,6 +259,7 @@ impl ManaActivation {
             ));
         }
         Some(Self {
+            command_id: command_id.into(),
             name,
             source: SubjectRef::Object {
                 id: ObjectRenderId {
@@ -400,6 +403,7 @@ impl ManaActivation {
         };
         Entry {
             activation: Activation {
+                command_id: self.command_id,
                 label,
                 sources,
                 mana,
@@ -412,12 +416,24 @@ impl ManaActivation {
 
 #[derive(Debug, Default)]
 pub(crate) struct ManaControls {
+    pub(crate) viewer: Option<PlayerId>,
     revision: Option<u64>,
     entries: Vec<Entry>,
     pending: Option<ManaActivation>,
 }
 
 impl ManaControls {
+    pub(crate) fn reset(&mut self) {
+        *self = Self {
+            viewer: self.viewer,
+            ..Self::default()
+        };
+    }
+
+    pub(crate) fn permits(&self, actor: PlayerId) -> bool {
+        self.viewer.is_none_or(|viewer| viewer == actor)
+    }
+
     pub(crate) fn semantic_command(
         &mut self,
         game: &mut Game,
@@ -430,12 +446,12 @@ impl ManaControls {
             unreachable!("action-aligned semantic Command")
         };
         if self.revision != Some(game.decision_epoch) {
-            *self = Self::default();
+            self.reset();
         }
         let mut activation = self
             .pending
             .take()
-            .or_else(|| ManaActivation::start(game, action));
+            .or_else(|| ManaActivation::start(game, action, &command.command_id));
         let skip = game.skip_trivial;
         if let Some(active) = &mut activation {
             active.observe_choice(game, action);
@@ -483,7 +499,8 @@ impl ManaControls {
         let Some(space) = game.action_space() else {
             return frame;
         };
-        if space.player != Some(viewer)
+        if !self.permits(viewer)
+            || space.player != Some(viewer)
             || (self.pending.is_some() && self.revision == Some(game.decision_epoch))
         {
             return frame;
@@ -572,8 +589,12 @@ impl ManaControls {
             ControlOffer::Float { permanent, .. } => {
                 let player = game.state.priority.holder;
                 entry = Some(
-                    ManaActivation::start(game, &Action::TapForMana { player, permanent })
-                        .expect("offered fixed source"),
+                    ManaActivation::start(
+                        game,
+                        &Action::TapForMana { player, permanent },
+                        &command.command_id,
+                    )
+                    .expect("offered fixed source"),
                 );
                 game.tap_fixed_mana_source(player, permanent);
                 game.state.priority_mut().on_non_pass_action(player);

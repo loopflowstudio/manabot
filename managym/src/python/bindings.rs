@@ -4710,12 +4710,19 @@ impl PyEnv {
         })
     }
 
-    fn enable_mana_controls(&self) -> PyResult<()> {
+    #[pyo3(signature = (viewer=None))]
+    fn enable_mana_controls(&self, viewer: Option<usize>) -> PyResult<()> {
         self.reject_guarded_mutation("Env.enable_mana_controls")?;
-        self.inner
+        let mut env = self
+            .inner
             .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
-            .enable_mana_controls();
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if let Some(viewer) = viewer {
+            env.enable_mana_controls_for(viewer)
+                .map_err(map_agent_err)?;
+        } else {
+            env.enable_mana_controls();
+        }
         Ok(())
     }
 
@@ -4728,7 +4735,13 @@ impl PyEnv {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn execute_mana_control_json(&self, command_json: &str) -> PyResult<String> {
+    #[pyo3(signature = (command_json, *, with_observation=false))]
+    fn execute_mana_control_json(
+        &self,
+        py: Python<'_>,
+        command_json: &str,
+        with_observation: bool,
+    ) -> PyResult<PyObject> {
         self.reject_guarded_mutation("Env.execute_mana_control_json")?;
         let command: SemanticCommand = serde_json::from_str(command_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid semantic command: {error}")))?;
@@ -4736,9 +4749,14 @@ impl PyEnv {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        let transition = env.execute_mana_control(&command).map_err(map_agent_err)?;
-        serde_json::to_string(&transition)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+        let (transition, observation) = env.step_mana_control(&command).map_err(map_agent_err)?;
+        let json = serde_json::to_string(&transition)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        if with_observation {
+            Ok((json, Py::new(py, PyObservation::from(observation))?).into_py(py))
+        } else {
+            Ok(json.into_py(py))
+        }
     }
 
     /// Validate and atomically apply one revision-bound semantic Command
@@ -4890,6 +4908,15 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         env.scenario_force_battlefield(player, name, ready)
+            .map_err(map_agent_err)
+    }
+
+    fn scenario_create_token(&self, player: usize, key: &str) -> PyResult<usize> {
+        self.reject_guarded_mutation("Env.scenario_create_token")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .scenario_create_token(player, key)
             .map_err(map_agent_err)
     }
 

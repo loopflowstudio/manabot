@@ -67,6 +67,7 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+from managym.mana_controls import FloatOffer, ManaControls, UndoOffer, mana_controls
 from managym.payment import preview_payment
 from managym.policy import PolicyRunner
 from managym.search import (
@@ -353,6 +354,7 @@ class DecisionContext:
     actions: list[dict[str, Any]]
     offers: list[dict[str, Any]]
     frame: dict[str, Any]
+    mana_controls: ManaControls | None = None
 
 
 @dataclass(frozen=True)
@@ -1030,6 +1032,8 @@ class GameSession:
                 # priority-stop automation still records its Commands here.
                 env = managym.Env(seed=seed)
                 obs, _ = env.reset(config.to_rust())
+                if not self.watch_mode:
+                    env.enable_mana_controls(viewer=config.human_seat)
                 observe_policies((policy,), env, obs)
             except BaseException as exc:
                 # PyO3's PanicException derives directly from BaseException and has
@@ -1316,6 +1320,7 @@ class GameSession:
                 "status": "duplicate",
                 "receipt": deepcopy(receipt),
                 "recovery": self.current_recovery("duplicate_command"),
+                **self._mana_controls_payload(),
             }
 
         if raw.get("match_id") != self.match_id:
@@ -1330,7 +1335,19 @@ class GameSession:
             return self._reject_command(raw, "stale_prompt", recover=True)
 
         offer_id = raw.get("offer_id")
-        if context.action_by_offer.get(offer_id) is None:
+        control = (
+            next(
+                (
+                    offer
+                    for offer in context.mana_controls.offers
+                    if offer.id == offer_id
+                ),
+                None,
+            )
+            if context.mana_controls
+            else None
+        )
+        if control is None and context.action_by_offer.get(offer_id) is None:
             return self._reject_command(raw, "unknown_offer", recover=True)
         if raw.get("answers") != []:
             return self._reject_command(raw, "invalid_selection", recover=False)
@@ -1346,7 +1363,10 @@ class GameSession:
 
         base_revision = context.revision
         batch_cursor = self.presentation.next_seq
-        self._apply_bound_command(context, command, source="client")
+        if control is None:
+            self._apply_bound_command(context, command, source="client")
+        else:
+            self._apply_mana_control(context, control, command_id)
         # The receipt names the human transition, before any opponent proposal.
         # A later failure must not make an accepted Command appear unexecuted.
         committed_frame = self._experience_frame()
@@ -1361,13 +1381,85 @@ class GameSession:
         while len(self.accepted_commands) > MAX_ACCEPTED_COMMANDS:
             self.accepted_commands.pop(next(iter(self.accepted_commands)))
 
-        if committed is not None:
+        advance = control is None or not _is_hero_turn(self.obs, self.human_seat)
+        if advance and committed is not None:
             committed(self._accepted_outcome(base_revision, batch_cursor, receipt))
             base_revision = self.revision
             batch_cursor = self.presentation.next_seq
-        self._advance()
+        if advance:
+            self._advance()
         self._last_presentation_cursor = batch_cursor
         return self._accepted_outcome(base_revision, batch_cursor, receipt)
+
+    def _apply_mana_control(
+        self, context: DecisionContext, offer: FloatOffer | UndoOffer, command_id: str
+    ) -> None:
+        assert self.env is not None and self.trace is not None
+        controls = context.mana_controls
+        assert controls is not None
+        native = SemanticCommand(command_id, controls.revision, offer.id).to_json()
+        before = self.env.state_digest()
+        observation = context.frame["projection"]
+        subjects = json.loads(self.env.presentation_subjects_json())
+        result, self.obs = self.env.execute_mana_control_json(
+            native, with_observation=True
+        )
+        transition = json.loads(result)
+        subjects.update(json.loads(self.env.presentation_subjects_json()))
+        self.presentation.observe(self.obs, event_subjects=subjects)
+        if isinstance(offer, UndoOffer):
+            assert controls.undo is not None
+            activation = controls.undo.activation
+            label = offer.label
+            source = activation.sources[0]
+            reverses = activation.command_id
+        else:
+            source = offer.source
+            after = mana_controls(self.env, self.human_seat)
+            if after.undo is not None:
+                label = after.undo.activation.label
+            else:
+                permanent = next(
+                    card
+                    for side in ("agent", "opponent")
+                    for card in observation[side]["battlefield"]
+                    if card["id"] == source.id.entity
+                )
+                label = f"{permanent['name']} tapped for {offer.label.removeprefix('Tap for mana: ')}"
+            reverses = None
+        description = f"Mana control: {label}"
+        self.trace.events.append(
+            TraceEvent(
+                actor="hero",
+                observation=observation,
+                actions=[],
+                action=None,
+                action_description=description,
+                reward=0.0,
+                control={
+                    "verb": offer.verb,
+                    "label": label,
+                    "source": source.model_dump(mode="json"),
+                    "native_command": json.loads(native),
+                    "receipt": transition["receipt"],
+                    "state_before": before,
+                    "revision": context.revision,
+                    "reverses": reverses,
+                },
+            )
+        )
+        self._pending_action_log.append(description)
+        self._advance_protocol_revision()
+        self._commit_step_presentation(
+            from_revision=context.revision, actor=context.viewer, caused_by=command_id
+        )
+        self._observe_policies()
+
+    def _mana_controls_payload(self) -> dict[str, Any]:
+        prompt = self.published_prompt
+        if prompt is None or prompt.mana_controls is None:
+            return {}
+        return {"mana_controls": prompt.mana_controls.model_dump(mode="json")}
 
     def _accepted_outcome(
         self, base_revision: int, cursor: int, receipt: dict[str, Any]
@@ -1389,6 +1481,7 @@ class GameSession:
                     if int(event["seq"]) >= cursor
                 ],
                 "receipt": deepcopy(receipt),
+                **self._mana_controls_payload(),
                 **self._drain_surface_metadata(),
             },
         }
@@ -1916,6 +2009,8 @@ class GameSession:
         if self._f6_turn is not None:
             # F6 yields through stops and stack alike until the turn ends.
             return False
+        if any(obs.agent.mana) or any(obs.agent.lesson_mana):
+            return True
         if self.stop_on_stack and len(obs.stack_objects) > 0:
             return True
 
@@ -2008,6 +2103,11 @@ class GameSession:
             self.obs,
             viewer=self.human_seat,
         )
+        if not self.watch_mode:
+            self.published_prompt = replace(
+                self.published_prompt,
+                mana_controls=mana_controls(self.env, self.human_seat),
+            )
         frame = ExperienceFrame.model_validate(self.published_prompt.frame)
         address = DecisionAddressV2.from_frame(
             replay_id=f"replay.{self.match_id}",
@@ -2278,6 +2378,7 @@ class GameSession:
             "protocol": PROTOCOL_VERSION,
             "frame": frame,
             "recovery": recovery,
+            **self._mana_controls_payload(),
         }
         if "deck_names" in frame:
             payload["deck_names"] = frame["deck_names"]
@@ -2305,6 +2406,7 @@ class GameSession:
         }
         if recover:
             payload["recovery"] = self.current_recovery("stale_command")
+            payload.update(self._mana_controls_payload())
         return payload
 
     def _persist_attempt(self, *, end_reason: str | None = None) -> None:
@@ -2937,6 +3039,9 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
+    if participant.role != ViewerRole.PILOT:
+        payload.pop("mana_controls", None)
+        payload.get("update", {}).pop("mana_controls", None)
     payload["work"] = record.game.work.payload()
     payload["mirror_retry"] = record.game.mirror_retry
     payload["mirror"] = (
@@ -3347,6 +3452,7 @@ def _cache_table_recovery(record: SessionRecord) -> None:
             "winner": frame["winner"],
             "frame": frame,
             "recovery": recovery,
+            **record.game._mana_controls_payload(),
         }
     for participant in list(record.participants.values()):
         record.published[participant.viewer_id] = _response_with_participant(

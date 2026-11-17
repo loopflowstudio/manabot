@@ -353,7 +353,7 @@ impl Env {
         self.reset_seed = self.seed;
         self.game = Some(game);
         if let Some(controls) = &mut self.mana_controls {
-            *controls = ManaControls::default();
+            controls.reset();
         }
         self.heuristics = [None, None];
         drop(_scope);
@@ -1133,6 +1133,15 @@ impl Env {
         self.mana_controls.get_or_insert_with(Default::default);
     }
 
+    pub fn enable_mana_controls_for(&mut self, viewer: usize) -> Result<(), AgentError> {
+        let player = Self::player_id(viewer)?;
+        self.enable_mana_controls();
+        let controls = self.mana_controls.as_mut().unwrap();
+        controls.viewer = Some(player);
+        controls.reset();
+        Ok(())
+    }
+
     pub fn mana_controls(&self, viewer: usize) -> Result<ControlFrame, AgentError> {
         let controls = self
             .mana_controls
@@ -1152,6 +1161,14 @@ impl Env {
         &mut self,
         command: &SemanticCommand,
     ) -> Result<SemanticTransition, AgentError> {
+        self.step_mana_control(command)
+            .map(|(transition, _)| transition)
+    }
+
+    pub(crate) fn step_mana_control(
+        &mut self,
+        command: &SemanticCommand,
+    ) -> Result<(SemanticTransition, Observation), AgentError> {
         self.require_external_chooser()?;
         let controls = self
             .mana_controls
@@ -1165,7 +1182,7 @@ impl Env {
             .execute(game, command)
             .map_err(|e| AgentError(e.to_string()))?;
         self.remember_heuristic_events(&observation);
-        Ok(transition)
+        Ok((transition, observation))
     }
 
     pub fn semantic_event_cursor(&self) -> Result<u64, AgentError> {
@@ -1444,11 +1461,9 @@ impl Env {
         self.scenario_game_mut("benchmark_game_mut").unwrap()
     }
 
-    fn scenario_player(player: usize) -> Result<PlayerId, AgentError> {
+    fn player_id(player: usize) -> Result<PlayerId, AgentError> {
         if player > 1 {
-            return Err(AgentError(format!(
-                "scenario: player {player} out of range"
-            )));
+            return Err(AgentError(format!("player {player} out of range")));
         }
         Ok(PlayerId(player))
     }
@@ -1459,14 +1474,14 @@ impl Env {
     }
 
     pub fn scenario_set_life(&mut self, player: usize, life: i32) -> Result<(), AgentError> {
-        let player = Self::scenario_player(player)?;
+        let player = Self::player_id(player)?;
         self.scenario_game_mut("scenario_set_life")?
             .scenario_set_life(player, life);
         Ok(())
     }
 
     pub fn scenario_clear_hand(&mut self, player: usize) -> Result<(), AgentError> {
-        let player = Self::scenario_player(player)?;
+        let player = Self::player_id(player)?;
         self.scenario_game_mut("scenario_clear_hand")?
             .scenario_clear_hand(player);
         Ok(())
@@ -1477,7 +1492,7 @@ impl Env {
         player: usize,
         name: &str,
     ) -> Result<(), AgentError> {
-        let player = Self::scenario_player(player)?;
+        let player = Self::player_id(player)?;
         self.scenario_game_mut("scenario_force_card_in_hand")?
             .scenario_force_card_in_hand(player, name)
     }
@@ -1488,7 +1503,7 @@ impl Env {
         name: &str,
         ready: bool,
     ) -> Result<usize, AgentError> {
-        let player = Self::scenario_player(player)?;
+        let player = Self::player_id(player)?;
         self.scenario_game_mut("scenario_force_battlefield")?
             .scenario_force_battlefield(player, name, ready)
             .map(|permanent| permanent.0)
@@ -1496,7 +1511,7 @@ impl Env {
 
     /// Create a registered token in a constructed position, using its catalog key.
     pub fn scenario_create_token(&mut self, player: usize, key: &str) -> Result<usize, AgentError> {
-        let player = Self::scenario_player(player)?;
+        let player = Self::player_id(player)?;
         if default_content_pack().token_id(key).is_none() {
             return Err(AgentError(format!("unknown token: {key}")));
         }

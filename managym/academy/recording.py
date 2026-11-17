@@ -77,7 +77,9 @@ class Recording:
         decisions: dict[int, ReplayDecision] = {}
         if self.replay:
             indices = [
-                i for i, event in enumerate(payload["events"]) if not event.get("auto")
+                i
+                for i, event in enumerate(payload["events"])
+                if not event.get("auto") and not event.get("control")
             ]
             if len(indices) != len(self.replay.decisions):
                 raise ValueError("recording decisions and transitions differ")
@@ -108,7 +110,7 @@ class Recording:
                         row,
                     )
                 )
-            elif not self.replay:
+            elif not self.replay and not event.get("control"):
                 self.positions.append(Position(f"legacy-choice:{i}", "choice", i))
             self.positions.append(Position(f"after:{i}", "consequences", i, row))
         self.positions.append(Position("latest", "state", len(payload["events"])))
@@ -117,7 +119,9 @@ class Recording:
         # Revision joins come from retained decisions/events, never ordinals.
         self.revisions = {i: row.revision for i, row in decisions.items()}
         for i, event in enumerate(payload["events"]):
-            if event.get("presentation"):
+            if event.get("control"):
+                self.revisions[i] = event["control"]["revision"]
+            elif event.get("presentation"):
                 self.revisions[i] = event["presentation"][0]["from_revision"]
 
         self.event_by_revision = {revision: i for i, revision in self.revisions.items()}
