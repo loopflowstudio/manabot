@@ -153,7 +153,8 @@ def cell(arm: str, output: Path) -> None:
 
 def _baseline_source(probe: Probe, output: Path) -> tuple[Path, Path]:
     """Build the kept source with the same dependencies and release toolchain."""
-    baseline = output / "baseline-source"
+    # Build products are runtime inputs, not experiment outputs to upload.
+    baseline = Path(os.environ["ETUDE_INPUTS_DIR"]).parent / "baseline-source"
     baseline.mkdir()
     with tarfile.open(
         Path(os.environ["ETUDE_INPUTS_DIR"]) / "baseline.tar.gz"

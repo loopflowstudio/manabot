@@ -217,3 +217,16 @@ matching extension into the extracted baseline, verified its source manifest,
 and imported the common harness against the baseline training implementation.
 The staged archive's size/digest and alternating five-pair order passed checks;
 Ruff and `git diff --check` passed. No local training timing is used.
+
+Paired submission: source `fe5d46d443eb47fa16c772843d885d8561dcca96`, launch
+`9f92d0c15f8d`, requested run `recording_cost/revisions-20261117-1`, A6000
+$2.2425 quoted window under the $5 job cap. Source publication completed, but
+provider create returned HTTP 400 before any worker started. Complete provider
+inventory confirmed no `etude-333576aaa9fa` pod; the request is being reconciled
+before any future acquisition. No paired timing exists. This is a capacity
+blocker, not evidence that the edited revision is faster or slower.
+
+The next driver revision places baseline source/build products beside the
+attempt's input directory, outside output collection. Receipts, final tensor
+hashes and the shared recipe remain outputs; a second copy of the entire
+baseline build is not an experiment result.
