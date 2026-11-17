@@ -1182,41 +1182,48 @@ Engine failures in evaluation get no loss, draw or strength credit.
 Enable durable game journals before starting an attempt you need to diagnose:
 
 ```sh
-uv run manabot train --recipe local --training-game-logs --out .runs/journal-demo
+uv run etude train manabot/recipes/local.py --experiment journal-demo --config '{"training_game_logs": true}'
 ```
 
-The training run directory holds `game-journals/operation.json` and one rolling
+The run's `out/` directory holds `game-journals/operation.json` and one rolling
 `game-journals/PRODUCER.jsonl` journal per active producer. Scalar and vector
 producers use the same private replay evidence; sharded producers write separate
-files with global stream identities. The baseline recipe nests these under each
-training attempt directory; `run.json` records `game_journal_directory`.
+files with global stream identities. For the command above, the directory is
+`~/.etude/track/journal-demo/out/game-journals/`.
 The files remain readable if a producer
 never returns or the process exits abruptly, without waiting for exception
 handling or cleanup.
 
-`--training-game-logs` defaults off and applies to local and baseline recipes
-and explicit regime runs. Python callers pass `training_game_logs=True` to
-`execute_regime`; remote declarations set it on the job:
+`training_game_logs` defaults off in the local and baseline recipe configs.
+Python callers set it on `SelfPlay`; remote declarations set it on the recipe's
+config:
 
 ```python
-job = TrainingJob(
-    regime=batched_baseline(),
-    experiment=Path(__file__).stem,
-    training_game_logs=True,
-)
+from etude.jobs import TrainingJob
+
+from manabot.recipes.baseline import BaselineConfig, train
+
+
+def training_jobs() -> list[TrainingJob]:
+    return [
+        TrainingJob(
+            name="baseline", train=train, config=BaselineConfig(training_game_logs=True)
+        )
+    ]
 ```
 
 Use the imports and launch setup in [remote training](#remote-training).
-This is a runtime diagnostic option: it does not edit the `TrainingRegime`,
-its digest or checkpoint bindings. Enable it in a new attempt; it cannot
-recover an unfinished game's inputs from an earlier run that omitted logging.
+This is a diagnostic config option excluded from the learner digest and
+checkpoint bindings. Etude still compares recipe configs on resume, so enable
+it when declaring a new run. It cannot recover an unfinished game's inputs from
+an earlier run that omitted logging.
 With logging off, there are no additional diagnostic native reads or durable
 per-step writes.
 
 Game facts, optional statistics and private recording belong to managym and
 can be used [without the training package](engine-python.md#collect-in-game-statistics).
 Training selects that recorder and supplies producer paths, run coordinates,
-retention and the outer phase markers. `--training-game-logs` does not enable
+retention and the outer phase markers. `training_game_logs` does not enable
 aggregate statistics or audited evaluation eligibility. Statistics can count
 play without detailed logs, but cannot explain a native call that never returns.
 The training exposure option retains detailed facts for analysis; it is distinct
@@ -1225,18 +1232,18 @@ from both in-memory statistics and durable pending-call recording.
 ### Locate the interrupted operation
 
 Read `operation.json` alongside the producer journals. It identifies the
-active collection, learner or opponent inference, learning, device
-synchronization or export operation, with pending/returned state, timestamp,
-sequence and run/stage/update coordinates. Nested inference returns restore
-the enclosing operation. A pending learning marker with returned/ready game
+active collection, learner or opponent inference, or learning operation,
+with pending/returned state, timestamp, sequence and run/update coordinates.
+Nested inference returns restore the enclosing operation. A pending learning
+marker with returned/ready game
 journals points to learning work; the last game action alone does not identify
 where progress stopped.
 
 Each producer journal retains the known seed and actual decks, committed
 action prefix, selected pending actions, active streams and last-known
 decision frames (actor and offers); replay below names their turn and phase.
-Collector construction, which resets each producer's first games, is part of the
-`collection` operation. Its native boundary distinguishes:
+Collector construction resets each producer's first games under the capture
+scope before the first collection phase. Each native boundary distinguishes:
 
 | Phase | Interpretation |
 | --- | --- |
@@ -1263,7 +1270,7 @@ Copy the producer journal to a private location before replaying if the run
 is still writing it. Substitute its filename for `PRODUCER`:
 
 ```sh
-uv run python -m manabot.training.state.game_errors .runs/journal-demo/game-journals/PRODUCER.jsonl --attempt 1 --seconds 30
+uv run python -m manabot.training.state.game_errors ~/.etude/track/journal-demo/out/game-journals/PRODUCER.jsonl --attempt 1 --seconds 30
 ```
 
 Replay uses the [existing source/native and world checks](#automatic-capture-and-replay).

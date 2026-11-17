@@ -8,7 +8,7 @@ raw/EMA, 87 tensors each, bitwise equal to retired 6ce618b8ad. Real
 SIGINT/SIGTERM saved at update 1; resume finished at 3, rows [1,2,3]. Old
 state.pt parity does not prove the revised save API.
 
-2026-11-16, Etude d9a6bc8, CPU only:
+2026-11-16 before main sync, Etude d9a6bc8, CPU only:
 - uv lock and locked sync pass; existing cp313 native extension used.
 - test_etude_agents plus native card resume/partial-failure retry: 9 passed
   (54s). Across real Etude game processes, public AgentError and a PyO3-shaped
@@ -33,5 +33,29 @@ state.pt parity does not prove the revised save API.
   tests/training/test_head_to_head.py test_monitor_evaluation.py`: 89 passed
   (73s); ruff clean on changed files.
 
-Not shown: CUDA batching, real Rust panic injection, hang/load injection,
+2026-11-16 after main sync, merged 3cb2aacbb5, Etude d9a6bc8:
+- Initial focused run: 69 failed / 32 passed (8.73s); stale native binary lacked
+  `known_library`. Rebuilt with `uv run --extra play maturin build --release -i
+  .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` (81s), then
+  atomically installed the matching cp313 extension.
+- `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest
+  tests/training/test_collection.py tests/training/test_training_game_journals.py
+  tests/env/test_decklist_disclosure.py tests/training/test_recipe_etude.py -q
+  --tb=short`: 100 passed / 1 failed (46.98s). Root reassignment read native
+  seeds before journaling intent; proposed setups now use synchronized cached
+  seeds before that read. Reran `test_training_game_journals.py` with the same
+  flags: 65 passed (28.37s), including interruption before reassignment reads.
+- Same command flags with `tests/training/test_training_decks.py
+  tests/training/test_self_play_loop.py tests/training/test_game_errors.py
+  tests/training/test_batch_closure.py tests/model/test_layer_input.py
+  tests/semantic/test_elemental_world.py tests/env/test_engine_recording.py`:
+  129 passed / 3 failed (27.27s). Two standalone test workers retained the
+  removed inference argument. Removed it; reran `test_game_errors.py` with the
+  same flags: 32 passed (23.90s). Includes bounded lost-worker/timeout fixtures,
+  not a native hang or load probe. Total: 233 distinct focused checks pass.
+- Updated stalled-training docs to Etude config/path/phase semantics.
+  `uv run --extra dev ruff check` and `ruff format --check` on recording and
+  game-error fixtures, plus `git diff --check`: pass.
+
+Not shown: CUDA batching, real Rust panic injection, native hang/load injection,
 launched or provider runs, browser proof, a full-suite run.

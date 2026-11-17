@@ -42,3 +42,8 @@ boundary/declaration verification (38 passed), lint and formatting pass. No CUDA
 proof or automatic policy→sampler scheduling claim. LLM experiments remain explicitly blocked on EXP-70/frozen checkpoints;
 their declarations share Agents but their sessions are not a runnable adoption
 proof. Earlier transcripts: 4de3a76ba0 and 382c653ec8:scratch/.
+
+After main sync (3cb2aacbb5): rebuilt native cp313 extension; 233 distinct focused
+collection/journal/disclosure/recipe and adjacent checks pass after fixing journal
+read ordering and stale standalone worker fixtures. Lint/format/diff checks pass;
+commands and results in implementation.md. Gate/publication remain caller steps.

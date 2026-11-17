@@ -890,9 +890,7 @@ class CapturedVector(_Capture):
     def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
-    def reset_each_into_buffers(
-        self, players: list[managym.GameSetup]
-    ) -> None:
+    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
         self._reset_each(players, lambda: self.native.reset_each_into_buffers(players))
 
     def reset_all(self, players: managym.GameSetup) -> Any:
@@ -933,12 +931,11 @@ class CapturedVector(_Capture):
                 self._evidence_for(self.games, "reset"),
                 "reassign_roots",
                 players=[
-                    None if setup is None else _retain_players(setup, seed)
-                    for setup, seed in zip(
-                        players, self.native.current_game_seeds(), strict=True
-                    )
+                    None if setup is None else _retain_players(setup, game.seed)
+                    for setup, game in zip(players, self.games, strict=True)
                 ],
             )
+        # Journal the intent from synchronized inputs before any native read.
         proposed = [game.model_copy(deep=True) for game in self.games]
         for game, setup, seed in zip(
             proposed, players, self.native.current_game_seeds(), strict=True
