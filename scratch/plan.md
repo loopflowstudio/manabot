@@ -228,6 +228,35 @@ QA's two retained-report defects (scratch/qa.html) are fixed by 3850764dd8,
   Task 2d1933 hard deadlines and the Lium fix remain external limitations;
   no Task for the Lium fix was found (questions.md).
 
+## Steers 54c7d853 and 7d745eb2 (2026-11-17) — three things owed
+
+Sources: .lf/prompts/20261117-105529-ssL53E-steer.md, -TkHneT-steer.md. "Do
+not land on the commit pin" (already replaced by PyPI 0.4.1). Docs for these
+are written: experiments/reports/etude-execution.md (retry rule at the top;
+results go there) and docs/training.md "Saved regimes" (unchanged, already
+states what cannot be rebuilt).
+
+1. GPU measurements as in the Remaining entry above: RunPod or Vast, any
+   reasonable single GPU, "try what is on offer", retry a few times across
+   the run when a host dies or nothing is available, then say exactly what
+   was tried. Lium excluded (Etude Task 73e1a9). About USD 0.13 of USD 10
+   spent. Terminate and confirm every machine.
+2. CI red at ce7e15ca27: Integration (ubuntu-latest, evaluation), run
+   44136662771, 1 failed / 197 passed:
+   `tests/eval/test_experiment_files.py::test_etude_finds_each_current_experiment_and_nothing_else`
+   (line 77, set mismatch). Unverified reading: `experiments/etude_execution.py`
+   is found as an experiment and is not in the test's expected set.
+3. PR #500 body is wrong in two sentences. "Historical records remain
+   readable, and frozen experiments retain their source revisions." — the
+   regime readers are gone; say that reports built from regime records
+   (any naming a regime, a `RegimeRun` or an `experiments/data/<name>/`
+   SQLite store) cannot be rebuilt from main and are read from
+   f4e1822faf46bbc9cdc43909293f8cbc8de4a300, with state.pt folders from
+   f577362135562e569033fe33e48c7ef0411a829d. "the planned comparison could
+   not start because no L4 was available" — replace with what the GPU retry
+   actually showed. Not edited in write-docs: the second sentence depends on
+   item 1.
+
 ## Built since the 2026-11-17 steers
 
 - Policy-error test: RuntimeError propagates without a result row; native

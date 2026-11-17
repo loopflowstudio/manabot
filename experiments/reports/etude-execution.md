@@ -6,6 +6,13 @@ pod). Both were terminated and confirmed absent; launcher estimates total
 about USD 0.13 of the USD 10 cap. A later RunPod/Vast capacity check found
 nothing to rent. The method below stands for a repeat.
 
+The repeat rents from RunPod or Vast only, taking any reasonable single GPU
+on offer (L4, 4090, 3090, A5000 or A6000 class) under the remaining cap. Lium
+is excluded: its rental strands the pod, which Etude Task 73e1a9 is fixing.
+A host that dies or a check that finds no capacity is retried a few times
+across the session before the measurement is given up; each try, its machine
+id and its confirmed termination is listed below.
+
 Exploratory, not a playing-strength claim. Does execution adoption change
 Elemental update throughput on the same GPU, do managed Manabot players batch
 on CUDA, and how does a stopped/resumed baseline compare with uninterrupted
@@ -109,8 +116,8 @@ pod or a reconciled deletion. No launcher/server loop was left running.
 
 The launcher's retained estimate at 16:03 UTC was **~USD 0.01**, not a final
 settlement: the client cannot reconcile this deleted pod. A retry needs a
-provider whose lifecycle the client can read (RunPod or Vast), or an Etude fix
-for Lium's timestamps and interrupted-creation recovery.
+provider whose lifecycle the client can read (RunPod or Vast); Etude Task
+73e1a9 owns the fix for Lium's timestamps and interrupted-creation recovery.
 
 ## RunPod/Vast capacity check — 2026-11-17, 16:09–16:10 UTC
 
