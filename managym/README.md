@@ -669,4 +669,83 @@ payment; funded payments and payments needing every available source retain
 native trivial-decision skipping. These ordinary choices are on by default
 for every consumer. Source taps use the existing `TapForCost` policy action
 with the source as focus; the native Command verb is `tap_for_mana`, distinct
-from waterbend. They do not expose free-form production at priority or undo.
+from waterbend. They do not expose free-form production at priority or undo;
+those are [mana controls](#mana-controls), which no policy is offered.
+
+### Mana controls
+
+Float a Forest at priority and take it back:
+
+```python
+env.enable_mana_controls()
+controls = json.loads(env.mana_controls_json(viewer))
+# {"revision": 41,
+#  "offers": [{"id": 3, "verb": "float", "label": "Tap for mana: {G}",
+#              "source": {...Forest...}, "output": {"green": 1}}],
+#  "undo": None}
+
+env.execute_mana_control_json(json.dumps(
+    {"command_id": "c1", "expected_revision": 41, "offer_id": 3, "answers": []}
+))
+controls = json.loads(env.mana_controls_json(viewer))
+# {"revision": 42,
+#  "offers": [{"id": 3, "verb": "undo", "label": "Undo: Forest tapped for {G}"}],
+#  "undo": {"activation": {"label": "Forest tapped for {G}", ...},
+#           "offer": 3, "reason": None}}
+```
+
+Executing the undo offer at revision 42 leaves `env.state_digest` equal to its
+value before the float, at revision 43.
+
+Mana controls are a second offer set published beside a decision's action
+offers, for an `Env` that called `enable_mana_controls()`. Academy's live game
+is the only caller. They are not `Action`s: the action space, observations,
+encoders, `Env.step`, `VectorEnv`, search forks and `semantic_decision_frame_json`
+are the same whether or not controls are enabled, and a fork or clone of an
+enabled `Env` starts with controls off. Calling either method on an `Env` that
+did not enable them is an error. `managym.mana_controls` gives the same two
+calls typed models.
+
+A control is answered with the native `Command`, bound to the published
+revision. Control offer ids continue the decision frame's numbering (action
+offers are `0..n`, controls start at `n`), so one revision has one id space;
+`execute_semantic_command_json` refuses a control id and
+`execute_mana_control_json` refuses an action id. Executing a control
+republishes the same decision at a new revision, without trivial-decision
+skipping, so a Command bound to the earlier revision is stale. Rejections are
+the Command's: stale revision, not the chooser, unknown offer, nonempty
+answers, game over.
+
+**Float** is offered to the chooser of a published priority decision, once for
+each permanent with a fixed output that can tap now and whose bonuses need no
+choice. It is the tap a pending payment offers, followed by the ordinary
+post-action boundary (triggers, state-based actions).
+
+**Undo** covers the most recent mana activation made through Commands on that
+`Env`: a float, a `tap_for_mana` in a pending payment, or an activated mana
+ability with the choices that finish it. Activations are undone newest first.
+The log empties when the published decision stops being the same decision: any
+Command that is not part of a mana activation, and the tap that finishes a
+payment. An undo offer exists only when both hold:
+
+1. The ability's costs are tapping permanents, paying mana and a
+   once-each-turn or exhaust use, and it has no instruction beside the mana.
+2. Applying the inverse to a clone of the game reproduced the
+   pre-activation `state_digest`.
+
+The inverse untaps what the activation tapped, restores both mana pools, drops
+the events it appended and clears the use it registered. Otherwise `undo.offer`
+is null and `undo.reason` carries a code and a sentence naming the source:
+
+| Code | Meaning |
+|---|---|
+| `sacrificed_source` | A permanent was sacrificed as a cost. |
+| `paid_life` | Life was paid or lost. |
+| `discarded_card` | A card was discarded as a cost. |
+| `additional_instructions` | The ability does something beside adding mana. |
+| `triggered_ability` | The activation queued a trigger or changed the stack. |
+| `other_consequences` | The inverse did not reproduce the earlier digest. |
+
+An activation that cannot be undone stays the current one and blocks those
+before it. The clone only verifies; the live game is changed by the inverse,
+never replaced by a snapshot.

@@ -66,11 +66,17 @@ Jack Heart's direction (2026-10-21): Academy should make the acting agent's
 viewer-safe observations and complete legal action space understandable to a
 human. Navigation, grouping and labels may clarify that shared contract; they
 must not hide strategic choices, silently select actions, reveal unavailable
-information or introduce human-only game semantics. Evaluate awkward decisions
+information or introduce human-only game semantics (mana controls, below, are
+the one named exception). Evaluate awkward decisions
 at the shared observation/action authority rather than disguising them in the
 browser. Preserve Command binding, stale rejection, actual pending decisions on
 reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
-explicit shared action and cannot erase committed costs or revealed information.
+explicit native offer answered by a Command and cannot erase committed costs or
+revealed information. Mana control offers (floating a fixed source at priority,
+undoing a proved-reversible mana activation) are the one offer set outside the
+shared action space: a capability only a person in live Academy play has,
+published only by an `Env` that enabled it, kept apart from game choices in the
+browser and marked in every recording.
 Configured priority-stop automation must remain identifiable as automation,
 separate from deliberate human decisions.
 Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;

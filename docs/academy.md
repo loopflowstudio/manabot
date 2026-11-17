@@ -633,8 +633,9 @@ committing. Player targets have explicit named controls. During combat, choose
 for the creature named by the current prompt: attack or decline, or select one
 of its legal blocks or decline. Each choice commits separately before the next
 creature's prompt; there is no draft of a whole attack or block to edit and
-confirm. Mana-source choices likewise follow the offered decisions;
-dragging a spell does not configure manual tapping.
+confirm. Dragging a spell does not configure manual tapping; to choose your
+own sources, tap them first or during the payment
+([Floating mana and undo](#floating-mana-and-undo)).
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
 offer. Card selection narrows navigation; **Show all** restores the full list.
@@ -648,7 +649,98 @@ selection and drags. Wait for the current prompt, then select again. Actions are
 unavailable while disconnected, awaiting a submitted action or changing settings.
 These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
 use their own decision controls. Cancellation only discards local selection:
-after commitment, costs and revealed information remain committed.
+after commitment, costs and revealed information remain committed. The one
+thing you can take back is a mana activation, with **Undo**.
+
+### Floating mana and undo
+
+You hold two Forests and a Mountain and want the Mountain left untapped after
+casting a two-mana green creature. At your main-phase priority, before choosing
+the spell:
+
+1. Select a Forest on the board and activate **Tap for mana: {G}**. The Forest
+   taps, the floating-mana readout shows `{G}`, and the same decision stays
+   open. A **Mana** group under the choices now shows
+   **Undo: Forest tapped for {G}**.
+2. You meant to look at your hand first. Activate **Undo**. The Forest untaps,
+   the readout empties and the game is exactly where it was before the tap.
+3. Tap both Forests, then cast the creature. Its payment spends the floating
+   `{G}{G}` and the Mountain stays untapped.
+
+**Tapping.** The **Mana** group lists every source you may tap now, each land
+or other permanent separately, with the mana it produces; two Forests are two
+entries. Selecting a source on the board shows the same control at the top of
+that card's choices. Focusing an entry marks its source on the board, so the
+whole flow works from the keyboard without the board. Nothing in the group is
+ever preselected, and tapping never picks a spell for you.
+
+The group holds sources whose output needs no choice. A source that asks for
+one, such as a land that adds one mana of any color, is an ordinary
+**Activate** choice in the main list; choose its color when asked, and **Undo**
+then covers the whole activation. A source you tap while a payment is pending
+is covered the same way.
+
+Mana you float behaves like any mana in your pool. The readout shows its
+color, what it may be spent on and when it empties; unspent mana empties when
+the step or phase ends, and the tap is not refunded. Academy does not pass
+priority automatically while mana you floated is in your pool.
+
+You can tap only at a priority decision Academy shows you. A window where
+passing is your only legal action is skipped as usual, and with **Use priority
+stops** on, a window outside your stops passes automatically; add a
+[stop](#choosing-priority-stops) to float mana there.
+
+**Undo.** **Undo** names the activation it reverses and takes back the most
+recent one. After it, the activation before becomes the one **Undo** names, so
+you can step back through several taps in the order you made them, newest
+first. It restores what the activation changed: the tapped permanents, your
+mana pool and a once-each-turn use.
+
+Undo belongs to the decision in front of you. Any other choice (casting,
+passing, choosing a target) commits every activation made so far, and the
+**Undo** control goes away. So does the tap that finishes a payment: the spell
+is paid for, and taking back a cast is not offered. While a payment is still
+pending you can undo its taps one by one, but you remain in the payment.
+
+The engine decides whether an activation can be undone, and offers **Undo**
+only when reversing it restores the game exactly. Otherwise **Undo** stays
+visible but unavailable, with the reason:
+
+| Reason shown | When |
+|---|---|
+| "Treasure was sacrificed for this mana." | The activation sacrificed a permanent. |
+| "Life was paid for this mana." | The activation paid or lost life. |
+| "Forest's tap triggered an ability." | An ability triggered from the tap or the mana. |
+| "This ability did more than add mana." | The ability has another instruction, such as gaining life or drawing a card. |
+| "A card was discarded for this mana." | The activation discarded a card. |
+| "This activation had other consequences." | Anything else the engine cannot reverse exactly, such as a random result. |
+
+An activation that cannot be undone also blocks the ones before it: mana from
+earlier taps may already have depended on it. Undo never hides information the
+activation revealed and never returns a cost the engine cannot restore.
+
+**Keyboard.** Tab reaches the **Mana** group after the ordinary choices. After
+a tap, focus moves to **Undo**; after an undo, it returns to that source's tap
+control. An unavailable **Undo** stays in the tab order and reads its reason to
+assistive technology. There is no Undo shortcut key.
+
+**Connection and stale choices.** A tap or an undo is submitted and recovered
+like any other choice
+([Pending input, waits and recovery](#pending-input-waits-and-recovery)): each
+one refreshes the decision, a choice made from the earlier view is rejected as
+stale, a resent submission is applied once, and reconnecting in the same tab
+shows the same sources and the same **Undo**.
+
+**In recordings.** Each tap and each undo is saved as its own step, labeled
+**Mana control**, in the action log and the recording. An undone tap stays in
+the history, followed by its undo; neither is erased. Replay, Watch and Study
+show these steps and offer no mana controls of their own. A Study branch taken
+after a float starts with that mana in the pool and treats the tap as
+committed.
+
+Bots never see these controls. A model, a search or an evaluation playing the
+same position gets the same legal actions it always did; tapping before a
+spell is something only a person in a live Academy game can do.
 
 ### Pending input, waits and recovery
 
@@ -667,7 +759,9 @@ or cost choice before trying another spell. Inspection and **Show all** keep
 the complete legal choices accessible. A pending cost can require a deliberate
 mana activation before **Pay cost** becomes available. Mana you have produced
 and not yet spent appears as a floating-mana readout beside the board, by
-color, until it is spent or empties. The list is the complete
+color, until it is spent or empties; see
+[Floating mana and undo](#floating-mana-and-undo) for producing it yourself
+and taking a tap back. The list is the complete
 set of legal actions at this decision. Academy does not say why an action is
 absent from it: a card with no listed action has none right now, and its
 details show its printed text and current state, not a reason.
@@ -726,7 +820,9 @@ resume credentials and unresolved input belong to that tab's session storage.
 Back, Escape and clear controls discard only unsubmitted local selections.
 Once an action commits, its costs and revealed information remain committed.
 Cancellation is possible only when the current legal choices explicitly offer
-it; there is no general browser undo.
+it. The engine offers **Undo** for a mana activation it can reverse exactly
+([Floating mana and undo](#floating-mana-and-undo)); nothing else can be
+undone, and the browser never rolls a game back on its own.
 
 ### Choosing priority stops
 
@@ -1320,7 +1416,9 @@ human. Navigation, grouping and labels may clarify that shared contract; they
 must not hide strategic choices, silently select actions, reveal unavailable
 information or introduce human-only game semantics. Awkward decisions are
 evaluated at the shared observation/action authority, not disguised in the
-browser. The invariants that follow:
+browser. Mana controls are the one named exception: a person in live play can
+tap a fixed mana source at priority and undo a mana activation, which no
+policy is offered. The invariants that follow:
 
 - **Command binding and stale rejection.** Every Command names the exact offer
   and revision that produced it; a stale or duplicate Command leaves state
@@ -1329,6 +1427,14 @@ browser. The invariants that follow:
   pending decision (including mid-payment and trigger-ordering choices) from a
   recovery envelope. A lost response does not undo a submitted choice; **Back**
   cannot refund committed costs or hide revealed information.
+- **Mana controls are native offers.** Floating and undo are a second offer
+  set the engine publishes beside the decision's action offers, only for a
+  live game that enabled it, and answered by the same Commands with the same
+  binding, stale rejection, idempotency and recovery. They are never part of
+  the action space a policy, search or advice call reads. Undo is offered only
+  for an activation the engine has proved it restores exactly, and every
+  control Command is recorded as its own marked step; an undo follows the tap
+  it reverses and erases nothing.
 - **Forced decisions are never shown.** Academy uses native `skip_trivial`
   like every game runner: a sole legal action, for
   either seat, never reaches a person or policy.
@@ -1339,7 +1445,7 @@ browser. The invariants that follow:
   Auto steps.
 - **Replay and fork identity.** Live, Watch, Replay and Study use one decision
   renderer. Study executes one exact semantic offer on a retained isolated root
-  (a full clone of the native game; the engine has no undo) and **Return to
+  (a full clone of the native game; a branch is never an undo) and **Return to
   recorded decision** restores the original address, frame and Command. Expired
   roots stay unavailable rather than being reconstructed from the screen.
   Imported game files get their own Academy identity while retaining the
