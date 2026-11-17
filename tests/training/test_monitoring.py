@@ -11,7 +11,7 @@ from manabot.reports.training import (
     Dashboard,
     training_dashboard,
 )
-from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.records import RegimeRun, StageRecord
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.update_metrics import stage_rows
 import managym
@@ -36,7 +36,7 @@ def _recipe() -> TrainingRegime:
 
 
 def test_retained_rows_without_coordinates_stay_unavailable() -> None:
-    run = TrainingRun(
+    run = RegimeRun(
         id="saved-fixture",
         regime=_recipe(),
         regime_digest="fixture",
@@ -160,7 +160,7 @@ def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
     from manabot.reports.experiment import ReportEvidence, write_dashboard
     from manabot.training.records import NumericalFailure
 
-    run = TrainingRun(
+    run = RegimeRun(
         id="numerical-fixture",
         regime=_recipe(),
         regime_digest="fixture",

@@ -2,13 +2,11 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
+
+from manabot.infra.schema import Strict
 
 BatchClosure = Literal["exact-quota", "complete-games"]
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class Schedule(Strict):

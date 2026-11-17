@@ -1,7 +1,7 @@
-"""Belief sampling in two stages: train a policy, then fit a sampler from its games.
+"""Belief sampling in two jobs: train a policy, then fit a sampler from its games.
 
 This file is the experiment `belief` for Etude, and the template for a recipe
-whose later stage starts from an earlier run's checkpoint. `training_jobs(state)`
+whose second job starts from the first run's checkpoint. `training_jobs(state)`
 always declares the job `policy` (`manabot.recipes.belief_policy`); once the
 experiment's stored state shows that run finished, it also declares `sampler`
 (`manabot.recipes.belief_sampler`) with `start=` the policy's final checkpoint.

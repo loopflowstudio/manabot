@@ -233,8 +233,8 @@ boundary. The cached catalog is never part of the state dict or a checkpoint.
 ## Capacity identity and accounting
 
 `ModelConfig.hidden_dim`, positive `attention_layers`, optional
-`attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration. The builder
-`manabot.recipes.builders.with_capacity` reuses those fields; they introduce no second model schema. Heads must divide width when
+`attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration. Retained regime fixtures reuse those fields;
+they introduce no second model schema. Heads must divide width when
 attention is enabled. Unset feedforward expansion is head-count times width,
 so changing heads can change parameter counts as well as attention semantics.
 The default ladder fixes four heads and compares 64/1, 64/2 and 128/2.

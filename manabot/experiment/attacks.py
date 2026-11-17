@@ -10,12 +10,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from manabot.training.regime import (
-    FrozenOpponent,
-    Strict,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.infra.schema import Strict
+from manabot.training.regime import FrozenOpponent, TrainingRegime, TrainSelfPlay
 
 
 class AttackTarget(Strict):

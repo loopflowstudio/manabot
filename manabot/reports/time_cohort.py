@@ -277,7 +277,7 @@ def native_cohort(
                 ),
             )
         )
-    # Keep attempts that failed before writing a TrainingRun discoverable.
+    # Keep attempts that failed before writing a RegimeRun discoverable.
     seen_executions: dict[str, ExperimentRun] = {}
     for execution in executions:
         if execution.id in seen_executions:

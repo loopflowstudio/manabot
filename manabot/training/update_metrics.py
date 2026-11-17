@@ -1,7 +1,7 @@
 """Per-update self-play diagnostics as Etude metrics, written once and read back.
 
 The learner logs each update's diagnostics to its Etude run;
-TrainingRun keeps counters and receipts. Matchup outcomes are an Etude row
+Saved regime records retain their counters and receipts. Matchup outcomes are an Etude row
 table per update (`OUTCOME_TABLE`, logged with `Run.log_table`), so deck pairs
 add rows rather than metric columns. `metric_row` produces flat "/"-joined
 names; readers project outcome tables to the same named matchup counts
@@ -66,7 +66,7 @@ class _Regime(Protocol):
 
 
 class _Run(Protocol):
-    """A current TrainingRun or a retained report projection of one."""
+    """A saved RegimeRun or its retained report projection."""
 
     @property
     def regime(self) -> _Regime: ...

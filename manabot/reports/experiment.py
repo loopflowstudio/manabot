@@ -17,7 +17,7 @@ import re
 from statistics import mean
 from typing import Literal
 
-from etude.records import RunRecord as EtudeRunRecord
+from etude.records import RunRecord
 from matplotlib.figure import Figure
 from pydantic import ConfigDict, JsonValue
 
@@ -41,7 +41,7 @@ from manabot.training.update_metrics import (
 )
 
 
-def read_run_record(path: Path) -> RetainedRun | EtudeRunRecord:
+def read_run_record(path: Path) -> RetainedRun | RunRecord:
     """Select the producer's schema before validation, never a permissive union.
 
     Etude writes version 2 or a historical nested declaration. An untagged
@@ -51,7 +51,7 @@ def read_run_record(path: Path) -> RetainedRun | EtudeRunRecord:
     if isinstance(value, dict) and (
         value.get("schema_version") == 2 or "declaration" in value
     ):
-        return EtudeRunRecord.model_validate(value)
+        return RunRecord.model_validate(value)
     return RetainedRun.model_validate(value)
 
 
@@ -131,7 +131,7 @@ class ReportEvidence:
 def load_evidence(root: Path) -> ReportEvidence:
     """Read saved JSON, validating both training and Etude tracker run files.
 
-    Tracker declarations share the name ``run.json`` with TrainingRun exports;
+    Tracker declarations share the name ``run.json`` with RegimeRun exports;
     they remain evidence sources but do not add training trajectories. Invalid
     records of either kind fail instead of disappearing.
     """

@@ -21,7 +21,7 @@ from manabot.reports.training import evaluation_dashboard
 from manabot.sim import anchors
 from manabot.sim.matchup import AuthoredMatchup, selected_match
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.records import TrainingRun
+from manabot.training.records import RegimeRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 from tests.eval.test_evaluation_policy_inputs import fixture_policy
@@ -210,7 +210,7 @@ def test_block_failure_retains_prior_rows_and_costs(
     monkeypatch.setattr("manabot.eval.evaluation.play_cell", play)
     # The injected manifest isolates arena orchestration from checkpoint loading.
     result = checkpoint_evaluation.evaluate_checkpoint(
-        TrainingRun.model_construct(),
+        RegimeRun.model_construct(),
         manifest.artifact,
         manifest.coordinates,
         tmp_path / "attempt",
@@ -228,7 +228,7 @@ def test_block_failure_retains_prior_rows_and_costs(
     assert saved == result
     with pytest.raises(FileExistsError):
         checkpoint_evaluation.evaluate_checkpoint(
-            TrainingRun.model_construct(),
+            RegimeRun.model_construct(),
             manifest.artifact,
             manifest.coordinates,
             tmp_path / "attempt",
@@ -330,7 +330,7 @@ def test_real_arena_checkpoint_outcomes(
                 )
             ],
         )
-        run = TrainingRun(
+        run = RegimeRun(
             id="fixture",
             regime_digest=canonical_sha256(regime.model_dump(mode="json")),
             regime=regime,
@@ -395,7 +395,7 @@ def test_real_arena_checkpoint_outcomes(
 def test_checkpoint_admission_failure_is_saved(tmp_path: Path) -> None:
     manifest = _manifest()
     match = selected_match()
-    run = TrainingRun.model_construct(
+    run = RegimeRun.model_construct(
         id="failed-admission",
         seed=manifest.training_seed,
         regime=TrainingRegime.model_construct(match=match),
@@ -448,7 +448,7 @@ def test_registration_extraction_preserves_frozen_monitor_identity(
         regime = TrainingRegime.model_construct(
             world=managym.WORLD_VERSION, match=match
         )
-        run = TrainingRun.model_construct(
+        run = RegimeRun.model_construct(
             id="fixture",
             regime_digest="a" * 64,
             seed=17,

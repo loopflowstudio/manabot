@@ -495,3 +495,69 @@ with `input not given: 'start'`. Etude local._prepare ignores Job.inputs and
 Job.environment. Stop dependent runtime work here: Etude must deliver the
 checkpoint before the documented local belief workflow can be proved. The
 recipe's given-input provenance check is not proof of real start= carriage.
+
+## Concept review of the implemented change — 2026-11-16 (f6a2660745)
+
+Read against the code, not run. The loop, recipes and commands match the
+design: `train(config)` opens the run, `self_play` reads top to bottom,
+new/resume/continue are separate commands, the guide states what a resume
+keeps and what starts again. The two sections above ("Landed API question",
+"Implementation counterexample") describe pin 5708e14 and are superseded: at
+d9a6bc8 `experiments/belief.py` declares `training_jobs(state)`, the sampler
+appears once a policy run is finished, and local `start=` delivery completed
+(questions.md).
+
+What a reader still has to learn for no benefit. Next implement direction, in
+this order; none changes behavior or serialized keys:
+
+1. **"Stage" is taught as a noun.** `docs/training.md` "Recipes in stages"
+   (and its three anchors, plus `manabot/README.md:461`, `experiments/README.md`),
+   `experiments/belief.py` and `recipes/belief_sampler.py` docstrings say
+   stage. The design has no stage noun: these are two jobs, the second
+   started from the first's checkpoint. Retitle to what happens ("A recipe
+   that starts from another run") and say job/run. Retained regime `stages`
+   keep their spelling.
+2. **`TrainingRun` names two things in Manabot.** Etude's live handle
+   (`loops/self_play.py`, `backends/torch/capture.py`, `sim/sim.py`,
+   `reports/training.py`) and the saved-regime record
+   `manabot.training.records.TrainingRun` (`experiment/checkpoint_evaluation.py`,
+   `verify/`, `reports/records.py`), whose docstring still says "passes current
+   execution admission" though nothing executes a regime. `RunRecord[RegimeT]`
+   likewise shadows Etude's `RunRecord` (imported as `EtudeRunRecord`). Rename
+   the retained pair for what they are (proposed: `RegimeRunRecord`,
+   `RegimeRun`; `RetainedRun` stays) and rewrite the module docstrings as
+   readers of saved records. Class names only; no alias (Task constraint).
+3. **Current code imports the retained module.** `backends/torch/collection.py`
+   and `runtime.py` take `Precision` from `training.regime` (defined in
+   `training.learning`); `eval/duel.py` and `eval/monitor.py` take `Strict`,
+   `ArtifactReference` and `TrainingCoordinates` from `training.regime` /
+   `training.records`. Give those three a non-regime owner so "regime.py reads
+   saved regimes" is true and live evaluation does not depend on it.
+4. **`manabot/recipes/` holds things that are not recipes**, which is why the
+   guide must say "the files that define `train`". `recipes/builders.py` mixes
+   current `SelfPlay` settings with `TrainingRegime` builders used only by
+   tests (`tests/fixtures/saved_regimes.py`, `test_builders.py`,
+   `wdl_baseline.py`): move those beside their users. `recipes/belief.py` is
+   the population-supervision demo behind `manabot belief-learn-demo`, not the
+   belief recipe next to it (on the base too): move it under `manabot/belief/`.
+5. **Leftover of the retired executor:** `VerifyStore.claim_training_recovery`
+   has no caller; `save_training_run`/`training_run` are called only by
+   `tests/training/test_regimes.py`. Delete with the exclusive test unless a
+   retained reader needs them.
+6. **AGENTS.md cites a line that no longer exists**:
+   `state, row = step(state, ...)`. The loop is
+   `row = step(settings, learner, ema, collector, counts, rng, out=run.out)`,
+   updating in place because Etude saves the objects registered with
+   `run.resume`. Quote the real line and say why it mutates.
+
+Left alone on purpose: `experiment/config.py::Experiment` and
+`experiment/attacks.py` (documented retained declarations); the `manabot train`
+refusal; `resource_metrics` (until EXP-58).
+
+Open, not settled by anyone, and Etude's to decide rather than this Task's:
+a job declared from stored state needs the same command typed twice (policy,
+then sampler), and `experiments/belief.py` takes the first finished policy of
+any seed, so with several seeds every sampler would start from one policy.
+Should a dependent job wait for and pair with its same-seed parent in one
+command? It matters when the belief experiment gets more than seed 0 or runs
+unattended. Today's two-pass, one-seed form is the reversible choice in use.

@@ -35,9 +35,9 @@ from manabot.eval.results import EvaluationRow
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
+from manabot.infra.schema import ArtifactReference
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
-from manabot.training.records import TrainingCoordinates
-from manabot.training.regime import ArtifactReference
+from manabot.training.coordinates import TrainingCoordinates
 
 EXPERIMENT = "two-seat-vs-one-seat-equal-updates-agents-v1"
 

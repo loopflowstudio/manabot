@@ -27,11 +27,12 @@ from manabot.experiment.checkpoint_evaluation import checkpoints
 from manabot.experiment.records import Attempt, ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.schema import Strict
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
-from manabot.training.records import TrainingRun
-from manabot.training.regime import Strict, TrainSelfPlay
+from manabot.training.records import RegimeRun
+from manabot.training.regime import TrainSelfPlay
 from manabot.training.state.backend import TrainingBackend
 from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.choice_corpus import Case, collect_choices, input_collisions
@@ -252,7 +253,7 @@ def report_baseline(directory: Path, *, backend: TrainingBackend) -> BaselineRep
         learning=learning_evidence([]),
     )
     try:
-        run = TrainingRun.model_validate_json(
+        run = RegimeRun.model_validate_json(
             (Path(attempt.path) / "run.json").read_text()
         )
         report.regime_digest = run.regime_digest

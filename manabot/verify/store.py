@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from manabot.experiment.records import ExperimentRun
-    from manabot.training.records import TrainingRun
 
 
 def _default_db_path() -> Path:
@@ -20,11 +19,7 @@ def _default_db_path() -> Path:
 
 
 def training_stage_payloads(con: sqlite3.Connection, run_id: str) -> list[dict]:
-    """Return one run's stage records in execution order.
-
-    Self-play update rows are Etude metrics, so a stage payload stays bounded
-    and is rewritten whole on every save.
-    """
+    """Read one saved run's retained stage records in execution order."""
     return [
         json.loads(payload)
         for (payload,) in con.execute(
@@ -81,50 +76,6 @@ class VerifyStore:
         if row is None:
             raise KeyError(run_id)
         return ExperimentRun.model_validate_json(row[0])
-
-    def save_training_run(self, run: TrainingRun) -> None:
-        """Commit one canonical regime execution and its stage records atomically."""
-        with self.con:
-            self.con.execute(
-                "INSERT INTO training_runs VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
-                (run.id, run.model_dump_json(exclude={"stages"})),
-            )
-            for stage in run.stages:
-                self.con.execute(
-                    "INSERT INTO training_stages VALUES (?, ?, ?) ON CONFLICT(run_id, stage_id) DO UPDATE SET payload=excluded.payload",
-                    (run.id, stage.id, stage.model_dump_json()),
-                )
-
-    def claim_training_recovery(self, parent_id: str, run: TrainingRun) -> None:
-        """Atomically allow one continuation per stopped attempt, never a fork."""
-        with self.con:
-            self.con.execute("BEGIN IMMEDIATE")
-            if self.con.execute(
-                "SELECT 1 FROM training_runs WHERE json_extract(payload, '$.parent_run_id') = ?",
-                (parent_id,),
-            ).fetchone():
-                raise ValueError(
-                    "attempt already has a recovery child; continue that child"
-                )
-            parent = self.training_run(parent_id)
-            if parent.status not in {"failed", "interrupted", "paused"}:
-                raise ValueError("recovery parent is not stopped")
-            self.con.execute(
-                "INSERT INTO training_runs VALUES (?, ?)",
-                (run.id, run.model_dump_json(exclude={"stages"})),
-            )
-
-    def training_run(self, run_id: str) -> TrainingRun:
-        from manabot.training.records import TrainingRun
-
-        row = self.con.execute(
-            "SELECT payload FROM training_runs WHERE id=?", (run_id,)
-        ).fetchone()
-        if row is None:
-            raise KeyError(run_id)
-        payload = json.loads(row[0])
-        payload["stages"] = training_stage_payloads(self.con, run_id)
-        return TrainingRun.model_validate(payload)
 
     def _create_schema(self) -> None:
         self.con.executescript(

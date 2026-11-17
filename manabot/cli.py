@@ -154,7 +154,7 @@ def belief_learn_demo_command(
 ) -> None:
     """Compare population-trained exact-world beliefs with p0 on held-out deals."""
 
-    from manabot.recipes.belief import main as run_belief_learn_demo
+    from manabot.belief.learning_demo import main as run_belief_learn_demo
 
     run_belief_learn_demo(
         episodes=episodes,

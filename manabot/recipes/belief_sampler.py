@@ -2,7 +2,7 @@
 
 Each attempt restarts collection and fitting. Etude checks and carries the
 immutable policy input, and records the resulting sampler checkpoint.
-`experiments/belief.py` declares this stage after the policy it starts from.
+`experiments/belief.py` declares this job after the policy it starts from.
 """
 
 from etude.train.tracking import track

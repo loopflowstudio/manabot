@@ -47,3 +47,10 @@ After main sync (3cb2aacbb5): rebuilt native cp313 extension; 233 distinct focus
 collection/journal/disclosure/recipe and adjacent checks pass after fixing journal
 read ordering and stale standalone worker fixtures. Rerun at be4c9397b8: 233 passed. Lint/format/diff checks pass;
 commands and results in implementation.md. Gate/publication remain caller steps.
+
+Concept-review cleanup (2026-11-16): job/run wording; RegimeRunRecord and
+RegimeRun retained readers; shared schema/coordinate owners; retained builders
+in test fixtures and belief demo in belief/; unused VerifyStore recovery/write
+methods removed; AGENTS loop example corrected. Behavior and serialized keys stay.
+Focused verification passes after correcting an unvalidated policy-import fixture;
+commands/results in implementation.md. All six review fixes are complete.

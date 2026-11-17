@@ -13,10 +13,10 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.schema import ArtifactReference
 from manabot.training.learning import Learning
-from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.records import RegimeRun, StageRecord
 from manabot.training.regime import (
-    ArtifactReference,
     CollectBelief,
     ImportPolicy,
     TrainingRegime,
@@ -55,7 +55,7 @@ def published_fixture(
             )
         ],
     )
-    source = TrainingRun(
+    source = RegimeRun(
         id="synthetic-untrained-producer",
         regime=recipe,
         regime_digest=canonical_sha256(recipe.model_dump(mode="json")),
@@ -126,8 +126,13 @@ def test_declarative_weight_contracts(tmp_path: Path) -> None:
         weights="ema",
         games=3,
     )
-    recipe.stages.append(histories)
+    # Validate the assembled record so automatic execution fields are resolved.
+    recipe = TrainingRegime.model_validate(
+        {**recipe.model_dump(), "stages": [*recipe.stages, histories]}
+    )
     assert TrainingRegime.model_validate_json(recipe.model_dump_json()) == recipe
-    histories.weights = "raw"
+    retained_histories = recipe.stages[-1]
+    assert isinstance(retained_histories, CollectBelief)
+    retained_histories.weights = "raw"
     with pytest.raises(ValueError, match="weights differ"):
         TrainingRegime.model_validate(recipe.model_dump())

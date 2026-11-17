@@ -2,9 +2,10 @@
 
 from manabot.experiment.config import Baseline
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.recipes.builders import PACK, ataraxos_baseline
+from manabot.recipes.builders import PACK
 from manabot.sim.matchup import selected_match
 import managym
+from tests.fixtures.regime_builders import ataraxos_baseline
 
 
 def wdl_baseline() -> Baseline:

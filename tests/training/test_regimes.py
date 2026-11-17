@@ -10,10 +10,8 @@ import torch
 from manabot.backends.torch.rl import selected_rows
 from manabot.policy.prepare import reference_distribution
 from manabot.training.learning import DampedPolicyLearning
-from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime
 from manabot.training.validation import validate_regime
-from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
 from tests.fixtures.saved_regimes import direct_self_play
 
@@ -50,25 +48,6 @@ def test_reference_has_full_support_and_is_permutation_invariant():
     )
     np.testing.assert_allclose(moved, probs[:, permutation], rtol=1e-6)
     assert selected_rows(torch.zeros(4), 0.25, 0.01).numel() == 0
-
-
-def test_store_exports_committed_run_and_preserves_old_schema(tmp_path):
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = TrainingRun(
-            id="fixture",
-            regime=recipe(),
-            regime_digest="test",
-            seed=1,
-            seed_streams={},
-            identities={},
-            stages=[StageRecord(id="policy-0")],
-        )
-        store.save_training_run(run)
-        run.status = "failed"
-        assert store.training_run(run.id).status == "pending"
-        store.save_training_run(run)
-        assert store.training_run(run.id).status == "failed"
-        assert store.con.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
 def test_modified_models_are_revalidated_before_execution():

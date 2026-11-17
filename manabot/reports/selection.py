@@ -14,9 +14,10 @@ import numpy as np
 from pydantic import Field
 
 from manabot.infra.identity import canonical_sha256
+from manabot.infra.schema import Strict
 from manabot.policy.returns import selection_mask, transition_gae
 from manabot.training.learning import DampedPolicyLearning
-from manabot.training.regime import CollectSelection, Strict
+from manabot.training.regime import CollectSelection
 from manabot.training.rollout.selection_data import FrozenRecord, SelectionDataset
 from manabot.training.updates.selection import SelectionGroup, selection_diagnostics
 

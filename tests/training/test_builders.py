@@ -9,20 +9,22 @@ import pytest
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import (
     REFERENCE_UPDATES,
-    ataraxos_baseline,
     fitted_horizon,
-    move_checkpoints,
-    ppo_checkpoints,
     sampled_self_play,
-    value_outputs,
-    with_agent,
-    with_capacity,
-    with_value_aggregation,
 )
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
 from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
+from tests.fixtures.regime_builders import (
+    ataraxos_baseline,
+    move_checkpoints,
+    ppo_checkpoints,
+    value_outputs,
+    with_agent,
+    with_capacity,
+    with_value_aggregation,
+)
 from tests.fixtures.saved_regimes import ataraxos_move_scalar
 
 ROOT = Path(__file__).resolve().parents[2]

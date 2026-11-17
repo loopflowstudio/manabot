@@ -17,8 +17,8 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy.protocol import BackendPolicy
+from manabot.training.learning import Precision
 from manabot.training.mps import mps_torch_error
-from manabot.training.regime import Precision
 
 
 def cuda_peak_metrics(device: str) -> dict[str, int]:

@@ -20,7 +20,7 @@ from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared, reference_distribution
 from manabot.policy.protocol import BackendPolicy
-from manabot.training.regime import Precision
+from manabot.training.learning import Precision
 from manabot.training.rollout.numerics import SampledRows
 from manabot.training.rollout.selection_data import SelectionPrediction
 

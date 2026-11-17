@@ -21,11 +21,12 @@ from manabot.eval.monitor import (
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, source_bundle_sha256
+from manabot.infra.schema import ArtifactReference, Strict
 from manabot.policy.protocol import Backend
 from manabot.sim import players
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
-from manabot.training.records import TrainingCoordinates, TrainingRun
-from manabot.training.regime import ArtifactReference, Strict
+from manabot.training.coordinates import TrainingCoordinates
+from manabot.training.records import RegimeRun
 
 
 class Checkpoint(Strict):
@@ -33,7 +34,7 @@ class Checkpoint(Strict):
     coordinates: TrainingCoordinates
 
 
-def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
+def stage_checkpoint(run: RegimeRun, stage_id: str) -> Checkpoint | None:
     """Return an admitted completed or paused export with original coordinates."""
     for index, stage in enumerate(run.stages):
         if stage.id != stage_id:
@@ -87,7 +88,7 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
 
 
 def checkpoint_manifest(
-    run: TrainingRun,
+    run: RegimeRun,
     artifact: ArtifactReference,
     coordinates: TrainingCoordinates,
     protocol: MonitorProtocol,
@@ -174,7 +175,7 @@ def checkpoint_manifest(
 
 
 def evaluate_checkpoint(
-    run: TrainingRun,
+    run: RegimeRun,
     artifact: ArtifactReference,
     coordinates: TrainingCoordinates,
     output_dir: Path,
@@ -257,7 +258,7 @@ def evaluate_checkpoint(
 
 
 def checkpoints(
-    run: TrainingRun, *, include_initial: bool = False, include_monitoring: bool = True
+    run: RegimeRun, *, include_initial: bool = False, include_monitoring: bool = True
 ) -> list[Checkpoint]:
     """Admitted raw exports with their original cumulative training coordinates."""
     found = [

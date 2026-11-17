@@ -5,18 +5,17 @@ group of tests reads, on the selected Allies/Lessons match.
 """
 
 from manabot.infra.config import ModelConfig
-from manabot.recipes.builders import (
-    GIB,
-    PACK,
-    move_checkpoints,
-    move_learning,
-    ppo_checkpoints,
-    with_value_output,
-)
+from manabot.recipes.builders import PACK, move_learning
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import IterationSchedule, Learning
 from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 import managym
+from tests.fixtures.regime_builders import (
+    GIB,
+    move_checkpoints,
+    ppo_checkpoints,
+    with_value_output,
+)
 
 
 def direct_self_play() -> TrainingRegime:

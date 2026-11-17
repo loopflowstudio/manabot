@@ -1,7 +1,7 @@
-"""Measured run records, separate from executable recipe definitions.
+"""Readers of saved regime run records and their measured diagnostics.
 
-RunRecord shares retained measurements across execution and report readers.
-TrainingRun binds those measurements to a currently admitted TrainingRegime.
+RegimeRunRecord supplies common measured fields; RegimeRun validates the saved
+regime schema. Neither record grants execution admission.
 """
 
 from typing import Any, Literal
@@ -9,11 +9,11 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from manabot.infra.host import HostFacts
+from manabot.infra.schema import ArtifactReference, Strict
+from manabot.training.coordinates import TrainingCoordinates
 from manabot.training.regime import (
-    ArtifactReference,
     LearningStateOrigin,
     ProducerCost,
-    Strict,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -98,30 +98,10 @@ class StageRecord(Strict):
     rejected_artifacts: dict[str, dict] = {}
     # Bounded rows of stages Etude does not track: selection or belief
     # summaries (historical records may also hold compound summaries).
-    # Self-play update rows are Etude metrics only (TrainingRun.metrics_run);
+    # Self-play update rows are Etude metrics only (RegimeRun.metrics_run);
     # historical exports retain theirs here.
     diagnostics: list[dict] = []
     error: str | None = None
-
-
-class TrainingCoordinates(Strict):
-    # Segment-local completed iterations; updates includes inherited absolute offsets.
-    segment_updates: int | None = Field(
-        default=None, ge=0, exclude_if=lambda value: value is None
-    )
-    optimizer_updates: int | None = Field(
-        default=None, ge=0, exclude_if=lambda value: value is None
-    )
-    stage_id: str
-    updates: int = Field(ge=0)
-    training_seconds: float = Field(ge=0)
-    active_training_seconds: float | None = Field(
-        default=None, ge=0, exclude_if=lambda value: value is None
-    )
-    environment_decisions: int = Field(default=0, ge=0)
-    learner_transitions: int = Field(default=0, ge=0)
-    optimizer_exposures: int = Field(default=0, ge=0)
-    games: int = Field(default=0, ge=0)
 
 
 class MonitoringCheckpoint(TrainingCoordinates):
@@ -130,8 +110,8 @@ class MonitoringCheckpoint(TrainingCoordinates):
     error: str | None = None
 
 
-class RunRecord[RegimeT](Strict):
-    """Shared measured run state; each reader chooses its recipe admission type."""
+class RegimeRunRecord[RegimeT](Strict):
+    """Saved measurements; each reader chooses its retained regime schema."""
 
     game_error_ledgers: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
@@ -254,8 +234,8 @@ class RunRecord[RegimeT](Strict):
         return total
 
 
-class TrainingRun(RunRecord[TrainingRegime]):
-    """A run whose recipe passes current execution admission."""
+class RegimeRun(RegimeRunRecord[TrainingRegime]):
+    """A saved run with a validated retained TrainingRegime."""
 
     game_journal_directory: str | None = Field(
         default=None, exclude_if=lambda value: value is None

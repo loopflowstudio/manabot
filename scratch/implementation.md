@@ -66,3 +66,9 @@ state.pt parity does not prove the revised save API.
 
 Not shown: CUDA batching, real Rust panic injection, native hang/load injection,
 launched or provider runs, browser proof, a full-suite run.
+
+2026-11-16 concept-review naming/ownership cleanup:
+- `uv run --extra dev --extra artifacts --extra reports --extra notebook pytest tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_monitor_evaluation.py tests/training/test_monitoring.py tests/training/test_experiment_report.py tests/training/test_policy_import.py tests/training/test_experiments.py tests/training/test_precision.py tests/model/test_recent_events.py tests/training/test_recipe_etude.py tests/training/test_self_play_loop.py tests/belief/test_learning.py::test_real_population_learning_is_held_out_and_beats_p0 -q --tb=short`: 129 passed, 1 skipped, 1 failed (162.83s). The failure was an assembled fixture bypassing validation: retained automatic execution fields resolved during round-trip. Validate the assembled fixture before its equality/rejection checks; production behavior stays unchanged.
+- `uv run --extra dev --extra artifacts --extra reports --extra notebook pytest tests/training/test_policy_import.py tests/training/test_learning_dashboard.py tests/infra/test_ci_selection.py tests/infra/test_release.py tests/test_package_boundaries.py -q --tb=short`: 139 passed (11.86s), including the corrected fixture and retained SQLite snapshot reader.
+- Fresh-process imports of eval.duel and eval.monitor load neither training.regime nor training.records. Torch collection still reaches SelectionGameSpec through selection_data; moving that separate schema was outside the six directed fixes.
+- Ruff check/format on changed and moved Python files, and `git diff --check`: pass. No runtime keys, stored bytes or scheduling behavior changed. Same-seed scheduling remains Etude's question; gate/publication are caller steps.

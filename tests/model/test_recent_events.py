@@ -26,9 +26,9 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import collect, open_collector
+from tests.fixtures.regime_builders import with_recent_events
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
 from tests.training.wdl_baseline import wdl_baseline

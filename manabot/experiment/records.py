@@ -15,14 +15,9 @@ from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.identity import canonical_sha256
-from manabot.training.records import TrainingRun
-from manabot.training.regime import (
-    ArtifactReference,
-    CheckpointCadence,
-    Strict,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.infra.schema import ArtifactReference, Strict
+from manabot.training.records import RegimeRun
+from manabot.training.regime import CheckpointCadence, TrainingRegime, TrainSelfPlay
 
 
 class MonitoringBudget(Strict):
@@ -92,7 +87,7 @@ class StepCalibration(Strict):
     def from_export(cls, path: Path) -> "StepCalibration":
         path = path.resolve()
         payload = path.read_bytes()
-        run = TrainingRun.model_validate_json(payload)
+        run = RegimeRun.model_validate_json(payload)
         if (
             run.status != "completed"
             or run.parent_run_id is not None

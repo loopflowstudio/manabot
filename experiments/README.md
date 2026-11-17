@@ -43,7 +43,7 @@ has not been run, so typing the command again launches what is new.
 | [seat_comparison](seat_comparison.py) | comparing method arms | `seat-comparison-one` and `seat-comparison-both`, four seeds each | — | score by update, one-seat dotted |
 | [tla_frontier](tla_frontier.py) | comparing model sizes on a deck corpus | one wall-bounded job per size, named for its regime | each size against its earlier self, the heuristic and the other size | progress curves and head to head |
 | [batched_baseline](batched_baseline.py) | one GPU recipe ([size and batching study](reports/longer-learning-017.md)) | `batched_baseline` | — | — |
-| [belief](belief.py) | a later stage that starts from an earlier run | `policy`, then `sampler` from its final checkpoint once state shows it finished ([guide](../docs/training.md#recipes-in-stages)) | — | — |
+| [belief](belief.py) | a job that starts from another run | `policy`, then `sampler` from its final checkpoint once state shows it finished ([guide](../docs/training.md#a-recipe-that-starts-from-another-run)) | — | — |
 
 [`llm_claude`](llm_claude.py) and [`llm_qwen`](llm_qwen.py) are eval-only files,
 a language model against a frozen checkpoint over the Elemental decks; they are

@@ -174,7 +174,10 @@ guarantees something every user relies on. Functions do the work: anything
 with steps, a loop or an order of operations. A class whose methods sequence the
 work (an executor, trainer, manager, runner or collector) is the shape to
 avoid; write the loop as a function whose body shows each step
-(`manabot/training/loops/self_play.py`: `state, row = step(state, ...)`).
+(`manabot/training/loops/self_play.py`:
+`row = step(settings, learner, ema, collector, counts, rng, out=run.out)`).
+That step updates the registered learner, EMA and counters in place because
+Etude saves those same objects through `run.resume`.
 
 Where classes are valuable here, with the examples to copy:
 

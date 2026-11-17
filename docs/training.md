@@ -17,7 +17,7 @@ launch, track and evaluate it, or bring your own.
 
 - [Run training](#run-training)
 - [Write a recipe](#write-a-recipe)
-- [Recipes in stages](#recipes-in-stages)
+- [A recipe that starts from another run](#a-recipe-that-starts-from-another-run)
 - [Self-play settings](#self-play-settings)
 - [Experiments](#experiments)
 - [Remote training](#remote-training)
@@ -147,7 +147,7 @@ The recipes we maintain are the files in `manabot/recipes/` that define
 `train`: `local.py` (a two-update smoke with no evaluation, for checking an
 installation), `baseline.py`, `elemental.py`, and `belief_policy.py` with
 `belief_sampler.py`, which `experiments/belief.py` declares as two jobs
-([recipes in stages](#recipes-in-stages)). An experiment
+([starting from another run](#a-recipe-that-starts-from-another-run)). An experiment
 file that defines `train` runs the same way
 (`uv run etude train experiments/batched_baseline.py`). A recipe's device is a
 config field with the recipe's own default (`cpu` for local and Elemental,
@@ -321,7 +321,7 @@ branch, stop check or state file in it. Those are the run's:
 | `run.log`, `run.log_table` | Metric rows and row tables on the declared clocks. The stepped clock is filled in; the loop passes `training_seconds`. |
 | `run.checkpoint(path)` | Publishes an immutable policy with where every clock stood. Evaluations, reports and other runs read these. |
 | `run.out` | The run's directory, the same on every attempt. Under a launch Etude carries it to storage as it is written and restores it before an attempt on another machine. |
-| `run.input(name)` | A file this run was given at launch, checked by digest ([recipes in stages](#recipes-in-stages)). |
+| `run.input(name)` | A file this run was given at launch, checked by digest ([starting from another run](#a-recipe-that-starts-from-another-run)). |
 
 The recipe need not name its experiment in `track`. Etude uses the file
 stem unless `--experiment` overrides it, for both local training and launch.
@@ -344,14 +344,14 @@ updates and pieces it calls need no run
 [`loops/minimal.py`](training-loop.md#a-complete-self-play-loop) is a whole
 resumable loop in about ninety lines to copy from.
 
-## Recipes in stages
+## A recipe that starts from another run
 
-A recipe whose later stage reads an earlier stage's result is two jobs of one
+A recipe that reads another run's result is two jobs of one
 experiment file. The second takes a completed checkpoint of the first as its
-start. Split this way when the stages want different machines or budgets, when
+start. Split this way when the jobs want different machines or budgets, when
 several runs start from one, or when the earlier result is evaluated on its
 own. The belief recipe trains a policy, then collects hidden-hand histories
-with it and fits a sampler. Each stage's `train(config)` is in
+with it and fits a sampler. Each job's `train(config)` is in
 `manabot/recipes/` (`belief_policy.py`, `belief_sampler.py`); the experiment
 file declares the jobs:
 
@@ -401,24 +401,24 @@ command again then starts it. `start=` takes a recorded checkpoint: Etude
 delivers its bytes, checked by digest, records the edge between the runs, and
 the sampler reads it with `run.input("start")`.
 
-`belief_policy.py` is an ordinary one-stage recipe: PPO self-play on the Gray
+`belief_policy.py` is an ordinary self-play recipe: PPO self-play on the Gray
 Ogre match, whose rates follow the horizon the recipe states
 (`gray_ogre_self_play(horizon=config.updates)`).
 
 ```bash
 uv run etude launch experiments/belief.py --rent l4   # the policy; again once it finishes, the sampler
-uv run etude train experiments/belief.py              # the same staging on this computer
+uv run etude train experiments/belief.py              # the same jobs on this computer
 ```
 
 On this computer the first `etude train` trains the policy; the second reports
 it finished and trains the sampler from its final checkpoint, delivered as the
-input `start`; a third trains nothing. `--job sampler` selects that stage
+input `start`; a third trains nothing. `--job sampler` selects that job
 alone, and refuses an address already taken unless given `--resume`. A
 checkpoint is handed down by `start=`, not as one of the policy run's stored
 files (`out.matching(...)`): the checkpoint record carries its lineage.
 
 The defaults are a pilot's: one policy update, three games and a small
-sampler. Each stage's files are in its own run:
+sampler. Each job's files are in its own run:
 
 ```text
 ~/.etude/track/belief/policy@0/out/policies/00000001-raw.safetensors
@@ -580,7 +580,7 @@ results are frozen-policy associations, not causal filter benefits.
 
 ### Reuse a published policy
 
-A stage that reads a policy takes a checkpoint path, so a published policy is
+A job that reads a policy takes a checkpoint path, so a published policy is
 used by passing its file where a recipe would pass the one its run was started
 from:
 

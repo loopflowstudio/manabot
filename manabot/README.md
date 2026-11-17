@@ -458,7 +458,7 @@ positional-condition checkpoints are rejected rather than reinterpreted.
 
 A recipe can [use a published raw/EMA policy](../docs/training.md#reuse-a-published-policy)
 without retraining, by passing its checkpoint path to the step that reads it.
-The [belief recipe](../docs/training.md#recipes-in-stages) freezes a
+The [belief recipe](../docs/training.md#a-recipe-that-starts-from-another-run) freezes a
 policy, collects private whole-game supervision and fits a constrained
 autoregressive hand sampler without exact enumeration.
 See [frozen-policy belief sampling](../README.md#beside-the-loop). This separately
@@ -814,8 +814,8 @@ protocol or cost limits.
 
 Reports use `reports.records.RetainedRun` to read recorded stage parameters as
 JSON without translating historical learning tags or adding current execution
-defaults; measured run fields are read through `RunRecord`. Reading or
-publishing a historical result does not make its regime runnable.
+defaults; measured run fields are read through
+`training.records.RegimeRunRecord`. Reading or publishing a historical result does not make its regime runnable.
 
 [GIH card evaluation](../docs/evaluation.md#card-data) uses simulation replay capture and Etude
 tables for copy-weighted card rankings, explicit cohorts and offline Arena-log export.

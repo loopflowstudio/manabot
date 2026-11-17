@@ -22,9 +22,10 @@ from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
-from manabot.training.regime import SelectionGameSpec, Strict
+from manabot.training.regime import SelectionGameSpec
 import managym
 from managym.decision import Command, DecisionFrame, Observation
 

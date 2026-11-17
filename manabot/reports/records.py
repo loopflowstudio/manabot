@@ -2,13 +2,14 @@
 
 Recorded stage parameters stay JSON, including unknown historical learning tags.
 No recipe is translated, repaired or passed to an executor. Measured run fields
-share RunRecord validation with live training; original exports remain unchanged.
+share RegimeRunRecord validation with saved regime readers; original exports
+remain unchanged.
 """
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
 from manabot.infra.config import ModelConfig
-from manabot.training.records import RunRecord, TrainingRun
+from manabot.training.records import RegimeRun, RegimeRunRecord
 
 
 class RecordedStage(BaseModel):
@@ -27,7 +28,7 @@ class RecordedRegime(BaseModel):
     stages: list[RecordedStage]
 
 
-class RetainedRun(RunRecord[RecordedRegime]):
+class RetainedRun(RegimeRunRecord[RecordedRegime]):
     """Reporting projection with opaque recipe parameters, never an executable run."""
 
     model_config = ConfigDict(extra="allow", allow_inf_nan=False)
@@ -43,4 +44,4 @@ class RetainedRun(RunRecord[RecordedRegime]):
         return self._updates_through(learning, stage_id)
 
 
-type ReportRun = TrainingRun | RetainedRun
+type ReportRun = RegimeRun | RetainedRun

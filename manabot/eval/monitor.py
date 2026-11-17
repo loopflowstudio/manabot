@@ -19,10 +19,10 @@ from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow, RateInterval
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
+from manabot.infra.schema import ArtifactReference, Strict
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.records import TrainingCoordinates
-from manabot.training.regime import ArtifactReference, Strict
+from manabot.training.coordinates import TrainingCoordinates
 
 EvaluationPurpose = Literal[
     "monitoring-not-scientific-evaluation",

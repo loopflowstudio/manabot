@@ -8,6 +8,7 @@ import pytest
 
 from manabot.belief.demo import runtime_env
 from manabot.belief.encoding import belief_schema_from_engine
+from manabot.belief.learning_demo import run_demo
 from manabot.belief.population import (
     BehaviorPopulationProvenance,
     BeliefPopulationDataset,
@@ -21,7 +22,6 @@ from manabot.belief.population import (
 )
 from manabot.belief.range import BeliefError
 from manabot.belief.state import ViewerHistory, ViewerHistoryEvent
-from manabot.recipes.belief import run_demo
 from managym.decision import Observation, PublicCommitment
 from managym.possible_worlds import PossibleWorldSpace
 from tests.belief.support import fixture_history, fixture_schema, fixture_space

@@ -22,7 +22,7 @@ from manabot.reports.experiment import (
     write_dashboard,
 )
 from manabot.reports.notebook import write_comparison_notebook
-from manabot.training.records import TrainingRun
+from manabot.training.records import RegimeRun
 from manabot.training.state.game_errors import GameErrorState
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
@@ -472,5 +472,5 @@ def test_retained_recipe_is_readable_but_not_executable() -> None:
         record.regime.model_dump(mode="json")["stages"] == payload["regime"]["stages"]
     )
     with pytest.raises(ValidationError):
-        TrainingRun.model_validate(record.model_dump(mode="json"))
+        RegimeRun.model_validate(record.model_dump(mode="json"))
     assert json.loads(source.read_text()) == payload

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from manabot.belief.encoding import BeliefEncodingSchema
     from manabot.belief.sampling_fit import BeliefTrainer
     from manabot.infra.config import ModelConfig
-    from manabot.training.regime import Precision
+    from manabot.training.learning import Precision
     from manabot.training.rollout.collection import Collector, RolloutBatch
     from manabot.training.rollout.numerics import CollectionSession
     from manabot.training.rollout.selection_data import SelectionPredictor

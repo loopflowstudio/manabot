@@ -1,10 +1,9 @@
 """Retained regime and stage records for reading historical experiments."""
 
 from collections.abc import Mapping
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal
 
 from pydantic import (
-    BaseModel,
     ConfigDict,
     Field,
     SerializerFunctionWrapHandler,
@@ -20,6 +19,7 @@ from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
 )
+from manabot.infra.schema import ArtifactReference, Strict
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import (
     BatchClosure,
@@ -29,18 +29,6 @@ from manabot.training.learning import (
 )
 from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.state.game_errors import GameErrorPolicy
-
-
-class ArtifactReference(TypedDict):
-    """Immutable local bytes admitted by content digest."""
-
-    path: str
-    sha256: str
-    bytes: int
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class CheckpointCadence(Strict):
@@ -273,7 +261,7 @@ class LearningStateImport(Strict):
     """Portable learner state; source bytes retain historical paths and identity.
 
     Paths here locate staged copies. Their hashes/sizes must match the parent
-    TrainingRun. Game streams and all RNGs explicitly start afresh.
+    RegimeRun. Game streams and all RNGs explicitly start afresh.
 
     `source_match` declares a deck switch: the parent trained on exactly this
     match and this segment continues on the regime's. Both must name the
