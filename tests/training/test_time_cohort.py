@@ -9,6 +9,7 @@ from etude.train.read import read_all
 from etude.train.records import Time
 import pytest
 
+from manabot.recipes.baseline import BaselineConfig, train as train_baseline
 from manabot.recipes.local import LocalConfig, train
 from manabot.reports.time_cohort import CohortRun, TimeCohort, write_cohort_report
 from manabot.reports.time_sources import load_time_sources
@@ -156,6 +157,26 @@ def test_empty_attempts_preserve_observed_history_without_inventing_time(
         assert reported.learner_transitions == 100
         assert len(reported.intervals) == update
         assert any("observed attempts only" in w for w in reported.warnings)
+
+
+def test_baseline_recipe_without_labels_stays_unclassified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "unlabeled-baseline")
+    monkeypatch.setenv("ETUDE_RUN", "seed-197")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    train_baseline(BaselineConfig(updates=1, device="cpu"))
+    (recorded,) = read_all(tmp_path / "track")
+    assert recorded.blocks
+    assert not {
+        column.name for block in recorded.blocks for column in block.header.series
+    } & {"run/kind", "run/recipe"}
+    (run,) = load_time_sources([str(tmp_path / "track")]).runs
+    assert run.kind == "unclassified"
+    assert not run.recipe
+    assert run.updates == 1 and run.active_seconds is not None
 
 
 def test_local_recipe_is_a_named_smoke_excluded_from_default_selection(

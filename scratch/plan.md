@@ -148,6 +148,14 @@ direction:
   `time_sources.label`; the reader's `declared.kind` / `run.job` precedence
   already prefers the record.
 
+Built after the seventh review: both loop labels default to `None` and only
+supplied labels enter the update row. Local keeps its explicit smoke labels.
+The training guide's example matches the signature and conditional logging.
+`uv run --extra dev --extra artifacts pytest tests/training/test_time_cohort.py -q -k 'baseline_recipe_without_labels or local_recipe_is_a_named_smoke'`:
+2 passed (7.11s); real baseline rows omit both columns and report as
+unclassified, while local smoke remains excluded by default. GPU speed and
+resume measurements remain unrun.
+
 No open product choice: the smoke rows are throwaway and the Etude change
 is additive.
 

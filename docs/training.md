@@ -306,8 +306,15 @@ recipe uses. Read it as the template for your own; its body is the loop you
 would write:
 
 ```python
-def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
-    """Train to the run's update target and return its final world-bound policy."""
+def self_play(
+    settings: SelfPlay,
+    run: TrainingRun,
+    *,
+    updates: int,
+    kind: str | None = None,
+    recipe: str | None = None,
+) -> Path:
+    """Train to the target; log report labels only when the recipe supplies them."""
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
@@ -330,6 +337,10 @@ def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
                 row = step(
                     settings, learner, ema, collector, counts, rng, out=run.out
                 )
+                if kind is not None:
+                    row["run/kind"] = kind
+                if recipe is not None:
+                    row["run/recipe"] = recipe
                 run.log(row, **clocks(counts))
                 if settings.behavior != "random":
                     run.log_table(
@@ -342,6 +353,10 @@ def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
                     publish(settings, run, learner, ema, counts)
         return publish(settings, run, learner, ema, counts)
 ```
+
+Report labels are optional: without them or Etude declaration labels, the
+training-time report shows the run as `unclassified`; the local recipe supplies
+`kind="smoke"` and `recipe="manabot.recipes.local"` so it is excluded by default.
 
 It returns the policy it trained: the EMA checkpoint of its last update when
 the learning record keeps an EMA, the raw one otherwise. There is no resume

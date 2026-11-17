@@ -675,10 +675,10 @@ def self_play(
     run: TrainingRun,
     *,
     updates: int,
-    kind: str = "training",
-    recipe: str = "",
+    kind: str | None = None,
+    recipe: str | None = None,
 ) -> Path:
-    """Train to the target; retain report labels alongside each update's clocks."""
+    """Train to the target; log report labels only when the recipe supplies them."""
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
@@ -699,7 +699,10 @@ def self_play(
         with self_play_games(settings, run, counts) as collector:
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out)
-                row.update({"run/kind": kind, "run/recipe": recipe})
+                if kind is not None:
+                    row["run/kind"] = kind
+                if recipe is not None:
+                    row["run/recipe"] = recipe
                 run.log(row, **clocks(counts))
                 if settings.behavior != "random":
                     run.log_table(

@@ -146,3 +146,10 @@ experiments/reports/etude-execution.md. Summary and blocker: plan.md, Remaining.
   server/watcher started. Full method and capacity table: experiment report.
   Retry still needs rentable RunPod/Vast capacity under USD 9. Gate and
   publication remain later steps.
+
+## Optional report labels — 2026-11-17
+
+`uv run --extra dev --extra artifacts pytest tests/training/test_time_cohort.py -q -k 'baseline_recipe_without_labels or local_recipe_is_a_named_smoke'`:
+2 passed, 9 deselected (7.11s). Real baseline training writes neither label
+column and reads as unclassified; local's explicit smoke labels still exclude
+it by default. GPU speed and resume measurements were not run.
