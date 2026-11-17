@@ -1480,3 +1480,36 @@ reader; both now use the surviving retained-row path, without restoring an API.
 file run exposed four stale-fixture failures before that consumer cut; the two
 new CPU gradient cases already passed. CUDA proof remains the rental's next
 admission step.
+
+### Repaired backward passed; worker paused — 2026-11-16
+
+Source `ffc3f773bf`, run `opponent_memory/cuda-calibration-bound32@39100`, attempt
+`fc861e77929a`: the directed CPU/CUDA sparse-chunk backward regression passed
+**all four cases** in 7.94 s on the A40. The control then completed **one update,
+54,467 learner decisions and 213 optimizer steps** in 332.227 s, with
+244.733 s collection and 85.424 s learning. The ordinary worker paused because
+its 600-second allowance could not fund another update plus its stop reserve;
+the calibration correctly rejected the incomplete two-update target. Its outer
+outcome remains failed, its inner outcome paused. Final raw/EMA/Adam were
+exported, but the calibration's reload check was not reached.
+
+Prefix maxima remained 432/13,623/113/5,196. Sampled process-tree RSS peaked at
+15,844,237,312 bytes; CUDA allocated/reserved peaks were 186,126,336 /
+257,949,696 bytes. The 25 outputs were fetched and hash-verified. Rental
+`mtg252-a40-58f3e2b06d73` is ended; launcher cost is **USD0.07871, estimated**.
+The completed control update is operational evidence only, without memory-arm
+admission, a comparative throughput result or a learning/strength conclusion.
+
+**Calibrate the time limit from this result.** Keep the exact workload,
+two-update targets, 32-row execution, capacities and 100-update provisional
+schedule. Allow 1,800 seconds per worker, with 90 seconds for worker finalization;
+the complete forward/reverse sequence has a 9,000-second guard inside a
+three-hour job. This funds two measured 332-second updates with room for the
+unadmitted memory arms, instead of repeatedly pausing the control. Progress
+logs now name the preflight and each worker start/completion.
+
+The ended runs release their unused reservations: Etude retains approximately
+USD0.26 in estimated commitments, not their original summed job ceilings.
+Quote the complete host window, including startup, for a job capped at USD2.00
+and launch under the unchanged **USD3.00 calibration cap**. No settled bill is
+claimed and no paid pilot is launched by this resource-bound correction.

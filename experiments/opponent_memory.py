@@ -58,15 +58,15 @@ def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
 
         root = Path(__file__).resolve().parents[1]
         job = PythonJob(
-            name="cuda-calibration-bound32",
+            name="cuda-calibration-full",
             train=calibrate,
             config=Calibration(source_bundle=bundle_at(root, revision)),
             repo=str(root),
             revision=revision,
             setup=machine_setup(" --extra artifacts --extra dev"),
             extras=("artifacts", "dev"),
-            max_hours=0.75,
-            max_usd=Decimal("0.60"),
+            max_hours=3.0,
+            max_usd=Decimal("2.00"),
             max_attempts=1,
         ).plain()
         return job.model_copy(
@@ -215,7 +215,7 @@ def calibration_recipe(name: str, *, smoke: bool) -> TrainingRegime:
         ),
         # A sampled deck source owns mixed disclosure and independent mirrors;
         # TrainingRegime forbids combining it with the older curriculum flag.
-        wall_seconds=600,
+        wall_seconds=600 if smoke else 1800,
         seconds_per_update=60,
         workers=1 if smoke else 4,
     )
@@ -302,7 +302,7 @@ def calibration_child(
         ETUDE_UNTIL_CLOCK="updates",
         ETUDE_UNTIL_VALUE=str(spec.updates),
         ETUDE_DEADLINE=(
-            datetime.now(timezone.utc) + timedelta(seconds=690)
+            datetime.now(timezone.utc) + timedelta(seconds=recipe.wall_seconds + 90)
         ).isoformat(),
     )
     if producer is not None:
@@ -395,6 +395,7 @@ def calibrate(config: Calibration) -> None:
         # Run the directed CUDA backward regression before the real workers;
         # the subprocess releases its allocator before any timed measurement.
         with (out / "attention-proof.log").open("w") as proof:
+            print("calibration: CUDA backward preflight", flush=True)
             subprocess.run(
                 [
                     "uv",
@@ -409,6 +410,7 @@ def calibrate(config: Calibration) -> None:
                 check=True,
                 timeout=180,
             )
+        print("calibration: CUDA backward preflight passed", flush=True)
     sequence = ["incumbent", *(arm.name for arm in ARMS)]
     if not config.smoke:
         sequence += list(reversed(sequence))
@@ -416,10 +418,15 @@ def calibrate(config: Calibration) -> None:
     receipts: list[str] = []
     try:
         for ordinal, name in enumerate(sequence):
-            remaining = 2400 - (time.monotonic() - started)
-            if remaining < 690:
+            remaining = (2400 if config.smoke else 9000) - (time.monotonic() - started)
+            worker_seconds = 690 if config.smoke else 1890
+            if remaining < worker_seconds:
                 raise RuntimeError("calibration wall cap reached before all repeats")
             directory = out / f"{ordinal:02d}-{name}"
+            print(
+                f"calibration: {ordinal + 1}/{len(sequence)} {name} starting",
+                flush=True,
+            )
             child = ChildProcess(
                 "experiments.opponent_memory:calibration_child",
                 (
@@ -432,7 +439,7 @@ def calibrate(config: Calibration) -> None:
                 ),
             )
             try:
-                child.join(timeout=min(690, remaining))
+                child.join(timeout=min(worker_seconds, remaining))
                 if child.exitcode != 0:
                     raise RuntimeError(
                         f"{name} worker failed or timed out; see {directory}"
@@ -450,6 +457,7 @@ def calibrate(config: Calibration) -> None:
                     psutil.wait_procs(descendants, timeout=10)
                 child.close()
             receipts.append(str(directory.relative_to(out) / "receipt.json"))
+            print(f"calibration: {name} completed; {receipts[-1]}", flush=True)
     finally:
         (out / "calibration.json").write_text(
             json.dumps(
