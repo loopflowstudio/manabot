@@ -1,10 +1,11 @@
 # Etude execution comparison
 
-**Not yet measured.** Three rentals on 2026-11-17 ended before a scored GPU
-update: one Vast host went offline, Lium's pod could not be read by Etude, and
-a later Vast 4090 blocked on durable writes. Every machine was terminated and
-confirmed absent. The latest retry reached CUDA successfully, but no alternate
-RunPod/Vast capacity was available afterward. Method and exact attempts below.
+**The RunPod RTX A6000 completed all four Elemental arms and both baseline
+evaluations.** The branch averaged 954 decisions/s during collection and
+learning, against 945 on main. The two repeats disagreed on which revision
+was faster. Both baseline endpoints scored 11/128 on the same replay-verified
+legs. CUDA forwards batched up to 14 inputs. The first three rentals and the
+successful A6000 measurement are recorded below.
 
 The repeat rents from RunPod or Vast only, taking any reasonable single GPU
 on offer (L4, 4090, 3090, A5000 or A6000 class) under the remaining cap. Lium
@@ -195,3 +196,147 @@ No alternate machine was rented. GPU speed, durable save cost, managed CUDA
 batching and resumed-versus-uninterrupted GPU learning remain unmeasured.
 A repeat needs a rentable host with working durable storage. No server,
 watcher or rented machine remains from this run.
+
+## RunPod A6000 — 2026-11-17
+
+At 19:36 UTC RunPod briefly offered a 4090 at USD 0.89/hour. The rental
+request returned no capacity. The other RunPod and Vast templates had no
+stock on that sweep. At 19:37 UTC a retry rented RunPod RTX A6000
+`mtg329-speed-a6000-2f5283ae0409`, pod `k9uj7aajsbbplr`, at USD 0.69/hour
+for two hours with `--max-usd 9`. Direct SSH, driver 595.112.07 and a Torch
+2.15.0+cu132 CUDA tensor operation worked. The two source archives were the
+same revisions as the 18:57 attempt. All 899 main and 831 branch source
+manifest entries matched on the rented machine. Each environment built from
+its own lockfile before the probe.
+
+The output directory was on the root overlay mount (60 GiB, 54 GiB free),
+mounted rw,relatime with lowerdir, upperdir, workdir and nouserxattr. The
+container's cgroup v1 blkio read/write BPS and IOPS device-limit files were
+all empty. The container cannot identify which host disk backs the overlay.
+At 19:43 UTC Dirty/Writeback started at 1,132/0 kB. One 4 KiB write, flush
+and fsync took 48.23 ms. System sync took 7.55 ms and Dirty/Writeback reached
+0/0 kB. Two-second samples then showed 1,248/0, 1,964/0 and 4,004/8 kB
+as the host continued working. The second write and fsync on the same file
+took 0.86 ms, followed by 7,916/0 kB. Timed arms began after the setup
+backlog drained. Both revisions ran under the same filtered strace
+(`-f -yy -ttt -T --seccomp-bpf -e trace=fsync,fdatasync`), recording the
+file, result and duration of each call in memory while training output stayed
+on the overlay.
+
+All four Elemental arms completed on the original archives. The first baseline
+on branch 3670249eb3 then failed before update one in CUDA attention backward
+with `Invalid max_seqlen_k:58`. A five-token minibatch containing sequences
+of two and three tokens reproduced the same failure with 58 padded slots.
+Bounding the kernel's sequence length by the smaller of the slot count and
+the total packed length produced finite gradients on this GPU. The fix keeps
+live-token attention enabled and reads both bounds from tensor shapes.
+
+The baseline retry uses a fresh checkout archive at 5826f7502e, including
+the attention fix and the intervening main merge. Both baseline trajectories
+and their managed evaluations use that revision. The throughput comparison
+retains the two earlier archives to hold engine behavior fixed between sides.
+
+### Elemental throughput
+
+| Arm in execution order | Decisions | Games | Optimizer steps | Collection s | Learning s | CLI wall s¹ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Branch 1 | 152,546 | 775 | 597 | 92.71 | 64.13 | 166 |
+| Main 1 | 154,506 | 774 | 605 | 101.16 | 66.22 | 179 |
+| Branch 2 | 152,874 | 774 | 599 | 98.73 | 64.46 | 169 |
+| Main 2 | 152,139 | 774 | 595 | 92.67 | 64.49 | 163 |
+
+¹ Elapsed between successive arm starts at one-second resolution. Every arm
+completed three updates. Pooling decisions over collection plus learning
+gives 954 decisions/s on the branch and 945 on main (about +1%). Across
+both runs the six updates took 335 s of wall time on the branch and 342 s on
+main. The ordering of the faster revision reversed on the second pair.
+These two repeats do not resolve a consistent speed difference. Branch
+`run.save()` durations by update were 0.17, 0.06, 50.59 ms and 0.09, 0.06,
+103.01 ms. Only the final call of each arm wrote state files. Main reported
+a metric cardinality warning on each run.
+
+### Durable writes during Elemental
+
+Each cell gives the call count and total syscall time in milliseconds. SQLite
+includes the database, journal, WAL and directory descriptors. Main's first
+durable write was the SQLite journal, at 1.782 and 1.240 ms. Branch's first
+write was the run declaration, at 3.980 and 0.745 ms.
+
+| File or operation | Branch 1 | Main 1 | Branch 2 | Main 2 |
+| --- | ---: | ---: | ---: | ---: |
+| Run declaration | 1 / 3.980 | 1 / 0.286 | 1 / 0.745 | 1 / 0.578 |
+| Game receipts | 775 / 197.150 | 774 / 151.373 | 774 / 162.839 | 774 / 158.478 |
+| Outcome tables | 3 / 105.682 | 3 / 2.316 | 3 / 124.623 | 3 / 1.927 |
+| Metric blocks | 6 / 3.691 | 8 / 4.834 | 6 / 74.163 | 8 / 5.834 |
+| SQLite | 0 | 27 / 13.064 | 0 | 27 / 8.879 |
+| Save learner.pt | 1 / 1.278 | 0 | 1 / 21.521 | 0 |
+| Save optimizer.pt | 1 / 0.871 | 0 | 1 / 6.030 | 0 |
+| Save ema.pt | 1 / 0.949 | 0 | 1 / 2.579 | 0 |
+| Save state.json | 1 / 0.112 | 0 | 1 / 0.705 | 0 |
+| Save current.json.partial | 1 / 0.142 | 0 | 1 / 0.880 | 0 |
+| Published policy checkpoint or checkpoint record | 0 | 0 | 0 | 0 |
+
+The checkpoint row counts explicit fsync/fdatasync calls on those paths.
+Etude records an immutable policy file already inside `out` by reference.
+Recovery saves on the branch follow the separate five-file sequence above.
+The slowest Elemental call was 123.708 ms on a branch outcome table. This
+host did not reproduce the multi-minute Vast stall. The earlier trace
+establishes where the Vast process waited; its device limit was never
+measured, so disk throttling remains unconfirmed.
+
+### Six-update baseline
+
+After rebuilding, sync reduced Dirty from 1,716,988 to 852 kB with zero
+Writeback. The CUDA regression test passed on the A6000. The uninterrupted
+baseline finished, the second baseline stopped after update three (exit 75),
+and the resumed process finished update six with its original target.
+The table shows cumulative decisions and Adam steps, followed by the logged
+per-update value loss.
+
+| Update | Full decisions | Resumed decisions | Full Adam steps | Resumed Adam steps | Full value loss | Resumed value loss |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 962 | 962 | 141 | 141 | 0.3511 | 0.3512 |
+| 2 | 1,743 | 1,743 | 243 | 243 | 2.1507 | 2.1507 |
+| 3 | 2,862 | 2,862 | 377 | 377 | 0.1716 | 0.1701 |
+| 4 | 3,541 | 3,450 | 469 | 450 | 0.1883 | 0.2192 |
+| 5 | 4,589 | 4,032 | 599 | 529 | 0.1679 | 0.3029 |
+| 6 | 5,685 | 5,070 | 739 | 649 | 0.2187 | 0.2929 |
+
+The independent CUDA trajectories already differed slightly in loss before
+the stop. Resume kept the update and optimizer counters and started fresh
+game and sampling streams. At update six the resumed arm had made 615 fewer
+decisions and 90 fewer optimizer steps. The final uninterrupted save took
+67.8 ms. The stop and final resumed saves took 61.4 and 67.8 ms respectively.
+
+### Managed CUDA evaluation
+
+Both six-update EMA endpoints played the same 16 deals with eight deck/seat
+legs per deal against the heuristic. All 256 games terminated, passed replay
+and satisfied row integrity checks. Each endpoint won 11 and lost 117, with
+the same score on every paired leg. Their EMA bytes differed. Each arena
+registration's checkpoint SHA-256 matched the corresponding archived endpoint.
+One seed and one paired cohort do not establish playing-strength equivalence.
+
+| Six-update endpoint | Played deals | Wins / legs | Elapsed s | CUDA inputs | Forward calls | Calls with batch >1 | Max batch |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uninterrupted | 16 | 11 / 128 | 86.19 | 6,587 | 2,204 | 1,574 | 14 |
+| Resumed | 16 | 11 / 128 | 85.99 | 6,587 | 2,209 | 1,584 | 13 |
+
+Each evaluation loaded one checkpoint into Etude's shared CUDA inference
+process, with up to 16 games active and one inference thread. Mean batch sizes
+were 2.99 uninterrupted and 2.98 resumed.
+Direct SSH exercised local Etude training and managed evaluation. Queued
+launcher delivery was outside this measurement.
+
+The evidence archive contains the per-call fsync/fdatasync traces for every
+arm and the failed baseline, storage probe, learning curves, save durations,
+endpoint policies, batch histograms, Etude performance records, arena results
+and Command traces. Retrieve it with
+`uv run --extra artifacts python -m manabot.data fetch experiments/data/etude-execution/a6000-results.tar.gz`.
+The local copy matched the rental's SHA-256
+`5b5345e2adc0b234b8d3a956a1b10839c67e3122e2c1e9064f5de1af254c4827`.
+
+Etude terminated the A6000 at 20:07:53 UTC and reported **~USD 0.35** for
+the rental. RunPod's lookup of pod `k9uj7aajsbbplr` confirmed absence.
+Together with the three prior launcher estimates, the total was approximately
+USD 0.62 of the approved USD 10.

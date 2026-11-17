@@ -39,3 +39,8 @@ LLM declarations await EXP-70 and compatible frozen checkpoints.
 Ideas outside this plan: move setup/numerics out of experiment/, move
 regime_tag to its single caller; simplify all-invalid admission only if Etude
 owns a declared minimum. No scope expansion authorized by these notes.
+
+For the A6000 retry, kept the already measured 3670249eb3 vs 3afd92d8f3
+Elemental arms. Both baseline trajectories use 5826f7502e after the five-token
+CUDA backward reproducer confirmed its live-attention fix. Kept the recipe's
+default layout and durable output for both.

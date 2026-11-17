@@ -63,29 +63,28 @@ is fixed; focused test passes (implementation.md). Other checks are the
 caller's gate, including nightly baseline workflow_dispatch after the
 choice-corpus alias fix. No full suite run in implement.
 
-## Remaining — latest steers 54c7d853 / 7d745eb2
+## GPU measurement complete — steer 8d007488
 
-1. GPU speed, CUDA batching and resume measurement using the existing harness
-   experiments/etude_execution.py; method and attempts live in its report.
-   Main 3afd92d8f3 versus branch on one reasonable single GPU; two alternating
-   three-update Elemental runs per revision, seed 197, normal 256 streams;
-   six-update branch baseline uninterrupted and stopped after update 3 then
-   resumed; 16 paired eight-leg deals per endpoint. Calibration only, no
-   strength equivalence claim. Direct SSH does not prove queued job delivery.
-   Total approved --max-usd 10. Lium
-   excluded (Etude Task 73e1a9); RunPod or Vast only; retry a few times across
-   this run on capacity failure/host death, terminate and confirm every machine.
-   Three rentals produced no scored update (dead Vast host, unreadable Lium
-   pod, Vast 4090 durable-write stall at Etude run.py:412 os.fsync); all
-   terminated and confirmed absent, about USD 0.27 spent in total; no
-   capacity on later RunPod/Vast checks. Attempts: the experiment report.
-   GPU acceptance is still unmet; a repeat needs working durable storage.
-2. CI: the discovery fix is pushed; checks on e22e825825 were pending at
-   realign (2026-11-17), none failed. Reading the result is the caller's gate.
-3. PR #500 body is current (saved-regime readers name f4e1822faf and
-   f577362135; GPU section states the failed retries). Nothing left here.
+RunPod A6000, four alternating 256-stream Elemental arms: 954 decisions/s
+branch (3670249eb3), 945 main (3afd92d8f3), opposite rankings across
+pairs. The small write+fsync fell from 48.23 to 0.86 ms after sync.
+Neither side stalled on its first durable write. Throttling on the earlier
+Vast host remains unconfirmed. Direct SSH measures local Etude execution.
 
-Gate and publication remain caller's steps; do not land. Dependency release
+The first CUDA baseline exposed an invalid jagged-attention backward bound.
+5826f7502e fixes it with a CUDA gradient regression (passed on A6000);
+all three local padded/live parity cases passed. Both six-update trajectories
+on 5826f7502e finished. Both endpoints won 11 of 128 replay-verified legs;
+managed CUDA batches reached 14/13. Report and artifact manifest retain the
+numbers, traces, differing source revisions and endpoint hashes. All machines
+terminated and confirmed absent; cumulative launcher estimate ~USD 0.62.
+
+## Remaining
+
+Gate and publication are the caller's steps, including updating PR #500
+with the completed GPU measurement and checking CI on the new commit.
+
+Dependency release
 cut is complete. External limits: Etude Task 2d1933 owns hard per-match
 deadlines (hang/death currently retries grouped job); 73e1a9 owns Lium lifecycle.
 LLM jobs await EXP-70/frozen checkpoints. Automatic same-seed policy→sampler
