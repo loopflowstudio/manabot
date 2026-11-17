@@ -102,3 +102,8 @@ available: "yes, i dont really care what gpu as long as its reasonable".
 Jack Heart, 2026-11-17, asked whether a Lium 4090 (about USD 0.41 an hour) may
 stand in when no L4 is available: "yes, i dont really care what gpu as long as
 its reasonable". This replaces "rent nothing other than an L4".
+
+Jack Heart, 2026-11-17, offered wait-and-retry / another cloud / land without
+GPU numbers for the blocked measurement: "1". Of the six-minute stall at
+Etude's `os.fsync` in `declare` on the Vast 4090: "This seems worth trying to
+debug".
