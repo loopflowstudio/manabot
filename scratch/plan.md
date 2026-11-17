@@ -78,8 +78,8 @@ regression, host facts: 9 passed). Not shown: CUDA batching, real Rust panic or 
 injection, launched/provider runs, browser proof, full suite, automatic
 policy→sampler scheduling. LLM experiments stay blocked on EXP-70/frozen
 checkpoints; their declarations share Agents but are not a runnable adoption
-proof. The earlier validation used merge base c035d5566a; origin/main now names
-3afd92d8f3. No new comparison or sync was performed.
+proof. The branch's merge base is origin/main 3afd92d8f3 (checked 2026-11-17;
+no newer main commits); the CPU learning comparison used that main.
 
 QA retry fix: each Elemental callback invocation writes its own
 `arena/<match-key>/attempt-*` (`elemental_play.evidence_directory`), so failed
@@ -136,8 +136,8 @@ Etude's failed match. Nothing further to change; no new open choice.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
-  as the gate's proof of that path. PR #500 CI at 09e4dd825a (the regime
-  reader deletion) was pending when last checked; no result yet.
+  as the gate's proof of that path. PR #500 head is d38c45464e; its CI
+  preflight was pending at realign (2026-11-17), no result yet.
 
 ## Built since the 2026-11-17 steers
 

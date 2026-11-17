@@ -93,8 +93,7 @@ nobody answered these). The docs are written to them:
 
 2026-11-17 compress choices (mine, reversible): deleted `HostFacts` /
 `MemoryLimit`, which the plan had kept for historical receipts; their only
-reader was the deleted run record. Kept the training-report page's script and
-`CohortRun` payload unchanged though its flamegraph and phase table can no
-longer show anything. Realign: those parts go under either answer to the open
-question above (plan.md, Delete list); only deleting the whole command waits. Left the `notebook` extra and plotting dependencies in
-pyproject for the same reason: CLAUDE.md's commands name `--extra notebook`.
+reader was the deleted run record. The training-report page's flamegraph,
+phase table, notebook extra and plotting dependencies have since been deleted
+(c570177e5c); only deleting the whole `training-report` command still waits on
+the open question above.
