@@ -1,9 +1,9 @@
 """Installed native selector, Python adapter, and retained pre-port decisions.
 
 Rule-group fixtures live alongside the native selector in heuristic/tests.rs.
-Golden decisions come from the Python owner at 757bb6257 on the fixture's
-engine world. A world change needs a new comparison with that reference,
-never relabeled actions.
+Golden decisions come from the unchanged Python owner at 757bb6257, recorded
+by scripts/record_heuristic_parity.py on the current engine. The original
+pre-port receipt remains separate; new source payments explicitly use PayCost.
 """
 
 from __future__ import annotations
@@ -28,9 +28,10 @@ from manabot.sim import anchors
 from manabot.sim.heuristic import HeuristicPlayer, heuristic_source_paths
 from manabot.sim.players import build_code_player
 from tests.eval.arena_fixture import arena_fixture
-from tests.retained_decision import source_payment_tape
 
-PARITY = Path(__file__).parents[1] / "fixtures/native_heuristic_parity.json"
+PARITY = (
+    Path(__file__).parents[1] / "fixtures/native_heuristic_smart_payment_parity.json"
+)
 
 
 def _players(decks: list[str]) -> list[managym.PlayerConfig]:
@@ -53,7 +54,7 @@ def test_native_heuristic_matches_retained_python_decisions() -> None:
         env = managym.Env(seed=case["seed"])
         raw, _ = env.reset(_players(case["decks"]))
         players = [HeuristicPlayer(max_actions=case["max_actions"]) for _ in range(2)]
-        tape = source_payment_tape(env, case["actions"])
+        tape = iter(case["actions"])
         for decision, expected in enumerate(tape):
             view = cast(Env, SimpleNamespace(last_raw_obs=raw))
             # These new payment decisions were implicit in the reference.

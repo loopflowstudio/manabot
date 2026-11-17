@@ -11,6 +11,8 @@ Current-world (w17) corpora with executable consumers:
   `... -- record --root conformance/semantic-kernel-w17-v4`.
 - `authored-match-w17-v2/` — the authored-match authority receipt
   (`conformance.authored_match_receipt`, `scripts/generate_authored_match_receipt.py`).
+  Its declared policy uniformly chooses strategic offers and explicitly uses
+  automatic payment at source-only decisions; directed payment tests cover manual taps.
 - `authored-match-parity-w17-v2/` — Academy live/headless replay parity
   (`scripts/verify-authored-match-parity`).
 - `public-commitment-parity-w17-v2/` — Academy public-commitment parity

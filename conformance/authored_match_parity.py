@@ -33,10 +33,10 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "0429f22831665f4f50bebcc559b44cffdfea4b0edcb78990cda9f9dae80f00ab"
-TERMINAL_STATE = "70de97a6ec827cddc3046efb866ab1a0e7ea0ca3027412e6c41a6a627b9a275f"
+AUTHORITY_SHA256 = "1738c611b086d8d8d88ac899a3be726037b78300d6e972bb1d0108686f6e8192"
+TERMINAL_STATE = "1fd1fedb3ac0f737c83c9097e63f49d17cdea8668fbd8e074b38e92ce7c82421"
 
-COMMAND_COUNT = 182
+COMMAND_COUNT = 191
 
 
 def _json_bytes(value: object) -> bytes:
@@ -323,7 +323,7 @@ def _run_engine(
                     surface, 15, "current_object_binding", "committed", "unchanged"
                 )
 
-        if prove_stale and revision == 30:
+        if prove_stale and revision == 31:
             assert (
                 captured_address is not None
                 and rendered_ref is not None
@@ -394,8 +394,8 @@ def _run_engine(
                 "captured_revision": 15,
                 "captured_render_ref": rendered_ref,
                 "candidate_address": captured_address,
-                "departure_transition": "29->30",
-                "current_revision": 30,
+                "departure_transition": "30->31",
+                "current_revision": 31,
                 "current_rejection": {
                     "code": "stale_object",
                     "state_witness_unchanged": True,
