@@ -91,6 +91,23 @@ QA fixes are built: evaluation error handling (24 passed, 37.31s) and snapshot
 retry (`reports/snapshot.py` opens the source before creating the output; 1
 passed). Commands and limits: implementation.md.
 
+- Steer 2026-11-17 (complete text: `lf session steers`; quotes in
+  positioning.md). No shipped doc changes for it: docs/evaluation.md
+  ("Failure") already says native `AgentError`/`PanicException` give invalid
+  score-null rows and "Other Python exceptions fail the match".
+  - Red CI on PR #500:
+    `tests/eval/test_evaluation_match.py::test_policy_exception_retains_player_failure`
+    expects a `RuntimeError` from `build_code_player` to become a `crash` row;
+    `native_game.execute_game` re-raises anything `is_game_error` rejects
+    (05bdc978da). The guide sides with the code, so the test is the stale
+    half: assert propagation, and keep a native-error case for the crash row.
+  - Speed against main on one rented L4, `--max-usd 3`, both sides in one
+    session: Elemental training updates/s with collection and learning
+    seconds per update and the cost of `run.save()`; evaluation games/s and
+    decisions/s on the same checkpoints and paired deals, first saying whether
+    CUDA batching worked. Numbers, method and limits go to implementation.md
+    and the PR description; terminate the machine and confirm. More than a few
+    percent slower: say where the time goes, do not optimize unasked.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch

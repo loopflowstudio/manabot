@@ -79,3 +79,7 @@ for Manabot: "i think we dont need warnings, were teh only users".
 Jack Heart, 2026-11-14: "56 landed. pin a commit for now, release xoming".
 Etude PR #103 merged as 5708e14cab1459b46f8310a9ec06f97ad154562f; main is
 still version 0.3.2.
+
+Jack Heart, 2026-11-17: "have we measured performance impact of this change".
+Nothing had been. Offered main against the branch on one L4 under USD 3:
+"yes l4 approved".
