@@ -98,7 +98,8 @@ passed). Commands and limits: implementation.md.
   score-null rows and "Other Python exceptions fail the match".
   - Fixed the stale red-CI test: RuntimeError propagates without a result row;
     native AgentError retains a crash row naming the responsible player.
-    Focused `-k policy_exception`: 2 passed (8.34s); Ruff check/format pass.
+    Compress split it into two tests; `pytest tests/eval/test_evaluation_match.py
+    -q -k policy_error`: 2 passed (0.60s); Ruff check/format pass.
   - Speed against main on one rented L4, `--max-usd 3`, both sides in one
     session: Elemental training updates/s with collection and learning
     seconds per update and the cost of `run.save()`; evaluation games/s and
