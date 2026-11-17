@@ -80,6 +80,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     for (const colorScheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await expect(panel.getByRole('list', { name: 'Would tap' })).toBeVisible();
+      await expect(panel.getByRole('button', {name: 'Clear preview'})).toHaveText('Clear');
       await expect(page.getByTestId('action-option')).toHaveCount(9);
       await expect(page.locator('[data-payment-source]').first()).toBeInViewport();
       await expect(pay).toBeInViewport({ ratio: 1 });
@@ -92,6 +93,12 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
       await page.screenshot({path: testInfo.outputPath(`payment-${width}-${colorScheme}.png`)});
     }
     const paymentHash = await page.evaluate(() => window.__mana.frame!.frame_hash);
+    const beforeClear = await page.evaluate(() => window.__mana.commands.length);
+    await panel.getByRole('button', {name: 'Clear preview'}).press('Enter');
+    await expect(panel).toBeFocused();
+    await expect(panel).toContainText('Focus or point to a payment choice.');
+    await expect(page.locator('[data-payment-source]')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__mana.commands.length)).toBe(beforeClear);
     await page.reload();
     await expect.poll(() => page.evaluate(() => window.__mana.frame?.frame_hash)).toBe(paymentHash);
     await expect(panel).toContainText('Would tap');
