@@ -184,6 +184,10 @@ class Env:
     def step_legacy_submission(
         self, offers: StructuredOfferSet, submission_json: str
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any], int]: ...
+    # Read-only automatic payment plan (managym.payment).
+    def payment_preview_json(
+        self, viewer: int, revision: int, fingerprint: str, action_index: int
+    ) -> str: ...
     # Shared semantic decision contract (managym.decision). JSON mirrors of
     # DecisionFrame / composite Observation / {receipt, observation}.
     def semantic_decision_frame_json(self) -> str: ...

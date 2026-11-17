@@ -848,7 +848,7 @@ fn payment_description(cost: &PaymentCost) -> String {
     }
 }
 
-fn cost_description(cost: &ManaCost) -> String {
+pub(crate) fn cost_description(cost: &ManaCost) -> String {
     let mut text = "{X}".repeat(usize::from(cost.x));
     if cost.cost[6] > 0 {
         text.push_str(&format!("{{{}}}", cost.cost[6]));

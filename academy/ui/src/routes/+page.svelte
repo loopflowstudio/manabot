@@ -8,7 +8,7 @@
   onDestroy(() => watchStart.cancel());
   import { watchStart } from '$lib/watch-start.svelte';
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, tick, untrack, setContext } from 'svelte';
 
   import {
     dragMoved, dragOffer, loadTableMode, saveTableMode, selectForPlay, selectedOffers,
@@ -16,6 +16,9 @@
   } from '$lib/play-selection';
   import { visibleCardLabel } from '$lib/decision-labels';
   import { offerFocus, offerTargets } from '$lib/offer-map';
+  import { PaymentPreviewController, PAYMENT_PREVIEW_CONTEXT, type PreviewState } from '$lib/payment-preview';
+  import PaymentPreview from '$lib/components/PaymentPreview.svelte';
+  import { fetchPaymentPreview } from '$lib/socket.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
@@ -49,6 +52,18 @@
     sendTransferPilot,
   } from '$lib/socket.svelte';
   import type { InteractionOffer, StopSide } from '$lib/types';
+
+  let paymentState = $state<PreviewState | null>(null);
+  // The decision whose payment slot is open. Only a proposal that concerns a
+  // payment opens it; it then stays until the decision changes, so the offer
+  // list above keeps its layout while the pointer moves.
+  let paymentSlotDecision = $state<string | null>(null);
+  const payments = new PaymentPreviewController(fetchPaymentPreview, state => {
+    paymentState = state;
+    if (state && !state.loading && state.preview?.state !== 'not_applicable') paymentSlotDecision = decisionKey;
+  });
+  setContext(PAYMENT_PREVIEW_CONTEXT, () => paymentState?.preview?.state === 'exact'
+    ? paymentState.preview.sources.flatMap((source, index) => source.source.kind === 'object' ? [{ id: source.source.id.entity, order: index + 1 }] : []) : []);
 
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
@@ -87,6 +102,7 @@
     connect(params.get('launch'));
 
     return () => {
+      payments.invalidate();
       disconnect();
     };
   });
@@ -94,6 +110,7 @@
   let secondaryOpen = $state(false);
 
   const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
+  const decisionKey = $derived(tableFrame ? `${tableFrame.match_id}:${tableFrame.revision}:${tableFrame.prompt?.id}` : null);
   const offers = $derived(tableFrame?.offers ?? []);
   const clickableTargets = $derived(offerTargets(offers));
   const highlightedOfferIds = $derived(new Set(hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? []));
@@ -211,6 +228,7 @@
   // adds selection and gestures; Study retains its separate retry capability.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
+  const paymentSlot = $derived(canSubmitLive && decisionKey !== null && paymentSlotDecision === decisionKey);
   const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && offers.length > 0);
   const boardObservation = $derived(
     gameStore.branchProjection
@@ -223,7 +241,7 @@
 
   $effect(() => {
     gameStore.updateSeq;
-    untrack(clearPlaySelection);
+    untrack(() => { payments.invalidate(); clearPlaySelection(); });
   });
   $effect(() => {
     if (!liveInput || (selection && !selectionMatches(selection, tableFrame))) untrack(clearPlaySelection);
@@ -233,6 +251,7 @@
   });
 
   function clearPlaySelection(): void {
+    payments.clear();
     if (drag?.moved) suppressClick = true;
     selection = null;
     drag = null;
@@ -368,6 +387,7 @@
     if (tableMode === 'play' && selection
       && !selectedOffers(selection, gameStore.protocolFrame).some(offer => offer.id === action.id)) return;
 
+    payments.invalidate();
     if (!sendAction(action.id)) {
       return;
     }
@@ -375,8 +395,27 @@
     clearPlaySelection();
   }
 
+  $effect(() => {
+    if (!canSubmitLive || gameStore.connection !== 'connected') untrack(() => payments.invalidate());
+  });
+
+  function dismissPaymentOnFocus(event: FocusEvent): void {
+    if (event.target instanceof Element && !event.target.closest('[data-offer-id], [data-testid="payment-preview"]')) {
+      payments.clear();
+    }
+  }
+
+  function previewOffer(action: InteractionOffer): void {
+    if (canSubmitLive && tableFrame && ['PRIORITY_CAST_SPELL', 'PRIORITY_ACTIVATE_ABILITY', 'CHOOSE_TARGET', 'PAY_COST', 'TAP_FOR_COST'].includes(action.action_type ?? '')) {
+      void payments.select(tableFrame, action.id, action.label);
+    } else {
+      payments.clear();
+    }
+  }
+
   function handleActionHover(action: InteractionOffer | null): void {
     if (action) {
+      previewOffer(action);
       gameStore.setFocus(offerFocus(action));
       return;
     }
@@ -389,6 +428,11 @@
       selection = selectForPlay(tableFrame, objectId);
     }
     const offerIds = targetOfferIds(objectId);
+    if (canSubmitLive && tableFrame) {
+      const candidates = tableFrame.offers.filter(offer => offerIds.includes(offer.id));
+      if (candidates.length === 1) previewOffer(candidates[0]);
+      else payments.clear();
+    }
     gameStore.selectTarget(objectId);
     gameStore.setFocus(focusIdsForOffers(offerIds));
   }
@@ -527,7 +571,7 @@
     </section>
   {/if}
   {#if gameStore.observation && boardObservation}
-    <div class="play-workspace" data-testid="play-workspace">
+    <div class="play-workspace" class:with-payment={paymentSlot} data-testid="play-workspace">
       <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
         workspace
@@ -592,6 +636,15 @@
           onPassTurn={handlePassTurn}
           onClearSelection={clearPlaySelection}
         />
+        {#if paymentSlot}
+          <PaymentPreview
+            state={paymentState?.preview?.state === 'not_applicable' ? null : paymentState}
+            observation={tableFrame.projection}
+            chosenSourceFirst={tableFrame.offers.some(offer => offer.id === paymentState?.offer && offer.action_type === 'TAP_FOR_COST')}
+            onClear={() => payments.clear()}
+            onRetry={() => { if (tableFrame && paymentState) void payments.select(tableFrame, paymentState.offer, paymentState.label); }}
+          />
+        {/if}
         {/if}
 
         <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>
@@ -662,7 +715,7 @@
   {/if}
 </main>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onfocusin={dismissPaymentOnFocus} />
 
 {#if gameStore.table?.attempt_id && gameStore.hasCapability('configure_match')}
   {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
@@ -682,7 +735,14 @@
     .table-active .sheet-content { height: 100%; display: flex; flex-direction: column; }
     .table-active .sheet-content > :global(*) { flex-shrink: 0; }
     .table-active .play-workspace { flex: 1; min-height: 0; }
-    .play-workspace { grid-template-columns: minmax(0, 1fr) clamp(19rem, 26vw, 23rem); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
+    .play-workspace { --choices-width: clamp(19rem, 26vw, 23rem); grid-template-columns: minmax(0, 1fr) var(--choices-width); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
+    .with-payment { position: relative; --preview-width: clamp(13rem, 19vw, 17rem); }
+    .with-payment .board-region { margin-right: calc(var(--preview-width) + 1rem); }
+    .with-payment :global([data-testid="payment-preview"]) {
+      position: absolute; inset: .5rem calc(var(--choices-width) + 1rem) 0 auto;
+      width: var(--preview-width); height: auto;
+      border-top: 0; border-left: 1px solid var(--border); padding-left: .75rem;
+    }
     .board-region { min-height: 0; display: flex; flex-direction: column; }
     .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
     .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
