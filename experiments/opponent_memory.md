@@ -1513,3 +1513,10 @@ USD0.26 in estimated commitments, not their original summed job ceilings.
 Quote the complete host window, including startup, for a job capped at USD2.00
 and launch under the unchanged **USD3.00 calibration cap**. No settled bill is
 claimed and no paid pilot is launched by this resource-bound correction.
+
+The initial three attempts are manifest-backed at
+`experiments/data/opponent-memory/20261116-cuda-admission` (17 entries).
+All 65 archived output files, totaling 50,808,576 original bytes, were fetched
+with SDK digest checks and reverified member-by-member, including exact archive
+membership. Cleanup snapshots confirm all three rentals ended. The artifact
+tracking guard passed. The full run at `469339f508` remains separate evidence.
