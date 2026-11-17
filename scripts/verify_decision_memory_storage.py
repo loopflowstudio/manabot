@@ -50,11 +50,23 @@ from manabot.training.updates.ppo import update_iteration
 import managym
 
 
+def _tree_rss(process: psutil.Process) -> int:
+    """Sum simultaneous live processes; exiting children own no resident pages."""
+    rss = 0
+    for child in [process, *process.children(recursive=True)]:
+        try:
+            rss += child.memory_info().rss
+        except psutil.NoSuchProcess:
+            # Includes ZombieProcess: a child may exit between enumeration and
+            # reading its RSS. Permission failures still invalidate the reading.
+            continue
+    return rss
+
+
 def residency(device: torch.device) -> dict[str, int | None]:
     """Phase-end process-tree RSS plus process high-water RSS; never add CUDA."""
     process = psutil.Process()
-    processes = [process, *process.children(recursive=True)]
-    rss = sum(p.memory_info().rss for p in processes if p.is_running())
+    rss = _tree_rss(process)
     high_water = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     if device.type == "cuda":
         torch.cuda.synchronize(device)
@@ -98,17 +110,18 @@ class HostPeak:
     def __init__(self) -> None:
         self.stop = Event()
         self.peak = 0
+        self.error: Exception | None = None
         self.thread = Thread(target=self._sample, name="memory-rss", daemon=True)
 
     def _sample(self) -> None:
         process = psutil.Process()
-        while True:
-            processes = [process, *process.children(recursive=True)]
-            self.peak = max(
-                self.peak, sum(p.memory_info().rss for p in processes if p.is_running())
-            )
-            if self.stop.wait(0.02):
-                return
+        try:
+            while True:
+                self.peak = max(self.peak, _tree_rss(process))
+                if self.stop.wait(0.02):
+                    return
+        except Exception as error:
+            self.error = error
 
     def __enter__(self) -> "HostPeak":
         self.thread.start()
@@ -117,6 +130,8 @@ class HostPeak:
     def __exit__(self, *args: object) -> None:
         self.stop.set()
         self.thread.join()
+        if self.error is not None and args[0] is None:
+            raise RuntimeError("process-tree RSS sampling failed") from self.error
 
 
 def execution_proof(

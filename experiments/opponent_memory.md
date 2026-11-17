@@ -71,9 +71,12 @@ selected K=1 for both paid memory arms.
   weight and average the three fitting seeds. The test split is scored after
   K selection. `--epochs` and `--max-games` allow predeclared smaller runs;
   defaults are eight and 120, with the 20-game smoke sizing the actual count.
-- **Choosing K.** K=4 only if its validation loss beats K=1, averaged over both
-  encoders, with an interval excluding zero; otherwise the cheaper on CPU, then
-  K=1. The test split is read once, for the table.
+- **Choosing K.** Select K=4 when its validation loss beats K=1, averaged over
+  both encoders, with an interval excluding zero. Otherwise select whichever K
+  has the lower aggregate CPU fit time; an exact CPU-time tie selects K=1.
+  Thus inconclusive validation can also select K=4 when it is cheaper on CPU.
+  The test split is read once, for the table. This clarifies the accepted
+  validation/CPU rule; it does not change the frozen K=1 result below.
 - **Cost.** Local CPU, no rental. The game count is sized from a 20-game timing
   smoke so that all fits finish within two hours.
 
@@ -1335,3 +1338,34 @@ includes completion, absent stage/role, digest and size rejection, raw/EMA and
 S3 prefixes, worker initialization and pre-update refusals. Ruff, format and
 whitespace passed. USD0 software evidence only; CUDA admission and calibration
 remain next, with paid-pilot overflow handling still a separate decision.
+
+### Bounded CUDA calibration procedure — 2026-11-16
+
+The `--calibration` declaration runs one exploratory job, separate from pilot
+training. It first trains a two-update control producer (seed 39100), then runs
+incumbent/control/transformer-K1/GRU-K1 in forward and reverse order, each in a
+fresh process. All branches use that producer's EMA via ordinary staged-input
+worker admission. The true history-disabled incumbent starts fresh and omits
+the memory vocabulary. These are short operational trajectories, not matched
+learning or strength evidence.
+
+The workload is mixed-disclosure Elemental independent ten-deck self-play,
+256 streams, four producers, complete-game closure, two updates, float32,
+512/16,384/128/8,192 memory capacities and 2/2/2 execution rows. The provisional
+100-update damping schedule is identical across arms; calibration must still
+choose the pilot horizon and gate scale. The explicit `UniformDecks` source
+owns disclosure and sampling; it replaces the older curriculum flag, which
+cannot be combined with a source in the current recipe API.
+
+Each worker retains its ordinary run, tracking, checkpoints, native/host/learner
+phase timings, realized maxima for all four memory tables, process-tree RSS and
+CUDA allocator peaks. Raw and EMA checkpoints must pass normal loading and
+finite-parameter checks on CUDA. Capacity errors fail calibration, with no
+truncation or recovery. Paid-pilot overflow handling remains undecided.
+
+The job has one attempt, a USD1.20 ceiling and 0.9-hour lifetime; the measurement
+itself stops within 2,400 seconds, each worker within 690 seconds including
+finalization. Quote the whole rental including startup before launching with
+`--max-usd 1.20`; do not infer actual cost from these ceilings. Incomplete
+repeats or a worker failure leave training/evaluation declarations stopped.
+The CPU smoke uses eight exact-quota rows on two streams and is plumbing only.

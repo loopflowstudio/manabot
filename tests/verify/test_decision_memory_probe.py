@@ -115,6 +115,8 @@ def test_game_splits_and_analytic_baseline() -> None:
     )
     assert choose_k(np.array([-0.02, -0.03, -0.01]), {1: 1.0, 4: 2.0})[0] == 4
     assert choose_k(np.array([-0.1, 0.1]), {1: 1.0, 4: 2.0})[0] == 1
+    assert choose_k(np.array([-0.1, 0.1]), {1: 2.0, 4: 1.0})[0] == 4
+    assert choose_k(np.array([-0.1, 0.1]), {1: 1.0, 4: 1.0})[0] == 1
 
 
 def test_hand_targets_cover_main_and_sideboard_without_silent_omission() -> None:
