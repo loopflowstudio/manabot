@@ -109,9 +109,15 @@
 
   let secondaryOpen = $state(false);
 
+  const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
+  const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
   const decisionKey = $derived(tableFrame ? `${tableFrame.match_id}:${tableFrame.revision}:${tableFrame.prompt?.id}` : null);
   const offers = $derived(tableFrame?.offers ?? []);
+  const controls = $derived(pilotCanAct && !participantStudying && !gameStore.branchProjection && !gameStore.resumeFailed
+    ? gameStore.manaControls : null);
+  const floats = $derived(controls?.offers.filter(offer => offer.verb === 'float') ?? []);
+  const selectedFloat = $derived(floats.find(offer => offer.source.id.entity === gameStore.selectedTargetId));
   const clickableTargets = $derived(offerTargets(offers));
   const highlightedOfferIds = $derived(new Set(hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? []));
 
@@ -220,8 +226,6 @@
   });
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.resumeFailed);
-  const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
-  const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
   const inputReady = $derived(!gameStore.commandPending && gameStore.work?.state !== 'running' && stopsPending === null && gameStore.connection === 'connected');
   // Both table modes submit through the same live authority gate. Play only
@@ -376,6 +380,20 @@
       event.preventDefault();
       handlePassTurn();
     }
+  }
+
+  function submitControl(id: number): void {
+    if (canSubmitLive && controls?.offers.some(offer => offer.id === id) && sendAction(id)) payments.invalidate();
+  }
+
+  function controlFocusTarget(): HTMLElement | null {
+    const source = gameStore.manaFocus;
+    gameStore.manaFocus = null;
+    if (!controls || source === null) return null;
+    if (source === 'undo') return document.getElementById('mana-undo');
+    const restored = offers.find(offer => ['TAP_FOR_COST', 'PRIORITY_ACTIVATE_ABILITY'].includes(offer.action_type ?? '') && offerFocus(offer).includes(source));
+    return document.getElementById(`mana-source-${source}`) ??
+      (restored ? document.querySelector<HTMLElement>(`[data-offer-id="${restored.id}"]`) : null);
   }
 
   function handleActionSelect(action: InteractionOffer): void {
@@ -621,7 +639,13 @@
           <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
         {:else if tableFrame}
+        {#if selectedFloat}
+          <button class="btn btn-secondary" disabled={!canSubmitLive}
+            onfocus={() => gameStore.setFocus([selectedFloat!.source.id.entity])}
+            onclick={() => selectedFloat && submitControl(selectedFloat.id)}>{selectedFloat.label}</button>
+        {/if}
         <DecisionSurface
+          {controlFocusTarget}
           workspace
           interrupted={gameStore.resumeFailed}
           frame={tableFrame}
@@ -636,6 +660,33 @@
           onPassTurn={handlePassTurn}
           onClearSelection={clearPlaySelection}
         />
+        {#if controls && (floats.length || controls.undo)}
+          <section aria-label="Mana" class="space-y-1 border-t border-line pt-2">
+            <div class="flex items-baseline justify-between">
+              <h3 class="type-rubric">Mana</h3>
+              <a class="type-caption underline" href={`#mana-pool-${tableFrame.projection.agent.id}`}>Floating mana</a>
+            </div>
+            <div class="max-h-32 space-y-1 overflow-y-auto">
+              {#each floats as offer (offer.source.id.entity)}
+                <button id={`mana-source-${offer.source.id.entity}`} class="btn btn-secondary btn-sm w-full"
+                  disabled={!canSubmitLive} onfocus={() => gameStore.setFocus([offer.source.id.entity])}
+                  onpointermove={() => gameStore.setFocus([offer.source.id.entity])}
+                  onblur={restoreFocus} onpointerleave={restoreFocus}
+                  onclick={() => submitControl(offer.id)}>
+                  {visibleCardLabel(tableFrame.projection, offer.source.id.entity)} · {offer.label}
+                </button>
+              {/each}
+            </div>
+            {#if controls.undo}
+              {@const undo = controls.undo}
+              <button id="mana-undo" class="btn btn-secondary btn-sm aria-disabled:opacity-60"
+                aria-disabled={!canSubmitLive || undo.offer === null}
+                aria-describedby={undo.reason ? 'mana-undo-reason' : undefined}
+                onclick={() => undo.offer !== null && submitControl(undo.offer)}>Undo: {undo.activation.label}</button>
+              {#if undo.reason}<p id="mana-undo-reason" class="type-caption">{undo.reason.explanation}</p>{/if}
+            {/if}
+          </section>
+        {/if}
         {#if paymentSlot}
           <PaymentPreview
             state={paymentState?.preview?.state === 'not_applicable' ? null : paymentState}

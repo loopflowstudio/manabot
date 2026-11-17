@@ -38,7 +38,7 @@ def mana_game(
     self.env.scenario_clear_hand(0)
     self.env.scenario_force_card_in_hand(0, "Gray Ogre")
     self.env.scenario_force_card_in_hand(0, "Mountain")
-    for name in ("Forest", "Jasmine Dragon Tea Shop"):
+    for name in ("Forest", "Mountain", "Jasmine Dragon Tea Shop"):
         self.env.scenario_force_battlefield(0, name, ready=True)
     self.env.scenario_create_token(0, "token.treasure")
     self.obs = self.env.scenario_refresh()

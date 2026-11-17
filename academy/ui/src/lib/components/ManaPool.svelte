@@ -20,7 +20,7 @@
 
 {#if total}
   <details class="type-caption" data-testid="mana-pool">
-    <summary>{label} floating mana: {manaText(total)}</summary>
+    <summary id={`mana-pool-${player.id}`}>{label} floating mana: {manaText(total)}</summary>
     <p>
       {#if hasParts}Amounts below are part of that total, not additional mana. {/if}
       Regular mana expires at step end unless a retention effect applies.

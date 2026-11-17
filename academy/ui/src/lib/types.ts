@@ -531,7 +531,20 @@ export interface PresentationEvent {
   kind: PresentationKind;
 }
 
+type ManaSource = Extract<SubjectRef, { kind: 'object' }>;
+export type FloatOffer = { verb: 'float'; id: number; source: ManaSource; label: string };
+export interface ManaControls {
+  revision: number;
+  offers: (FloatOffer | { verb: 'undo'; id: number; label: string })[];
+  undo: {
+    activation: { command_id: string; label: string; sources: ManaSource[] };
+    offer: number | null;
+    reason: { code: string; explanation: string } | null;
+  } | null;
+}
+
 export interface FrameUpdate {
+  mana_controls?: ManaControls;
   base_revision: number;
   frame: ExperienceFrame;
   presentation: PresentationEvent[];
@@ -819,6 +832,7 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
 ) & {
+  mana_controls?: ManaControls;
   work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;
   mirror?: import('./search').SearchConfig | null;

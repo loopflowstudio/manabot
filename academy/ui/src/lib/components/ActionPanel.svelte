@@ -7,6 +7,7 @@
   import type { DecisionObjectView, InteractionOffer } from '$lib/types';
 
   interface Props {
+    controlFocusTarget?: () => HTMLElement | null;
     offers?: InteractionOffer[];
     describeSubject?: (object: DecisionObjectView) => string;
     instruction?: string;
@@ -30,6 +31,7 @@
   }
 
   let {
+    controlFocusTarget,
     offers = [],
     describeSubject = object => object.label,
     instruction = '',
@@ -124,7 +126,11 @@
     void tick().then(() => {
       // New offers must not interrupt someone reading recorded consequences.
       if (document.activeElement?.closest('[data-testid="presentation-history"]')) return;
-      focusFirstChoice();
+      const control = controlFocusTarget?.();
+      if (control) {
+        control.focus({ preventScroll: true });
+        revealWithinScrollRegions(control);
+      } else focusFirstChoice();
     });
   });
 </script>

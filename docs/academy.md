@@ -806,11 +806,9 @@ readout. Restricted amounts are part of the pool totals, not extra mana.
 source means "has tapped". The floating-mana readout beside the board is the
 only statement of mana you actually have. Clearing the preview, moving focus or
 clearing a selection dismisses a proposal and changes nothing in the game.
-A tapped source stays tapped and its mana stays in your pool until it is spent
-or empties; there is no undo and no refund for a tap you regret.
-
-Source taps are offered only while a cost is being paid. Academy has no action
-for tapping lands at priority to float mana before choosing a spell.
+At priority you can float mana before choosing a spell. After a tap or an
+undo, focus the spell again to see its updated proposal. See
+[Floating mana and undo](#floating-mana-and-undo).
 
 **When a preview goes away.** A preview belongs to one decision. Submitting
 an action, a new decision, a change of viewed player or a lost connection

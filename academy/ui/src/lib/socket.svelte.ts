@@ -24,6 +24,7 @@ import type {
   ClientMessage,
   FrameUpdate,
   LaunchSetup,
+  ManaControls,
   RecoveryEnvelope,
   ExperienceFrame,
   ServerMessage,
@@ -650,6 +651,7 @@ export class GameSocketController {
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
         this.applyRecovery(
           message.recovery,
+          message.mana_controls,
           sessionId,
           resumeToken,
           message.log ?? [],
@@ -692,17 +694,25 @@ export class GameSocketController {
     if (message.type === 'command_outcome') {
       const outcomeId = message.status === 'accepted' ? message.update.receipt?.command_id
         : message.status === 'duplicate' ? message.receipt.command_id : message.rejection.command_id;
+      const submittedOffer = this.pendingCommand?.command.offer_id;
       if (this.pendingCommand && outcomeId !== this.pendingCommand.command.command_id) return;
       this.clearPendingCommand();
       gameStore.endCommand();
       if (message.status === 'accepted') {
-        gameStore.submissionAccepted = true;
+        const controls = gameStore.manaControls;
+        const control = controls?.offers.find(offer => offer.id === submittedOffer);
+        gameStore.submissionAccepted = !control;
         this.applyUpdate(message.update);
+        if (submittedOffer !== undefined && gameStore.protocolFrame?.frame_hash === message.update.receipt?.resulting_frame_hash) {
+          const activation = message.update.mana_controls?.undo?.activation;
+          if (control?.verb === 'undo') gameStore.manaFocus = controls?.undo?.activation.sources[0]?.id.entity ?? null;
+          else if (activation && activation.command_id !== controls?.undo?.activation.command_id) gameStore.manaFocus = 'undo';
+        }
       } else if (message.status === 'duplicate') {
-        this.applyRecovery(message.recovery);
+        this.applyRecovery(message.recovery, message.mana_controls);
       } else {
         if (message.recovery) {
-          this.applyRecovery(message.recovery);
+          this.applyRecovery(message.recovery, message.mana_controls);
         }
         gameStore.lastCommandRejection = message.rejection;
         gameStore.setError(message.rejection.message);
@@ -834,6 +844,7 @@ export class GameSocketController {
       ...(update.log ? { log: update.log } : {}),
       ...(update.auto_passed ? { auto_passed: update.auto_passed } : {}),
     });
+    gameStore.manaControls = update.mana_controls ?? null;
     try {
       validatePresentationUpdate(
         update.presentation,
@@ -860,6 +871,7 @@ export class GameSocketController {
 
   private applyRecovery(
     recovery: RecoveryEnvelope,
+    controls?: ManaControls,
     sessionId?: string,
     resumeToken?: string,
     log: string[] = [],
@@ -895,6 +907,7 @@ export class GameSocketController {
       sessionId,
       resumeToken,
     );
+    gameStore.manaControls = controls ?? null;
     try {
       this.presentationCursor = validatePresentationTail(
         recovery.presentation_tail,

@@ -6,6 +6,7 @@
   import type { ExperienceFrame, InteractionOffer } from '$lib/types';
 
   interface Props {
+    controlFocusTarget?: () => HTMLElement | null;
     frame: ExperienceFrame;
     workspace?: boolean;
     navigationKey?: string;
@@ -22,7 +23,7 @@
     onClearSelection?: () => void;
     onPassTurn?: () => void;
   }
-  let { frame, workspace = false, navigationKey = '', selectedTargetId = null, disabled = false, readOnly = false, interrupted = false,
+  let { controlFocusTarget, frame, workspace = false, navigationKey = '', selectedTargetId = null, disabled = false, readOnly = false, interrupted = false,
     chosenOffer = null, fastForwarding = false, canPassTurn = false,
     highlightedOfferIds = new Set<number>(), onHoverAction, onSelectAction,
     onClearSelection, onPassTurn }: Props = $props();
@@ -37,7 +38,7 @@
 </script>
 
 <section aria-label="Decision surface" data-testid="decision-surface" data-revision={frame.revision} class="min-w-0 space-y-3" class:workspace-decision={workspace}>
-  <ActionPanel {offers} describeSubject={object => subjectLabel(frame.projection, object)} {previewNames} actionSpaceKind={frame.action_space}
+  <ActionPanel {controlFocusTarget} {offers} describeSubject={object => subjectLabel(frame.projection, object)} {previewNames} actionSpaceKind={frame.action_space}
     instruction={context?.instruction ?? frame.prompt?.instruction ?? ''}
     totalOffers={frame.offers.length} gameOver={frame.status === 'game_over'} {chosenOffer} {selectedTargetId}
     {disabled} {readOnly} {interrupted} {fastForwarding} {canPassTurn} {highlightedOfferIds}

@@ -26,6 +26,7 @@ import type {
   Decklists,
   ExperienceFrame,
   GameLogEntry,
+  ManaControls,
   Observation,
   OpponentConfig,
   StopsConfig,
@@ -119,6 +120,8 @@ export class GameStore {
   branchAttemptId = $state<string | null>(null);
   branchProjection = $state<Observation | null>(null);
   tableAnnouncement = $state('');
+  manaFocus: number | 'undo' | null = null;
+  manaControls = $state<ManaControls | null>(null);
   protocolFrame = $state<ExperienceFrame | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state<Observation | null>(null);
@@ -373,6 +376,8 @@ export class GameStore {
     resumeToken?: string,
   ): void {
     this.lastCommandRejection = null;
+    this.manaFocus = null;
+    this.manaControls = null;
     this.protocolFrame = frame;
     const actions = frame.offers.map((offer) => ({
       index: offer.id,
@@ -519,6 +524,8 @@ export class GameStore {
     this.work = null;
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
+    this.manaFocus = null;
+    this.manaControls = null;
     this.protocolFrame = null;
     this.observation = null;
     this.actions = [];

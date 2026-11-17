@@ -21,7 +21,7 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: `${uvicorn} managym.academy.server:app --port ${apiPort}`,
+          command: `${uvicorn} tests.fixtures.mana_controls_server:create_app --factory --port ${apiPort}`,
           cwd: '../..',
           url: `http://localhost:${apiPort}/api/traces`,
           reuseExistingServer: true,
