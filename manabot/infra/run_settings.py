@@ -1,8 +1,7 @@
-"""Runtime instrumentation, separate from learning identity and resume admission.
+"""Self-play instrumentation shared by recipe configs and game capture.
 
-RunSettings travels unchanged from an entry point to captures. TrainingJob keeps
-its flat serialized fields; deprecated switches resolve only at that boundary or
-the CLI, before execution receives this value.
+Recipe configs serialize these options as flat keys. Etude compares the config
+on resume, while the learner digest excludes instrumentation.
 """
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,10 +9,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from managym.diagnostics import Level
 
 
-class RunSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
+class Instrumentation(BaseModel):
     record_games: float = Field(default=0.0, ge=0, le=1)
     diagnostics: Level = "standard"
     stall_seconds: float = Field(default=600, gt=0)
     statistics: bool = False
+
+    @property
+    def run_settings(self) -> "RunSettings":
+        return RunSettings.model_validate(
+            self.model_dump(include=set(RunSettings.model_fields))
+        )
+
+
+class RunSettings(Instrumentation):
+    model_config = ConfigDict(extra="forbid", frozen=True)

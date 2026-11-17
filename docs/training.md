@@ -1242,8 +1242,8 @@ selected game is written to `out/games/PRODUCER.jsonl` when it ends, as a
 state digests and the collector's annotations. Selection hashes the game's
 seed and stream, so it draws on no training randomness and the same run
 records the same games. An unselected game adds no native read; a selected one
-reads one state digest per decision. The local and baseline recipe configs
-carry `record_games`, `statistics`, `diagnostics` and `stall_seconds`; Python
+reads one state digest per decision. All shipped self-play recipe configs
+accept `record_games`, `statistics`, `diagnostics` and `stall_seconds`; Python
 callers set `SelfPlay.run_settings`, a `RunSettings` from
 `manabot.infra.run_settings`. `statistics: true` collects native counters for
 every game, written privately to `out/statistics/`, independently of recording.

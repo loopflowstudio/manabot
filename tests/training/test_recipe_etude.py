@@ -9,6 +9,7 @@ import pytest
 from experiments import belief
 from manabot.backends.torch.checkpoint import BACKEND as TORCH
 from manabot.belief.sampling_data import read_dataset
+from manabot.recipes import elemental
 from manabot.recipes.belief_sampler import BeliefConfig, train
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.loops.self_play import (
@@ -25,6 +26,24 @@ from manabot.training.rollout.selection_data import (
     collect_selection,
 )
 from tests.fixtures.training_records import recording
+
+
+def test_elemental_records_games_for_one_update(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "out"
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ETUDE_OUT", str(out))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "elemental")
+    monkeypatch.setenv("ETUDE_RUN", "elemental@0")
+    monkeypatch.setenv("ETUDE_SEED", "197")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    elemental.train(
+        elemental.ElementalConfig.model_validate_json(
+            '{"record_games": 1, "updates": 1, "streams": 2}'
+        )
+    )
+    assert any(path.stat().st_size for path in (out / "games").glob("*.jsonl"))
 
 
 def test_belief_sampler_uses_given_policy_and_restarts_its_work(

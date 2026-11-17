@@ -50,3 +50,5 @@ Sync onto main dcee96ccd1 (one game record), 2026-11-17 — choices made:
 - Not caused by the sync: `test_resource_limit_replay_rejects_old_schema...`
   diverges at action 32 of the frozen TLA fixture under the current engine
   (`replay_attempt` is byte-identical to main's).
+
+The shared instrumentation fields preserve each recipe’s existing Pydantic extra-field and mutability behavior. The Elemental recording check uses two CPU streams and seed 197.

@@ -107,3 +107,7 @@ Jack Heart, 2026-11-17, offered wait-and-retry / another cloud / land without
 GPU numbers for the blocked measurement: "1". Of the six-minute stall at
 Etude's `os.fsync` in `declare` on the Vast 4090: "This seems worth trying to
 debug".
+
+Jack Heart, 2026-11-17, after the A6000 measurement (branch 954 decisions/s,
+main 945; no fsync stall; resumed and uninterrupted both 11/128) and with the
+instrumentation-option regression still being fixed: "ok, approved for landing".

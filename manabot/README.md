@@ -491,7 +491,8 @@ uv run etude train manabot/recipes/local.py --experiment demo --config '{"record
 uv run --no-project managym academy replay ~/.etude/track/demo/out/games --game 0
 ```
 
-`record_games` writes each selected game to `out/games/` when it ends:
+All shipped self-play recipes accept `record_games`, `statistics`, `diagnostics`
+and `stall_seconds` as flat config keys. `record_games` writes each selected game to `out/games/` when it ends:
 seed, decks, chosen actions, state digests, and the policy's probabilities,
 value and update at each decision. Academy plays it again through the engine
 and steps through it with no policy, checkpoint or manabot. A loop of your own

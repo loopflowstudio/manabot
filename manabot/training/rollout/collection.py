@@ -82,7 +82,6 @@ from manabot.training.state.game_errors import (
     RecordAttempt,
 )
 from managym import WORLD_SETUP, Deck, GameSetup
-from managym.diagnostics import Operation
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -283,6 +282,15 @@ class ExposureCounts(TypedDict):
     truncated_games: int
 
 
+class Operation(Protocol):
+    def progress(self, decisions: int) -> None: ...
+
+
+class NoOperation:
+    def progress(self, decisions: int) -> None:
+        pass
+
+
 class OperationScope(Protocol):
     """A named boundary in the caller's failure journal.
 
@@ -292,11 +300,13 @@ class OperationScope(Protocol):
 
     def __call__(
         self, name: str, *, per_step: bool = False
-    ) -> AbstractContextManager[Operation | None]: ...
+    ) -> AbstractContextManager[Operation]: ...
 
 
-def no_operation(name: str, *, per_step: bool = False) -> AbstractContextManager[None]:
-    return nullcontext()
+def no_operation(
+    name: str, *, per_step: bool = False
+) -> AbstractContextManager[Operation]:
+    return nullcontext(NoOperation())
 
 
 @dataclass

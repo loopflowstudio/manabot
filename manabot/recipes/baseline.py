@@ -8,42 +8,27 @@ from pathlib import Path
 from typing import Literal
 
 from etude.train.tracking import track
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from manabot.infra.config import ModelConfig
-from manabot.infra.run_settings import RunSettings
+from manabot.infra.run_settings import Instrumentation
 from manabot.recipes.builders import PACK
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.verify.learning_regression import BaselineReport, report_recipe
-from managym.diagnostics import Level
 
 BASELINE_STEPS = 128
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
 
 
-class BaselineConfig(BaseModel):
+class BaselineConfig(Instrumentation):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     updates: int = Field(default=BASELINE_STEPS, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cuda"
     learning_seats: Literal["one", "both"] = "both"
     padded_shapes: bool = False
-    # Instrumentation (manabot.infra.run_settings); none of it changes learning.
-    record_games: float = Field(default=0.0, ge=0, le=1)
-    diagnostics: Level = "standard"
-    stall_seconds: float = Field(default=600, gt=0)
-    statistics: bool = False
-
-    @property
-    def run_settings(self) -> RunSettings:
-        return RunSettings(
-            record_games=self.record_games,
-            diagnostics=self.diagnostics,
-            stall_seconds=self.stall_seconds,
-            statistics=self.statistics,
-        )
 
 
 def settings(config: BaselineConfig) -> SelfPlay:

@@ -376,10 +376,10 @@ has no manabot. There is no export step.
 
 `record_games` takes 0 (the default), 1 for every game, or a fraction between
 them. A fraction selects games by their seed and stream, so it does not disturb
-the run and the same run records the same games. The local and baseline recipe
-configs carry it, alongside `statistics`, `diagnostics` and `stall_seconds`,
-locally and in a launched job; these options are outside the learner's digest
-and may differ between attempts. The rows are written under the run's
+the run and the same run records the same games. All shipped self-play recipe
+configs accept it alongside `statistics`, `diagnostics` and `stall_seconds`,
+locally and in a launched job. The learner digest excludes these options.
+Etude compares them with the rest of the recipe config on resume. The rows are written under the run's
 `out/games/`, one file per producer; download that directory to open a remote
 run's games. A game the run stopped
 in the middle of is kept and opens as **Interrupted**.

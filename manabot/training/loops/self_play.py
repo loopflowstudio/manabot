@@ -522,8 +522,7 @@ def step(
             batch = collect(
                 collector, behavior(settings, learner, ema), settings.transitions
             )
-            if collection is not None:
-                collection.progress(stats.micro_steps - decisions)
+            collection.progress(stats.micro_steps - decisions)
         synchronize(device)
         with collector.operation("learning"), learner.profiler.track("Learning"):
             metrics = learn(settings, learner, ema, counts, batch, rng)

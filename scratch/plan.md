@@ -82,15 +82,15 @@ No stall on a throttled disk was confirmed, so no Etude fsync Task was filed.
 The timed arms predate 5826f7502e and the sync onto main dcee96ccd1 (merged
 at c7fd53704a; choices in questions.md); neither was re-timed.
 
+All shipped self-play recipes now accept the four flat instrumentation keys.
+Focused check: `uv run pytest -q tests/training/test_recipe_etude.py::test_elemental_records_games_for_one_update tests/training/test_training_game_journals.py::test_recipe_forwards_runtime_flag` — 3 passed, including a one-update CPU Elemental run that wrote game records.
+
 ## Remaining
 
-Implement next (design-train-api.md, concept review 2026-11-17): every shipped
-self-play recipe config accepts the four instrumentation keys, declared once;
-fix the stale run_settings header and guide sentence; no-op operation instead
-of the None guard; one Elemental recording test.
-
-Gate and publication are the caller's steps, including updating PR #500
-with the completed GPU measurement and checking CI on the new commit.
+Jack Heart, 2026-11-17: "ok, approved for landing" (steer 1fb8f71a).
+Gate and publication carry the A6000 result and its limits into PR #500,
+check CI on the final commit and report any remaining failure and its cause.
+Remove scratch/ entirely in the pre-land commit, then land after green CI.
 
 The dependency release
 cut is complete. Known failure not caused by this branch:
