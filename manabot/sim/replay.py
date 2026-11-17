@@ -42,6 +42,7 @@ from managym.replay import (
     run_bounded_replay,
     walk,
 )
+from managym.statistics import Reduction
 
 
 @dataclass(frozen=True)
@@ -241,13 +242,21 @@ def replay_game(
     *,
     require_terminal: bool = True,
     capture_cards: bool = False,
+    reduction: Reduction | None = None,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
     """Verify one game, optionally retaining native facts from the same replay."""
     if is_record(game):
         game = audit_view(game, digest=GameRecord.model_validate(game).sha256)
     if "record" in game:
         return _replay_record(
-            game, require_terminal=require_terminal, capture_cards=capture_cards
+            game,
+            require_terminal=require_terminal,
+            capture_cards=capture_cards,
+            reduction=reduction,
+        )
+    if reduction is not None:
+        raise ValueError(
+            "custom evaluation reducers require an ordinary canonical game record"
         )
     env, _ = replay_environment(game, capture_cards=capture_cards)
     try:
@@ -261,7 +270,11 @@ def replay_game(
 
 
 def _replay_record(
-    game: dict[str, Any], *, require_terminal: bool, capture_cards: bool
+    game: dict[str, Any],
+    *,
+    require_terminal: bool,
+    capture_cards: bool,
+    reduction: Reduction | None = None,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
     record = GameRecord.model_validate(game["record"])
     counts = asdict(ReplayReceipt(games=1))
@@ -272,7 +285,9 @@ def _replay_record(
         counts["trace_mismatches"] += 1
     if game.get("game_trace_sha256") != record.sha256:
         counts["trace_mismatches"] += 1
-    walker = walk(record, capture_cards=capture_cards)
+    walker = walk(record, capture_cards=capture_cards or reduction is not None)
+    if reduction is not None:
+        reduction.start(walker.game.players)
     for decision in walker:
         expected = game["decisions"][decision.index]
         frame = build_viewer_frame(
@@ -300,6 +315,8 @@ def _replay_record(
         ):
             counts["offer_mismatches"] += 1
         counts["decisions"] += 1
+        if reduction is not None:
+            reduction.decision(decision)
     assert walker.stop is not None
     if walker.stop.status == "diverged":
         counts["state_mismatches"] += 1
@@ -314,10 +331,24 @@ def _replay_record(
         or (walker.stop.status == "complete") != bool(game["terminated"])
     ):
         counts["outcome_mismatches"] += 1
+    receipt = ReplayReceipt(**counts)
+    cards = walker.cards() if capture_cards or reduction is not None else None
+    # Audited statistics admit successful, complete games only. A verified
+    # prefix or runner failure must not acquire ordinary win/loss eligibility.
+    if (
+        reduction is not None
+        and receipt.passed
+        and walker.stop.status == "complete"
+        and not game.get("failure")
+    ):
+        assert cards is not None
+        reduction.end(walker.stop, cards)
     captured = (
-        walker.cards().model_dump(mode="json", by_alias=True) if capture_cards else None
+        cards.model_dump(mode="json", by_alias=True)
+        if capture_cards and cards is not None
+        else None
     )
-    return ReplayReceipt(**counts), captured
+    return receipt, captured
 
 
 def _replay_game(

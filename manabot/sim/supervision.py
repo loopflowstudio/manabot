@@ -10,13 +10,17 @@ child reports an inference failure, which fails the allocation. Torch-free.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
+import io
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
 from typing import Any
 from uuid import uuid4
+
+import cloudpickle
 
 from manabot.sim.card_evidence import (
     EvidenceRef,
@@ -33,11 +37,48 @@ from manabot.sim.evaluation_records import (
 )
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.replay import apply_game_event, replay_games
+from manabot.sim.replay import apply_game_event, replay_game, replay_games
 from manabot.sim.serving_protocol import InferenceFailure, InferenceRuntime
 from manabot.sim.threads import REPLAY_BUDGET
+import managym
 from managym.journal import DurableJournal
 from managym.recording import atomic_private_json, read_record
+from managym.statistics import Reducer, Reduction
+
+
+def _native_attribute(kind: str, member: str | None = None) -> object:
+    native = getattr(managym, kind)
+    return native if member is None else getattr(native, member)
+
+
+class _ReducerPickler(cloudpickle.CloudPickler):
+    """Resolve public PyO3 types/enums by their managym names.
+
+    PyO3 publishes them with ``builtins`` as their module. Ordinary cloudpickle
+    therefore tries to copy their native class internals when a script-local
+    reducer refers to ActionEnum, instead of importing the shared public type.
+    Native observation instances still require ordinary extracted Python facts.
+    """
+
+    def reducer_override(self, value: object) -> Any:
+        # Pickle's reduction tuples are the local untyped library boundary.
+        kind = value if isinstance(value, type) else type(value)
+        if (
+            kind.__module__ == "builtins"
+            and getattr(managym, kind.__name__, None) is kind
+        ):
+            if isinstance(value, type):
+                return _native_attribute, (kind.__name__,)
+            for name, member in vars(kind).items():
+                if member is value:
+                    return _native_attribute, (kind.__name__, name)
+        return super().reducer_override(value)
+
+
+def _reducer_bytes(value: object) -> bytes:
+    output = io.BytesIO()
+    _ReducerPickler(output).dump(value)
+    return output.getvalue()
 
 
 def failure_record(
@@ -238,25 +279,50 @@ class ReplayOutcome:
     error: str | None = None
     # The replay child's `ProcessCensus` counters, when it reported.
     process: dict[str, int] = field(default_factory=dict)
+    # Heterogeneous user row types cross this explicit extension boundary.
+    statistics_rows: list[list[Any]] = field(default_factory=list)
 
 
 def replay_worker(
-    connection: Connection, games: list[dict[str, Any]], card_evidence_dir: Path | None
+    connection: Connection,
+    games: list[dict[str, Any]],
+    card_evidence_dir: Path | None,
+    reducer_payload: bytes | None = None,
 ) -> None:
     """Replay child entry; over its thread budget, the outcome is an error."""
     try:
-        if card_evidence_dir is None:
+        reduction = (
+            Reduction(cloudpickle.loads(reducer_payload))
+            if reducer_payload is not None
+            else None
+        )
+        if card_evidence_dir is None and reduction is None:
             outcome = ReplayOutcome([replay_games([game]).to_dict() for game in games])
         else:
             receipts = []
             references = []
             for game in games:
-                evidence = capture_verified_game(GameTrace(data=stored_game(game)))
-                references.append(retain_evidence(card_evidence_dir, evidence))
-                receipts.append(dict(evidence.replay))
-            outcome = ReplayOutcome(receipts, tuple(references))
+                if card_evidence_dir is not None:
+                    evidence = capture_verified_game(
+                        GameTrace(data=stored_game(game)), reduction=reduction
+                    )
+                    references.append(retain_evidence(card_evidence_dir, evidence))
+                    receipts.append(dict(evidence.replay))
+                else:
+                    receipt, _ = replay_game(game, reduction=reduction)
+                    receipts.append(receipt.to_dict())
+            outcome = ReplayOutcome(
+                receipts,
+                tuple(references),
+                statistics_rows=reduction.rows if reduction is not None else [],
+            )
         REPLAY_BUDGET.account(outcome.process)
-        connection.send(outcome)
+        # A user may define reducers/row dataclasses in their script. Cloudpickle
+        # keeps that code portable without re-importing the parent's __main__.
+        if reducer_payload is None:
+            connection.send(outcome)
+        else:
+            connection.send_bytes(_reducer_bytes(outcome))
     except BaseException as exc:
         connection.send(ReplayOutcome(error=f"{type(exc).__name__}: {exc}"))
     finally:
@@ -268,13 +334,15 @@ def replay_retained(
     seconds: float,
     *,
     card_evidence_dir: Path | None = None,
+    reducers: Sequence[Reducer[Any]] = (),
 ) -> ReplayOutcome:
     """Replay native evidence under the same killable allocation boundary."""
     if seconds <= 0:
         return ReplayOutcome(error="allocation deadline exhausted before replay")
     started = time.monotonic()
+    payload = _reducer_bytes(tuple(reducers)) if reducers else None
     process = ChildProcess(
-        "manabot.sim.supervision:replay_worker", (games, card_evidence_dir)
+        "manabot.sim.supervision:replay_worker", (games, card_evidence_dir, payload)
     )
     receiver = process.connection
     try:

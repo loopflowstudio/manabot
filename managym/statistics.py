@@ -115,6 +115,36 @@ class Reducer[T]:
         return rows
 
 
+class Reduction:
+    """Feed several reducers one verified traversal; aggregate after all games.
+
+    ``rows`` holds unaggregated per-game results so a supervised worker can
+    return them for one final aggregation across workers or deal blocks.
+    """
+
+    def __init__(self, reducers: Sequence[Reducer[Any]]) -> None:
+        self.reducers = tuple(reducers)
+        self.rows: list[list[Any]] = [[] for _ in reducers]
+
+    def start(self, setup: list["PlayerSetup"]) -> None:
+        for reducer in self.reducers:
+            reducer.start(setup)
+
+    def decision(self, decision: "RecordedDecision") -> None:
+        for reducer in self.reducers:
+            reducer.decision(decision)
+
+    def end(self, result: "ReplayStop", capture: CapturedCards) -> None:
+        for reducer, rows in zip(self.reducers, self.rows, strict=True):
+            rows.extend(reducer.end(result, capture))
+
+    def finish(self) -> list[list[Any]]:
+        return [
+            reducer.finish(rows)
+            for reducer, rows in zip(self.reducers, self.rows, strict=True)
+        ]
+
+
 @dataclass(frozen=True)
 class BehaviourRow:
     seat: int
@@ -297,18 +327,12 @@ def reduce(
     """
     from managym.replay import walk
 
-    rows: list[list[Any]] = [[] for _ in reducers]
+    reduction = Reduction(reducers)
     for record in records:
         replay = walk(record, capture_cards=True)
-        for reducer in reducers:
-            reducer.start(replay.game.players)
+        reduction.start(replay.game.players)
         for decision in replay:
-            for reducer in reducers:
-                reducer.decision(decision)
+            reduction.decision(decision)
         assert replay.stop is not None
-        captured = replay.cards()
-        for reducer, output in zip(reducers, rows, strict=True):
-            output.extend(reducer.end(replay.stop, captured))
-    return [
-        reducer.finish(output) for reducer, output in zip(reducers, rows, strict=True)
-    ]
+        reduction.end(replay.stop, replay.cards())
+    return reduction.finish()

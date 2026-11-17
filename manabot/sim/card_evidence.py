@@ -16,6 +16,7 @@ from manabot.sim.evaluation_records import audit_view, is_record
 from manabot.sim.replay import replay_game
 from managym.card_capture import CapturedCards, Seat
 from managym.recording import GameRecord
+from managym.statistics import Reduction
 
 CAPTURE_VERSION = 1
 
@@ -106,14 +107,16 @@ class EvidenceRef(StrictModel):
     game: str
 
 
-def capture_verified_game(trace: GameTrace) -> GameEvidence:
+def capture_verified_game(
+    trace: GameTrace, *, reduction: Reduction | None = None
+) -> GameEvidence:
     data = trace.audit
     identities = data.get("runtime_identities")
     if not isinstance(identities, dict) or not isinstance(
         identities.get("content_digest"), str
     ):
         raise ValueError("card capture requires recorded runtime/content identity")
-    receipt, captured = replay_game(data, capture_cards=True)
+    receipt, captured = replay_game(data, capture_cards=True, reduction=reduction)
     if captured is None:
         raise ValueError("native capture unavailable")
     failure = data.get("failure")

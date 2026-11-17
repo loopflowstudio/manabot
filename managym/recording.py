@@ -31,7 +31,7 @@ from managym.card_capture import captured_cards
 from managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
 from managym.journal import DurableJournal, json_line
-from managym.statistics import GameStatistics, Reducer
+from managym.statistics import GameStatistics, Reducer, Reduction
 
 
 def semantic_frame_sha256(frame: str) -> str:
@@ -850,7 +850,7 @@ class ScalarCapture(_Capture):
     ) -> None:
         super().__init__(**recording)
         self.reducers = reducers or []
-        self._rows: list[list[Any]] = [[] for _ in self.reducers]
+        self._reduction = Reduction(self.reducers)
         self._reducers_finished = True
         self._env: managym.Env | None = None
         self.seed = seed
@@ -891,8 +891,7 @@ class ScalarCapture(_Capture):
             self._env = env
             self._flush_statistics()
             self._reducers_finished = False
-            for reducer in self.reducers:
-                reducer.start(self.inputs.players)
+            self._reduction.start(self.inputs.players)
             self._returned()
             self.identities["content_manifest"] = env.content_pack_manifest()
             if self._game_journal is not None:
@@ -915,10 +914,7 @@ class ScalarCapture(_Capture):
 
     def rows(self) -> list[list[Any]]:
         """Reducer tables for the games completed or closed so far."""
-        return [
-            reducer.finish(rows)
-            for reducer, rows in zip(self.reducers, self._rows, strict=True)
-        ]
+        return self._reduction.finish()
 
     def _finish_reducers(self, env: managym.Env, end: GameEnd) -> None:
         if self._reducers_finished or not self.reducers:
@@ -932,8 +928,7 @@ class ScalarCapture(_Capture):
             end.reason,
             end.winner,
         )
-        for reducer, rows in zip(self.reducers, self._rows, strict=True):
-            rows.extend(reducer.end(result, captured))
+        self._reduction.end(result, captured)
         self._reducers_finished = True
 
     def _flush_statistics(self, *, partial: bool = False) -> None:
@@ -1071,8 +1066,7 @@ class ScalarCapture(_Capture):
             inputs.committed = len(inputs.actions)
             self._returned()
             if decision is not None:
-                for reducer in self.reducers:
-                    reducer.decision(decision)
+                self._reduction.decision(decision)
             if env.is_game_over():
                 end = GameEnd(
                     status="complete",

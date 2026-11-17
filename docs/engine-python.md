@@ -428,6 +428,12 @@ The same reducers run during scalar play: pass `reducers=[...]` to
 `ScalarCapture` and read `capture.rows()` after each game. One definition
 serves both.
 
+manabot evaluation also accepts named reducers on `play_cell`. Those hooks run
+inside its existing verification replay, sharing native card facts with audited
+card statistics. Its [evaluation statistics](evaluation.md#custom-statistics-for-every-evaluation-game)
+table aggregates once across all deal blocks; another `reduce()` call is not
+needed to collect the same questions.
+
 A record that stops early contributes its verified decisions and no result;
 `CardPerformance` leaves it out of win rates and reports how many games it left
 out. Reducers describe the games they were given. When only a share of games

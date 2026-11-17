@@ -536,6 +536,46 @@ admission still require the separate successful replay audit. Its `trace_sha256`
 identifies the canonical record, including that metadata. Existing rollup names
 and `gih-copies-v1` counting rules are unchanged.
 
+### Custom statistics for every evaluation game
+
+Pass named managym reducers to `play_cell`:
+
+```python
+from managym.statistics import Behaviour, CardPerformance
+
+rows, trace, replay = play_cell(
+    # Supply the usual key, player_a, player_b, deal_seeds and out_dir.
+    **cell_arguments,
+    reducers={"cards": CardPerformance(), "behaviour": Behaviour()},
+)
+print(trace["statistics_path"])
+```
+
+The private `statistics.json` contains `tables` under those names, the number
+of games, `complete_verified_games`, and replay status/errors. Custom reducers
+use the same interface as [record analysis](engine-python.md#ask-questions-of-recorded-games).
+They receive decisions and card facts from the existing verification replay;
+there is no additional replay or policy inference for statistics. When
+`card_evidence_dir` is also set, its audited card evidence comes from that
+same traversal. Each reducer's `finish` runs once across all deal blocks, not
+once per worker. The card table uses native seats; participant mapping,
+eligibility and bootstrap intervals remain evaluation responsibilities.
+
+Only complete, successfully audited games contribute reducer rows. Rejected
+games remain in the evaluation's original records and outcome diagnostics.
+A reducer exception fails its supervised replay/statistics job, reports the
+error, and publishes no custom tables; it never retries or rewrites the played
+game. Tables are mode 0600 and are not attached to Academy viewer records.
+Ordinary canonical game records support these hooks; legacy traces and
+constructed scenario roots retain their existing verification reader.
+
+Per-game callbacks run in the bounded replay child, so expensive Python analysis
+counts toward its replay deadline. Final `finish` aggregation runs once in the
+coordinator. Script-local reducer classes and dataclass rows
+are supported. Imported reducer modules must be available to that child, just
+as they are to the evaluation runner. Keeping all questions in this one call
+shares the replay; calling `reduce()` later is a deliberate new analysis.
+
 A failed game's `failures/*.jsonl` file is a settled capture snapshot. A pending
 call is retained as unknown and is never attempted while viewing it. Diagnose
 it with `uv run --no-project python -m managym.replay <file>` on the recorded
