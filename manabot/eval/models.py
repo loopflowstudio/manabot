@@ -134,6 +134,9 @@ class MatchRow(StrictModel):
         if trace_path.is_absolute() or ".." in trace_path.parts:
             raise ValueError("match trace locator must stay artifact-relative")
         if self.trace_path not in {
+            f"games/{self.cell_id}.jsonl",
+            f"games/deals/{self.cell_id}.{self.deal_seed}.jsonl",
+            f"games/{self.cell_id}.{self.deal_seed}.jsonl",
             f"traces/{self.cell_id}.commands.jsonl.gz",  # frozen panel evidence
             f"traces/{self.cell_id}.{self.deal_seed}.commands.jsonl.gz",
         }:

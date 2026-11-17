@@ -34,6 +34,7 @@ from manabot.infra.host import host_facts
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
+from manabot.infra.run_settings import RunSettings
 from manabot.infra.runtime import RunContext
 from manabot.infra.source import source_commit
 from manabot.model.architecture import architecture_identity
@@ -94,6 +95,7 @@ from manabot.training.update_metrics import (
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 import managym
+from managym.diagnostics import Operation
 
 from .clock import boot_identity, watchdog_seconds
 
@@ -251,8 +253,7 @@ def execute_regime(
     stop_path: Path | None = None,
     stop_reserve_seconds: float | None = None,
     experiment: str | None = None,
-    training_exposure: bool = False,
-    training_game_logs: bool = False,
+    settings: RunSettings = RunSettings(),
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -394,8 +395,7 @@ def execute_regime(
             stop_reserve_seconds=stop_reserve_seconds,
             initial_admission=initial_admission,
             experiment=experiment,
-            training_exposure=training_exposure,
-            training_game_logs=training_game_logs,
+            settings=settings,
         )
 
 
@@ -417,8 +417,7 @@ def _execute_regime(
     stop_reserve_seconds: float | None = None,
     initial_admission: Path | None = None,
     experiment: str | None = None,
-    training_exposure: bool = False,
-    training_game_logs: bool = False,
+    settings: RunSettings = RunSettings(),
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -526,12 +525,12 @@ def _execute_regime(
     failures: CaptureScope | None = None
 
     @contextmanager
-    def operation(name: str) -> Iterator[None]:
+    def operation(name: str, *, per_step: bool = False) -> Iterator[Operation | None]:
         if failures is None:
             yield
         else:
-            with failures.operation(name):
-                yield
+            with failures.operation(name, per_step=per_step) as phase_operation:
+                yield phase_operation
 
     last_export = float("-inf")
     export_wait = PROGRESS_EXPORT_SECONDS
@@ -728,11 +727,10 @@ def _execute_regime(
                 "allocation_deadline": run.allocation_deadline,
                 "parent_run_id": run.parent_run_id,
             },
-            training_exposure=training_exposure,
-            training_game_logs=training_game_logs,
+            settings=settings,
         )
         resources.enter_context(capture_scope(failures))
-        if training_game_logs:
+        if settings.diagnostics != "off":
             failures.journal_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             run.game_journal_directory = str(failures.journal_directory)
             persist()
@@ -1273,7 +1271,7 @@ def _execute_regime(
                             deck_source=regime.deck_source,
                             workers=stage.execution.workers,
                             adaptive=stage.adaptive,
-                            operation=operation,
+                            operation=lambda name: operation(name, per_step=True),
                             numerics=backend.collection.CollectionSession(
                                 device=stage.execution.device,
                                 seed=seeds["collection"],
@@ -1433,13 +1431,18 @@ def _execute_regime(
                     assert behavior_agent is not None
                     batch = None
                     try:
-                        with operation("collection"):
+                        with operation("collection") as collection_operation:
+                            previous_decisions = collector.stats.micro_steps
                             batch = collector.collect(
                                 behavior_agent,
                                 stage.transitions,
                                 deadline_monotonic=deadline,
                                 check=check,
                             )
+                            if collection_operation is not None:
+                                collection_operation.progress(
+                                    collector.stats.micro_steps - previous_decisions
+                                )
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
@@ -1792,7 +1795,7 @@ def _execute_regime(
         primary_error = sys.exception()
         resources.close()
         failures = None
-        if training_game_logs and run.stages:
+        if settings.diagnostics != "off" and run.stages:
             try:
                 for path in sorted((out / "game-journals").glob("*")):
                     if path.is_file() and not path.name.startswith("."):
@@ -1806,8 +1809,14 @@ def _execute_regime(
                 primary_error.add_note(
                     f"Terminal game journals could not be registered: {capture_error}"
                 )
-        if training_exposure and run.stages:
-            for path in sorted((out / "exposure").glob("*.jsonl")):
-                run.stages[-1].artifacts[f"exposure/{path.name}"] = artifact(path)
-            persist()
+        for enabled, directory in (
+            (settings.record_games, "games"),
+            (settings.statistics, "statistics"),
+        ):
+            if enabled and run.stages:
+                for path in sorted((out / directory).glob("*.jsonl")):
+                    run.stages[-1].artifacts[f"{directory}/{path.name}"] = artifact(
+                        path
+                    )
+                persist()
     return run

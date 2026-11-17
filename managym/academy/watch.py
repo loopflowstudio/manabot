@@ -8,7 +8,10 @@ from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field, replace
 from threading import Lock
 from time import monotonic
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
+
+if TYPE_CHECKING:
+    from managym.recording import GameRecord
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -22,7 +25,6 @@ from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .deck_import import DeckImportInput
 from .extensions import bot_extension
-from .launch import refuse_training_receipt
 from .opponent import policy_registry
 from .replay_index import DecisionAddressV2
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
@@ -310,7 +312,11 @@ def inspect_watch(
     )
     if not recording.watch and not recording.completed_mirror:
         raise HTTPException(409, "not_a_bot_watch")
-    record = None if finished else record_for_watch(trace_id, token)
+    closed = finished or payload.get("end_reason") in {
+        "record_interrupted",
+        "record_diverged",
+    }
+    record = None if closed else record_for_watch(trace_id, token)
     identities = metadata.get("players", [])
     mirrors = server._recorded_mirrors(identities)
     watched = payload["config"].get("watch_players")
@@ -360,18 +366,24 @@ def inspect_watch(
     }
 
 
-def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
+def import_game(game_record: dict[str, Any]) -> dict[str, Any]:
     """Verify a training or evaluation game, then project its Commands without policies.
 
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.
     """
+    from managym.recording import records_from_source
+
     from .trace import GameConfig
 
+    records = records_from_source(game_record)
+    if records is not None:
+        if len(records) != 1:
+            raise ValueError("select exactly one game record")
+        return import_record(records[0])
     extension = bot_extension()
     if extension is None:
         raise HTTPException(400, "arena_import_unavailable")
-    refuse_training_receipt(game_record)
     arena = extension.verify_arena(game_record)
     # Verify the supplied bytes even when the source identity was imported before.
     existing = AttemptStore(
@@ -471,3 +483,118 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         server._drop_session(game.match_id, "import_failed")
         raise
+
+
+def import_record(record: "GameRecord") -> dict[str, Any]:
+    """Project the verified prefix through GameSession's Command authority."""
+    from managym.bots import BotDecision
+    from managym.decision import Command
+    from managym.replay import RecordedDecision, walk
+
+    from .trace import GameConfig, RecordingImport
+
+    if not record.skip_trivial:
+        raise ValueError("Academy requires forced-decision skipping")
+    if record.resolved_player_policies != ("agent", "agent"):
+        raise ValueError(
+            "Academy requires both seats' surfaced decisions; native-seat records are not yet viewable"
+        )
+    replay = walk(record)
+    source = record.sha256
+    store = AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite")
+    existing = store.arena_recording(source)
+    if existing is not None:
+        return {"id": existing, "finished": True, "source_sha256": source}
+    setups = replay.game.players
+    if len({p.disclosure for p in setups}) != 1:
+        raise ValueError("mixed deck disclosure is not supported by Watch")
+    created = create_watch(
+        WatchRequest(seed=replay.game.seed),
+        recorded_players=[
+            RecordedPlayer(
+                seat, p.name, "bot", p.name, p.name, inference={"source_sha256": source}
+            )
+            for seat, p in enumerate(setups)
+        ],
+    )
+    session = record_for_watch(created["id"], created["token"]).game
+    try:
+        assert session.trace is not None
+        session.env = replay.env
+        session.obs = replay.observation
+        session.published_prompt = None
+        session.trace.config = GameConfig(
+            hero_deck=setups[0].decklist,
+            villain_deck=setups[1].decklist,
+            hero_sideboard=setups[0].sideboard,
+            villain_sideboard=setups[1].sideboard,
+            seed=replay.game.seed,
+            villain_type="random",
+            decklists=setups[0].disclosure,
+            watch_players=[p.name for p in setups],
+            opponent={
+                "kind": "record",
+                "name": "Recorded game",
+                **(
+                    {"source_kind": record.context["source_kind"]}
+                    if record.context.get("source_kind") in ("training", "evaluation")
+                    else {}
+                ),
+            },
+        )
+
+        def apply(decision: RecordedDecision) -> None:
+            seat = int(decision.observation.agent.player_index)
+            context = (
+                session._publish_current_prompt()
+                if seat == 0
+                else session._build_decision_context(session.obs, viewer=seat)
+            )
+            assert context is not None
+            annotation = decision.annotation
+            probabilities = annotation.probabilities if annotation else None
+            if probabilities is not None and len(probabilities) != len(context.offers):
+                raise ValueError("recorded probabilities differ from legal offers")
+            session._bot_decision = BotDecision(
+                decision.chosen,
+                probabilities=probabilities or [],
+                search_scores=annotation.search_scores if annotation else [],
+                belief=annotation.belief if annotation else None,
+                value=annotation.value if annotation else None,
+                update=annotation.update if annotation else None,
+                unavailable="not retained" if annotation is None else None,
+            )
+            offer = next(
+                key
+                for key, action in context.action_by_offer.items()
+                if action == decision.chosen
+            )
+            bound = session._authority_command(context, offer, "policy")
+            native = decision.commitment
+            if isinstance(native, Command):
+                bound["command_id"] = native.command_id
+                bound["answers"] = list(native.answers)
+            session._apply_bound_command(
+                context,
+                bound,
+                source="policy",
+                native_command=native.to_json()
+                if isinstance(native, Command)
+                else None,
+            )
+
+        for _ in replay.run(apply):
+            pass
+        assert replay.stop is not None
+        stop = replay.stop
+        reason = "game_over" if stop.status == "complete" else f"record_{stop.status}"
+        session.trace.recording_import = RecordingImport(stop, replay.build_differs)
+        session._persist_attempt(end_reason=reason)
+        return {
+            **created,
+            "finished": True,
+            "count": len(session.canonical_decisions),
+            "stop": stop.status,
+        }
+    finally:
+        server._drop_session(session.match_id, "record_import_closed")

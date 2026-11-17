@@ -89,6 +89,9 @@ checkpoints or experiment evidence.
 
 ## Style
 
+- Etude evaluation source identity reads `git ls-files`. Mark a new source file
+  with `git add -N <path>` before running an evaluation fixture that fingerprints
+  it; untracked files fail admission with `identity_path_without_files`.
 - Package style guides live in each package README (`manabot/README.md`,
   `managym/README.md`). Avoid transient comments that denote changes; pay
   attention to file headers and README content; propose small, iterative
@@ -294,6 +297,15 @@ chooser: `publish_action_space` resolves control once from the legal actions.
 Env dispatch, observations and Command/offer actors read that chooser directly;
 never remap it again. Player control grants in-game inspection through native
 `shares_information`, never private sideboard access or outside-game selection.
+
+Native `semantic_decision_frame_json` and `execute_semantic_command_json`
+use action-aligned `structured_search_offers`: these offers have no choices
+and reject nonempty `Command.answers`. Compound submissions belong to the
+separate `compound_offers` / `step_structured` API. Do not infer supported
+atomic answers from the `Command` field alone, or pass compound offer ids to
+the semantic executor. Recording preserves the original native Command and
+its object preconditions; Academy's presentation Command has a separate
+revision scope.
 
 Native heuristic selection consumes the live viewer `Observation`, including
 `action_space.focus` (source identity for target/cost decisions). Canonical viewer
@@ -627,6 +639,11 @@ the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
+
+A launched training job's experiment label must match the label supplied to
+Etude tracking by its recipe/stage, including training in a subprocess. Etude
+rejects a mismatch with `experiment_differs_from_launch` before the first update;
+changing the launch label does not rename the recipe's tracking label.
 
 Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
 checkpoint through the SDK, rather than assuming the file ends in `.pt`.

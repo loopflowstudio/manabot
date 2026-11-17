@@ -587,8 +587,12 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         and state["model"]
         and state["collector_rng"].numel()
     )
-    # Initialization is valid retained evidence; no failed replacement is exported.
-    assert set(record["artifacts"]) == {"initial_raw"}
+    # Retain initialization and diagnostics without exporting a failed replacement.
+    assert set(record["artifacts"]) == {
+        "initial_raw",
+        "game-journals/operation.json",
+        "game-journals/stacks.txt",
+    }
     assert run["selected_artifact"] is None
     initial_path = Path(record["artifacts"]["initial_raw"]["path"])
     assert initial_content is not None and initial_path.read_bytes() == initial_content

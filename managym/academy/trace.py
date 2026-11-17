@@ -20,6 +20,7 @@ import managym
 from managym.bots import BotDecision
 from managym.disclosure import DecklistDisclosure
 from managym.experience_projection import redact_observation
+from managym.replay import ReplayStop
 from managym.search import SearchConfig
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -177,6 +178,12 @@ class TraceEvent:
     analysis_observation: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class RecordingImport:
+    stop: ReplayStop
+    build_differs: bool
+
+
 @dataclass
 class Trace:
     config: GameConfig
@@ -189,6 +196,7 @@ class Trace:
     # removed from the established trace API before any redaction mode is
     # applied. Legacy traces omit it.
     canonical_replay: dict[str, Any] | None = None
+    recording_import: RecordingImport | None = None
 
     def to_record(self) -> dict[str, Any]:
         """Borrow JSON payloads for immediate, read-only persistence.
@@ -199,6 +207,10 @@ class Trace:
         Callers must not mutate this record or retain it across a game step.
         """
         record = {item.name: getattr(self, item.name) for item in fields(self)}
+        if self.recording_import is None:
+            record.pop("recording_import")
+        else:
+            record["recording_import"] = asdict(self.recording_import)
         record["config"] = asdict(self.config)
         record["events"] = [
             {

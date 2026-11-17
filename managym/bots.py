@@ -46,6 +46,8 @@ class BotDecision:
     factors: list[PolicyFactor] = field(default_factory=list)
     belief: BeliefSummary | None = None
 
+    update: int | None = None
+
 
 class FlatSearchPolicy:
     """Flat determinized Monte Carlo through native Env.flat_mc_scores.

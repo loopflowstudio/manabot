@@ -216,7 +216,6 @@ def capture(folder: Path, probe: Probe) -> dict[str, object]:
             protocol.training_seed,
             folder / "run",
             store,
-            training_exposure=False,
             backend=resolve("torch"),
         )
     if run.status != "completed":

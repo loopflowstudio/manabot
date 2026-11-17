@@ -3,7 +3,6 @@ use crate::search_state::{identity, SearchStateIdentity};
 use crate::{
     agent::{
         action::AgentError,
-        behavior_tracker::BehaviorTracker,
         heuristic::Heuristic,
         observation::{EventData, Observation},
         observation_encoder::{
@@ -171,6 +170,7 @@ pub struct Env {
     collect_statistics: bool,
     retained_statistics: Vec<crate::flow::statistics::GameStatistics>,
     drained_generation: Option<u64>,
+    pub(crate) record_terminal: bool,
     capture_cards: bool,
     capture_exposure: bool,
     retained_exposure: Vec<String>,
@@ -180,8 +180,6 @@ pub struct Env {
     /// Originating reset seed, independent of pending resets and branch RNG seeds.
     reset_seed: u64,
     pub profiler: Profiler,
-    pub hero_tracker: BehaviorTracker,
-    pub villain_tracker: BehaviorTracker,
     possible_world_space_constructions: AtomicU64,
     pub(crate) capture_generation: u64,
 }
@@ -256,7 +254,7 @@ impl Env {
         seed: u64,
         skip_trivial: bool,
         enable_profiler: bool,
-        enable_behavior_tracking: bool,
+        _enable_behavior_tracking: bool,
     ) -> Self {
         Self {
             game: None,
@@ -267,6 +265,7 @@ impl Env {
             collect_statistics: false,
             retained_statistics: Vec::new(),
             drained_generation: None,
+            record_terminal: false,
             capture_cards: false,
             capture_exposure: false,
             retained_exposure: Vec::new(),
@@ -274,8 +273,6 @@ impl Env {
             seed,
             reset_seed: seed,
             profiler: Profiler::new(enable_profiler, 64),
-            hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
-            villain_tracker: BehaviorTracker::new(enable_behavior_tracking),
             possible_world_space_constructions: AtomicU64::new(0),
             capture_generation: 0,
         }
@@ -358,6 +355,31 @@ impl Env {
         let (observation, _, _, _, info) =
             self.settle_players(observation, 0.0, false, false, empty_info_dict())?;
         Ok((observation, info))
+    }
+
+    /// Prepare an atomic root replacement without dropping optional recording sinks.
+    /// Unlike a search branch, this continues the producer's retained evidence.
+    pub(crate) fn replacement_root(&self) -> Result<Self, AgentError> {
+        let mut replacement = Self::new(self.seed(), self.skip_trivial, false, false)
+            .with_player_policies(self.player_policies);
+        replacement.collect_statistics = self.collect_statistics;
+        replacement.capture_cards = self.capture_cards;
+        replacement.capture_exposure = self.capture_exposure;
+        replacement.record_terminal = self.record_terminal;
+        replacement.retained_statistics = self.retained_statistics.clone();
+        if self.drained_generation != Some(self.capture_generation) {
+            if let Some(summary) = self.statistics() {
+                replacement.retained_statistics.push(summary);
+            }
+        }
+        replacement.retained_exposure = self.retained_exposure.clone();
+        if self.capture_exposure && self.game.is_some() {
+            replacement.retained_exposure.push(self.exposure_json()?);
+        }
+        if self.profiler.is_enabled() {
+            replacement.profiler = Profiler::new(true, 64);
+        }
+        Ok(replacement)
     }
 
     pub fn enable_statistics(&mut self) -> Result<(), AgentError> {
@@ -622,7 +644,6 @@ impl Env {
         }
         if done {
             self.add_profiler_info(&mut result.4);
-            self.add_behavior_info(&mut result.4);
         }
         Ok(result)
     }
@@ -705,7 +726,6 @@ impl Env {
         };
         if result.2 {
             self.add_profiler_info(&mut result.4);
-            self.add_behavior_info(&mut result.4);
         }
         self.remember_heuristic_events(&result.0);
         let (observation, reward, terminated, truncated, info) = result;
@@ -732,7 +752,6 @@ impl Env {
         };
         if result.2 {
             self.add_profiler_info(&mut result.4);
-            self.add_behavior_info(&mut result.4);
         }
         self.remember_heuristic_events(&result.0);
         let (observation, reward, terminated, truncated, info) = result;
@@ -1139,7 +1158,7 @@ impl Env {
         let _scope = self.profiler.track("env_info");
         let mut info = empty_info_dict();
         self.add_profiler_info(&mut info);
-        self.add_behavior_info(&mut info);
+
         info
     }
 
@@ -1184,7 +1203,7 @@ impl Env {
 
     /// Independent copy of this env's game for search rollouts.
     ///
-    /// Profiling and behavior tracking are disabled on the fork; stepping the
+    /// Profiling is disabled on the fork; stepping the
     /// fork never mutates the original.
     pub fn fork(&self) -> Result<Env, AgentError> {
         let game = self
@@ -1690,23 +1709,6 @@ impl Env {
             }
         }
         insert_info(info, "profiler", InfoValue::Map(out));
-    }
-
-    fn add_behavior_info(&self, info: &mut InfoDict) {
-        let mut behavior = empty_info_dict();
-        if self.hero_tracker.is_enabled() || self.villain_tracker.is_enabled() {
-            let mut hero = empty_info_dict();
-            for (k, v) in self.hero_tracker.get_stats() {
-                insert_info(&mut hero, k, InfoValue::String(v));
-            }
-            let mut villain = empty_info_dict();
-            for (k, v) in self.villain_tracker.get_stats() {
-                insert_info(&mut villain, k, InfoValue::String(v));
-            }
-            insert_info(&mut behavior, "hero", InfoValue::Map(hero));
-            insert_info(&mut behavior, "villain", InfoValue::Map(villain));
-        }
-        insert_info(info, "behavior", InfoValue::Map(behavior));
     }
 }
 

@@ -24,6 +24,7 @@ from manabot.experiment.execution import (
 )
 from manabot.experiment.runner import run_experiment
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.run_settings import RunSettings
 from manabot.policy.protocol import Backend
 from manabot.recipes.builders import PACK
 from manabot.recipes.device import accelerator
@@ -89,7 +90,7 @@ class TrainingRecipe(Strict):
         seed: int = 197,
         out: Path | None = None,
         backend: Backend,
-        training_game_logs: bool = False,
+        settings: RunSettings = RunSettings(),
     ) -> ExperimentRun:
         """Train, export and evaluate with one reserved CPU evaluator thread."""
         destination = out or Path(".runs") / (
@@ -110,7 +111,7 @@ class TrainingRecipe(Strict):
                 hardware,
                 destination,
                 backend=backend,
-                training_game_logs=training_game_logs,
+                settings=settings,
             )
         except Exception:
             if (destination / "experiment.json").exists():
@@ -240,7 +241,7 @@ def _baseline(
 
 def run_baseline(
     *,
-    training_game_logs: bool = False,
+    settings: RunSettings = RunSettings(),
     steps: int = BASELINE_STEPS,
     seed: int = 197,
     out: Path | None = None,
@@ -263,5 +264,5 @@ def run_baseline(
         seed=seed,
         out=out,
         backend=resolve("torch"),
-        training_game_logs=training_game_logs,
+        settings=settings,
     )

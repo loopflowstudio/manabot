@@ -10,6 +10,7 @@ import torch
 from typer.testing import CliRunner
 
 from manabot import cli
+from manabot.infra.run_settings import RunSettings
 from manabot.policy.protocol import Backend
 from manabot.recipes import local
 from manabot.recipes.baseline import TrainingRecipe, baseline, baseline_test
@@ -97,7 +98,7 @@ def test_cli_smoke_and_named_recipe(
             learning_seats="both",
             device=None,
             padded_shapes=False,
-            training_game_logs=False,
+            settings=RunSettings(),
         )
     ]
     result = runner.invoke(
@@ -113,7 +114,7 @@ def test_cli_smoke_and_named_recipe(
         learning_seats="both",
         device=None,
         padded_shapes=False,
-        training_game_logs=False,
+        settings=RunSettings(),
     )
     result = runner.invoke(
         cli.app, ["train", "--steps", "1", "--learning-seats", "one"]
@@ -227,7 +228,7 @@ def test_recipe_and_cli_device_selection(
         plan: TrainingRegime,
         *args: object,
         backend: Backend,
-        training_game_logs: bool = False,
+        settings: RunSettings = RunSettings(),
     ) -> SimpleNamespace:
         assert backend.name == "torch"
         observed.append(plan.stages[0].execution.device)
@@ -281,7 +282,7 @@ def test_cli_padded_shapes_reaches_the_recipe_stage(
         plan: TrainingRegime,
         *args: object,
         backend: Backend,
-        training_game_logs: bool = False,
+        settings: RunSettings = RunSettings(),
     ) -> SimpleNamespace:
         assert backend.name == "torch"
         record(plan)

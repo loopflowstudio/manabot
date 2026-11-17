@@ -4,7 +4,13 @@ Live summaries are partial until terminal. Retained capture reduction validates
 copy continuity, but says nothing about experiment eligibility or replay success.
 """
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+import warnings
+
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 import managym
 from managym.card_capture import CapturedCards
@@ -31,6 +37,38 @@ class GameStatistics(BaseModel):
     terminal: bool
     winner: int | None
     cards: tuple[CardCounts, ...]
+    card_digest: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda value: value is None
+    )
+    # The capture's private labels (run, update, cell) when the row was written.
+    context: dict[str, Any] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+
+def read_statistics(path: Path) -> Iterator[GameStatistics]:
+    """Read private capture summaries; ignore only a torn final row.
+
+    The content digest binds native definition indices to their card catalog.
+    Malformed complete rows fail instead of silently dropping game evidence.
+    """
+    if path.is_dir():
+        for child in sorted(path.glob("*.jsonl")):
+            yield from read_statistics(child)
+        return
+    with path.open("rb") as source:
+        for line in source:
+            if not line.endswith(b"\n"):
+                warnings.warn(
+                    "Incomplete final statistics row; ignored",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return
+            row = GameStatistics.model_validate_json(line)
+            if row.card_digest is None:
+                raise ValueError("statistics row requires card_digest")
+            yield row
 
 
 def summary(raw: str) -> GameStatistics | None:
@@ -47,3 +85,298 @@ def reduce_cards(cards: CapturedCards) -> list[CardCounts]:
             cards.capture.model_dump_json(by_alias=True)
         )
     )
+
+
+# Python reducers run on sampled records or explicitly instrumented scalar play.
+# They never add an audited evaluation eligibility claim to the native facts.
+
+if TYPE_CHECKING:
+    from managym.recording import GameRecord, PlayerSetup
+    from managym.replay import RecordedDecision, ReplayStop
+
+
+class Reducer[T]:
+    """One question over setup, chooser decisions, movements and resolutions.
+
+    end receives the complete private card capture, including movements and
+    resolution facts. finish may combine per-game rows into a table.
+    """
+
+    def start(self, setup: list["PlayerSetup"]) -> None:
+        pass
+
+    def decision(self, decision: "RecordedDecision") -> None:
+        pass
+
+    def end(self, result: "ReplayStop", capture: CapturedCards) -> list[T]:
+        return []
+
+    def finish(self, rows: list[T]) -> list[T]:
+        return rows
+
+
+class AnalysisFailure(ValueError):
+    """A custom analysis failed; the source game and verification are unchanged."""
+
+
+class Reduction:
+    """Feed several reducers one verified traversal; aggregate after all games.
+
+    ``rows`` holds unaggregated per-game results so a supervised worker can
+    return them for one final aggregation across workers or deal blocks.
+    """
+
+    def __init__(self, reducers: Sequence[Reducer[Any]]) -> None:
+        self.error: str | None = None
+        self.reducers = tuple(reducers)
+        self.rows: list[list[Any]] = [[] for _ in reducers]
+
+    def fail(self, error: str) -> None:
+        """Quarantine this analysis without throwing into its game owner."""
+        if self.error is None:
+            self.error = error
+            for rows in self.rows:
+                rows.clear()
+
+    def _call(self, phase: str, *arguments: object) -> list[Any]:
+        if self.error is not None:
+            return []
+        results = []
+        for reducer in self.reducers:
+            try:
+                results.append(getattr(reducer, phase)(*arguments))
+            except Exception as exc:
+                self.fail(
+                    f"{type(reducer).__name__}.{phase}: {type(exc).__name__}: {exc}"
+                )
+                return []
+        return results
+
+    def start(self, setup: list["PlayerSetup"]) -> None:
+        self._call("start", setup)
+
+    def decision(self, decision: "RecordedDecision") -> None:
+        self._call("decision", decision)
+
+    def end(self, result: "ReplayStop", capture: CapturedCards) -> None:
+        results = self._call("end", result, capture)
+        if self.error is None:
+            try:
+                for rows, new in zip(self.rows, results, strict=True):
+                    rows.extend(new)
+            except Exception as exc:
+                self.fail(f"invalid reducer rows: {type(exc).__name__}: {exc}")
+
+    def finish(self) -> list[list[Any]]:
+        if self.error is not None:
+            return [[] for _ in self.reducers]
+        tables = []
+        for reducer, rows in zip(self.reducers, self.rows, strict=True):
+            try:
+                tables.append(reducer.finish(rows))
+            except Exception as exc:
+                self.fail(
+                    f"{type(reducer).__name__}.finish: {type(exc).__name__}: {exc}"
+                )
+                return [[] for _ in self.reducers]
+        return tables
+
+    def tables(self) -> list[list[Any]]:
+        """Read final tables, raising an analysis error instead of partial results."""
+        tables = self.finish()
+        if self.error is not None:
+            raise AnalysisFailure(self.error)
+        return tables
+
+
+@dataclass(frozen=True)
+class BehaviourRow:
+    seat: int
+    land_opportunities: int = 0
+    lands_played: int = 0
+    attack_opportunities: int = 0
+    attacks: int = 0
+
+    @property
+    def land_played_when_able(self) -> float | None:
+        return (
+            self.lands_played / self.land_opportunities
+            if self.land_opportunities
+            else None
+        )
+
+    @property
+    def attacked_when_able(self) -> float | None:
+        return (
+            self.attacks / self.attack_opportunities
+            if self.attack_opportunities
+            else None
+        )
+
+
+class Behaviour(Reducer[BehaviourRow]):
+    def start(self, setup: list["PlayerSetup"]) -> None:
+        self._seats = [BehaviourRow(0), BehaviourRow(1)]
+
+    def decision(self, decision: "RecordedDecision") -> None:
+        observation, chosen = decision.observation, decision.chosen
+        actions = observation.action_space.actions
+        if chosen < 0 or len(actions) < 2:
+            return
+        seat = int(observation.agent.player_index)
+        row = self._seats[seat]
+        land = managym.ActionEnum.PRIORITY_PLAY_LAND
+        attack = managym.ActionEnum.DECLARE_ATTACKER
+        self._seats[seat] = replace(
+            row,
+            land_opportunities=row.land_opportunities
+            + any(a.action_type == land for a in actions),
+            lands_played=row.lands_played + (actions[chosen].action_type == land),
+            attack_opportunities=row.attack_opportunities
+            + any(a.action_type == attack for a in actions),
+            attacks=row.attacks + (actions[chosen].action_type == attack),
+        )
+
+    def end(self, result: "ReplayStop", capture: CapturedCards) -> list[BehaviourRow]:
+        return self._seats
+
+    def finish(self, rows: list[BehaviourRow]) -> list[BehaviourRow]:
+        return [
+            BehaviourRow(
+                seat,
+                sum(r.land_opportunities for r in rows if r.seat == seat),
+                sum(r.lands_played for r in rows if r.seat == seat),
+                sum(r.attack_opportunities for r in rows if r.seat == seat),
+                sum(r.attacks for r in rows if r.seat == seat),
+            )
+            for seat in (0, 1)
+        ]
+
+
+@dataclass(frozen=True)
+class CardRow:
+    seat: int
+    card: str
+    name: str
+    games: int = 0
+    wins: int = 0
+    opening_hand: int = 0
+    opening_won: int = 0
+    drawn: int = 0
+    drawn_won: int = 0
+    gih: int = 0
+    gih_won: int = 0
+    not_seen: int = 0
+    not_seen_won: int = 0
+
+    @property
+    def gih_win_rate(self) -> float | None:
+        return self.gih_won / self.gih if self.gih else None
+
+    @property
+    def not_seen_win_rate(self) -> float | None:
+        return self.not_seen_won / self.not_seen if self.not_seen else None
+
+
+class CardPerformance(Reducer[CardRow]):
+    """gih-copies-v1: OH/GD/GIH count copies; GP/GNS count games."""
+
+    def __init__(self) -> None:
+        self.excluded_games = 0
+
+    def end(self, result: "ReplayStop", capture: CapturedCards) -> list[CardRow]:
+        if result.status != "complete" or result.winner is None:
+            self.excluded_games += 1
+            return []
+        return _card_rows(
+            reduce_cards(capture), result.winner, capture.capture.content_digest
+        )
+
+    def from_statistics(self, summaries: Iterable[GameStatistics]) -> list[CardRow]:
+        """The every-game table, separate from sampled or audited populations."""
+        rows: list[CardRow] = []
+        for summary in summaries:
+            if not summary.terminal or summary.winner is None:
+                self.excluded_games += 1
+                continue
+            if summary.card_digest is None:
+                raise ValueError("statistics table requires card_digest")
+            rows.extend(_card_rows(summary.cards, summary.winner, summary.card_digest))
+        return self.finish(rows)
+
+    def finish(self, rows: list[CardRow]) -> list[CardRow]:
+        merged: dict[tuple[int, str], CardRow] = {}
+        for row in rows:
+            key = row.seat, row.card
+            old = merged.get(key)
+            if old is None:
+                merged[key] = row
+            else:
+                merged[key] = CardRow(
+                    row.seat,
+                    row.card,
+                    row.name,
+                    old.games + row.games,
+                    old.wins + row.wins,
+                    old.opening_hand + row.opening_hand,
+                    old.opening_won + row.opening_won,
+                    old.drawn + row.drawn,
+                    old.drawn_won + row.drawn_won,
+                    old.gih + row.gih,
+                    old.gih_won + row.gih_won,
+                    old.not_seen + row.not_seen,
+                    old.not_seen_won + row.not_seen_won,
+                )
+        return sorted(merged.values(), key=lambda row: (row.seat, row.name, row.card))
+
+
+def _card_rows(
+    counts: Iterable[CardCounts], winner: int, card_digest: str
+) -> list[CardRow]:
+    rows = []
+    for count in counts:
+        if not (count.deck_copies or count.opening_copies or count.drawn_copies):
+            continue
+        win = int(winner == count.seat)
+        gih = count.opening_copies + count.drawn_copies
+        gp = int(count.deck_copies > 0)
+        gns = int(gp and gih == 0)
+        rows.append(
+            CardRow(
+                count.seat,
+                f"{card_digest}:{count.definition}",
+                count.name,
+                games=gp,
+                wins=gp * win,
+                opening_hand=count.opening_copies,
+                opening_won=count.opening_copies * win,
+                drawn=count.drawn_copies,
+                drawn_won=count.drawn_copies * win,
+                gih=gih,
+                gih_won=gih * win,
+                not_seen=gns,
+                not_seen_won=gns * win,
+            )
+        )
+    return rows
+
+
+def reduce(
+    records: Iterable["GameRecord"], reducers: Sequence[Reducer[Any]]
+) -> list[list[Any]]:
+    """Traverse each record once for all questions; rows describe this sample.
+
+    Reducers may return their own row types, so the heterogeneous result is the
+    intentionally dynamic boundary of the extension API.
+    """
+    from managym.replay import walk
+
+    reduction = Reduction(reducers)
+    for record in records:
+        replay = walk(record, capture_cards=True)
+        reduction.start(replay.game.players)
+        for decision in replay:
+            reduction.decision(decision)
+        assert replay.stop is not None
+        reduction.end(replay.stop, replay.cards())
+    return reduction.tables()

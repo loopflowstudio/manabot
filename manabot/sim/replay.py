@@ -12,6 +12,7 @@ import tempfile
 from typing import Any
 
 from manabot.env.env import Env
+from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
@@ -19,13 +20,29 @@ from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_json, canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import expected_world
+from manabot.sim.evaluation_records import (
+    audit_view,
+    evaluation_metadata,
+    is_record,
+    stored_game,
+)
 from manabot.sim.frames import build_command, build_viewer_frame, decision_row
 from manabot.verify.games import INTERACTIVE_DECK
 from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.scenarios import SCENARIOS, build_scenario_env
 import managym
 from managym.experience import UNVERSIONED_CONTENT_HASH, Command
-from managym.replay import ReplayAgreement, matches_retained_error, run_bounded_replay
+from managym.recording import GameRecord, read_record
+from managym.replay import (
+    RecordedDecision,
+    ReplayAgreement,
+    matches_retained_error,
+    replay_failure_inputs,
+    require_replay_runtime as require_record_runtime,
+    run_bounded_replay,
+    walk,
+)
+from managym.statistics import Reduction
 
 
 @dataclass(frozen=True)
@@ -63,13 +80,17 @@ class ReplayReceipt:
 
 
 def write_trace(path: Path, games: list[dict[str, Any]]) -> dict[str, Any]:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = b"".join(canonical_json(game) + b"\n" for game in games)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    payload = b"".join(canonical_json(stored_game(game)) + b"\n" for game in games)
     # Replace atomically: a later failed game must not tear earlier evidence.
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
         temporary = Path(stream.name)
         try:
-            stream.write(gzip.compress(payload, compresslevel=9, mtime=0))
+            stream.write(
+                gzip.compress(payload, compresslevel=9, mtime=0)
+                if path.suffix == ".gz"
+                else payload
+            )
             stream.flush()
             os.fsync(stream.fileno())
             os.replace(temporary, path)
@@ -79,8 +100,15 @@ def write_trace(path: Path, games: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def read_trace(path: Path) -> list[dict[str, Any]]:
+    body = path.read_bytes()
+    if path.suffix == ".gz":
+        body = gzip.decompress(body)
+    rows = [json.loads(line) for line in body.splitlines()]
     return [
-        json.loads(line) for line in gzip.decompress(path.read_bytes()).splitlines()
+        audit_view(row, digest=GameRecord.model_validate(row).sha256)
+        if is_record(row)
+        else row
+        for row in rows
     ]
 
 
@@ -89,6 +117,7 @@ def replay_environment(
     observation_space: ObservationSpace | None = None,
     *,
     capture_cards: bool = False,
+    capture: ScalarCapture | None = None,
 ) -> tuple[Env, dict[str, Any]]:
     if "scenario_root" in game:
         if capture_cards:
@@ -131,6 +160,7 @@ def replay_environment(
         ),
         Reward(RewardConfig()),
         seed=int(game["deal_seed"]),
+        capture=capture,
     )
     if capture_cards:
         env._engine.enable_card_capture()
@@ -152,6 +182,32 @@ def replay_prefix(
         raise ValueError("replay prefix is outside the retained trace")
     env, observation = replay_environment(game, observation_space)
     try:
+        if "record" in game:
+            record = GameRecord.model_validate(game["record"])
+            record.games[0].actions = record.games[0].actions[:decisions]
+            record.games[0].committed = decisions
+            record.games[0].end = None
+            replay = walk(record)
+            replay.env = env._engine
+
+            def apply(decision: RecordedDecision) -> None:
+                nonlocal observation
+                if isinstance(decision.commitment, int):
+                    observation = env.step(decision.commitment)[0]
+                else:
+                    observation = env.step_semantic(decision.commitment)[0]
+
+            for _ in replay.run(apply=apply):
+                pass
+            if (
+                replay.stop is None
+                or replay.stop.status == "diverged"
+                or env._engine.is_game_over()
+            ):
+                raise ValueError(
+                    f"retained profile root diverged or terminated: {replay.stop}"
+                )
+            return env, observation
         for expected in game["decisions"][:decisions]:
             command = Command.model_validate(expected["command"])
             observation, _, terminated, truncated, _ = env.step(int(command.offer_id))
@@ -186,8 +242,22 @@ def replay_game(
     *,
     require_terminal: bool = True,
     capture_cards: bool = False,
+    reduction: Reduction | None = None,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
     """Verify one game, optionally retaining native facts from the same replay."""
+    if is_record(game):
+        game = audit_view(game, digest=GameRecord.model_validate(game).sha256)
+    if "record" in game:
+        return _replay_record(
+            game,
+            require_terminal=require_terminal,
+            capture_cards=capture_cards,
+            reduction=reduction,
+        )
+    if reduction is not None:
+        raise ValueError(
+            "custom evaluation reducers require an ordinary canonical game record"
+        )
     env, _ = replay_environment(game, capture_cards=capture_cards)
     try:
         receipt = _replay_game(game, env, require_terminal=require_terminal)
@@ -197,6 +267,88 @@ def replay_game(
         return receipt, captured
     finally:
         env.close()
+
+
+def _replay_record(
+    game: dict[str, Any],
+    *,
+    require_terminal: bool,
+    capture_cards: bool,
+    reduction: Reduction | None = None,
+) -> tuple[ReplayReceipt, dict[str, Any] | None]:
+    record = GameRecord.model_validate(game["record"])
+    counts = asdict(ReplayReceipt(games=1))
+    original = audit_view(game["record"])
+    if evaluation_metadata(game) != record.context.get("evaluation"):
+        counts["trace_mismatches"] += 1
+    if game["decisions"] != original["decisions"]:
+        counts["trace_mismatches"] += 1
+    if game.get("game_trace_sha256") != record.sha256:
+        counts["trace_mismatches"] += 1
+    walker = walk(record, capture_cards=capture_cards or reduction is not None)
+    if reduction is not None:
+        reduction.start(walker.game.players)
+    for decision in walker:
+        expected = game["decisions"][decision.index]
+        frame = build_viewer_frame(
+            decision.observation,
+            match_id=game["match_id"],
+            revision=decision.index,
+            content_hash=UNVERSIONED_CONTENT_HASH,
+            asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+        )
+        if canonical_sha256(frame) != expected["frame_sha256"]:
+            counts["frame_mismatches"] += 1
+        if frame["projection"]["opponent"].get("hand"):
+            counts["private_exposures"] += 1
+        if build_command(frame, decision.chosen) != expected["command"]:
+            counts["command_mismatches"] += 1
+        actor = int(decision.observation.agent.player_index)
+        if (
+            actor != expected["actor"]
+            or game["seat_players"][actor] != expected["player_id"]
+        ):
+            counts["actor_mismatches"] += 1
+        if (
+            frame["offers"][decision.chosen] != expected["chosen_offer"]
+            or frame["action_space"] != expected["action_space_kind"]
+        ):
+            counts["offer_mismatches"] += 1
+        counts["decisions"] += 1
+        if reduction is not None:
+            reduction.decision(decision)
+    assert walker.stop is not None
+    if walker.stop.status == "diverged":
+        counts["state_mismatches"] += 1
+    if (
+        require_terminal
+        and walker.stop.status != "complete"
+        and not game.get("failure")
+    ):
+        counts["missing_decisions"] += 1
+    if not game.get("failure") and (
+        walker.stop.winner != game["winner"]
+        or (walker.stop.status == "complete") != bool(game["terminated"])
+    ):
+        counts["outcome_mismatches"] += 1
+    receipt = ReplayReceipt(**counts)
+    cards = walker.cards() if capture_cards or reduction is not None else None
+    # Audited statistics admit successful, complete games only. A verified
+    # prefix or runner failure must not acquire ordinary win/loss eligibility.
+    if (
+        reduction is not None
+        and receipt.passed
+        and walker.stop.status == "complete"
+        and not game.get("failure")
+    ):
+        assert cards is not None
+        reduction.end(walker.stop, cards)
+    captured = (
+        cards.model_dump(mode="json", by_alias=True)
+        if capture_cards and cards is not None
+        else None
+    )
+    return receipt, captured
 
 
 def _replay_game(
@@ -314,6 +466,13 @@ def read_game_journal(path: Path) -> dict[str, Any]:
     Torn JSON fails closed. An unobserved outcome is explicitly unknown, never a
     successful evaluation or a claim that the pending Command actually failed.
     """
+    with path.open() as source:
+        first = json.loads(source.readline())
+    if isinstance(first, dict):
+        record = read_record(path)
+        return audit_view(
+            record.model_dump(mode="json", by_alias=True), digest=record.sha256
+        )
     game: dict[str, Any] | None = None
     with path.open() as stream:
         for line in stream:
@@ -333,6 +492,8 @@ def replay_failure(game: dict[str, Any]) -> dict[str, Any]:
     Run through the CLI for a process wall-time bound. The original trace remains
     immutable; passing the retained action after repair is diagnostic advancement.
     """
+    if "record" in game:
+        return replay_failure_inputs(GameRecord.model_validate(game["record"]))[0]
     pending = game.get("pending_decision")
     if pending is None or game.get("failure") is None:
         raise ValueError("game has no retained failed Command")
@@ -437,9 +598,17 @@ def main() -> None:
         parser.error("game is beyond the end of the trace")
     game = games[args.game - 1]
     try:
-        require_replay_runtime(
-            game["runtime_identities"], allow_changed_runtime=args.allow_changed_runtime
-        )
+        if "record" in game:
+            require_record_runtime(
+                GameRecord.model_validate(game["record"]).identities,
+                allow_changed_runtime=args.allow_changed_runtime,
+                require_source=True,
+            )
+        else:
+            require_replay_runtime(
+                game["runtime_identities"],
+                allow_changed_runtime=args.allow_changed_runtime,
+            )
     except ValueError as error:
         parser.error(str(error))
     print(json.dumps(replay_failure(game)))

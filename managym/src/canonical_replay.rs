@@ -57,6 +57,9 @@ pub struct ReplayDecision {
     pub frame: ExperienceFrame,
     pub offer: InteractionOffer,
     pub command: Command,
+    /// Original rules commitment, separate from the presentation revision scope.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_command: Option<String>,
 }
 
 impl ReplayDecision {
