@@ -23,7 +23,11 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.sim.heuristic import HeuristicPlayer
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    close_collector,
+    collect,
+    open_collector,
+)
 from managym.decision import Command, DecisionFrame
 
 
@@ -102,7 +106,7 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
         MatchConfig(hero_deck={"Mountain": 30}, villain_deck={"Mountain": 30})
     )
     with capture_scope(CaptureScope(tmp_path)):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             space,
             match,
             Reward(RewardConfig()),
@@ -116,9 +120,9 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
             ),
         )
         try:
-            batch = collector.collect(agent, 2)
+            batch = collect(collector, agent, 2)
         finally:
-            collector.close()
+            close_collector(collector)
     rows = batch.observations()
     valid = rows.observation["actions_valid"].astype(bool)
     assert rows.log_probabilities.shape == valid.shape

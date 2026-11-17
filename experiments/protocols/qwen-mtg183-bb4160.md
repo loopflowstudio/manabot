@@ -1,5 +1,7 @@
 # Qwen versus MTG-183 in historical w13 — bb4160
 
+> The code that ran this experiment was removed from main; the last commit with it is `b49df79b49`.
+
 Jack Heart requested this evaluation on 2026-10-28 with a fresh **$10 GPU
 budget** (cumulative, including setup, failures, transfer and cleanup), and on
 the same day accepted running the exact MTG-183 checkpoint in a separately

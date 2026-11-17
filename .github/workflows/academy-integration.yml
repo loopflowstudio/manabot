@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --python 3.13 --no-install-package managym \
-            --extra dev --extra play --extra notebook --extra artifacts --extra reports
+            --extra dev --extra play --extra artifacts --extra reports
 
       - name: Build managym extension
         run: uv run maturin develop --features python --manifest-path managym/Cargo.toml

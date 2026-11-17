@@ -51,13 +51,13 @@ passing the corresponding directory instead of `report.md`.
 | Ten-deck learning, three seeds, old/new heuristic endpoints | `experiments/data/mtg181/report.md`; [MTG-181 protocol](../experiments/protocols/elemental-181.md) |
 | Four-seed one-seat/two-seat comparison | `experiments/data/seat-comparison-v1/report.md`; [seat protocol](../experiments/protocols/seat-comparison-v1.md) |
 | UR/GW specialist, direct matches and card associations | `experiments/data/mtg186/report.md`; [MTG-186 protocol](../experiments/protocols/mtg186.md) |
-| Failed first Elemental training attempt | [MTG-174 result](../experiments/elemental-uniform-baseline.md) |
-| Heuristic revision and expensive search gain | [Heuristic strength](../experiments/heuristic-strength.md) |
+| Failed first Elemental training attempt | [MTG-174 result](../experiments/reports/elemental-uniform-baseline.md) |
+| Heuristic revision and expensive search gain | [Heuristic strength](../experiments/reports/heuristic-strength.md) |
 | Qwen single-game L4 proof, timing and memory limits | [LLM harness](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/llm.md) |
 | Longer Elemental run: protocol, no final result claimed | [MTG-183 protocol](../experiments/protocols/elemental-183.md) |
-| Earlier batching comparison | [Longer learning 017](../experiments/longer-learning-017.md) |
-| Unresolved floor/pooling and critic-coverage screens | [Pooling follow-up](../experiments/pooling-filter-followup.md), [technique screen](../experiments/ataraxos-technique-screen.md) |
-| Historical reset-seeding correction | [World-growth investigation](../experiments/exp-06-newworld-training.md), [corrections F1–F3](understanding.md) |
+| Earlier batching comparison | [Longer learning 017](../experiments/reports/longer-learning-017.md) |
+| Unresolved floor/pooling and critic-coverage screens | [Pooling follow-up](../experiments/reports/pooling-filter-followup.md), [technique screen](../experiments/reports/ataraxos-technique-screen.md) |
+| Historical reset-seeding correction | [World-growth investigation](../experiments/reports/exp-06-newworld-training.md), [corrections F1–F3](understanding.md) |
 
 ## Implementation map
 

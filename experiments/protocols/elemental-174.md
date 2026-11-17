@@ -124,7 +124,7 @@ receipts, a reloadable admitted endpoint, realized coverage and the bounded
 evaluation results/limitations. Publish immutable receipts and raw bytes through
 `manabot.data`, commit only manifest/report, and leave MTG-174 incomplete if an
 external blocker prevents the accepted actual outcome. Historical comparison:
-`experiments/scale-ladder.md`, its allocation/evaluation receipts and retained
+`experiments/reports/scale-ladder.md`, its allocation/evaluation receipts and retained
 MTG-159 checkpoint, with 0.11→0.69 against heuristic at update 9,250; 0.11 was
 not head-to-head against initialization. Next question is separately authorized
 adaptive sampling, before any hard-coded world switch; no paid follow-up here.

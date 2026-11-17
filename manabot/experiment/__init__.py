@@ -1,1 +1,1 @@
-"""Experiment definitions, allocation and execution above the training run."""
+"""Retained experiment declarations and checkpoint evaluation readers."""

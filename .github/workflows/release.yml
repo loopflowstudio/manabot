@@ -175,8 +175,6 @@ jobs:
         shell: bash
         run: |
           export PATH="$RUNNER_TEMP/no-rust:$PATH"
-          # Prepare the pure Python Git SDK before the binary-only engine check.
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" 'etude-sdk @ git+https://github.com/loopflowstudio/etude@d60236d015a4b2a01055b2c861856f06bb1852a2'
           uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cp scripts/release/academy_replay_smoke.py "$RUNNER_TEMP/academy_replay_smoke.py"
@@ -190,18 +188,18 @@ jobs:
         shell: bash
         run: |
           wheel=$(echo "$GITHUB_WORKSPACE"/dist/manabot-*.whl)
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation,notebook,llm,openrouter]"
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation,llm,openrouter]"
           cd "$RUNNER_TEMP"
           unset PYTHONPATH
-          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import managym.academy.server; import manabot.reports.experiment; import manabot.reports.time_sources; import nbclient; import transformers; import httpx'
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import managym.academy.server; import manabot.reports.time_sources; import transformers; import httpx'
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.eval.cards --help
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.sim.replay --help
-          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.experiment.monitor_worker --help
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" manabot --help
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
       - name: Exercise latest compatible Torch with the pinned Etude client
         shell: bash
         run: |
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3] @ git+https://github.com/loopflowstudio/etude@d60236d015a4b2a01055b2c861856f06bb1852a2'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3]==0.4.1'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cd "$RUNNER_TEMP"
           rm -rf release-smoke

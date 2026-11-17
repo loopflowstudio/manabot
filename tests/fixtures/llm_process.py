@@ -2,9 +2,8 @@
 
 from multiprocessing.connection import Connection
 import os
-from pathlib import Path
 import time
-from typing import TYPE_CHECKING, Callable, Literal
+from typing import Callable, Literal
 
 from manabot.llm import session as session_module
 from manabot.llm.schema import (
@@ -18,9 +17,6 @@ from manabot.llm.schema import (
     SelectionResult,
 )
 from manabot.llm.selection import Runtime
-
-if TYPE_CHECKING:
-    from experiments.qwen_mtg183 import ScheduledGame
 
 
 class CountingRuntime:
@@ -170,27 +166,3 @@ def load_stall(config: InferenceConfig) -> Runtime:
 
 def load_exit(config: InferenceConfig) -> Runtime:
     os._exit(7)
-
-
-def game_child(
-    connection: Connection, mode: str, game: "ScheduledGame", out: Path, deadline: float
-) -> None:
-    """Bounded game IPC fixture, with no inference or native play."""
-    from experiments.qwen_mtg183 import GameResult
-    from manabot.verify.llm_game import GameSummary
-
-    with connection:
-        connection.send("bad" if mode == "admission" else "ready")
-        if connection.recv() != "play":
-            return
-        if mode == "exit":
-            os._exit(7)
-        if mode == "deadline":
-            time.sleep(30)
-            return
-        result = GameResult(
-            game=game, summary=GameSummary(mode="fixture", completed=True)
-        )
-        if mode == "mismatch":
-            result.game = game.model_copy(update={"index": game.index + 1})
-        connection.send(result)

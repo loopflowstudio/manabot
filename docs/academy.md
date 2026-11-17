@@ -363,8 +363,8 @@ when one is raised.
 Ask the run to record games, then open its output:
 
 ```bash
-uv run manabot train --recipe local --record-games 0.25 --out .runs/demo
-uv run --no-project managym academy replay .runs/demo/games --game 0
+uv run etude train manabot/recipes/local.py --experiment demo --config '{"record_games": 0.25}'
+uv run --no-project managym academy replay ~/.etude/track/demo/out/games --game 0
 ```
 
 The browser opens in **Replay**, headed **Training game**. Every decision the
@@ -374,20 +374,21 @@ the update it was playing at. The policy is never rerun and no checkpoint is
 loaded, so the directory opens on a machine that has never seen the model and
 has no manabot. There is no export step.
 
-`--record-games` takes `off` (the default), `all`, or a fraction between 0 and
-1. A fraction selects games by their seed and stream, so it does not disturb
-the run and the same run records the same games. Remote jobs set
-`TrainingJob(record_games=0.25)`; the option is outside the recipe's digest
-and may differ between attempts. The rows are written under the run's
-`games/`, one file per producer, and collected with its other outputs;
-download that directory to open a remote run's games. A game the run stopped
+`record_games` takes 0 (the default), 1 for every game, or a fraction between
+them. A fraction selects games by their seed and stream, so it does not disturb
+the run and the same run records the same games. All shipped self-play recipe
+configs accept it alongside `statistics`, `diagnostics` and `stall_seconds`,
+locally and in a launched job. The learner digest excludes these options.
+Etude compares them with the rest of the recipe config on resume. The rows are written under the run's
+`out/games/`, one file per producer; download that directory to open a remote
+run's games. A game the run stopped
 in the middle of is kept and opens as **Interrupted**.
 
 A loop of your own records the same way by passing the capture options to its
 collector:
 
 ```python
-collector = SeatRoutedCollector(..., games_path=Path("runs/jace/games/0.jsonl"))
+collector = open_collector(..., games_path=Path("runs/jace/games/0.jsonl"))
 ```
 
 or, with no manabot at all, by stepping through a
@@ -407,12 +408,12 @@ other. Statistics over a recorded fraction describe that fraction
 
 | What you see | Cause and fix |
 |---|---|
-| `replay.missing` for `<out>/games` | The run recorded nothing: `--record-games` was off, or no selected game had started. Run with `all` or a larger fraction. |
+| `replay.missing` for `<out>/games` | The run recorded nothing: `record_games` was 0, or no selected game had started. Run with 1 or a larger fraction. |
 | **Stopped at decision N** | This build does not play the game as the run did. The message names both builds; open it with the one that recorded it. |
 | `replay.rejected` | The games were recorded in another world or with other card content; the message names the build to use. |
 
-`record_games(...)`, `TrainingGames`, `TrainingJob.training_exposure` and
-`manabot export-game` still work, warn, and are removed in 0.4.0. Receipts and
+`record_games(...)`, `TrainingGames` and `manabot export-game` still work,
+warn, and are removed in 0.4.0. Receipts and
 exported games they already wrote keep opening.
 
 ### Play a game
@@ -1068,8 +1069,9 @@ unavailable selection rather than substituting a newer model. Keyboard navigatio
 uses the browser's select controls.
 
 With manabot installed, its provider discovers `.pt` and portable `.safetensors`
-checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`) and explicit
-`ACADEMY_PLAY_CHECKPOINTS` sources. Python can supply provider-owned discovery
+checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`), explicit
+`ACADEMY_PLAY_CHECKPOINTS` sources and the runs `etude train` keeps on this
+computer (`~/.etude/track`, moved by `ETUDE_HOME`). Python can supply provider-owned discovery
 without changing the environment:
 
 ```python

@@ -371,7 +371,7 @@ fn random_smoke_stage2_cards() {
     }
 }
 
-/// The Milestone-1 UR Lessons decklist (experiments/milestone-1-two-deck-slice.md).
+/// The Milestone-1 UR Lessons decklist (experiments/reports/milestone-1-two-deck-slice.md).
 fn ur_lessons_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([
         ("Island".to_string(), 9),
@@ -391,7 +391,7 @@ fn ur_lessons_deck() -> BTreeMap<String, usize> {
     ])
 }
 
-/// The Milestone-1 GW Allies decklist (experiments/milestone-1-two-deck-slice.md).
+/// The Milestone-1 GW Allies decklist (experiments/reports/milestone-1-two-deck-slice.md).
 fn gw_allies_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([
         ("Plains".to_string(), 9),

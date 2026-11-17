@@ -86,7 +86,7 @@ class TargetPracticeVector:
 
     Every row is one genuine terminal transition. The next root replaces only
     the next observation; terminal flags and the previous winner remain available
-    to SeatRoutedCollector. Paused rows neither advance seeds nor consume actions.
+    to Collector. Paused rows neither advance seeds nor consume actions.
     """
 
     def __init__(

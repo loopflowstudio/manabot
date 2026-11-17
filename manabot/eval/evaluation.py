@@ -1,39 +1,38 @@
 """Placement-independent evaluation requests, execution and retained results.
 
 An EvaluationRequest names registrations, deals and arena semantics, without a
-training run. evaluate uses an allocation supplied by any caller; evaluate_local
-owns a bounded CPU allocation without callback transport or remote services.
+training run. evaluate uses supplied game agents for managed Etude play;
+evaluate_local bounds scalar CPU children without remote services.
 Only complete replayed deal cohorts produce paired-deal score intervals.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import ExitStack
 from functools import partial
 import json
+import math
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 from uuid import uuid4
 
+from etude.errors import RetryRequested
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow, RateInterval, bootstrap_mean_interval
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
-from manabot.sim.execution import EvalExecution, EvalExecutionV1
+from manabot.sim.agent import GamePlayer
+from manabot.sim.execution import EvalExecutionV1, RecordedExecution
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup, selected_decks
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.serving_protocol import InferenceRuntime
-
-if TYPE_CHECKING:
-    from manabot.eval.endpoint import InferenceEndpoint
 
 
 class EvaluationRequest(StrictModel):
@@ -76,22 +75,15 @@ class EvaluationRequest(StrictModel):
     def expected_games(self) -> int:
         return len(self.deal_seeds) * len(self.legs)
 
-    def bind(self, execution: EvalExecution) -> "EvaluationRequest":
-        key, (candidate, opponent) = bind_execution(
-            self.key, (self.candidate, self.opponent), execution
-        )
-        return self.model_copy(
-            update=dict(key=key, candidate=candidate, opponent=opponent)
-        )
-
 
 class EvaluationResult(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     request: EvaluationRequest
     evaluation_id: str | None = None
+    deadline_unix: float | None = Field(default=None, exclude_if=lambda v: v is None)
     card_evidence_dir: str | None = None
     # Retained v1 allocations stay readable; they are never continued under v2.
-    execution: EvalExecution | EvalExecutionV1 | None = None
+    execution: RecordedExecution | EvalExecutionV1 | None = None
     status: Literal["running", "completed", "incomplete"] = "running"
     rows: list[EvaluationRow] = Field(default_factory=list)
     win: RateInterval | None = None
@@ -186,14 +178,14 @@ def _execute_attempt(
     *,
     out_dir: Path,
     evaluation_id: str,
-    execution: EvalExecution | None = None,
-    inference: InferenceRuntime | InferenceEndpoint | None = None,
+    agents: Mapping[str, GamePlayer] | None = None,
+    deadline: float | None = None,
     card_evidence_dir: Path | None = None,
 ) -> EvaluationResult:
     """Execute in an exclusively claimed directory; retain every failure."""
     result = EvaluationResult(
         request=request,
-        execution=execution,
+        deadline_unix=deadline,
         evaluation_id=evaluation_id,
         card_evidence_dir=str(card_evidence_dir)
         if card_evidence_dir is not None
@@ -201,15 +193,9 @@ def _execute_attempt(
     )
     atomic_json(out_dir / "evaluation.json", result.model_dump(mode="json"))
     started = time.perf_counter()
-    performance = EvalPerformance(
-        "evaluation", execution.instrumentation if execution else True
-    )
+    performance = EvalPerformance("evaluation")
     try:
-        runner = (
-            inference.play_cell
-            if inference is not None and not isinstance(inference, InferenceRuntime)
-            else partial(play_cell, execution=execution, inference=inference)
-        )
+        runner = partial(play_cell, agents=agents, deadline=deadline)
         rows, trace, replay = runner(
             key=request.key,
             player_a=request.candidate,
@@ -226,6 +212,8 @@ def _execute_attempt(
         for name, payload in (("rows", rows), ("trace", trace), ("replay", replay)):
             atomic_json(out_dir / f"{name}.json", payload)
         result.rows = [EvaluationRow.model_validate(row) for row in rows]
+    except RetryRequested:
+        raise
     except Exception as exc:
         result.error = f"{type(exc).__name__}: {exc}"
         if not (out_dir / "performance.json").exists():
@@ -263,8 +251,8 @@ def evaluate(
     request: EvaluationRequest,
     *,
     out_dir: Path,
-    execution: EvalExecution | None = None,
-    inference: InferenceRuntime | InferenceEndpoint | None = None,
+    agents: Mapping[str, GamePlayer] | None = None,
+    deadline: float | None = None,
     card_evidence_dir: Path | None = None,
 ) -> EvaluationResult:
     """Start a fresh logical evaluation; existing directories are never replaced.
@@ -272,17 +260,16 @@ def evaluate(
     Explicit continuation uses continue_evaluation. The first attempt stays at
     this root; subsequent attempts retain their own subdirectories and receipts.
     """
-    execution = resolve_execution(execution, inference)
-    if execution is not None:
-        request = request.bind(execution)
+    if deadline is not None and not math.isfinite(deadline):
+        raise ValueError("deadline must be finite")
     out_dir.mkdir(parents=True, exist_ok=False)
     with exclusive_file_lock(out_dir / ".evaluation.lock"):
         return _execute_attempt(
             request,
             out_dir=out_dir,
             evaluation_id=uuid4().hex,
-            execution=execution,
-            inference=inference,
+            agents=agents,
+            deadline=deadline,
             card_evidence_dir=card_evidence_dir,
         )
 
@@ -390,8 +377,8 @@ def evaluation_status(directory: Path) -> EvaluationResult:
 def continue_evaluation(
     directory: Path,
     *,
-    execution: EvalExecution | None = None,
-    inference: InferenceRuntime | InferenceEndpoint | None = None,
+    agents: Mapping[str, GamePlayer] | None = None,
+    deadline: float | None = None,
     checkpoint_paths: dict[str, str] | None = None,
     request: EvaluationRequest | None = None,
 ) -> EvaluationResult:
@@ -409,14 +396,11 @@ def continue_evaluation(
         if result.evaluation_id is None:
             raise ValueError("historical evaluation has no continuation identity")
         original = result.request
-        execution = resolve_execution(execution, inference)
-        if (execution.compute if execution else None) != (
-            result.execution.compute if result.execution else None
-        ):
-            raise ValueError("continuation requires the same execution contract")
+        if result.execution is not None:
+            raise ValueError(
+                "retained shared evaluation requires its recorded revision"
+            )
         if request is not None:
-            if execution is not None:
-                request = request.bind(execution)
             if (
                 request.model_copy(
                     update={"checkpoint_paths": original.checkpoint_paths}
@@ -456,8 +440,8 @@ def continue_evaluation(
             pending,
             out_dir=out,
             evaluation_id=result.evaluation_id,
-            execution=execution,
-            inference=inference,
+            agents=agents,
+            deadline=deadline,
             card_evidence_dir=Path(result.card_evidence_dir)
             if result.card_evidence_dir
             else None,
@@ -466,13 +450,7 @@ def continue_evaluation(
 
 
 def evaluate_local(
-    request: EvaluationRequest, *, limits: EvalExecution, out_dir: Path
+    request: EvaluationRequest, *, deadline: float, out_dir: Path
 ) -> EvaluationResult:
-    """Own a fresh CPU attempt. No endpoint, provider lookup or cloud fallback.
-
-    Registration preparation is separate; admission of the registered bytes,
-    inference, native play and replay all consume this absolute deadline.
-    """
-    if limits.device != "cpu":
-        raise ValueError("local evaluation requires explicit CPU execution")
-    return evaluate(request, out_dir=out_dir, execution=limits)
+    """Run a scalar local comparison under one absolute wall-clock deadline."""
+    return evaluate(request, out_dir=out_dir, deadline=deadline)

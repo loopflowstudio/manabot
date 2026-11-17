@@ -17,12 +17,16 @@ from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.training.regime import DampedPolicyLearning, Learning
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    collect,
+    open_collector,
+)
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
+from tests.model.policy_fixture import recipe
 from tests.model.prepared_routes import device_input, host_inputs
-from tests.training.test_recovery import recipe
 
 
 def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:
@@ -35,17 +39,16 @@ def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:
         config.agent.recent_events = True
     space = ObservationSpace(config.observation)
     agent = ActorCritic(space, config.agent).eval()
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(config.match),
         Reward(RewardConfig()),
         num_envs=2,
         seed=91,
         opponent_mode="self",
-        recovery_max_microsteps=10000,
         numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
-    return agent, collector.collect(agent, 8)
+    return agent, collect(collector, agent, 8)
 
 
 def _observation(batch: RolloutBatch) -> dict[str, torch.Tensor]:

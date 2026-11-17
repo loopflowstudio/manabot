@@ -71,7 +71,7 @@ def _project_allocation(
     if serving is not None:
         # Historical writers retained paths relative to their working
         # directory. Resolve once for verification and portable links.
-        traces = [Path(trace).resolve() for trace in serving["traces"]]
+        traces = [Path(trace).resolve() for trace in serving.get("traces", [])]
         serving["traces"] = [str(path) for path in traces]
         dependencies.extend(traces)
     if declaration is not None:
@@ -353,7 +353,7 @@ def project_evaluations(
                     "status": "hypothesis; no critical path inferred from overlapping totals",
                     "observation": "Compare native/encoding, durable acknowledgement, serving and IPC intervals using the timeline.",
                     "mechanism": "Amortize repeated preparation with residency/batching; profile engine or transfers only if they delay completion.",
-                    "validation": "Interleaved equal-work serving_benchmark plan with declared tolerances and diagnostic traces.",
+                    "validation": "Compare equal-work Etude execution records with declared tolerances.",
                     "coverage": "bounded host timeline; pure FFI, device execution and exact synchronization cost unavailable",
                     "evidence": str(receipt_path),
                 },

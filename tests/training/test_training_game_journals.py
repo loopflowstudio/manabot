@@ -496,66 +496,24 @@ def test_atomic_replacement_retains_complete_old_bytes_on_error(
     assert not list(path.parent.glob(".*.tmp"))
 
 
-@pytest.mark.parametrize("recipe", ["local", "baseline", "regime"])
-def test_cli_forwards_runtime_flag(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recipe: str
-) -> None:
-    from types import SimpleNamespace
+@pytest.mark.parametrize("recipe", ["local", "baseline"])
+def test_recipe_forwards_runtime_flag(recipe: str) -> None:
+    from manabot.recipes.baseline import BaselineConfig, settings
+    from manabot.recipes.local import LocalConfig
+    from manabot.training.loops.self_play import learner_digest
 
-    from typer.testing import CliRunner
-
-    from manabot.cli import app
-    from manabot.recipes.local import local_smoke
-
-    seen: list[bool] = []
-
-    def execute(*args: object, **kwargs: object) -> SimpleNamespace:
-        seen.append(kwargs["settings"].diagnostics == "detailed")
-        return SimpleNamespace(
-            status="completed",
-            id="test",
-            notebook="baseline.ipynb",
-            stages=[SimpleNamespace(artifacts={"raw": {"path": "policy.pt"}})],
-        )
-
-    monkeypatch.setattr("manabot.recipes.local.run_local", execute)
-    monkeypatch.setattr("manabot.recipes.baseline.run_baseline", execute)
-    monkeypatch.setattr("manabot.training.execution.execute_regime", execute)
-    args = ["train", "--training-game-logs", "--out", str(tmp_path / "run")]
-    if recipe == "regime":
-        path = tmp_path / "regime.json"
-        path.write_text(local_smoke(device="cpu").model_dump_json())
-        args += ["--regime", str(path)]
-    else:
-        args += ["--recipe", recipe]
-    result = CliRunner().invoke(app, args)
-    assert result.exit_code == 0, result.output
-    assert seen == [True]
-
-
-def test_job_option_is_runtime_only() -> None:
-    from manabot.experiment.job import TrainingJob
-    from manabot.recipes.local import local_smoke
-
-    plain = TrainingJob(regime=local_smoke(device="cpu"), experiment="fixture")
-    enabled = plain.model_copy(update={"training_game_logs": True})
-    assert "training_game_logs" not in plain.model_dump(mode="json")
-    with pytest.warns(DeprecationWarning, match="training_game_logs.*0.4.0"):
-        restored = TrainingJob.model_validate_json(enabled.model_dump_json())
-    assert restored.run_settings.diagnostics == "detailed"
-    with pytest.warns(DeprecationWarning, match="training_exposure.*0.4.0"):
-        exposure = TrainingJob(
-            regime=plain.regime,
-            experiment="fixture",
-            training_exposure=True,
-            statistics=True,
-        )
-    assert exposure.run_settings.record_games == 1
-    assert exposure.run_settings.statistics
-    assert exposure.run_settings == RunSettings.model_validate_json(
-        exposure.run_settings.model_dump_json()
+    config_type = LocalConfig if recipe == "local" else BaselineConfig
+    plain = config_type(device="cpu")
+    enabled = plain.model_copy(
+        update={"diagnostics": "detailed", "record_games": 0.25, "statistics": True}
     )
-    assert enabled.regime.model_dump_json() == plain.regime.model_dump_json()
+    restored = config_type.model_validate_json(enabled.model_dump_json())
+    assert restored.run_settings == RunSettings(
+        diagnostics="detailed", record_games=0.25, statistics=True
+    )
+    assert settings(enabled).run_settings == restored.run_settings
+    assert "run_settings" not in settings(plain).model_dump(mode="json")
+    assert learner_digest(settings(enabled)) == learner_digest(settings(plain))
 
 
 def test_return_acknowledgment_storage_error_names_executed_call(
@@ -650,21 +608,20 @@ def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) ->
 def _interrupt_execution(directory: str, phase: str) -> None:
     import torch
 
-    from manabot.backends import resolve
     from manabot.backends.torch.collection import CollectionScope
-    from manabot.recipes.local import local_smoke
-    import manabot.training.execution as execution
-    from manabot.training.regime import TrainSelfPlay
-    from manabot.verify.store import VerifyStore
+    from manabot.recipes.builders import gray_ogre_self_play
+    from manabot.training.loops import self_play as execution
+    from tests.fixtures.training_records import recording
 
     torch.set_num_threads(1)
-    regime = local_smoke(steps=1, device="cpu")
-    regime.agent.hidden_dim = 8
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.learning_seats = "one"
-    stage.batch_closure = "exact-quota"
-    stage.transitions = 2
+    settings = gray_ogre_self_play(horizon=1).model_copy(
+        update={
+            "run_settings": RunSettings(diagnostics="detailed"),
+            "learning_seats": "one",
+            "batch_closure": "exact-quota",
+            "transitions": 2,
+        }
+    )
 
     def exit_now(*args: object, **kwargs: object) -> Any:
         os._exit(73)
@@ -675,34 +632,31 @@ def _interrupt_execution(directory: str, phase: str) -> None:
     else:
         patch.setattr(execution, "update_damped_iteration", exit_now)
         patch.setattr(execution, "update_iteration", exit_now)
-    with VerifyStore(Path(directory) / "training.sqlite") as store:
-        execution.execute_regime(
-            regime,
-            24,
-            Path(directory) / "run",
-            store,
-            backend=resolve("torch"),
-            settings=RunSettings(diagnostics="detailed"),
-        )
+    os.environ["ETUDE_OUT"] = str(Path(directory) / "run")
+    with recording(
+        experiment="journal",
+        run="fixture",
+        clocks=execution.CLOCKS,
+        directory=Path(directory) / "track",
+        seed=24,
+    ) as run:
+        execution.self_play(settings, run, updates=1)
     raise AssertionError("injected training operation not reached")
 
 
 @pytest.mark.parametrize("phase", ["learner_inference", "learning"])
-def test_executor_interrupt_marks_active_work_before_call(
+def test_etude_loop_interrupt_marks_active_work_before_call(
     tmp_path: Path, phase: str
 ) -> None:
     _run_child("_interrupt_execution", str(tmp_path), phase)
     directory = tmp_path / "run/game-journals"
     marker = json.loads((directory / "operation.json").read_text())
     assert marker["operation"] == phase and marker["state"] == "pending"
-    assert marker["context"]["stage"]
-    assert marker["context"]["coordinates"]["updates"] == 0
+    assert marker["context"]["update"] == 0
     for cursor in _cursors(directory):
         evidence = read_record(cursor)
         assert evidence.boundary is not None and evidence.boundary.phase == "ready"
         assert evidence.boundary.returned
-    run = json.loads((tmp_path / "run/run.json").read_text())
-    assert Path(run["game_journal_directory"]).resolve() == directory.resolve()
 
 
 def _synthetic_evidence(length: int = 0) -> tuple[GameRecord, NativeBoundary]:

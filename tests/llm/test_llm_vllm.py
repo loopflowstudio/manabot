@@ -1,20 +1,15 @@
 """Exact token boundaries and failure accounting without GPU allocation."""
 
-from concurrent.futures import Future
-from contextlib import nullcontext
-from decimal import Decimal
 from functools import partial
 import json
 from pathlib import Path
 import subprocess
 import sys
-import tarfile
 import time
-from types import SimpleNamespace, TracebackType
-from typing import Callable, Never
+from types import TracebackType
+from typing import Callable
 from urllib.request import Request
 
-from etude.launch.records import Job
 from huggingface_hub import _snapshot_download, snapshot_download
 from huggingface_hub._tree_cache import TreeCacheEntry
 from huggingface_hub.errors import IncompleteSnapshotError
@@ -24,11 +19,11 @@ from tokenizers.models import WordLevel
 from tokenizers.pre_tokenizers import WhitespaceSplit
 from transformers import PreTrainedTokenizerFast
 
-from experiments import qwen_mtg183_vllm as campaign
 from manabot.llm import tokenization, vllm_runtime, vllm_server
 from manabot.llm.schema import InferenceConfig, Message, RuntimeIdentity, Sampling
-from manabot.sim.child import ChildProcess
-from manabot.verify.llm_game import GameSummary
+
+INFERENCE = Path("configs/llm/qwen3.5-9b-reasoning.json")
+BUDGET_INFERENCE = Path("configs/llm/qwen3.5-9b-reasoning-budget.json")
 
 
 def test_server_uses_its_own_virtual_environment(
@@ -41,9 +36,7 @@ def test_server_uses_its_own_virtual_environment(
         capture_output=True,
         timeout=20,
     )
-    config = InferenceConfig.model_validate_json(
-        campaign.original.INFERENCE.read_text()
-    )
+    config = InferenceConfig.model_validate_json(INFERENCE.read_text())
     monkeypatch.setenv("VIRTUAL_ENV", sys.prefix)
     monkeypatch.chdir(tmp_path)
     command = vllm_server.server_command(config, "fixture", 4)
@@ -58,7 +51,7 @@ def test_server_uses_its_own_virtual_environment(
 
 
 def test_speculative_draft_is_part_of_the_declared_server() -> None:
-    config = campaign.TREATMENTS["budget"].load()
+    config = InferenceConfig.model_validate_json(BUDGET_INFERENCE.read_text())
     plain = vllm_server.server_command(config, "fixture", 32)
     drafted = vllm_server.server_command(config, "fixture", 32, 1)
     assert "--speculative-config" not in plain
@@ -323,7 +316,7 @@ def test_budget_forcing_closes_unfinished_reasoning(
 
 
 def test_thinking_budget_requires_thinking_and_answer_room() -> None:
-    fields = json.loads(campaign.original.INFERENCE.read_text())
+    fields = json.loads(INFERENCE.read_text())
     with pytest.raises(ValueError, match="thinking budget"):
         InferenceConfig.model_validate({**fields, "thinking_budget": 2048})
     with pytest.raises(ValueError, match="thinking budget"):
@@ -332,48 +325,8 @@ def test_thinking_budget_requires_thinking_and_answer_room() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("arm", "output_tokens", "context_tokens"),
-    [
-        ("sampled", 16_384, 65_536),
-        ("budget", 4096, 16_384),
-        ("budget-64k", 4096, 65_536),
-        ("nothink", 512, 16_384),
-    ],
-)
-def test_declared_arm_reaches_the_frozen_schedule(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    arm: str,
-    output_tokens: int,
-    context_tokens: int,
-) -> None:
-    # Replace only native artifact preparation; no job is submitted or rented.
-    def native_job(native_artifact: str, native_source: str) -> Job:
-        return Job(command="fixture", max_hours=11)
-
-    monkeypatch.setattr(campaign.original, "training_jobs", native_job)
-    job = campaign.training_jobs("unused", "unused", arm=arm, games=1).plain()
-    assert job.config is not None
-    config = campaign.Campaign.model_validate_json(job.config)
-    games = campaign._prepare_schedule(config, tmp_path)
-    assert len(games) == 1
-    effective = InferenceConfig.model_validate_json(
-        games[0].config.inference.read_text()
-    )
-    assert (effective.max_new_tokens, effective.context_tokens) == (
-        output_tokens,
-        context_tokens,
-    )
-    source = InferenceConfig.model_validate_json(config.inference.read_text())
-    # The larger context changes no other part of the treatment.
-    assert effective.model_dump(exclude={"context_tokens"}) == source.model_dump(
-        exclude={"context_tokens"}
-    )
-
-
 def test_sampled_decoding_requires_its_settings() -> None:
-    fields = json.loads(campaign.original.INFERENCE.read_text())
+    fields = json.loads(INFERENCE.read_text())
     with pytest.raises(ValueError, match="sampling settings"):
         InferenceConfig.model_validate({**fields, "decoding": "sampled"})
     with pytest.raises(ValueError, match="sampling settings"):
@@ -519,281 +472,6 @@ def test_server_admits_its_derived_route_and_reaps_on_mismatch(
     assert server.log.closed and waited and terminated
 
 
-def test_long_reasoning_budget_preserves_deals_and_reaches_server(
-    tmp_path: Path,
-    runtime: vllm_runtime.VLLMRuntime,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config = campaign.Campaign()
-    games = campaign._prepare_schedule(config, tmp_path)
-    original = campaign.original.schedule(config)
-    assert len(games) == len(original) == 100
-    for game, expected in zip(games, original, strict=True):
-        assert game.model_dump(
-            exclude={"config": {"inference"}}
-        ) == expected.model_dump(exclude={"config": {"inference"}})
-        assert game.config.max_seconds == config.seconds == 36000
-    effective = InferenceConfig.model_validate_json(
-        (tmp_path / "inference.json").read_text()
-    )
-    command = vllm_server.server_command(effective, "fixture", config.concurrency)
-    assert command[command.index("--max-model-len") + 1] == "65536"
-    assert command[command.index("--max-num-seqs") + 1] == "8"
-    monkeypatch.setattr(
-        vllm_runtime, "urlopen", _serving(runtime.identity.behavior_version(effective))
-    )
-    runtime = vllm_runtime.VLLMRuntime(
-        effective, identity_path=tmp_path / "identity.json"
-    )
-
-    def request(req: Request, timeout: float) -> Reply:
-        body = json.loads(req.data or b"{}")
-        assert body["max_tokens"] == 16384
-        assert 1700 < timeout <= 1800
-        return _completion(body, [4, 2, 3, 1])
-
-    monkeypatch.setattr(vllm_runtime, "urlopen", request)
-    prompt = runtime.encode((Message(role="user", content="A0"),))
-    assert (
-        runtime.generate(
-            prompt, time.monotonic() + effective.deadline_seconds
-        ).finish_reason
-        == "eos"
-    )
-
-
-@pytest.fixture
-def campaign_identity(tmp_path: Path) -> RuntimeIdentity:
-    identity = RuntimeIdentity(
-        runtime="vllm",
-        runtime_version="fixture",
-        torch_version="fixture",
-        python_version="fixture",
-        device_name="fixture",
-        chat_template="fixture",
-        generation_config={},
-    )
-    (tmp_path / "vllm-identity.json").write_text(identity.model_dump_json())
-    return identity
-
-
-def _use_inline_supervisors(monkeypatch: pytest.MonkeyPatch, concurrency: int) -> None:
-    """Settle submitted game fixtures immediately without launching game children."""
-
-    class Pool:
-        def __init__(self, **kwargs: object) -> None:
-            assert kwargs["max_workers"] == concurrency
-
-        def __enter__(self) -> "Pool":
-            return self
-
-        def __exit__(self, *args: object) -> None:
-            pass
-
-        def submit(
-            self,
-            fn: Callable[
-                [campaign.original.ScheduledGame, Path, float],
-                campaign.original.GameResult,
-            ],
-            game: campaign.original.ScheduledGame,
-            out: Path,
-            deadline: float,
-        ) -> Future[campaign.original.GameResult]:
-            future: Future[campaign.original.GameResult] = Future()
-            future.set_result(fn(game, out, deadline))
-            return future
-
-    monkeypatch.setattr(campaign, "ThreadPoolExecutor", Pool)
-
-
-@pytest.mark.parametrize("concurrency", [4, 8, 16])
-def test_failed_batch_retains_every_admitted_game_and_stops_queue(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    concurrency: int,
-    campaign_identity: RuntimeIdentity,
-) -> None:
-    config = campaign.Campaign(concurrency=concurrency)
-    games = campaign._prepare_schedule(config, tmp_path)
-    # Once frozen, execution must not depend on the source inference defaults.
-    monkeypatch.setattr(campaign.original, "INFERENCE", tmp_path / "absent.json")
-    submitted: list[int] = []
-
-    def play(
-        game: campaign.original.ScheduledGame, out: Path, deadline: float
-    ) -> campaign.original.GameResult:
-        assert game == games[len(submitted)]
-        submitted.append(game.index)
-        admission = json.loads((out / "campaign.json").read_text())
-        assert admission["attempted"] == len(submitted)
-        assert game.index in admission["pending_games"]
-        assert admission["session_closed"] is False
-        return campaign.original.GameResult(
-            game=game,
-            summary=GameSummary(
-                mode="fixture", completed=False, failure="injected deadline"
-            ),
-        )
-
-    _use_inline_supervisors(monkeypatch, concurrency)
-    monkeypatch.setattr(campaign, "play_game", play)
-    campaign.worker(config, tmp_path)
-    receipt = json.loads((tmp_path / "campaign.json").read_text())
-    assert len(submitted) == len(set(submitted)) == concurrency
-    assert receipt["planned"] == 100
-    assert receipt["attempted"] == receipt["settled"] == concurrency
-    assert receipt["completed"] == 0 and receipt["session_closed"] is True
-    assert len(json.loads((tmp_path / "results.json").read_text())) == concurrency
-    assert json.loads((tmp_path / "games.json").read_text())["mode"] == "concurrent"
-    effective = InferenceConfig.model_validate_json(
-        (tmp_path / "inference.json").read_text()
-    )
-    assert effective.deadline_seconds == 1800 and effective.max_new_tokens == 16384
-    assert effective.context_tokens == 65536
-    assert effective.enable_thinking is True
-
-
-@pytest.mark.parametrize(
-    ("changed", "reason"),
-    [
-        ({"model_behavior_version": "other"}, "model behavior other is not cohort"),
-        ({"opponent_sha256": "0" * 64}, "is not frozen"),
-        ({"model_behavior_version": None}, "missing a frozen player identity"),
-        ({"opponent_sha256": None}, "missing a frozen player identity"),
-    ],
-)
-@pytest.mark.parametrize("changed_game", [0, 1])
-def test_changed_player_identity_stops_cohort_and_is_retained(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    campaign_identity: RuntimeIdentity,
-    changed: dict[str, str | None],
-    reason: str,
-    changed_game: int,
-) -> None:
-    submitted: list[int] = []
-    config = campaign.Campaign(concurrency=1)
-    campaign._prepare_schedule(config, tmp_path)
-    inference = InferenceConfig.model_validate_json(
-        (tmp_path / "inference.json").read_text()
-    )
-    expected_version = campaign_identity.behavior_version(inference)
-
-    def play(
-        game: campaign.original.ScheduledGame, out: Path, deadline: float
-    ) -> campaign.original.GameResult:
-        admission = json.loads((out / "campaign.json").read_text())
-        assert admission["model_behavior_version"] == expected_version
-        summary = GameSummary(
-            mode="fixture",
-            completed=True,
-            model_behavior_version=expected_version,
-            opponent_sha256=campaign.original.CHECKPOINT_SHA256,
-        )
-        if len(submitted) == changed_game:
-            summary = summary.model_copy(update=changed)
-        submitted.append(game.index)
-        return campaign.original.GameResult(game=game, summary=summary)
-
-    _use_inline_supervisors(monkeypatch, config.concurrency)
-    monkeypatch.setattr(campaign, "play_game", play)
-    campaign.worker(config, tmp_path)
-    receipt = json.loads((tmp_path / "campaign.json").read_text())
-    expected_games = changed_game + 1
-    assert (
-        receipt["attempted"]
-        == receipt["settled"]
-        == receipt["completed"]
-        == expected_games
-    )
-    assert receipt["model_behavior_version"] == expected_version
-    assert reason in receipt["stop_reason"]
-    results = json.loads((tmp_path / "results.json").read_text())
-    assert len(results) == expected_games
-    for field, value in changed.items():
-        assert results[-1]["summary"][field] == value
-
-
-def test_expired_campaign_retains_all_unattempted_games(
-    tmp_path: Path, campaign_identity: RuntimeIdentity
-) -> None:
-    config = campaign.Campaign(seconds=1)
-    campaign._prepare_schedule(config, tmp_path)
-    campaign.worker(config, tmp_path)
-    receipt = json.loads((tmp_path / "campaign.json").read_text())
-    assert receipt["attempted"] == receipt["completed"] == 0
-    assert receipt["planned"] == 100
-    assert receipt["session_closed"] is True
-    assert receipt["stop_reason"] == "campaign time reserve reached"
-
-
-@pytest.mark.parametrize("attempt_usd", ["0", "-1", "9.41", "NaN", "Infinity"])
-def test_attempt_beyond_remaining_budget_is_refused_before_launch(
-    tmp_path: Path, attempt_usd: str
-) -> None:
-    # Missing provenance files prove refusal precedes any launch preparation.
-    with pytest.raises(ValueError, match="attempt_usd"):
-        campaign.training_jobs(
-            str(tmp_path / "absent.json"), str(tmp_path / "absent.json"), attempt_usd
-        )
-
-
-def test_small_nothink_pilot_retains_its_deadline_and_rental_bound(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def native_job(native_artifact: str, native_source: str) -> Job:
-        return Job(command="fixture", max_hours=11)
-
-    monkeypatch.setattr(campaign.original, "training_jobs", native_job)
-    job = campaign.training_jobs(
-        "unused",
-        "unused",
-        attempt_usd="0.80",
-        arm="nothink",
-        games=1,
-        concurrency=1,
-        decision_seconds=300,
-    ).plain()
-    assert job.config is not None
-    config = campaign.Campaign.model_validate_json(job.config)
-    games = campaign._prepare_schedule(config, tmp_path)
-    effective = InferenceConfig.model_validate_json(
-        games[0].config.inference.read_text()
-    )
-    assert len(games) == 1
-    assert effective.enable_thinking is False
-    assert effective.deadline_seconds == 300
-    assert effective.max_new_tokens == 512
-    assert config.seconds == pytest.approx(1200)
-    assert config.seconds > effective.deadline_seconds + 120
-    # Include machine acquisition as well as the job's setup/delivery reserve.
-    assert (job.max_hours + 0.25) * 0.60 == pytest.approx(0.80)
-    assert job.max_usd == Decimal("0.80")
-
-
-@pytest.mark.parametrize("attempt_usd", ["0.60", "0.80", "0.92"])
-def test_rental_without_a_full_decision_window_is_refused(attempt_usd: str) -> None:
-    with pytest.raises(ValueError, match="complete decision admission"):
-        campaign.training_jobs(
-            "absent", "absent", attempt_usd=attempt_usd, arm="nothink"
-        )
-
-
-def test_collection_waits_for_game_owner_to_finish(tmp_path: Path) -> None:
-    out = tmp_path / "output"
-    out.mkdir()
-    record = tmp_path / "game-records" / "game-096"
-    record.mkdir(parents=True)
-    (record / "summary.json").write_text("{}")
-    campaign.original.collect(out, settled_games=set())
-    assert not list(out.iterdir())
-    (record / "actor-startup.json").write_text('{"seconds": 2}')
-    campaign.original.collect(out, settled_games={record.name})
-    with tarfile.open(out / "game-096.tar.gz") as archive:
-        assert "game-096/actor-startup.json" in archive.getnames()
-
-
 @pytest.mark.parametrize("server", [False, True])
 def test_offline_snapshot_matches_prepared_files(
     tmp_path: Path,
@@ -850,129 +528,3 @@ def test_offline_snapshot_matches_prepared_files(
     (snapshot / ("model.safetensors" if server else "tokenizer.json")).unlink()
     with pytest.raises(IncompleteSnapshotError):
         construct()
-
-
-@pytest.mark.parametrize(
-    "mode", ["complete", "admission", "exit", "deadline", "mismatch"]
-)
-def test_game_child_lifecycle(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str
-) -> None:
-    children: list[ChildProcess] = []
-
-    def child(target: str, arguments: tuple[object, ...]) -> ChildProcess:
-        process = ChildProcess(
-            "tests.fixtures.llm_process:game_child", (mode, *arguments)
-        )
-        children.append(process)
-        return process
-
-    monkeypatch.setattr(campaign, "ChildProcess", child)
-    game = campaign.original.schedule(campaign.Campaign())[0]
-    deadline = time.time() + (2 if mode == "deadline" else 10)
-    if mode == "complete":
-        result = campaign.play_game(game, tmp_path, deadline)
-        assert result.game == game and result.summary.completed
-    else:
-        error = (
-            TimeoutError
-            if mode == "deadline"
-            else EOFError
-            if mode == "exit"
-            else RuntimeError
-        )
-        with pytest.raises(error):
-            campaign.play_game(game, tmp_path, deadline)
-    assert len(children) == 1
-    assert children[0].exitcode is not None
-    assert children[0].connection.closed
-    assert not children[0].is_alive()
-
-
-@pytest.mark.parametrize("failure_at", ["submission", "child"])
-def test_game_launch_failure_settles_admission(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    campaign_identity: RuntimeIdentity,
-    failure_at: str,
-) -> None:
-    def fail(*args: object, **kwargs: object) -> Never:
-        admission = json.loads((tmp_path / "campaign.json").read_text())
-        assert admission["attempted"] == 1
-        assert admission["pending_games"] == [games[0].index]
-        raise OSError("injected launch failure")
-
-    config = campaign.Campaign(concurrency=1, games=2)
-    games = campaign._prepare_schedule(config, tmp_path)
-    if failure_at == "submission":
-        monkeypatch.setattr(campaign.ThreadPoolExecutor, "submit", fail)
-    else:
-        monkeypatch.setattr(campaign, "ChildProcess", fail)
-    campaign.worker(config, tmp_path)
-    receipt = json.loads((tmp_path / "campaign.json").read_text())
-    assert receipt["attempted"] == receipt["settled"] == receipt["failed"] == 1
-    assert receipt["unattempted"] == 1
-    assert receipt["pending_games"] == []
-    assert receipt["session_closed"]
-    assert "injected launch failure" in receipt["stop_reason"]
-
-
-def test_real_game_child_retains_failed_preparation(tmp_path: Path) -> None:
-    out = tmp_path / "output"
-    out.mkdir()
-    game = campaign.original.schedule(campaign.Campaign())[0]
-    game = game.model_copy(
-        update={
-            "config": game.config.model_copy(
-                update={"inference": tmp_path / "missing.json"}
-            )
-        }
-    )
-    result = campaign.play_game(game, out, time.time() + 20)
-    assert result.game == game
-    assert not result.summary.completed
-    assert "FileNotFoundError" in result.summary.failure
-    retained = json.loads(
-        (
-            tmp_path / "game-records" / f"game-{game.index:03d}" / "summary.json"
-        ).read_text()
-    )
-    assert retained == result.summary.model_dump(mode="json")
-
-
-def test_campaign_interruption_accounts_for_every_admission(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        vllm_server, "VLLMServer", lambda *args: nullcontext(SimpleNamespace(seconds=0))
-    )
-
-    def interrupt(config: campaign.Campaign, *, worker_module: str) -> None:
-        path = tmp_path / "campaign.json"
-        receipt = json.loads(path.read_text())
-        assert receipt["unattempted"] == receipt["planned"] == 100
-        receipt.update(
-            attempted=2, settled=1, failed=1, pending_games=[11], unattempted=98
-        )
-        path.write_text(json.dumps(receipt))
-        raise RuntimeError("campaign worker interrupted; partial evidence retained")
-
-    monkeypatch.setattr(campaign.original, "supervise", interrupt)
-    with pytest.raises(RuntimeError, match="worker interrupted"):
-        campaign.run(campaign.Campaign())
-    receipt = json.loads((tmp_path / "campaign.json").read_text())
-    assert receipt["session_closed"]
-    assert receipt["pending_games"] == []
-    assert receipt["canceled_games"] == [11]
-    assert receipt["settled"] == receipt["attempted"] == 2
-    assert receipt["completed"] == 0
-    assert receipt["failed"] == receipt["canceled"] == 1
-    assert receipt["unattempted"] == 98
-    assert (
-        receipt["planned"]
-        == receipt["completed"]
-        + receipt["failed"]
-        + receipt["canceled"]
-        + receipt["unattempted"]
-    )

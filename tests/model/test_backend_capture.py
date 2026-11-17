@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 from manabot.backends import resolve
@@ -12,59 +13,46 @@ from manabot.backends.torch.capture import capture
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import from_torch_state
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning
+from manabot.training.loops.self_play import CLOCKS, SelfPlay
 import managym
+from tests.fixtures.training_records import recording
 
 
-def test_capture_replays_both_seat_update(tmp_path: Path) -> None:
-    regime = TrainingRegime(
-        id="capture-test",
-        world=managym.WORLD_VERSION,
+def test_capture_replays_both_seat_update(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = SelfPlay(
         match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
         # The framework container implements input v9 only.
         observation=ObservationConfig(policy_input_version=9),
-        agent=ModelConfig(
+        model=ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,
             value_kind="scalar",
             value_aggregation="masked_mean",
             world=managym.WORLD_SETUP,
         ),
-        stages=[
-            TrainSelfPlay(
-                id="fit",
-                operation="train_self_play",
-                updates=1,
-                streams=2,
-                transitions=4,
-                learning_seats="both",
-                execution=Execution(
-                    device="cpu",
-                    threads=1,
-                    bucketed_shapes=True,
-                    memory_bytes=2 * 2**30,
-                    wall_seconds=120,
-                ),
-                learning=DampedPolicyLearning(
-                    gradient="damped_policy",
-                    min_advantage=0,
-                    advantage_quantile=0,
-                    max_grad_norm=0.01,
-                ),
-            )
-        ],
-        wall_seconds=120,
+        streams=2,
+        transitions=4,
+        bucketed_shapes=True,
+        learning=DampedPolicyLearning(
+            gradient="damped_policy",
+            min_advantage=0,
+            advantage_quantile=0,
+            max_grad_norm=0.01,
+        ),
     )
     out = tmp_path / "capture"
-    capture(out, regime, 197, experiment="capture-test")
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "run"))
+    monkeypatch.setenv("ETUDE_SEED", "197")
+    with recording(
+        experiment="capture-test", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        capture(out, settings, run)
     meta = json.loads((out / "capture.json").read_text())
     assert meta["calls"] > 0 and meta["minibatches"] > 1
     assert meta["engine"] >= 0
