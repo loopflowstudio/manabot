@@ -35,6 +35,10 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true }).selectOption('search');
     await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search worlds', exact: true })).toHaveValue('1');
     await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search depth', exact: true })).toHaveValue('1');
+    // A fresh deal can give the non-search seat the first decision; this seed
+    // gives it to seat 1's search, whose evidence the next lines read.
+    await page.getByLabel('Deal mode', { exact: true }).selectOption('repeat');
+    await page.getByLabel('Seed', { exact: true }).fill('0');
     await page.getByRole('button', { name: 'Start watching' }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
