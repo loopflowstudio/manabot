@@ -41854,6 +41854,26 @@
    "sha256": "bd99fddeb3b5e61358165e0d3b6f3d7b0a2ee806649e0973d55ad00496b34e7b",
    "bytes": 22854
   },
+  "experiments/data/opponent-memory/20261117-cuda-additive/additive-attempt.json": {
+   "sha256": "4eacd01945dcbf98069448ed9c56dd614612c58c9d800cae66ca647f9a96c24c",
+   "bytes": 28823
+  },
+  "experiments/data/opponent-memory/20261117-cuda-additive/additive-launcher-status.json": {
+   "sha256": "dc81d1dce68efb556e760c1cdbe2f421f71579c70cc7caacd3546350d99dd572",
+   "bytes": 510
+  },
+  "experiments/data/opponent-memory/20261117-cuda-additive/additive-members.json": {
+   "sha256": "c5e100c97be522105f814b531c8c25f34774625a122742a1b3a1b73c67947e77",
+   "bytes": 26246
+  },
+  "experiments/data/opponent-memory/20261117-cuda-additive/additive-output.tar.gz": {
+   "sha256": "ededf0b02018e6293478a113016bdad1e366bf3fe6a173683973c4f4d27324b9",
+   "bytes": 75852070
+  },
+  "experiments/data/opponent-memory/20261117-cuda-additive/additive-record.json": {
+   "sha256": "4e2a3f9b92ced1c42f4ddfca5e6edc2efe5218b643cdac8f9444536318b02a43",
+   "bytes": 202070
+  },
   "experiments/data/opponent-memory/20261117-cuda-fold-2/fetch.py": {
    "sha256": "12f6354ab71717f1fdf5774cbf85dd02f020a15f5fe5035be3798fbad812558b",
    "bytes": 2496

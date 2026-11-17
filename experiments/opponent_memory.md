@@ -2228,3 +2228,29 @@ and per-member SHA256/size manifest. Archive members verified locally and
 published. No paid launch, pilot, PR, job rename or Task completion. Matched
 training and paired strength evaluation remain unrun; this new arithmetic has
 no CUDA measurement yet. All three bounded parts are complete.
+
+### Additive-join CUDA calibration — 2026-11-17
+
+Run `opponent_memory/cuda-calibration-additive@39100`, source `cdc0368534`, A40 `mtg252-a40-985cdbcb45ff`. Five sequential fresh workers, unchanged refs256 workload, two updates each; raw and EMA reload admitted. Launcher estimate USD0.3054048066777777718369988078; rental ended. Exploratory cost evidence; matched training and paired strength evaluation remain unrun.
+
+| Worker | Decisions | Stage s | Collection s | Learning s | Time / incumbent | Host tree peak GB | CUDA peak GB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0: control | 104997 | 340.294 | 211.050 | 126.770 | 1.090 | 15.862 | 0.181 |
+| 1: incumbent | 106081 | 299.910 | 179.154 | 118.673 | 0.961 | 15.515 | 0.177 |
+| 2: control | 104497 | 327.456 | 205.253 | 119.842 | 1.049 | 15.889 | 0.182 |
+| 3: gru-k1 | 104769 | 394.889 | 261.324 | 130.985 | 1.265 | 16.356 | 0.243 |
+| 4: incumbent | 106698 | 324.253 | 195.985 | 126.080 | 1.039 | 15.570 | 0.177 |
+
+Incumbent median **312.082 s**; its two workers differ by **8.1%**, so ratios carry about ±4% reference spread. Excluding the producer control, control is **1.049×**, GRU **1.265×** incumbent time (previous fold-2: 1.125× / 1.443×). These are stage-time comparisons with different completed-game decision totals, not matched learning or strength evidence.
+
+| Phase seconds | Incumbent 1 | Control branch | GRU-K1 | Incumbent 2 |
+|---|---:|---:|---:|---:|
+| Retention | 3.926 | 20.755 | 20.628 | 4.342 |
+| Preparation | 59.281 | 69.329 | 111.950 | 64.284 |
+| Inference/action selection | 73.264 | 73.129 | 86.655 | 81.427 |
+| Learner forward/loss | 107.597 | 108.328 | 119.297 | 114.119 |
+| Native observation encoding | 1.546 | 2.816 | 2.703 | 1.690 |
+
+The additive join removes most of the earlier learner/inference excess. GRU preparation exceeds control by 42.621 s over 4,025 calls (10.589 ms/call); both log arms retain about 17 s more than incumbents. Memory capture is nested within retention, and backward/optimizer tracks are nested within forward/loss; do not sum nested tracks. No new paid launch or pilot follows in this slice.
+
+All **134 outputs / 182,750,320 bytes** fetched through public SDK digest checks and archive members verified by size/SHA256. Evidence: `experiments/data/opponent-memory/20261117-cuda-additive`, including output archive, member manifest and launcher/attempt/run records. Frozen output bytes and source identities remain unchanged.
