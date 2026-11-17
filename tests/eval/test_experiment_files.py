@@ -17,7 +17,7 @@ from etude.experiment import Checkpoint, TrainingRun
 from etude.jobs import Checkpoints, ExperimentState, evaluation_spec
 from etude.page import build, experiment_files
 from etude.records import ArtifactRef
-from etude.report import Counters, Curve, Matches, Series
+from etude.report import Counters, Curve, Matches, Ranking, Series
 import pytest
 
 from experiments import elemental, opponent_memory, tla_frontier
@@ -275,6 +275,8 @@ def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> Non
         stage = spec.regime.stages[0]
         assert isinstance(stage, TrainSelfPlay)
         assert stage.target_learner_transitions == 3_300_000
+        assert stage.updates == 90
+        assert stage.execution.wall_seconds == run.job.max_hours * 3600 - 1200
         assert stage.learning.decision_schedule.transitions == 3_300_000
         assert stage.execution.collection_rows == 128
         assert spec.regime.agent.decision_memory == "none"
@@ -307,6 +309,19 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     curves = [
         panel for panel in opponent_memory.report().evals if isinstance(panel, Curve)
     ]
+    # Each seed must remain visible; Etude unions a panel's selections by job.
+    for seed, curve in zip(opponent_memory.SEEDS, curves[:3], strict=True):
+        assert str(seed) in curve.title
+        assert isinstance(curve.matches, tuple)
+        assert {selection.seating for selection in curve.matches} == {
+            opponent_memory.seating_name(seed, disclosure, "control", point)
+            for disclosure in opponent_memory.DISCLOSURES
+            for point in (*opponent_memory.MILESTONES, "final")
+        }
+    ranking = next(
+        panel for panel in opponent_memory.report().evals if isinstance(panel, Ranking)
+    )
+    assert ranking.matches == Matches(tag="control")
     drawn = {
         selection.seating
         for panel in curves
@@ -319,6 +334,7 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     games = sum(len(seating.configs) * seating.games for seating in seatings)
     assert games == 9600
     for seating in seatings:
+        assert seating.fixed and seating.seeds == "one"
         if "control-final" in seating.name:
             assert [player.checkpoint.at["updates"] for player in seating.players] == [
                 100,

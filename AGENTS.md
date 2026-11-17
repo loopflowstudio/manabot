@@ -105,6 +105,9 @@ checkpoints or experiment evidence.
 
 - Etude inference source identities hash tracked files. Stage new source files
   before exercising experiment discovery that constructs `Inference(source=...)`.
+- Etude report curves average runs within a job. For a per-seed readout,
+  select that seed's fixed checkpoint seatings in its own panel and declare
+  `Seating(seeds="one")`; otherwise other seeds can make the curve a gap.
 
 - Most runs are exploratory: calibration, throughput, capacity, pilots and
   anything run to make later work possible. They need no prediction, protocol

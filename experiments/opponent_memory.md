@@ -59,6 +59,10 @@ A blanked player is the same checkpoint with its four memory tables zeroed
 before every decision; the board, legal actions and native game are untouched.
 It measures whether the trained policy uses the log.
 
+The report gives each training seed its own head-to-head panel, split by
+decklist disclosure. The play/draw ranking counts head-to-head games against
+control only.
+
 **What this can resolve.** Treating games as independent, which is slightly
 optimistic because a pairing's legs share a deal, the final head-to-head is
 ±1.4 points at 95% pooled, ±2.0 per disclosure and ±3.5 per seed and disclosure;
@@ -101,6 +105,8 @@ per trunk and USD3.30 per branch (USD27 total training). Read the retained
 commitment before launching; these ceilings are not additional allowances.
 
 Step 2 refuses a seed whose trunk is missing or unfinished, naming the seed.
+If a trunk was retried, it uses the sole completed attempt's EMA export;
+zero or several completed attempt records refuse before branching.
 Step 3 plays nothing while no branch has a checkpoint, and can be repeated as
 milestones arrive: an evaluation pass that reaches its cap keeps its finished
 matches and the next pass plays the rest.

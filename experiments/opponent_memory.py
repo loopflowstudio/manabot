@@ -30,6 +30,7 @@ from experiments.learning_signal import Design, Pairing
 from manabot.experiment.job import PretrainedInitialization, TrainingJob, machine_setup
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup
+from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
 import managym
 from managym.disclosure import DecklistDisclosure
@@ -55,8 +56,18 @@ DISCLOSURES: tuple[DecklistDisclosure, ...] = ("open", "closed")
 MAX_USD = 50
 
 
-TRUNK_DECISIONS = 3_300_000
-BRANCH_DECISIONS = 4_400_000
+@dataclass(frozen=True)
+class PilotStage:
+    """A training stage's learner horizon and whole-job resource limits."""
+
+    decisions: int
+    updates: int
+    max_hours: float
+    max_usd: Decimal
+
+
+TRUNK = PilotStage(3_300_000, 90, 3.5, Decimal("2.40"))
+BRANCH = PilotStage(4_400_000, 120, 5.0, Decimal("3.30"))
 MILESTONES = (20, 40, 60)
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
@@ -82,41 +93,47 @@ def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
             parents[seed] = _published_trunk(storage, run.name, seed)
         return branch_jobs(
             revision,
-            regime=pilot_recipe(BRANCH_DECISIONS),
+            regime=pilot_recipe(BRANCH),
             trunks=parents,
-            max_hours=5.0,
-            max_usd=Decimal("3.30"),
+            max_hours=BRANCH.max_hours,
+            max_usd=BRANCH.max_usd,
+            milestones=MILESTONES,
         )
-    recipe = pilot_recipe(TRUNK_DECISIONS)
+    recipe = pilot_recipe(TRUNK)
     recipe.id = "decision-memory-trunk"
     return (
         TrainingJob(regime=recipe, experiment=EXPERIMENT)
         .job(
             repo=ROOT,
             revision=revision,
-            max_hours=3.5,
-            max_usd=Decimal("2.40"),
+            max_hours=TRUNK.max_hours,
+            max_usd=TRUNK.max_usd,
         )
         .runs(*SEEDS)
     )
 
 
 def _published_trunk(storage: Storage, run: str, seed: int) -> PretrainedInitialization:
-    """Resolve one attempt receipt; ordinary pretrained admission checks its bytes."""
+    """Resolve the sole completed attempt; failed retries cannot supply weights."""
     folder = run_prefix(run)
     records = [
         key
         for key in storage.keys(folder)
         if key.startswith(f"{folder}attempts/") and key.endswith("/training/run.json")
     ]
-    if len(records) != 1:
-        raise ValueError(
-            f"seed {seed}: trunk has {len(records)} attempt records, expected one"
-        )
     try:
+        completed = [
+            key
+            for key in records
+            if TrainingRun.model_validate_json(storage.get(key)).status == "completed"
+        ]
+        if len(completed) != 1:
+            raise ValueError(
+                f"trunk has {len(completed)} completed attempt records, expected one"
+            )
         trunk = PretrainedInitialization.from_storage(
             storage,
-            records[0],
+            completed[0],
             source_stage="self-play",
             weights="ema",
         )
@@ -134,6 +151,7 @@ def branch_jobs(
     trunks: Mapping[int, PretrainedInitialization],
     max_hours: float,
     max_usd: Decimal,
+    milestones: tuple[int, ...],
 ) -> list[RunRequest]:
     """Freeze control/GRU branches from published trunk inputs without launching.
 
@@ -159,11 +177,11 @@ def branch_jobs(
                 configuration.agent.decision_memory_gate_scale = 2.0
             job = TrainingJob(
                 regime=configuration,
-                experiment=Path(__file__).stem,
+                experiment=EXPERIMENT,
                 pretrained=trunk,
-                milestones=MILESTONES if regime.stages[0].updates > 60 else (),
+                milestones=milestones,
             ).job(
-                repo=Path(__file__).resolve().parents[1],
+                repo=ROOT,
                 revision=revision,
                 max_hours=max_hours,
                 max_usd=max_usd,
@@ -265,6 +283,9 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
                         configs=conditions,
                         games=design.legs,
                         tags=(tag,),
+                        # Fixed checkpoint pair: report this seed independently
+                        # of the other runs grouped under the same job.
+                        seeds="one",
                     )
                 )
     return tuple(found)
@@ -342,15 +363,19 @@ def report() -> Report:
         score=Score(table="plays", value="score", reference=0.5),
         clock="learner_transitions",
         evals=(
-            Curve(
-                title="Head-to-head against control",
-                matches=tuple(
-                    Matches(seating=seating_name(seed, disclosure, "control", point))
-                    for seed in SEEDS
-                    for disclosure in DISCLOSURES
-                    for point in (*MILESTONES, "final")
-                ),
-                split="decklists",
+            *(
+                Curve(
+                    title=f"Head-to-head against control — seed {seed}",
+                    matches=tuple(
+                        Matches(
+                            seating=seating_name(seed, disclosure, "control", point)
+                        )
+                        for disclosure in DISCLOSURES
+                        for point in (*MILESTONES, "final")
+                    ),
+                    split="decklists",
+                )
+                for seed in SEEDS
             ),
             Curve(
                 title="Intact memory against blanked memory",
@@ -367,15 +392,19 @@ def report() -> Report:
                 columns="deck",
                 matches=Matches(tag="control"),
             ),
-            Ranking(title="On the play or the draw", by="on_play"),
+            Ranking(
+                title="On the play or the draw",
+                by="on_play",
+                matches=Matches(tag="control"),
+            ),
         ),
         perf=PERF,
         ml=ML,
     )
 
 
-def pilot_recipe(decisions: int) -> TrainingRegime:
-    """Shared control recipe; the decision horizon sets its schedule and wall."""
+def pilot_recipe(limits: PilotStage) -> TrainingRegime:
+    """Shared control recipe, bounded by the stage's horizon and job wall."""
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.recipes.builders import sampled_self_play
     from manabot.training.decks import UniformDecks
@@ -386,10 +415,8 @@ def pilot_recipe(decisions: int) -> TrainingRegime:
     )
     import managym
 
-    if decisions not in {TRUNK_DECISIONS, BRANCH_DECISIONS}:
-        raise ValueError("pilot horizon must be the trunk or branch decision target")
-    trunk = decisions == TRUNK_DECISIONS
-    wall_seconds = (3.5 if trunk else 5.0) * 3600 - 1200
+    # Reserve twenty minutes of the job for setup and publishing artifacts.
+    wall_seconds = limits.max_hours * 3600 - 1200
     observation = ObservationConfig(
         max_decision_records=512,
         max_decision_reference_details=16384,
@@ -427,11 +454,13 @@ def pilot_recipe(decisions: int) -> TrainingRegime:
     )
     stage = recipe.stages[0]
     assert isinstance(stage, TrainSelfPlay)
-    stage.updates = 90 if trunk else 120
-    stage.target_learner_transitions = decisions
+    stage.updates = limits.updates
+    stage.target_learner_transitions = limits.decisions
     assert isinstance(stage.learning, DampedPolicyLearning)
     stage.learning.iteration_schedule = None
-    stage.learning.decision_schedule = LearnerDecisionSchedule(transitions=decisions)
+    stage.learning.decision_schedule = LearnerDecisionSchedule(
+        transitions=limits.decisions
+    )
     # Capacity overflow fails the run: no truncation and no abort-and-continue.
     stage.game_errors = None
     stage.execution.collection_rows = 128

@@ -324,6 +324,7 @@ def test_branch_builder_declares_shared_inputs_and_matching_seed_labels() -> Non
         trunks={39101: trunk},
         max_hours=1,
         max_usd=Decimal("0.25"),
+        milestones=(1,),
     )
     specs = [
         TrainingJob.model_validate_json(each.job.config or "") for each in requests
@@ -335,6 +336,7 @@ def test_branch_builder_declares_shared_inputs_and_matching_seed_labels() -> Non
     assert all(each.seed == trunk.source_seed for each in requests)
     assert all(spec.pretrained == trunk for spec in specs)
     assert all(spec.experiment == "opponent_memory" for spec in specs)
+    assert all(spec.milestones == (1,) for spec in specs)
     assert all(each.job.inputs == requests[0].job.inputs for each in requests)
     with pytest.raises(ValueError, match="match its producer seed"):
         branch_jobs(
@@ -343,6 +345,7 @@ def test_branch_builder_declares_shared_inputs_and_matching_seed_labels() -> Non
             trunks={39102: trunk},
             max_hours=1,
             max_usd=Decimal("0.25"),
+            milestones=(),
         )
 
 
@@ -375,16 +378,18 @@ def test_pilot_requires_completed_trunk_for_every_seed(
 
     monkeypatch.setattr(opponent_memory, "observe", observe)
     message = "seed 39101:.*" + (
-        "unfinished" if state == "running" else "expected one|attempt records"
+        "unfinished" if state == "running" else "expected one|completed attempt records"
     )
     with pytest.raises(ValueError, match=message):
         opponent_memory.training_jobs("HEAD", trunks=str(tmp_path))
 
 
+@pytest.mark.parametrize("retried", [False, True])
 def test_pilot_branches_from_three_published_ema_trunks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     memory_trunk: TrainingRun,
+    retried: bool,
 ) -> None:
 
     storage = DirectoryStorage(tmp_path / "pilot")
@@ -398,6 +403,14 @@ def test_pilot_branches_from_three_published_ema_trunks(
         storage.put(folder + "run.json", parent.model_dump_json().encode())
         artifact = Path(parent.stages[0].artifacts["ema"]["path"])
         storage.put_file(folder + artifact.name, artifact)
+        if retried:
+            failed = parent.model_copy(deep=True)
+            failed.status = "failed"
+            # No weight export exists for this failed attempt.
+            storage.put(
+                f"{run_prefix(name)}attempts/failed/training/run.json",
+                failed.model_dump_json().encode(),
+            )
         runs.append(
             TrainingRunSummary(
                 name=name,
@@ -426,6 +439,12 @@ def test_pilot_branches_from_three_published_ema_trunks(
         assert len(specs) == 2
         assert specs[0].pretrained == specs[1].pretrained
         assert specs[0].pretrained.source_seed == seed
+        assert specs[0].pretrained.source_run.key.endswith(
+            "attempts/one/training/run.json"
+        )
+        assert specs[0].pretrained.checkpoint.key.endswith(
+            f"attempts/one/training/{artifact.name}"
+        )
         for spec in specs:
             stage = spec.regime.stages[0]
             assert isinstance(stage, TrainSelfPlay)
@@ -435,3 +454,25 @@ def test_pilot_branches_from_three_published_ema_trunks(
     runs.pop()
     with pytest.raises(ValueError, match="seed 39103: expected one trunk"):
         opponent_memory.training_jobs("HEAD", trunks=str(storage.root))
+
+
+@pytest.mark.parametrize("completed", [0, 2])
+def test_pilot_refuses_no_or_multiple_completed_trunk_attempts(
+    tmp_path: Path,
+    memory_trunk: TrainingRun,
+    completed: int,
+) -> None:
+    storage = DirectoryStorage(tmp_path / "pilot")
+    parent = memory_trunk.model_copy(deep=True)
+    parent.seed = 39101
+    parent.stages[0].id = "self-play"
+    for attempt in range(2):
+        parent.status = "completed" if attempt < completed else "failed"
+        storage.put(
+            f"{run_prefix('trunk')}attempts/{attempt}/training/run.json",
+            parent.model_dump_json().encode(),
+        )
+    with pytest.raises(
+        ValueError, match=f"seed 39101: trunk has {completed} completed attempt records"
+    ):
+        opponent_memory._published_trunk(storage, "trunk", 39101)
