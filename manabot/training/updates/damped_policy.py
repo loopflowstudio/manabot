@@ -181,6 +181,7 @@ def update_damped_iteration(
     iteration: int,
     *,
     bootstrap_agent: Policy | None = None,
+    learner_transitions: int | None = None,
 ) -> UpdateDiagnostics:
     """One fresh epoch grouped by native stream count, with frozen targets.
 
@@ -210,7 +211,7 @@ def update_damped_iteration(
         advantage_abs_mean = float(targets.advantages.abs().mean())
     # Which rows the actor trains on, [T,E] on the host.
     actor_rows = to_host(targets.selected)
-    rate, tau = learning.rates(iteration)
+    rate, tau = learning.rates(iteration, learner_transitions=learner_transitions)
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
         "value_kind": learner.agent.config.value_kind,
@@ -222,13 +223,22 @@ def update_damped_iteration(
         "iteration": iteration,
         "learning_rate": rate,
         "tau": tau,
-        "schedule_clock": "collection-update-iteration",
+        "schedule_clock": (
+            "learner_transitions"
+            if learning.decision_schedule is not None
+            else "collection-update-iteration"
+        ),
         "reference": learning.reference,
         "advantage_abs_mean": advantage_abs_mean,
         "bootstrapped_tail_fraction": float(
             np.mean(~batch.dones[-1], dtype=np.float32)
         ),
     }
+    if learning.decision_schedule is not None:
+        assert learner_transitions is not None
+        diagnostics["schedule_progress"] = min(
+            1.0, learner_transitions / learning.decision_schedule.transitions
+        )
     with track("Selection and health diagnostics"):
         advantage_rows = to_host(targets.advantages)
         health = batch_health(

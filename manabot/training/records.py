@@ -237,6 +237,17 @@ class RunRecord[RegimeT](Strict):
                 break
         return total
 
+    def learner_transitions_through(self, stage_id: str | None = None) -> int:
+        """Committed learner decisions, including imported ancestor coordinates."""
+        total = 0
+        for stage in self.stages:
+            total += stage.learner_transitions
+            if stage.learning_state_origin is not None:
+                total += stage.learning_state_origin.learner_transitions
+            if stage.id == stage_id:
+                break
+        return total
+
     def optimizer_updates_through(self, stage_id: str | None = None) -> int | None:
         """Cumulative measured calls; any missing stage/ancestor remains unavailable."""
         total = 0

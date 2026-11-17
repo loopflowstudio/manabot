@@ -51,6 +51,7 @@ from typing import Literal
 
 from etude.jobs import TrainingJob as EtudeTrainingJob
 from etude.launch.records import Input, Job
+from etude.spec import Until
 from etude.storage import SAFE_NAME, S3Storage, Storage
 from pydantic import Field, model_validator
 
@@ -388,6 +389,17 @@ class TrainingJob(Strict):
         assert isinstance(stage, TrainSelfPlay)
         return stage.updates
 
+    @property
+    def target(self) -> Until:
+        """The scientific stopping clock; updates may remain a safety ceiling."""
+        stage = self.regime.stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        if stage.target_learner_transitions is not None:
+            return Until(
+                clock="learner_transitions", value=stage.target_learner_transitions
+            )
+        return Until(clock="updates", value=stage.updates)
+
     def job(
         self,
         *,
@@ -428,7 +440,7 @@ class TrainingJob(Strict):
             extras=("dev",) if spec.validate_numerics else (),
             repo=str(repo.resolve()),
             revision=revision,
-            until=f"updates={spec.updates}",
+            until=spec.target,
             max_hours=max_hours,
             max_usd=max_usd,
             max_attempts=1,
@@ -469,8 +481,8 @@ def _run_worker(spec: TrainingJob, *, backend: Backend) -> TrainingRun:
     if environment.get("ETUDE_CONTINUES"):
         raise ValueError("policy artifacts cannot resume collector/optimizer state")
     if (
-        environment.get("ETUDE_UNTIL_CLOCK") != "updates"
-        or float(environment["ETUDE_UNTIL_VALUE"]) != spec.updates
+        environment.get("ETUDE_UNTIL_CLOCK") != spec.target.clock
+        or float(environment["ETUDE_UNTIL_VALUE"]) != spec.target.value
     ):
         raise ValueError("launcher target differs from the frozen regime")
     # Bind the unpacked archive before anything reads source identity.
@@ -551,11 +563,20 @@ def _run_worker(spec: TrainingJob, *, backend: Backend) -> TrainingRun:
             training_game_logs=spec.training_game_logs,
             backend=backend,
         )
-    finished = run.status == "completed" and run.updates_through() == spec.updates
+    progress = (
+        run.learner_transitions_through()
+        if spec.target.clock == "learner_transitions"
+        else run.updates_through()
+    )
+    finished = run.status == "completed" and (
+        progress >= spec.target.value
+        if spec.target.clock == "learner_transitions"
+        else progress == spec.target.value
+    )
     # A wall-bounded stop exported the complete learner state short of target.
     paused = (
         run.status == "paused"
-        and run.updates_through() < spec.updates
+        and progress < spec.target.value
         and {"raw", "ema", "optimizer"} <= set(run.stages[0].artifacts)
     )
     if not (finished or paused):
@@ -569,7 +590,14 @@ def _run_worker(spec: TrainingJob, *, backend: Backend) -> TrainingRun:
     # reporting the update reached. Private scientific receipts and rejected
     # attempts remain under output even on failure.
     result = {
-        "clocks": {"updates": run.updates_through()},
+        "clocks": {
+            "updates": run.updates_through(),
+            **(
+                {"learner_transitions": progress}
+                if spec.target.clock == "learner_transitions"
+                else {}
+            ),
+        },
         "checkpoint": str(
             Path(artifact["path"]).resolve().relative_to(output.resolve())
         ),

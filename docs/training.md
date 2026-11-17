@@ -162,9 +162,24 @@ separately named evaluation output with its own clock. The selection rule is
 run wall time by the regime's `wall_seconds`; continuation stages do not reset
 it. `iteration_fraction` uses completed iterations and is required for step
 cadence, recovery and portable continuation; `RunControl()` selects it for new
-declarations. Damped-policy (Ataraxos) schedules use absolute iteration
-formulas regardless of this field. Evaluation is outside training and does not
-consume the training clock.
+declarations. Damped-policy (Ataraxos) schedules select their own iteration or
+learner-decision clock, independently of this field. Evaluation is outside
+training and does not consume the training clock.
+
+For comparisons at matched learner decisions, set
+`learning.decision_schedule=LearnerDecisionSchedule(transitions=N)` and
+`train_self_play.target_learner_transitions=N`. The learning rate and tau use
+the committed learner count before each update, so each complete batch uses one
+rate. Collection and learning finish that batch before stopping: its checkpoint
+retains the actual count, including overshoot. `updates` remains a safety ceiling;
+reaching it before the decision target fails rather than claiming completion.
+This schedule is exclusive with `iteration_schedule`. Omitted settings retain
+the existing iteration-based recipe and serialized identity.
+
+A pretrained learner starts this clock at zero; producer cost does not advance
+it. A learner-state continuation retains the parent's absolute decision count
+and the declared curve. Etude jobs expose the same `learner_transitions` target,
+so allocating a different wall allowance does not redefine the scientific horizon.
 
 ### Learning from both seats
 
@@ -323,8 +338,8 @@ under `experiment`, the declaring file's stem, so that file's `eval(state)` and
 `report()` find them ([experiment files](../experiments/README.md#etude-experiment-files)).
 An `Experiment` with `jobs` (`PlannedRun`) gives the same via
 `experiment.runs(experiment=..., repo=..., revision=...)`. On the machine,
-`manabot.experiment.job` trains to the absolute update target and records a
-checkpoint at every milestone so Etude evaluation can follow. Setup installs
+`manabot.experiment.job` trains to the declared absolute update or learner-decision
+target and records a checkpoint at every milestone so Etude evaluation can follow. Setup installs
 Rust 1.98.1 with rustup and runs the locked `uv sync`, which builds the native
 engine. `validate_numerics=True` runs the CUDA numerics gate
 (`manabot.experiment.numerics`) first and refuses to train if it fails.

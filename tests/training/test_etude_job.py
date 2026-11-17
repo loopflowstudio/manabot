@@ -73,8 +73,8 @@ def worker_environment(
         "ETUDE_OUTPUT_DIR": str(tmp_path / "output"),
         "ETUDE_STOP_FILE": str(tmp_path / "stop"),
         "ETUDE_SEED": "12250",
-        "ETUDE_UNTIL_CLOCK": "updates",
-        "ETUDE_UNTIL_VALUE": str(spec.updates),
+        "ETUDE_UNTIL_CLOCK": spec.target.clock,
+        "ETUDE_UNTIL_VALUE": str(spec.target.value),
         "ETUDE_DEADLINE": (
             datetime.now(timezone.utc)
             + timedelta(seconds=spec.regime.wall_seconds + 90)

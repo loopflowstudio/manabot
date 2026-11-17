@@ -260,8 +260,13 @@ this one experiment.
    blank that arm's records, including length/count/presence cues. Tag
    these `reliance`, separately from primary `control` games. This is a test of
    reliance under an intervention, not evidence that memory improves learning.
-   There are 14,400 primary games and 4,800 endpoint reliance games at three
-   milestones and three seeds. Quote/calibrate their cost before allocating;
+   One checkpoint pair per milestone gives 7,200 primary games and 2,400
+   endpoint reliance games at three milestones and three seeds. This corrects
+   arithmetic retained from the earlier four-memory-arm plan; the declared
+   deals and legs are unchanged. If complete-batch checkpoints bracket a
+   milestone, retain their actual counts and schedule the required checkpoint
+   pairs for explicit interpolation; price those additional games too.
+   Quote/calibrate their cost before allocating;
    retain partial coverage explicitly if the allowance cannot finish them.
    A heuristic curve is optional context only, after the primary comparisons.
 

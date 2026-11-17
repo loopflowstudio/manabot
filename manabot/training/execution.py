@@ -601,12 +601,12 @@ def _execute_regime(
                 s.collection_seconds + s.learning_seconds for s in run.stages
             )
             + sum(origin.active_training_seconds for origin in origins),
+            "learner_transitions": run.learner_transitions_through(),
             **{
                 name: sum(getattr(s, name) for s in run.stages)
                 + sum(getattr(origin, name) for origin in origins)
                 for name in (
                     "environment_decisions",
-                    "learner_transitions",
                     "optimizer_exposures",
                     "games",
                 )
@@ -634,6 +634,12 @@ def _execute_regime(
         point = coordinates()
         if isinstance(stage, TrainSelfPlay) and record.updates == stage.updates:
             return
+        if (
+            isinstance(stage, TrainSelfPlay)
+            and stage.target_learner_transitions is not None
+            and (run.learner_transitions_through() >= stage.target_learner_transitions)
+        ):
+            return  # Final exports own the endpoint, as for an update target.
         scheduled = point["updates"] in checkpoint_milestones and not any(
             c.updates == point["updates"] for c in run.monitoring_checkpoints
         )
@@ -1424,6 +1430,11 @@ def _execute_regime(
                 slowest_update = 0.0
                 timed = phase_seconds(record)
                 for update_index in range(first_update, stage.updates):
+                    if stage.target_learner_transitions is not None and (
+                        run.learner_transitions_through()
+                        >= stage.target_learner_transitions
+                    ):
+                        break
                     if stage.active_seconds is not None and (
                         record.collection_seconds + record.learning_seconds
                         >= stage.active_seconds
@@ -1475,6 +1486,7 @@ def _execute_regime(
                                         stage.learning,
                                         iteration + 1,
                                         bootstrap_agent=behavior_agent,
+                                        learner_transitions=run.learner_transitions_through(),
                                     )
                                 else:
                                     diagnostic = update_iteration(
@@ -1598,6 +1610,11 @@ def _execute_regime(
                     if (
                         stop_reserve_seconds is not None
                         and update_index + 1 < stage.updates
+                        and (
+                            stage.target_learner_transitions is None
+                            or run.learner_transitions_through()
+                            < stage.target_learner_transitions
+                        )
                     ):
                         # Stop while another update and the final exports
                         # still fit inside every watchdog clock.
@@ -1613,6 +1630,17 @@ def _execute_regime(
                 ):
                     raise RuntimeError(
                         "update safety ceiling reached before active training endpoint"
+                    )
+                if (
+                    not wall_bounded
+                    and stage.target_learner_transitions is not None
+                    and (
+                        run.learner_transitions_through()
+                        < stage.target_learner_transitions
+                    )
+                ):
+                    raise RuntimeError(
+                        "update safety ceiling reached before learner-decision target"
                     )
                 self_play_session = (learner, ema, iteration)
                 agent = learner.agent
