@@ -127,7 +127,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     const requests: string[] = [];
     page.on('request', request => { if (request.url().endsWith('/payment-preview') && new URL(request.frame().url()).pathname === '/replay') requests.push(request.url()); });
     await page.getByRole('link', {name: 'Open replay', exact: true}).click();
-    await expect(page.getByText('Automatic payment preview was not recorded.', {exact:false})).toBeVisible();
+    await expect(page.getByRole('slider', { name: 'Replay position' })).toBeVisible();
     expect(requests).toEqual([]);
   });
 }

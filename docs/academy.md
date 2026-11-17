@@ -710,7 +710,7 @@ the cast action is where you see those taps beforehand.
 | The preview says | Meaning |
 | --- | --- |
 | Sources and their output | The automatic plan for this cost, in tapping order. **Left over** is the pool after the cost when the spending is forced. When several spends are legal it shows the pool after production and says which choices you will be prompted for. |
-| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. The preview names the missing choice and marks no sources. Follow the prompts; the preview at the payment is exact. |
+| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. The preview names the missing choice and marks no sources. The preview returns at the completing target or at the payment prompt when there is one; when the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
 | No sources needed | The cost is zero or your floating mana already covers it. |
 | No automatic payment | The automatic payer cannot fund this cost from fixed sources. Use an offered mana ability and make its choices first. |
 | Nothing | The action has no mana payment. Using a mana ability that itself has a fee is also not previewed. |

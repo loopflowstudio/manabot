@@ -430,7 +430,6 @@
                 onRetry={offer => void retryStudyOffer(offer)} onReveal={() => void revealStudy()} onReturn={() => void returnToScore()} onPreview={plan => void previewStudyPlan(plan)} onFocusPlan={plan => focusedPlan = plan} />
             {:else if current.decision}
               <DecisionSurface frame={current.decision.frame} readOnly chosenOffer={current.decision.offer_id} />
-              <p class="type-caption text-ink-2">Automatic payment preview was not recorded. Recorded activations and spending remain visible.</p>
               <RecordedDecisionEvidence offers={current.decision.frame.offers} recorded={current.outputs} chosenOffer={current.decision.offer_id} />
               <button class="btn btn-secondary mt-3" disabled={!index.can_study || studyStore.busy || replayStore.busy || !!index.mirror_retry} onclick={event => void openStudyDecision(event.currentTarget)} bind:this={studyButton}>Try another line</button>
               {#if !index.can_study}<p class="type-caption">Study requires retained rules state and this game's participant credential.</p>{/if}
