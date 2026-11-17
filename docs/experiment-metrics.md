@@ -40,6 +40,12 @@ training cohort. Use `--top 10`, `--include-benchmarks`, or repeated `--run` wit
 the exact logical IDs shown in the page to change the initial selection. Page
 filters do not silently remove already selected runs.
 
+The local recipe writes `run/kind=smoke` and
+`run/recipe=manabot.recipes.local` beside its update metrics, so new local smokes
+are excluded by default even under a different experiment or run name. Explicit
+Etude declaration kind/job fields take precedence over these logged labels.
+Older unlabeled runs remain unclassified; names alone do not establish purpose.
+
 Use **Save selection** and **Restore selection** for exact membership tied to the
 report's evidence snapshot. Restoring against different source bytes is rejected;
 retain the original HTML and its `*-training-time.json` alongside the selection.
@@ -53,6 +59,11 @@ duration. Metric names are not interpreted as timing phases, and no rental
 ceilings are converted into spend. A directory of saved regime records
 is not a source: it holds no Etude run, and the report says so in its
 warnings.
+
+An attempt that ends before logging any clock coordinates leaves prior work
+and observed active time visible. The report retains the attempt and warns that
+its unmeasured time is excluded; it does not treat that time as zero. A run with
+no observed attempts still has unavailable duration and work counters.
 
 The reader uses the optional Etude SDK and existing credentials. Local/S3 reads
 happen only during report generation; the resulting page needs no server or

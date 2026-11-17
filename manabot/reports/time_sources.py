@@ -126,11 +126,24 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
         ),
     )
     attempts = {a.writer: a for a in run.writers}
+    # New writers establish supersession with their first row. Opening and
+    # closing a tracking context alone neither replaces work nor measures time.
+    observed_writers = [
+        writer
+        for writer in writers
+        if any(b.header.writer == writer and b.header.rows for b in run.blocks)
+        or (writer in attempts and attempts[writer].resumed_at)
+    ]
+    silent = len(writers) - len(observed_writers)
+    if silent:
+        warnings.append(
+            f"{silent} attempts logged no clock coordinates; active time includes observed attempts only."
+        )
     active: float | None = (
-        0.0 if names.get(training_clock) == "time" and writers else None
+        0.0 if names.get(training_clock) == "time" and observed_writers else None
     )
     intervals = []
-    for index, writer in enumerate(writers):
+    for index, writer in enumerate(observed_writers):
         attempt = attempts.get(writer)
         blocks = [b for b in run.blocks if b.header.writer == writer]
         end = (
@@ -143,7 +156,7 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
             # restored is the latest earlier row below that first row; the
             # first attempt of a run with no parent starts its clock at zero.
             baseline = (
-                _clock_before(run, writers[:index], training_clock, baseline)
+                _clock_before(run, observed_writers[:index], training_clock, baseline)
                 if index
                 else None
             )
@@ -218,9 +231,13 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
     def count(clock: str) -> int | None:
         if names.get(clock) != "step":
             return None
-        value = _clock_endpoint(run, writers[-1], clock) if writers else None
-        if value is None and writers:
-            latest = attempts.get(writers[-1])
+        value = (
+            _clock_endpoint(run, observed_writers[-1], clock)
+            if observed_writers
+            else None
+        )
+        if value is None and observed_writers:
+            latest = attempts.get(observed_writers[-1])
             value = latest.resumed_at.get(clock) if latest else None
         # Checkpoints carry explicit observed coordinates, not planned work.
         if not writers and run.checkpoints:
@@ -234,13 +251,36 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
             else None
         )
 
+    def label(metric: str) -> str:
+        # RunData.points reads numeric metrics only. Decode just this text
+        # column, newest writer first, rather than loading every update metric.
+        for writer in reversed(observed_writers):
+            for block in sorted(
+                (b for b in run.blocks if b.header.writer == writer),
+                key=lambda b: b.header.first,
+                reverse=True,
+            ):
+                column = next(
+                    (
+                        c
+                        for c in block.header.series
+                        if c.name == metric and c.kind == "text"
+                    ),
+                    None,
+                )
+                if column is not None:
+                    codes = block.array(column.data, "<u4")
+                    if len(codes):
+                        return column.labels[int(codes[-1])] or ""
+        return ""
+
     status = run.outcome.state if run.outcome else "running or unfinished"
     return CohortRun(
         id=identifier,
         label=declared.job_name or run.experiment,
         experiment=run.experiment,
-        kind=declared.kind or "unclassified",
-        recipe=run.job or "",
+        kind=declared.kind or label("run/kind") or "unclassified",
+        recipe=run.job or label("run/recipe"),
         seed=declared.seed,
         status=status,
         members=tuple(f"{identifier}/{w}" for w in writers),

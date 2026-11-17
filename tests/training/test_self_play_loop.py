@@ -113,6 +113,12 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         for name, value in ema.state_dict().items():
             torch.testing.assert_close(value, averaged[name], rtol=0, atol=0)
     recorded = read(tmp_path / "track", "test", "policy")
+    (after_inspection,) = load_time_sources([str(tmp_path / "track")]).runs
+    assert after_inspection.updates == reported.updates
+    assert after_inspection.learner_transitions == reported.learner_transitions
+    assert after_inspection.active_seconds == reported.active_seconds
+    assert len(after_inspection.members) == 3
+    assert any("observed attempts only" in w for w in after_inspection.warnings)
     assert list(recorded.points("coordinates/updates", "updates").x) == [1, 2]
     assert {cp.at["updates"] for cp in recorded.checkpoints} == {0, 1, 2}
     # The training-time report reads work and active time from the loop's clocks.

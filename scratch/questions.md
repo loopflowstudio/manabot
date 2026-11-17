@@ -1,5 +1,14 @@
 # MTG-329 live limits and decisions
 
+2026-11-17 report fixes (mine, reversible): preserve observed totals across
+attempts with neither rows nor historical resume coordinates; retain those
+attempts and warn that their time is unmeasured. A wholly silent run still has
+no totals. Etude 0.4.1 `track` accepts no kind/job metadata argument, so local
+smoke labels travel as text metrics on existing update rows (`run/kind`,
+`run/recipe`), with explicit declaration fields taking precedence. This avoids
+changing persisted config equality or adding metadata-only clock rows.
+Historical unlabeled runs remain unclassified rather than guessing from names.
+
 2026-11-17 GPU measurement choices (mine, reversible): two alternating
 three-update Elemental runs per revision at the recipe's normal 256 streams;
 six-update baseline for resume, with an Etude stop-file request at update 3;

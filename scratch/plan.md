@@ -115,6 +115,15 @@ and `manabot training-report` stays as the cross-experiment run list
 `etude report` does not draw. Naming leftovers are ideas in questions.md, not
 implement directions.
 
+## Report follow-up
+
+QA's retained-report defects are fixed: new local smokes carry explicit
+  kind/recipe text labels and are excluded by default. Empty attempts retain
+  earlier observed work/time and remain counted, with a coverage warning for
+  unmeasured time. Unlabeled historical runs stay unclassified. No config,
+  checkpoint or frozen evidence was rewritten. Focused report, recipe and
+  real resume checks: 14 passed (9.08s); evidence in implementation.md.
+
 ## Remaining
 
 - Learning check, main against the branch (steer 2026-11-17,

@@ -670,8 +670,15 @@ def self_play_games(
             close_collector(collector)
 
 
-def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
-    """Train to the run's update target and return its final world-bound policy."""
+def self_play(
+    settings: SelfPlay,
+    run: TrainingRun,
+    *,
+    updates: int,
+    kind: str = "training",
+    recipe: str = "",
+) -> Path:
+    """Train to the target; retain report labels alongside each update's clocks."""
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
@@ -692,6 +699,7 @@ def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:
         with self_play_games(settings, run, counts) as collector:
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out)
+                row.update({"run/kind": kind, "run/recipe": recipe})
                 run.log(row, **clocks(counts))
                 if settings.behavior != "random":
                     run.log_table(

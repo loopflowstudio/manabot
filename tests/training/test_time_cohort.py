@@ -7,7 +7,9 @@ import subprocess
 from etude.records import Clock, Continuation
 from etude.train.read import read_all
 from etude.train.records import Time
+import pytest
 
+from manabot.recipes.local import LocalConfig, train
 from manabot.reports.time_cohort import CohortRun, TimeCohort, write_cohort_report
 from manabot.reports.time_sources import load_time_sources
 from tests.fixtures.training_records import recording
@@ -57,7 +59,7 @@ def test_etude_written_logs_are_selectable_without_invented_phases(
             ],
         )
         run.log(
-            {"loss": 0.5},
+            {"loss": 0.5, "run/kind": "smoke", "run/recipe": "other"},
             training_seconds=seconds,
             learner_transitions=seed * 100,
             updates=seed,
@@ -67,6 +69,7 @@ def test_etude_written_logs_are_selectable_without_invented_phases(
     assert len(cohort.runs) == 2
     assert sorted(r.active_seconds for r in cohort.runs) == [10, 100]
     assert sorted(r.learner_transitions for r in cohort.runs) == [100, 200]
+    assert all(r.kind == "training" and r.recipe == "recipe" for r in cohort.runs)
     assert all(
         r.intervals and r.intervals[0].basis.startswith("Logged") for r in cohort.runs
     )
@@ -112,6 +115,67 @@ def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> 
     assert len(run.members) == 2
     assert run.active_seconds == 14
     assert run.learner_transitions == 120
+
+
+def test_empty_attempts_preserve_observed_history_without_inventing_time(
+    tmp_path: Path,
+) -> None:
+    clocks = [Time("training_seconds"), "updates", "learner_transitions"]
+    with recording(experiment="resume", run="same", directory=tmp_path, clocks=clocks):
+        pass
+    (empty,) = load_time_sources([str(tmp_path)]).runs
+    assert empty.active_seconds is None and empty.updates is None
+    for seconds, update in [(10, 1), (20, 2)]:
+        with recording(
+            experiment="resume",
+            run="same",
+            directory=tmp_path,
+            clocks=clocks,
+            resume=True,
+        ) as run:
+            run.log(
+                {}, training_seconds=seconds, updates=update, learner_transitions=100
+            )
+            run.log(
+                {"loss": 0.5},
+                training_seconds=seconds,
+                updates=update,
+                learner_transitions=100,
+            )
+        with recording(
+            experiment="resume",
+            run="same",
+            directory=tmp_path,
+            clocks=clocks,
+            resume=True,
+        ):
+            pass
+        (reported,) = load_time_sources([str(tmp_path)]).runs
+        assert reported.active_seconds == seconds
+        assert reported.updates == update
+        assert reported.learner_transitions == 100
+        assert len(reported.intervals) == update
+        assert any("observed attempts only" in w for w in reported.warnings)
+
+
+def test_local_recipe_is_a_named_smoke_excluded_from_default_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "renamed-experiment")
+    monkeypatch.setenv("ETUDE_RUN", "renamed-run")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    train(LocalConfig(updates=1))
+    cohort = load_time_sources([str(tmp_path / "track")])
+    (run,) = cohort.runs
+    assert run.kind == "smoke"
+    assert run.recipe == "manabot.recipes.local"
+    assert run.updates == 1 and run.active_seconds is not None
+    write_cohort_report(cohort, tmp_path / "report.html")
+    data = json.loads((tmp_path / "report-training-time.json").read_text())
+    assert _js("T.largest(d.runs, 'active_seconds', 5, false)", data) == []
+    assert _js("T.largest(d.runs, 'active_seconds', 5, true)", data) == [run.id]
 
 
 def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(

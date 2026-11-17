@@ -17,4 +17,10 @@ class LocalConfig(BaselineConfig):
 def train(config: LocalConfig) -> None:
     inputs = settings(config).model_copy(update={"streams": 2, "transitions": 16})
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(inputs, run, updates=config.updates)
+        self_play(
+            inputs,
+            run,
+            updates=config.updates,
+            kind="smoke",
+            recipe="manabot.recipes.local",
+        )

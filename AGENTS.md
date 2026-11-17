@@ -127,6 +127,10 @@ checkpoints or experiment evidence.
 
 ### Python structure and documentation
 
+- Etude report labels use the text metrics `run/kind` and `run/recipe`;
+  explicit declaration kind/job fields take precedence. `RunData.points`
+  reads numeric metrics only: read text through the stored block's series
+  columns without decoding the entire update history.
 - Design around the domain's data structures and public APIs. Keep the core
   types and entry points easy to find; separate orchestration, learning rules,
   and persistence when they have different responsibilities.

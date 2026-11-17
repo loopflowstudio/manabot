@@ -1,5 +1,28 @@
 # MTG-329 evidence
 
+## Retained report fixes — 2026-11-17
+
+- Local smokes now log explicit text kind/recipe labels alongside existing
+  updates. The report reads those columns, preferring declaration fields.
+  Config bytes and resume equality are unchanged; old unlabeled runs remain
+  unclassified. First focused check exposed that Etude `RunData.points` reads
+  only numeric metrics; the reader now decodes only the matching text column.
+- Empty attempts no longer erase earlier observed work and duration. They
+  stay in membership with a warning that their time is unmeasured. Fixtures
+  cover silence before, between and after observed attempts, a wholly silent
+  run, and the actual loop's saved-state inspection attempt.
+- `uv run --extra dev --extra artifacts pytest tests/training/test_time_cohort.py tests/training/test_recipe_etude.py tests/training/test_self_play_loop.py::test_resume_keeps_adam_ema_counts_and_immutable_policies -q`:
+  14 passed (9.08s). The local recipe test uses renamed experiment/run names,
+  checks generated report selection through its actual JavaScript, and proves
+  a smoke can still be explicitly included. Declaration kind/job precedence
+  is covered separately. Ruff check/format and `git diff --check` pass.
+- Fresh isolated `ETUDE_HOME`, actual `uv run etude train
+  manabot/recipes/local.py --config '{"updates":1}' --json` then
+  `uv run --extra reports manabot training-report --source <home>/track --out
+  <home>/report.html`: both exit 0; generated JSON names
+  `kind=smoke`, `recipe=manabot.recipes.local`, `updates=1`. No servers,
+  watchers or rentals started. GPU measurements remain unrun for gate/CI.
+
 ## Earlier evidence (full text: ce688b24d3:scratch/implementation.md)
 
 - 2026-11-16 evaluation errors: injected native AgentError/PyO3-shaped panic
