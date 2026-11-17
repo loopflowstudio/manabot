@@ -1093,7 +1093,7 @@ impl Env {
             .game
             .as_mut()
             .ok_or_else(|| AgentError("env.execute_semantic_command called before reset".into()))?
-            .execute_semantic_command_with_observation(command)
+            .execute_semantic_command_with_observation(command, self.mana_controls.as_mut())
             .map_err(|error| AgentError(error.to_string()))?;
         self.remember_heuristic_events(&observation);
         Ok(transition)
@@ -1109,7 +1109,7 @@ impl Env {
         })?;
         let actor = current_agent(game)?;
         let (transition, observation, done) = game
-            .execute_semantic_command_with_observation(command)
+            .execute_semantic_command_with_observation(command, self.mana_controls.as_mut())
             .map_err(|error| AgentError(error.to_string()))?;
         let reward = if done {
             game.winner_index()
@@ -1492,6 +1492,18 @@ impl Env {
         self.scenario_game_mut("scenario_force_battlefield")?
             .scenario_force_battlefield(player, name, ready)
             .map(|permanent| permanent.0)
+    }
+
+    /// Create a registered token in a constructed position, using its catalog key.
+    pub fn scenario_create_token(&mut self, player: usize, key: &str) -> Result<usize, AgentError> {
+        let player = Self::scenario_player(player)?;
+        if default_content_pack().token_id(key).is_none() {
+            return Err(AgentError(format!("unknown token: {key}")));
+        }
+        self.scenario_game_mut("scenario_create_token")?
+            .create_token(key, player, false)
+            .map(|id| id.0)
+            .ok_or_else(|| AgentError(format!("token did not enter: {key}")))
     }
 
     /// Recompute the current priority action space after injections and

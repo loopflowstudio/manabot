@@ -394,13 +394,14 @@ impl Game {
         &mut self,
         command: &Command,
     ) -> Result<SemanticTransition, SemanticError> {
-        self.execute_semantic_command_with_observation(command)
+        self.execute_semantic_command_with_observation(command, None)
             .map(|(transition, _, _)| transition)
     }
 
     pub(crate) fn execute_semantic_command_with_observation(
         &mut self,
         command: &Command,
+        controls: Option<&mut crate::flow::mana::controls::ManaControls>,
     ) -> Result<(SemanticTransition, AgentObservation, bool), SemanticError> {
         if self.is_game_over() {
             return Err(SemanticError::GameOver);
@@ -441,6 +442,9 @@ impl Game {
             .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
         self.validate_object_preconditions(command)?;
 
+        if let Some(controls) = controls {
+            return controls.semantic_command(self, command, actor, public_commitment, &atomic);
+        }
         let done = self
             .apply_atomic_command(&atomic)
             .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
