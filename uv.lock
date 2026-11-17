@@ -1123,6 +1123,7 @@ name = "manabot"
 version = "0.2.3"
 source = { editable = "." }
 dependencies = [
+    { name = "cloudpickle" },
     { name = "etude-sdk" },
     { name = "gymnasium" },
     { name = "managym" },
@@ -1200,6 +1201,7 @@ training-runtime = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
+    { name = "cloudpickle", specifier = ">=3.1.2" },
     { name = "etude-sdk", git = "https://github.com/loopflowstudio/etude?rev=d60236d015a4b2a01055b2c861856f06bb1852a2" },
     { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", git = "https://github.com/loopflowstudio/etude?rev=d60236d015a4b2a01055b2c861856f06bb1852a2" },
     { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", git = "https://github.com/loopflowstudio/etude?rev=d60236d015a4b2a01055b2c861856f06bb1852a2" },

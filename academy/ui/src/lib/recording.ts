@@ -6,6 +6,7 @@ export interface BotDecision {
   action: number;
   probabilities: number[];
   value: number | null;
+  update?: number | null;
   value_semantic: string | null;
   search_scores: (number | null)[];
   unavailable: string | null;
@@ -50,6 +51,7 @@ export interface RecordingIndex {
   winner: number | null;
   players: RecordedPlayer[];
   source_kind: string | null;
+  record_stop?: {status: 'complete' | 'interrupted' | 'diverged'; index: number; reason: string | null} | null;
   /** Seat 2's configured checkpoint, for records that predate recorded players. */
   opponent?: TraceConfig['opponent'];
   opponent_checkpoint?: TraceConfig['opponent_checkpoint'];

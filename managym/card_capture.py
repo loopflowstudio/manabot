@@ -7,9 +7,12 @@ without them say nothing about opportunities or resolutions.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    import managym
 
 
 class StrictModel(BaseModel):
@@ -138,3 +141,8 @@ class CapturedCards(StrictModel):
         ) != len(self.final_cards):
             raise ValueError("capture omitted a committed movement")
         return self
+
+
+def captured_cards(env: managym.Env) -> CapturedCards:
+    """Validate private native facts for live reducers and recorded-game replay."""
+    return CapturedCards.model_validate_json(env.card_capture_json())

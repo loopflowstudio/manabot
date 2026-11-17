@@ -11,21 +11,36 @@ each native seat can use an external agent, random play or the built-in
 heuristic, without installing `manabot`. See
 [per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
 
-## Statistics and private recording
+## Recording, statistics and diagnostics
 
-Call `game.enable_statistics()` before `game.reset(players)`, play normally,
-then read `game.statistics()` for per-game card counts and completion state.
-Drain completed/replaced summaries with `game.take_statistics()`. Statistics
-need no detailed logs, replay or disk writes; both statistics and recording
-default off.
+```python
+capture = ScalarCapture(seed=7, games_path=Path("games.jsonl"))
+capture.reset(game, players)
+while not game.is_game_over():
+    capture.step(game, choose(game), annotation={"value": 0.31})
+capture.close()
+```
 
-For durable diagnostic inputs, use `managym.recording.ScalarCapture` or
-`CapturedVector` with an explicit journal path before reset. These retain
-pending native calls even if the engine never returns. They work without
-manabot, Torch or Etude. Private journals contain hidden information and must
-not be used as Academy viewer exports. See the
-[standalone examples and recovery guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#collect-in-game-statistics)
-for independent options, costs, partial counts and replay.
+`managym.recording` writes one small row per finished game: seed, setups,
+actions and state digests. That one record is what `managym academy replay
+games.jsonl` steps through, what `managym.statistics.reduce` computes card
+performance, behaviour rates and your own reducers from, and what
+`managym.export_arena` turns into an Arena-style log that outlives the engine
+version. `record_fraction` samples games; a `journal_path` writes the same
+record durably around every native call, for a call that may never return.
+`managym.diagnostics` marks the phases of your loop and leaves the phase,
+stacks and games in progress when one stalls.
+
+Give the capture `statistics_path=Path("statistics/worker.jsonl")` for native
+per-game card counts on every game, independent of record sampling. Read them
+with `read_statistics` and `CardPerformance.from_statistics`. Low-level callers
+can enable/read/drain counters directly on the Env.
+
+All of it works without manabot, Torch or Etude. Records and statistics hold
+hidden information: keep them private; Academy shows each viewer only what
+that seat could see. See the
+[engine guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#record-games)
+for options, costs, interrupted games and replay.
 
 ## Play in the browser
 
@@ -86,53 +101,39 @@ Global **New game** opens a separate session setup; **Cancel** discards edits.
 Changing both controllers to bots in the session editor offers **Start new
 watched game**, preserving the Play session.
 
-### Watch a replay from an evaluation
-
-Evaluation trace import needs the optional manabot integration, installed in
-the same environment and at the same release version as managym:
+### Watch a recorded game
 
 ```bash
-uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
+uv run --no-project managym academy replay games.jsonl
+uv run --no-project managym academy replay .runs/demo/games --game 3
 ```
 
-With any earlier Academy server stopped, open one game of the evaluation's
-retained command trace, usually
-`traces/<cell-id>.commands.jsonl.gz` in its output directory (download the
-artifact first if the evaluation ran remotely):
+Any game managym recorded opens with only `managym` installed: one your own
+loop wrote through `managym.recording`, a training run's `games/` directory
+(`manabot train --record-games 0.25`) or an evaluation's. The browser opens in
+**Replay** at the first recorded choice or this tab's saved position; use
+**Next**, **Previous** or **Play** to follow choices, consequences and the
+result. Each choice shows the probabilities, value and update the chooser
+recorded, and **not retained** for what it did not. `--game` is the game's
+position, counted from 0, or the start of its digest; run the command without
+it to list the games. In the browser, the same is **Open a game file** under
+**Watch** (`/replay?watch=1`).
 
-```bash
-uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
-```
+Academy plays the recorded actions through the engine again and checks the
+recorded state digest before every decision, without running the original
+players or loading their checkpoints. A game cut off part-way, or one this
+build does not reproduce, opens up to its last verified decision and says
+where and why it stops. A game from another world is refused with the managym
+version that recorded it. `managym academy replay <recording-id>` reopens a
+game from **Games** in the same browser and address (including port), or when
+it is shared and finished.
 
-The browser opens in **Replay** at the first recorded choice or this tab's saved
-position; use **Next**, **Previous** or **Play** to follow choices, consequences
-and the result. `--game` is the game's
-position in the file, counted from 0, or the start of its trace digest; run
-the command without it to list the file's games. `managym academy replay
-<recording-id>` reopens a game from **Games**, with or without manabot, in the
-same browser and address (including port), or when it is shared and finished. In
-the browser, the same import is **Open a game file** under
-**Watch** (`/replay?watch=1`). Import verifies the
-recorded actions and state digests without running the original players or
-loading their checkpoints. Incompatible historical worlds need their original
-revision. The [evaluation replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-an-evaluation)
-covers supported files and troubleshooting.
-
-### Watch a game from your training loop
-
-A game the training loop itself played opens the same way, once manabot has
-exported it:
-
-```bash
-uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
-uv run --no-project managym academy replay jace.game.jsonl.gz
-```
-
-**Replay** opens headed **Training game** with both players' names, on the
-first of the decisions the loop actually made; an evaluation's game is headed
-**Evaluation game**. Recording the games is one `with record_games(...)` block
-around the loop:
-[Watch a game from your training loop](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-your-training-loop).
+Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and games
+exported by `manabot export-game`, both written by earlier releases, still
+open; those two are verified by manabot, installed at the same release
+version. The
+[replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#open-a-replay-directly)
+covers selection, privacy and troubleshooting.
 
 ### Launch from Python
 

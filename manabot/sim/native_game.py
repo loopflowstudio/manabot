@@ -1,8 +1,9 @@
 """The native game child: one bounded game, its Commands and pre-command evidence.
 
 `supervise_game` launches `game_worker` as a `ChildProcess`. The child builds
-viewer-safe frames, sends each pending Command for durable acknowledgement
-before native execution, and reports the settled game. Under a declared
+viewer-safe frames, journals native commitments through the capture before
+execution, and reports the settled game. Constructed scenarios retain their
+acknowledged Command trace because a seed and decks cannot recreate their root. Under a declared
 allocation, checkpoint players are served: they reach their policy over the
 game's own connection to the allocation's inference service, not through the
 supervisor. Without one, they play scalar in-child. Code players (anchors,
@@ -18,15 +19,17 @@ budget; exceeding it is an infrastructure failure, not a forfeit.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import asdict, replace
 from multiprocessing.connection import Connection
 from pathlib import Path
+import tempfile
 import time
 import traceback
 from typing import Any
 from uuid import uuid4
 
 from manabot.backends import resolve
+from manabot.env.failures import ScalarCapture
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.provenance import (
@@ -35,6 +38,12 @@ from manabot.infra.provenance import (
     source_bundle_sha256,
 )
 from manabot.policy.protocol import Backend
+from manabot.sim.evaluation_records import (
+    bind_record,
+    decision_annotation,
+    evaluation_metadata,
+    finalize_game,
+)
 from manabot.sim.execution import EvalExecution
 from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.performance import EvalPerformance
@@ -50,8 +59,10 @@ from manabot.sim.serving_protocol import (
 )
 from manabot.sim.supervision import failure_record, infrastructure_failure
 from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded
+from managym.bots import BeliefSummary
 from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
+from managym.recording import read_record
 
 
 class _InChildPlayers:
@@ -137,6 +148,8 @@ def execute_game(
     """
     responsible = None
     env = None
+    temporary = tempfile.TemporaryDirectory(prefix="evaluation-record-")
+    capture = None
     perf = EvalPerformance(
         str(game.get("match_id", "game")),
         game.get("instrumentation", True),
@@ -198,9 +211,21 @@ def execute_game(
         )
         send(("identities", game["runtime_identities"]))
         with perf.span("native_reset_and_encoding"):
-            env, obs = replay_environment(game, space)
-        game["initial_state_digest"] = env._engine.state_digest()
-        send(("initial", game["initial_state_digest"]))
+            if "scenario_root" not in game:
+                capture_path = Path(
+                    game.get("capture_path", Path(temporary.name) / "journal.jsonl")
+                )
+                capture = ScalarCapture(
+                    game["deal_seed"],
+                    journal_path=capture_path,
+                    context={"source_kind": "evaluation"},
+                    context_provider=lambda: {"evaluation": evaluation_metadata(game)},
+                    failure_directory=capture_path.parent,
+                )
+            env, obs = replay_environment(game, space, capture=capture)
+        if capture is None:
+            game["initial_state_digest"] = env._engine.state_digest()
+            send(("initial", game["initial_state_digest"]))
         for seat, player_id in enumerate(game["seat_players"]):
             player = built[player_id][0]
             if in_child.starts_game(player):
@@ -278,7 +303,7 @@ def execute_game(
             responsible = None
             send(("phase", None))
             decision = {
-                **decision_row(env, frame, action),
+                **decision_row(env, frame, action, retain_digest=capture is None),
                 "revision": revision,
                 "player_id": player_id,
                 "player_seed": game["player_seeds"][player_id],
@@ -289,8 +314,36 @@ def execute_game(
             if player_id in policies:
                 decision["inference_request_id"] = request.request_id
                 decision["inference_batch_id"] = reply.batch_id
-            # The parent acknowledges durable pre-command evidence before native
-            # execution. Successful Commands alone cannot reproduce a rejection.
+            player = built[player_id][0]
+            if in_child.observes_steps(player) and player.last_receipt is not None:
+                # Arena traces are private. Advice uses the explicit public projection.
+                decision["local_update_receipt"] = player.last_receipt.to_json()
+                decision["latency_seconds"] += player.last_receipt.belief_seconds
+                decision["belief_model_mismatch"] = (
+                    "opponent_behavior_not_assumed_equal_to_frozen_policy"
+                )
+            annotation = decision_annotation(decision)
+            if in_child.observes_steps(player) and player.last_receipt is not None:
+                receipt = player.last_receipt
+                annotation.update(
+                    probabilities=list(receipt.target),
+                    search_scores=list(receipt.values),
+                    belief=asdict(
+                        BeliefSummary(
+                            receipt.belief_model,
+                            receipt.belief_digest,
+                            receipt.condition_mass,
+                            len(
+                                {
+                                    (r.world_index, r.world_seed)
+                                    for r in receipt.rollouts
+                                }
+                            ),
+                        )
+                    ),
+                )
+            # Scenarios use the parent's acknowledged Command journal. Ordinary
+            # games fsync their capture journal immediately before native execution.
             game["pending_decision"] = decision
             with perf.span("command_durable_acknowledgement"):
                 send(("pending", decision))
@@ -307,21 +360,16 @@ def execute_game(
                     int(semantic_frame.offers[action]["id"]),
                 )
                 obs, _, terminated, truncated, info, transition = env.step_semantic(
-                    semantic_command
+                    semantic_command, annotation=annotation
                 )
             else:
-                obs, _, terminated, truncated, info = env.step(action)
+                obs, _, terminated, truncated, info = env.step(
+                    action, annotation=annotation
+                )
             perf.record("native_step_and_encoding", native_started)
             perf.count("native_step_calls")
-            decision["post_state_digest"] = env._engine.state_digest()
-            player = built[player_id][0]
-            if in_child.observes_steps(player) and player.last_receipt is not None:
-                # Arena traces are private. Advice uses the explicit public projection.
-                decision["local_update_receipt"] = player.last_receipt.to_json()
-                decision["latency_seconds"] += player.last_receipt.belief_seconds
-                decision["belief_model_mismatch"] = (
-                    "opponent_behavior_not_assumed_equal_to_frozen_policy"
-                )
+            if capture is None:
+                decision["post_state_digest"] = env._engine.state_digest()
             game.pop("pending_decision", None)
             game["decisions"].append(decision)
             decision_counts[player_id] += 1
@@ -365,8 +413,18 @@ def execute_game(
     if env is not None:
         if env.obs_space.encoder.config.action_overflow == "first-legal":
             game["policy_action_cutoff"] = env._capture.policy_action_report()
-        env.close()
+        env.close(reason=game["termination_reason"])
+        if capture is not None:
+            # The journal includes a rejected/pending call; viewing never executes it.
+            record = (
+                read_record(capture_path)
+                if game.get("pending_decision")
+                else capture.snapshot()
+            )
+            bind_record(game, record)
+    temporary.cleanup()
     game["worker_performance"] = perf.snapshot()
+    finalize_game(game)
     send(("result", game))
 
 
@@ -399,7 +457,11 @@ def game_worker(
         if event[0] == "result":
             _census(event[1])
         connection.send(event)
-        if event[0] == "pending" and connection.recv() != "retained":
+        if (
+            event[0] == "pending"
+            and "scenario_root" in game
+            and connection.recv() != "retained"
+        ):
             raise RuntimeError("pre-command evidence was not retained")
 
     def infer(request: DecisionRequest) -> DecisionReply:

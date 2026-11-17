@@ -31,6 +31,7 @@ from manabot.experiment.execution import ExperimentRun, HardwareInventory, Regim
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import source_bundle_sha256
+from manabot.infra.run_settings import RunSettings
 from manabot.sim.threads import child_environment
 from manabot.training.clock import arm_worker_deadline, boot_identity
 from manabot.training.execution import execute_regime
@@ -63,7 +64,7 @@ def run_experiment(
     hardware: HardwareInventory,
     out: Path,
     *,
-    training_game_logs: bool = False,
+    settings: RunSettings = RunSettings(),
     resume: bool = False,
     recover: tuple[int, ...] = (),
     backend: TrainingBackend,
@@ -324,7 +325,7 @@ def run_experiment(
                     {
                         "regime": regimes[attempt.case].model_dump(mode="json"),
                         "seed": attempt.seed,
-                        "training_game_logs": training_game_logs,
+                        "settings": settings.model_dump(mode="json"),
                         "out": str(directory),
                         "store": str(store.path.resolve()),
                         "resume_from": attempt.recovery_parent,
@@ -477,7 +478,7 @@ def main() -> None:
             if isinstance(payload.get("checkpoint_updates"), list)
             else payload.get("checkpoint_updates"),
             backend=resolve("torch"),
-            training_game_logs=payload.get("training_game_logs", False),
+            settings=RunSettings.model_validate(payload["settings"]),
         )
     if run.status != "completed":
         raise SystemExit(1)

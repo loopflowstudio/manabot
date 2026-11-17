@@ -10,7 +10,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
-from managym.recording import FailureEvidence
+from managym.recording import GameRecord
 from managym.replay import replay_failure_inputs
 
 _MAX_SEED = 2**64 - 1
@@ -87,7 +87,7 @@ def test_legacy_capture_argument_warns_and_records_only_per_seat_players(
         vector.reset_all_into_buffers(_players())
         vector.step_into_buffers([0])
         evidence = vector._evidence_for(vector.games, "step")
-        restored = FailureEvidence.model_validate_json(
+        restored = GameRecord.model_validate_json(
             evidence.model_dump_json(by_alias=True)
         )
         assert restored.player_policies == (
@@ -130,7 +130,7 @@ def test_retained_policy_replay_has_no_deprecation_warning(
             del payload["player_policies"]
         if policy is not None:
             payload["opponent_policy"] = policy
-        evidence = FailureEvidence.model_validate(payload)
+        evidence = GameRecord.model_validate(payload)
         retained = evidence.model_dump_json(by_alias=True)
         result = replay_failure_inputs(evidence)[0]
         assert result["status"] == "advanced"

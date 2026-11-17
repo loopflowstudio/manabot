@@ -7,17 +7,18 @@
   <summary class="type-title cursor-pointer py-1 text-display">Recorded policy and search evidence</summary>
   <div class="space-y-4 pt-3">
       <p class="type-caption">Recorded at this decision. Chosen offers are marked ✓.</p>
-      <p>Value: {recorded?.value?.toFixed(4) ?? 'Unavailable'} {recorded?.value_semantic ?? ''}</p>
+      <p>Value: {recorded?.value?.toFixed(4) ?? 'not retained'} {recorded?.value_semantic ?? ''}</p>
+      <p>Update: {recorded?.update ?? 'not retained'}</p>
       {#if recorded?.unavailable}<p class="type-caption text-ink-2">{recorded.unavailable}</p>{/if}
       <table class="w-full text-left type-caption">
         <thead><tr><th>Legal action</th>{#if recorded?.mirror}<th>Raw policy</th><th>Search values</th><th>Updated policy</th>{:else}<th>Policy</th><th>Search score</th>{/if}</tr></thead>
         <tbody>{#each offers as offer, index}
           <tr class:bg-panel-muted={offer.id === chosenOffer}>
             <td class="py-2">{offer.id === chosenOffer ? '✓ ' : ''}{offer.label}</td>
-            {#if recorded?.mirror}<td>{recorded.mirror.prior[index] === undefined ? 'Unavailable' : `${(recorded.mirror.prior[index] * 100).toFixed(2)}%`}</td>{/if}
-            {#if !recorded?.mirror}<td>{recorded?.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
-            <td>{recorded?.search_scores[index]?.toFixed(4) ?? 'Unavailable'}</td>
-            {#if recorded?.mirror}<td>{recorded.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
+            {#if recorded?.mirror}<td>{recorded.mirror.prior[index] === undefined ? 'not retained' : `${(recorded.mirror.prior[index] * 100).toFixed(2)}%`}</td>{/if}
+            {#if !recorded?.mirror}<td>{recorded?.probabilities[index] === undefined ? 'not retained' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
+            <td>{recorded?.search_scores[index]?.toFixed(4) ?? 'not retained'}</td>
+            {#if recorded?.mirror}<td>{recorded.probabilities[index] === undefined ? 'not retained' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
           </tr>
         {/each}</tbody>
       </table>

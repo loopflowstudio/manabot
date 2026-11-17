@@ -70,7 +70,7 @@ def admit_card_game(game: GameEvidence, match: Match) -> tuple[str, str]:
     ).model_copy(update={"hero": seats[0], "villain": seats[1]})
     if game.seat_players != seats or game.seat_decks != decks or game.setup != setup:
         raise ValueError("card evidence differs from scheduled seat/deck assignment")
-    runtime = game.trace.data.get("runtime_identities")
+    runtime = game.trace.audit.get("runtime_identities")
     setup_data = setup.model_dump()
     if (
         not isinstance(runtime, dict)
@@ -96,7 +96,7 @@ def admit_card_runtime(game: GameEvidence, environment: Environment) -> None:
         or environment.config.get("metric_version") != METRIC_VERSION
     ):
         raise ValueError("incompatible card environment")
-    runtime = game.trace.data.get("runtime_identities")
+    runtime = game.trace.audit.get("runtime_identities")
     if not isinstance(runtime, dict) or any(
         runtime.get(field) != value for field, value in identity.items()
     ):

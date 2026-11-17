@@ -121,12 +121,14 @@ test('imported launch setup shows selected sources and switches back to bundled 
 });
 
 
-test('an exported collector game opens with both policy names, training label and default art', async ({ page }) => {
+test('a recorded collector game opens with both seat names, training label and default art', async ({ page }) => {
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { training_replay: string };
   await page.goto(addresses.training_replay);
   await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'The Score · Training game', exact: true })).toBeVisible();
-  await expect(page.getByTestId('game-board').getByRole('heading', { name: 'learner', exact: true })).toHaveCount(2);
+  const board = page.getByTestId('game-board');
+  await expect(board.getByRole('heading', { name: 'gaea', exact: true })).toBeVisible();
+  await expect(board.getByRole('heading', { name: 'urza', exact: true })).toBeVisible();
   const visibleCard = page.locator('[data-testid="card-treatment"]:visible').first();
   await visibleCard.scrollIntoViewIfNeeded();
   await expect(visibleCard).toHaveAttribute('data-art-source', 'scryfall');

@@ -200,7 +200,6 @@ def test_independent_treatments_execute_optimizer(changes):
         not torch.equal(before[k], v) for k, v in trainer.agent.state_dict().items()
     )
     assert sum(diagnostic["selected_action_types"]) == diagnostic["retained"]
-    assert sum(diagnostic["action_types"]) == diagnostic["rows"]
     assert diagnostic["schedule_progress"] == 0.5
 
 

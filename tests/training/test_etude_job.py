@@ -609,7 +609,14 @@ def test_worker_retains_journals_inside_launcher_output(
     stage.transitions = 2
     stage.learning_seats = "one"
     stage.batch_closure = "exact-quota"
-    spec = spec.model_copy(update={"training_game_logs": True, "milestones": ()})
+    spec = spec.model_copy(
+        update={
+            "training_game_logs": True,
+            "record_games": 1.0,
+            "statistics": True,
+            "milestones": (),
+        }
+    )
     frozen = spec.regime.model_dump_json()
     worker_environment(tmp_path, monkeypatch, spec)
     if failed:
@@ -636,7 +643,23 @@ def test_worker_retains_journals_inside_launcher_output(
         for key, value in run.stages[-1].artifacts.items()
         if key.startswith("game-journals/")
     }
-    assert len(references) == 2
+    assert set(references) == {
+        "game-journals/vector-0.jsonl",
+        "game-journals/operation.json",
+        "game-journals/stacks.txt",
+        "game-journals/escalations.jsonl",
+    }
+    from managym.recording import read_records
+    from managym.replay import walk
+
+    records = list(read_records(tmp_path / "output/training/games"))
+    assert records
+    assert any(len(record.games[0].actions) for record in records)
+    for record in records:
+        replay = walk(record)
+        list(replay)
+        assert replay.stop.status == "interrupted"
+    assert any(key.startswith("games/") for key in run.stages[-1].artifacts)
     for reference in references.values():
         path = Path(reference["path"])
         assert path.is_relative_to(tmp_path / "output")

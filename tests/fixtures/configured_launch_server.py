@@ -8,8 +8,9 @@ from pathlib import Path
 import torch
 
 from manabot.backends import resolve
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra.config import ModelConfig
-from manabot.sim.recording import record_games
+from manabot.infra.run_settings import RunSettings
 from manabot.training.loops.minimal import train
 from managym.academy.card_art import printings
 from managym.academy.launch import serve
@@ -23,9 +24,13 @@ def main() -> None:
     write_example_trace(source)
     # A real bounded self-play update supplies the producer-to-browser proof.
     torch.set_num_threads(1)
-    with record_games(
-        output.parent / "training-games", players=("learner", "learner")
-    ) as games:
+    training_run = output.parent / "training-games"
+    with capture_scope(
+        CaptureScope(
+            training_run / "failures",
+            settings=RunSettings(record_games=1),
+        )
+    ):
         train(
             1,
             streams=2,
@@ -34,9 +39,7 @@ def main() -> None:
             model=ModelConfig(hidden_dim=8, num_attention_heads=2),
             backend=resolve("torch"),
         )
-    training_source = games.sample(seed=0).export(
-        output.parent / "training.game.jsonl.gz"
-    )
+    training_source = training_run / "games"
     # Valid one-pixel JPEG: seeded cache, no Scryfall request from browser proofs.
     art_dir = output.parent / "art"
     art_dir.mkdir(exist_ok=True)
@@ -77,7 +80,7 @@ def main() -> None:
             seed=7,
         )
         replay = academy.replay(source)
-        training_replay = academy.replay(training_source)
+        training_replay = academy.replay(training_source, game=0)
         output.write_text(
             json.dumps(
                 {
