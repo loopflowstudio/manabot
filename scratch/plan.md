@@ -80,10 +80,10 @@ choice-corpus alias fix. No full suite run in implement.
    terminated and confirmed absent, about USD 0.27 spent in total; no
    capacity on later RunPod/Vast checks. Attempts: the experiment report.
    GPU acceptance is still unmet; a repeat needs working durable storage.
-2. CI expectation fixed above; leave CI rerun/publication to caller.
-3. PR #500 body corrected: saved-regime reports cannot be rebuilt from main;
-   name f4e1822faf and f577362135, replace the stale no-L4 sentence with the
-   actual GPU retry result. Description updated; gate/publication stay with caller.
+2. CI: the discovery fix is pushed; checks on e22e825825 were pending at
+   realign (2026-11-17), none failed. Reading the result is the caller's gate.
+3. PR #500 body is current (saved-regime readers name f4e1822faf and
+   f577362135; GPU section states the failed retries). Nothing left here.
 
 Gate and publication remain caller's steps; do not land. Dependency release
 cut is complete. External limits: Etude Task 2d1933 owns hard per-match
