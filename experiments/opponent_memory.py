@@ -58,7 +58,7 @@ def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
 
         root = Path(__file__).resolve().parents[1]
         job = PythonJob(
-            name="cuda-calibration",
+            name="cuda-calibration-rows32",
             train=calibrate,
             config=Calibration(source_bundle=bundle_at(root, revision)),
             repo=str(root),
@@ -74,7 +74,7 @@ def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
         ).runs(39100)
     raise RuntimeError(
         "Opponent-memory CUDA peaks, worker/update and checkpoint-reload admission "
-        "remain unmeasured at 2/2/2 execution limits. Calibrate a common learner-"
+        "have not passed admission. Calibrate a common learner-"
         "decision horizon and wire jobs before allocating training. "
         "See experiments/opponent_memory.md."
     )
@@ -226,9 +226,9 @@ def calibration_recipe(name: str, *, smoke: bool) -> TrainingRegime:
     stage.learning.iteration_schedule = IterationSchedule(steps=100)
     # Calibration fails on capacity; paid-pilot recovery is still undecided.
     stage.game_errors = None
-    stage.execution.collection_rows = 2
-    stage.execution.bootstrap_rows = 2
-    stage.execution.learner_rows = 2
+    stage.execution.collection_rows = 2 if smoke else 32
+    stage.execution.bootstrap_rows = 2 if smoke else 32
+    stage.execution.learner_rows = 2 if smoke else 32
     stage.execution.precision = "float32"
     recipe.observation = observation
     recipe.agent.decision_memory = arm.encoder

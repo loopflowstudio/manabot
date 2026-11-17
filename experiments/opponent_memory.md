@@ -1369,3 +1369,70 @@ finalization. Quote the whole rental including startup before launching with
 `--max-usd 1.20`; do not infer actual cost from these ceilings. Incomplete
 repeats or a worker failure leave training/evaluation declarations stopped.
 The CPU smoke uses eight exact-quota rows on two streams and is plumbing only.
+
+Preparation checks at source `76e9c49cd0`: the final CPU smoke completed all
+five workers in 69.96 seconds (producer, incumbent and three EMA branches),
+including normal raw/EMA reload. An earlier smoke exposed a zombie-child race
+in process-tree RSS sampling; the sampler now ignores exited children and
+propagates other sampling failures. The clean rerun had no sampling errors.
+Focused probe-rule and experiment-discovery checks passed two tests; Ruff,
+format and whitespace checks passed. Frozen probe artifacts were not rerun.
+
+Etude's prospective quote on 2026-11-16 was one A40, at least six vCPUs and
+48 GB host memory, USD0.59/hour and **USD0.68 planned rental cost**, including
+startup, within the USD1.20 job/launch cap. This is a quote, not incurred cost.
+The launcher had no existing `opponent_memory` runs. Scoped discovery used
+`r2://manabot/jobs/opponent_memory` and `--job cuda-calibration`, so calibration
+does not invoke the still-stopped evaluation declaration. The unscoped bucket
+scan was interrupted before submission; no rental or run resulted from it.
+
+### First CUDA admission stopped in collection — 2026-11-16
+
+Source `76e9c49cd0`, run `opponent_memory/cuda-calibration@39100`, launch
+`8ea6cceb615c`, attempt `53bf706d0206`: **failed admission**. The common control
+producer hit `TimeoutError: training resource wall deadline exceeded` in the
+ordinary collector. It completed zero updates; no subsequent incumbent or
+memory arm ran, and no final raw/EMA reload was available. The outer launcher
+records failure and the inner training record records interruption. This is
+not a throughput, CUDA-memory-arm fit, learning or strength result.
+
+Host: Xeon Gold 6342, 7.65-CPU cgroup quota, 49,999,998,976-byte host limit.
+A40: 47,699,722,240 device bytes, capability 8.6; Torch 2.15.0+cu132, CUDA 13.2,
+world w17, CP313 native SHA256
+`c2c7f44161500b00abcf0e5537b6e968a2eec9f1dace0569574c18088595af26`.
+Worker receipt wall time was 600.946 s. Sampled process-tree peak RSS was
+8,908,734,464 bytes; CUDA allocated/reserved peaks were 109,712,896 /
+121,634,816 bytes. These describe the incomplete control trajectory only.
+
+| Table | Realized maximum before timeout | Configured capacity |
+|---|---:|---:|
+| decision_records | 116 | 512 |
+| decision_reference_details | 8,700 | 16,384 |
+| decision_references | 79 | 128 |
+| decision_members | 1,209 | 8,192 |
+
+There was no capacity error. These partial prefixes cannot admit learned-game
+tails or justify shrinking capacities. Collection occupied 594.348 s:
+preparation 170.987 s and inference/action selection 343.907 s, each across
+19,717 execution calls. Native step/encoding was 11.103 s (nested native
+stepping 4.147 s, encoding 3.107 s); recording 5.672 s and bookkeeping 0.342 s.
+Nested native timings must not be added again. No completed learner-decision
+count exists, so no decisions/s is inferred from an incomplete batch.
+
+The rental `mtg252-a40-0ae24e1a885c` was terminated and the launcher confirms
+`rental_ended=true`. Its retained launcher cost is **USD0.12234, estimated**;
+no settled bill is available. All **22** output files were fetched through the
+SDK with digest checks, including four private native failure journals, the
+interrupted record, initial checkpoint and phase/resource receipt. The R2
+timeouts during log reads resolved sufficiently to retrieve the final evidence.
+
+**Prospective bounded retry:** use 32/32/32 execution rows, retaining 256 streams,
+four producers, the same capacities, float32, two-update target and provisional
+schedule. The control's small CUDA peak and large number of small inference
+calls motivate this resource choice; they do not prove its speedup or admit
+memory-arm peaks. The job name records `rows32`, with one attempt and the same
+USD1.20 cap. Both job ceilings total USD2.40, below the USD3 calibration allowance.
+No table is truncated, game recovered or prior failed attempt relabelled.
+The script now reuses training's existing process-tree RSS reader; its four
+focused exit/zombie/permission/real-process tests passed. Pilot declarations
+remain stopped pending complete CUDA admission and calibration.

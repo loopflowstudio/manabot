@@ -37,6 +37,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.profiler import Profiler
 from manabot.sim.rollout import BatchedSampler, RandomBatchController, allocate_buffers
+from manabot.training.execution import process_tree_rss
 from manabot.training.regime import Learning
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import (
@@ -50,23 +51,10 @@ from manabot.training.updates.ppo import update_iteration
 import managym
 
 
-def _tree_rss(process: psutil.Process) -> int:
-    """Sum simultaneous live processes; exiting children own no resident pages."""
-    rss = 0
-    for child in [process, *process.children(recursive=True)]:
-        try:
-            rss += child.memory_info().rss
-        except psutil.NoSuchProcess:
-            # Includes ZombieProcess: a child may exit between enumeration and
-            # reading its RSS. Permission failures still invalidate the reading.
-            continue
-    return rss
-
-
 def residency(device: torch.device) -> dict[str, int | None]:
     """Phase-end process-tree RSS plus process high-water RSS; never add CUDA."""
     process = psutil.Process()
-    rss = _tree_rss(process)
+    rss = process_tree_rss(process)
     high_water = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     if device.type == "cuda":
         torch.cuda.synchronize(device)
@@ -117,7 +105,7 @@ class HostPeak:
         process = psutil.Process()
         try:
             while True:
-                self.peak = max(self.peak, _tree_rss(process))
+                self.peak = max(self.peak, process_tree_rss(process))
                 if self.stop.wait(0.02):
                     return
         except Exception as error:
