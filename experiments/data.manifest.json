@@ -41838,6 +41838,14 @@
    "sha256": "7742e7387627504efd2a6838c4a27db9bc079b0f877cb11449f353465e3ee0bd",
    "bytes": 184
   },
+  "experiments/data/opponent-memory/20261117-collection-fold/evidence.tar.gz": {
+   "sha256": "8f7abc0a6249512f4268ad55bd78beea2d13f91fe89265965c032ddb57089a31",
+   "bytes": 22483760
+  },
+  "experiments/data/opponent-memory/20261117-collection-fold/members.json": {
+   "sha256": "bd99fddeb3b5e61358165e0d3b6f3d7b0a2ee806649e0973d55ad00496b34e7b",
+   "bytes": 22854
+  },
   "experiments/data/opponent-memory/20261117-cuda-optimized-retry/lost-attempt.json": {
    "sha256": "90bd5c9bcf083b8f84d436228a913fd347309babb515b093b3d5b1b5dce93bc5",
    "bytes": 388

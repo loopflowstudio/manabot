@@ -14,7 +14,7 @@ over the batch's valid objects packed into one sequence; either setting
 composes with the other and neither changes the model.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from types import TracebackType
@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 
 from manabot.backends.torch._continuation import ContinuationEncoder
-from manabot.backends.torch._decision_memory import DecisionMemory
+from manabot.backends.torch._decision_memory import CollectionMemory, DecisionMemory
 from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
 from manabot.backends.torch._name_candidates import NameCandidateEncoder
 from manabot.backends.torch._numerics import buffer_on
@@ -482,11 +482,17 @@ class ActorCritic(nn.Module):
         return spec
 
     def prepare(
-        self, obs: ObservationBuffers, *, inference: bool = False
+        self,
+        obs: ObservationBuffers,
+        *,
+        inference: bool = False,
+        memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
         self.check_observation(obs)
-        return self.prepare_admitted(obs, inference=inference)
+        return self.prepare_admitted(
+            obs, inference=inference, memory_roots=memory_roots
+        )
 
     def check_observation(self, obs: ObservationBuffers) -> None:
         mask = np.asarray(obs["actions_valid"])
@@ -507,6 +513,7 @@ class ActorCritic(nn.Module):
         *,
         inference: bool = False,
         needs: np.ndarray | None = None,
+        memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Prepare unchanged admitted rows for learning or inference.
 
@@ -535,7 +542,8 @@ class ActorCritic(nn.Module):
             live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
-            memory_fold=not inference and self.config.decision_memory == "gru",
+            memory_fold=self.config.decision_memory == "gru",
+            memory_roots=memory_roots,
             binding=spec.binding,
             action_capacity=capacity,
             select_programs=not inference and not self.bucketed_shapes,
@@ -1194,6 +1202,7 @@ class PolicyInference:
         self._versions = agent._parameter_versions()
         self._modes = tuple(module.training for module in agent.modules())
         self._binding = agent._binding()
+        self.memory = CollectionMemory()
         self.transfers = 0
         self.transfer_bytes = 0
         agent.clear_cache()
@@ -1205,6 +1214,7 @@ class PolicyInference:
             agent is not self.agent
             or self._versions != self.agent._parameter_versions()
         ):
+            self.memory.clear()
             raise RuntimeError("inference policy changed within its scope")
         if (
             self._modes != tuple(module.training for module in self.agent.modules())
@@ -1235,6 +1245,7 @@ class PolicyInference:
         traceback: TracebackType | None,
     ) -> None:
         self._closed = True
+        self.memory.clear()
         self.agent.clear_cache()
 
     @torch.no_grad()
@@ -1259,7 +1270,13 @@ class PolicyInference:
         self.check(self.agent)
         if any(not isinstance(value, np.ndarray) for value in obs.values()):
             raise TypeError("inference preparation requires NumPy observation buffers")
-        batch = self.agent.prepare(obs, inference=True)
+        batch = self.agent.prepare(
+            obs,
+            inference=True,
+            memory_roots=self.memory.roots(obs)
+            if self.agent.config.decision_memory == "gru"
+            else None,
+        )
         if self.cache_catalog:
             batch = replace(batch, programs=None)
         arrays = (
@@ -1269,7 +1286,10 @@ class PolicyInference:
         )
         self.transfer_bytes = sum(array.nbytes for array in arrays)
         self.transfers = len({array.dtype for array in arrays})
-        return replace(on_device(batch, self.device), guard=self._forward_check)
+        return replace(
+            self.memory.bind(on_device(batch, self.device), obs),
+            guard=self._forward_check,
+        )
 
 
 # -----------------------------------------------------------------------------

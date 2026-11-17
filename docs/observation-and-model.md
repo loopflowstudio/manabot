@@ -580,24 +580,23 @@ complete decision history, and no training benefit has been measured.
 
 ## Whole-game decision memory
 
-**Unreleased.** The native projection, Torch encoders and shared rollout prefix
-storage are implemented as a bounded draft. The original dense rollout would need over
-500 GiB at the planned pilot size. Prefix storage removes that repeated ownership,
-but the controlled size proof does not establish host or GPU fit at the census
-maxima. Bootstrap retains prefixes; controlled CPU execution reports host
-residency separately from device inputs and activations.
-The earlier repeated-reference layout measured a 27.33 GiB host peak in an
-independent 256-stream CPU cohort with 2/2/2 execution limits; see the [resource report](../experiments/opponent_memory.md#independent-game-host-measurement-2026-11-16)
-for its scope. Host residency of the new snapshot layout has not been measured;
-on the recorded CPU world before #547/#550 integration, log-control collection
-costs 1.73× the history-disabled median
-([report](../experiments/opponent_memory.md#final-post-sync-admission-measurement--2026-11-16)).
-The gated join and [branching from a trunk](#starting-from-a-control-trunk)
-are implemented. CUDA worker admission and the three-arm pilot remain
-outstanding. The [completed supervised probe](../experiments/opponent_memory.md#supervised-probe-result--2026-11-16)
-selected one summary token for both pilot encoders.
-The combined disclosure/library layout needs fresh cost and CUDA admission;
-those earlier timings do not measure it.
+**Unreleased.** Whole-game native logs, shared immutable prefixes and Torch
+encoders are implemented with bounded execution rows. Memory stays opt-in.
+The [cost report](../experiments/opponent_memory.md) records the current
+optimized A40 calibration: control costs 1.143× incumbent time, GRU-K1 1.548×,
+with a 0.253 GB CUDA allocated peak. These are exploratory cost measurements;
+matched training and paired strength evaluation have not run. Transformer
+probe and earlier calibration evidence remain separate.
+
+Collection retains native table cursors and reuses unchanged prefix versions.
+The GRU folds complete record chunks in both collection and learning. During
+collection, an unchanged inference scope caches detached complete-node
+embeddings and recurrent states; every open tail is recomputed. Native game
+generation and prefix identity bound cache reuse, and scope exit discards the
+cache before a parameter update. These tensors never become observations,
+replays, checkpoints or search-fork state. Dense stateless encoding remains the
+reference, and arbitrary imported prefixes still undergo complete admission.
+The transformer keeps its full-sequence encoder.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
 one or four summary tokens in its model configuration:
@@ -729,9 +728,9 @@ append independently; sampled hidden cards never relabel that prefix. Replaying
 the original Commands reconstructs the records, including after resume or an
 Academy reconnect. Each seat keeps its own view.
 
-The policy recomputes summaries from the entire available prefix on every
-forward. There is no neural state to transfer between decisions, reset at turn
-boundaries or save alongside a checkpoint. Training remains per decision;
+The policy summary depends on the entire available prefix. Collection may reuse
+complete-node results within an unchanged inference scope; the cache is discarded
+before parameter updates and excluded from game persistence. Training remains per decision;
 recurrent sequence batches and burn-in are unnecessary. A checkpoint retains
 the encoder choice and weights through ordinary persistence. Restoring a game
 still requires its original replay or exact native state; weights alone do not
@@ -762,10 +761,10 @@ from the predecessor state and reads each policy row at its own tail. Repeated
 prefixes share gradient paths: their loss contributions still add with the
 logical actor and critic denominators. Rows keep their selected order; sampling
 and optimizer boundaries are unchanged. This temporary tree and its neural
-states expire with that execution chunk's backward graph. Collection and
-bootstrap still encode each full prefix; there is no learned cache across
-calls or parameter updates. Dense inputs and the transformer retain the
-stateless full-prefix encoder.
+states expire with that execution chunk's backward graph. Collection uses the
+same causal fold with detached cached roots, recomputing each selected open tail.
+Bootstrap without an inference scope folds without cached roots. Dense inputs
+and the transformer retain the stateless full-prefix encoder.
 
 A memory-enabled training stage (including a control retaining the
 same logs) requires explicit positive `Execution.collection_rows`,
@@ -829,7 +828,8 @@ its input is admitted Prepared data, and it evaluates no action or value head.
 All three arms start a fresh `TrainSelfPlay` stage through `pretrained`.
 Collection retains record-aligned immutable chunks. Native transport counts and
 process-local game generations let each stream extend its previous viewer prefix:
-closed chunks are reused, while the last chunk is re-read to preserve coalesced
+an unchanged tail revision reuses the issued prefix directly. After a commit,
+closed chunks are reused and the open chunk is re-read to preserve coalesced
 passes. Reset, fork and replay restoration change the generation even when a
 seed repeats. These cursors are transport metadata, never policy features or
 replay identities. Dense imports and archives still validate the complete prefix.

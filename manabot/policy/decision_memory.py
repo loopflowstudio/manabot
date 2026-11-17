@@ -6,6 +6,7 @@ never become numeric features. Selected prefixes retain ordered repeated members
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields, replace
 from typing import TYPE_CHECKING
 
@@ -58,11 +59,25 @@ class MemoryLevel[A]:
 
 @dataclass(frozen=True)
 class MemoryFold[A]:
-    """An execution chunk's node tree; index zero is the zero initial state."""
+    """One causal node tree; index zero is the zero initial state.
+
+    Collection can supply detached root states [roots, 64] and the references
+    introduced by those roots. Local detail routes index only newly embedded
+    references; member routes index cached references followed by new ones.
+    Node keys/slices and the optional result sink are ephemeral serving metadata,
+    never game facts. Learner folds have no cached roots or result sink.
+    """
 
     levels: tuple[MemoryLevel[A], ...]
     tails: A
     node_count: int
+    keys: tuple[str, ...] = ()
+    reference_slices: tuple[tuple[int, int], ...] = ()
+    record_slices: tuple[tuple[int, int], ...] = ()
+    root_nodes: A | None = None
+    root_states: A | None = None
+    root_references: A | None = None
+    retain: Callable[[A, A, A], None] | None = None
 
 
 @dataclass(frozen=True)
@@ -600,7 +615,9 @@ def _prepare_retained(
     )
 
 
-def _prepare_fold(obs: PrefixObservation, tables: Tables) -> MemoryRows[np.ndarray]:
+def _prepare_fold(
+    obs: PrefixObservation, tables: Tables, roots: Mapping[str, int] | None = None
+) -> MemoryRows[np.ndarray]:
     """Embed each selected node once, with exact joins to predecessor references.
 
     No neural tensors or raw prefix owners escape preparation. The tree and its
@@ -608,21 +625,52 @@ def _prepare_fold(obs: PrefixObservation, tables: Tables) -> MemoryRows[np.ndarr
     """
     from manabot.policy.prepare import pack
 
+    roots = roots or {}
+    selected_nodes: dict[str, Tail] = {}
+    for prefix in obs.prefixes:
+        for node in prefix.tail.chunks() if prefix.tail else ():
+            selected_nodes.setdefault(node.key, node)
+    cached = [node for node in selected_nodes.values() if node.key in roots]
+    root_offsets: dict[str, int] = {}
+    reference_base = 0
+    for node in cached:
+        root_offsets[node.key] = reference_base
+        reference_base += roots[node.key]
+    root_reference_count = reference_base
     nodes: list[Tail] = []
+    reference_slices: list[tuple[int, int]] = []
+    record_slices: list[tuple[int, int]] = []
     indexes: dict[str, int] = {}
     depths: list[int] = []
     references: list[np.ndarray] = [np.empty(0, np.int64)]
     record_starts: list[int] = []
     arrays: dict[str, list[np.ndarray]] = {f.name: [] for f in fields(MemoryFeatures)}
-    reference_base = record_base = 0
+    record_base = 0
     parents: list[int] = []
     for prefix in obs.prefixes:
         for node in prefix.tail.chunks() if prefix.tail else ():
             if node.key in indexes:
                 continue
             parent = indexes[node.previous.key] if node.previous else 0
+            if node.key in roots:
+                count = roots[node.key]
+                start = root_offsets[node.key]
+                joined = np.concatenate(
+                    (references[parent], np.arange(start, start + count))
+                )
+                record_starts.append(-1)
+                reference_slices.append((start, count))
+                record_slices.append((-1, 0))
+                nodes.append(node)
+                indexes[node.key] = len(nodes)
+                references.append(joined)
+                parents.append(parent)
+                depths.append(-1)
+                continue
             fragment = _chunk_features(node, tables)
             count = len(fragment.reference_numbers)
+            reference_slices.append((reference_base, count))
+            record_slices.append((record_base, len(fragment.numbers)))
             joined = np.concatenate(
                 (references[parent], np.arange(reference_base, reference_base + count))
             )
@@ -632,7 +680,7 @@ def _prepare_fold(obs: PrefixObservation, tables: Tables) -> MemoryRows[np.ndarr
             for name in arrays:
                 value = getattr(fragment, name)
                 if name == "detail_references":
-                    value = value + reference_base
+                    value = value + reference_base - root_reference_count
                 elif name == "member_references":
                     value = joined[value + cursor.references]
                 elif name == "member_groups":
@@ -683,17 +731,25 @@ def _prepare_fold(obs: PrefixObservation, tables: Tables) -> MemoryRows[np.ndarr
                 [indexes[p.tail.key] if p.tail else 0 for p in obs.prefixes], np.int64
             ),
             len(nodes),
+            keys=tuple(node.key for node in nodes),
+            reference_slices=tuple(reference_slices),
+            record_slices=tuple(record_slices),
+            root_nodes=np.array([indexes[node.key] for node in cached], np.int64),
         ),
     )
 
 
 def prepare_memory(
-    obs: "ObservationBuffers", tables: "Tables", *, fold: bool = False
+    obs: "ObservationBuffers",
+    tables: "Tables",
+    *,
+    fold: bool = False,
+    roots: Mapping[str, int] | None = None,
 ) -> MemoryRows[np.ndarray] | None:
     retained = retained_memory(obs)
     return (
         (
-            _prepare_fold(retained, tables)
+            _prepare_fold(retained, tables, roots)
             if fold
             else _prepare_retained(retained, tables)
         )

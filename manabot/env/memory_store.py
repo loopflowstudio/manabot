@@ -123,6 +123,8 @@ class Tail:
 class Prefix:
     identity: PrefixIdentity
     tail: Tail | None
+    # Native transport lifetime only; archives restore facts without this epoch.
+    native_epoch: int | None = None
 
     @property
     def counts(self) -> tuple[int, ...]:
@@ -370,7 +372,7 @@ class MemoryStore:
         )
         for blocks in record_chunks(rows, _CHUNK_ROWS, cursor):
             tail = self._append(tail, self._intern(blocks))
-        prefix = Prefix(identity, tail)
+        prefix = Prefix(identity, tail, epoch)
         self._streams[row, identity.viewer] = _StreamCapture(
             epoch, tail_version, prefix
         )

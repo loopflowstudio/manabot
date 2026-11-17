@@ -2030,3 +2030,29 @@ Existing whole-game harness, two streams, one real update, 556 decisions in ever
 Control CPU time ratios are 1.020/1.037/1.017×; GRU 1.653/1.755/1.752×. The prior learner-fold medians were 1.04/1.03/1.06× control and 1.67/1.79/1.80× GRU. These small differences have overlapping ranges and do not establish a general speedup. The native projection must still be fully rewritten when the acting viewer changes; suffix transport alone cannot remove that cost with one shared output row. No new CUDA result follows.
 
 Validation: touched debug nextest tests passed (2); CPython 3.13 release extension rebuilt from the root and replaced atomically; prefix-storage tests passed (14), including recovery, with the strengthened 140-step native-buffer-versus-dense test passing afterward. Evidence archive retains source, harness, all 27 receipts/logs and member hashes. No paid launch or PR. Collection folding follows as a separate cut.
+
+### Parameter-bound collection fold — 2026-11-17
+
+The GRU now uses one causal fold for learning and collection. Each unchanged PolicyInference scope holds weak complete-node results: detached reference/record embeddings and the node end state. Host preparation omits cached nodes; device forward embeds only new nodes and advances from supplied roots. Every selected open tail recomputes, including old tails selected alongside descendants. Native generation plus prefix identity bounds reuse across reset, fork and resume; parameter changes invalidate the scope and clear its cache. Exit clears the cache. Node-local clones avoid retaining an entire execution allocation, and Prepared result sinks retain only weak node references. No neural state enters observations, replay, checkpoints or search forks. Learner folds have no cached roots; dense stateless encoding and the transformer retain their reference paths. Model shape, capacities, coalescing and transformer evidence are unchanged.
+
+The existing whole-game CPU harness ran 27 sequential fresh processes (three per arm and row limit), each retaining 556 decisions, two streams, mixed disclosure and one real update. Gates are open. Same harness, seeds and workload as the native-cursor cut; original sampling groups and optimizer/loss denominators are unchanged. Times are medians [min, max], seconds; ratios use the fresh true incumbent.
+
+| Rows | Arm | Collection s | Update s | Total s | Total / incumbent |
+|---|---|---:|---:|---:|---:|
+| 32 | incumbent | 1.420 [1.410, 1.428] | 2.559 [2.553, 2.583] | 3.981 [3.969, 4.004] | 1.000 |
+| 32 | control | 1.534 [1.505, 1.544] | 2.571 [2.563, 2.585] | 4.097 [4.076, 4.129] | 1.029 |
+| 32 | gru-k1 | 2.239 [2.239, 2.289] | 3.825 [3.798, 3.856] | 6.087 [6.064, 6.095] | 1.529 |
+| 128 | incumbent | 1.419 [1.396, 1.441] | 2.021 [1.995, 2.031] | 3.426 [3.414, 3.461] | 1.000 |
+| 128 | control | 1.507 [1.497, 1.526] | 2.016 [1.989, 2.031] | 3.528 [3.496, 3.542] | 1.030 |
+| 128 | gru-k1 | 2.238 [2.194, 2.272] | 3.198 [3.196, 3.213] | 5.435 [5.407, 5.467] | 1.586 |
+| 256 | incumbent | 1.417 [1.375, 1.447] | 1.977 [1.963, 1.979] | 3.397 [3.352, 3.410] | 1.000 |
+| 256 | control | 1.533 [1.493, 1.543] | 1.987 [1.952, 2.008] | 3.486 [3.480, 3.550] | 1.026 |
+| 256 | gru-k1 | 2.263 [2.247, 2.266] | 3.209 [3.152, 3.212] | 5.456 [5.418, 5.476] | 1.606 |
+
+Control CPU time ratios are **1.029/1.030/1.026×**; GRU **1.529/1.586/1.606×**. After the transport cut, GRU totals were 6.615/6.009/5.978 s; now 6.087/5.435/5.456 s, with collection falling from 2.794/2.774/2.781 s to 2.239/2.238/2.263 s. Update medians remain about 3.82/3.20/3.21 s. This improves the measured CPU path but remains well above a 10% time regression. It is not a CUDA measurement, capacity/fit proof, learning result or adoption recommendation. No paid launch, pilot, paired evaluation or PR follows.
+
+Numerical proof: six additional whole-game runs pair the unchanged stateless retained collection preparation with the collection fold at all three row limits; proof instrumentation only saves arrays, outside the timed matrix. Actions, rewards, dones, 556 decisions and prefix identities match exactly. Maximum absolute differences across every compared element: logprobs/values **1.4901e-7**, updated parameters/buffers **5.9605e-8**, final gradients **1.4901e-8**. All pass the existing fold tolerances (outputs atol=2e-6/rtol=2e-5; gradients/state atol=2e-5/rtol=2e-4). No tolerance was enlarged. Floating-point batching changes mean GRU output/gradient/state hashes differ from the stateless receipts; byte equality is not claimed. Within the new matrix, each arm/row combination repeats the same hashes exactly. Incumbent/control hashes still match the transport receipts exactly.
+
+Validation: 30 tests passed in the four affected storage/fold files, including open-gate cold/warm, late references, K1/K4, live/padded, coalesced tails, reset/fork/resume lifetimes, parameter invalidation, shuffled/repeated/empty policy rows, all learner gradients and weak ownership even with a warm Prepared still alive. The shared model decision-memory tests passed (108). Ruff and whitespace checks passed. The native-cursor commit already supplied debug nextest and the rebuilt extension; this cut changes no Rust.
+
+Evidence: `experiments/data/opponent-memory/20261117-collection-fold` retains the implemented source, unchanged harness, runners, all 27 receipts/logs, six full-array proof runs and the current plan/design plus pre-cut design chronology. Every archive member is verified against its SHA256/size manifest. The current design closes decision 1 as the Task session taking option b; the two authorized optimization cuts are complete. Matched training/paired evaluation remain unrun pending the Task session’s next decision.

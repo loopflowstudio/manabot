@@ -561,6 +561,7 @@ def prepare(
     value_token: bool = False,
     memory_summaries: int = 0,
     memory_fold: bool = False,
+    memory_roots: Mapping[str, int] | None = None,
     binding: str = "",
     action_capacity: int | None = None,
     select_programs: bool = False,
@@ -573,7 +574,11 @@ def prepare(
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
-    memory = prepare_memory(obs, tables, fold=memory_fold) if memory_summaries else None
+    memory = (
+        prepare_memory(obs, tables, fold=memory_fold, roots=memory_roots)
+        if memory_summaries
+        else None
+    )
     obs = {key: np.asarray(value) for key, value in obs.items()}
     facts = obs["facts"]
     if inference and not bucketed:

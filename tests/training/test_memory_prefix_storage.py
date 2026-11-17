@@ -215,6 +215,8 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
                 model.prepare(selected.materialize(), inference=True), "cpu"
             )
             for key, value in array_fields(expected_input, torch.Tensor).items():
+                if key.startswith("/memory/"):
+                    continue  # retained GRU bootstrap shares causal nodes
                 torch.testing.assert_close(
                     array_fields(selected_input, torch.Tensor)[key],
                     value,

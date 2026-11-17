@@ -1,17 +1,131 @@
 """Decision memory encoders and their shared record featurizer.
 
-Policy/value gradients flow through the J1 board summaries into both the record
-featurizer and temporal encoder. Every call starts from the supplied prefix;
-neither encoder retains a learned state across decisions or weight updates.
+Policy/value gradients flow through the J1 summaries into the featurizer and
+encoder. Causal folds share exact prefix nodes within an update. Collection
+reuses detached complete-node results for one parameter-bound inference scope;
+open tails are recomputed. No neural state enters game facts or persistence.
 """
 
-from typing import Literal
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Literal
+from weakref import WeakKeyDictionary, ref
 
 import torch
 from torch import nn
 from torch.nn.utils.rnn import PackedSequence
 
-from manabot.policy.decision_memory import MemoryRows
+from manabot.env.memory_store import PrefixIdentity, Tail
+from manabot.policy.decision_memory import MemoryRows, retained_memory
+
+if TYPE_CHECKING:
+    from manabot.env.observation import ObservationBuffers
+    from manabot.policy.prepare import Prepared
+
+
+@dataclass(frozen=True)
+class CachedNode:
+    lifetime: tuple[PrefixIdentity, int | None]
+    references: torch.Tensor
+    records: torch.Tensor
+    state: torch.Tensor
+
+
+class CollectionMemory:
+    """Weak node results for one unchanged inference scope; open tails never enter.
+
+    Scope guards bind parameter versions, device and module modes. Values own only
+    detached node-local tensors, never their weak keys or a whole execution tree.
+    """
+
+    def __init__(self) -> None:
+        self.nodes: WeakKeyDictionary[Tail, CachedNode] = WeakKeyDictionary()
+
+    def clear(self) -> None:
+        self.nodes.clear()
+
+    def roots(self, obs: "ObservationBuffers") -> dict[str, int]:
+        retained = retained_memory(obs)
+        if retained is None:
+            return {}
+        roots: dict[str, int] = {}
+        rejected = {prefix.tail.key for prefix in retained.prefixes if prefix.tail}
+        for prefix in retained.prefixes:
+            for node in prefix.tail.chunks() if prefix.tail else ():
+                cached = self.nodes.get(node)
+                if cached is None or cached.lifetime != (
+                    prefix.identity,
+                    prefix.native_epoch,
+                ):
+                    rejected.add(node.key)
+                    roots.pop(node.key, None)
+                elif node.key not in rejected:
+                    roots[node.key] = len(cached.references)
+        return roots
+
+    def bind(
+        self, batch: "Prepared[torch.Tensor]", obs: "ObservationBuffers"
+    ) -> "Prepared[torch.Tensor]":
+        retained = retained_memory(obs)
+        if retained is None or batch.memory is None or batch.memory.fold is None:
+            return batch
+        fold = batch.memory.fold
+        nodes = {
+            node.key: node
+            for prefix in retained.prefixes
+            for node in (prefix.tail.chunks() if prefix.tail else ())
+        }
+        lifetimes = {
+            node.key: (prefix.identity, prefix.native_epoch)
+            for prefix in retained.prefixes
+            for node in (prefix.tail.chunks() if prefix.tail else ())
+        }
+        root_keys = {
+            key
+            for index, key in enumerate(fold.keys)
+            if fold.record_slices[index][0] < 0
+        }
+        cached = [self.nodes[nodes[key]] for key in fold.keys if key in root_keys]
+        open_keys = {prefix.tail.key for prefix in retained.prefixes if prefix.tail}
+        complete = {
+            node.previous.key for node in nodes.values() if node.previous is not None
+        } - open_keys
+        pending = [
+            (i, ref(nodes[key]), lifetimes[key])
+            for i, key in enumerate(fold.keys)
+            if key in complete and key not in root_keys
+        ]
+
+        reference_slices, record_slices = fold.reference_slices, fold.record_slices
+
+        def retain(
+            states: torch.Tensor, references: torch.Tensor, records: torch.Tensor
+        ) -> None:
+            for index, weak, lifetime in pending:
+                node = weak()
+                if node is None:
+                    continue
+                start, count = reference_slices[index]
+                record_start, record_count = record_slices[index]
+                self.nodes[node] = CachedNode(
+                    lifetime,
+                    references[start : start + count].detach().clone(),
+                    records[record_start : record_start + record_count]
+                    .detach()
+                    .clone(),
+                    states[index + 1].detach().clone(),
+                )
+
+        fold = replace(
+            fold,
+            root_references=torch.cat([node.references for node in cached])
+            if cached
+            else None,
+            root_states=torch.stack([node.state for node in cached])
+            if cached
+            else None,
+            retain=retain,
+        )
+        return replace(batch, memory=replace(batch.memory, fold=fold))
 
 
 class DecisionMemory(nn.Module):
@@ -104,6 +218,8 @@ class DecisionMemory(nn.Module):
                 -1,
             )
         )
+        if rows.fold is not None and rows.fold.root_references is not None:
+            references = torch.cat((rows.fold.root_references, references))
         members = self.member_map(
             torch.cat((references[rows.member_references], rows.member_positions), -1)
         )
@@ -135,6 +251,11 @@ class DecisionMemory(nn.Module):
                 # descendants contribute gradients to that same state; no state
                 # survives the forward/backward or a parameter update.
                 states = records.new_zeros((rows.fold.node_count + 1, 64))
+                if rows.fold.root_states is not None:
+                    assert rows.fold.root_nodes is not None
+                    states = states.index_copy(
+                        0, rows.fold.root_nodes, rows.fold.root_states
+                    )
                 for level in rows.fold.levels:
                     packed = PackedSequence(
                         records[level.records], torch.tensor(level.schedule.sizes)
@@ -143,6 +264,8 @@ class DecisionMemory(nn.Module):
                     states = states.index_copy(
                         0, level.nodes, hidden[-1][level.schedule.restore]
                     )
+                if rows.fold.retain is not None:
+                    rows.fold.retain(states, references, records)
                 summaries = self._summaries(states[rows.fold.tails])
                 return summaries * (rows.fold.tails != 0)[:, None, None]
             packed = PackedSequence(
