@@ -1,11 +1,10 @@
 # Etude execution comparison
 
 **Not yet measured.** Two rentals on 2026-11-17 ended before any scored GPU
-workload (a Vast host went offline; the pinned Etude client could not read
-Lium's pod). Both were terminated and confirmed absent; launcher estimates
-total about USD 0.13 of the USD 10 cap. A further RunPod/Vast capacity check
-found no rentable machine and incurred no new cost. The method below stands
-for a repeat.
+workload (a Vast host went offline; the Etude client could not read Lium's
+pod). Both were terminated and confirmed absent; launcher estimates total
+about USD 0.13 of the USD 10 cap. A later RunPod/Vast capacity check found
+nothing to rent. The method below stands for a repeat.
 
 Exploratory, not a playing-strength claim. Does execution adoption change
 Elemental update throughput on the same GPU, do managed Manabot players batch
@@ -91,7 +90,8 @@ ETUDE_HOME=/tmp/mtg329-performance-etude doppler run --project etude --config pr
 
 Lium created pod `55297a92-fa2b-47dd-9c73-b327672e74ca`, named
 `etude-7b0c01e641d4`, at `2026-11-17T16:01:32.886331` (the provider's exact
-timezone-naive value). Etude's pinned `Pod.created_at: AwareDatetime` rejected
+timezone-naive value). Etude's `Pod.created_at: AwareDatetime` (pin d9a6bc8f06,
+the code released as 0.4.1) rejected
 that response (`timezone_aware`). Its next inventory read rejected the same
 field. The launcher therefore retained machine
 `mtg329-speed-4090-lium-7b0c01e641d4` as starting, with no provider id or
@@ -108,20 +108,16 @@ launcher still has the unresolved intent and must not be treated as a live
 pod or a reconciled deletion. No launcher/server loop was left running.
 
 The launcher's retained estimate at 16:03 UTC was **~USD 0.01**, not a final
-settlement: it cannot reconcile this deleted pod with the pinned client.
-A retry needs a provider allocation whose lifecycle the client can read, or an
-Etude fix for the actual Lium timestamps and interrupted-creation recovery.
+settlement: the client cannot reconcile this deleted pod. A retry needs a
+provider whose lifecycle the client can read (RunPod or Vast), or an Etude fix
+for Lium's timestamps and interrupted-creation recovery.
 
-## RunPod/Vast retry — 2026-11-17, 16:09–16:10 UTC
+## RunPod/Vast capacity check — 2026-11-17, 16:09–16:10 UTC
 
-Updated the branch to released Etude SDK 0.4.1 from PyPI and created a fresh
-isolated launcher at `/tmp/mtg329-runpod-vast-etude`, copying storage,
-RunPod/Vast provider configuration and their eight on-demand templates only.
-The earlier Lium intent was left untouched. No shared launcher was changed.
-
-Capacity queries used the same Doppler projects as above, this new
-`ETUDE_HOME`, and `uv run --no-sync etude availability TEMPLATE --timeout 30`
-after a locked sync to 0.4.1. Every template reported none available:
+On released Etude SDK 0.4.1, from a fresh isolated launcher
+(`/tmp/mtg329-runpod-vast-etude`: storage, RunPod/Vast configuration and their
+eight on-demand templates only), `uv run --no-sync etude availability TEMPLATE
+--timeout 30` reported none available for every template:
 
 | Provider | GPU | Minimum vCPUs / RAM | Hourly ceiling |
 | --- | --- | --- | --- |
@@ -134,8 +130,6 @@ after a locked sync to 0.4.1. Every template reported none available:
 | Vast | RTX 4090 | 4 / 24 GB | USD 1 |
 | Vast | RTX 3090 | 4 / 24 GB | USD 1 |
 
-No rent was issued; the retry's USD 9 rental cap remains unused. The final
-launcher inventory contained only the owned local machine, with zero
-sessions, rentals and runs. No server, watcher or remote workload was started,
-so no new termination was needed. GPU speed, CUDA batching and stop/resume
-comparison remain unmeasured pending provider capacity.
+Nothing was rented or started: the launcher lists only the owned local
+machine, with zero sessions, rentals and runs. The launcher holding the Lium
+intent and the shared launcher were not touched.

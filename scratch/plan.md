@@ -128,25 +128,17 @@ Etude's failed match. Nothing further to change; no new open choice.
   where the time goes, do not optimize unasked. Any reasonable single GPU (L4,
   4090 or similar price; .lf/prompts/20261117-065639-rst6T1-steer.md,
   replacing the L4-only steer); the report names it. Use RunPod or Vast for the next retry; Lium is excluded. Terminate every machine and confirm.
-  Harness: experiments/etude_execution.py; method, ids, events and cost
-  estimates: experiments/reports/etude-execution.md. Nothing measured yet:
-  - Vast 4090 (15:36–15:53 UTC) went offline during native compilation;
-    termination confirmed; launcher estimate ~USD 0.12.
-  - Retry (16:00–16:03 UTC): no RunPod/Vast capacity. Lium created a 4090
-    under `--max-usd 9`, but its timezone-naive `created_at` fails Etude d9's
-    `AwareDatetime`, so no receipt was kept. Pod deleted through Lium's API
-    and confirmed absent; the isolated launcher
-    (`/tmp/mtg329-performance-etude`) keeps an unresolved intent (~USD 0.01).
-  - Retry at 16:09–16:10 UTC on released 0.4.1: fresh isolated launcher
-    `/tmp/mtg329-runpod-vast-etude`, eight RunPod/Vast templates all reported
-    no capacity (L4/4090/A6000/A5000 on RunPod; L4/4090/3090 on Vast). No rent
-    issued; final inventory has only local, zero sessions/rentals/runs. No
-    added cost or GPU acceptance.
-  - Next: retry on RunPod or Vast (both readable by released 0.4.1) when
-    either has a 4090/L4-class offer, from a fresh isolated `ETUDE_HOME` so the
-    unresolved Lium intent in `/tmp/mtg329-performance-etude` stays as evidence
-    and cannot hold the rental. Do not retry Lium or claim GPU acceptance until
-    a scored run completes. Spent so far ~USD 0.13; cap the rental at 9.
+  Harness: experiments/etude_execution.py; method, machine ids, events and
+  cost estimates: experiments/reports/etude-execution.md. Nothing measured yet:
+  a Vast 4090 went offline while compiling, Lium's pod was unreadable by Etude
+  (timezone-naive `created_at`), and at 16:09 UTC on released 0.4.1 all eight
+  RunPod/Vast templates had no capacity. Every machine is confirmed gone;
+  spent ~USD 0.13.
+  - Next: retry when RunPod or Vast offers a 4090/L4-class machine, from the
+    fresh isolated `ETUDE_HOME=/tmp/mtg329-runpod-vast-etude` (the unresolved
+    Lium intent in `/tmp/mtg329-performance-etude` stays as evidence and must
+    not hold the rental); cap the rental at USD 9. Do not claim GPU acceptance
+    until a scored run completes.
   - Local preflight passed: two-update CPU stop/resume, 16 replayed games.
     Direct SSH proves no queued launcher delivery. The harness is unchanged
     since ee370d9757 apart from compress edits, so a repeat may archive HEAD;
@@ -155,14 +147,10 @@ Etude's failed match. Nothing further to change; no new open choice.
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
   as the gate's proof of that path. PR #500 (open, not draft) head is
-  b2fd182b0b; `gh pr checks 500` showed preflight pending at realign
-  (2026-11-17).
-- Released dependency cut complete: removed the git source, raised all Etude
-  minimums and play-runtime pin to 0.4.1, relocked, and updated consumer release
-  installs, metadata validation and docs. Isolated integration: 12 passed;
-  release checks after retiring a stale deleted-module assertion: 39 passed.
-  Etude Task 2d1933 hard deadlines and the Lium fix remain external limitations;
-  landing remains the caller's decision.
+  b2fd182b0b at the last realign (2026-11-17), preflight pending.
+- Released dependency cut complete (pyproject, lock, release workflow,
+  metadata validation, docs, AGENTS.md); evidence in implementation.md. Etude
+  Task 2d1933 hard deadlines and the Lium fix remain external limitations.
 
 ## Built since the 2026-11-17 steers
 
