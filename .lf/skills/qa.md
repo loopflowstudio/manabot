@@ -412,6 +412,25 @@ publish, land or choose the next Graph step from here.
   (`GameInputs`). Reset a `VectorEnv(num_envs=1, seed=game.seed,
   seed_stride=…, skip_trivial=…, player_policies=evidence.resolved_player_policies)`
   with `game.setup()` and step `game.actions` to replay each retained game.
+- Decision-memory branches (`TrainSelfPlay.pretrained`): from
+  `local_smoke(steps=3, device="cpu").authored_dump()` set attention, FiLM,
+  `recent_events=False`, the four `max_decision_*` capacities and 2/2/2
+  execution rows; train a `decision_memory="none"` control trunk with
+  `manabot train --regime`, then point each branch's `pretrained` at the
+  trunk's `run.json` and `self-play-ema.safetensors` (path, sha256, bytes).
+  Compare trunk EMA and branch `initial_raw` with `resolve("torch").load_policy`
+  on real decisions: logits and value must be exactly equal. Read gates from the
+  checkpoint keys containing `memory_gate`. A history-disabled producer must be
+  refused naming the `observation.max_decision_*` fields. For the remote path,
+  `PretrainedInitialization.from_storage(DirectoryStorage(<dir>), ...)` feeds
+  `experiments.opponent_memory.branch_jobs` (trunk seed must be a declared
+  label, e.g. 39101); to run a built job, commit first, copy the inputs under
+  `spec.pretrained.files()` names, set the `ETUDE_*` variables `_run_worker`
+  reads and call `run_worker()`. It writes `.manabot-source.json` into the
+  checkout: delete it after each run or the next refuses. Two of seven
+  identical 3-update CPU branch runs idled ~130 s at ~5% CPU until the 120 s
+  wall deadline (host load 17–26, `downtime_seconds` ≈ the gap); retry before
+  attributing a timeout to the change.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
