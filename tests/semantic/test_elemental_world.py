@@ -43,6 +43,7 @@ from managym.academy.server import GameSession, _parse_game_config
 from managym.experience import LegacyPermanentView
 from managym.experience_projection import describe_actions, serialize_observation
 from tests.model.prepared_routes import device_input
+from tests.retained_decision import source_payment_tape
 
 PACK = "elemental-world-v2"
 
@@ -357,7 +358,7 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
 
 
 def test_retained_professor_offer_completes_payment_and_replays_exactly() -> None:
-    # Apply the retained w10 action prefix to the current w11 WB/UG setup.
+    # Replay the old choices with explicit automatic payment at new source decisions.
     # This preserves the regression; it does not relabel the frozen w10 root.
     prefix = [
         2,
@@ -404,13 +405,14 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
                 for key in ("elemental_wb", "elemental_ug")
             ]
         )
-        for action in prefix:
+        for action in source_payment_tape(env, prefix):
             obs, _, _, _, _ = env.step(action)
         assert len(obs.action_space.actions) == 8
         assert "Gnarled Professor" in describe_actions(obs)[4]["description"]
         root = env.state_digest()
         branch = env.clone_env()
-        obs, _, _, _, _ = branch.step(4)
+        for action in source_payment_tape(branch, [4]):
+            obs, _, _, _, _ = branch.step(action)
         # The production wrapper skips forced payment and priority steps,
         # reaching the resolved Professor's player-visible Learn decision.
         # Directed native regressions exercise each explicit payment step.

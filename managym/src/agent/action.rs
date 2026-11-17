@@ -27,7 +27,7 @@ pub enum ActionType {
     PayCost = 11,
     /// Choose a mode of a modal effect.
     ChooseMode = 12,
-    /// Tap a permanent to pay {1} of a waterbend cost.
+    /// Tap a permanent for a waterbend cost or produce mana for a pending payment.
     TapForCost = 13,
     LearnTakeLesson = 14,
     LearnDiscard = 15,
@@ -130,6 +130,12 @@ pub enum Action {
         player: PlayerId,
         permanent: PermanentId,
     },
+    /// Tap fixed-output source `permanent` for mana toward the pending mana
+    /// payment.
+    TapForMana {
+        player: PlayerId,
+        permanent: PermanentId,
+    },
 }
 
 impl Action {
@@ -154,7 +160,8 @@ impl Action {
             | Action::Decline { player, .. }
             | Action::PayCost { player, .. }
             | Action::ChooseMode { player, .. }
-            | Action::WaterbendTap { player, .. } => *player,
+            | Action::WaterbendTap { player, .. }
+            | Action::TapForMana { player, .. } => *player,
         }
     }
 
@@ -183,7 +190,7 @@ impl Action {
             Action::Decline { .. } => ActionType::DeclineChoice,
             Action::PayCost { .. } => ActionType::PayCost,
             Action::ChooseMode { .. } => ActionType::ChooseMode,
-            Action::WaterbendTap { .. } => ActionType::TapForCost,
+            Action::WaterbendTap { .. } | Action::TapForMana { .. } => ActionType::TapForCost,
         }
     }
 }
