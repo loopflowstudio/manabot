@@ -2397,3 +2397,19 @@ erratum. Frozen CUDA bytes/source identities and the calibration job name remain
 unchanged. No paid launch, pilot, PR or Task completion. The Task session owns
 CUDA measurement of these host cuts; matched training and paired strength remain
 unrun.
+
+### CUDA suffix calibration — 2026-11-17
+
+Run `opponent_memory/cuda-calibration-suffix@39100`, source `5c644ef19e`, A40 `mtg252-a40-36729973e845`. All 134 outputs fetched through SDK digest checks and archived with size/SHA256 verification. One preceding launch was refused for no A40 stock. Launcher estimate USD0.2933; rental terminated and pod gone (Task session observation). The launch used `--max-usd 3.80`, with USD2.68 committed beforehand. No launch in this slice.
+
+| Worker | Seconds | / incumbent | Retention s | Preparation s | Inference s | Forward/loss s | Native encoding s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 00-control | 332.295 | 1.089 | 18.369 | 53.672 | 63.669 | 130.172 | 3.770 |
+| 01-incumbent | 305.775 | 1.002 | 3.628 | 48.564 | 63.530 | 128.694 | 1.985 |
+| 02-control | 337.066 | 1.105 | 20.182 | 58.725 | 66.567 | 130.481 | 3.778 |
+| 03-gru-k1 | 366.312 | 1.201 | 18.478 | 75.165 | 72.080 | 139.669 | 3.730 |
+| 04-incumbent | 304.331 | 0.998 | 4.221 | 50.922 | 64.886 | 125.529 | 2.023 |
+
+The incumbent median is 305.053 s; its two measurements agree within 0.5%. Control is 1.105× and GRU 1.201× incumbent time. The previous additive run was 1.049×/1.265× with about 8% incumbent spread. These are exploratory cost receipts, not learning or strength evidence. Capture is nested under retention, never added as another cost. Repeated open-tail work remains a candidate; unchanged-stream skipping alone cannot remove it in opponent-only self-play, where nearly every viewer log changes at nearly every step.
+
+Evidence: `experiments/data/opponent-memory/20261117-cuda-optimized-retry/suffix-output.tar.gz` and adjacent member/launcher records. Matched training and paired strength comparison remain unrun. No paid launch, pilot, PR, model-shape change or calibration-job rename follows.
