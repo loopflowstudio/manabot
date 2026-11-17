@@ -115,6 +115,42 @@ and `manabot training-report` stays as the cross-experiment run list
 `etude report` does not draw. Naming leftovers are ideas in questions.md, not
 implement directions.
 
+Seventh concept review (c22355ca9c), covering the QA report fixes
+(5d57401099, 3850764dd8, eef697a757). The third clock and the silent-attempt
+rule settle as built. The report labels do not, and are the next implement
+direction:
+
+- What a run is for is the run's identity, which the design gives to the
+  command ("Identity, inputs, continuation and paths belong to the command").
+  Etude's `RunRecord` already has `kind` and `job`; 0.4.1's `track` and
+  `etude train FILE` cannot set them, so the labels travel as text metrics.
+  That stopgap is acceptable only where it is asked for.
+- As built, `self_play(..., kind="training", recipe="")` makes every caller
+  assert a purpose it never stated. Counterexample:
+  `experiments/batched_baseline.py`, a benchmark, calls the loop with no
+  label, so its rows say `run/kind=training` for good and the report includes
+  it by default; Elemental's retained rows gain `run/kind=training` and an
+  empty `run/recipe` on every update. docs/experiment-metrics.md says "names
+  alone do not establish purpose"; a default does no better.
+- Direction: the loop logs only labels its recipe gave. A recipe that says
+  nothing writes no `run/kind` or `run/recipe` column and stays
+  `unclassified`, as before 3850764dd8. Only `manabot/recipes/local.py`
+  passes labels, so the stopgap lives in throwaway smoke runs and never in
+  retained evidence. Test: a run through `baseline`/`elemental` settings has
+  no label columns; the local recipe is still excluded by default.
+- docs/training.md shows `self_play` as "the loop you would write" with the
+  old signature and no label line. Make the listing match the code, and say
+  in one sentence that labels are optional and what the report does without
+  them.
+- Proposed, not filed (Etude): `etude train FILE` records the file as the
+  run's `job`, and the command or `track` accepts a `kind`. When a release
+  has that, delete the label argument, the two text metrics and
+  `time_sources.label`; the reader's `declared.kind` / `run.job` precedence
+  already prefers the record.
+
+No open product choice: the smoke rows are throwaway and the Etude change
+is additive.
+
 ## Report follow-up
 
 QA's two retained-report defects (scratch/qa.html) are fixed by 3850764dd8,

@@ -160,3 +160,10 @@ defaults; either deletion is its own later change and loses nothing now.
 for recipe runs. It replaces the docs' earlier "No transitions clock is
 declared" choice, which had no recorded reason. A run created before this
 change declares two clocks; resuming one under three was not tested.
+
+2026-11-17 seventh concept review (mine, reversible): report labels stay as
+text metrics for the local smoke only; the loop's `kind="training"` default
+goes, so unlabeled recipes log no label and read as `unclassified`. Not asked
+of anyone: whether to hold PR #500 for an Etude release that records `job`
+and `kind` on `etude train FILE` instead. Taken as no, because the stopgap
+then touches only throwaway smoke runs and deleting it later rewrites nothing.
