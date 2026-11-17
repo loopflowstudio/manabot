@@ -86,53 +86,23 @@ measurement has run. Resume strength and CUDA speed/admission remain separate.
   Final isolated `etude machines` lists only owned local; no watcher/server
   was started. Gate, publication, CUDA/resume and nightly remain unrun.
 
-## GPU attempt — 2026-11-17
+## GPU attempts — 2026-11-17
 
-- Prepared `experiments/etude_execution.py` and its report before remote scored
-  work: alternating main/branch Elemental runs, normal 256 streams, real save
-  timings, a six-update full/stopped/resumed baseline and managed evaluation
-  with actual device/batch logging. Main archive's resolved Elemental config
-  validated against its historical schema; this adds no live regime reader.
+Method, machine ids, exact events and launcher estimates:
+experiments/reports/etude-execution.md. Summary and blocker: plan.md, Remaining.
+
 - Harness preflight: actual `etude train` at seed 197, CPU, two updates,
   stop-file request after update 1: exit 75; `--resume`: exit 0. Reader returns
   updates [1, 2], final 1,012 decisions. Production managed callback on an
   existing checkpoint: 2 deals, 16/16 valid/replayed games, 645 CPU forwards,
-  max batch 1. This is a harness check, not CUDA or main/branch performance.
-- Vast 4090 reached SSH, source upload and native compilation, then provider
-  status became offline. No scored GPU workload completed. Explicit termination
-  confirmed 15:53 UTC by Etude's deleted listing and Vast API absence. Fallback
-  RunPod A6000 query: no capacity. Method, machine id, exact events and the
-  launcher's single retained cost estimate: experiments/reports/etude-execution.md.
-- Ruff check/format and `git diff --check` pass. `lf context` keeps default
-  targets and no usage entries. No server/watcher or rented machine remains.
-  CUDA speed/batching and GPU resume-strength remain unmeasured; gate, nightly
-  and publication remain the caller's steps.
-
-## Compress — 2026-11-17
-
-- `experiments/etude_execution.py`: dropped the re-validation of settings that
-  are already a `SelfPlay`, a repeated `CheckpointRef` import and three
-  function-local `import os`. AGENTS.md states the `__main__` rule once, in
-  the existing callback paragraph. Ruff check/format pass.
-  `python -m experiments.etude_execution settings` wrote 3,218 bytes;
-  `etude train experiments/etude_execution.py --config
+  max batch 1. A harness check, not CUDA or main/branch performance. The main
+  archive's resolved Elemental config validated against its historical schema.
+- After compress: `python -m experiments.etude_execution settings` wrote 3,218
+  bytes; `etude train experiments/etude_execution.py --config
   '{"workload":"baseline","device":"cpu","updates":1}' --json`: finished, one
-  timed save (0.034 s). No GPU was rented in this step.
-
-## GPU retry — 2026-11-17, 16:00–16:03 UTC
-
-- RunPod L4/4090/A6000/A5000 and Vast 4090/3090 had no matching capacity.
-  Lium offered a 4090 at USD 0.41/hour; `etude rent
-  mtg329-speed-4090-lium --hours 2 --max-usd 9` created a pod, but the pinned
-  SDK rejected its timezone-naive `created_at` before retaining a provider
-  receipt. A scheduler tick reproduced the failed reconciliation. No GPU
-  workload, SSH or source upload occurred.
-- `etude terminate` refused with `Lium create already attempted; awaiting
-  reconciliation`. Direct authenticated deletion of that exact pod succeeded;
-  inventory exclusion followed by individual 404/absence confirmed termination
-  by 16:03 UTC. The isolated launcher retains an unresolved intent, with a
-  ~USD 0.01 estimate, not a final settlement. No shared launcher change or
-  background server. Exact ids, method and limits: report's Retry section.
-- No code changed; no build/test rerun was needed. GPU acceptance remains
-  blocked on provider lifecycle compatibility/capacity. Gate and publication
-  remain later steps.
+  timed save (0.034 s).
+- Vast 4090: SSH, upload and native compilation, then offline; no scored
+  workload; termination confirmed 15:53 UTC. Lium 4090 (16:01 UTC): created,
+  unreadable by the pinned SDK, deleted directly and confirmed absent by
+  16:03 UTC; `etude terminate` refused (`Lium create already attempted;
+  awaiting reconciliation`). No server, watcher or rented machine remains.

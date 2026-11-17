@@ -1,5 +1,10 @@
 # Etude execution comparison
 
+**Not yet measured.** Two rentals on 2026-11-17 ended before any scored GPU
+workload (a Vast host went offline; the pinned Etude client could not read
+Lium's pod). Both were terminated and confirmed absent; launcher estimates
+total about USD 0.13 of the USD 10 cap. The method below stands for a repeat.
+
 Exploratory, not a playing-strength claim. Does execution adoption change
 Elemental update throughput on the same GPU, do managed Manabot players batch
 on CUDA, and how does a stopped/resumed baseline compare with uninterrupted
@@ -18,7 +23,7 @@ termination even if setup or measurement fails.
 
 ## Attempt — 2026-11-17
 
-No scored GPU workload completed. The source archives were main
+The source archives were main
 `3afd92d8f3bf48b87d873693580f0d5f8ccf3612` and branch
 `ee370d9757b86422db0ff0140d651c37a911de3f`, with this measurement module
 overlaid on each. Python source manifests bound the archive bytes; the engine
@@ -69,12 +74,6 @@ Ruff check/format and `git diff --check` pass. No experiment-specific test
 suite or saved schedule was added. Working setup script and source archives
 remain in `/tmp/mtg329-gpu`; those paths are temporary, not archival evidence.
 
-There is no GPU performance or resume-strength conclusion. Repeat the
-planned workload on a functioning single GPU; confirm CUDA, retain training
-phase/save timings, score full/resumed endpoints and inspect actual managed
-batch sizes before making those claims. Gate, nightly dispatch and publication
-remain separate.
-
 ## Retry — 2026-11-17, 16:00–16:03 UTC
 
 At branch `f962de12a174a17515692cd69a42a759feaa7b78`, fresh capacity checks
@@ -108,8 +107,5 @@ pod or a reconciled deletion. No launcher/server loop was left running.
 
 The launcher's retained estimate at 16:03 UTC was **~USD 0.01**, not a final
 settlement: it cannot reconcile this deleted pod with the pinned client.
-No bill was reconstructed. The earlier attempt's estimate stays above.
-The GPU throughput, CUDA batching and stop/resume comparison remain unmeasured.
-Retry needs a provider allocation whose lifecycle the client can read, or an
+A retry needs a provider allocation whose lifecycle the client can read, or an
 Etude fix for the actual Lium timestamps and interrupted-creation recovery.
-Gate and publication remain later steps.

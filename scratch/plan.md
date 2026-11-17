@@ -126,28 +126,22 @@ Etude's failed match. Nothing further to change; no new open choice.
   4090 or similar price; .lf/prompts/20261117-065639-rst6T1-steer.md,
   replacing the L4-only steer); the report names it. Lium rental is untested:
   confirm start and termination. Terminate every machine and confirm.
-  Harness prepared in experiments/etude_execution.py; method and actual
-  attempt in experiments/reports/etude-execution.md. Vast 4090 rented and
-  reached SSH/native compilation, then the host went offline before a scored
-  workload. Termination confirmed in Etude and by absence from Vast's API at
-  15:53 UTC. RunPod A6000 had no capacity. No GPU timings, CUDA batches or
-  resume strength were observed; repeat on a functioning GPU. Account for
-  this attempt within the USD 10 total cap (its launcher's estimate is in the
-  report); cap a subsequent rental at USD 9 to leave margin. The two-update
-  CPU stop/resume harness and 16 replayed preflight games passed. No queued
-  launcher-delivery proof follows from a direct SSH measurement. Outside
-  AGENTS.md and the harness/report, HEAD 773ee9a135 equals the archived
-  branch ee370d9757, so a repeat may archive HEAD; the setup script and
-  archives in /tmp/mtg329-gpu are temporary and may be rebuilt.
-  Retry 2026-11-17 at 16:00–16:03 UTC: RunPod L4/4090/A6000/A5000 and
-  Vast 4090/3090 had no capacity. Lium created a 4090 under `--max-usd 9`,
-  but its timezone-naive `created_at` failed Etude's AwareDatetime validation
-  before a receipt was retained. No SSH or GPU work. Direct provider deletion
-  confirmed by individual 404/absence; `etude terminate` could not reconcile
-  the unreceipted intent. Isolated launcher still says starting (~USD 0.01
-  estimate); no actual pod or server remains. Report has exact ids and limits.
-  Retry requires a readable provider lifecycle or an Etude timestamp/recovery
-  fix; do not claim GPU acceptance or keep retrying this unresolved intent.
+  Harness: experiments/etude_execution.py; method, ids, events and cost
+  estimates: experiments/reports/etude-execution.md. Nothing measured yet:
+  - Vast 4090 (15:36–15:53 UTC) went offline during native compilation;
+    termination confirmed; launcher estimate ~USD 0.12.
+  - Retry (16:00–16:03 UTC): no RunPod/Vast capacity. Lium created a 4090
+    under `--max-usd 9`, but its timezone-naive `created_at` fails Etude d9's
+    `AwareDatetime`, so no receipt was kept. Pod deleted through Lium's API
+    and confirmed absent; the isolated launcher
+    (`/tmp/mtg329-performance-etude`) keeps an unresolved intent (~USD 0.01).
+  - Blocked on a provider allocation whose lifecycle the pinned client can
+    read, or an Etude timestamp/recovery fix. Do not retry Lium or claim GPU
+    acceptance. A later rental stays within the USD 10 total (cap it at 9).
+  - Local preflight passed: two-update CPU stop/resume, 16 replayed games.
+    Direct SSH proves no queued launcher delivery. The harness is unchanged
+    since ee370d9757 apart from compress edits, so a repeat may archive HEAD;
+    /tmp/mtg329-gpu is temporary and may be rebuilt.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
