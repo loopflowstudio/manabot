@@ -135,7 +135,9 @@ def test_recipe_report_preserves_paired_deals_and_policy_inspection(
         seed=197,
         updates=1,
         deals=(1_915_100_000, 1_915_100_001),
-        seconds=90,
+        # Sixteen scalar child games plus replay share this evaluation budget;
+        # leave headroom below the independent 300-second per-test watchdog.
+        seconds=180,
         backend=resolve("torch"),
     )
     assert report.software == "passed", report.error
@@ -144,4 +146,4 @@ def test_recipe_report_preserves_paired_deals_and_policy_inspection(
     assert all(len(deal.legs) == 4 for deal in report.paired)
     assert [policy.updates for policy in report.policies] == [0, 1]
     assert sum(item.retained for item in report.exposure) > 0
-    assert (tmp_path / "learning.json").exists()
+    assert (out / "learning.json").exists()

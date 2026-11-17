@@ -21,8 +21,9 @@ recovery members and their Torch functions (policy/optimizer/RNG state, Adam
 admission, clone/validate, device metrics), collector restore_rng, VerifyStore
 (stage reader now in reports/snapshot.py), reports/selection.py,
 training/clock.py and its test, report_baseline, local_checkpoint_file,
-HardwareInventory, replay_prefix. Kept: StepCalibration (documented retained
-reader), infra/host.py (see questions.md).
+HardwareInventory, replay_prefix, host_facts and its CPU/cgroup/RunPod readers
+and exclusive tests. Kept: StepCalibration (retained reader) and HostFacts /
+MemoryLimit schemas for historical receipts.
 
 ## Built
 
@@ -43,21 +44,15 @@ true hangs/exits retry the grouped job. No nested-process workaround.
 
 ## Validation and limits
 
-Focused native, card, world, monitor and report checks, isolated dependency
-integration, and installed 3.12/3.13 smoke pass; see implementation.md. Final
-boundary/declaration verification (38 passed), lint and formatting pass. No CUDA/provider
-proof or automatic policy→sampler scheduling claim. LLM experiments remain explicitly blocked on EXP-70/frozen checkpoints;
-their declarations share Agents but their sessions are not a runnable adoption
-proof. Earlier transcripts: 4de3a76ba0 and 382c653ec8:scratch/.
+Evidence and commands: implementation.md. Focused native, card, world, monitor,
+report, recipe, journal and boundary checks pass at 852c0d866b before this
+follow-up; the report proof now also passes; isolated dependency integration and installed
+3.12/3.13 smoke pass. Not shown: CUDA batching, real Rust panic or native hang
+injection, launched/provider runs, browser proof, full suite, automatic
+policy→sampler scheduling. LLM experiments stay blocked on EXP-70/frozen
+checkpoints; their declarations share Agents but are not a runnable adoption
+proof. origin/main equals the merge base (c035d5566a); no upstream sync needed.
 
-After main sync (3cb2aacbb5): rebuilt native cp313 extension; 233 distinct focused
-collection/journal/disclosure/recipe and adjacent checks pass after fixing journal
-read ordering and stale standalone worker fixtures. Rerun at be4c9397b8: 233 passed. Lint/format/diff checks pass;
-commands and results in implementation.md. Gate/publication remain caller steps.
+## Remaining
 
-Concept-review cleanup (2026-11-16): job/run wording; RegimeRunRecord and
-RegimeRun retained readers; shared schema/coordinate owners; retained builders
-in test fixtures and belief demo in belief/; unused VerifyStore recovery/write
-methods removed; AGENTS loop example corrected. Behavior and serialized keys stay.
-Focused verification passes after correcting an unvalidated policy-import fixture;
-commands/results in implementation.md. All six review fixes are complete.
+- Gate and publication are the caller's steps.

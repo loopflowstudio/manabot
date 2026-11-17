@@ -1,64 +1,47 @@
 # MTG-329 evidence
 
-Full transcripts and commands: 4de3a76ba0:scratch/implementation.md,
-382c653ec8:scratch/implementation.md. No paid/provider/service run or landing.
+Prior transcripts/commands: 4de3a76ba0, 382c653ec8 and f6a2660745:
+`scratch/implementation.md`. No paid/provider/service run or landing.
 
-2026-11-14 (earlier pins/native): seed 197 two-update PPO and damped-policy
-raw/EMA, 87 tensors each, bitwise equal to retired 6ce618b8ad. Real
-SIGINT/SIGTERM saved at update 1; resume finished at 3, rows [1,2,3]. Old
-state.pt parity does not prove the revised save API.
+- 2026-11-14: seed 197, two-update PPO/damped raw/EMA, 87 tensors each,
+  bitwise equal to retired 6ce618b8ad. SIGINT/SIGTERM saved update 1; resume
+  finished 3, rows [1,2,3]. This predates the revised save API.
+- 2026-11-16, Etude d9 CPU: 9 agent/native-card retry tests passed. Across
+  Etude processes, AgentError/PanicException retain an invalid score-null game
+  and failure journal, then seven clean games. Injected clock and Command caps
+  keep score-null rows; RetryRequested escapes with its journal. Ordered masked
+  Prepared batching and repeated seeded sampling pass. An omitted all-null
+  scalar column means unavailable, never zero. Card/world/monitor/head-to-head:
+  87 passed; isolated artifacts/SDK/source/recipe: 12 passed. Installed wheels,
+  CPython 3.12.12/3.13.15, Torch 2.15.0, Etude d9: two-update training, reload,
+  CLI and Academy smoke passed.
+- After main sync, a stale binary caused 69 failures. Rebuilt cp313 extension
+  atomically (81s), fixed pre-journal seed reads and two stale worker fixtures;
+  eleven focused files: 233 passed. Concept cleanup: 139 passed after correcting
+  an assembled policy-import fixture; fresh eval.duel/monitor imports load no
+  training.regime/records. First compress eval/boundary check: 89 passed.
+- Second compress: 269 passed, 2 skipped, 1 failed (101s). The failing recipe
+  report's choice-corpus KeyError also occurred at 9336e7aa08. A real one-update
+  baseline CLI run located blocks beside `out` under
+  `track/baseline/baseline@197`; report_recipe now reads the run's parent by name.
 
-2026-11-16 before main sync, Etude d9a6bc8, CPU only:
-- uv lock and locked sync pass; existing cp313 native extension used.
-- test_etude_agents plus native card resume/partial-failure retry: 9 passed
-  (54s). Across real Etude game processes, public AgentError and a PyO3-shaped
-  PanicException each leave game one invalid, score null, a failure journal and
-  seven following games clean. Injected clock expiry: eight timeouts; one-Command
-  cap: eight command_cap rows, scores null. RetryRequested escapes to Etude with
-  its journal. Loader batches Prepared rows in order with masked logits (float
-  tolerance) and repeats a seeded sample. Etude omits an all-null scalar column:
-  absence means unavailable score, never zero.
-- Card/world/monitor/head-to-head: 87 passed; the SDK filters completed matches
-  before scheduling (skipped=0), so resume tests assert no replayed match.
-- Isolated artifacts/SDK/source/recipe command: 12 passed. Self-play, minimal,
-  recipe and belief provenance incl. save/resume and EMA pass.
-- Installed wheels outside the checkout, CPython 3.12.12 and 3.13.15, Torch
-  2.15.0, Etude 0.4.0 at d9: 2-update training, policy reload, CLI, Academy.
-- A non-pickleable agent closure once stranded fixture cleanup; the bridge now
-  sends only the synthetic match and survives EOF. Resume configs use JSON
-  model dumps. No frozen evidence rewritten.
-- First compress pass: 89 focused eval/boundary checks passed (73s).
+Not shown: CUDA, real Rust panic or native-hang injection, launched/provider runs,
+browser proof, full suite, automatic policy→sampler scheduling. Bounded failure
+fixtures prove neither native-hang handling nor in-flight collection recovery.
 
-2026-11-16 after main sync (3cb2aacbb5), Etude d9a6bc8; full commands in
-f6a2660745:scratch/implementation.md:
-- First focused run 69 failed / 32 passed: the stale native binary lacked
-  `known_library`. Rebuilt the cp313 extension (81s) and installed it atomically.
-- Root reassignment read native seeds before journaling intent; proposed setups
-  now use synchronized cached seeds first. Two standalone test workers kept the
-  removed inference argument. After both fixes the eleven collection, journal,
-  disclosure, recipe, deck, loop, game-error, closure, layer-input, world and
-  recording files: 233 passed at 15d69f186f and be4c9397b8. Lost-worker/timeout
-  fixtures are bounded, not a native hang or load probe.
-- Docs give the Etude `--config '{"training_game_logs": true}'` form.
-- Concept-review cleanup (9336e7aa08): 129 passed, 1 skipped, 1 failed (163s);
-  the failure was an assembled policy-import fixture bypassing validation, fixed
-  in the fixture. Follow-up five files: 139 passed. Fresh-process imports of
-  eval.duel and eval.monitor load neither training.regime nor training.records.
-
-Not shown: CUDA batching, real Rust panic injection, native hang/load injection,
-launched or provider runs, browser proof, a full-suite run.
-
-2026-11-16 second compress pass (dead recovery surface, see plan.md):
-- `uv run --extra dev --extra artifacts --extra reports --extra notebook pytest
-  tests/training/test_update_backend_protocols.py test_experiments.py
-  test_learning_dashboard.py test_self_play_loop.py test_numerical_health.py
-  test_recipe_etude.py test_artifact_storage.py test_collection.py
-  test_game_errors.py tests/test_package_boundaries.py tests/sim/test_recording.py
-  tests/infra/test_ci_selection.py test_release.py
-  tests/verify/test_learning_regression.py`: 269 passed, 2 skipped, 1 failed
-  (101s). The failure predates the pass (same on 9336e7aa08); see questions.md.
-- `etude train` of the baseline recipe, 1 update, temp ETUDE_HOME: run blocks sit
-  in `track/baseline/baseline@197/`, `out/` beside them; `read_all` finds the
-  run from the experiment or track directory, not from the run directory or
-  `out`. report_recipe read `out/etude`, which never exists; it now reads the
-  run's parent directory by run name.
+2026-11-16 recipe-report follow-up:
+- Audit failure reproduced at seed 82000, 23-action prefix: waterbend focus is
+  card 79 of permanent 103. choice_corpus now maps permanent and stack aliases
+  to one descriptor, reads characteristic getters and includes stack rows in
+  collision inputs; no public-information fallback or strategic labels.
+- The report test looked for learning.json outside the run's `out` and gave
+  sixteen scalar games plus replay 90 seconds (exhausted, no replay mismatch);
+  it now allows 180 under the unchanged 300-second watchdog.
+- Deleted unused host/cgroup/RunPod collection; schema round trips remain.
+- Compress pass, no code edits: `uv run --extra dev --extra artifacts --extra
+  reports --extra notebook pytest tests/verify/test_choice_corpus.py
+  tests/verify/test_learning_regression.py tests/infra/test_host_facts.py -q`:
+  9 passed (102.92s). Ruff check/format pass for the changed files; an
+  unsorted import in tests/verify/test_input_v10.py is not from this branch.
+- `lf context`: scratch stays over 12k tokens because of the protected notes
+  (questions.md); no limit changed. Gate and publication remain later steps.

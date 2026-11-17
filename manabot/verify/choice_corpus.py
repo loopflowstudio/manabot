@@ -16,7 +16,11 @@ from typing import Literal
 
 import torch
 
-from manabot.env.observation import ACTION_DECLARED_INDEX, PERMANENT_DEFINITION_INDEX
+from manabot.env.observation import (
+    ACTION_DECLARED_INDEX,
+    PERMANENT_DEFINITION_INDEX,
+    STACK_DEFINITION_INDEX,
+)
 from manabot.verify.action_cases import encode, reorder_offers
 import managym
 
@@ -81,14 +85,14 @@ def _signatures(raw: managym.Observation) -> list[str]:
                 role,
                 card.registry_key,
                 int(card.zone),
-                card.power,
-                card.toughness,
+                card.characteristics.power,
+                card.characteristics.toughness,
                 card.is_token,
-                card.is_ally,
-                card.is_lesson,
-                card.ward_cost,
-                card.kicker_cost,
-                _keywords(card.keywords),
+                card.characteristics.is_ally,
+                card.characteristics.is_lesson,
+                card.characteristics.ward_cost,
+                card.characteristics.kicker_cost,
+                _keywords(card.characteristics.keywords),
             ]
         for permanent in permanents:
             objects[permanent.id] = [
@@ -106,6 +110,25 @@ def _signatures(raw: managym.Observation) -> list[str]:
                 permanent.has_exile_link,
                 _keywords(permanent.characteristics.keywords),
             ]
+            if permanent.object_id is not None:
+                objects[permanent.object_id] = objects[permanent.id]
+    for item in raw.stack_objects:
+        # Spell card ids and stack ids name the same public object, as in v11.
+        descriptor: list[object] = [
+            "stack",
+            "self" if item.controller_id == raw.agent.id else "opponent",
+            int(item.kind),
+            item.source_card_registry_key,
+            item.ability_index,
+            item.chosen_mode,
+            item.announced_x,
+            item.x,
+            item.kicked,
+            item.is_copy,
+        ]
+        objects[item.stack_object_id] = descriptor
+        if item.object_id is not None:
+            objects[item.object_id] = descriptor
     for card in raw.agent_sideboard:
         objects[card.candidate_id] = ["outside", "self", card.registry_key]
     # Unknown references are errors, not labels derived from arbitrary IDs.
@@ -329,6 +352,11 @@ def action_inputs(
             elif kind == "permanents" and mutation == "without_definition":
                 row[PERMANENT_DEFINITION_INDEX] = 0.0
             rows.append(ObjectInput(kind, role, tuple(row)))
+    for tensor in obs["stack"][0]:
+        stack_row: list[float] = tensor.tolist()
+        if mutation == "without_definition":
+            stack_row[STACK_DEFINITION_INDEX] = 0.0
+        rows.append(ObjectInput("stack", "shared", tuple(stack_row)))
     result: list[ActionInput] = []
     for index in range(count):
         action: list[float] = obs["actions"][0, index, :-1].tolist()

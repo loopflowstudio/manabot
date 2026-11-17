@@ -41,14 +41,10 @@ config field; old CLI/TrainingJob forwarding tests become recipe/loop checks.
 Exact native snapshot/restore assertions remain retired; preserve auto-reset,
 resolved-disclosure and export/replay checks. No launcher database was touched.
 
-Open after the second compress pass (for gate):
-- `test_recipe_report_preserves_paired_deals_and_policy_inspection` still fails,
-  now in the choice-corpus audit: `native corpus audit incomplete or failed ...
-  'error': 'KeyError: 79'` at `objects[index] for index in action.focus`
-  (verify/choice_corpus.py, unchanged on this branch; seed 82000, family 10,
-  focus of a type-11 action). The nightly baseline's `evaluate` takes the same
-  path, so it would report software error until this is fixed.
-- Nothing records host facts now: `infra.host.host_facts()` has no caller since
-  the executor went. Left in place with its tests; wire it into the loop's rows
-  or delete it.
-
+2026-11-16 follow-up: delete unused host collection instead of adding a second
+machine-collection path to the loops. Retain HostFacts/MemoryLimit schemas and
+round-trip tests. Replayed seed 82000's 23-action prefix: focus 79 is the card
+identity of permanent 103 (Water Tribe Rallier) during waterbend payment. The
+corpus must resolve both aliases to one descriptor, as the v11 encoders do.
+Spell card/stack aliases also share a row; collision checks must include stack.
+No native rule, observation layout, frozen evidence or strategic label changes.
