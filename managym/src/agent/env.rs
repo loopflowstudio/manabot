@@ -777,6 +777,19 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
+    pub fn payment_preview(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        action_index: usize,
+    ) -> Result<crate::flow::mana::PaymentPreview, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .payment_preview(PlayerId(viewer), revision, fingerprint, action_index)
+    }
+
     /// Public event identities used to explain a committed transition.
     pub fn presentation_subjects(
         &self,

@@ -464,6 +464,24 @@ publish, land or choose the next Graph step from here.
   figure that changes bytes on every redraw also changes its manifest entry.
   Render SVGs with `rsvg-convert -z 2 -b white` and look at them.
 
+- Payment previews (`[data-testid=payment-preview]`, `POST
+  /api/sessions/<id>/payment-preview`): the panel exists only once a payment
+  offer has been previewed in the current decision, so read it with a count
+  check. Arrival focus previews the first offer as soon as a game starts; a
+  `page.route` for failure or delay must be installed before Start game.
+  Compare `[data-payment-source]` ids with the frame's tapped permanent ids
+  after the commit. `trigger_order_server` with `payment_fixture: true` in the
+  `new_game` config gives a ready Lightning Strike payment with nine offers.
+  Rebuilding the SPA stops running `npm run preview` servers; restart them.
+  For a fixture-free game, `managym academy play --deck <f> --opponent-deck
+  <f> --opponent passive --seed 7` with `18 Mountain / 18 Forest / 12
+  Badgermole Cub / 12 Lightning Bolt` against `60 Plains` reaches an
+  all-sources cast (turn 3), a real source-choice prompt with triggered mana
+  (turn 5, after earthbending the Mountain) and a Bolt target → payment flow
+  (turn 7). Cub's earthbend trigger asks for a land target after it resolves.
+  Each new browser context starts a new game from the same launch URL.
+  **Open replay** is a link, not a button. Read the resume credentials from
+  `sessionStorage['etude.gui.resume']` to probe the route from the page.
 - Search (search-capable policy in Play/Watch): `uv run etude train
   manabot/recipes/local.py` gives a compatible
   `out/policies/<update>-raw.safetensors` in about 90 s; save `{"provider": "manabot",
