@@ -2072,7 +2072,15 @@ impl Game {
         player: PlayerId,
         permanent: PermanentId,
     ) -> Result<(), AgentError> {
+        let before = (self.pending_choice.is_none()
+            && self.state.suspended_decision.is_none()
+            && self.mana_capture(player).is_some())
+        .then(|| self.state.players[player.0].mana_pool.total());
         self.tap_fixed_mana_source(player, permanent);
+        if let Some(before) = before {
+            let produced = self.state.players[player.0].mana_pool.total() - before;
+            self.mana_capture(player).unwrap().float(produced);
+        }
         if self.state.suspended_decision.is_some() {
             return self.advance_mana_upfront();
         }
@@ -2928,7 +2936,11 @@ impl Game {
             };
             combat.spend(&unit, &cost.purpose)
         } else {
-            regular.spend(unit, &cost.purpose)
+            let spent = regular.spend(unit, &cost.purpose);
+            if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
+                exposure.mana[player.0].remove(unit.total(), regular.total(), false);
+            }
+            spent
         }
     }
 
@@ -3096,7 +3108,12 @@ impl Game {
                 continue;
             }
             let pool = std::mem::take(self.state.mana_pool_mut(player));
-            *self.state.mana_pool_mut(player) = self.unspent_mana_retained(player, pool);
+            let before = pool.total();
+            let kept = self.unspent_mana_retained(player, pool);
+            if let Some(capture) = self.mana_capture(player) {
+                capture.remove(before - kept.total(), kept.total(), true);
+            }
+            *self.state.mana_pool_mut(player) = kept;
         }
     }
 
@@ -3108,7 +3125,11 @@ impl Game {
                 continue;
             }
             let combat = std::mem::take(self.state.combat_mana_pool_mut(player));
+            let before = combat.total();
             let kept = self.unspent_mana_retained(player, combat);
+            if let Some(capture) = self.mana_capture(player) {
+                capture.combat_expired += u64::from(before - kept.total());
+            }
             self.state.mana_pool_mut(player).add(&kept);
         }
     }

@@ -48,6 +48,43 @@ pub struct ExposureResolution {
 pub struct ExposureCapture {
     pub choices: Vec<ExposureChoice>,
     pub resolutions: Vec<ExposureResolution>,
+    pub mana: [ManaUse; 2],
+}
+
+/// Priority-floated units lose source identity when pooled. Track the range
+/// that can remain after each spend, without changing the rules' mana classes.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct ManaUse {
+    pub priority_produced: u64,
+    pub regular_expired: u64,
+    pub combat_expired: u64,
+    pub priority_expired_min: u64,
+    pub priority_expired_max: u64,
+    #[serde(skip)]
+    held_min: u16,
+    #[serde(skip)]
+    held_max: u16,
+}
+
+impl ManaUse {
+    pub fn float(&mut self, amount: u16) {
+        self.priority_produced += u64::from(amount);
+        self.held_min += amount;
+        self.held_max += amount;
+    }
+
+    /// A removal can consume at most the floated units held and must
+    /// consume any that cannot fit in the remaining pool.
+    pub fn remove(&mut self, amount: u16, remaining: u16, expiry: bool) {
+        if expiry {
+            self.regular_expired += u64::from(amount);
+            self.priority_expired_min += u64::from(self.held_min.saturating_sub(remaining));
+            self.priority_expired_max += u64::from(self.held_max.min(amount));
+            self.priority_expired_max = self.priority_expired_max.min(self.priority_produced);
+        }
+        self.held_min = self.held_min.saturating_sub(amount);
+        self.held_max = self.held_max.min(remaining);
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -137,6 +174,10 @@ impl CardCapture {
 }
 
 impl Game {
+    pub(crate) fn mana_capture(&mut self, player: PlayerId) -> Option<&mut ManaUse> {
+        Some(&mut self.card_capture.as_mut()?.exposure.as_mut()?.mana[player.0])
+    }
+
     /// Transactions preserve diagnostic sinks; search clones deliberately omit them.
     pub(crate) fn rollback_snapshot(&self) -> Self {
         let mut snapshot = self.clone();
@@ -497,5 +538,30 @@ mod tests {
         assert_eq!(moved.name, before.name);
         assert_eq!(moved.definition, before.definition);
         assert_eq!(moved.incarnation, before.incarnation + 1);
+    }
+}
+
+#[cfg(test)]
+mod mana_tests {
+    use super::ManaUse;
+
+    #[test]
+    fn spending_from_a_mixed_pool_bounds_the_expired_float() {
+        let mut mana = ManaUse::default();
+        mana.float(2);
+        // One other unit joins. Spend one, then let the two remaining units expire.
+        mana.remove(1, 2, false);
+        mana.remove(2, 0, true);
+        assert_eq!(
+            (mana.priority_expired_min, mana.priority_expired_max),
+            (1, 2)
+        );
+        // No attribution carries over from an emptied pool.
+        mana.remove(4, 0, true);
+        assert_eq!(mana.regular_expired, 6);
+        assert_eq!(
+            (mana.priority_expired_min, mana.priority_expired_max),
+            (1, 2)
+        );
     }
 }

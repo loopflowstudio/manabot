@@ -40,6 +40,8 @@ from experiments import (
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
+import managym
+from managym.recording import GameRecord, ScalarCapture
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = ROOT / "experiments"
@@ -314,3 +316,46 @@ def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
     unknown = replace(lost, name="unknown-run")
     with pytest.raises(EtudeError, match="unknown-run"):
         tla_frontier.with_launcher_ends(replace(state, runs=(unknown,)))
+
+
+def test_spot_check_counts_a_float_expiring_through_skipped_steps(
+    tmp_path: Path,
+) -> None:
+    env = managym.Env(seed=3)
+    path = tmp_path / "spot.jsonl"
+    capture = ScalarCapture(3, games_path=path)
+    obs, _ = capture.reset(
+        env,
+        managym.GameSetup(
+            [managym.PlayerConfig(name, {"Forest": 12}) for name in ("a", "b")],
+            mana_taps=(True, False),
+        ),
+    )
+    decisions = [0, 0]
+    floated = False
+    while not env.is_game_over():
+        actor = int(obs.agent.player_index)
+        decisions[actor] += 1
+        actions = [a.action_type for a in obs.action_space.actions]
+        choice = 0
+        if not floated and managym.ActionEnum.TAP_FOR_COST in actions:
+            choice = actions.index(managym.ActionEnum.TAP_FOR_COST)
+            floated = True
+        elif managym.ActionEnum.PRIORITY_PLAY_LAND in actions:
+            choice = actions.index(managym.ActionEnum.PRIORITY_PLAY_LAND)
+        obs, *_ = capture.step(env, choice)
+    capture.close()
+    record = GameRecord.model_validate_json(path.read_bytes())
+    on, off = mana_taps.spot_check(record, 1, record.sha256)
+    assert env.skip_trivial_count() > 0
+    assert [on["surfaced"], off["surfaced"]] == decisions
+    assert (on["seat"], off["seat"]) == (1, 0)
+    assert on["float_offered"] > 0
+    assert on["float_chosen"] == on["priority_produced"] == 1
+    assert (
+        on["regular_expired"]
+        == on["priority_expired_min"]
+        == on["priority_expired_max"]
+        == 1
+    )
+    assert off["float_offered"] == off["float_chosen"] == off["regular_expired"] == 0

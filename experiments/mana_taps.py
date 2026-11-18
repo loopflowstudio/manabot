@@ -9,8 +9,11 @@ Run locally with `uv run etude smoke experiments/mana_taps.py`.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 from functools import cache
+import gzip
+import hashlib
 import os
 from pathlib import Path
 import random
@@ -26,7 +29,7 @@ from etude.eval.records import (
     Seating,
     checkpoint_player,
 )
-from etude.eval.result import Row, Tables
+from etude.eval.result import Result, Row
 from etude.jobs import EvalJob, ExperimentState, TrainingJob
 from etude.report import Curve, Matches, Report, Score, Series
 from etude.spec import Input
@@ -50,6 +53,8 @@ from manabot.training.decks import UniformDecks
 from manabot.training.panels import ML
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
+from managym.recording import GameRecord
+from managym.replay import walk
 
 if TYPE_CHECKING:
     from manabot.training.loops.self_play import SelfPlay
@@ -285,7 +290,50 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     ]
 
 
-def play(match: Match[Deals], agents: Sequence[object]) -> Tables:
+@dataclass
+class FloatDecisions:
+    surfaced: int = 0
+    float_offered: int = 0
+    float_chosen: int = 0
+
+
+def spot_check(record: GameRecord, leg: int, replay_sha256: str) -> list[Row]:
+    """Replay one scored leg. Count offers inside the policy's first-legal limit."""
+    counts = [FloatDecisions(), FloatDecisions()]
+    replay = walk(record, capture_cards=True)
+    for decision in replay:
+        space = decision.observation.action_space
+        actions = space.actions[: OBSERVATION.max_actions]
+        row = counts[int(decision.observation.agent.player_index)]
+        row.surfaced += 1
+        if any(
+            a.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY for a in actions
+        ):
+            tap = managym.ActionEnum.TAP_FOR_COST
+            row.float_offered += any(a.action_type == tap for a in actions)
+            row.float_chosen += actions[decision.chosen].action_type == tap
+    if replay.stop is None or replay.stop.status != "complete":
+        raise ValueError(f"mana spot check replay failed: {replay.stop}")
+    exposure = replay.cards().capture.exposure
+    if exposure is None or exposure.mana is None:
+        raise ValueError("native replay lacks mana expiry measurements")
+    return [
+        {
+            "seat": (leg + game_seat) % 2,
+            "game_seat": game_seat,
+            "game": leg,
+            "deal_seed": replay.game.seed,
+            "replay_sha256": replay_sha256,
+            **asdict(count),
+            **mana.model_dump(),
+        }
+        for game_seat, (count, mana) in enumerate(
+            zip(counts, exposure.mana, strict=True)
+        )
+    ]
+
+
+def play(match: Match[Deals], agents: Sequence[object]) -> Result:
     conditions = Deals.model_validate(match.config)
     if match.index is None or conditions != deals():
         raise ValueError("expected an indexed match on the fixed trophy pairs")
@@ -338,6 +386,7 @@ def play(match: Match[Deals], agents: Sequence[object]) -> Tables:
         / match.key
     )
     root.mkdir(parents=True, exist_ok=True)
+    directory = Path(mkdtemp(dir=root)) / "evaluation"
     result = evaluate(
         EvaluationRequest(
             key=key,
@@ -349,7 +398,7 @@ def play(match: Match[Deals], agents: Sequence[object]) -> Tables:
             game_seconds=600,
             purpose="mana-taps-tla",
         ),
-        out_dir=Path(mkdtemp(dir=root)) / "evaluation",
+        out_dir=directory,
         agents=dict(
             zip(
                 ("candidate", "opponent"),
@@ -379,7 +428,24 @@ def play(match: Match[Deals], agents: Sequence[object]) -> Tables:
                     "failure": row.failure if row else result.error or "missing leg",
                 }
             )
-    return {"games": rows}
+    # The first fixed pair supplies four matched spot checks per seating.
+    # Keep each replay with its Etude match so a worker's scratch path is never required.
+    spots: list[Row] = []
+    blobs: list[bytes] = []
+    if match.index == 0 and complete:
+        for path in sorted({r.trace_path for r in result.rows}):
+            with (directory / path).open("rb") as shard:
+                for line in shard:
+                    record = GameRecord.model_validate_json(line)
+                    leg = record.context["evaluation"]["leg"]
+                    if record.sha256 != (by_leg[leg].model_extra or {})["trace_sha256"]:
+                        raise ValueError("spot check differs from scored replay")
+                    body = gzip.compress(line, mtime=0)
+                    spots.extend(
+                        spot_check(record, leg, hashlib.sha256(body).hexdigest())
+                    )
+                    blobs.append(body)
+    return Result(tables={"games": rows, "mana_spot_checks": spots}, blobs=blobs)
 
 
 def report() -> Report:
