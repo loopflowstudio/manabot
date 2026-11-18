@@ -116,13 +116,17 @@ export class GameStore {
   }
 
   table = $state<TableSnapshot | null>(null);
-  restoredDecision = $state<RestoredReplayDecision | null>(null);
+  // Frames and projections are the authority's immutable values, replaced
+  // whole on every update: raw state, so reading one is a plain property
+  // read rather than a deep proxy's (the table reads them thousands of times
+  // a frame, and the resume record serializes the frame on every update).
+  restoredDecision = $state.raw<RestoredReplayDecision | null>(null);
   branchAttemptId = $state<string | null>(null);
-  branchProjection = $state<Observation | null>(null);
+  branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
-  protocolFrame = $state<ExperienceFrame | null>(null);
+  protocolFrame = $state.raw<ExperienceFrame | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
-  observation = $state<Observation | null>(null);
+  observation = $state.raw<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
   // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
   actionSpaceKind = $state<string>('');

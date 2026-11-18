@@ -7,8 +7,9 @@ import type { RecordedPosition, RecordingIndex } from './recording';
  * source generation lets a pending producer refresh only its own recording.
  */
 export class ReplayStore {
-  index = $state<RecordingIndex | null>(null);
-  current = $state<RecordedPosition | null>(null);
+  // The recording and the shown position are replaced whole, never edited: raw state.
+  index = $state.raw<RecordingIndex | null>(null);
+  current = $state.raw<RecordedPosition | null>(null);
   selected = $state(0);
   playing = $state(false);
   speed = $state(1);
