@@ -790,6 +790,20 @@ impl Env {
             .payment_preview(PlayerId(viewer), revision, fingerprint, action_index)
     }
 
+    /// Read-only whole-declaration preview; see [`Game::combat_preview`].
+    pub fn combat_preview(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        plan: &crate::flow::combat_preview::CombatPlan,
+    ) -> Result<crate::flow::combat_preview::CombatPreview, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .combat_preview(PlayerId(viewer), revision, fingerprint, plan)
+    }
+
     /// Public event identities used to explain a committed transition.
     pub fn presentation_subjects(
         &self,

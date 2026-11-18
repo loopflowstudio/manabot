@@ -38,6 +38,7 @@ import managym
 from managym.academy.card_art import card_art
 from managym.academy.card_faces import CardFace, card_faces
 from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
+from managym.combat import CombatPlan, preview_combat
 from managym.decision import (
     Command as SemanticCommand,
     DecisionFrame as SemanticDecisionFrame,
@@ -4520,6 +4521,83 @@ async def get_payment_preview(
             raise HTTPException(409, "payment_preview_stale") from exc
         return {
             **payload.model_dump(),
+            "viewer": context.viewer,
+            "preview": preview.model_dump(mode="json"),
+        }
+
+
+class CombatPreviewRequest(BaseModel):
+    """A drafted declaration at the current combat prompt's authority address."""
+
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    revision: int
+    prompt_id: int
+    frame_hash: str
+    plan: CombatPlan
+
+
+@app.post("/api/sessions/{session_id}/combat-preview")
+async def get_combat_preview(
+    session_id: str,
+    payload: CombatPreviewRequest,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Preview a whole attack or block without committing any of it.
+
+    Each step names the Academy offer to send at the decision it predicts:
+    Academy offer ids enumerate the native actions in order
+    (`_build_decision_context`), so a step's native action index is its offer.
+    """
+    record = SESSION_REGISTRY.get(session_id)
+    if record is None:
+        raise HTTPException(404, "session_not_found")
+    async with record.lock:
+        participant = _rest_participant(record, x_etude_participant_token)
+        if (
+            TableCapability.SUBMIT_LIVE_COMMAND
+            not in ROLE_CAPABILITIES[participant.role]
+        ):
+            raise HTTPException(403, "combat_preview_forbidden")
+        game = record.game
+        context = game.published_prompt
+        pending = game._pending_decision
+        if context is None or pending is None or game.env is None:
+            raise HTTPException(409, "combat_preview_stale")
+        frame = pending.frame
+        if context.viewer != game.human_seat:
+            raise HTTPException(403, "combat_preview_forbidden")
+        if (
+            game.match_id != payload.match_id
+            or frame.revision != payload.revision
+            or frame.prompt is None
+            or frame.prompt.id != payload.prompt_id
+            or frame.frame_hash != payload.frame_hash
+            or frame.frame_hash != context.frame["frame_hash"]
+        ):
+            raise HTTPException(409, "combat_preview_stale")
+        if context.action_space not in {"DECLARE_ATTACKER", "DECLARE_BLOCKER"}:
+            raise HTTPException(409, "combat_preview_not_a_declaration")
+        native = SemanticDecisionFrame.from_json(
+            pending.root.semantic_decision_frame_json()
+        )
+        try:
+            preview = preview_combat(
+                game.env,
+                viewer=context.viewer,
+                revision=native.revision,
+                fingerprint=native.fingerprint,
+                plan=payload.plan,
+            )
+        except managym.AgentError as exc:
+            raise HTTPException(409, "combat_preview_stale") from exc
+        if preview.steps and (
+            context.action_by_offer.get(preview.steps[0].action_index)
+            != preview.steps[0].action_index
+        ):
+            raise RuntimeError("Academy combat offers no longer enumerate actions.")
+        return {
+            **payload.model_dump(mode="json"),
             "viewer": context.viewer,
             "preview": preview.model_dump(mode="json"),
         }
