@@ -4,6 +4,7 @@ The report (`opponent_memory.md`) owns the design, evidence and open decisions.
 `training_jobs` declares one model size at a time: three trunks, or six EMA branches with `trunks`;
 each `PilotStage` owns its stage's horizon and caps.
 Frozen calibration runs retain their original source commits and receipts.
+`size="history-off"` declares the same-host cost comparison with main instead.
 `census` and `probe` are the USD0 commands. Nothing runs on import.
 """
 
@@ -12,8 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from itertools import combinations
+import os
 from pathlib import Path
 import random
+import subprocess
+import sys
 
 from etude.eval.match import Tables
 from etude.eval.records import (
@@ -25,7 +29,12 @@ from etude.eval.records import (
     Seating,
 )
 from etude.experiment import observe
-from etude.jobs import EvalJob, ExperimentState, TrainingRunSummary
+from etude.jobs import (
+    EvalJob,
+    ExperimentState,
+    TrainingJob as PythonJob,
+    TrainingRunSummary,
+)
 from etude.launch.records import Job
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
 from etude.spec import RunRequest
@@ -34,7 +43,12 @@ from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import DECKS, PACK
 from experiments.learning_signal import Design, Pairing
-from manabot.experiment.job import PretrainedInitialization, TrainingJob, machine_setup
+from manabot.experiment.job import (
+    TOOLCHAIN_ENV,
+    PretrainedInitialization,
+    TrainingJob,
+    machine_setup,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.recipes.builders import sampled_self_play
@@ -109,6 +123,42 @@ TRUNK_NAME = "trunk-2"
 TRUNK_NAMES = {39101: TRUNK_NAME, 39102: TRUNK_NAME, 39103: "trunk-4"}
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
+# The commit of main this work is based on: the incumbent for history-off cost.
+INCUMBENT = "3afd92d8f3bf48b87d873693580f0d5f8ccf3612"
+
+
+class HistoryOff(BaseModel):
+    """Same-host training cost with history off, against a reference revision."""
+
+    model_config = ConfigDict(extra="forbid")
+    reference: str = INCUMBENT
+
+
+def measure_history_off(config: HistoryOff) -> None:
+    """Build the reference engine beside this source and time both on the GPU."""
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts/measure_history_off.py"), "compare"]
+        + ["--out", str(Path(os.environ["ETUDE_OUTPUT_DIR"]) / "history-off")]
+        + ["--reference", config.reference],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+def _history_off_job(revision: str) -> Job:
+    job = PythonJob(
+        name="cuda-history-off",
+        train=measure_history_off,
+        config=HistoryOff(),
+        repo=str(ROOT),
+        revision=revision,
+        setup=machine_setup(" --extra play"),
+        extras=("play",),
+        max_hours=1.25,
+        max_usd=Decimal("1.00"),
+        max_attempts=1,
+    ).plain()
+    return job.model_copy(update={"command": f"{TOOLCHAIN_ENV}\n{job.command}"})
 
 
 def training_jobs(
@@ -121,6 +171,8 @@ def training_jobs(
     `seeds` (comma-separated) branches only those seed labels, so finished
     trunks need not wait for one still looking for a machine.
     """
+    if size == "history-off":
+        return _history_off_job(revision).runs(39100)
     chosen = tuple(int(seed) for seed in seeds.split(",")) if seeds else SEEDS
     if not set(chosen) <= set(SEEDS):
         raise ValueError(f"unknown seeds {seeds!r}; expected a subset of {SEEDS}")
