@@ -637,9 +637,11 @@ The rail holds:
   and its buttons. **Rules detail** holds the engine's full instruction.
   Passing priority and paying a cost are the primary button (Space), labelled
   with what it does next: **Resolve** and the spell on top of the stack, the
-  step it moves to ("To combat", "To blockers"), or the cost and the lands it
-  taps ("Pay {1}{U} · Island ×2"; see
-  [Previewing payments](#previewing-payments)). Declining,
+  step it moves to ("To combat", "To blockers"), or the cost ("Pay {1}{U}",
+  with the lands it taps dashed on the board and named in the button's
+  accessible name; see [Previewing payments](#previewing-payments)). The label
+  stays on one line; a long one is shortened and its full text is the
+  button's accessible name and tooltip. Declining,
   and a combat answer that does not name another creature, are separate
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
@@ -699,8 +701,8 @@ happened yet; pointing and focusing send no action. Pointing at a row of **All
 legal choices** previews that choice the same way.
 
 Cast the Cub. At the payment prompt the same lands stay dashed and the primary
-button reads the plan: **Pay {1}{G} · Mountain, Forest**. Press Space or the
-button to tap exactly those lands.
+button reads **Pay {1}{G}**; its accessible name reads the plan, "Pay {1}{G} ·
+Mountain, Forest". Press Space or the button to tap exactly those lands.
 
 The preview is the automatic payer's own plan for the position in front of
 you. Academy asks the game for it; the browser never works one out. What it
@@ -874,9 +876,16 @@ move list and recording. Pausing narration does not change these settings.
 ### Reading consequences
 
 The table's rail tells what happened in prose. In live play it is **Since
-your last move**: spells cast and their targets, attacks, blocks, damage and
-deaths, read from the authority's presentation events after your last
-commit, with the move list beneath grouped by turn. In Replay the same recap
+your last move**: spells cast and their targets, lands played, discards,
+attacks, blocks, damage and deaths, read from the authority's presentation
+events after your last commit, with the move list beneath grouped by turn.
+When the opponent moved, those facts are also read out one at a time over the
+move list, about a second each, with the cards each is about outlined on the
+board; Space (when no control has focus), a click on the caption or any
+action ends the reading, and the choices stay live throughout. Reduced motion
+reads out nothing; the recap lists every fact. Sentences name a player
+shortly ("Heuristic cast…"); the plate and top bar keep how it decides
+("Heuristic · scripted"). In Replay the same recap
 covers **This move** at a consequences position and **Since the last
 decision** at a choice (from the same chooser's previous decision); the move
 list jumps to any move.
