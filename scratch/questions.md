@@ -1,0 +1,78 @@
+# MTG-353 — choices made without a person present (kickoff, 2026-11-17)
+
+The exploration questions of 2026-11-17 (mechanism A/B/C, payment level,
+per-card rows, row counts, vision C) were settled by the plan Jack Heart
+approved; per-seat interfaces and payment level moved to MTG-386.
+
+Made for review in `plan.md`; each is reversible:
+
+1. Pinned pilots are two small committed containers (v9 and v11) written by
+   this change, not the 3.9 MB best player. The best player is checked by
+   `recheck` and by the same test when its file is present.
+2. Pinned-pilot equality is 1e-5 on probabilities plus equal rank of the
+   chosen action, not bit identity, so Linux CI and macOS agree.
+3. A row for a token the checkpoint never saw starts at the mean of its
+   table's learned rows (zero passed over).
+4. Renamed token names are carried by a committed rename table in managym; a
+   learned key missing from it refuses the load.
+5. `possible_world_version` binds only models with belief inputs.
+6. Setup-bound checkpoints keep refusing as today.
+7. The branch was moved to current main with `lf sync` (it had no commits).
+
+Slice 1 answered the open question: all 46 missing keys are classified in
+`managym/src/cards/token_renames.rs` (one rename, 45 retired), and the
+unmodified best player loads with trained-card vectors matching the
+checkpoint-only computation. Strength on main is slice 3's measurement.
+
+## Concept review, 2026-11-17 (nobody present; each reversible)
+
+8. A card the pilot trained on reads the program stored in its checkpoint;
+   cards added since read the running catalog. Passed over: running programs
+   for every card with the loss measured. Not yet measured: how many of the
+   298 trained definitions differ by rename against restructure; slice 1
+   counts it first.
+9. The writer catalog is one file per `world_digest`, holding definition keys
+   and naming names only. Token names are an authoring dump, not committed.
+10. The v9 pinned pilot is a small model saved from the `ab2b757d9` checkout.
+11. No `breaks.json`: the reason and commit live in the recording's header.
+12. `recheck` is strength only. The approved plan had one throughput
+    reference for the mini; it is left out as its own Task. Put it back if
+    that was wanted in this PR.
+13. Left as it was, and shown on the page as a mismatch: a fixed-match
+    (setup-bound) checkpoint still stops loading when cards are added.
+
+## Docs written first, 2026-11-17 (nobody present; each reversible)
+
+14. The load report is one log record from `load_checkpoint` (its return type
+    is unchanged), printed in full by `recheck` and summarised per row in
+    Academy. Passed over: a new return value or a separate `inspect` command.
+15. The rename table is `managym/src/cards/token_renames.rs`, beside the
+    serializer in `managym/src/cards/tokens.rs`.
+16. Two small commands the refusal messages name, so each refusal carries its
+    fix: `scripts/pinned_pilot.py names --at <revision>` (names behind
+    unexplained keys) and `python -m manabot.model.writer_catalog` (dump a
+    writer catalog at the writing revision).
+17. `recheck` exits 1 outside the interval or on an incomplete cohort, takes
+    `--out` and `--seconds`, and its reference names a matchups file and deal
+    seeds. Field names in the example record are a proposal.
+18. `record --reason` rewrites recordings only and cannot pass a pilot the
+    loader refuses.
+19. v9/v10 removal is restated as "once a v11 player is at least as strong,
+    not before 0.4.0" where docs said "removed in 0.4.0".
+
+Open: WORLDS.md's per-world sections (w4-w16) still say earlier checkpoints
+"are rejected". They are history of those revisions and were left as written;
+say so if they should carry a note.
+
+20. Split the writer catalog and actual program comparison out first. The
+    export stores complete naming candidates because names alone cannot
+    reproduce the historical checkpoint digest. Keyless rows follow the
+    semantic pack's existing registry-name convention.
+
+21. Classified the original `opponent_picks` field as `picks` inside
+    `DistinctSearchEnd::OpponentSplits`. Classified the two search labels
+    and their record aliases as retired: the new decision carries arbitrary
+    object IDs, a predicate and a structured ending. Trigger shorthands and
+    ManaUse were also restructured. Their rows remain available to stored
+    programs. Validate each architecture receipt on its writer's arrays
+    before growing the runtime tables.
