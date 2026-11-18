@@ -381,13 +381,15 @@ export function unpilePlanned(piles: Pile[], planned: ReadonlyMap<number, unknow
 
 // ———————————————————————————————————————— Sizing
 
-/** Cards in hand are 5:7, as printed. */
-export const CARD_RATIO = 5 / 7;
-/** Battlefield frames are landscape: name bar above the art, 4:3. */
-export const FRAME_RATIO = 4 / 3;
+/**
+ * Every card is drawn at a printed card's proportions, 63:88 (width over
+ * height), in hand and on the battlefield alike. A tapped permanent turns a
+ * quarter: its footprint is the same card lying on its side.
+ */
+export const CARD_RATIO = 63 / 88;
 
 export interface RowFit {
-  /** Card width in px. */
+  /** Card width in px, upright. */
   card: number;
   /** Horizontal offset between copies in one pile, px. */
   fan: number;
@@ -401,15 +403,31 @@ export interface RowLimits {
   minCard: number;
   maxCard: number;
   maxLines: number;
-  /** Card width over height. A tapped card keeps its frame, so this is every card's shape. */
-  ratio: number;
 }
 
-function linesNeeded(piles: number[], width: number, card: number, fan: number, gap: number): number {
+/**
+ * What `fitRow` needs of one pile: whether each card in it, attachments
+ * included and in drawing order, is turned on its side (tapped).
+ */
+export type PileShape = readonly boolean[];
+
+/** The width a card takes on the table: upright `card`, or its height when it lies on its side. */
+export function footprint(card: number, turned: boolean): number {
+  return turned ? Math.round(card / CARD_RATIO) : card;
+}
+
+/** A pile's width: each card sits `fan` right of the one before, and the widest reach wins. */
+export function pileWidth(shape: PileShape, card: number, fan: number): number {
+  let width = 0;
+  shape.forEach((turned, index) => { width = Math.max(width, index * fan + footprint(card, turned)); });
+  return width;
+}
+
+function linesNeeded(piles: readonly PileShape[], width: number, card: number, fan: number, gap: number): number {
   let lines = 1;
   let used = 0;
-  for (const count of piles) {
-    const w = card + (count - 1) * fan;
+  for (const shape of piles) {
+    const w = pileWidth(shape, card, fan);
     if (used > 0 && used + gap + w > width) { lines += 1; used = w; }
     else used += (used > 0 ? gap : 0) + w;
   }
@@ -417,9 +435,10 @@ function linesNeeded(piles: number[], width: number, card: number, fan: number, 
 }
 
 /**
- * The largest card that fits piles of `piles[i]` copies into a `width` ×
- * `height` row. A row of n lines gives each line height / n; a wider fan is
- * tried before a narrower one, and a smaller card before another line.
+ * The largest card that fits `piles` into a `width` × `height` row. A row of
+ * n lines gives each line height / n, which must hold an upright card; a
+ * turned card is wider and shorter, so it costs width only. A smaller card
+ * is tried before another line.
  *
  * A larger card never needs fewer lines (every pile widens with it and lines
  * wrap greedily), so each line count's largest fitting card is found by
@@ -427,15 +446,14 @@ function linesNeeded(piles: number[], width: number, card: number, fan: number, 
  * `handStrip`), so a pixel-by-pixel walk would cost tens of milliseconds on
  * a crowded board.
  */
-export function fitRow(piles: number[], width: number, height: number, limits: RowLimits): RowFit {
-  const { gap, minCard, maxCard, maxLines, ratio } = limits;
-  if (!piles.length || width <= 0 || height <= 0) return { card: maxCard, fan: Math.round(maxCard * 0.3), lines: 1, overflow: false };
-  const fanOf = (card: number): number => Math.max(8, Math.round(card * 0.22));
+export function fitRow(piles: readonly PileShape[], width: number, height: number, limits: RowLimits): RowFit {
+  const { gap, minCard, maxCard, maxLines } = limits;
+  if (!piles.length || width <= 0 || height <= 0) return { card: maxCard, fan: fanOf(maxCard), lines: 1, overflow: false };
   const fits = (card: number, lines: number): boolean => linesNeeded(piles, width, card, fanOf(card), gap) <= lines;
   let best: RowFit | null = null;
   for (let lines = 1; lines <= maxLines; lines += 1) {
     const lineHeight = (height - gap * (lines - 1)) / lines;
-    let high = Math.min(maxCard, Math.floor(lineHeight * ratio));
+    let high = Math.min(maxCard, Math.floor(lineHeight * CARD_RATIO));
     if (high < minCard || !fits(minCard, lines)) continue;
     // `low` fits; find the largest card up to `high` that does.
     let low = minCard;
@@ -447,12 +465,17 @@ export function fitRow(piles: number[], width: number, height: number, limits: R
     if (!best || low > best.card) best = { card: low, fan: fanOf(low), lines, overflow: false };
   }
   if (best) return best;
-  return { card: minCard, fan: 8, lines: maxLines, overflow: true };
+  return { card: minCard, fan: fanOf(minCard), lines: maxLines, overflow: true };
 }
 
-/** What `fitRow` needs of each pile: its cards, attachments included. */
-export function pileCounts(piles: Pile[]): number[] {
-  return piles.map(pile => pile.items.reduce((total, item) => total + 1 + item.attached.length, 0));
+/** Copies in a pile overlap but leave each copy's name bar edge in sight. */
+function fanOf(card: number): number {
+  return Math.max(8, Math.round(card * 0.22));
+}
+
+/** Each pile's shape: its cards, attachments included, and which of them are tapped. */
+export function pileShapes(piles: Pile[]): PileShape[] {
+  return piles.map(pile => pile.items.flatMap(item => [item.permanent.tapped, ...item.attached.map(attached => attached.permanent.tapped)]));
 }
 
 export interface HalfSplit {
@@ -469,8 +492,8 @@ export interface HalfSplit {
  * row may run a little smaller than the creatures before it gains height.
  */
 export function splitHalf(
-  creatures: number[],
-  support: number[],
+  creatures: readonly PileShape[],
+  support: readonly PileShape[],
   width: number,
   height: number,
   limits: { creatures: RowLimits; support: RowLimits; gap: number },
@@ -499,7 +522,7 @@ export function splitHalf(
  */
 export function handStrip(
   boardHeight: number,
-  halves: { creatures: number[]; support: number[]; width: number }[],
+  halves: { creatures: readonly PileShape[]; support: readonly PileShape[]; width: number }[],
   limits: { creatures: RowLimits; support: RowLimits; gap: number },
   range: { min: number; max: number; step: number },
 ): number {

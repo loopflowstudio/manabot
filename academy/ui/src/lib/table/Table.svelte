@@ -19,7 +19,7 @@
   import { onMount, setContext, untrack, type Snippet } from 'svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
-  import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig } from '$lib/types';
+  import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
   import Field from './Field.svelte';
   import Inspect from './Inspect.svelte';
   import Lines from './Lines.svelte';
@@ -38,8 +38,9 @@
   import Rail from './Rail.svelte';
   import TableCard from './TableCard.svelte';
   import { phaseTrack } from './phases';
+  import PhaseTrack from './PhaseTrack.svelte';
   import { shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, FRAME_RATIO, handStrip, pileCounts, possessive, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -48,6 +49,8 @@
     you: { name: string; deck: string | null };
     opponent: { name: string; deck: string | null; description?: string };
     stops: StopsConfig;
+    /** Toggle one stop from the phase track; without it the track's stops are read-only. */
+    ontogglestop?: (side: StopSide, step: string) => void;
     /** The live connection; a recording has none. */
     connection?: ConnectionState | null;
     connectionLabel?: string;
@@ -97,7 +100,7 @@
   }
 
   let {
-    frame, live, status, you, opponent, stops, connection = null, connectionLabel = '', log, canPassTurn,
+    frame, live, status, you, opponent, stops, ontogglestop, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
     since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
@@ -422,10 +425,10 @@
     travel.play(root, prefersReducedMotion());
   });
 
-  // Battlefield frames are landscape so names stay legible as rows shrink;
-  // lands and other support permanents are smaller tiles of the same frame.
-  const CREATURES: RowLimits = { gap: 8, minCard: 64, maxCard: 172, maxLines: 3, ratio: FRAME_RATIO };
-  const SUPPORT: RowLimits = { gap: 6, minCard: 52, maxCard: 128, maxLines: 2, ratio: FRAME_RATIO };
+  // Battlefield frames are printed cards, upright or tapped on their side;
+  // lands and other support permanents are smaller cards of the same frame.
+  const CREATURES: RowLimits = { gap: 8, minCard: 48, maxCard: 140, maxLines: 3 };
+  const SUPPORT: RowLimits = { gap: 6, minCard: 40, maxCard: 104, maxLines: 2 };
   const ROW_GAP = 6;
 
   // Each half divides its height between its two rows by what they hold.
@@ -433,7 +436,7 @@
   let yourRows = $state({ width: 0, height: 0 });
   function split(side: typeof view.you, size: { width: number; height: number }): HalfSplit | null {
     if (size.width <= 0 || size.height <= 0) return null;
-    return splitHalf(pileCounts(side.creatures), pileCounts(side.support), size.width - 22, size.height - 16,
+    return splitHalf(pileShapes(side.creatures), pileShapes(side.support), size.width - 22, size.height - 16,
       { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT });
   }
   const theirSplit = $derived(split(board.opponent, theirRows));
@@ -592,15 +595,21 @@
 
   // ———————————————— Hand
 
-  // The hand yields height to the board: an empty hand is a label, and a hand
-  // grows only into height the board's rows would not use (`handStrip`).
+  // Hand cards are large, 136 to 150 px wide (`HAND_MIN`, `HAND_MAX`): the
+  // board gives the hand that height before its rows grow, and a crowded
+  // board (24 permanents or more) may take it back down to `HAND_CROWDED`
+  // when its rows need it (`handStrip`). An empty hand is a label.
+  /** Strip heights, px: the card is the strip less 22 px of lift and padding, at 63:88. */
+  const HAND_MIN = 212;
+  const HAND_MAX = 232;
+  const HAND_CROWDED = 160;
   const boardCount = $derived(boardProjection.agent.battlefield.length + boardProjection.opponent.battlefield.length);
   let boardHeight = $state(0);
   const handTrack = $derived(board.hand.length === 0 ? '30px' : `${handStrip(boardHeight, [
-    { creatures: pileCounts(board.opponent.creatures), support: pileCounts(board.opponent.support), width: theirRows.width },
-    { creatures: pileCounts(board.you.creatures), support: pileCounts(board.you.support), width: yourRows.width },
+    { creatures: pileShapes(board.opponent.creatures), support: pileShapes(board.opponent.support), width: theirRows.width },
+    { creatures: pileShapes(board.you.creatures), support: pileShapes(board.you.support), width: yourRows.width },
   ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
-  { min: boardCount >= 24 ? 96 : 112, max: Math.max(112, Math.min(236, Math.round(boardHeight * 0.32))), step: 8 })}px`);
+  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * 0.34))), step: 8 })}px`);
   /** The players' plates' column. */
   const PLATE_WIDTH = 148;
   /** The hand's cards keep clear of its label at the left edge. */
@@ -710,16 +719,8 @@
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
-    <nav class="track" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}`}>
-      <span class="type-rubric turn" data-testid="turn-number">Turn {boardProjection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</span>
-      <ol>
-        {#each track as mark (mark.key)}
-          <li class="type-rubric" class:current={mark.current} aria-current={mark.current ? 'step' : undefined}
-            title={`${mark.label}${mark.stop ? ' · stop' : ''}`}>
-            {mark.short}{#if mark.stop}<i class="stop" aria-hidden="true"></i><span class="sr-only">, stop</span>{/if}
-          </li>
-        {/each}
-      </ol>
+    <nav class="track-slot" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}`}>
+      <PhaseTrack {track} turn={boardProjection.turn.turn_number} {yourTurn} ontoggle={ontogglestop} />
     </nav>
     <div class="right">
       {#if connection}
@@ -923,13 +924,7 @@
   .brand { font-family: var(--font-serif); font-weight: 600; font-size: 19px; color: var(--accent-text); }
   .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The matchup gives way first: the phase track and the controls keep their width. */
-  .track { display: flex; align-items: center; gap: 10px; margin: 0 auto; flex-shrink: 0; }
-  .track .turn { color: var(--text); white-space: nowrap; }
-  .track ol { display: flex; gap: 1px; }
-  .track li { position: relative; padding: 2px 5px; border-radius: 10px; color: var(--text-tertiary); white-space: nowrap; }
-  .track li.current { background: var(--accent); color: var(--ivory); }
-  .track .stop { position: absolute; left: 50%; bottom: -3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 2px; background: var(--accent); }
-  .track li.current .stop { background: var(--ivory); }
+  .track-slot { margin: 0 auto; flex-shrink: 0; align-self: stretch; }
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .connection { display: inline-flex; align-items: center; gap: 6px; color: var(--text-tertiary); }
   .connection i { width: 6px; height: 6px; border-radius: 3px; background: var(--neutral); }

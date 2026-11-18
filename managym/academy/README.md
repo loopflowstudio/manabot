@@ -117,9 +117,9 @@ at least once on the card or player it acts on, as a prompt button (pass, pay,
 declines and combat answers without another creature) or in a tray for subjects
 the table does not draw. A card with one offer commits it on click; several
 open at the card. Number keys, Space (primary) and F6 act from the keyboard. Rows size
-their cards with `fitRow`, piling identical permanents and wrapping before
-scrolling. See [playing on the table](../../docs/academy.md#playing-on-the-table).
-Priority stops are in the table's menu; see
+their cards with `fitRow`, piling identical permanents, keeping a tapped card's
+sideways width and wrapping before scrolling. See [playing on the table](../../docs/academy.md#playing-on-the-table).
+Priority stops are set on the top bar's step track and in the table's menu; see
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
 stack responses and F6. Recorded policy/search evidence is attached to the
 decision it describes; the live table has no example Advice panel. Replay,

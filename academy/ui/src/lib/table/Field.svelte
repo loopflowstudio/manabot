@@ -2,11 +2,12 @@
   /**
    * One battlefield row. It measures the space it is given and sizes its
    * cards with `fitRow`, so a crowded row shrinks, piles and wraps instead of
-   * spilling under its neighbours.
+   * spilling under its neighbours. A tapped card lies on its side in the
+   * width its pile reserves for it, centred on the upright cards' line.
    */
   import TableCard from './TableCard.svelte';
   import type { PlannedSource } from './payment';
-  import { fitRow, pileCounts, unpilePlanned, type PermanentItem, type Pile, type RowLimits } from './view';
+  import { fitRow, footprint, pileShapes, pileWidth, unpilePlanned, type PermanentItem, type Pile, type RowLimits } from './view';
 
   /** Pixels a lean may pass the row's edge: the rows' padding, short of the other half's cards. */
   const LEAN_SLACK = 6;
@@ -43,8 +44,9 @@
   let width = $state(0);
   let height = $state(0);
   // A pixel of slack keeps rounding from wrapping a row that just fits.
-  const fit = $derived(fitRow(pileCounts(shown), width - 2, height, limits));
-  const cardHeight = $derived(Math.round(fit.card / limits.ratio));
+  const shapes = $derived(pileShapes(shown));
+  const fit = $derived(fitRow(shapes, width - 2, height, limits));
+  const cardHeight = $derived(footprint(fit.card, true));
   // An attacker steps toward the player it attacks: a fifth of its height
   // (less when lines are stacked), but never further than the row's own free
   // space and padding, so it stops short of the defending row and its P/T
@@ -72,18 +74,20 @@
   data-card-width={fit.card}
   data-lines={fit.lines}
   style:--lean={`${lean}px`}
+  style:gap={`${limits.gap}px`}
 >
   {#if width > 0}
-    {#each shown as pile (pile.key)}
+    {#each shown as pile, at (pile.key)}
       {@const members = pile.items.flatMap(item => [item, ...item.attached.map(attached => ({ ...attached, host: item }))])}
-      <div class="pile" style:width={`${fit.card + (members.length - 1) * fit.fan}px`} style:height={`${cardHeight}px`}>
+      <div class="pile" style:width={`${pileWidth(shapes[at], fit.card, fit.fan)}px`} style:height={`${cardHeight}px`}>
         {#each members as item, index (item.permanent.id)}
           <!-- A leaning attacker paints over its neighbours and the seam. -->
-          <div class="member" style:left={`${index * fit.fan}px`} style:z-index={item.permanent.attacking ? members.length + 20 : members.length - index}>
+          <div class="member" style:left={`${index * fit.fan}px`} style:top={item.permanent.tapped ? `${Math.round((cardHeight - fit.card) / 2)}px` : '0px'}
+            style:z-index={item.permanent.attacking ? members.length + 20 : members.length - index}>
             <TableCard
               name={item.permanent.name ?? 'Unknown permanent'}
               width={fit.card}
-              shape="landscape"
+              shape="field"
               permanent={item.permanent}
               offers={draft ? [] : item.offers}
               {live}
@@ -111,7 +115,7 @@
 <style>
   .field {
     position: relative; min-height: 0; min-width: 0; height: 100%;
-    display: flex; flex-wrap: wrap; align-content: center; align-items: center; gap: 8px 8px;
+    display: flex; flex-wrap: wrap; align-content: center; align-items: center;
   }
   .field.end { align-content: center; }
   .field.overflow { flex-wrap: nowrap; overflow-x: auto; }

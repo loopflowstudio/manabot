@@ -1,6 +1,13 @@
-/** The turn as a track of priority windows, with the stops that hold them. */
+/**
+ * The turn as a track of priority windows, with the stops set on each.
+ *
+ * A stop belongs to a step and a side (your turn or the opponent's, as
+ * `StopsConfig` keeps them). The track shows both sides' stops on every
+ * step, so a person can set the opponent's end-step stop during their own
+ * turn; the side whose turn it is decides which stop holds now.
+ */
 import { STOP_STEPS } from '$lib/stops';
-import type { Observation, StopsConfig } from '$lib/types';
+import type { Observation, StopsConfig, StopSide } from '$lib/types';
 
 /** Native step names for each stop window (managym/academy/server.py). */
 const ENGINE_STEPS: Record<string, string[]> = {
@@ -25,17 +32,30 @@ export interface PhaseMark {
   short: string;
   label: string;
   current: boolean;
-  /** The active player's stop holds priority here. */
-  stop: boolean;
+  /** Whether each side's stop is set here, as configured. */
+  set: Record<StopSide, boolean>;
 }
 
-export function phaseTrack(turn: Observation['turn'], stops: StopsConfig, yourTurn: boolean): PhaseMark[] {
-  const held = new Set(stops.auto_pass ? (yourTurn ? stops.my : stops.opponent) : STOP_STEPS.map(step => step.key));
-  return STOP_STEPS.map(step => ({
-    key: step.key,
-    short: SHORT[step.key],
-    label: step.label,
-    current: ENGINE_STEPS[step.key].includes(turn.step),
-    stop: held.has(step.key),
-  }));
+export interface PhaseTrack {
+  marks: PhaseMark[];
+  /** The side whose turn it is: its stops are the ones that hold now. */
+  active: StopSide;
+  /** Priority stops are off: every step holds, whatever is set. */
+  every: boolean;
+}
+
+export function phaseTrack(turn: Observation['turn'], stops: StopsConfig, yourTurn: boolean): PhaseTrack {
+  const my = new Set(stops.my);
+  const opponent = new Set(stops.opponent);
+  return {
+    active: yourTurn ? 'my' : 'opponent',
+    every: !stops.auto_pass,
+    marks: STOP_STEPS.map(step => ({
+      key: step.key,
+      short: SHORT[step.key],
+      label: step.label,
+      current: ENGINE_STEPS[step.key].includes(turn.step),
+      set: { my: my.has(step.key), opponent: opponent.has(step.key) },
+    })),
+  };
 }

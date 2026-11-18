@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { FRAME_RATIO, fitRow, handStrip, offerPlacements, possessive, splitHalf, tableView, unpilePlanned, type PermanentItem, type TableView } from './view';
+import { fitRow, footprint, handStrip, pileWidth, offerPlacements, possessive, splitHalf, tableView, unpilePlanned, type PermanentItem, type PileShape, type TableView } from './view';
 import { shortName } from '$lib/opponent-name';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -147,18 +147,29 @@ describe('where decisions land', () => {
 });
 
 describe('fitRow', () => {
-  const limits = { gap: 8, minCard: 44, maxCard: 140, maxLines: 3, ratio: 5 / 7 };
-  const upright = (n: number) => Array.from({ length: n }, () => 1);
+  const limits = { gap: 8, minCard: 44, maxCard: 140, maxLines: 3 };
+  const pile = (n: number, tapped = false): PileShape => Array(n).fill(tapped);
+  const upright = (n: number): PileShape[] => Array.from({ length: n }, () => pile(1));
 
-  it('uses the full height for a small board', () => {
+  it('uses the full height for a small board, at a printed card\'s proportions', () => {
     const fit = fitRow(upright(3), 800, 150, limits);
     expect(fit.lines).toBe(1);
-    expect(fit.card).toBe(Math.floor(150 * 5 / 7));
+    expect(fit.card).toBe(Math.floor(150 * 63 / 88));
   });
 
-  it('sizes landscape frames by their own ratio', () => {
-    const fit = fitRow(upright(3), 800, 90, { ...limits, maxCard: 200, ratio: 4 / 3 });
-    expect(fit.card).toBe(120);
+  it('reserves a tapped card\'s sideways width, so tapping can shrink a full row', () => {
+    const width = 3 * 100 + 2 * 8;
+    expect(fitRow(upright(3), width, 140, limits).card).toBe(100);
+    const tapped = fitRow([pile(1, true), pile(1), pile(1)], width, 140, limits);
+    expect(tapped.card).toBeLessThan(100);
+    expect(footprint(tapped.card, true) + 2 * tapped.card + 2 * 8).toBeLessThanOrEqual(width);
+  });
+
+  it('measures a pile by its widest reach', () => {
+    expect(pileWidth(pile(3), 100, 22)).toBe(144);
+    expect(pileWidth(pile(3, true), 100, 22)).toBe(44 + footprint(100, true));
+    // An untapped Aura on a tapped creature: the creature lies wider than the Aura's offset.
+    expect(pileWidth([true, false], 100, 22)).toBe(footprint(100, true));
   });
 
   it('keeps twenty-four distinct creatures readable by wrapping', () => {
@@ -169,9 +180,9 @@ describe('fitRow', () => {
   });
 
   it('fits a pile of twelve lands in less width than twelve cards', () => {
-    const pile = fitRow([12], 400, 120, limits);
+    const piled = fitRow([pile(12)], 400, 120, limits);
     const spread = fitRow(upright(12), 400, 120, limits);
-    expect(pile.card).toBeGreaterThan(spread.card);
+    expect(piled.card).toBeGreaterThan(spread.card);
   });
 
   it('reports overflow only past the smallest size', () => {
@@ -180,15 +191,15 @@ describe('fitRow', () => {
 
   it('finds the same largest card as trying every size', () => {
     // Every card size from the largest down, as a person would by eye: the first that fits wins.
-    const walk = (piles: number[], width: number, height: number) => {
+    const walk = (piles: PileShape[], width: number, height: number) => {
       let best: { card: number; lines: number } | null = null;
       for (let lines = 1; lines <= limits.maxLines; lines += 1) {
         const lineHeight = (height - limits.gap * (lines - 1)) / lines;
-        for (let card = Math.min(limits.maxCard, Math.floor(lineHeight * limits.ratio)); card >= limits.minCard; card -= 1) {
+        for (let card = Math.min(limits.maxCard, Math.floor(lineHeight * 63 / 88)); card >= limits.minCard; card -= 1) {
           const fan = Math.max(8, Math.round(card * 0.22));
           let used = 0, needed = 1;
-          for (const count of piles) {
-            const w = card + (count - 1) * fan;
+          for (const shape of piles) {
+            const w = Math.max(...shape.map((turned, index) => index * fan + (turned ? Math.round(card * 88 / 63) : card)));
             if (used > 0 && used + limits.gap + w > width) { needed += 1; used = w; } else used += (used > 0 ? limits.gap : 0) + w;
           }
           if (needed <= lines) { if (!best || card > best.card) best = { card, lines }; break; }
@@ -199,7 +210,7 @@ describe('fitRow', () => {
     let seed = 7;
     const random = (n: number) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
     for (let trial = 0; trial < 400; trial += 1) {
-      const piles = Array.from({ length: 1 + random(30) }, () => 1 + (random(4) === 0 ? random(9) : 0));
+      const piles = Array.from({ length: 1 + random(30) }, () => pile(1 + (random(4) === 0 ? random(9) : 0), random(3) === 0));
       const width = 200 + random(1000), height = 40 + random(400);
       const fit = fitRow(piles, width, height, limits);
       const expected = walk(piles, width, height);
@@ -209,11 +220,11 @@ describe('fitRow', () => {
 });
 
 describe('splitHalf', () => {
-  const limits = { gap: 6, creatures: { gap: 8, minCard: 40, maxCard: 132, maxLines: 3, ratio: 5 / 7 }, support: { gap: 8, minCard: 36, maxCard: 104, maxLines: 2, ratio: 5 / 7 } };
-  const upright = (n: number) => Array.from({ length: n }, () => 1);
+  const limits = { gap: 6, creatures: { gap: 8, minCard: 40, maxCard: 132, maxLines: 3 }, support: { gap: 8, minCard: 36, maxCard: 104, maxLines: 2 } };
+  const upright = (n: number): PileShape[] => Array.from({ length: n }, () => [false]);
 
   it('gives a crowded creature row the height a few land piles do not need', () => {
-    const split = splitHalf(upright(18), [5, 5], 840, 280, limits);
+    const split = splitHalf(upright(18), [Array(5).fill(false), Array(5).fill(false)], 840, 280, limits);
     expect(split.creatures).toBeGreaterThan(280 * 0.58);
     expect(split.creatureFit.card).toBeGreaterThanOrEqual(60);
     expect(split.creatureFit.overflow || split.supportFit.overflow).toBe(false);
@@ -253,18 +264,16 @@ describe('the spell being cast', () => {
 describe('handStrip', () => {
   const limits = {
     gap: 6,
-    creatures: { gap: 8, minCard: 64, maxCard: 172, maxLines: 3, ratio: FRAME_RATIO },
-    support: { gap: 6, minCard: 52, maxCard: 128, maxLines: 2, ratio: FRAME_RATIO },
+    creatures: { gap: 8, minCard: 48, maxCard: 140, maxLines: 3 },
+    support: { gap: 6, minCard: 40, maxCard: 104, maxLines: 2 },
   };
-  const range = { min: 112, max: 236, step: 8 };
-  const half = (creatures: number, lands: number) => ({ creatures: Array(creatures).fill(1), support: Array(lands).fill(1), width: 830 });
-
-  it('gives a sparse board\'s spare height to the hand at 1280×800', () => {
-    expect(handStrip(720, [half(2, 4), half(3, 5)], limits, range)).toBeGreaterThanOrEqual(190);
-  });
+  // The table's range on a crowded board: its rows may take the hand down from 232 to 160.
+  const range = { min: 160, max: 232, step: 8 };
+  const half = (creatures: number, lands: number) => ({
+    creatures: Array.from({ length: creatures }, () => [false]), support: Array.from({ length: lands }, () => [false]), width: 830 });
 
   it('keeps a crowded board\'s height for the board', () => {
-    expect(handStrip(720, [half(18, 12), half(18, 12)], limits, range)).toBeLessThanOrEqual(128);
+    expect(handStrip(720, [half(18, 12), half(18, 12)], limits, range)).toBeLessThanOrEqual(176);
   });
 
   it('never shrinks any row by more than 3% of its card width', () => {

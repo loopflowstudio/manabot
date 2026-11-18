@@ -595,12 +595,15 @@ count, and each copy remains its own control. Crowded rows shrink their cards
 and wrap onto a further line before anything scrolls, and each half gives the
 crowded row more of its height.
 
-Permanents are drawn as landscape frames: the name and mana cost on a bar
-above the art, power and toughness on an upright plate, the keywords the
-permanent has now at the lower edge (one it was granted is outlined), counters
-on the art. Mana symbols carry their letter, and ◇ for colourless. A tapped
-permanent keeps its frame and place, its art greyed and labelled **Tapped**.
-Cards in hand keep the printed shape, with the type line under the name.
+Every card has a printed card's proportions (63:88). A permanent's name is on
+a bar above its art, wrapping to a second line rather than being cut; its mana
+cost is left to the hand and the inspection. Power and toughness sit on an
+upright plate, the keywords the permanent has now at the lower edge of the art
+(one it was granted is outlined), counters and a pile's count on the art. Mana
+symbols carry their letter, and ◇ for colourless. A tapped permanent turns a
+quarter onto its side, in room its row keeps for it so it never covers a
+neighbour; its name bar stays across the top. Cards in hand have the type line
+under the name and the cost on the art.
 
 Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
 keywords with why it has each (printed, the effect that granted it, or
@@ -611,10 +614,12 @@ inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
 until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
 instead, showing the last card you inspected. The top bar shows the turn, the
-current step and the steps where your priority stops hold. The hand strip is
-as tall as the board can spare: an empty hand is a label, a hand on a sparse
-board grows into the height the battlefield rows would not use, and on a
-crowded board the battlefield keeps its height.
+current step and, under each step, two rows of stop markers: **You** for your
+turn and **Them** for the opponent's, filled where the game stops. Press a
+marker to set or clear that stop (see [priority stops](#choosing-priority-stops)).
+Cards in hand are large, 136 to 150 px wide, and sit side by side while the
+strip has room; with 24 permanents or more on the battlefield the board may
+take the hand down to about 100 px wide. An empty hand is a label.
 
 The rail holds:
 
@@ -856,10 +861,12 @@ it; there is no general browser undo.
 
 ### Choosing priority stops
 
-To hold up a response during the opponent's upkeep, open **Menu**, keep
-**Use priority stops** checked and check **Upkeep** under **Opponent turn**.
-Academy pauses at a priority window there when you have a real choice. The
-top bar's step track marks the steps where your stops hold.
+To hold up a response during the opponent's upkeep, press the **Them** marker
+under **Upkeep** on the top bar's step track, or open **Menu**, keep **Use
+priority stops** checked and check **Upkeep** under **Opponent turn**; the two
+are the same setting. Academy pauses at a priority window there when you have
+a real choice. The markers are one Tab stop: arrow keys move between them and
+Space or Enter toggles one. A recording's track shows its stops read-only.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. A checked
 step stops automatic priority passing there; an unchecked step allows it unless

@@ -415,6 +415,7 @@
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
       stops={gameStore.stops}
+      ontogglestop={handleToggleStop}
       connection={gameStore.connection}
       connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
       log={gameStore.actionLog}

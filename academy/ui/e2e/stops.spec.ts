@@ -175,3 +175,32 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await expect(table).not.toHaveAttribute('data-turn', '1', { timeout: 30_000 });
   await expect(page.locator('[data-testid=log-entry][data-actor=you]').filter({ hasText: 'Pass turn' })).toHaveCount(1);
 });
+
+test('the phase track sets the same stops as the Menu, for either turn', async ({ page }) => {
+  await page.goto('/?setup=1');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
+  await page.getByTestId('opponent-select').selectOption('random');
+  await page.getByRole('button', { name: 'Start game' }).first().click();
+  await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
+
+  // Default stops show as filled markers: your main phases, the opponent's end step.
+  const marker = (side: string, step: string) => page.getByTestId(`track-stop-${side}-${step}`);
+  await expect(marker('my', 'main1')).toHaveAttribute('aria-pressed', 'true');
+  await expect(marker('opponent', 'end_step')).toHaveAttribute('aria-pressed', 'true');
+  await expect(marker('opponent', 'upkeep')).toHaveAttribute('aria-pressed', 'false');
+
+  // On your own turn, set a stop for the opponent's upkeep; the Menu shows it and the server keeps it.
+  await marker('opponent', 'upkeep').click();
+  await expect(marker('opponent', 'upkeep')).toHaveAttribute('aria-pressed', 'true');
+  await openStopsPanel(page);
+  await expect(page.getByTestId('stop-opponent-upkeep').first()).toBeChecked();
+
+  // The Menu's change shows on the track; the markers are one Tab stop, moved by arrows.
+  await page.getByTestId('stop-my-main2').first().click();
+  await expect(marker('my', 'main2')).toHaveAttribute('aria-pressed', 'false');
+  await marker('opponent', 'upkeep').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(marker('my', 'upkeep')).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(marker('my', 'upkeep')).toHaveAttribute('aria-pressed', 'true');
+});

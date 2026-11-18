@@ -5,13 +5,14 @@
    * its outline says a legal offer acts on it, and its accessible name says
    * which.
    *
-   * Two frames. `portrait` (hand, tray) is a printed card's shape: art, then a
-   * bar with the name and type line, cost pips on the art. `landscape`
-   * (battlefield) puts the name bar on top so names stay readable when a
-   * crowded row shrinks its cards, with the art below. Both keep power and
-   * toughness on an upright plate. A tapped card keeps its frame and place:
-   * its art is desaturated and labelled, so rows never reflow on tap.
-   * Rules text lives in the inspect view.
+   * Both frames are a printed card's proportions (63:88). `portrait` (hand,
+   * tray) is art over a bar with the name and type line, cost pips on the
+   * art. `field` (battlefield) puts the name bar on top, wrapping to a second
+   * line rather than cutting the name, with the art below and no cost (the
+   * hand and inspect show it). A tapped permanent lies on its side: its
+   * footprint and art turn a quarter, while the name bar stays across the
+   * top so it still reads. Counters, pile counts, keywords and power and
+   * toughness sit on the art, upright. Rules text lives in the inspect view.
    */
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace } from '$lib/card-faces.svelte';
@@ -21,12 +22,13 @@
   import { cardEvidence, EVIDENCE, formatProbability, type OfferEvidence } from './replay';
   import type { PlannedSource } from './payment';
   import Pips from './Pips.svelte';
-  import { CARD_RATIO, FRAME_RATIO, type PlacedOffer } from './view';
+  import { footprint, type PlacedOffer } from './view';
 
   interface Props {
     name: string;
+    /** Upright width, px; a tapped permanent's footprint is this card on its side. */
     width: number;
-    shape?: 'portrait' | 'landscape';
+    shape?: 'portrait' | 'field';
     permanent?: PermanentState | null;
     card?: CardState | null;
     offers?: PlacedOffer[];
@@ -66,9 +68,13 @@
   const recordedPolicy = getContext<(() => OfferEvidence | null) | undefined>(EVIDENCE);
   const recorded = $derived(cardEvidence(recordedPolicy?.() ?? null, offers.map(placed => placed.offer.id)));
 
-  const landscape = $derived(shape === 'landscape');
-  const height = $derived(Math.round(width / (landscape ? FRAME_RATIO : CARD_RATIO)));
+  const field = $derived(shape === 'field');
   const tapped = $derived(permanent?.tapped ?? false);
+  const turned = $derived(field && tapped);
+  const upright = $derived(footprint(width, true));
+  // A turned card's box is the upright card on its side.
+  const boxWidth = $derived(turned ? upright : width);
+  const boxHeight = $derived(turned ? width : upright);
   const creature = $derived(permanent ? permanent.types?.is_creature ?? permanent.power !== null : card?.types.is_creature ?? false);
   const power = $derived(permanent?.power ?? card?.power ?? null);
   const toughness = $derived(permanent?.toughness ?? card?.toughness ?? null);
@@ -80,15 +86,16 @@
   }).filter(([, amount]) => amount > 0));
 
   // Type sizes follow the frame, within a readable floor and a quiet ceiling.
+  // Battlefield names are 12 px at every size: a crowded row wraps them.
   const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
-  const bar = $derived(landscape ? clamp(Math.round(height * 0.2), 14, 22) : Math.round(height * 0.26));
-  const nameSize = $derived(landscape ? clamp(bar - 4.5, 9.5, 14) : clamp(height * 0.078, 9, 15));
-  const typeSize = $derived(clamp(height * 0.05, 8.5, 11));
-  const showType = $derived(!landscape && height >= 110);
-  const pip = $derived(landscape ? clamp(bar - 5, 10, 14) : clamp(height * 0.07, 10, 14));
-  const showCost = $derived(landscape ? width >= 96 : width >= 58);
-  const plate = $derived(clamp(height * (landscape ? 0.17 : 0.085), 10, 14));
-  const showKeywords = $derived(landscape && height >= 62 && keywords.length > 0);
+  const nameSize = $derived(field ? 12 : clamp(upright * 0.072, 11, 15));
+  const typeSize = $derived(clamp(upright * 0.05, 9, 11));
+  const showType = $derived(!field && upright >= 110);
+  const pip = $derived(clamp(upright * 0.07, 10, 14));
+  const showCost = $derived(!field && width >= 58);
+  const plate = $derived(clamp(upright * 0.085, 10, 14));
+  const showKeywords = $derived(field && width >= 64 && keywords.length > 0);
+  const keywordRoom = $derived(boxWidth >= 120 ? 3 : 1);
 
   const url = $derived(artUrl(name));
   let loaded = $state<string | null>(null);
@@ -126,14 +133,14 @@
   class="slot"
   class:lean-up={permanent?.attacking && toward === 'up'}
   class:lean-down={permanent?.attacking && toward === 'down'}
-  style:width={`${width}px`}
-  style:height={`${height}px`}
+  style:width={`${boxWidth}px`}
+  style:height={`${boxHeight}px`}
 >
   <button
     type="button"
     class="tcard"
-    class:landscape
-    class:tapped
+    class:field
+    class:turned
     class:legal={live && (offers.length > 0 || draft === 'can')}
     class:drafted={draft === 'in'}
     class:armed={draft === 'armed'}
@@ -155,48 +162,49 @@
     data-payment-source={planned?.order}
     data-card-name={name}
     aria-label={label}
-    style:width={`${width}px`}
-    style:height={`${height}px`}
-    style:--bar={`${bar}px`}
+    style:width={`${boxWidth}px`}
+    style:height={`${boxHeight}px`}
     onclick={event => onactivate?.(event.currentTarget)}
     onmouseenter={event => onpreview?.(event.currentTarget)}
     onmouseleave={() => onpreview?.(null)}
     onfocus={event => onpreview?.(event.currentTarget)}
     onblur={() => onpreview?.(null)}
   >
-    <span class="art" aria-hidden="true" style:background-image={art ? `url('${art}')` : undefined}>
-      {#if !art}<span class="no-art">{face?.type_line ?? ''}</span>{/if}
-    </span>
     <span class="bar" aria-hidden="true">
       <span class="name" style:font-size={`${nameSize}px`}>{name}</span>
-      {#if count}<span class="count" style:font-size={`${Math.max(9, nameSize - 1)}px`}>×{count}</span>{/if}
-      {#if landscape && showCost && face?.cost}<Pips cost={face.cost} size={pip} />{/if}
       {#if showType && face}<span class="type" style:font-size={`${typeSize}px`}>{face.type_line}</span>{/if}
     </span>
-    {#if !landscape && showCost && face?.cost}<span class="cost" aria-hidden="true"><Pips cost={face.cost} size={pip} /></span>{/if}
-    {#if tapped}<span class="tapped-mark" aria-hidden="true">Tapped</span>{/if}
-    {#if counters.length && width >= 56}
-      <span class="counters" aria-hidden="true">{counters.map(([kind, amount]) => `${kind === '+1/+1' ? '+1' : kind.replace(/_/g, ' ')} ×${amount}`).join(' · ')}</span>
-    {/if}
-    {#if showKeywords}
-      <span class="keywords" aria-hidden="true">
-        {#each keywords.slice(0, width >= 120 ? 3 : 1) as fact (fact.keyword)}<i class:granted={fact.source !== null}>{fact.keyword.replace(/_/g, ' ')}</i>{/each}
-        {#if keywords.length > (width >= 120 ? 3 : 1)}<i>+{keywords.length - (width >= 120 ? 3 : 1)}</i>{/if}
+    <span class="art" aria-hidden="true">
+      <span class="picture" style:background-image={art ? `url('${art}')` : undefined}>
+        {#if !art}<span class="no-art">{face?.type_line ?? ''}</span>{/if}
       </span>
-    {/if}
-    {#if creature && power !== null}
-      <span class="pt" class:hurt={(permanent?.damage ?? 0) > 0}
-        class:up={permanent && ((permanent.power ?? 0) > (face?.power ?? Infinity) || (permanent.toughness ?? 0) > (face?.toughness ?? Infinity))}
-        style:font-size={`${plate}px`} aria-hidden="true">{power}/{toughness}{#if permanent?.damage}<small>−{permanent.damage}</small>{/if}</span>
-    {/if}
-    {#if offers.length > 1 && live}<span class="many" aria-hidden="true">{offers.length}</span>{/if}
-    {#if planned}
-      <span class="plan" aria-hidden="true"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
-    {/if}
-    {#if recorded && (recorded.p !== null || recorded.chosen)}
-      <span class="policy" aria-hidden="true" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
-    {/if}
-    {#if dealt}{#key dealt}<span class="dealt" aria-hidden="true" data-testid="damage-dealt">−{dealt}</span>{/key}{/if}
+      {#if counters.length && width >= 56}
+        <span class="counters">{counters.map(([kind, amount]) => `${kind === '+1/+1' ? '+1' : kind.replace(/_/g, ' ')} ×${amount}`).join(' · ')}</span>
+      {/if}
+      <span class="corner">
+        {#if showCost && face?.cost}<span class="cost"><Pips cost={face.cost} size={pip} /></span>{/if}
+        {#if count}<span class="count">×{count}</span>{/if}
+        {#if offers.length > 1 && live}<span class="many">{offers.length}</span>{/if}
+      </span>
+      {#if showKeywords}
+        <span class="keywords">
+          {#each keywords.slice(0, keywordRoom) as fact (fact.keyword)}<i class:granted={fact.source !== null}>{fact.keyword.replace(/_/g, ' ')}</i>{/each}
+          {#if keywords.length > keywordRoom}<i>+{keywords.length - keywordRoom}</i>{/if}
+        </span>
+      {/if}
+      {#if creature && power !== null}
+        <span class="pt" class:hurt={(permanent?.damage ?? 0) > 0}
+          class:up={permanent && ((permanent.power ?? 0) > (face?.power ?? Infinity) || (permanent.toughness ?? 0) > (face?.toughness ?? Infinity))}
+          style:font-size={`${plate}px`}>{power}/{toughness}{#if permanent?.damage}<small>−{permanent.damage}</small>{/if}</span>
+      {/if}
+      {#if planned}
+        <span class="plan"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
+      {/if}
+      {#if recorded && (recorded.p !== null || recorded.chosen)}
+        <span class="policy" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
+      {/if}
+      {#if dealt}{#key dealt}<span class="dealt" data-testid="damage-dealt">−{dealt}</span>{/key}{/if}
+    </span>
   </button>
 </div>
 
@@ -207,45 +215,55 @@
   .slot.lean-down { transform: translateY(var(--lean, 20%)); }
 
   .tcard {
-    position: relative; display: block; overflow: hidden; padding: 0; cursor: pointer; text-align: left;
+    position: relative; display: flex; flex-direction: column-reverse; overflow: hidden; padding: 0; cursor: pointer; text-align: left;
     border-radius: max(4px, 5%); border: 1px solid rgb(20 14 8 / 0.55);
     background: var(--bg-surface); color: var(--text);
     box-shadow: 0 1px 2px rgb(20 14 8 / 0.25);
     transition: transform var(--motion-move) var(--motion-move-ease), box-shadow var(--motion-fast) ease-out;
   }
   .tcard:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+  .turned { border-radius: max(4px, 3.5%); }
 
-  /* Portrait: art over a bar of name and type line. */
-  .art { position: absolute; left: 0; right: 0; top: 0; bottom: var(--bar); background: var(--bg-muted) center 30% / cover no-repeat; transition: filter var(--motion-fast); }
-  .no-art { position: absolute; inset: 4px; display: grid; place-items: center; text-align: center; font: italic 10px/1.2 var(--font-serif); color: var(--text-tertiary); overflow: hidden; }
+  /* The name bar: under the art in hand, across the top on the battlefield, upright either way. */
   .bar {
-    position: absolute; left: 0; right: 0; bottom: 0; height: var(--bar); padding: 3px 5px 0; min-width: 0;
-    display: flex; flex-direction: column; gap: 1px; background: var(--bg-surface); border-top: 1px solid var(--border);
+    flex: none; min-width: 0; padding: 3px 5px 4px; display: flex; flex-direction: column; gap: 1px;
+    background: var(--bg-surface); border-top: 1px solid var(--border);
   }
-  .name { font-family: var(--font-sans); font-weight: 700; line-height: 1.15; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .field { flex-direction: column; }
+  .field .bar { padding: 2px 4px 3px; border-top: 0; border-bottom: 1px solid var(--border); }
+  .name {
+    font-family: var(--font-sans); font-weight: 700; line-height: 1.2; color: var(--text);
+    overflow: hidden; overflow-wrap: break-word; hyphens: auto; text-wrap: balance;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  }
   .type { font-family: var(--font-sans); line-height: 1.2; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cost { position: absolute; top: 4px; right: 4px; padding: 1px 2px; border-radius: 8px; background: rgb(247 240 224 / 0.82); display: flex; }
-
-  /* Landscape: a name bar on top, art below; cost at the bar's end. */
-  .landscape .art { top: var(--bar); bottom: 0; background-position: center 28%; }
-  .landscape .bar {
-    top: 0; bottom: auto; flex-direction: row; align-items: center; gap: 4px; padding: 0 4px 0 5px;
-    border-top: 0; border-bottom: 1px solid var(--border);
-  }
-  .landscape .name { flex: 1 1 auto; min-width: 0; }
-
   .token .bar { background: color-mix(in srgb, var(--bg-muted) 60%, var(--bg-surface)); }
 
-  /* Tapped: same frame and place, spent colour, labelled. */
-  .tapped .art { filter: saturate(0.25) brightness(0.78); }
-  .tapped .bar { background: var(--bg-muted); }
-  .tapped .name { color: var(--text-secondary); }
-  .tapped-mark {
-    position: absolute; left: 0; right: 0; top: calc(var(--bar) + (100% - var(--bar)) / 2 - 7px); text-align: center;
-    font: 600 9px/14px var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase;
-    color: #f8f1e0; background: rgb(20 14 8 / 0.55);
+  /* The art fills what the bar leaves. A turned card's picture is the upright art turned a quarter. */
+  .art { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; container-type: size; background: var(--bg-muted); }
+  .picture { position: absolute; inset: 0; background: var(--bg-muted) center 30% / cover no-repeat; }
+  .turned .picture {
+    inset: auto; left: 50%; top: 50%; width: 100cqh; height: 100cqw;
+    transform: translate(-50%, -50%) rotate(90deg);
   }
-  .tcard:not(.landscape) .tapped-mark { top: calc((100% - var(--bar)) / 2 - 7px); }
+  .no-art { position: absolute; inset: 4px; display: grid; place-items: center; text-align: center; font: italic 10px/1.2 var(--font-serif); color: var(--text-tertiary); overflow: hidden; }
+
+  .corner { position: absolute; top: 3px; right: 3px; display: flex; gap: 3px; align-items: flex-start; }
+  .cost { padding: 1px 2px; border-radius: 8px; background: rgb(247 240 224 / 0.82); display: flex; }
+  .count {
+    padding: 0 5px; border-radius: 8px; font: 700 12px/16px var(--font-sans); font-variant-numeric: tabular-nums;
+    color: var(--text); background: color-mix(in srgb, var(--bg-surface) 90%, transparent); border: 1px solid var(--border-strong);
+  }
+  .many {
+    min-width: 17px; height: 17px; border-radius: 9px; padding: 0 4px;
+    font-family: var(--font-sans); font-size: 10.5px; font-weight: 700; line-height: 15px; text-align: center;
+    color: #f8f1e0; background: var(--legal); border: 1px solid rgb(20 14 8 / 0.5);
+  }
+  .counters {
+    position: absolute; top: 3px; left: 3px; max-width: calc(100% - 6px); padding: 0 4px; border-radius: 4px; text-align: left;
+    font-family: var(--font-sans); font-size: 9.5px; font-weight: 700; line-height: 14px;
+    color: #f8f1e0; background: rgb(12 9 5 / 0.72); white-space: nowrap; overflow: hidden;
+  }
 
   .tcard.attacking { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 6px 14px rgb(20 14 8 / 0.3); }
   .tcard.touched { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 1px 2px rgb(20 14 8 / 0.25); }
@@ -260,7 +278,6 @@
     color: var(--text); background: var(--bg-surface); border: 1px solid var(--border-strong);
   }
   .policy[data-chosen='true'] { color: var(--bg-surface); background: var(--text); border-color: var(--text); }
-  .tcard:not(.landscape) .policy { bottom: calc(var(--bar) + 3px); }
   .tcard.beat { box-shadow: 0 0 0 3px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent); transition: box-shadow 160ms ease-out; }
   /* Drafted into an attack or block: a dashed accent ring, distinct from a declared (solid) attacker. */
   .tcard.drafted { outline: 2px dashed var(--accent); outline-offset: 2px; }
@@ -270,15 +287,14 @@
   /* Planned payment: dashed, and what tapping it adds. Distinct from the solid "legal" outline. */
   .tcard.planned { outline: 2px dashed var(--planned); outline-offset: 2px; }
   .plan {
-    position: absolute; left: 50%; top: calc(var(--bar) + 3px); transform: translateX(-50%);
+    position: absolute; left: 50%; top: 3px; transform: translateX(-50%);
     display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 3px; border-radius: 9px;
     background: var(--bg-surface); border: 1px dashed var(--planned); box-shadow: 0 1px 3px rgb(20 14 8 / 0.3);
   }
-  .tcard:not(.landscape) .plan { top: 3px; }
   .plan b { font: 700 10px/14px var(--font-sans); color: var(--planned-text); min-width: 9px; text-align: center; }
   .dealt {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -30%);
-    font: 800 clamp(13px, 30%, 22px)/1 var(--font-sans); font-size: max(13px, calc(var(--bar) * 1.05)); color: #fff;
+    font: 800 18px/1 var(--font-sans); color: #fff;
     padding: 2px 6px; border-radius: 5px; background: #9b2f22; box-shadow: 0 2px 6px rgb(20 14 8 / 0.4);
     animation: land calc(var(--motion-move) * 1.6) var(--motion-move-ease);
   }
@@ -288,7 +304,6 @@
     font-family: var(--font-sans); font-weight: 700; line-height: 1.35; font-variant-numeric: tabular-nums;
     color: #2a2116; background: #f3ead6; border: 1px solid rgb(20 14 8 / 0.5);
   }
-  .tcard:not(.landscape) .pt { bottom: calc(var(--bar) + 3px); }
   .pt.up { color: #2f5f26; }
   .pt.hurt { color: #7e2a20; }
   .pt small { font-size: 0.75em; margin-left: 2px; }
@@ -298,26 +313,8 @@
     padding: 0 4px; border-radius: 3px; color: #f8f1e0; background: rgb(12 9 5 / 0.72);
   }
   .keywords i.granted { box-shadow: inset 0 0 0 1px #9ecb8b; }
-  .many {
-    position: absolute; top: calc(var(--bar) + 3px); right: 3px; min-width: 17px; height: 17px; border-radius: 9px; padding: 0 4px;
-    font-family: var(--font-sans); font-size: 10.5px; font-weight: 700; line-height: 15px; text-align: center;
-    color: #f8f1e0; background: var(--legal); border: 1px solid rgb(20 14 8 / 0.5);
-  }
-  .tcard:not(.landscape) .many { top: 3px; left: 3px; right: auto; }
-  .count {
-    flex: none; padding: 0 4px; border-radius: 3px; font-family: var(--font-sans); font-weight: 700; line-height: 1.25;
-    font-variant-numeric: tabular-nums; color: var(--text); background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
-    border: 1px solid var(--border-strong); border-radius: 8px;
-  }
-  .tcard:not(.landscape) .count { position: absolute; top: 3px; right: 3px; }
-  .counters {
-    position: absolute; top: 3px; left: 3px; max-width: calc(100% - 6px); padding: 0 4px; border-radius: 4px; text-align: left;
-    font-family: var(--font-sans); font-size: 9.5px; font-weight: 700; line-height: 14px;
-    color: #f8f1e0; background: rgb(12 9 5 / 0.72); white-space: nowrap; overflow: hidden;
-  }
-  .landscape .counters { top: calc(var(--bar) + 3px); }
   @media (prefers-reduced-motion: reduce) {
-    .slot, .tcard, .art { transition: none; }
+    .slot, .tcard { transition: none; }
     .dealt { animation: none; }
   }
 </style>
