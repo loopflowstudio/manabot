@@ -40,6 +40,8 @@ class ScriptedGames:
     exercising pauses while the other stream finishes its game.
     """
 
+    skip_trivial = True
+
     def __init__(self, buffers: dict[str, np.ndarray]) -> None:
         self.buffers = buffers
         self.positions = [0, 0]

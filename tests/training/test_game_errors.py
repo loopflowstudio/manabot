@@ -65,6 +65,8 @@ class ScriptedFailures:
     markers so any leaked rows, duplicate steps or cross-game returns are visible.
     """
 
+    skip_trivial = True
+
     def __init__(
         self,
         buffers: dict[str, np.ndarray],

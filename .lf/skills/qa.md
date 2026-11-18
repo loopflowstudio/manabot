@@ -622,6 +622,22 @@ publish, land or choose the next Graph step from here.
   <site-packages>/manabot/recipes/local.py --until updates=1` trains there.
   An engine wheel built before a merge from main does not match the merged
   Python; rebuild it.
+  `etude train <any file>.py` runs a recipe file from an ignored `.runs/`
+  directory too, named by its stem: copy `manabot/recipes/local.py`'s `train`
+  and `model_copy` the settings for a child run (`pretrained=<parent
+  policies/0000000N-ema.safetensors>`, `match` with `decklists="closed"`), or
+  rebuild `SelfPlay(**dump)` with `match=None`, a `UniformDecks(...,
+  decklists="mixed")` deck source and `model.world = managym.WORLD_SETUP` for
+  per-game disclosure. Runs written by an earlier commit of the same branch are
+  returning data; read them again after a table rename.
+- Collector changes: scripted environments in `tests/training`
+  (`collector._env = ...` in `test_credit_assignment.py`,
+  `test_two_seat_learning.py`, `test_game_errors.py`) stand in for the vector
+  environment, so an attribute the collector newly reads fails there, not in
+  the tests of the change. Run those files; CI does not run
+  `test_game_errors.py`. Read a failed job while its run is still in progress
+  with `gh api --allow-escape-sequences
+  repos/<owner>/<repo>/actions/jobs/<job-id>/logs`.
 - Decision memory is opt-in on raw engines: `managym.Env(...)` and
   `VectorEnv(...)` record no viewer decision log unless built with
   `decision_memory=True` (the training wrappers derive it from

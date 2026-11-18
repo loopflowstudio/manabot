@@ -115,6 +115,8 @@ class CreditGames:
     start a draw game. Buffers deliberately contain unrelated native rewards.
     """
 
+    skip_trivial = True
+
     def __init__(
         self,
         buffers: dict[str, np.ndarray],

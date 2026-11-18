@@ -129,6 +129,18 @@ for a run that predates the table (QA). #559 was still open at realign; `mana_pa
 `mana_floats` per seat are added as `GameSetting(seat, ...)` rows in
 `_refresh_roots` by whichever PR merges second.
 
+QA at `90df80d245` (`scratch/qa.html`): the guide's blocks ran as written on a
+fresh resumed run (checkout and installed wheel), a closed child of it, a
+per-game mixed run (also interrupted and resumed) and the minimal loop;
+setting counts summed to games at every update. Frontier Small has no setting
+rows (it declared no disclosure). CI's training job failed on that commit:
+three scripted test environments did not state `skip_trivial`, which the
+collector now reads. Each states it now (uncommitted at the end of QA; the
+hosted job has not been seen green). Left as found: runs written by earlier
+commits of this branch read with NULL `runs` columns and no parent; three
+`test_game_errors.py` replay tests fail on main too and CI does not run that
+file.
+
 Not in this PR: naming the difference when a checkpoint is seated under other
 levels; an admission gate; counts of a setting within one matchup.
 
