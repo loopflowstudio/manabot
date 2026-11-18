@@ -7,7 +7,9 @@ import pytest
 
 from manabot.eval.training_corpus import UnknownCoverage, training_corpus
 from manabot.model.writer_catalog import writer_catalog
+from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.decks import corpus_decks
+from manabot.training.loops.self_play import CLOCKS, self_play
 from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.update_metrics import OUTCOME_TABLE, ROSTER_TABLE, metric_row
 from managym import Deck
@@ -171,3 +173,45 @@ def test_card_statistics_count_terminal_games_at_the_outcome_update(
         UnknownCoverage, match="update 2 has 0 terminal statistics games for 1 corpus"
     ):
         training_corpus(data, 2, statistics=path)
+
+
+def test_pretrained_corpus_follows_the_published_parent_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(update={"checkpoint_every": 1})
+    monkeypatch.setenv("ETUDE_RUN", "parent")
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "parent"))
+    with recording(
+        experiment="first", run="parent", directory=tmp_path / "track", clocks=CLOCKS
+    ) as run:
+        final = self_play(settings, run, updates=2)
+    parent = final.with_name("00000001-raw.safetensors")
+    monkeypatch.setenv("ETUDE_RUN", "child")
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "child"))
+    with recording(
+        experiment="second", run="child", directory=tmp_path / "track", clocks=CLOCKS
+    ) as run:
+        self_play(settings.model_copy(update={"pretrained": parent}), run, updates=1)
+    data = read(tmp_path / "track", "second", "child")
+    corpus = training_corpus(data, 1)
+    assert corpus.query(
+        "corpus",
+        """select run, update_number, sum(games) from corpus
+        group by all order by run""",
+    ).fetchall() == [("child", 1, 2), ("parent", 1, 2)]
+    assert corpus.query(
+        "corpus",
+        """select run, decklists, learning_seats, parent_run,
+        parent_update from settings order by run""",
+    ).fetchall() == [
+        ("child", "open", "both", "parent", 1),
+        ("parent", "open", "both", None, None),
+    ]
+    assert corpus.query(
+        "corpus",
+        """select distinct board, card from deck_cards where copies > 0
+        order by card""",
+    ).fetchall() == [
+        ("main", key)
+        for key in ("lea.forest", "lea.gray_ogre", "lea.llanowar_elves", "lea.mountain")
+    ]

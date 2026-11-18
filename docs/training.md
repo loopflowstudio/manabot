@@ -339,21 +339,35 @@ def self_play(
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
             publish(settings, run, learner, ema, counts)
         with self_play_games(settings, run, counts) as collector:
-            for update in run.steps("updates", to=updates):
-                row = step(
-                    settings, learner, ema, collector, counts, rng, out=run.out
+            if counts.updates == 0:
+                parent = None
+                if settings.pretrained is not None:
+                    record = load_metadata(settings.pretrained)
+                    parent = ParentCheckpoint(
+                        run=(record.get("source") or {}).get("etude_run"),
+                        update=(record.get("bc") or {}).get("update"),
+                        sha256=file_sha256(settings.pretrained),
+                    )
+                log_corpus_setup(
+                    run,
+                    collector,
+                    behavior=settings.behavior,
+                    curriculum=settings.matchup_curriculum,
+                    disclosure=settings.deck_source.decklists
+                    if settings.deck_source
+                    else collector.match.config.decklists,
+                    parent=parent,
+                    updates=0,
+                    **clocks(counts),
                 )
+            for update in run.steps("updates", to=updates):
+                row = step(settings, learner, ema, collector, counts, rng, out=run.out)
                 if kind is not None:
                     row["run/kind"] = kind
                 if recipe is not None:
                     row["run/recipe"] = recipe
                 run.log(row, **clocks(counts))
-                if settings.behavior != "random":
-                    run.log_table(
-                        OUTCOME_TABLE,
-                        collector.stats.self_play.drain(),
-                        **clocks(counts),
-                    )
+                log_corpus_outcomes(run, collector, **clocks(counts))
                 run.save()
                 if is_checkpoint(settings, update):
                     publish(settings, run, learner, ema, counts)

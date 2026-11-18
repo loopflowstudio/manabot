@@ -33,6 +33,7 @@ import torch
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import (
     load_checkpoint,
+    load_metadata,
     save_checkpoint as save_policy,
 )
 from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
@@ -48,14 +49,18 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.run_settings import RunSettings
 from manabot.model.world import (
     validate_agent_decks,
     validate_agent_setup,
 )
-from manabot.model.writer_catalog import writer_catalog
-from manabot.training.decks import UniformDecks, corpus_decks
+from manabot.training.corpus import (
+    ParentCheckpoint,
+    log_corpus_outcomes,
+    log_corpus_setup,
+)
+from manabot.training.decks import UniformDecks
 from manabot.training.learning import (
     BatchClosure,
     DampedPolicyLearning,
@@ -85,8 +90,6 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.state.incidents import save_incident
 from manabot.training.update_metrics import (
-    OUTCOME_TABLE,
-    ROSTER_TABLE,
     metric_row,
     phase_seconds,
     time_since,
@@ -701,11 +704,24 @@ def self_play(
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
             publish(settings, run, learner, ema, counts)
         with self_play_games(settings, run, counts) as collector:
-            if counts.updates == 0 and settings.behavior != "random":
-                players = collector.uniform_roster or collector.match.to_rust()
-                run.log_table(
-                    ROSTER_TABLE,
-                    corpus_decks((player.deck for player in players), writer_catalog()),
+            if counts.updates == 0:
+                parent = None
+                if settings.pretrained is not None:
+                    record = load_metadata(settings.pretrained)
+                    parent = ParentCheckpoint(
+                        run=(record.get("source") or {}).get("etude_run"),
+                        update=(record.get("bc") or {}).get("update"),
+                        sha256=file_sha256(settings.pretrained),
+                    )
+                log_corpus_setup(
+                    run,
+                    collector,
+                    behavior=settings.behavior,
+                    curriculum=settings.matchup_curriculum,
+                    disclosure=settings.deck_source.decklists
+                    if settings.deck_source
+                    else collector.match.config.decklists,
+                    parent=parent,
                     updates=0,
                     **clocks(counts),
                 )
@@ -716,12 +732,7 @@ def self_play(
                 if recipe is not None:
                     row["run/recipe"] = recipe
                 run.log(row, **clocks(counts))
-                if settings.behavior != "random":
-                    run.log_table(
-                        OUTCOME_TABLE,
-                        collector.stats.self_play.drain(),
-                        **clocks(counts),
-                    )
+                log_corpus_outcomes(run, collector, **clocks(counts))
                 run.save()
                 if is_checkpoint(settings, update):
                     publish(settings, run, learner, ema, counts)

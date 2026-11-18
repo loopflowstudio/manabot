@@ -285,14 +285,31 @@ print(query("""
 
 # Deck mix at each update. A mirror contributes two seats.
 print(query("""
-    select update_number, deck, sum(games) as seats from
-        (select update_number, unnest([play, draw]) as deck, games from corpus)
-    group by update_number, deck order by update_number, seats desc, deck
+    select experiment, run, update_number, deck, sum(games) as seats from
+        (select experiment, run, update_number, unnest([play, draw]) as deck, games from corpus)
+    group by all order by experiment, run, update_number, seats desc, deck
 """))
 ```
 
-Card membership includes main decks and sideboards. It measures which lists
-entered games. New self-play runs record the resolved roster at update zero.
+Each run keeps its own update numbers. If a learner started from a published
+checkpoint, the corpus includes the parent through that checkpoint’s update.
+The reader matches its recorded run, update and SHA-256 in the same storage.
+An unresolved parent raises `UnknownCoverage`. Inspect each contributing run’s
+decision settings and its exact deck entries with SQL:
+
+```python
+print(query("""
+    select experiment, run, decklists, mana_taps, max_actions, action_overflow,
+           policy_input_version, behavior, opponent_mode, learning_seats, matchup_curriculum
+    from settings order by experiment, run
+"""))
+print(query("select run, entry, deck, board, card, copies from deck_cards order by all"))
+```
+
+Self-play and the minimal loop write these tables at update zero. A roster
+can contain several entries with the same deck identity. Older runs have
+NULL for unrecorded settings and supply no per-board rows in `deck_cards`.
+Card membership includes main decks and sideboards.
 For historical scalar outcomes, the roster comes from the declared deck source
 and card keys come from the writer's catalog. An explicitly logged empty
 outcome table records zero completed games. An update missing its outcomes
@@ -306,7 +323,9 @@ terminal games by update, native seat and definition key. Games and wins count
 main-deck inclusion. Choice counts also include generated cards. A missing
 directory, empty capture or update with fewer terminal games than the corpus
 raises `UnknownCoverage`. A resumed run keeps rows from superseded attempts,
-so its statistics can exceed the selected corpus. Aggregate each table before
+so its statistics can exceed the selected corpus. A single capture directory
+cannot establish card statistics for a corpus that follows a parent checkpoint.
+That request raises `UnknownCoverage`. Aggregate each table before
 joining because several matchups and seats can contribute to the same update.
 
 ```python

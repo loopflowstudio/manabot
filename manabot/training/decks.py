@@ -101,7 +101,7 @@ class CorpusDeck(TypedDict):
     cards: list[str]
 
 
-def corpus_decks(decks: Iterable[Deck], catalog: WriterCatalog) -> list[CorpusDeck]:
+def definition_names(catalog: WriterCatalog) -> dict[str, str]:
     keys = catalog["definition_keys"]
     names = {key: key for key in keys}
     names.update(
@@ -111,6 +111,39 @@ def corpus_decks(decks: Iterable[Deck], catalog: WriterCatalog) -> list[CorpusDe
             if (index := entry["definition"]) is not None
         }
     )
+    return names
+
+
+class DeckCard(TypedDict):
+    entry: int
+    deck: str
+    card: str
+    copies: int
+    board: Literal["main", "sideboard"]
+
+
+def deck_cards(decks: Iterable[Deck], catalog: WriterCatalog) -> list[DeckCard]:
+    names = definition_names(catalog)
+    rows: list[DeckCard] = []
+    for entry, deck in enumerate(decks):
+        identity = deck.identity
+        for board in ("main", "sideboard"):
+            counts = deck.main if board == "main" else deck.sideboard
+            for name, copies in counts.items():
+                rows.append(
+                    DeckCard(
+                        entry=entry,
+                        deck=identity,
+                        card=names[name],
+                        copies=copies,
+                        board=board,
+                    )
+                )
+    return rows
+
+
+def corpus_decks(decks: Iterable[Deck], catalog: WriterCatalog) -> list[CorpusDeck]:
+    names = definition_names(catalog)
     return [
         CorpusDeck(
             deck=deck.identity,

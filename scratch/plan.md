@@ -72,20 +72,23 @@ runs. DuckDB plans used hash joins on the two deck identities.
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude
    Task; this PR does not wait for it.
-2. Card statistics relation, built (steer, Jack Heart, 2026-11-18:
-   "didnt this land?", "i do think we should play well with it"). Old runs:
-   "Not a problem"; value-estimate trustworthiness: "agreed, leave this
-   out". Design below.
-3. Record the resolved deck identifier, definition key, copies and board, plus
-   settings derived from the training configuration (disclosure, mana taps, action
-   slots and overflow, input version, behavior/opponents, learning seats and
-   curriculum). Expose settings to SQL. Read older runs as before.
-4. Record pretrained checkpoint run, update and SHA-256 in settings and follow
-   the parent in corpus queries.
-5. Share deck, settings and outcome logging with the minimal loop. Verify a
-   settings query and the existing membership queries against both writers.
-6. Gate and publish for human review after the query is built. No landing,
-   paid run, corpus label in the checkpoint or change to exact-deck refusal.
+2. Gate and publish for human review. No landing, paid run, corpus label in
+   the checkpoint or change to exact-deck refusal.
+
+## Training settings, deck contents and parent checkpoints (built)
+
+Both loops log resolved deck entries (board, copies and definition key) and
+decision settings at update zero and call the same outcome writer. Continued
+runs retain the original setup. The reader exposes settings and deck_cards,
+and follows a published parent by run, update and SHA-256. Historical rosters
+and their outcomes still read as before.
+
+The local parent trained through update 2. Its child started from update 1
+and trained one more update. The four membership queries and the settings
+query found two games from each run, with separate update-1 coordinates and
+v11, current-self, both-seat settings for each. The minimal loop's update 1
+had two mirror games, four deck seats and the same decision settings. Both
+examples reported Lightning Bolt as new in the proposed two-card list.
 
 ## Card statistics in the corpus (built)
 

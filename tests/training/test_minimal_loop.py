@@ -25,6 +25,13 @@ def test_minimal_loop_publishes_moved_finite_weights(
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
     train(MinimalConfig(updates=2, streams=2, decisions=8, model=tiny))
     recorded = read(tmp_path / "track", "minimal", "minimal-seed-3")
+    (settings,) = recorded.read_table("training_settings", "updates")
+    assert settings.rows[0]["behavior"] == "current-self"
+    assert settings.rows[0]["learning_seats"] == "both"
+    assert recorded.read_table("training_deck_cards", "updates")[0].rows
+    assert [
+        table.x for table in recorded.read_table("self_play_outcomes", "updates")
+    ] == [1, 2]
     assert len(recorded.checkpoints) == 1
     checkpoint = recorded.checkpoints[0]
     # The minimal example publishes ordinary framework weights in one folder.

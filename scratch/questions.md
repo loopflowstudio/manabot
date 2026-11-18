@@ -180,3 +180,12 @@ say so if they should carry a note.
     Use the native definition index in the digest-selected catalog for every
     row. Games and wins follow CardPerformance's main-deck denominator, while
     generated cards retain their draws and exposure.
+
+40. Keep the setup tables at update zero on resume. In Etude 0.4.1 the first
+    row of a resumed writer cuts off its predecessor at that coordinate. Logging
+    setup again at the last completed update could hide that update's outcomes.
+    A restart from zero writes the tables again.
+41. Ancestry uses the checkpoint registration's run, update and SHA-256. An
+    unidentifiable parent leaves ancestry unknown. A single local statistics
+    path cannot prove statistics coverage across a chain. Attempt-aware
+    statistics publication remains question 38.
