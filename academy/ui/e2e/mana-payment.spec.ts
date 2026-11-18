@@ -110,10 +110,17 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     expect(await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')).sort())).toEqual(plannedIds);
 
     // Pointing at a land outside the plan previews "tap this, then the rest"; clicking it is the authority's tap.
-    const own = page.locator('.you .row.support [data-testid=table-card].legal:not([data-payment-source])').filter({ hasText: 'Mountain' }).first();
-    const ownId = await own.getAttribute('data-object-id');
-    const edge = (await own.boundingBox())!;
-    await page.mouse.move(edge.x + edge.width - 6, edge.y + edge.height / 2);
+    // The first land outside the plan tops its pile, so its left edge is the
+    // part only it covers: further right, a copy under it shares the point
+    // and the hover raises whichever the browser hits first. The land and the
+    // point are read together, since a second read can name another card.
+    const { ownId, x, y } = await page.evaluate(() => {
+      const land = [...document.querySelectorAll<HTMLElement>('.you .row.support [data-testid=table-card].legal:not([data-payment-source])')]
+        .find(card => card.dataset.cardName === 'Mountain')!;
+      const box = land.getBoundingClientRect();
+      return { ownId: land.dataset.objectId!, x: box.left + 6, y: box.top + box.height / 2 };
+    });
+    await page.mouse.move(x, y);
     await expect(page.locator(`[data-object-id="${ownId}"][data-payment-source="1"]`)).toHaveCount(1);
     await expect(primary).toHaveText(/^Pay \{1\}\{R\}\s*Space$/);
     before = (await frame(page)).revision;
