@@ -282,7 +282,7 @@ share a curve. No uncertainty interval claims independent training seeds.
 
 Keep the complete Etude metric run when copying evidence, including
 `artifacts/`. Each update references an immutable Etude row table of
-deck/opponent/position counts; Etude resolves those references after selecting
+deck/opponent/seat counts; Etude resolves those references after selecting
 resumed and duplicate updates. See [update metrics](training.md#update-metrics)
 for storage and reader details. Copying only metric blocks leaves the counts
 unavailable. A missing or damaged referenced table raises an error naming its

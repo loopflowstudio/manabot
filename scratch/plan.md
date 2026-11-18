@@ -14,8 +14,14 @@ real parent and child run), `tests/training/test_self_play.py`,
 `tests/model/test_world.py`: 18 passed. Not run: the guide's file example
 against a real `etude train` output directory (QA).
 
+Realign at `feb228178b`: the code backs items 1 and 4; one leftover
+"deck/opponent/position counts" in `docs/experiment-metrics.md` now says
+seat. `SelfPlayPoint.position` stays as a warning alias until 0.4.0. Hosted CI
+on `feb228178b` was pending, every job including Academy UI; nothing seen
+green or red yet.
+
 Next: item 5, the gate step: the red Academy UI job, then publish to #558 and
-stop at human review.
+stop at human review. Nothing else remains to implement.
 
 Jack Heart answered `scratch/concept-review.html` (the review written with a
 person; the graph's eighth review is in git at 309ed9febe): "1a 2a 3a 4 c:
