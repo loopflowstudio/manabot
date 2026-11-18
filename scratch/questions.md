@@ -82,3 +82,9 @@ say so if they should carry a note.
     update on a real opening decision for each fixture. Main's Python writer
     ran with this branch's native extension (main's catalog plus rename export).
     Record u1952 separately and select its optional local bytes by environment.
+
+23. Select updates 25 and 800 as early and middle reference points. Use exact
+    unrounded intervals from the retained page. For u1952 double the historical
+    cohort to 128 games by adding 16 to each pair's deal. For the new-card arm
+    use the first eight eligible trophy lists in source order, paired adjacently
+    for 32 games. Compare the heuristic with the first-64 cap in both arms.

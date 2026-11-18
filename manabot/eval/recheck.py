@@ -13,7 +13,7 @@ from manabot.eval.local import prepare_local_request
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.artifacts import StoredArtifact
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import StrictModel
+from manabot.infra.identity import SHA256_PATTERN, StrictModel
 from manabot.infra.source import source_commit
 from manabot.sim.matchup import DeckMatchup
 
@@ -41,6 +41,7 @@ class StrengthReference(StrictModel):
     matchups: Path
     deal_offsets: tuple[int, ...] = Field(min_length=1)
     recorded: RecordedStrength
+    opponent_source_sha256: str = Field(pattern=SHA256_PATTERN)
     opponent_changes: tuple[str, ...] = ()
 
 
@@ -72,6 +73,16 @@ def measure_pairs(
             heuristic_actions=reference.max_actions,
             show_binding=index == 0,
         )
+        if (
+            index == 0
+            and request.opponent.source_sha256 != reference.opponent_source_sha256
+        ):
+            changes = ", ".join(reference.opponent_changes)
+            print(
+                "  opponent  heuristic changed since the record"
+                + (f" ({changes})" if changes else ""),
+                flush=True,
+            )
         directory = out / f"pair-{index:02d}"
         result = evaluate_local(request, deadline=deadline, out_dir=directory)
         if result.status != "completed" or result.score is None:
@@ -100,10 +111,6 @@ def recheck(path: Path, *, out: Path | None, seconds: float) -> int:
         f"  recorded  {r.score:.2f} ({r.low:.2f}–{r.high:.2f}), {r.games} games, at {r.revision}",
         flush=True,
     )
-    if reference.opponent_changes:
-        print(
-            f"  opponent  heuristic changed since the record ({', '.join(reference.opponent_changes)})"
-        )
     with TemporaryDirectory(prefix="manabot-recheck-") as temp:
         directory = out or Path(temp)
         if out is not None:

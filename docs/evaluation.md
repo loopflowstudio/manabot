@@ -229,20 +229,19 @@ status is 0 when the measured score is inside the recorded interval and 1 when
 it is outside or the cohort is incomplete. `--out DIR` keeps the evaluation's
 journals and replays; `--seconds` bounds the run.
 
-A reference is a small committed record under `experiments/references/`:
+A reference names the checkpoint by bucket URI, byte count and SHA-256. The
+first fetch needs bucket access and the artifacts extra (`uv run --extra artifacts
+manabot recheck …`). Subsequent runs verify the bytes in
+`MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`).
 
-```json
-{
-  "name": "tla-frontier-small-u1952",
-  "checkpoint": {"uri": "s3://…/policies/00001952-raw.pt", "sha256": "c95c61aa…bbaf8"},
-  "opponent": "heuristic",
-  "matchups": "experiments/references/tla-frontier-pairs.json",
-  "deal_seeds": [101, 102, 103, 104],
-  "recorded": {"score": 0.72, "low": 0.61, "high": 0.81, "games": 64,
-               "revision": "ab2b757d9",
-               "report": "experiments/reports/tla-frontier-c5fba4-results.md"}
-}
-```
+The [u1952 reference](../experiments/references/tla-frontier-small-u1952.json)
+pins the heuristic's action cap, source identity, score, interval and writing
+revision. Its matchup file is relative to the reference. Each pair supplies
+both full lists and its original deal seed. Offsets `[0, 16]` replay the
+original deals and add 16 more. The interval resamples the 16 deck pairs,
+keeping both deals and all four legs of each deal together. The earlier
+references are [u25](../experiments/references/tla-frontier-small-u25.json)
+and [u800](../experiments/references/tla-frontier-small-u800.json).
 
 Recheck loads the checkpoint through the ordinary loader, so it also prints
 the [load report](observation-and-model.md#running-a-checkpoint-on-a-later-revision),

@@ -7,8 +7,8 @@ an Etude checkpoint record that could fetch remote bytes.
 """
 
 import argparse
-import math
 import logging
+import math
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
