@@ -524,6 +524,7 @@ impl Game {
             let player = self.state.priority.holder;
             let actions = self.compute_player_actions(player);
             if self.skip_trivial && actions.len() == 1 {
+                self.skipped_priority_passes += 1;
                 let next = self.next_player(player);
                 self.state.priority_mut().on_pass(next);
                 continue;

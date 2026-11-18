@@ -164,6 +164,7 @@ impl Game {
             semantic_object_candidates: Default::default(),
             pending_choice: None,
             skip_trivial_count: 0,
+            skipped_priority_passes: 0,
             card_capture: None,
             statistics: None,
             capture_drawing: None,

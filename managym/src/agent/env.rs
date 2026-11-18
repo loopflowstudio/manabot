@@ -512,7 +512,9 @@ impl Env {
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
     /// since the current game began. Resets to zero on `reset`.
     pub fn skip_trivial_count(&self) -> usize {
-        self.game.as_ref().map_or(0, |game| game.skip_trivial_count)
+        self.game.as_ref().map_or(0, |game| {
+            game.skip_trivial_count + game.skipped_priority_passes
+        })
     }
 
     /// Training-only error context. Public scalar/API errors do not expose

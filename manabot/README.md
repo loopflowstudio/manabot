@@ -620,9 +620,9 @@ option meet the same heuristic. Each game's record holds the resolved pair
 (`MatchConfig.priority_mana_taps`, omitted when both are false and exchanged
 with the seats by `swapped()`), which is what replay reads.
 
-An update is a fixed number of decisions, and a seat with the option on makes
-more of them per game. Compare such runs by games and by training hours as
-well as by updates.
+An update is a fixed number of decisions. Enabling taps can change both the
+number of decisions in a turn and the length of a game. Compare runs by games
+and training hours as well as by updates.
 
 ## Research program
 

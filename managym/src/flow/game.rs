@@ -761,7 +761,10 @@ pub struct Game {
     /// part of the rules-state witness or client wire representation.
     pub(crate) semantic_object_candidates: RefCell<BTreeMap<ObjectCandidateAddress, ObjectId>>,
     pub pending_choice: Option<PendingChoice>,
+    /// Collapsed action spaces. Historical replay digests include this count.
     pub skip_trivial_count: usize,
+    /// Forced passes consumed directly in tick_priority, before a space exists.
+    pub(crate) skipped_priority_passes: usize,
 }
 
 impl Clone for Game {
@@ -779,6 +782,7 @@ impl Clone for Game {
             semantic_object_candidates: self.semantic_object_candidates.clone(),
             pending_choice: self.pending_choice.clone(),
             skip_trivial_count: self.skip_trivial_count,
+            skipped_priority_passes: self.skipped_priority_passes,
             card_capture: None,
             statistics: None,
             capture_drawing: None,

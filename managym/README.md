@@ -709,18 +709,19 @@ or phase, as any floating mana does. There is no undo.
   payments offer none.
 - **More decisions.** A priority window whose only action was `PassPriority`
   is skipped as forced; with an untapped source and the option on it is a
-  decision. Expect more decisions per game for that seat.
-- **Each seat has its own value.** The other seat's action space, both seats'
-  observations and the encoded shapes are the same as without the option; a
-  tap is the existing `TapForCost` policy action with the source as focus.
+  decision. `Env.skip_trivial_count()` counts forced priority passes and other
+  single-action decisions skipped since reset.
+- **Each seat has its own value.** The chooser's option determines the offers.
+  Each tap uses the existing `TapForCost` policy action with the source as
+  focus. Both seats use the same observation shapes.
   The pair is part of the game's setup: recordings carry it and replay
   rebuilds the same action spaces from it. Omitting it, or passing
   `(False, False)`, gives the same games, digests and recording bytes as
   before. A pair that is not two booleans raises `ValueError`.
 
 Tapping a source at priority for a seat without the option raises
-`managym.AgentError`, as any action that is not offered does. The built-in
-heuristic, random and search players are always seated without it.
+`managym.AgentError`, as any action that is not offered does. Manabot evaluation seats
+heuristic, random and search players with the option off.
 
 ### Inspecting automatic payment
 

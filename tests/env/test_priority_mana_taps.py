@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import managym
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
+import managym
 from managym.recording import GameRecord, ScalarCapture
 
 
@@ -90,3 +90,24 @@ def test_default_and_explicit_off_play_and_record_identically(
 def test_priority_mana_taps_requires_two_booleans(invalid: object) -> None:
     with pytest.raises(ValueError, match="two booleans"):
         managym.GameSetup(forests(), priority_mana_taps=invalid)  # type: ignore[arg-type]
+
+
+def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
+    off = managym.Env(seed=3)
+    on = managym.Env(seed=3)
+    seats = forests()
+    for env, taps in ((off, False), (on, True)):
+        obs, _ = env.reset(managym.GameSetup(seats, priority_mana_taps=(taps, False)))
+        before = env.skip_trivial_count()
+        land = next(
+            i
+            for i, action in enumerate(obs.action_space.actions)
+            if action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
+        )
+        env.step(land)
+        if taps:
+            assert env.skip_trivial_count() == before
+        else:
+            # With only lands, the next surfaced decision is the opponent's land.
+            # At least both seats' passes at the current main phase were skipped.
+            assert env.skip_trivial_count() >= before + 2
