@@ -30,6 +30,7 @@ def priority_root(
     battlefield: tuple[str, ...],
     *,
     opponent: tuple[str, ...] = (),
+    mana_taps: managym.ManaTaps = "off",
 ) -> managym.Env:
     """Seed 23, 20 of each named card per deck; inject at first-main priority."""
     # Diagnostic exception: the collision proof needs sole-offer continuations
@@ -37,7 +38,12 @@ def priority_root(
     # played for a model or policy from these roots.
     env = managym.Env(seed=23, skip_trivial=False)
     deck = {card: 20 for card in sorted(set(hand + battlefield + opponent))}
-    env.reset([managym.PlayerConfig(name, deck) for name in ("a", "b")])
+    env.reset(
+        managym.GameSetup(
+            [managym.PlayerConfig(name, deck) for name in ("a", "b")],
+            mana_taps=(mana_taps, mana_taps),
+        )
+    )
     for _ in range(20):
         contract = SemanticDecisionContract.from_env(env)
         observation = Observation.from_json(

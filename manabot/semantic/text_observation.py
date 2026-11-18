@@ -560,7 +560,7 @@ class _Renderer:
         if (
             action.action_type == managym.ActionEnum.TAP_FOR_COST
             and self.state.action_space.action_space_type
-            == managym.ActionSpaceEnum.PAY_OR_NOT
+            in (managym.ActionSpaceEnum.PRIORITY, managym.ActionSpaceEnum.PAY_OR_NOT)
         ):
             return "tap_for_mana"
         return _enum(_VERBS, int(action.action_type))
