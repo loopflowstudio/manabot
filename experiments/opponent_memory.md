@@ -2605,3 +2605,48 @@ an A40 with 28 single-threaded workers, then failed when one game reached the
 games). Workers outnumbered the machine's cores about 3.5 to 1. Evaluation
 now runs 30 workers on a 32-vCPU CPU machine (`410fe064d9`, run
 `decision-memory-elemental-v1-ac7e7ee21101`).
+
+### First evaluation pass, gates and the update clock — 2026-11-18
+
+Run `decision-memory-elemental-v1-ac7e7ee21101` (revision `410fe064d9`)
+played 500 matches on final checkpoints. Scores are the GRU arm's, with a
+binomial standard error that treats the four legs of a deal as independent.
+
+| Seating | Decklists | Games | Score |
+| --- | --- | ---: | ---: |
+| GRU v control, seed 39103 | open | 800 | 0.547 ± 0.018 |
+| GRU v control, seed 39103 | closed | 800 | 0.542 ± 0.018 |
+| GRU v control, seed 39101 | open | 32 | 0.656 ± 0.084 |
+| GRU v control, seed 39101 | closed | 20 | 0.550 ± 0.111 |
+| Intact v blanked memory, seed 39101 | open | 200 | 0.480 ± 0.035 |
+| Intact v blanked memory, seed 39101 | closed | 196 | 0.490 ± 0.036 |
+| Intact v blanked memory, seed 39103 | open | 200 | 0.490 ± 0.035 |
+| Intact v blanked memory, seed 39103 | closed | 200 | 0.530 ± 0.035 |
+
+Memory gates `tanh(2a)` of the two attention layers, absolute value, read
+from the stored GRU checkpoints (all start at 0):
+
+| Seed | Update 40 | Update 80 | Update 120 | Final |
+| --- | --- | --- | --- | --- |
+| 39101 | 0.053 / 0.062 | 0.067 / 0.068 | 0.079 / 0.074 | 0.084 / 0.078 |
+| 39102 | 0.042 / 0.054 | 0.052 / 0.065 | 0.065 / 0.072 | 0.069 / 0.074 |
+| 39103 | 0.035 / 0.048 | 0.040 / 0.059 | 0.051 / 0.067 | 0.059 / 0.069 |
+
+**The arms are not matched in learner decisions at equal updates.** An update
+is not a fixed number of learner decisions in this recipe, and the cause of
+the difference between arms is not yet identified.
+
+| Seed | Arm | Update 40 | Update 80 | Update 120 | Final (updates) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 39101 | control | 2.64M | 6.72M | — | 7.58M (89) |
+| 39101 | GRU | 2.27M | 4.54M | 6.66M | 8.17M (150) |
+| 39102 | control | | | — | 7.09M (86) |
+| 39102 | GRU | 2.24M | 4.64M | 7.07M | 7.97M (136) |
+| 39103 | control | | | — | 8.04M (114) |
+| 39103 | GRU | 1.86M | 4.27M | 6.63M | 8.00M (143) |
+
+No control branch reached update 120, and every branch stopped on its wall
+cap before 8.8M decisions. The update-40 and update-80 head-to-heads compare
+unequal training, and seed 39103's final head-to-head compares equal
+decisions with 143 against 114 updates. The gate and blanked-memory readouts
+are within one checkpoint and do not depend on this.
