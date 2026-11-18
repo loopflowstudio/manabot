@@ -2698,3 +2698,26 @@ active in nearly every update. Over updates 20–40 the GRU arm's pre-clip
 norm was 2.10 against control's 0.81 (seed 39101) and 1.06 against 0.41
 (39102), but 1.22 against 1.54 (39103). Shared clipping is a candidate
 cause of the slower sharpening and is not established.
+
+### Head-to-head and reliance, all three seeds — 2026-11-18
+
+Runs `decision-memory-elemental-v1-ac7e7ee21101` and `-a5d1642838e8`
+(revision `410fe064d9`) completed every declared head-to-head and reliance
+match. Scores are the GRU arm's; each deal's four legs are averaged first and
+the standard error is across deals. This supersedes the first-pass table.
+
+| Seed | Decklists | Update 40 (50 deals) | Update 80 (50 deals) | Final (200 deals) | Intact v blanked, final (50 deals) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 39101 | open | 0.560 ± 0.030 | 0.540 ± 0.034 | 0.619 ± 0.016 | 0.480 ± 0.025 |
+| 39101 | closed | 0.560 ± 0.032 | 0.560 ± 0.030 | 0.588 ± 0.014 | 0.490 ± 0.032 |
+| 39102 | open | 0.490 ± 0.029 | 0.560 ± 0.035 | 0.562 ± 0.015 | 0.495 ± 0.033 |
+| 39102 | closed | 0.540 ± 0.034 | 0.490 ± 0.030 | 0.554 ± 0.015 | 0.485 ± 0.031 |
+| 39103 | open | 0.555 ± 0.026 | 0.505 ± 0.035 | 0.547 ± 0.015 | 0.490 ± 0.036 |
+| 39103 | closed | 0.535 ± 0.026 | 0.530 ± 0.028 | 0.542 ± 0.014 | 0.530 ± 0.023 |
+
+The GRU arm's final checkpoint beat control's in all three seeds and both
+disclosures, while blanking its memory cost nothing. The final checkpoints
+differ in learner decisions for seeds 39101 (8.17M against 7.58M) and 39102
+(7.97M against 7.09M) and are equal for 39103 (8.00M against 8.04M); update
+counts differ in all three. The advantage is therefore not attributable to
+memory use at play time.
