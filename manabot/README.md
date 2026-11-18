@@ -581,6 +581,49 @@ reseeding flush exact totals, including zero-overflow runs. The approximation
 and its evaluation limits are specified in the
 [TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
 
+## Mana taps at priority
+
+A policy can be trained with its lands and other fixed-output sources offered
+as actions whenever it holds priority, not only while a payment is pending
+([what the seat is offered](../managym/README.md#mana-taps-at-priority)). The
+option belongs to the policy's observation configuration, beside its action
+capacity:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+off = ObservationConfig(max_actions=64, action_overflow="first-legal")
+on = off.model_copy(update={"priority_mana_taps": True})
+
+"priority_mana_taps" in off.model_dump()   # False
+on.model_dump()["priority_mana_taps"]      # True
+```
+
+It is false by default and left out of the dump when false, so existing
+configurations, checkpoints and digests keep their identity. It changes no
+buffer shape: a checkpoint trained with it and one trained without it are
+admitted to the same game.
+
+Self-play with `SelfPlay.observation = on` offers the taps to both learning
+seats. The checkpoint saves the configuration, and evaluation seats each
+player in the space it trained in:
+
+| Seat holds | Offered priority taps |
+| --- | --- |
+| a checkpoint saved with `priority_mana_taps=True` | yes |
+| any other checkpoint | no |
+| heuristic, random, search or LLM player | no |
+
+Nothing on an evaluation request chooses this, so a checkpoint cannot be
+played in a space it did not train in, and two arms that differ only in this
+option meet the same heuristic. Each game's record holds the resolved pair
+(`MatchConfig.priority_mana_taps`, omitted when both are false and exchanged
+with the seats by `swapped()`), which is what replay reads.
+
+An update is a fixed number of decisions, and a seat with the option on makes
+more of them per game. Compare such runs by games and by training hours as
+well as by updates.
+
 ## Research program
 
 [RESEARCH.md](RESEARCH.md) says what we are doing now, what the experiments

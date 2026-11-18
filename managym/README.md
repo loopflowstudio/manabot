@@ -669,7 +669,58 @@ payment; funded payments and payments needing every available source retain
 native trivial-decision skipping. These ordinary choices are on by default
 for every consumer. Source taps use the existing `TapForCost` policy action
 with the source as focus; the native Command verb is `tap_for_mana`, distinct
-from waterbend. They do not expose free-form production at priority or undo.
+from waterbend. They do not expose undo, or production at priority unless a
+seat [asks for it](#mana-taps-at-priority).
+
+### Mana taps at priority
+
+A seat can also be offered its fixed-output sources while it holds priority.
+The option is per seat and off by default:
+
+```python
+import managym
+
+setup = managym.GameSetup([first, second], priority_mana_taps=(True, False))
+```
+
+With two untapped Forests and a creature spell in hand, the first seat's
+priority space is what it was, followed by one tap per source:
+
+```text
+0  CastSpell     Badgermole Cub
+1  PassPriority
+2  TapForMana    Forest
+3  TapForMana    Forest
+```
+
+Taking action 2 taps that Forest and adds `{G}` to the seat's pool. The seat
+keeps priority and is offered the remaining Forest; casting then spends the
+floating mana first. Unspent mana empties with the pool at the end of the step
+or phase, as any floating mana does. There is no undo.
+
+- **The space only grows at its end.** Every action offered without the option
+  keeps its index, `PassPriority` included; taps follow in battlefield order,
+  one per source, identical sources included (eight Forests are eight
+  actions). Under `action_overflow="first-legal"` the taps are the first
+  actions dropped.
+- **Fixed-output sources only.** Activated mana abilities with a choice are
+  already offered at priority. Payments are unchanged: a pending payment
+  offers useful taps as above whatever this option says, and resolution
+  payments offer none.
+- **More decisions.** A priority window whose only action was `PassPriority`
+  is skipped as forced; with an untapped source and the option on it is a
+  decision. Expect more decisions per game for that seat.
+- **Each seat has its own value.** The other seat's action space, both seats'
+  observations and the encoded shapes are the same as without the option; a
+  tap is the existing `TapForCost` policy action with the source as focus.
+  The pair is part of the game's setup: recordings carry it and replay
+  rebuilds the same action spaces from it. Omitting it, or passing
+  `(False, False)`, gives the same games, digests and recording bytes as
+  before. A pair that is not two booleans raises `ValueError`.
+
+Tapping a source at priority for a seat without the option raises
+`managym.AgentError`, as any action that is not offered does. The built-in
+heuristic, random and search players are always seated without it.
 
 ### Inspecting automatic payment
 
