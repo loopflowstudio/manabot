@@ -4,8 +4,8 @@
  *
  * `recentView(frame, since, events, labels)` reads the authority's presentation
  * events (never a diff of snapshots) for what happened after revision `since`:
- * spells cast and whether they are still on the stack, attacks, blocks, damage
- * and deaths, and how much damage each object and player was dealt.
+ * spells cast and whether they are still on the stack, lands played, discards,
+ * attacks, blocks, damage and deaths, and how much damage each object and player was dealt.
  * `tableLines(frame, events)` draws standing facts: a spell on the stack to
  * each of its targets, and each blocker to the attacker it blocks, from the
  * projection while combat lasts and from the block events since the person's
@@ -290,6 +290,18 @@ export function recentView(
       }
       case 'turn_started':
         break;
+      case 'land_played': {
+        const by = playerSide(frame, kind.player);
+        fact(by, `${sideName(by)} played ${objectName(kind.object, labels, book) ?? 'a land'}`, null, [kind.object.entity]);
+        view.touched.add(kind.object.entity);
+        break;
+      }
+      case 'discarded': {
+        const by = playerSide(frame, kind.player);
+        const cards = kind.objects.map(object => objectName(object, labels, book) ?? 'a card');
+        fact(by, `${sideName(by)} discarded ${list(cards)}`, null, kind.objects.map(object => object.entity));
+        break;
+      }
     }
   });
   view.resolved = [...casts.values()].filter(spell => !onStack.has(spell.id));

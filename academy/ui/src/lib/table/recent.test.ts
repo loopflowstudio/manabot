@@ -62,6 +62,25 @@ describe('nameBook', () => {
   });
 });
 
+describe('lands and discards', () => {
+  it("tells the opponent's land play and discard as facts about the cards they became", () => {
+    const after = withBoard(bolt.recovery.frame, projection => {
+      projection.opponent.battlefield = [permanent(95, 'Plains')];
+      projection.opponent.graveyard = [card(96, 'Earth Kingdom Jailer'), card(97, 'Yip Yip!')];
+    });
+    const base = bolt.recovery.presentation_tail[0];
+    const land: PresentationEvent = { ...base, seq: 7, from_revision: 3, to_revision: 4,
+      kind: { kind: 'land_played', object: { entity: 95, incarnation: 1 }, player: 1 } };
+    const discard: PresentationEvent = { ...base, seq: 8, from_revision: 4, to_revision: 5,
+      kind: { kind: 'discarded', objects: [{ entity: 96, incarnation: 2 }, { entity: 97, incarnation: 2 }], player: 1 } };
+    const view = recentView(after, 3, [land, discard], () => ({ objects: {}, players: {}, stacks: {} }), names, nameBook([after], []));
+    expect(view.facts.map(fact => [fact.by, fact.text, fact.subjects])).toEqual([
+      ['opponent', 'Search 64 played Plains', [95]],
+      ['opponent', 'Search 64 discarded Earth Kingdom Jailer and Yip Yip!', [96, 97]],
+    ]);
+  });
+});
+
 describe('tableLines', () => {
   it('draws a spell on the stack to its target, and drops the line once it leaves', () => {
     const onStack = withBoard(bolt.recovery.frame, projection => { projection.agent.stack = [card(4001, 'Lightning Bolt')]; });

@@ -205,6 +205,19 @@ function validatePresentationKind(value: unknown, seq: number): void {
       requireInteger(value.player, 'kind.player', seq);
       requireInteger(value.turn_number, 'kind.turn_number', seq);
       return;
+    case 'land_played':
+      validateObjectRenderId(value.object, 'kind.object', seq);
+      requireInteger(value.player, 'kind.player', seq);
+      return;
+    case 'discarded':
+      if (!Array.isArray(value.objects)) {
+        throw new Error(`Presentation event ${seq} has invalid kind.objects`);
+      }
+      for (const object of value.objects) {
+        validateObjectRenderId(object, 'kind.objects[]', seq);
+      }
+      requireInteger(value.player, 'kind.player', seq);
+      return;
     default:
       throw new Error(`Presentation event ${seq} has unsupported kind ${value.kind}`);
   }
@@ -358,6 +371,18 @@ export function presentationBeat(
       detail = `${player}'s turn begins.`;
       break;
     }
+    case 'land_played': {
+      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
+      heading = 'Land played';
+      detail = `${player} plays ${objectLabel(event.kind.object, labels)}.`;
+      break;
+    }
+    case 'discarded': {
+      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
+      heading = 'Discard';
+      detail = `${player} discards ${event.kind.objects.map((object) => objectLabel(object, labels)).join(', ')}.`;
+      break;
+    }
   }
 
   return {
@@ -385,6 +410,8 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'attack_group': return [...kind.attackers.map(object), kind.defender];
     case 'blocked': return [object(kind.attacker), ...kind.blockers.map(object)];
     case 'turn_started': return [{ kind: 'player', id: kind.player }];
+    case 'land_played': return [object(kind.object), { kind: 'player', id: kind.player }];
+    case 'discarded': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
   }
 }
 

@@ -154,6 +154,10 @@ impl Game {
 
     /// Public event identities captured before a transition so a permanent's
     /// later departure cannot turn a committed damage target into a guess.
+    /// `object:<slot>` names each battlefield and graveyard appearance by the
+    /// storage slot a committed `CardMoved` event reports, so a land played or
+    /// a card discarded is named as the public object it became. Both zones
+    /// are public to every viewer.
     pub fn presentation_subjects(&self) -> std::collections::BTreeMap<String, SubjectRef> {
         let mut subjects = std::collections::BTreeMap::new();
         for (index, _) in self.state.players.iter().enumerate() {
@@ -178,6 +182,19 @@ impl Game {
                             },
                         },
                     );
+                }
+            }
+        }
+        for (index, _) in self.state.players.iter().enumerate() {
+            let player = PlayerId(index);
+            for zone in [
+                crate::state::zone::ZoneType::Battlefield,
+                crate::state::zone::ZoneType::Graveyard,
+            ] {
+                for object in self.state.zones.zone_objects(zone, player).iter() {
+                    if let Some(view) = self.decision_object(*object) {
+                        subjects.insert(format!("object:{}", object.slot()), view.subject);
+                    }
                 }
             }
         }

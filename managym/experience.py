@@ -735,6 +735,18 @@ class TurnStartedPresentation(ProtocolModel):
     turn_number: UInt32
 
 
+class LandPlayedPresentation(ProtocolModel):
+    kind: Literal["land_played"]
+    object: ObjectRenderId
+    player: UInt8
+
+
+class DiscardedPresentation(ProtocolModel):
+    kind: Literal["discarded"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
@@ -744,7 +756,9 @@ PresentationKind: TypeAlias = Annotated[
     | DiedPresentation
     | AttackGroupPresentation
     | BlockedPresentation
-    | TurnStartedPresentation,
+    | TurnStartedPresentation
+    | LandPlayedPresentation
+    | DiscardedPresentation,
     Field(discriminator="kind"),
 ]
 

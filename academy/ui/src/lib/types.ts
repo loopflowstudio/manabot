@@ -469,6 +469,8 @@ export const PRESENTATION_KIND_NAMES = [
   'attack_group',
   'blocked',
   'turn_started',
+  'land_played',
+  'discarded',
 ] as const;
 
 /**
@@ -521,6 +523,16 @@ export type PresentationKind =
       kind: 'turn_started';
       player: number;
       turn_number: number;
+    }
+  | {
+      kind: 'land_played';
+      object: ObjectRenderId;
+      player: number;
+    }
+  | {
+      kind: 'discarded';
+      objects: ObjectRenderId[];
+      player: number;
     };
 
 export interface PresentationEvent {
@@ -617,6 +629,8 @@ export interface RecordedPlayer {
   kind: 'human' | 'bot';
   name: string;
   deck: string;
+  /** The deck's display name ("GW Allies"); the recording index supplies it. */
+  deck_name?: string;
   version: string | null;
   inference: (Record<string, unknown> & { runtime?: PolicyRuntimeIdentity }) | null;
 }

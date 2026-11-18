@@ -2216,6 +2216,59 @@
             "player",
             "turn_number"
           ]
+        },
+        {
+          "description": "A land played from hand (CR 305.1), named as the permanent it became.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "land_played"
+            },
+            "object": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "object",
+            "player"
+          ]
+        },
+        {
+          "description": "Cards a player discarded (CR 701.9a), named as the graveyard objects\nthey became.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "discarded"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "player"
+          ]
         }
       ]
     },

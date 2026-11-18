@@ -834,6 +834,17 @@ pub enum PresentationKind {
         player: PlayerId,
         turn_number: u32,
     },
+    /// A land played from hand (CR 305.1), named as the permanent it became.
+    LandPlayed {
+        object: ObjectRenderId,
+        player: PlayerId,
+    },
+    /// Cards a player discarded (CR 701.9a), named as the graveyard objects
+    /// they became.
+    Discarded {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
