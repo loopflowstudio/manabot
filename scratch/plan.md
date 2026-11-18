@@ -87,8 +87,18 @@ for every trained card, including cards whose rules changed. WORLDS.md records
 the historical labels. Pinned pilots, writer catalogs and loader refusal
 examples in Academy were already built.
 
-**Next slice:** follow checkpoint admission through the evaluation participant
-record (item 5). Verify old records remain readable and an unknown writing
-revision stays unknown. Check that the retained world label alone cannot
-refuse admission under item 2. Gate then publishes the revision for human
-review.
+**Next slice:** item 5, the only plan item not built. Start at
+`manabot/eval/admission.py:register_checkpoint`. It reads the checkpoint
+through `backend.read_policy`/`load_policy` and builds a `PlayerRegistration`
+(`manabot/sim/registration.py`). Carry the writing revision
+(`checkpoint_source`) and the count of trained cards read from a stored
+program on that record. If Etude's participant record has no field for them,
+write them to the evaluation's local output and record the gap in
+`questions.md`. Tests: an old record without the fields still reads; an
+unknown writing revision stays `None`. Item 2 check: `registration.world`
+comes from `runtime["world"]`. Confirm a differing retained world label alone
+cannot refuse admission or serving. Gate then publishes for human review.
+
+Off-plan: `scratch/concept-review.html` (`c61d05e`) proposes a paired-replay
+baseline. The 2026-11-18 direction puts "paired verdicts" outside this PR.
+Read it as background only; it goes when scratch/ is deleted before landing.
