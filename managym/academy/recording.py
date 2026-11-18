@@ -505,9 +505,9 @@ def narrate_move(
     `own` is the person's own steps of this move (`own_steps`) when the move is
     theirs, and empty for another seat, whose hidden choices are never named.
     What was visible becomes the move ("Cast Yip Yip!, targeting Earth Kingdom
-    Jailer", "Play Forest", "Attack with Ally, Otter-Penguin"); a priority pass
-    is "Pass priority". The person's own moves add what only they saw:
-    "Activate Fire Nation Cadets", "Learn: take Accumulate Wisdom", "Ordered
+    Jailer", "Activate Fire Nation Cadets", "Play Forest", "Attack with Ally,
+    Otter-Penguin"); a priority pass is "Pass priority". The person's own
+    moves add what only they saw: "Learn: take Accumulate Wisdom", "Ordered
     triggers: Tiger-Seal, then Ally". A step that completes later (announcing a
     spell before it reaches the stack, one attacker of several, one trigger of
     several placed) is None: its move is named where it completes.
@@ -535,10 +535,32 @@ def narrate_move(
         identity = subject.get("id", subject)
         return names.get(int(identity["entity"]))
 
+    def targets_of(source: list[dict[str, Any]]) -> list[str]:
+        return [
+            target
+            for other in events
+            if other["kind"] == "targeted"
+            and other["source"] in source
+            and (target := name(other["target"]))
+        ]
+
+    def targeting(source: list[dict[str, Any]]) -> str:
+        targets = targets_of(source)
+        return f", targeting {_listed(targets)}" if targets else ""
+
     phrases: list[str] = []
     spells: list[str] = []
+    activated = False
     for kind in events:
-        if kind["kind"] == "cast" and kind["controller"] == actor:
+        if kind["kind"] == "activated" and kind["controller"] == actor:
+            # A cost that moved the source (cycling) is part of this move,
+            # not a discard of its own.
+            activated = True
+            source = {"kind": "object", "id": kind["object"]}
+            phrases.append(
+                f"Activate {name(source) or 'an ability'}" + targeting([source])
+            )
+        elif kind["kind"] == "cast" and kind["controller"] == actor:
             spell = (
                 name({"kind": "stack", "id": kind["stack"]})
                 or name({"kind": "object", "id": kind["object"]})
@@ -546,21 +568,15 @@ def narrate_move(
                     (card for card in arrived["spells"] if card not in spells), None
                 )
             )
-            targets = [
-                target
-                for other in events
-                if other["kind"] == "targeted"
-                and other["source"]
-                in (
-                    {"kind": "stack", "id": kind["stack"]},
-                    {"kind": "object", "id": kind["object"]},
-                )
-                and (target := name(other["target"]))
-            ]
             spells.append(spell or "a spell")
             phrases.append(
                 f"Cast {spell or 'a spell'}"
-                + (f", targeting {_listed(targets)}" if targets else "")
+                + targeting(
+                    [
+                        {"kind": "stack", "id": kind["stack"]},
+                        {"kind": "object", "id": kind["object"]},
+                    ]
+                )
             )
         elif kind["kind"] == "attack_group":
             attackers = [n for a in kind["attackers"] if (n := name({"id": a}))]
@@ -569,7 +585,7 @@ def narrate_move(
             blockers = [n for b in kind["blockers"] if (n := name({"id": b}))]
             attacker = name({"id": kind["attacker"]}) or "an attacker"
             phrases.append(f"Block {attacker} with {_listed(blockers) or 'creatures'}")
-    if not spells:
+    if not spells and not activated:
         phrases[:0] = [f"Play {land}" for land in arrived["lands"]]
         if arrived["discarded"]:
             phrases.append(f"Discard {_listed(arrived['discarded'])}")
@@ -602,12 +618,6 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
         return "Ordered triggers: " + ", then ".join(_trigger_source(p) for p in placed)
     if stage == "learn":
         return f"Learn: {last.chosen[:1].lower()}{last.chosen[1:]}"
-    source = (context.get("source") or {}).get("label")
-    if context.get("announcing") == "activated_ability" and source:
-        targets = [t["label"] for t in context.get("targets") or [] if t.get("label")]
-        return f"Activate {source}" + (
-            f", targeting {_listed(targets)}" if targets else ""
-        )
     if last.chosen.startswith("Activate ability: "):
         return "Activate " + last.chosen.removeprefix("Activate ability: ")
     if stage in ("declare_attackers", "declare_blockers"):

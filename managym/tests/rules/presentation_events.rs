@@ -103,3 +103,43 @@ fn combat_death_and_next_turn_are_one_ordered_committed_tape() {
         } if player.0 == 1
     ));
 }
+
+/// CR 602.2: an activated ability put on the stack is one public event naming
+/// its source and controller; the Mountain tapped for its cost is a mana
+/// ability (CR 605.3a) and announces nothing.
+#[test]
+fn an_activation_on_the_stack_names_its_source_and_its_mana_does_not() {
+    let mut scenario = Scenario::new(
+        deck(&[("Mountain", 20), ("Shivan Dragon", 20)]),
+        deck(&[("Mountain", 40)]),
+        60210,
+    );
+    let shivan = scenario.force_permanent_on_battlefield(0, "Shivan Dragon");
+    scenario.game_mut().state.permanents[shivan]
+        .as_mut()
+        .expect("shivan")
+        .summoning_sick = false;
+    let _ = scenario.force_permanent_on_battlefield(0, "Mountain");
+    scenario.advance_to_active_step(0, StepKind::Main);
+    let shivan_object = scenario.game().state.permanents[shivan]
+        .as_ref()
+        .expect("shivan")
+        .object;
+    scenario.game_mut().take_observation_events();
+
+    assert!(
+        scenario.take_action_by_type(managym::agent::action::ActionType::PriorityActivateAbility)
+    );
+
+    let events = scenario.game_mut().take_observation_events();
+    let activations = events
+        .iter()
+        .filter(|event| matches!(event, GameEvent::AbilityActivated { .. }))
+        .collect::<Vec<_>>();
+    assert_eq!(activations.len(), 1, "unexpected tape: {events:#?}");
+    assert!(matches!(
+        activations[0],
+        GameEvent::AbilityActivated { source_object, controller, .. }
+            if *source_object == shivan_object && controller.0 == 0
+    ));
+}

@@ -471,6 +471,7 @@ export const PRESENTATION_KIND_NAMES = [
   'turn_started',
   'land_played',
   'discarded',
+  'activated',
 ] as const;
 
 /**
@@ -533,6 +534,11 @@ export type PresentationKind =
       kind: 'discarded';
       objects: ObjectRenderId[];
       player: number;
+    }
+  | {
+      kind: 'activated';
+      object: ObjectRenderId;
+      controller: number;
     };
 
 export interface PresentationEvent {

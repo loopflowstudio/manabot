@@ -4,7 +4,7 @@
  *
  * `recentView(frame, since, events, labels)` reads the authority's presentation
  * events (never a diff of snapshots) for what happened after revision `since`:
- * spells cast and whether they are still on the stack, lands played, discards,
+ * spells cast and whether they are still on the stack, abilities activated, lands played, discards,
  * attacks, blocks, damage and deaths, and how much damage each object and player was dealt.
  * `tableLines(frame, events)` draws standing facts: a spell on the stack to
  * each of its targets, and each blocker to the attacker it blocks, from the
@@ -55,7 +55,7 @@ export interface ResolvedSpell {
 }
 
 /** What a fact reports; beats group consecutive facts of one kind. */
-export type FactKind = 'cast' | 'damage' | 'died' | 'destroyed' | 'attacked' | 'blocked' | 'land' | 'discarded';
+export type FactKind = 'cast' | 'activated' | 'damage' | 'died' | 'destroyed' | 'attacked' | 'blocked' | 'land' | 'discarded';
 
 export interface RecentFact {
   seq: number;
@@ -240,6 +240,12 @@ export function recentView(
           ?? book.ids.get(kind.object.entity) ?? labels.stacks[String(kind.stack)] ?? told ?? 'a spell';
         casts.set(kind.stack, { id: kind.stack, name, by, targets: [] });
         fact(by, 'cast', `${names[by]} cast ${name}`, kind.stack);
+        break;
+      }
+      case 'activated': {
+        const by = playerSide(frame, kind.controller);
+        fact(by, 'activated', `${sideName(by)} activated ${objectName(kind.object, labels, book) ?? 'an ability'}`, null, [kind.object.entity]);
+        view.touched.add(kind.object.entity);
         break;
       }
       case 'targeted': {

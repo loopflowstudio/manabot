@@ -834,6 +834,13 @@ pub enum PresentationKind {
         player: PlayerId,
         turn_number: u32,
     },
+    /// An activated ability put on the stack (CR 602.2), named by its source
+    /// as that object stands after the costs were paid. Mana abilities never
+    /// use the stack and have no event.
+    Activated {
+        object: ObjectRenderId,
+        controller: PlayerId,
+    },
     /// A land played from hand (CR 305.1), named as the permanent it became.
     LandPlayed {
         object: ObjectRenderId,

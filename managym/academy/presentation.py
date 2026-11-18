@@ -1,7 +1,7 @@
 """Authority-side projection of committed engine facts into presentation events.
 
-The projector follows committed spells, land plays, discards and
-combat-to-turn sequences. Meaning
+The projector follows committed spells, activated abilities, land plays,
+discards and combat-to-turn sequences. Meaning
 comes from server-authored interaction offers confirmed by
 ``recent_events``; observation snapshots are viewer-safe label catalogs only
 and are never diffed to invent game facts.
@@ -53,6 +53,8 @@ class PresentationProjector:
         self._facts: list[_PresentationFact] = []
         self._spell_stacks: dict[int, int] = {}
         self._pending_spell: _PendingSpell | None = None
+        # Targets chosen for the activation being announced; None when none is.
+        self._pending_activation: tuple[dict[str, Any], ...] | None = None
         self._pending_land = False
 
     def reset(self) -> None:
@@ -60,6 +62,7 @@ class PresentationProjector:
         self._facts = []
         self._spell_stacks = {}
         self._pending_spell = None
+        self._pending_activation = None
         self._pending_land = False
 
     @property
@@ -68,31 +71,39 @@ class PresentationProjector:
         return self._next_seq
 
     def note_action(self, offer: InteractionOffer) -> None:
-        """Stage native subjects until matching cast/resolution events commit.
+        """Stage native subjects until matching cast/activation events commit.
 
-        Casting and target selection can resolve in the same engine step, so
-        the post-step stack cannot supply their identities. Historical offers
-        without typed subjects provide no new presentation facts.
+        Casting or activating and target selection can resolve in the same
+        engine step, so the post-step stack cannot supply their identities.
+        Historical offers without typed subjects provide no new presentation
+        facts.
         """
         self._pending_land = offer.action_type == "PRIORITY_PLAY_LAND"
         if offer.action_type == "PRIORITY_CAST_SPELL":
             source = offer.source
+            self._pending_activation = None
             self._pending_spell = (
                 _PendingSpell(object_id=source.id.model_dump(), controller=offer.actor)
                 if source is not None and source.kind == "object"
                 else None
             )
-        elif offer.action_type == "CHOOSE_TARGET" and self._pending_spell is not None:
+        elif offer.action_type == "PRIORITY_ACTIVATE_ABILITY":
+            self._pending_spell = None
+            self._pending_activation = ()
+        elif offer.action_type == "CHOOSE_TARGET":
             targets = tuple(
                 subject.object.subject.model_dump(mode="json")
                 for subject in offer.subjects
                 if subject.role == "target"
             )
-            self._pending_spell = _PendingSpell(
-                object_id=self._pending_spell.object_id,
-                controller=self._pending_spell.controller,
-                targets=(*self._pending_spell.targets, *targets),
-            )
+            if self._pending_spell is not None:
+                self._pending_spell = _PendingSpell(
+                    object_id=self._pending_spell.object_id,
+                    controller=self._pending_spell.controller,
+                    targets=(*self._pending_spell.targets, *targets),
+                )
+            elif self._pending_activation is not None:
+                self._pending_activation = (*self._pending_activation, *targets)
 
     def observe(
         self,
@@ -106,6 +117,9 @@ class PresentationProjector:
         cast_events = [event for event in events if _event_type(event) == "SPELL_CAST"]
         for event in cast_events:
             self._observe_cast(event)
+        for event in events:
+            if _event_type(event) == "ABILITY_ACTIVATED":
+                self._observe_activation(event, event_subjects)
 
         for event in events:
             if _event_type(event) == "SPELL_COUNTERED":
@@ -182,6 +196,45 @@ class PresentationProjector:
                     suggested_ms=500,
                     sound=None,
                     kind={"kind": "targeted", "source": source, "target": target},
+                )
+            )
+
+    def _observe_activation(
+        self,
+        event: managym.EventData,
+        event_subjects: dict[str, dict[str, Any]],
+    ) -> None:
+        """An ability on the stack, named by its source's public appearance.
+
+        The source is read after the step, so a cost that moved it (a card
+        discarded to cycle) names the graveyard object it became. A source
+        no viewer can see, or an activation whose announcement this projector
+        never noted, tells nothing rather than a guess.
+        """
+        targets = self._pending_activation
+        self._pending_activation = None
+        subject = event_subjects.get(f"object:{int(event.source_id)}")
+        if targets is None or subject is None or subject.get("kind") != "object":
+            return
+        self._facts.append(
+            _PresentationFact(
+                importance="normal",
+                suggested_ms=500,
+                sound=None,
+                kind={
+                    "kind": "activated",
+                    "object": subject["id"],
+                    "controller": int(event.controller_id),
+                },
+            )
+        )
+        for target in targets:
+            self._facts.append(
+                _PresentationFact(
+                    importance="normal",
+                    suggested_ms=500,
+                    sound=None,
+                    kind={"kind": "targeted", "source": subject, "target": target},
                 )
             )
 

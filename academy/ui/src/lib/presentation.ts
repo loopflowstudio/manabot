@@ -160,6 +160,10 @@ function validatePresentationKind(value: unknown, seq: number): void {
       requireInteger(value.controller, 'kind.controller', seq);
       requireInteger(value.stack, 'kind.stack', seq);
       return;
+    case 'activated':
+      validateObjectRenderId(value.object, 'kind.object', seq);
+      requireInteger(value.controller, 'kind.controller', seq);
+      return;
     case 'targeted':
       validateSubjectRef(value.source, 'kind.source', seq);
       validateSubjectRef(value.target, 'kind.target', seq);
@@ -327,6 +331,12 @@ export function presentationBeat(
       detail = `${controller} casts ${spell}.`;
       break;
     }
+    case 'activated': {
+      const controller = labels.players[String(event.kind.controller)] ?? `Player ${event.kind.controller}`;
+      heading = 'Ability activated';
+      detail = `${controller} activates ${objectLabel(event.kind.object, labels)}.`;
+      break;
+    }
     case 'targeted': {
       heading = 'Target locked';
       detail = `${subjectLabel(event.kind.source, labels)} targets ${subjectLabel(event.kind.target, labels)}.`;
@@ -403,6 +413,7 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
   const kind = event.kind;
   switch (kind.kind) {
     case 'cast': return [object(kind.object), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
+    case 'activated': return [object(kind.object), { kind: 'player', id: kind.controller }];
     case 'targeted': return [kind.source, kind.target];
     case 'resolved': return [{ kind: 'stack', id: kind.stack }];
     case 'damage': return [...(kind.source ? [kind.source] : []), kind.target];
