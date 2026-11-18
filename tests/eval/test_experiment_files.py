@@ -323,7 +323,7 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     )
     assert len(jobs) == 1
     seatings = jobs[0].tournament.seatings
-    assert len(seatings) == 84
+    assert len(seatings) == 168
     assert jobs[0].max_hours == 3 and jobs[0].max_usd == 4
     curves = [
         panel for panel in opponent_memory.report().evals if isinstance(panel, Curve)
@@ -358,14 +358,17 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     heuristic = [seating for seating in seatings if "heuristic" in seating.tags]
     head_to_head = [seating for seating in seatings if seating not in heuristic]
     assert {seating.name for seating in head_to_head} == drawn
-    # Both arms' final checkpoints, each disclosure, against the heuristic.
-    assert len(heuristic) == 2 * 3 * 2 * 2
+    # Against the heuristic, per size, seed and disclosure: both arms' finals
+    # (50 deals), and 25-deal curves over control's 0/40/80/120 and GRU's
+    # 40/80/120.
+    finals = [seating for seating in heuristic if seating.name.endswith("-final")]
+    assert (len(finals), len(heuristic)) == (2 * 3 * 2 * 2, 2 * 3 * 2 * 9)
     for seating in heuristic:
-        assert (
-            seating.players[1].kind == "code" and seating.players[1].name == "heuristic"
-        )
+        opponent = seating.players[1]
+        assert opponent.kind == "code" and opponent.name == "heuristic"
+        assert len(seating.configs) == (50 if seating in finals else 25)
     games = sum(len(seating.configs) * seating.games for seating in seatings)
-    assert games == 19200 + len(heuristic) * 50 * 4
+    assert games == 19200 + len(finals) * 200 + (len(heuristic) - len(finals)) * 100
     for seating in head_to_head:
         assert seating.fixed and seating.seeds == "one"
         size, _, seed, *_ = seating.name.split("-")
@@ -389,5 +392,6 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     interiors = opponent_memory.evaluation_matchups(
         ExperimentState(experiment="opponent_memory", runs=running)
     )
-    assert len(interiors) == 36
+    # 36 head-to-heads plus the 84 heuristic-curve seatings.
+    assert len(interiors) == 36 + 84
     assert all("final" not in seating.name for seating in interiors)

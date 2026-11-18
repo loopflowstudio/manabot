@@ -73,6 +73,7 @@ TRUNK = PilotStage(3_300_000, 90, 3.5, Decimal("2.40"))
 MILESTONES = (40, 80, 120)
 # Paired deals per final checkpoint against the heuristic, each disclosure.
 HEURISTIC_DEALS = 50
+HEURISTIC_CURVE_DEALS = 25
 
 
 @dataclass(frozen=True)
@@ -289,30 +290,41 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
                 ("final", "control", gru.final, control.final, intact, 200),
                 ("final", "reliance", gru.final, gru.final, blanked, 50),
             ]
-            # Each arm's final checkpoint against the fixed native heuristic.
+            # Each arm against the fixed native heuristic: its final checkpoint,
+            # and a shorter curve over the milestones. Update 0 is the shared
+            # trunk export, played once through control.
             for arm, branch in zip(("control", "gru"), branches, strict=True):
-                if branch.final is None:
-                    continue
-                for disclosure in DISCLOSURES:
-                    found.append(
-                        Seating(
-                            name=seating_name(
-                                size, seed, disclosure, f"{arm}-heuristic", "final"
-                            ),
-                            players=(branch.final.player(intact), heuristic),
-                            configs=tuple(
-                                Conditions(
-                                    design=DESIGN.name,
-                                    decklists=disclosure,
-                                    **pairing.model_dump(),
-                                ).model_dump()
-                                for pairing in DESIGN.pairings[:HEURISTIC_DEALS]
-                            ),
-                            games=DESIGN.legs,
-                            tags=("heuristic", f"{size}-heuristic"),
-                            seeds="one",
-                        )
+                points = [("final", branch.final, HEURISTIC_DEALS)] + [
+                    (
+                        update,
+                        branch.checkpoints.at("updates", update).last,
+                        HEURISTIC_CURVE_DEALS,
                     )
+                    for update in ((0,) if arm == "control" else ()) + MILESTONES
+                ]
+                for point, checkpoint, deals in points:
+                    if checkpoint is None:
+                        continue
+                    for disclosure in DISCLOSURES:
+                        found.append(
+                            Seating(
+                                name=seating_name(
+                                    size, seed, disclosure, f"{arm}-heuristic", point
+                                ),
+                                players=(checkpoint.player(intact), heuristic),
+                                configs=tuple(
+                                    Conditions(
+                                        design=DESIGN.name,
+                                        decklists=disclosure,
+                                        **pairing.model_dump(),
+                                    ).model_dump()
+                                    for pairing in DESIGN.pairings[:deals]
+                                ),
+                                games=DESIGN.legs,
+                                tags=("heuristic", f"{size}-heuristic"),
+                                seeds="one",
+                            )
+                        )
             for point, tag, first, second, inference, deals in lines:
                 if first is None or second is None:
                     continue
