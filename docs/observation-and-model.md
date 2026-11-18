@@ -271,18 +271,13 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 model, observation_space = load_checkpoint("final.pt")
 ```
 
-The loader logs one report of what it bound. Counts here show the form:
-
-```text
-final.pt: policy input v9, written at ab2b757d9 (from its strength reference; the file records no source)
-  columns   agent_player, opponent_player: reads 73 of 74; ignores decklists_open
-  cards     298 trained definitions read their stored programs
-            138 of them serialize differently today: tla.aang_swift_savior, ...
-            definitions added since read the running catalog
-  tokens    1,772 rows bound by key, 64 through the rename table, 0 unexplained
-            344 rows the checkpoint never saw start at the table mean
-  names     348 bound by name, 103 new
-```
+The loader logs the binding at INFO level. On the unmodified u1952 file,
+both player rows read 73 of the running engine's 74 columns. The model uses
+360 stored card programs. The report names the 136 that serialize differently
+in this engine. All 348 learned names still resolve. The loader initializes
+396 new token rows and 103 new name rows at their respective table means.
+One missing field was renamed, 45 token or record names were retired, and
+zero keys were unexplained.
 
 Nothing in the file is rewritten. `model` then plays any deck the pool admits,
 including cards it never saw. How well it plays them is a measurement, not a
@@ -345,9 +340,8 @@ lists every rename since the oldest supported checkpoint, beside the
 serializer that hashes the names. An entry has this form:
 
 ```rust
-// (kind, name the checkpoint learned) -> name today, or None for a name that went away
-(TokenKind::Variant, "OldVariantName") => Some("NewVariantName"),
-(TokenKind::Field, "removed_field") => None,
+(Field, "opponent_picks", Some("picks")),
+(Structure, "ManaUse", None),
 ```
 
 A learned key that is neither in the running vocabulary nor in this table

@@ -22,8 +22,9 @@ framework.
 """
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
+import logging
 from pathlib import Path
 import struct
 from typing import Any
@@ -37,7 +38,14 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.world import validate_checkpoint_world
+from manabot.model.architecture import (
+    ArchitectureReceipt,
+    architecture_receipt,
+    validate_architecture_receipt,
+)
+from manabot.model.interface import ModelInterface, model_interface, world_fields
+from manabot.model.world import checkpoint_source, written_at
+from manabot.policy.binding import bind_catalog
 from manabot.policy.prepare import Layout, Tables
 
 type ParameterArrays = Mapping[str, np.ndarray]
@@ -63,6 +71,8 @@ _METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
 _OPTIONAL_METADATA_KEYS = (
     "bc",
     "global_step",
+    "writer_catalog",
+    "input_columns",
     "belief_schema_identity",
     "belief_content_manifest_identity",
 )
@@ -101,7 +111,7 @@ class Dimensions:
     links: int
 
 
-def layout(space: ObservationSpace) -> Layout:
+def layout(space: ObservationSpace, player_width: int | None = None) -> Layout:
     encoder = space.encoder
     joins = (PERMANENT_DEFINITION_INDEX, *PERMANENT_LINK_INDEXES)
     return Layout(
@@ -109,6 +119,7 @@ def layout(space: ObservationSpace) -> Layout:
             c for c in range(encoder.permanent_dim) if c not in joins
         ),
         link_columns=PERMANENT_LINK_INDEXES,
+        player_width=player_width,
     )
 
 
@@ -164,9 +175,24 @@ class PolicyCheckpoint:
     parameters: ParameterArrays
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
+    player_width: int | None = None
+
+    def receipt(self) -> ArchitectureReceipt:
+        return architecture_receipt(
+            self.model,
+            self.space,
+            {k: (int(v.size), True) for k, v in self.parameters.items()},
+        )
+
+    def record(self) -> dict[str, Any]:
+        return {
+            key: json.loads(value)
+            for key, value in self.metadata.items()
+            if key != "converted_from"
+        }
 
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, layout(self.space))
+        return Tables.from_buffers(self.buffers, layout(self.space, self.player_width))
 
     def dimensions(self) -> Dimensions:
         encoder = self.space.encoder
@@ -177,7 +203,7 @@ class PolicyCheckpoint:
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=encoder.player_dim,
+            player=self.player_width or encoder.player_dim,
             card=encoder.card_dim,
             permanent=len(layout(self.space).numeric_permanent_columns),
             action=encoder.action_dim,
@@ -258,7 +284,17 @@ def checkpoint_metadata(
 def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
     arrays = dict(checkpoint.parameters)
     arrays.update({_BUFFER + k: v for k, v in checkpoint.buffers.items()})
-    write_safetensors(path, arrays, checkpoint.metadata)
+    metadata = dict(checkpoint.metadata)
+    if checkpoint.player_width is not None:
+        # read_container returns runtime-bound arrays. Serializing those arrays
+        # makes this runtime their writer, while conversion uses the originals.
+        record = {
+            **world_fields(checkpoint.space, checkpoint.player_width),
+            "architecture": checkpoint.receipt().model_dump(mode="json"),
+            "source": checkpoint_source(),
+        }
+        metadata.update({key: json.dumps(value) for key, value in record.items()})
+    write_safetensors(path, arrays, metadata)
 
 
 def read_metadata(path: str | Path) -> dict[str, Any]:
@@ -311,13 +347,20 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
     space = ObservationSpace(
         ObservationConfig.from_checkpoint(hypers["observation_hypers"])
     )
-    validate_checkpoint_world(meta, space)
+    meta.update(
+        {
+            key: json.loads(metadata[key])
+            for key in ("writer_catalog", "input_columns")
+            if key in metadata
+        }
+    )
+    interface = model_interface(meta, space)
     model = ModelConfig.from_checkpoint(hypers["agent_hypers"])
     parameters = {k: v for k, v in arrays.items() if not k.startswith(_BUFFER)}
     for name, value in parameters.items():
         if value.dtype != np.float32:
             raise TypeError(f"parameter {name}: expected float32, got {value.dtype}")
-    return PolicyCheckpoint(
+    checkpoint = PolicyCheckpoint(
         model=model,
         space=space,
         parameters=parameters,
@@ -326,6 +369,52 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
         },
         metadata=metadata,
     )
+    return admit_checkpoint(checkpoint, meta, interface)
+
+
+def admit_checkpoint(
+    checkpoint: PolicyCheckpoint, record: Mapping[str, Any], interface: ModelInterface
+) -> PolicyCheckpoint:
+    """Verify the receipt against the tensors that were written, before adding rows."""
+    if record.get("architecture") is not None:
+        validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
+    if interface.writer is None or interface.current is None:
+        return checkpoint
+    width = interface.player_width
+    projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
+    extra = (
+        checkpoint.space.shapes["player_turn_state"][-1]
+        if checkpoint.space.encoder.turn_state
+        else 0
+    )
+    if projected != width + extra:
+        raise ValueError("checkpoint player columns differ from its projection")
+    if not checkpoint.model.catalog_records() and interface.writer == interface.current:
+        return replace(checkpoint, player_width=width)
+    try:
+        bound, report = bind_catalog(checkpoint, interface.writer, interface.current)
+    except ValueError as error:
+        raise ValueError(f"{error}; {written_at(record)}") from error
+    logging.getLogger(__name__).info(
+        "Policy input v%s (%s). Player columns %d/%d. Stored programs %d, changed %d: %s. "
+        "Token keys renamed %d, retired %d, unexplained 0. New embedding rows %d tokens, %d names.",
+        checkpoint.space.encoder.config.policy_input_version,
+        written_at(record),
+        width,
+        checkpoint.space.encoder.player_dim,
+        len(
+            set(interface.writer["definition_keys"]).intersection(
+                interface.current["definition_keys"]
+            )
+        ),
+        len(report.changed_programs),
+        ", ".join(report.changed_programs) or "none",
+        report.renamed_keys,
+        report.retired_keys,
+        report.new_tokens,
+        report.new_names,
+    )
+    return replace(bound, player_width=width)
 
 
 # safetensors: an 8-byte little-endian header length, a JSON header naming each

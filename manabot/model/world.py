@@ -250,7 +250,9 @@ def validate_checkpoint_world(
     checkpoint: Mapping[str, Any], observation_space: Any, player_configs=None
 ) -> dict:
     binding = checkpoint.get("world_binding")
-    if not isinstance(binding, dict) or binding.get("world") != WORLD:
+    if isinstance(binding, dict) and binding.get("world") != WORLD:
+        raise ValueError(f"trained in {binding.get('world')}, engine is {WORLD}")
+    if not isinstance(binding, dict):
         raise ValueError(
             f"checkpoint requires an explicit compatible {WORLD} world binding"
         )
@@ -260,6 +262,12 @@ def validate_checkpoint_world(
         raise ValueError("checkpoint world binding has invalid setup") from error
     current = current_binding_form(binding)
     if _digest(current) != _digest(expected):
+        manifest = current.get("content_manifest")
+        if isinstance(manifest, dict) and manifest != expected.get("content_manifest"):
+            raise ValueError(
+                "checkpoint content binding differs: trained on content "
+                f"{str(manifest.get('content_digest', 'unknown'))[:12]}; {written_at(checkpoint)}"
+            )
         raise ValueError(
             "checkpoint world/setup/input binding differs from this runtime in "
             f"{binding_difference(current, expected)}; {written_at(checkpoint)}"

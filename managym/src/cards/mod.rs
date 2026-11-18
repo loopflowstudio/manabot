@@ -21,6 +21,7 @@ mod fixtures;
 pub mod names;
 mod pool;
 pub mod setups;
+pub mod token_renames;
 pub mod tokens;
 
 pub use pool::{content_pool, world_pool, ContentPool, Eligibility, PoolDefinition};

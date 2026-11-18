@@ -91,7 +91,7 @@ def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
         # from read_container otherwise retain the entire weights file.
         tables = Tables.from_buffers(
             {key: value.copy() for key, value in checkpoint.buffers.items()},
-            layout(checkpoint.space),
+            layout(checkpoint.space, checkpoint.player_width),
         )
         spec = Spec(
             checkpoint.model,

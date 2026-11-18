@@ -100,6 +100,7 @@ class Layout:
 
     numeric_permanent_columns: tuple[int, ...]
     link_columns: tuple[int, ...]
+    player_width: int | None = None
 
 
 @dataclass(frozen=True)
@@ -572,7 +573,10 @@ def prepare(
     else:
         first = last = np.zeros(len(candidates), np.int64)
 
-    players = [obs[key].astype(f32) for key in ("agent_player", "opponent_player")]
+    players = [
+        obs[key][..., : tables.layout.player_width].astype(f32)
+        for key in ("agent_player", "opponent_player")
+    ]
     cards = [obs[key].astype(f32) for key in ("agent_cards", "opponent_cards")]
     if "player_turn_state" in obs:
         players = [

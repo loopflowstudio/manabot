@@ -53,9 +53,14 @@ from manabot.policy.prepare import (
 )
 
 
-def binding(model: ModelConfig, space: ObservationSpace) -> str:
+def binding(
+    model: ModelConfig, space: ObservationSpace, player_width: int | None = None
+) -> str:
     """The configuration a prepared batch belongs to, independent of weights."""
-    return model.model_dump_json() + "\n" + space.encoder.config.model_dump_json()
+    key = model.model_dump_json() + "\n" + space.encoder.config.model_dump_json()
+    if player_width is not None and player_width != space.encoder.player_dim:
+        key += f"\nplayer_width={player_width}"
+    return key
 
 
 @dataclass(frozen=True)
@@ -69,7 +74,7 @@ class Spec:
 
     @property
     def binding(self) -> str:
-        return binding(self.model, self.space)
+        return binding(self.model, self.space, self.tables.layout.player_width)
 
 
 def legal_mask(mask: np.ndarray) -> np.ndarray:

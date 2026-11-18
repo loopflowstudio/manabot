@@ -8,8 +8,8 @@ this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
 
 Admission belongs to the injected backend's policy loader; the catalog
-reuses its world binding rules (``manabot.model.world``) so a listed
-"compatible" checkpoint and a loadable one cannot disagree about the world.
+uses the same metadata comparison (``manabot.model.interface``). Tensor-level
+failures such as an unexplained learned key are checked on load.
 """
 
 from __future__ import annotations
@@ -26,14 +26,8 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
-    UnsupportedPolicyInput,
 )
-from manabot.model.world import (
-    WORLD,
-    current_binding_form,
-    expected_world,
-    written_at,
-)
+from manabot.model.interface import model_interface
 from manabot.policy.protocol import Backend
 import managym
 
@@ -185,89 +179,20 @@ def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str |
 
 
 def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
-    """Name the first way a checkpoint's world binding differs from this runtime.
-
-    Mirrors ``validate_checkpoint_world`` but explains the difference instead
-    of raising, field by field, in the order a researcher would fix it.
-    """
-
-    binding = checkpoint.get("world_binding")
-    if not isinstance(binding, Mapping):
-        return f"trained without a world binding; engine is {WORLD}"
-    trained = binding.get("world")
-    if trained != WORLD:
-        return f"trained in {trained}, engine is {WORLD}"
+    """Explain the same metadata admission the policy loader uses."""
     try:
         observation = ObservationConfig.from_checkpoint(
             checkpoint["hypers"]["observation_hypers"]
         )
-        expected = expected_world(binding, ObservationSpace(observation))
-        binding = current_binding_form(binding)
-    except UnsupportedPolicyInput as error:
+        model_interface(checkpoint, ObservationSpace(observation))
+    except (ValueError, TypeError, KeyError, managym.AgentError) as error:
         return str(error)
-    except BaseException as error:  # PyO3 panics on invalid native setups
+    except BaseException as error:
+        # Invalid retained native setups may raise a PyO3 panic.
         if isinstance(error, (KeyboardInterrupt, SystemExit, GeneratorExit)):
             raise
         return "its deck setup or observation settings no longer build in this engine"
-    for key, explanation in _BINDING_FIELDS:
-        if binding.get(key) != expected.get(key):
-            difference = explanation(binding.get(key), expected.get(key))
-            return f"{difference}; {written_at(checkpoint)}"
     return None
-
-
-def _content_mismatch(trained: Any, engine: Any) -> str:
-    def digest(manifest: Any) -> str:
-        if isinstance(manifest, Mapping):
-            return str(manifest.get("content_digest", "unknown"))[:12]
-        return "unknown"
-
-    return (
-        f"card content differs: trained on content {digest(trained)}, "
-        f"engine has {digest(engine)}"
-    )
-
-
-_BINDING_FIELDS = (
-    (
-        "policy_input_version",
-        lambda trained, engine: (
-            f"policy input version {trained}, engine expects {engine}"
-        ),
-    ),
-    (
-        "rules",
-        lambda trained, engine: (
-            f"rules decision/world-space versions {trained}, engine has {engine}"
-        ),
-    ),
-    ("content_manifest", _content_mismatch),
-    (
-        "naming_vocabulary",
-        lambda trained, engine: "naming vocabulary differs from this engine",
-    ),
-    (
-        "world_digest",
-        lambda trained, engine: (
-            f"world cards differ: trained on {str(trained)[:12]}, "
-            f"engine has {str(engine)[:12]}"
-        ),
-    ),
-    (
-        "input_schema",
-        lambda trained, engine: "observation tensor shapes differ from this engine",
-    ),
-    (
-        "learning_schema_sha256",
-        lambda trained, engine: (
-            f"learning schema {str(trained)[:12]}, engine has {str(engine)[:12]}"
-        ),
-    ),
-    (
-        "setups",
-        lambda trained, engine: "its recorded deck setup no longer resolves the same",
-    ),
-)
 
 
 def _setups(binding: Any) -> tuple[managym.Deck, ...]:

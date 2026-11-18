@@ -92,7 +92,8 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
     payload["model_state_dict"] = {}  # Admission must precede weight loading.
     path = tmp_path / "bad.pt"
     write_checkpoint(payload, path)
-    with pytest.raises(ValueError, match="binding"):
+    reason = "trained in w3" if change == "world" else "binding"
+    with pytest.raises(ValueError, match=reason):
         load_checkpoint(str(path))
 
 

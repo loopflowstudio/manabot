@@ -108,6 +108,11 @@ def card_definitions_json() -> str:
 def catalog_token_value(name: str) -> int:
     """The catalog's stable token value for a Rust or printed name."""
 
+def catalog_token_renames() -> tuple[
+    list[tuple[int, str, str | None]], list[tuple[str, str, str | None]]
+]:
+    """Historical catalog tokens and record names with their optional successors."""
+
 def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
     """Every name fact/shared-effect encoders hash, as `(namespace, name,
     value, token_kind, token_value)`; the token is card text's for the same

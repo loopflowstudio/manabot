@@ -14,7 +14,6 @@ beside the native torch API (see the protocol section below).
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 import importlib
-import json
 from pathlib import Path
 import tempfile
 from types import ModuleType
@@ -38,18 +37,17 @@ from manabot.infra.artifacts import (
     materialize_artifact,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.architecture import validate_architecture_receipt
+from manabot.model.interface import model_interface, world_fields
 from manabot.model.world import (
     checkpoint_source,
     checkpoint_world,
-    deck_world,
-    validate_checkpoint_world,
     validate_policy_input,
 )
 from manabot.policy.checkpoint import (
     NotAContainer,
     ParameterArrays,
     PolicyCheckpoint,
+    admit_checkpoint,
     canonical_name,
     checkpoint_metadata,
     from_torch_state,
@@ -58,6 +56,7 @@ from manabot.policy.checkpoint import (
     torch_name,
     write_container,
 )
+from manabot.policy.prepare import Tables
 import managym
 
 
@@ -116,41 +115,60 @@ def load_checkpoint(
 
     if isinstance(path, StoredArtifact):
         path = str(materialize_artifact(path))
-    if not _is_torch_file(Path(path)):
+    if _is_torch_file(Path(path)):
+        checkpoint = read_torch_checkpoint(Path(path))
+        record = checkpoint.record()
+        checkpoint = admit_checkpoint(
+            checkpoint, record, model_interface(record, checkpoint.space)
+        )
+    else:
         try:
-            agent, obs_space, binding = _load_container(
-                Path(path), bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
-            )
+            checkpoint = read_container(path)
         except NotAContainer as error:
             raise NotAContainer(
                 f"{path} is neither a PyTorch checkpoint (a zip archive) nor a "
                 "policy checkpoint container; it may be truncated or another "
                 "kind of file"
             ) from error
-        if include_belief_binding:
-            return agent, obs_space, binding
-        return agent, obs_space
-
-    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-    config = checkpoint["hypers"]
-    obs_space = ObservationSpace(
-        ObservationConfig.from_checkpoint(config["observation_hypers"])
+    agent = restore_policy(
+        checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
     )
-
-    world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent_config = ModelConfig.from_checkpoint(config["agent_hypers"])
-    agent = ActorCritic(
-        obs_space,
-        agent_config,
-        bucketed_shapes=bucketed_shapes,
-        live_tokens=live_tokens,
-    )
-    binding = _restore_metadata(agent, checkpoint, world_binding)
-    agent.load_state_dict(checkpoint["model_state_dict"])
-    agent.eval()
     if include_belief_binding:
-        return agent, obs_space, binding
-    return agent, obs_space
+        return agent, checkpoint.space, agent.belief_binding
+    return agent, checkpoint.space
+
+
+def restore_policy(
+    checkpoint: PolicyCheckpoint,
+    *,
+    bucketed_shapes: bool = False,
+    live_tokens: bool = False,
+) -> ActorCritic:
+    """Assemble an admitted checkpoint with its saved decision and value semantics."""
+    agent = assemble(
+        checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+    )
+    record = checkpoint.record()
+    _restore_metadata(agent, record, record["world_binding"])
+    agent.eval()
+    return agent
+
+
+def read_torch_checkpoint(path: Path) -> PolicyCheckpoint:
+    """Read the writer's original tensors under canonical names."""
+    record = torch.load(path, map_location="cpu", weights_only=False)
+    config = record["hypers"]
+    observation = ObservationConfig.from_checkpoint(config["observation_hypers"])
+    model = ModelConfig.from_checkpoint(config["agent_hypers"])
+    state = record["model_state_dict"]
+    buffers = set(Tables.BUFFERS.values())
+    return from_torch_state(
+        model,
+        observation,
+        {name: tensor.detach().numpy() for name, tensor in state.items()},
+        checkpoint_metadata(record),
+        parameter_names=[name for name in state if name not in buffers],
+    )
 
 
 def load_metadata(path: str | Path) -> dict[str, Any]:
@@ -191,10 +209,6 @@ def _restore_metadata(
     if agent.belief_count_buckets > 0:
         binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
     agent.belief_binding = binding
-    if checkpoint.get("architecture") is not None:
-        validate_architecture_receipt(
-            agent.architecture_receipt(), checkpoint["architecture"]
-        )
     return binding
 
 
@@ -203,25 +217,6 @@ def _is_torch_file(path: Path) -> bool:
     8-byte header length."""
     with path.open("rb") as file:
         return file.read(4) == b"PK\x03\x04"
-
-
-def _load_container(
-    path: Path, *, bucketed_shapes: bool, live_tokens: bool
-) -> tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]:
-    """Restore policy metadata with the same admission as a legacy checkpoint."""
-    container = read_container(path)
-    record = {
-        key: json.loads(value)
-        for key, value in container.metadata.items()
-        if key != "converted_from"
-    }
-    agent = assemble(
-        container, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
-    )
-    world_binding = validate_checkpoint_world(record, container.space)
-    binding = _restore_metadata(agent, record, world_binding)
-    agent.eval()
-    return agent, container.space, binding
 
 
 def assemble(
@@ -235,9 +230,20 @@ def assemble(
     agent = ActorCritic(
         checkpoint.space,
         checkpoint.model,
+        player_width=checkpoint.player_width,
         bucketed_shapes=bucketed_shapes,
         live_tokens=live_tokens,
     )
+    cards = agent.semantic_cards
+    if cards is not None and checkpoint.player_width is not None:
+        weight = checkpoint.parameters["semantic_cards.token_embedding.weight"]
+        if cards.token_embedding.num_embeddings != weight.shape[0]:
+            cards.token_embedding = torch.nn.Embedding(
+                weight.shape[0], checkpoint.model.hidden_dim
+            )
+        program_shape = checkpoint.buffers["semantic_cards.tokens"].shape
+        if cards.tokens.shape != program_shape:
+            cards.tokens = torch.empty(program_shape, dtype=torch.long)
     torch_names = {canonical_name(name): name for name in agent.state_dict()}
     arrays = {**checkpoint.parameters, **checkpoint.buffers}
     unknown = sorted(set(arrays) - set(torch_names))
@@ -270,10 +276,10 @@ def save_checkpoint(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
-        "world_binding": (
-            deck_world(obs_space)
+        **(
+            world_fields(obs_space, agent.player_width)
             if player_configs is None
-            else checkpoint_world(player_configs, obs_space)
+            else {"world_binding": checkpoint_world(player_configs, obs_space)}
         ),
         "source": checkpoint_source(),
         "architecture": agent.architecture_receipt().model_dump(mode="json"),

@@ -5209,6 +5209,25 @@ fn catalog_token_value(name: &str) -> i32 {
     crate::cards::tokens::name_value(name)
 }
 
+#[cfg(feature = "python")]
+type Renamed<K> = (K, &'static str, Option<&'static str>);
+
+/// Historical (token kind, old name, successor) and (record namespace,
+/// old name, successor) entries. Definition references instead follow the
+/// referenced definition identity.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn catalog_token_renames() -> (Vec<Renamed<u16>>, Vec<Renamed<&'static str>>) {
+    use crate::cards::token_renames::{RECORDS, TOKENS};
+    (
+        TOKENS
+            .iter()
+            .map(|&(kind, old, new)| (kind as u16, old, new))
+            .collect(),
+        RECORDS.to_vec(),
+    )
+}
+
 /// `(namespace, name, value, token_kind, token_value)` of one record name.
 #[cfg(feature = "python")]
 type RecordNameRow = (&'static str, String, i32, Option<u16>, Option<i32>);
@@ -5442,6 +5461,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
     m.add_function(wrap_pyfunction!(reduce_card_capture_json, m)?)?;
     m.add_function(wrap_pyfunction!(catalog_token_value, m)?)?;
+    m.add_function(wrap_pyfunction!(catalog_token_renames, m)?)?;
     m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
     crate::python::layout_bindings::register(m)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;

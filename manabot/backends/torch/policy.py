@@ -125,6 +125,7 @@ class ActorCritic(nn.Module):
         observation_space: ObservationSpace,
         config: ModelConfig,
         *,
+        player_width: int | None = None,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> None:
@@ -149,7 +150,8 @@ class ActorCritic(nn.Module):
             raise ValueError(
                 "history observation contract requires recent_events ActorCritic"
             )
-        player_dim = enc.player_dim
+        self.player_width = player_width or enc.player_dim
+        player_dim = self.player_width
         card_dim = enc.card_dim
         # Inputs v10/v11 append each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
@@ -423,7 +425,7 @@ class ActorCritic(nn.Module):
             )
 
     def _binding(self) -> str:
-        return admission.binding(self.config, self.observation_space)
+        return admission.binding(self.config, self.observation_space, self.player_width)
 
     def _admission_spec(self) -> admission.Spec:
         key = (
@@ -444,7 +446,9 @@ class ActorCritic(nn.Module):
             self.config,
             self.observation_space,
             replace(
-                Tables.from_buffers(buffers, layout(self.observation_space)),
+                Tables.from_buffers(
+                    buffers, layout(self.observation_space, self.player_width)
+                ),
                 order_lengths=_catalog_order,
             ),
             self.card_definitions.num_embeddings
