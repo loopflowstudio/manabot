@@ -877,7 +877,7 @@ move list and recording. Pausing narration does not change these settings.
 
 The table's rail tells what happened in prose. In live play it is **Since
 your last move**: spells cast and their targets, lands played, discards,
-attacks, blocks, damage and deaths, read from the authority's presentation
+reveals, attacks, blocks, damage and deaths, read from the authority's presentation
 events after your last commit, with the move list beneath grouped by turn.
 When the opponent moved, those facts are also read out one at a time over the
 move list, about a second each, with the cards each is about outlined on the
