@@ -668,7 +668,7 @@
             </div>
             <div class="max-h-32 space-y-1 overflow-y-auto">
               {#each floats as offer (offer.source.id.entity)}
-                <button id={`mana-source-${offer.source.id.entity}`} class="btn btn-secondary btn-sm w-full"
+                <button id={`mana-source-${offer.source.id.entity}`} class="btn btn-secondary btn-sm h-auto min-h-[26px] w-full justify-start whitespace-normal py-1 text-left"
                   disabled={!canSubmitLive} onfocus={() => gameStore.setFocus([offer.source.id.entity])}
                   onpointermove={() => gameStore.setFocus([offer.source.id.entity])}
                   onblur={restoreFocus} onpointerleave={restoreFocus}
@@ -679,7 +679,7 @@
             </div>
             {#if controls.undo}
               {@const undo = controls.undo}
-              <button id="mana-undo" class="btn btn-secondary btn-sm aria-disabled:opacity-60"
+              <button id="mana-undo" class="btn btn-secondary btn-sm h-auto min-h-[26px] max-w-full whitespace-normal py-1 text-left aria-disabled:opacity-60"
                 aria-disabled={!canSubmitLive || undo.offer === null}
                 aria-describedby={undo.reason ? 'mana-undo-reason' : undefined}
                 onclick={() => undo.offer !== null && submitControl(undo.offer)}>Undo: {undo.activation.label}</button>
