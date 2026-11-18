@@ -34,7 +34,7 @@ pending choice with the same legal offers and permitted information.
 - **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,
   authoritative game loop, viewer-safe observation serialization
 - **`presentation.py`**: semantic presentation events (combat, turn
-  transitions, spell sequences, land plays and discards) derived from engine
+  transitions, spell sequences, land plays, discards and reveals) derived from engine
   events
 - **`curated_pack.py`**: the frozen curated matchup asset pack
 - **`study_protocol.py`**: viewer-safe study artifacts and decision evidence
