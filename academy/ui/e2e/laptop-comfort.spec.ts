@@ -23,13 +23,13 @@ async function layout(page: Page): Promise<Layout> {
   return page.evaluate(() => {
     const halves = [...document.querySelectorAll<HTMLElement>('.board .half')];
     const outside: string[] = [];
-    // The card a decision is about rises 8 px over its row's edge, and attackers
-    // and blockers lean toward the midline: placement, not overflow.
+    // The card a decision is about rises 8 px over its row's edge. An attacker
+    // leans toward the midline but stops inside its own half, so it never
+    // hides under, or covers, a card of the defending row.
     const slack = 10;
     for (const half of halves) {
       const bounds = half.getBoundingClientRect();
       for (const card of half.querySelectorAll<HTMLElement>('[data-testid=table-card]')) {
-        if (card.closest('.lean-up, .lean-down')) continue;
         const box = card.getBoundingClientRect();
         if (box.top < bounds.top - slack || box.bottom > bounds.bottom + slack || box.left < bounds.left - slack || box.right > bounds.right + slack) {
           const edges = [box.top - bounds.top, bounds.bottom - box.bottom, box.left - bounds.left, bounds.right - box.right].map(Math.round);

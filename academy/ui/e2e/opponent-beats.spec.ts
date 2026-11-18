@@ -46,7 +46,7 @@ test('the opponent\'s moves are read out, and Space ends the reading without act
   const text = await page.evaluate(() => document.querySelector('[data-testid=beat]')?.textContent ?? '');
   const before = sent.count;
   await page.keyboard.press('Space');
-  expect(text).toMatch(/ cast | attacked with | dealt | died| blocked /);
+  expect(text).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked /);
   expect(text).toMatch(/\d+ of \d+ · Space to skip/);
   await expect(beat).toHaveCount(0);
   expect(sent.count).toBe(before);

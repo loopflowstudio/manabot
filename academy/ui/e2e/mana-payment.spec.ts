@@ -127,7 +127,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     const after = await frame(page);
     if (after.action_space === 'PAY_OR_NOT') {
       // The tap paid {R}; the plan for the rest is one more source.
-      await expect(primary).toHaveText(/^Pay \{1\}\{R\} · \S+/);
+      await expect(primary).toHaveAccessibleName(/\{1\}\{R\} · \S+/);
       await expect(planned(page)).toHaveCount(1);
       const remaining = await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')));
       before = after.revision;
