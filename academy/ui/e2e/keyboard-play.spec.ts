@@ -94,10 +94,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     const commands = sent.length;
     const space = await page.getByTestId('action-panel').getAttribute('data-action-space-kind');
     const target = space === 'PRIORITY' ? [/^Your hand/, /Play (Island|Mountain|Forest|Plains)/] as const
-      : space === 'DECLARE_ATTACKER' ? [/^Your battlefield$/, /Attack with/] as const : null;
+      : space === 'DECLARE_ATTACKER' ? [/^Your battlefield$/, /can attack; press to add it/] as const : null;
     if (target && await reach(page, target[0], target[1])) {
       await page.keyboard.press('Enter');
       byEnter += 1;
+      // An attack is drafted on the board; Space confirms it, one Command per creature asked.
+      if (space === 'DECLARE_ATTACKER') {
+        await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+        await page.keyboard.press('Space');
+      }
     } else {
       // Space is the primary wherever focus is in the table; choices without one are numbered.
       if (await page.getByTestId('primary-action').count()) await page.keyboard.press('Space');
@@ -105,7 +110,8 @@ test('a game is played from the keyboard alone', async ({ page }) => {
       bySpace += 1;
     }
     await expect.poll(() => revision(page), { timeout: 30_000 }).toBeGreaterThan(before);
-    expect(sent.length).toBe(commands + 1);
+    if (space === 'DECLARE_ATTACKER') expect(sent.length).toBeGreaterThan(commands);
+    else expect(sent.length).toBe(commands + 1);
     // Focus stays on the table after the move.
     await expect.poll(async () => page.evaluate(() => document.activeElement !== document.body)).toBe(true);
   }

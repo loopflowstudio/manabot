@@ -49,13 +49,17 @@
     planned?: PlannedSource | null;
     /** Copies in this card's pile, shown on the top copy. */
     count?: number | null;
+    /** Its place in a combat draft: it may join (`can`), it is drafted (`in`), or it is the blocker being placed (`armed`). */
+    draft?: 'can' | 'in' | 'armed' | null;
+    /** What pressing it does in a combat draft, for its accessible name. */
+    note?: string | null;
     onactivate?: (element: HTMLElement) => void;
     onpreview?: (element: HTMLElement | null) => void;
   }
 
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, onactivate, onpreview,
+    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, draft = null, note = null, onactivate, onpreview,
   }: Props = $props();
 
   // At a recorded choice: the policy's mass on this card's offers, and whether one was played.
@@ -112,6 +116,7 @@
   const label = $derived([
     `${name}${creature && power !== null ? ` ${power}/${toughness}` : ''}`,
     facts,
+    note ?? '',
     offers.length === 1 ? `${offers[0].offer.label} (${offers[0].number})`
       : offers.length > 1 ? `${offers.length} choices: ${offers.map(placed => placed.offer.label).join('; ')}` : '',
   ].filter(Boolean).join(' — '));
@@ -129,7 +134,9 @@
     class="tcard"
     class:landscape
     class:tapped
-    class:legal={live && offers.length > 0}
+    class:legal={live && (offers.length > 0 || draft === 'can')}
+    class:drafted={draft === 'in'}
+    class:armed={draft === 'armed'}
     class:offered={!live && recorded !== null}
     class:chosen={recorded?.chosen}
     class:asked
@@ -144,6 +151,7 @@
     data-travel-side={side}
     data-object-id={permanent?.id ?? card?.id}
     data-offer-count={offers.length}
+    data-draft={draft ?? undefined}
     data-payment-source={planned?.order}
     data-card-name={name}
     aria-label={label}
@@ -254,6 +262,9 @@
   .policy[data-chosen='true'] { color: var(--bg-surface); background: var(--text); border-color: var(--text); }
   .tcard:not(.landscape) .policy { bottom: calc(var(--bar) + 3px); }
   .tcard.beat { box-shadow: 0 0 0 3px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent); transition: box-shadow 160ms ease-out; }
+  /* Drafted into an attack or block: a dashed accent ring, distinct from a declared (solid) attacker. */
+  .tcard.drafted { outline: 2px dashed var(--accent); outline-offset: 2px; }
+  .tcard.armed { box-shadow: 0 0 0 2px var(--accent), 0 8px 18px rgb(20 14 8 / 0.35); transform: translateY(-8px); outline: 2px dashed var(--accent); outline-offset: 2px; }
   .tcard.asked { box-shadow: 0 0 0 2px var(--accent), 0 8px 18px rgb(20 14 8 / 0.35); transform: translateY(-8px); }
 
   /* Planned payment: dashed, and what tapping it adds. Distinct from the solid "legal" outline. */

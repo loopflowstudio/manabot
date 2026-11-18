@@ -18,6 +18,14 @@ import type {
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 
+function permanent(id: number, name: string, controller: number, power: number, toughness: number): Observation['agent']['battlefield'][number] {
+  return {
+    id, name, controller_id: controller, tapped: false, damage: 0, summoning_sick: false,
+    power, toughness, base_power: power, base_toughness: toughness, plus1_counters: 0,
+  };
+}
+
+/** You: Otter-Penguin (83) and Tiger-Seal (85). The opponent: Badgermole Cub (84). */
 function combatObservation(): Observation {
   const observation = structuredClone(boltFixture.recovery.frame.projection);
   observation.turn = {
@@ -27,32 +35,8 @@ function combatObservation(): Observation {
     active_player_id: 0,
     agent_player_id: 0,
   };
-  observation.agent.battlefield = [{
-    id: 83,
-    name: 'Otter-Penguin',
-    controller_id: 0,
-    tapped: false,
-    damage: 0,
-    summoning_sick: false,
-    power: 2,
-    toughness: 2,
-    base_power: 2,
-    base_toughness: 2,
-    plus1_counters: 0,
-  }];
-  observation.opponent.battlefield = [{
-    id: 84,
-    name: 'Badgermole Cub',
-    controller_id: 1,
-    tapped: false,
-    damage: 0,
-    summoning_sick: false,
-    power: 1,
-    toughness: 1,
-    base_power: 1,
-    base_toughness: 1,
-    plus1_counters: 0,
-  }];
+  observation.agent.battlefield = [permanent(83, 'Otter-Penguin', 0, 2, 2), permanent(85, 'Tiger-Seal', 0, 3, 3)];
+  observation.opponent.battlefield = [permanent(84, 'Badgermole Cub', 1, 1, 1)];
   return observation;
 }
 
@@ -74,29 +58,39 @@ function offer(
 
 const OTTER = subject(83, 'Otter-Penguin');
 const CUB = subject(84, 'Badgermole Cub');
+const TIGER = subject(85, 'Tiger-Seal');
 
-function frameAt(stage: 'attack' | 'block' | 'priority'): ExperienceFrame {
+type Stage = 'otter' | 'tiger' | 'block' | 'priority';
+const REVISION: Record<Stage, number> = { otter: 10, tiger: 11, block: 12, priority: 13 };
+
+/** The engine asks one creature at a time: Otter-Penguin, then Tiger-Seal; then the Cub attacks and Otter-Penguin may block. */
+function frameAt(stage: Stage): ExperienceFrame {
   const base = structuredClone(boltFixture.recovery.frame);
-  const revision = stage === 'attack' ? 10 : stage === 'block' ? 11 : 12;
+  const revision = REVISION[stage];
   const observation = combatObservation();
-  const actionSpace = stage === 'attack' ? 'DECLARE_ATTACKER' : stage === 'block' ? 'DECLARE_BLOCKER' : 'PRIORITY';
+  const actionSpace = stage === 'block' ? 'DECLARE_BLOCKER' : stage === 'priority' ? 'PRIORITY' : 'DECLARE_ATTACKER';
+  if (stage === 'tiger') observation.agent.battlefield[0] = { ...observation.agent.battlefield[0], attacking: true, tapped: true };
   if (stage === 'block') {
     observation.turn = { ...observation.turn, active_player_id: 1, step: 'DECLARE_BLOCKERS_STEP' };
     observation.opponent.battlefield[0].attacking = true;
   }
   if (stage === 'priority') observation.turn = { ...observation.turn, active_player_id: 1, phase: 'COMBAT', step: 'COMBAT_END' };
-  const offers = stage === 'attack'
-    ? [
-        offer(101, 'declare_attackers', 'Attack with Otter-Penguin', 'DECLARE_ATTACKER', [83], [{ role: 'source', object: OTTER }]),
-        offer(102, 'declare_attackers', 'Do not attack with Otter-Penguin', 'DECLARE_ATTACKER', [83], [{ role: 'choice', object: OTTER }]),
-      ]
-    : stage === 'block'
-      ? [
-          offer(201, 'declare_blockers', 'Block Badgermole Cub with Otter-Penguin', 'DECLARE_BLOCKER', [83, 84],
-            [{ role: 'choice', object: OTTER }, { role: 'target', object: CUB }]),
-          offer(202, 'declare_blockers', 'Otter-Penguin: do not block', 'DECLARE_BLOCKER', [83], [{ role: 'choice', object: OTTER }]),
-        ]
-      : [offer(301, 'pass_priority', 'Pass priority', 'PRIORITY_PASS_PRIORITY', [])];
+  const offers = {
+    otter: [
+      offer(101, 'declare_attackers', 'Attack with Otter-Penguin', 'DECLARE_ATTACKER', [83], [{ role: 'source', object: OTTER }]),
+      offer(102, 'declare_attackers', 'Do not attack with Otter-Penguin', 'DECLARE_ATTACKER', [83], [{ role: 'choice', object: OTTER }]),
+    ],
+    tiger: [
+      offer(103, 'declare_attackers', 'Attack with Tiger-Seal', 'DECLARE_ATTACKER', [85], [{ role: 'source', object: TIGER }]),
+      offer(104, 'declare_attackers', 'Do not attack with Tiger-Seal', 'DECLARE_ATTACKER', [85], [{ role: 'choice', object: TIGER }]),
+    ],
+    block: [
+      offer(201, 'declare_blockers', 'Block Badgermole Cub with Otter-Penguin', 'DECLARE_BLOCKER', [83, 84],
+        [{ role: 'choice', object: OTTER }, { role: 'target', object: CUB }]),
+      offer(202, 'declare_blockers', 'Otter-Penguin: do not block', 'DECLARE_BLOCKER', [83], [{ role: 'choice', object: OTTER }]),
+    ],
+    priority: [offer(301, 'pass_priority', 'Pass priority', 'PRIORITY_PASS_PRIORITY', [])],
+  }[stage];
   return {
     ...base,
     match_id: 'combat-prompt-proof',
@@ -134,82 +128,181 @@ function acceptedUpdate(command: Command, frame: ExperienceFrame, presentation: 
   };
 }
 
-/** Attack, then block, then the combat's end; each Command answers the frame it was made at. */
-async function installCombatAuthority(page: Page, commands: Command[]): Promise<void> {
+interface Authority {
+  commands: Command[];
+  previews: { revision: number; plan: { attackers: { entity: number }[]; blocks: { blocker: { entity: number }; attacker: { entity: number } }[] } }[];
+}
+
+const id = (entity: number) => ({ entity, incarnation: 0 });
+
+/**
+ * A combat authority: each Command answers the frame it was made at, and the
+ * combat preview answers a drafted plan with the per-creature offers the
+ * engine would ask for. `after` replaces the frame that follows a revision,
+ * to stand for a decision the preview did not predict.
+ */
+async function installCombatAuthority(page: Page, after: Partial<Record<number, Stage>> = {}): Promise<Authority> {
+  const authority: Authority = { commands: [], previews: [] };
+  let current = frameAt('otter');
+  await page.route('**/api/sessions/*/combat-preview', async route => {
+    const request = route.request().postDataJSON() as { match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: Authority['previews'][number]['plan'] };
+    authority.previews.push({ revision: request.revision, plan: request.plan });
+    const attacks = new Set(request.plan.attackers.map(attacker => attacker.entity));
+    const step = (revision: number, creature: number, actionIndex: number, attack: boolean, blocks: number | null = null) =>
+      ({ revision, fingerprint: `native-${revision}`, creature: id(creature), action_index: actionIndex, attack, blocks: blocks === null ? null : id(blocks) });
+    const preview = request.revision === 12
+      ? {
+          kind: 'blockers', declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [id(84)], must_block: false }],
+          steps: [request.plan.blocks.length ? step(12, 83, 201, false, 84) : step(12, 83, 202, false)],
+          refused: null, declared_attackers: [], declared_blocks: request.plan.blocks,
+        }
+      : {
+          kind: 'attackers',
+          declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [], must_block: false },
+            { creature: id(85), label: 'Tiger-Seal', can_block: [], must_block: false }].filter(creature => request.revision === 10 || creature.creature.entity === 85),
+          steps: [
+            ...(request.revision === 10 ? [step(10, 83, attacks.has(83) ? 101 : 102, attacks.has(83))] : []),
+            step(11, 85, attacks.has(85) ? 103 : 104, attacks.has(85)),
+          ],
+          refused: null, declared_attackers: request.plan.attackers, declared_blocks: [],
+        };
+    await route.fulfill({ json: { ...request, viewer: 0, preview } });
+  });
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage((raw) => {
       const message = JSON.parse(String(raw)) as { type?: string; command?: Command };
-      if (message.type === 'new_game') {
-        const frame = frameAt('attack');
+      if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
-          type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
+          type: 'observation', table: tableSnapshot(), data: current.projection, actions: [],
           session_id: 'combat-session', resume_token: 'combat-resume-token',
-          recovery: { ...structuredClone(boltFixture.recovery), reason: 'initial_connect', frame, presentation_tail: [],
-            presentation_cursor: 0, accepted_commands: [], replay_cursor: frame.revision },
+          recovery: { ...structuredClone(boltFixture.recovery), reason: 'initial_connect', frame: current, presentation_tail: [],
+            presentation_cursor: 0, accepted_commands: [], replay_cursor: current.revision },
         }));
         return;
       }
       if (message.type !== 'command' || !message.command) return;
       const command = message.command;
-      commands.push(command);
-      const blocked = command.expected_revision === 11;
-      const next = command.expected_revision === 10 ? frameAt('block') : frameAt('priority');
+      authority.commands.push(command);
+      const revision = command.expected_revision;
+      const stage: Stage = after[revision] ?? (revision === 10 ? 'tiger' : revision === 11 ? 'block' : 'priority');
+      const next = frameAt(stage);
+      const blocked = revision === 12 && command.offer_id === 201;
       if (blocked) next.projection.agent.battlefield[0].damage = 1;
       if (blocked) next.projection.opponent.battlefield[0].damage = 2;
+      current = next;
       socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted',
-        update: acceptedUpdate(command, next, blocked ? combatEvents(11) : []) }));
+        update: acceptedUpdate(command, next, blocked ? combatEvents(12) : []) }));
     });
   });
+  return authority;
 }
 
-async function startCombat(page: Page, commands: Command[]): Promise<void> {
-  await installCombatAuthority(page, commands);
+async function startCombat(page: Page, after: Partial<Record<number, Stage>> = {}): Promise<Authority> {
+  const authority = await installCombatAuthority(page, after);
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
+  await expect(page.getByTestId('combat-draft')).toBeVisible();
+  return authority;
 }
 
 const card = (page: Page, id: number) => page.locator(`.board [data-testid=table-card][data-object-id="${id}"]`);
 
+async function press(page: Page, mode: 'pointer' | 'keyboard', id: number): Promise<void> {
+  if (mode === 'pointer') await card(page, id).click();
+  else { await card(page, id).focus(); await page.keyboard.press('Enter'); }
+}
+
 for (const mode of ['pointer', 'keyboard'] as const) {
-  test(`combat is answered on the board by ${mode}: attack with the creature, block on the attacker`, async ({ page }) => {
-    const commands: Command[] = [];
+  test(`combat is drafted on the board by ${mode} and sent one creature at a time on confirm`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
-    await startCombat(page, commands);
+    const authority = await startCombat(page);
 
-    // The creature asked about is lifted and is the attack; declining is a separate button.
-    await expect(card(page, 83)).toHaveClass(/asked/);
-    await expect(card(page, 83)).toHaveClass(/legal/);
-    await expect(card(page, 83)).toHaveAccessibleName(/Attack with Otter-Penguin \(1\)$/);
-    await expect(page.getByTestId('prompt-action')).toHaveText(['2Do not attack with Otter-Penguin']);
-    await expect(page.getByTestId('action-option')).toHaveCount(2);
-    if (mode === 'pointer') await card(page, 83).click();
-    else await page.keyboard.press('1');
-    await expect.poll(() => commands.length).toBe(1);
-    expect(commands[0]).toMatchObject({ match_id: 'combat-prompt-proof', expected_revision: 10, prompt_id: 110, offer_id: 101, answers: [] });
+    // Every creature that can attack is outlined, and the primary reads the whole plan.
+    await expect(card(page, 83)).toHaveAttribute('data-draft', 'can');
+    await expect(card(page, 85)).toHaveAttribute('data-draft', 'can');
+    await expect(card(page, 83)).toHaveAccessibleName(/can attack; press to add it to the attack/);
+    await expect(page.getByTestId('primary-action')).toHaveText(/No attack/);
 
-    // Blocking: the attacker is the control; the blocker asked about is lifted; not blocking is a button.
+    // Drafting sends nothing: Otter-Penguin leans in, Tiger-Seal stays home.
+    await press(page, mode, 83);
+    await expect(card(page, 83)).toHaveAttribute('data-draft', 'in');
+    await expect(card(page, 83)).toHaveClass(/attacking/);
+    await expect(page.getByTestId('decision-prompt')).toHaveText('Attack with Otter-Penguin · not with Tiger-Seal');
+    await press(page, mode, 85);
+    await press(page, mode, 85);
+    // The button fits one line; the prompt above names the plan.
+    await expect(page.getByTestId('primary-action')).toHaveText(/Attack with 1/);
+    await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+    expect(authority.commands).toEqual([]);
+
+    // Confirm: each Command answers the frame the preview predicted for it.
+    if (mode === 'pointer') await page.getByTestId('primary-action').click();
+    else await page.keyboard.press('Space');
+    await expect.poll(() => authority.commands.length).toBe(2);
+    expect(authority.commands.map(command => [command.expected_revision, command.prompt_id, command.offer_id])).toEqual([[10, 110, 101], [11, 111, 104]]);
+
+    // Blocking: Otter-Penguin can block only the Cub, so pressing it drafts that block and draws its line.
     await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
-    await expect(card(page, 83)).toHaveClass(/asked/);
-    await expect(card(page, 84)).toHaveClass(/legal/);
-    await expect(card(page, 84)).toHaveAccessibleName(/Block Badgermole Cub with Otter-Penguin \(1\)$/);
-    await expect(page.getByTestId('prompt-action')).toHaveText(['2Otter-Penguin: do not block']);
-    if (mode === 'pointer') await card(page, 84).click();
-    else await page.keyboard.press('1');
-    await expect.poll(() => commands.length).toBe(2);
-    expect(commands[1]).toMatchObject({ expected_revision: 11, prompt_id: 111, offer_id: 201, answers: [] });
+    await expect(page.getByTestId('combat-draft')).toHaveAttribute('data-kind', 'blockers');
+    await expect(card(page, 83)).toHaveAccessibleName(/can block; press, then the attacker it blocks/);
+    await press(page, mode, 83);
+    await expect(card(page, 83)).toHaveAttribute('data-draft', 'in');
+    await expect(page.locator('[data-testid=table-lines] [data-line-kind=block]')).toHaveCount(1);
+    await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Badgermole Cub');
+    await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+    expect(authority.commands).toHaveLength(2);
+    if (mode === 'pointer') await page.getByTestId('primary-action').click();
+    else await page.keyboard.press('Space');
+    await expect.poll(() => authority.commands.length).toBe(3);
+    expect(authority.commands[2]).toMatchObject({ expected_revision: 12, prompt_id: 112, offer_id: 201, answers: [] });
     expect(errors).toEqual([]);
   });
 }
 
-test('after combat, the block stays drawn and damage shows on the cards it landed on', async ({ page }, testInfo) => {
-  const commands: Command[] = [];
-  await startCombat(page, commands);
+test('a frame the preview did not predict stops the sequence and redraws the board', async ({ page }) => {
+  // After Otter-Penguin's attack the game asks for priority, not about Tiger-Seal.
+  const authority = await startCombat(page, { 10: 'priority' });
   await card(page, 83).click();
+  await card(page, 85).click();
+  await expect(page.getByTestId('primary-action')).toHaveText(/Attack with 2/);
+  await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+  await page.getByTestId('primary-action').click();
+  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PRIORITY');
+  await page.waitForTimeout(300);
+  expect(authority.commands.map(command => command.offer_id)).toEqual([101]);
+  await expect(page.getByTestId('combat-stopped')).toHaveText(/Stopped after 1 of 2: the game asked something the preview did not predict/);
+  // The board is the frame's own again: no draft, Tiger-Seal not drawn attacking.
+  await expect(page.getByTestId('combat-draft')).toHaveCount(0);
+  await expect(card(page, 85)).not.toHaveClass(/attacking/);
+  await expect(card(page, 85)).not.toHaveAttribute('data-draft');
+});
+
+test('a reload mid-draft keeps the draft and commits nothing', async ({ page }) => {
+  const authority = await startCombat(page);
+  await card(page, 85).click();
+  await expect(card(page, 85)).toHaveAttribute('data-draft', 'in');
+  await page.reload();
+  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
+  await expect(card(page, 85)).toHaveAttribute('data-draft', 'in');
+  await expect(card(page, 83)).toHaveAttribute('data-draft', 'can');
+  await expect(page.getByTestId('decision-prompt')).toHaveText('Attack with Tiger-Seal · not with Otter-Penguin');
+  expect(authority.commands).toEqual([]);
+  // The restored draft is sent as drafted.
+  await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+  await page.keyboard.press('Space');
+  await expect.poll(() => authority.commands.map(command => command.offer_id)).toEqual([102, 103]);
+});
+
+test('after combat, the block stays drawn and damage shows on the cards it landed on', async ({ page }, testInfo) => {
+  const authority = await startCombat(page);
+  await page.getByTestId('primary-action').click();
   await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
-  await card(page, 84).click();
+  await card(page, 83).click();
+  await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+  await page.getByTestId('primary-action').click();
   await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PRIORITY');
   // No frame holds the block any longer; the block events since the move draw it.
   await expect(page.locator('[data-testid=table-lines] [data-line-kind=block]')).toHaveCount(1);
@@ -223,8 +316,9 @@ test('after combat, the block stays drawn and damage shows on the cards it lande
   ]);
   await page.screenshot({ path: testInfo.outputPath('after-combat.png') });
   // Passing is the person's next move: the marks of the last one go.
+  const sent = authority.commands.length;
   await page.keyboard.press('Space');
-  await expect.poll(() => commands.length).toBe(3);
+  await expect.poll(() => authority.commands.length).toBe(sent + 1);
 });
 
 test('Replay keeps playing through a live producer save and resumes at its saved choice', async ({ page }) => {

@@ -43,6 +43,7 @@
     sendSetStops,
     sendTransferPilot,
     fetchPaymentPreview,
+    fetchCombatPreview,
   } from '$lib/socket.svelte';
   import type { ExperienceFrame, InteractionOffer, StopSide } from '$lib/types';
 
@@ -422,6 +423,7 @@
       interrupted={gameStore.resumeFailed}
       payment={paymentState}
       onpreview={previewPayment}
+      combatPreview={canSubmitLive && !participantStudying ? fetchCombatPreview : undefined}
       onact={handleActionSelect}
       onpassturn={handlePassTurn}
       {notices}

@@ -30,11 +30,13 @@
     toward: 'up' | 'down';
     align?: 'start' | 'end';
     names: Map<number, string>;
+    /** A combat draft's place for each creature it concerns, and what pressing it does. */
+    draft?: { places: Map<number, 'can' | 'in' | 'armed'>; notes: Map<number, string> } | null;
     onactivate: (item: PermanentItem, element: HTMLElement) => void;
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
+  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, draft = null, onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -83,8 +85,10 @@
               width={fit.card}
               shape="landscape"
               permanent={item.permanent}
-              offers={item.offers}
+              offers={draft ? [] : item.offers}
               {live}
+              draft={draft?.places.get(item.permanent.id) ?? null}
+              note={draft?.notes.get(item.permanent.id) ?? null}
               asked={asked.has(item.permanent.id)}
               touched={touched.has(item.permanent.id)}
               beat={beat.has(item.permanent.id)}

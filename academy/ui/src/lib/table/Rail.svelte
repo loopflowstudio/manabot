@@ -56,12 +56,16 @@
     /** Moves jump to their position when set. */
     onjump?: (id: string) => void;
     currentMove?: string | null;
+    /** A combat draft's controls, in place of the per-creature buttons. */
+    draft?: Snippet;
+    /** Why a confirmed combat declaration stopped before all of it was sent. */
+    stopped?: string | null;
   }
 
   let {
     view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
-    evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null,
+    evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
   const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
@@ -210,6 +214,10 @@
           {/if}
         </div>
       {/if}
+      {#if stopped}<p class="type-caption text-ink-2" data-testid="combat-stopped" role="status">{stopped}</p>{/if}
+      {#if draft}
+        {@render draft()}
+      {:else}
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} onclick={() => onact(view.primary!)}>
@@ -223,6 +231,7 @@
           <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}{placed.offer.label}{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
+      {/if}
       {#if canPassTurn}
         <button type="button" class="pass-turn type-caption" data-testid="pass-turn" onclick={onpassturn}
           title="Pass every priority window until the turn ends">Pass turn <kbd>F6</kbd></button>
