@@ -568,7 +568,8 @@ def step(
         rates = {
             "decisions_per_game": rows / completed,
             "skipped_share": skips / (skips + rows),
-            "priority_tap_rate": (stats.priority_taps - taps) / (stats.micro_steps - decisions),
+            "priority_tap_rate": (stats.priority_taps - taps)
+            / (stats.micro_steps - decisions),
             "rows_per_second": rows / seconds,
             "updates_per_hour": 3600 / seconds,
             "games_per_hour": completed * 3600 / seconds,
