@@ -2721,3 +2721,24 @@ differ in learner decisions for seeds 39101 (8.17M against 7.58M) and 39102
 (7.97M against 7.09M) and are equal for 39103 (8.00M against 8.04M); update
 counts differ in all three. The advantage is therefore not attributable to
 memory use at play time.
+
+### Final checkpoints against the heuristic — 2026-11-18
+
+Run `decision-memory-elemental-v1-784fb252dbbe` (revision `5197b1c9e7`)
+played each arm's final checkpoint against the native heuristic, 50 paired
+deals per cell. Scores are the checkpoint's, with the standard error across
+deals.
+
+| Seed | Decklists | Control | GRU |
+| --- | --- | ---: | ---: |
+| 39101 | open | 0.295 ± 0.031 | 0.400 ± 0.029 |
+| 39101 | closed | 0.325 ± 0.027 | 0.480 ± 0.028 |
+| 39102 | open | 0.385 ± 0.036 | 0.455 ± 0.033 |
+| 39102 | closed | 0.365 ± 0.030 | 0.380 ± 0.032 |
+| 39103 | open | 0.420 ± 0.031 | 0.460 ± 0.036 |
+| 39103 | closed | 0.410 ± 0.036 | 0.410 ± 0.036 |
+
+Every checkpoint loses to the heuristic. The GRU arm scores at least as
+well as control in all six cells (means 0.431 against 0.367); at seed 39103,
+where the final checkpoints have equal learner decisions, the difference is
+within one standard error.
