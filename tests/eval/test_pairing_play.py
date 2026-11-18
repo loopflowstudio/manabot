@@ -43,10 +43,12 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
 ) -> None:
     """A world matchup admits world-bound checkpoints, as trained recipes write them."""
     torch.set_num_threads(1)
+    # Vanilla decks exercise disclosure, checkpoint identity and all four legs
+    # with bounded decision histories for the recurrent test policies.
     matchup = AuthoredMatchup(
-        pack_key="ur-lessons-vs-gw-allies",
-        role_a="ur_lessons",
-        role_b="gw_allies",
+        pack_key="mtg122-complexity-v1",
+        role_a="l1_swift",
+        role_b="l1_heavy",
         decklists=disclosure,
         world=world,
     )
