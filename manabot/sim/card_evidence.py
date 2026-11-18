@@ -84,7 +84,7 @@ class GameEvidence(StrictModel):
             or self.leg != trace["leg"]
             or list(self.seat_players) != trace["seat_players"]
             or self.winner != trace["winner"]
-            or self.setup.model_dump(mode="json") != trace["match_hypers"]
+            or self.setup != MatchConfig.model_validate(trace["match_hypers"])
         ):
             raise ValueError("evidence differs from trace")
         if list(self.seat_decks) != trace.get("seat_decks", ["mirror", "mirror"]):
