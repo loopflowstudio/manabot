@@ -2777,3 +2777,26 @@ the learning. At equal updates the arms are close, with the GRU arm ahead
 at update 80 in all three seeds; control reached update 80 after 6.7M
 decisions (seed 39101) where the GRU arm needed 4.5M, because control's
 games hold more decisions.
+
+### History off against main on the A40 — 2026-11-18
+
+Run `opponent_memory/cuda-history-off@39100` (revision `e4aca24cbd`,
+USD 0.32) built main's base commit `3afd92d8f3` beside this branch on one
+A40 and ran `scripts/measure_history_off.py compare`: history off, 256
+whole-game streams, four collection workers, bf16, the seeded width-64
+model, three collection-and-update iterations per fresh process with the
+first discarded. Both sources played the same 107,048 timed decisions.
+
+| Order | Source | Collection s | Update s | Decisions/s |
+|---:|---|---:|---:|---:|
+| 0 | branch | 198.8 | 118.4 | 337.5 |
+| 1 | main | 191.2 | 122.0 | 341.8 |
+| 2 | main | 166.0 | 118.6 | 376.2 |
+| 3 | branch | 157.5 | 122.0 | 383.1 |
+
+Branch over main in seconds per decision is **0.998×** (medians of two
+cases each); update time alone is 0.9995×. Collection time drifted by about
+20% over the rental on both sources, which the branch/main/main/branch order
+balances; two cases per side give no confidence bound. With history off the
+branch costs the same as main on the training GPU, to within this
+measurement.
