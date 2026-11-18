@@ -11,6 +11,7 @@ from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 import managym
 from managym.recording import GameRecord, ScalarCapture
+from managym.replay import walk
 
 
 def forests() -> list[managym.PlayerConfig]:
@@ -127,3 +128,39 @@ def test_priority_taps_preserve_default_config_identity_and_follow_seats() -> No
     match = Match(MatchConfig(mana_taps=(True, False)))
     assert match.to_rust().mana_taps == (True, False)
     assert match.swapped().to_rust().mana_taps == (False, True)
+
+
+def test_capture_counts_a_priority_float_expiring_through_skipped_steps(
+    tmp_path: Path,
+) -> None:
+    env = managym.Env(seed=3)
+    path = tmp_path / "game.jsonl"
+    capture = ScalarCapture(3, games_path=path)
+    obs, _ = capture.reset(env, managym.GameSetup(forests(), mana_taps=(True, False)))
+    floated = False
+    while not env.is_game_over():
+        actions = [a.action_type for a in obs.action_space.actions]
+        choice = 0
+        if not floated and managym.ActionEnum.TAP_FOR_COST in actions:
+            choice = actions.index(managym.ActionEnum.TAP_FOR_COST)
+            floated = True
+        elif managym.ActionEnum.PRIORITY_PLAY_LAND in actions:
+            choice = actions.index(managym.ActionEnum.PRIORITY_PLAY_LAND)
+        obs, *_ = capture.step(env, choice)
+    capture.close()
+    assert floated and env.skip_trivial_count() > 0
+    replay = walk(GameRecord.model_validate_json(path.read_bytes()), capture_cards=True)
+    for _ in replay:
+        pass
+    exposure = replay.cards().capture.exposure
+    assert exposure is not None and exposure.mana is not None
+    on, off = exposure.mana
+    # The floated Forest's {G} is never spent; it empties with the pool.
+    assert (
+        on.priority_produced
+        == on.regular_expired
+        == on.priority_expired_min
+        == on.priority_expired_max
+        == 1
+    )
+    assert off.priority_produced == off.regular_expired == 0

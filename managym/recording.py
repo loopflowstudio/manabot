@@ -96,10 +96,10 @@ def _game_disclosure(players: list[PlayerSetup]) -> DecklistDisclosure | None:
 
 def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
     disclosure = managym.resolve_decklists(players, seed)
-    taps = managym.GameSetup(players).mana_taps
+    setup = managym.GameSetup(players)
     return [
-        PlayerSetup.retain(player, disclosure, taps[i])
-        for i, player in enumerate(players)
+        PlayerSetup.retain(player, disclosure, taps)
+        for player, taps in zip(setup, setup.mana_taps)
     ]
 
 

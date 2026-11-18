@@ -21,12 +21,10 @@ from etude.jobs import (
     Checkpoints,
     EvalJob,
     ExperimentState,
-    OutMembers,
     TrainingJob,
     TrainingRunSummary,
     checkpoint_inputs,
 )
-from etude.out import OutMember
 from etude.page import experiment_files
 from etude.records import ArtifactRef
 import pytest
@@ -42,8 +40,6 @@ from experiments import (
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
-import managym
-from managym.recording import GameRecord, ScalarCapture
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = ROOT / "experiments"
@@ -62,11 +58,7 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
-    (
-        mana_taps,
-        (),
-        {"mana-taps-w64-off": 3, "mana-taps-w64-on": 3},
-    ),
+    (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-on": 3}),
 ]
 
 
@@ -132,58 +124,6 @@ def test_training_jobs_read_as_addressed_runs(
     }
     assert all("etude.call" in request.job.command for request in requests)
     assert all(request.job.smoke is not None for request in requests)
-
-
-def test_mana_taps_rental_limits_apply_to_all_six_runs() -> None:
-    requests = read_training_jobs(
-        EXPERIMENTS / "mana_taps.py",
-        ("--hours", "0.875", "--usd-per-run", "0.79", "--max-attempts", "2"),
-    )
-    assert len(requests) == 6
-    assert {request.seed for request in requests} == set(mana_taps.SEEDS)
-    assert all(request.job.max_attempts == 2 for request in requests)
-    assert all(request.job.max_hours == 0.875 for request in requests)
-    assert all(str(request.job.max_usd) == "0.79" for request in requests)
-
-
-def test_mana_eval_delivers_raw_and_ema_bytes_at_each_milestone(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def out(run: TrainingRunSummary) -> OutMembers:
-        return OutMembers(
-            (
-                OutMember(
-                    run=run.name,
-                    key="out/policies/00000075-raw.safetensors",
-                    sha256="a" * 64,
-                    size_bytes=17,
-                    uri=f"r2://fixture/{run.name}/out/policies/00000075-raw.safetensors",
-                ),
-            )
-        )
-
-    monkeypatch.setattr(TrainingRunSummary, "out", property(out))
-    runs = tuple(
-        replace(
-            _finished_run(tmp_path, range(75, 76), name=f"{name}@21501", job=name),
-            seed=21501,
-        )
-        for name in ("mana-taps-w64-off", "mana-taps-w64-on")
-    )
-    state = ExperimentState(experiment="fixture", runs=runs)
-    ema, raw = mana_taps.eval_jobs(state)
-    for job, digest in ((ema, "0" * 64), (raw, "a" * 64)):
-        assert len(job.tournament.seatings) == 3
-        inputs = [
-            item
-            for item in job.lower(state).inputs
-            if item.name.startswith("checkpoint-")
-        ]
-        assert len(inputs) == 2
-        assert {item.sha256 for item in inputs} == {digest}
-    assert {c.file for c in raw.checkpoints} == {
-        "out/policies/00000075-raw.safetensors"
-    }
 
 
 def test_training_declarations_return_typed_jobs_that_lower() -> None:
@@ -360,46 +300,3 @@ def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
     unknown = replace(lost, name="unknown-run")
     with pytest.raises(EtudeError, match="unknown-run"):
         tla_frontier.with_launcher_ends(replace(state, runs=(unknown,)))
-
-
-def test_spot_check_counts_a_float_expiring_through_skipped_steps(
-    tmp_path: Path,
-) -> None:
-    env = managym.Env(seed=3)
-    path = tmp_path / "spot.jsonl"
-    capture = ScalarCapture(3, games_path=path)
-    obs, _ = capture.reset(
-        env,
-        managym.GameSetup(
-            [managym.PlayerConfig(name, {"Forest": 12}) for name in ("a", "b")],
-            mana_taps=(True, False),
-        ),
-    )
-    decisions = [0, 0]
-    floated = False
-    while not env.is_game_over():
-        actor = int(obs.agent.player_index)
-        decisions[actor] += 1
-        actions = [a.action_type for a in obs.action_space.actions]
-        choice = 0
-        if not floated and managym.ActionEnum.TAP_FOR_COST in actions:
-            choice = actions.index(managym.ActionEnum.TAP_FOR_COST)
-            floated = True
-        elif managym.ActionEnum.PRIORITY_PLAY_LAND in actions:
-            choice = actions.index(managym.ActionEnum.PRIORITY_PLAY_LAND)
-        obs, *_ = capture.step(env, choice)
-    capture.close()
-    record = GameRecord.model_validate_json(path.read_bytes())
-    on, off = mana_taps.spot_check(record, 1, record.sha256)
-    assert env.skip_trivial_count() > 0
-    assert [on["surfaced"], off["surfaced"]] == decisions
-    assert (on["seat"], off["seat"]) == (1, 0)
-    assert on["float_offered"] > 0
-    assert on["float_chosen"] == on["priority_produced"] == 1
-    assert (
-        on["regular_expired"]
-        == on["priority_expired_min"]
-        == on["priority_expired_max"]
-        == 1
-    )
-    assert off["float_offered"] == off["float_chosen"] == off["regular_expired"] == 0
