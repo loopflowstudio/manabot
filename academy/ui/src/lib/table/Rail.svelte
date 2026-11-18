@@ -147,13 +147,13 @@
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
   .stack-entry .who { width: 6px; height: 6px; border-radius: 3px; background: var(--neutral); flex: none; }
   .stack-entry .who.mine { background: var(--info); }
-  .prompt { display: grid; gap: 6px; }
+  .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .whose { color: var(--text-tertiary); }
   .whose.yours { color: var(--error-text); }
   .instruction { max-height: 5.2em; overflow-y: auto; }
   .primary { height: 40px; width: 100%; font-size: 14px; justify-content: center; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
-  .secondary { width: 100%; justify-content: flex-start; }
+  .secondary { width: 100%; height: auto; min-height: 32px; padding-block: 5px; justify-content: flex-start; text-align: left; white-space: normal; }
   kbd {
     font-family: var(--font-mono); font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 3px;
     border: 1px solid currentColor; opacity: 0.75; min-width: 16px; text-align: center;
