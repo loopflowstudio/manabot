@@ -17,7 +17,7 @@
 
 <style>
   .thumb {
-    flex: none; width: 26px; height: 36px; border-radius: 3px; border: 1px solid rgb(20 14 8 / 0.5);
+    flex: none; width: 26px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
     background: var(--bg-muted) center 30% / cover no-repeat;
   }
 </style>

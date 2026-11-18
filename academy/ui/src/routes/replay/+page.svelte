@@ -441,7 +441,7 @@
   <details class="table-menu">
     <summary class="btn btn-ghost btn-sm" data-testid="table-menu">Menu</summary>
     <div class="menu-panel" role="region" aria-label="Recording and tools">
-      <p class="type-rubric text-ink-2" data-testid="recording-heading">{sourceLabel}</p>
+      <p class="type-label text-ink-2" data-testid="recording-heading">{sourceLabel}</p>
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
       <p class="type-caption text-ink-3" data-testid="replay-perspective">{perspectiveText}</p>
       <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
@@ -473,7 +473,7 @@
         </label>
       {/if}
       {#if index?.watch}
-        <details><summary class="type-rubric cursor-pointer">Watch another matchup</summary>
+        <details><summary class="type-label cursor-pointer">Watch another matchup</summary>
           {#key index.id}<WatchSetup setup={index.private_setup} disabled={locked} onOpen={id => void goto(`/replay?trace=${encodeURIComponent(id)}`)} />{/key}
         </details>
       {/if}
@@ -485,7 +485,7 @@
 {#snippet result()}
   {#if ending}
     <div data-testid="game-result-dialog" class="result">
-      <p class="type-rubric text-ink-3">Game over · recorded</p>
+      <p class="type-label text-ink-3">Game over · recorded</p>
       <h2 data-testid="game-result" class="type-display text-display">{ending.headline}</h2>
       <p class="text-ink-2">{ending.how}</p>
       <p class="type-caption text-ink-2">{ending.life}</p>

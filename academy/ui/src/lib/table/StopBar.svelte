@@ -86,21 +86,21 @@
 <style>
   .stopbar { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; height: 44px; background: var(--bg-surface); border-top: 1px solid var(--border); }
   .steps { display: grid; grid-template-columns: var(--plate) repeat(9, minmax(0, 1fr)); min-width: 0; }
-  .key { display: grid; align-content: center; gap: 2px; padding-left: 14px; font: 12px/14px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
+  .key { display: grid; align-content: center; gap: 0; padding-left: 14px; font: 12px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
   .key .active { color: var(--text); }
   .cell { display: grid; grid-template-rows: 14px 16px 14px; align-content: center; min-width: 0; border-left: 1px solid transparent; }
   .cell.rule { border-left-color: var(--border); }
   .cell.current { background: var(--bg-muted); }
   .name { font: 12px/16px var(--font-sans); color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .current .name { color: var(--text); font-weight: 700; }
+  .current .name { color: var(--text); font-weight: 600; }
 
   /* A stop is a small square: hollow when off, filled every time, a dot inside once. The button is the whole row of its cell. */
-  .stop { display: grid; place-items: center; height: 14px; min-height: 0; padding: 0; border: 0; background: none; border-radius: 3px; }
+  .stop { display: grid; place-items: center; height: 14px; min-height: 0; padding: 0; border: 0; background: none; border-radius: var(--radius-sm); }
   button.stop { cursor: pointer; }
-  .stop i { position: relative; width: 10px; height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1.25px var(--text-tertiary); }
+  .stop i { position: relative; width: 10px; height: 10px; border-radius: 0; box-shadow: inset 0 0 0 1.25px var(--text-tertiary); }
   .stop.every i { background: var(--text); box-shadow: inset 0 0 0 1.25px var(--text); }
   .stop.once i { box-shadow: inset 0 0 0 1.25px var(--text); }
-  .stop.once i::after { content: ''; position: absolute; inset: 2.5px; border-radius: 1px; background: var(--text); }
+  .stop.once i::after { content: ''; position: absolute; inset: 2.5px; border-radius: 0; background: var(--text); }
   button.stop:hover i { box-shadow: inset 0 0 0 1.5px var(--text); }
   button.stop:hover { background: var(--bg-field); }
   button.stop:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }

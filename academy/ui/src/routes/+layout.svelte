@@ -60,7 +60,7 @@
     <div class="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-y-2 px-4 py-3">
       <div class="flex items-baseline gap-3">
         <div data-testid="brand-name" class="type-brand text-[#f8f1e0]">Academy</div>
-        <div class="type-rubric hidden text-[#f8f1e0]/65 sm:block">Games and recorded decisions</div>
+        <div class="type-label hidden text-[#f8f1e0]/65 sm:block">Games and recorded decisions</div>
       </div>
       <nav class="flex items-center gap-2">
         {#each NAV as item}
@@ -96,7 +96,7 @@
         </p>
       </div>
       <nav aria-label="Footer" class="type-caption">
-        <div class="type-rubric text-ink-2">Table</div>
+        <div class="type-label text-ink-2">Table</div>
         <ul class="mt-1">
           {#each NAV as item}
             <li><a class="inline-block py-1 text-ink-2 underline-offset-2 hover:text-ink hover:underline" href={item.href}>{item.label}</a></li>

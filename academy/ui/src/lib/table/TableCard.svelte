@@ -27,6 +27,7 @@
    */
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace, frameColors } from '$lib/card-faces.svelte';
+  import { labelText } from './inspect';
   import type { CardState, PermanentState } from '$lib/types';
   import { getContext } from 'svelte';
   import { keywordsOf } from './inspect';
@@ -100,16 +101,15 @@
     ...(permanent?.counters ?? {}),
   }).filter(([, amount]) => amount > 0));
 
-  // Type sizes follow the frame, within a readable floor and a quiet ceiling.
+  // Type comes from the six sizes of DESIGN.md, each with its line height.
   // Battlefield names are 12 px at every size: a crowded row wraps them.
+  const LINE: Record<number, number> = { 12: 16, 14: 20 };
   const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
-  const nameSize = $derived(field ? 12 : clamp(upright * 0.072, 11, 15));
-  const typeSize = $derived(clamp(upright * 0.05, 9, 11));
+  const nameSize = $derived(field ? 12 : 14);
   const showType = $derived(!field && upright >= 110);
   const pip = $derived(clamp(upright * 0.07, 10, 14));
   const showCost = $derived(!field && width >= 58);
-  const plate = $derived(clamp(upright * 0.085, 10, 14));
-  const chipSize = $derived(clamp(width * 0.16, 10, 12));
+  const plate = $derived(upright >= 90 ? 14 : 12);
   const keywordRoom = $derived(boxWidth >= 120 ? 3 : width >= 64 ? 1 : 0);
   const hasPt = $derived(creature && power !== null);
   /**
@@ -122,8 +122,8 @@
     ...(permanent?.blocking !== undefined ? [{ key: 'blocking', text: 'Blocking', kind: 'combat', granted: false }] : []),
     ...(permanent?.damage ? [{ key: 'damage', text: `${permanent.damage} damage`, kind: 'damage', granted: false }] : []),
     ...(permanent?.summoning_sick && creature ? [{ key: 'sick', text: width >= 100 ? 'Summoning sick' : 'Sick', kind: 'sick', granted: false }] : []),
-    ...counters.map(([kind, amount]) => ({ key: `counter-${kind}`, text: kind === '+1/+1' ? `+${amount}/+${amount}` : `${kind.replace(/_/g, ' ')} ×${amount}`, kind: 'counter', granted: false })),
-    ...keywords.slice(0, keywordRoom).map(fact => ({ key: `keyword-${fact.keyword}`, text: fact.keyword.replace(/_/g, ' '), kind: 'keyword', granted: fact.source !== null })),
+    ...counters.map(([kind, amount]) => ({ key: `counter-${kind}`, text: kind === '+1/+1' ? `+${amount}/+${amount}` : `${labelText(kind)} ×${amount}`, kind: 'counter', granted: false })),
+    ...keywords.slice(0, keywordRoom).map(fact => ({ key: `keyword-${fact.keyword}`, text: labelText(fact.keyword), kind: 'keyword', granted: fact.source !== null })),
     ...(keywords.length > keywordRoom && keywordRoom > 0 ? [{ key: 'keyword-more', text: `${keywords.length - keywordRoom} more`, kind: 'keyword', granted: false }] : []),
   ]);
 
@@ -220,8 +220,8 @@
     onblur={() => onpreview?.(null)}
   >
     <span class="bar" aria-hidden="true" style={barStyle}>
-      <span class="name" style:font-size={`${nameSize}px`}>{name}{#if count}<b class="count" data-testid="pile-count-badge">{' '}×{count}</b>{/if}</span>
-      {#if showType && face}<span class="type" style:font-size={`${typeSize}px`}>{face.type_line}</span>{/if}
+      <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}<b class="count" data-testid="pile-count-badge">{' '}×{count}</b>{/if}</span>
+      {#if showType && face}<span class="type">{face.type_line}</span>{/if}
     </span>
     <span class="art" aria-hidden="true">
       <span class="picture" style:background-image={art ? `url('${art}')` : undefined}>
@@ -232,14 +232,14 @@
         {#if offers.length > 1 && live}<span class="many">{offers.length}</span>{/if}
       </span>
       {#if chips.length}
-        <span class="chips" style:--below={`${hasPt ? Math.round(plate * 1.35) + 8 : 3}px`} style:--row={`${Math.ceil(chipSize * 1.34) + 2}px`} style:font-size={`${chipSize}px`}>
+        <span class="chips" style:--below={`${hasPt ? LINE[plate] + 8 : 3}px`}>
           {#each chips as chip (chip.key)}<i class={`chip ${chip.kind}`} class:granted={chip.granted}>{chip.text}</i>{/each}
         </span>
       {/if}
       {#if hasPt}
         <span class="pt" class:hurt={(permanent?.damage ?? 0) > 0}
           class:up={permanent && ((permanent.power ?? 0) > (face?.power ?? Infinity) || (permanent.toughness ?? 0) > (face?.toughness ?? Infinity))}
-          style:font-size={`${plate}px`}>{power}/{toughness}</span>
+          style:font-size={`${plate}px`} style:line-height={`${LINE[plate]}px`}>{power}/{toughness}</span>
       {/if}
       {#if planned}
         <span class="plan"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
@@ -262,13 +262,13 @@
   .tcard {
     --rise: 0px; --tilt: 0deg;
     position: relative; display: flex; flex-direction: column-reverse; overflow: hidden; padding: 0; cursor: pointer; text-align: left;
-    border-radius: max(4px, 5%); border: 1px solid var(--border);
+    border-radius: var(--radius-card); border: 1px solid var(--border);
     background: var(--bg-surface); color: var(--text);
     transform: translateY(var(--rise)) rotate(var(--tilt));
     transition: transform var(--motion-move) var(--motion-move-ease), box-shadow var(--motion-move) ease-out, filter var(--motion-move) ease-out;
   }
   .tcard:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
-  .turned { border-radius: max(4px, 3.5%); }
+  .turned { border-radius: var(--radius-card-turned); }
 
   /* The name bar: under the art in hand, across the top on the battlefield, upright either way, in the card's colours. */
   .bar {
@@ -278,13 +278,13 @@
   .field { flex-direction: column; }
   .field .bar { padding: 2px 4px 3px; }
   .name {
-    font-family: var(--font-sans); font-weight: 700; line-height: 1.2; color: inherit;
+    font-family: var(--font-serif); font-weight: 600; color: inherit;
     overflow: hidden; overflow-wrap: break-word; hyphens: auto; text-wrap: balance;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   }
-  /* A pile's count follows the name, in the name's weight or heavier. */
-  .count { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .type { font-family: var(--font-sans); line-height: 1.2; color: inherit; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A pile's count follows the name, in the interface face. */
+  .count { font-family: var(--font-sans); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .type { font: 12px/16px var(--font-sans); color: inherit; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* The art fills what the bar leaves. A turned card's picture is the upright art turned a quarter. */
   .art { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; container-type: size; background: var(--bg-muted); }
@@ -293,30 +293,28 @@
     inset: auto; left: 50%; top: 50%; width: 100cqh; height: 100cqw;
     transform: translate(-50%, -50%) rotate(90deg);
   }
-  .no-art { position: absolute; inset: 4px; display: grid; place-items: center; text-align: center; font: italic 10px/1.2 var(--font-serif); color: var(--text-tertiary); overflow: hidden; }
+  .no-art { position: absolute; inset: 4px; display: grid; place-items: center; text-align: center; font: 12px/16px var(--font-sans); color: var(--text-tertiary); overflow: hidden; }
 
   .corner { position: absolute; top: 3px; right: 3px; display: flex; gap: 3px; align-items: flex-start; }
-  .cost { padding: 1px 2px; border-radius: 8px; background: color-mix(in srgb, var(--bg-surface) 85%, transparent); display: flex; }
+  .cost { padding: 1px 2px; border-radius: var(--radius-full); background: color-mix(in srgb, var(--bg-surface) 85%, transparent); display: flex; }
   .many {
-    min-width: 17px; height: 17px; border-radius: 9px; padding: 0 4px;
-    font-family: var(--font-sans); font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center;
+    min-width: 16px; height: 16px; border-radius: var(--radius-full); padding: 0 4px;
+    font: 600 12px/16px var(--font-sans); text-align: center;
     color: var(--on-accent); background: var(--accent);
   }
 
   /* Chips: one row above power and toughness, wrapping upward, never under the plate; only whole rows that fit the art show. */
   .chips {
     position: absolute; left: 3px; right: 3px; bottom: var(--below); display: flex; flex-wrap: wrap-reverse; align-content: flex-start; gap: 2px; overflow: hidden;
-    max-height: round(down, calc(100cqh - var(--below) + 2px), var(--row));
+    max-height: round(down, calc(100cqh - var(--below) + 2px), 18px);
   }
   .chip {
-    max-width: 100%; padding: 0 5px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 1em/1.34 var(--font-sans); font-style: normal; text-transform: capitalize;
+    max-width: 100%; padding: 0 5px; border-radius: var(--radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 12px/16px var(--font-sans);
     color: var(--text); background: var(--bg-surface); box-shadow: 0 0 0 1px var(--border);
   }
-  .chip.keyword { text-transform: capitalize; }
-  .chip.sick { font-style: italic; text-transform: none; }
-  .chip.combat, .chip.counter { font-weight: 700; }
-  .chip.damage { font-weight: 700; color: var(--damage); text-transform: none; }
+  .chip.combat, .chip.counter { font-weight: 600; }
+  .chip.damage { font-weight: 600; color: var(--damage); }
   .chip.granted { box-shadow: 0 0 0 1px var(--gain); }
 
   /* Lift: what a legal offer acts on is raised; the selected card higher, with an ink edge. */
@@ -327,7 +325,7 @@
   .tcard.dim-hand { filter: var(--dim-hand); }
   .tcard.dim-idle { filter: var(--dim-idle); }
   /* An attacker tilts a few degrees past its rest: a tapped one lies just past the quarter, a vigilant one stays upright. */
-  .tcard.attacking { --tilt: -2deg; box-shadow: 0 10px 20px rgb(0 0 0 / 0.25); }
+  .tcard.attacking { --tilt: -2deg; box-shadow: var(--lift-attacking); }
   .tcard.attacking.turned { --tilt: -6deg; }
   .tcard.attacking.downward { --tilt: 2deg; }
   .tcard.attacking.turned.downward { --tilt: 6deg; }
@@ -337,8 +335,8 @@
   .tcard.offered { box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 55%, transparent); }
   .tcard.chosen { box-shadow: 0 0 0 2px var(--text), var(--lift); }
   .policy {
-    position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); padding: 0 5px; border-radius: 8px;
-    font: 700 10.5px/15px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
+    position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); padding: 0 5px; border-radius: var(--radius-full);
+    font: 600 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
     color: var(--text); background: var(--bg-surface); border: 1px solid var(--border-strong);
   }
   .policy[data-chosen='true'] { color: var(--bg-surface); background: var(--text); border-color: var(--text); }
@@ -351,20 +349,20 @@
   .tcard.planned { outline: 2px dashed var(--planned); outline-offset: 2px; }
   .plan {
     position: absolute; left: 50%; top: 3px; transform: translateX(-50%);
-    display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 3px; border-radius: 9px;
-    background: var(--bg-surface); border: 1px dashed var(--planned); box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+    display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 3px; border-radius: var(--radius-full);
+    background: var(--bg-surface); border: 1px dashed var(--planned);
   }
-  .plan b { font: 700 10px/14px var(--font-sans); color: var(--planned-text); min-width: 9px; text-align: center; }
+  .plan b { font: 600 12px/16px var(--font-sans); color: var(--planned-text); min-width: 9px; text-align: center; }
   .dealt {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -30%);
-    font: 800 18px/1 var(--font-sans); color: var(--bg);
-    padding: 2px 6px; border-radius: 5px; background: var(--damage); box-shadow: 0 2px 6px rgb(0 0 0 / 0.4);
+    font: 600 20px/28px var(--font-sans); color: var(--bg);
+    padding: 0 6px; border-radius: var(--radius-sm); background: var(--damage); box-shadow: var(--shadow-raised);
     animation: land calc(var(--motion-move) * 1.6) var(--motion-move-ease);
   }
   @keyframes land { from { transform: translate(-50%, -90%) scale(1.25); opacity: 0; } }
   .pt {
-    position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: 4px;
-    font-family: var(--font-sans); font-weight: 600; line-height: 1.35; font-variant-numeric: tabular-nums;
+    position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: var(--radius-sm);
+    font-family: var(--font-sans); font-weight: 600; font-variant-numeric: tabular-nums;
     color: var(--text); background: var(--bg-surface); box-shadow: 0 0 0 1px var(--border);
   }
   .pt.up { color: var(--gain); }

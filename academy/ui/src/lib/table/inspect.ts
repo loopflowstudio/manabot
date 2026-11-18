@@ -95,3 +95,9 @@ export function signed(power: number, toughness: number): string {
   const one = (value: number): string => (value < 0 ? `−${-value}` : `+${value}`);
   return `${one(power)}/${one(toughness)}`;
 }
+
+/** A keyword or counter kind as a label: `first_strike` reads "First strike". */
+export function labelText(name: string): string {
+  const words = name.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

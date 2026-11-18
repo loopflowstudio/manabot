@@ -46,7 +46,7 @@
   <!-- Live play's strip only counts, so Tab passes it by; a recording's opens to a navigable line. -->
   <button type="button" class="head" aria-expanded={open} onclick={ontoggle} data-testid="strip-toggle" tabindex={onjump ? undefined : -1}>
     <span class="chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
-    <span class="type-rubric">Decisions · {decisions.length}{#if values.length}<span class="text-ink-3"> · value recorded at {values.length}</span>{/if}</span>
+    <span class="type-heading">Decisions · {decisions.length}{#if values.length}<span class="text-ink-3"> · value recorded at {values.length}</span>{/if}</span>
     {#if note}<span class="note type-caption text-ink-3">{note}</span>{/if}
   </button>
   {#if open}
@@ -80,10 +80,10 @@
   .head { display: flex; align-items: baseline; gap: 6px; width: 100%; padding: 4px 0; color: var(--text-secondary); text-align: left; }
   .head:hover { color: var(--text); }
   .chevron { width: 10px; }
-  .note { margin-left: auto; text-transform: none; letter-spacing: 0; }
-  .lane { position: relative; border-radius: 4px; }
+  .note { margin-left: auto; }
+  .lane { position: relative; border-radius: var(--radius-sm); }
   .lane:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .line { display: block; width: 100%; height: 44px; background: var(--bg-field); border-radius: 4px; }
+  .line { display: block; width: 100%; height: 44px; background: var(--bg-field); border-radius: var(--radius-sm); }
   /* The slider is the line's input: invisible, the full lane, a hairline thumb so
      a click lands on the position drawn under it. */
   .seek { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
@@ -96,6 +96,6 @@
   .value { fill: none; stroke: var(--info-text, var(--accent)); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .value.theirs { stroke: var(--text-tertiary); }
   .here { stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
-  .turns { position: relative; height: 12px; }
-  .turns span { position: absolute; transform: translateX(2px); font: 600 9px/12px var(--font-mono); color: var(--text-tertiary); }
+  .turns { position: relative; height: 16px; }
+  .turns span { position: absolute; transform: translateX(2px); font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
 </style>

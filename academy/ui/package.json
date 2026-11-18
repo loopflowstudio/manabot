@@ -9,7 +9,6 @@
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test": "vitest run",
-		"validate:contrast": "node scripts/validate-contrast.mjs",
 		"test:e2e": "playwright test",
 		"test:e2e:launch": "playwright test --config playwright.launch.config.ts",
 		"test:e2e:study": "playwright test --config playwright.study.config.ts",

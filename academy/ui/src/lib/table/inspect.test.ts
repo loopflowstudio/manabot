@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PermanentState } from '$lib/types';
 import type { CardFace } from '$lib/card-faces.svelte';
-import { keywordsOf, ptProvenance, signed } from './inspect';
+import { keywordsOf, labelText, ptProvenance, signed } from './inspect';
 
 const face: CardFace = { cost: '{G}{W}', colors: ['G', 'W'], type_line: 'Creature — Human Soldier Ally', keywords: ['trample'], power: 1, toughness: 1 };
 function permanent(extra: Partial<PermanentState>): PermanentState {
@@ -72,4 +72,11 @@ describe('keywordsOf', () => {
 it('signs P/T changes as rules text does', () => {
   expect(signed(2, 0)).toBe('+2/+0');
   expect(signed(-1, -1)).toBe('−1/−1');
+});
+
+describe('labelText', () => {
+  it('reads a keyword in sentence case', () => {
+    expect(labelText('first_strike')).toBe('First strike');
+    expect(labelText('flying')).toBe('Flying');
+  });
 });

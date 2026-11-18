@@ -92,7 +92,7 @@
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="type-rubric text-mountain-ink">Study · Decision {restored.ordinal + 1}</p>
+      <p class="type-label text-mountain-ink">Study · Decision {restored.ordinal + 1}</p>
       <h2 id="study-heading" class="type-title mt-1 text-display">
         {phase === 'restored' ? (inspected ? 'Try another line' : 'Retry before reveal') : phase === 'retried' ? 'Your line is committed' : 'Compare plans'}
       </h2>
@@ -120,11 +120,11 @@
   {/if}
 
   {#if phase === 'restored'}
-    <p class="type-annotation mt-3 text-ink-2">
+    <p class="type-body mt-3 text-ink-2">
       {inspected ? 'Choose your line on the table from the exact historical offer. The recorded match stays at its current decision.' : 'Choose your line on the table from the exact historical offer. Policy and Search stay sealed until one command is accepted.'}
     </p>
   {:else if phase === 'retried'}
-    <p class="type-annotation mt-3 text-ink-2">
+    <p class="type-body mt-3 text-ink-2">
       {inspected ? 'Your line ran on an isolated rules branch. Return to compare it with the recorded bot choice.' : 'Your prediction is locked. Reveal asks the evidence provider now; returning leaves it sealed.'}
     </p>
     {#if !inspected}
@@ -139,7 +139,7 @@
     </button>
     {/if}
   {:else if phase === 'revealed'}
-    <p class="type-annotation mt-3 text-ink-2">
+    <p class="type-body mt-3 text-ink-2">
       Played, Policy, and Search are separate judgments. Focus a plan to highlight its authoritative table objects; select it to play its bounded continuation.
     </p>
     <div

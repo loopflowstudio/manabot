@@ -728,11 +728,9 @@
     <p class="turn" data-testid="turn-number">Turn {boardProjection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</p>
     <div class="right">
       {#if connection}
-        <span class="connection" data-state={connection}>
-          <i aria-hidden="true"></i>
-          <span data-testid="connection-badge" data-connection-state={connection} role="status" aria-live="polite" aria-atomic="true"
-            aria-label={`Connection status: ${connectionLabel}`} class="type-rubric">{connectionLabel}</span>
-        </span>
+        <!-- Connected says nothing: only a problem shows; the status stays for assistive technology. -->
+        <span data-testid="connection-badge" data-connection-state={connection} role="status" aria-live="polite" aria-atomic="true"
+          aria-label={`Connection status: ${connectionLabel}`} class="connection type-label" class:sr-only={connection === 'connected'}>{connection === 'connected' ? connectionLabel : connectionLabel.charAt(0).toUpperCase() + connectionLabel.slice(1)}</span>
       {/if}
       <button type="button" class="keys-hint type-caption" data-testid="keys-hint" aria-haspopup="dialog" aria-expanded={keysOpen}
         aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" bind:this={keysButton} onclick={() => (keysOpen = !keysOpen)}><kbd>?</kbd></button>
@@ -747,7 +745,7 @@
     data-board={beatBoard ? 'step' : 'frame'} bind:this={boardElement}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} name={opponent.name} deck={opponent.deck} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
-        active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
+        choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
         <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
         <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -755,14 +753,14 @@
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} name={you.name} deck={you.deck} offers={board.you.offers} {live} damage={recent.damage.players.get(boardProjection.agent.player_index) ?? 0}
-        active={yourTurn} side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
+        side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
         <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
         <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
-      <span class="type-rubric hand-label text-ink-3">Hand · {board.hand.length}</span>
+      <span class="type-heading hand-label text-ink-2">Hand · {board.hand.length}</span>
       <div class="hand-cards" style:width={`${handCard + Math.max(0, board.hand.length - 1) * handStep}px`}>
         {#each board.hand as item, index (item.card.id)}
           <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * handStep}px`}>
@@ -789,7 +787,7 @@
 
     {#if view.tray.length && !result}
       <section class="tray" aria-label="Choices from outside the table" data-testid="tray">
-        <h2 class="type-rubric text-ink-2">{frame.prompt?.title ?? 'Choose'}</h2>
+        <h2 class="type-heading text-ink-2">{frame.prompt?.title ?? 'Choose'}</h2>
         <div class="tray-items">
           {#each view.tray as item (item.placed.offer.id)}
             {#if item.name}
@@ -866,7 +864,7 @@
 {#if menuAt}
   <div class="menu" use:region role="menu" tabindex="-1" aria-label={`Choices for ${menuAt.title}`} bind:this={menuElement} data-testid="card-menu"
     style:left={`${menuAt.x}px`} style:top={`${menuAt.y}px`}>
-    <p class="type-rubric text-ink-2">{menuAt.title}</p>
+    <p class="type-heading text-ink-2">{menuAt.title}</p>
     {#each menuAt.offers as placed (placed.offer.id)}
       <button type="button" role="menuitem" onclick={() => act(placed)} data-offer-id={placed.offer.id}><kbd>{placed.number}</kbd>{placed.offer.label}</button>
     {/each}
@@ -876,7 +874,7 @@
 
 {#if keysOpen}
   <div class="keys" role="dialog" aria-label="Keyboard shortcuts" data-testid="keys-sheet">
-    <p class="type-rubric text-ink-2">Keys{recording ? ' · Review' : ''}</p>
+    <p class="type-heading text-ink-2">Keys{recording ? ' · Review' : ''}</p>
     <dl>
       {#each keys as row (row.key)}
         <dt>{#if row.plain}<span class="type-caption">{row.key}</span>{:else}<kbd>{row.key}</kbd>{/if}</dt><dd class="type-caption">{row.does}</dd>
@@ -888,7 +886,7 @@
 
 {#if zoneAt}
   <div class="menu zone" role="dialog" aria-label={zoneAt.title} style:left={`${zoneAt.x}px`} style:top={`${zoneAt.y}px`}>
-    <p class="type-rubric text-ink-2">{zoneAt.title}</p>
+    <p class="type-heading text-ink-2">{zoneAt.title}</p>
     <ol>
       {#each zoneAt.cards as card (card.id)}
         <li><button type="button" onmouseenter={event => previewCard(card, event.currentTarget)} onmouseleave={() => previewCard(null, null)}
@@ -906,7 +904,7 @@
       <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard}
         blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} art={72} />
     {:else}
-      <p class="type-annotation text-ink-3">Hover or focus a card to inspect it.</p>
+      <p class="type-body text-ink-3">Hover or focus a card to inspect it.</p>
     {/if}
   </section>
 {/snippet}
@@ -929,16 +927,13 @@
     grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px;
     border-bottom: 1px solid var(--border); background: var(--bg-surface); min-width: 0;
   }
-  .brand { font-family: var(--font-serif); font-weight: 600; font-size: 19px; color: var(--accent-text); }
+  .brand { font-family: var(--font-serif); font-weight: 600; font-size: 20px; line-height: 28px; color: var(--accent-text); }
   .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The matchup gives way first: the turn and the controls keep their width. */
-  .turn { margin: 0 auto; flex-shrink: 0; font-size: 14px; line-height: 20px; font-weight: 700; white-space: nowrap; }
+  .turn { margin: 0 auto; flex-shrink: 0; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; }
   .stops-slot { grid-row: 4; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .connection { display: inline-flex; align-items: center; gap: 6px; color: var(--text-tertiary); }
-  .connection i { width: 6px; height: 6px; border-radius: 3px; background: var(--neutral); }
-  .connection[data-state='connected'] i { background: var(--success); }
-  .connection[data-state='connecting'] i, .connection[data-state='reconnecting'] i { background: var(--warning); }
+  .connection { color: var(--warning-text); }
 
   .board {
     position: relative; min-height: 0; min-width: 0; display: grid;
@@ -961,7 +956,7 @@
 
   .tray {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); z-index: 40;
-    padding: 12px 16px 14px; border: 1px solid var(--border-strong); border-radius: 10px;
+    padding: 12px 16px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
     background: var(--bg-surface); box-shadow: var(--shadow-raised); max-width: 90%;
   }
   .tray-items { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; align-items: flex-start; }
@@ -969,7 +964,7 @@
 
   .result-card {
     position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: 45; width: min(440px, 80%);
-    display: grid; gap: 10px; padding: 18px 20px 14px; border: 1px solid var(--border-strong); border-radius: 12px;
+    display: grid; gap: 10px; padding: 18px 20px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--bg-surface) 94%, transparent); box-shadow: var(--shadow-raised);
     animation: appear var(--motion-move) ease-out;
   }
@@ -977,10 +972,10 @@
   /* A beat reads out one of the opponent's moves over the rail's move list, where it covers no card or choice. */
   .beat {
     display: grid; gap: 4px; align-content: center; justify-items: center; padding: 6px 12px; border: 1px solid var(--border-strong);
-    border-radius: 8px; background: var(--bg-surface); box-shadow: var(--shadow-raised); text-align: center; cursor: pointer;
+    border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-raised); text-align: center; cursor: pointer;
     animation: appear var(--motion-fast) ease-out;
   }
-  .beat-text { font-size: 14px; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+  .beat-text { font-size: 14px; line-height: 20px; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
   .beat-count { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .result-card.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; padding: 6px; }
   .result-card .fold { justify-self: end; color: var(--text-secondary); }
@@ -995,42 +990,41 @@
   .combat-draft .secondary { width: 100%; min-height: 32px; padding-block: 5px; justify-content: flex-start; }
   .pile-count { display: flex; align-items: center; gap: 6px; }
   .pile-count span { flex: 1; }
-  .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: 5px; font-weight: 700; }
+  .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-weight: 600; }
   .pile-count .step:disabled { opacity: 0.4; }
   .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
   .bottom { grid-row: 3; grid-column: 1; min-width: 0; border-top: 1px solid var(--border); background: var(--bg-surface); }
 
   .menu {
     position: fixed; z-index: 300; min-width: 220px; max-width: 320px; padding: 8px; display: grid; gap: 2px;
-    border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-surface); box-shadow: var(--shadow-raised);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
   .menu, .preview { animation: open var(--motion-fast) ease-out; transform-origin: top left; }
   @keyframes open { from { opacity: 0; transform: scale(0.97); } }
   .menu p { padding: 0 6px 4px; }
-  .menu button { display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; border-radius: 5px; font-size: 13.5px; color: var(--text); width: 100%; }
+  .menu button { display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; color: var(--text); width: 100%; }
   .menu button:hover, .menu button:focus-visible { background: var(--bg-field); outline: 1px solid var(--border-strong); }
-  .menu .cancel { color: var(--text-secondary); font-size: 12px; }
+  .menu .cancel { color: var(--text-secondary); font-size: 12px; line-height: 16px; }
   .zone ol { max-height: 260px; overflow-y: auto; }
-  kbd { font-family: var(--font-mono); font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 3px; border: 1px solid currentColor; opacity: 0.7; min-width: 16px; text-align: center; }
 
   .preview {
     position: fixed; z-index: 250; width: 270px; max-height: calc(100vh - 60px); overflow: hidden; pointer-events: none;
-    padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised);
+    padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
   .dock { max-height: 100%; overflow-y: auto; }
-  .keys-hint { display: inline-flex; align-items: center; color: var(--text-tertiary); padding: 2px 3px; border-radius: 4px; }
+  .keys-hint { display: inline-flex; align-items: center; color: var(--text-tertiary); padding: 2px 3px; border-radius: var(--radius-sm); }
   .keys-hint:hover, .keys-hint[aria-expanded='true'] { color: var(--text); background: var(--bg-field); }
   .keys {
     position: fixed; z-index: 300; top: 46px; right: 14px; width: 340px; padding: 10px 12px 8px; display: grid; gap: 6px;
-    border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-surface); box-shadow: var(--shadow-raised);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-raised);
     animation: open var(--motion-fast) ease-out; transform-origin: top right;
   }
   .keys dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; align-items: baseline; }
   .keys dt { text-align: right; white-space: nowrap; }
   .keys dd { color: var(--text-secondary); }
-  .keys .cancel { justify-self: end; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); padding: 3px 6px; border-radius: 5px; }
+  .keys .cancel { justify-self: end; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); padding: 3px 6px; border-radius: var(--radius-sm); }
   .keys .cancel:hover, .keys .cancel:focus-visible { background: var(--bg-field); }
-  .inspect-toggle { color: var(--text-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+  .inspect-toggle { color: var(--text-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); white-space: nowrap; }
   .inspect-toggle:hover { color: var(--text); background: var(--bg-field); }
   .inspect-toggle[aria-pressed='true'] { color: var(--text); background: var(--bg-field); }
 

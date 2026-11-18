@@ -131,9 +131,9 @@
   {#if dock}<div class="block docked">{@render dock()}</div>{/if}
 
   <section use:region={{ across: !onjump }} class="block stack" aria-label="Stack">
-    <h2><span class="type-rubric text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
+    <h2><span class="type-heading text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
     {#if view.stack.length === 0}
-      <p class="type-annotation text-ink-3">Empty</p>
+      <p class="type-caption text-ink-3">Empty</p>
     {:else}
       <ol>
         {#each view.stack as item, index (item.entry.id)}
@@ -147,7 +147,7 @@
               {...hover(item.card?.name ?? item.entry.label)}>
               <Thumb name={item.card?.name ?? item.entry.label} />
               <span class="entry-text">
-                <span class="truncate">{stackName(item.entry)}</span>
+                <span class="truncate entry-name">{stackName(item.entry)}</span>
                 <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
             </button>
@@ -157,7 +157,7 @@
     {/if}
     {#if recent.facts.length}
       <div class="recent" data-testid="recent">
-        <h3><span class="type-rubric text-ink-3">{recapTitle}</span></h3>
+        <h3><span class="type-heading text-ink-2">{recapTitle}</span></h3>
         <ol>
           {#each facts as fact (fact.seq)}
             {@const spell = fact.spell === null ? undefined : resolved.get(fact.spell)}
@@ -179,14 +179,14 @@
   </section>
 
   <section use:region={{ across: !onjump }} class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
-    <p class="type-rubric whose" class:yours={live}>
-      {#if thinking}<i class="thinking" aria-hidden="true"></i><span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
+    <p class="type-heading whose" class:yours={live}>
+      {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
     </p>
     {#if !over}
       {#if interrupted}
-        <p class="type-annotation text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
+        <p class="type-body text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
       {:else if frame.prompt}
-        <p class="line type-title text-ink" data-testid="decision-prompt" data-kind={frame.action_space}>{line}</p>
+        <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}>{line}</p>
       {/if}
       {#if evidence}
         <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
@@ -249,9 +249,9 @@
   </section>
 
   <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
-    <h2 class="heading type-rubric text-ink-2">
-      <span class="type-rubric">{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
-      <span class="type-rubric" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
+    <h2 class="heading type-heading text-ink-2">
+      <span>{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
+      <span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
     </h2>
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
@@ -276,11 +276,11 @@
 
   <section use:region={{ across: !onjump }} class="block log" aria-label="Moves">
     {#if reading}<div class="reading">{@render reading()}</div>{/if}
-    <h2><span class="type-rubric text-ink-2">Moves</span></h2>
+    <h2><span class="type-heading text-ink-2">Moves</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>
       {#each moves as turn, index (`${turn.turn}:${index}`)}
         <li class="turn" data-turn={turn.turn}>
-          <p class="turn-head type-rubric"><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
+          <p class="turn-head type-label"><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
           <ol>
             {#each turn.moves as move, at (move.id)}
               {#if onjump}
@@ -321,27 +321,25 @@
   .stack { max-height: 34vh; overflow-y: auto; }
   .stack ol { display: grid; gap: 3px; }
   .stack-entry {
-    width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px; border-radius: 5px;
-    border: 1px solid var(--border); background: var(--bg-field); font-size: 13px; color: var(--text);
+    width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--bg-field); font-size: 14px; line-height: 20px; color: var(--text);
   }
   .stack-entry.top { border-color: var(--border-strong); }
   /* Being cast or activated: on the stack by the rules, its costs still being chosen. */
   .stack-entry[data-announcing] { border-style: dashed; border-color: var(--planned); }
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
-  .entry-text { display: grid; min-width: 0; line-height: 16px; }
+  .entry-text { display: grid; min-width: 0; }
+  .entry-name { font-family: var(--font-serif); font-weight: 600; }
   .recent { margin-top: 8px; }
   .recent h3 { margin-bottom: 3px; }
   .recent ol { display: grid; gap: 3px; }
-  .fact { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); line-height: 15px; }
+  .fact { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
   .fact.theirs { color: var(--text); }
   .fact-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .resolved { display: inline-flex; border-radius: 3px; outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
+  .resolved { display: inline-flex; border-radius: var(--radius-sm); outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
   .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .whose { color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
-  .whose.yours { color: var(--error-text); }
-  .thinking { width: 6px; height: 6px; border-radius: 3px; background: var(--warning); animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.25; } }
-  .line { font-size: 15px; line-height: 20px; }
+  .whose { color: var(--text-secondary); }
+  .whose.yours { color: var(--text); }
   .detail summary { cursor: pointer; width: max-content; }
   .detail p { margin-top: 2px; max-height: 6em; overflow-y: auto; }
   /* One line at any rail width: the full text is the accessible name and the title. */
@@ -351,19 +349,15 @@
   .payment-note { margin-top: -4px; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   .secondary { width: 100%; height: auto; min-height: 32px; padding-block: 5px; justify-content: flex-start; text-align: left; white-space: normal; }
-  kbd {
-    font-family: var(--font-mono); font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 3px;
-    border: 1px solid currentColor; opacity: 0.75; min-width: 16px; text-align: center;
-  }
-  .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: 4px; }
+  .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: var(--radius-sm); }
   .pass-turn:hover { color: var(--text); background: var(--bg-field); }
   .status { min-height: 16px; }
   .choices { flex: 1 1 auto; min-height: 110px; display: flex; flex-direction: column; }
   .heading { display: flex; justify-content: space-between; }
   .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 0; margin: 0 -6px; padding: 2px 6px; }
   .row {
-    width: 100%; display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 5px; text-align: left;
-    border: 1px solid transparent; font-size: 13px; line-height: 17px; color: var(--text); background: none;
+    width: 100%; display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
+    border: 1px solid transparent; font-size: 14px; line-height: 20px; color: var(--text); background: none;
   }
   .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-field); }
   .row:disabled { color: var(--text-secondary); cursor: default; }
@@ -371,7 +365,7 @@
   .hidden-key { visibility: hidden; }
   .log { position: relative; flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
   .reading { position: absolute; inset: 6px 8px; z-index: 5; display: grid; }
-  .turns { flex: 1; min-height: 0; overflow-y: auto; mask-image: linear-gradient(transparent, #000 14px); display: grid; align-content: start; gap: 4px; }
+  .turns { flex: 1; min-height: 0; overflow-y: auto; mask-image: linear-gradient(transparent, var(--text) 14px); display: grid; align-content: start; gap: 4px; }
   .turn-head { display: flex; gap: 8px; align-items: baseline; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }
   .move { display: flex; align-items: baseline; gap: 6px; padding-left: 26px; color: var(--text); line-height: 16px; }
@@ -379,14 +373,13 @@
   .move .who { flex: none; width: 60px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .move .who.repeat { visibility: hidden; }
   .move.you .who { color: var(--info-text); }
-  .move.auto { color: var(--text-tertiary); font-style: italic; }
-  .move.quiet { color: var(--text-tertiary); font-size: 11px; line-height: 14px; }
-  .move.quiet .auto { font-style: italic; }
-  .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: 3px; text-decoration: underline dotted; }
+  .move.auto { color: var(--text-tertiary); }
+  .move.quiet { color: var(--text-tertiary); }
+  .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
   .more:hover { color: var(--text); }
   .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .docked { flex: none; max-height: 36%; overflow-y: auto; }
-  .card-name { text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
+  .card-name { font-family: var(--font-serif); font-weight: 600; text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
   .card-name:hover, .card-name:focus-visible { color: var(--accent-text); }
   .times { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .evidence { display: grid; gap: 1px; padding: 4px 8px; border-left: 2px solid var(--border-strong); min-width: 0; }
@@ -396,18 +389,15 @@
   .search-detail td { padding: 1px 4px 1px 0; vertical-align: top; }
   .search-detail tr.chosen td { font-weight: 600; }
   .provenance { overflow-wrap: anywhere; }
-  .p { margin-left: auto; flex: none; font: 600 11px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-secondary);
-    padding: 0 4px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--legal) 28%, transparent) calc(var(--p, 0) * 100%), transparent 0); }
+  .p { margin-left: auto; flex: none; font: 600 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-secondary);
+    padding: 0 4px; border-radius: var(--radius-sm); background: linear-gradient(90deg, color-mix(in srgb, var(--legal) 28%, transparent) calc(var(--p, 0) * 100%), transparent 0); }
   .row.chosen, .secondary.chosen { border-color: var(--text); }
   .row.chosen .label { font-weight: 600; }
   .row:disabled.chosen { color: var(--text); }
   .primary.chosen { outline: 2px solid var(--text); outline-offset: 2px; }
   .primary .p { color: inherit; background: none; }
   .move.jump { padding-left: 0; }
-  .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: 3px; text-align: left; color: inherit; }
+  .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }
   .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
-  @media (prefers-reduced-motion: reduce) {
-    .thinking { animation: none; }
-  }
 </style>

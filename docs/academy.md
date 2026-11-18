@@ -618,9 +618,11 @@ back: a card in hand you cannot play now is dimmed most, a permanent of yours
 nothing acts on is slightly muted, and lands and the opponent's side are never
 dimmed. Summoning sickness is told by its label, not by more dimming. The
 selected card, such as the spell whose targets you are choosing, rises higher
-with a thin ink edge. Light mode is Wash (white and grey grounds, charcoal for
-what you act with) and dark mode is Night (near-black grounds, near-white);
-Academy follows the system setting.
+with a thin ink edge. In light mode the grounds are white and grey and what you
+act with is charcoal; in dark mode they are near-black and it is near-white.
+Academy follows the system setting. Card and player names, life and the card
+names in the move list are set in Literata; everything else is in Source
+Sans 3. The top bar shows the connection only when it has a problem.
 
 Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
 keywords with why it has each (printed, the effect that granted it, or

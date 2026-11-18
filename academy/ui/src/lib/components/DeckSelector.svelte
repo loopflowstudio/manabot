@@ -57,7 +57,7 @@
 <section aria-label="Choose decks" class="my-6 w-full min-w-0 border-b border-line pb-6" data-testid="deck-browser">
   <div class="mb-5 flex flex-wrap items-baseline justify-between gap-2">
     <div>
-      <p class="type-rubric text-ink-2">The Elemental collection</p>
+      <p class="type-label text-ink-2">The Elemental collection</p>
       <h2 class="type-title text-display">Ten decks. Choose your matchup.</h2>
     </div>
     <p class="type-caption text-ink-2">40 cards each · individual Lesson pools · mirrors welcome</p>
@@ -111,7 +111,7 @@
         {/each}
       </div>
       {#if deck}<div class="mt-5 border-t border-line pt-3">
-        <h4 class="type-rubric text-ink-2">Lesson pool</h4>
+        <h4 class="type-label text-ink-2">Lesson pool</h4>
         <ul class="mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2">
           {#each lessons as [name, count] (name)}
             <li><button class="flex w-full items-center gap-3 py-2 text-left hover:bg-panel-muted" onclick={() => inspectCard(name)} aria-label={`Inspect ${name}`}><div class="h-12 w-20 shrink-0 overflow-hidden rounded border border-line" aria-hidden="true"><CardImage {name} className="h-full w-full" /></div><span class="text-sm"><span class="mr-2 text-ink-2">{count}</span>{name}</span></button></li>

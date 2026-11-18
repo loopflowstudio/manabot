@@ -8,7 +8,7 @@
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace } from '$lib/card-faces.svelte';
   import type { CardState, PermanentState } from '$lib/types';
-  import { keywordsOf, ptProvenance, signed } from './inspect';
+  import { keywordsOf, labelText, ptProvenance, signed } from './inspect';
   import Pips from './Pips.svelte';
 
   interface Props {
@@ -55,7 +55,7 @@
   {#if face}<p class="type">{face.type_line}</p>{/if}
   {#if keywords.length}
     <p class="keywords">
-      {#each keywords as fact (fact.keyword)}<span class:granted={fact.source !== null} title={fact.source ?? 'Printed'}>{fact.keyword.replace(/_/g, ' ')}{#if fact.source}<small> · {fact.source}</small>{/if}</span>{/each}
+      {#each keywords as fact (fact.keyword)}<span class:granted={fact.source !== null} title={fact.source ?? 'Printed'}>{labelText(fact.keyword)}{#if fact.source}<small> · {fact.source}</small>{/if}</span>{/each}
     </p>
   {/if}
   {#if text}<p class="text" data-testid="card-rules-text">{text}</p>{/if}
@@ -78,22 +78,22 @@
 
 <style>
   .inspect { display: grid; gap: 4px; min-width: 0; }
-  .art { border-radius: 5px; background: var(--bg-muted) center 28% / cover no-repeat; border: 1px solid var(--border); margin-bottom: 2px; }
-  .name { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 600 19px/1.15 var(--font-serif); color: var(--text); }
-  .type { font: 12px/1.3 var(--font-sans); color: var(--text-tertiary); }
+  .art { border-radius: var(--radius-sm); background: var(--bg-muted) center 28% / cover no-repeat; border: 1px solid var(--border); margin-bottom: 2px; }
+  .name { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 600 20px/28px var(--font-serif); color: var(--text); }
+  .type { font: 12px/16px var(--font-sans); color: var(--text-tertiary); }
   .keywords { display: flex; flex-wrap: wrap; gap: 3px; }
   .keywords span {
-    font: 600 11px/16px var(--font-sans); text-transform: capitalize; padding: 0 6px; border-radius: 3px;
+    font: 600 12px/16px var(--font-sans); padding: 0 6px; border-radius: var(--radius-sm);
     background: var(--bg-muted); color: var(--text);
   }
   .keywords span.granted { background: var(--success-wash); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 50%, transparent); }
-  .keywords small { text-transform: none; font-weight: 400; color: var(--text-secondary); }
-  .text { font: 12.5px/1.42 var(--font-sans); color: var(--text); white-space: pre-line; }
+  .keywords small { font-weight: 400; color: var(--text-secondary); }
+  .text { font: 14px/20px var(--font-sans); color: var(--text); white-space: pre-line; }
   .pt { border-top: 1px solid var(--border); padding-top: 4px; display: grid; gap: 2px; }
-  .total { font: 12px/1.4 var(--font-sans); color: var(--text-secondary); }
-  .total b { font: 700 13px/1.4 var(--font-mono); color: var(--text); }
+  .total { font: 12px/16px var(--font-sans); color: var(--text-secondary); }
+  .total b { font: 600 14px/20px var(--font-sans); color: var(--text); }
   .pt ol { display: grid; gap: 1px; }
-  .pt li { display: flex; gap: 8px; font: 11.5px/1.35 var(--font-sans); color: var(--text-secondary); }
-  .pt .amount { flex: none; min-width: 44px; font-family: var(--font-mono); color: var(--text); }
-  .state { font: 11.5px/1.35 var(--font-mono); color: var(--text-secondary); border-top: 1px solid var(--border); padding-top: 4px; }
+  .pt li { display: flex; gap: 8px; font: 12px/16px var(--font-sans); color: var(--text-secondary); }
+  .pt .amount { flex: none; min-width: 44px; font-weight: 600; color: var(--text); }
+  .state { font: 12px/16px var(--font-sans); color: var(--text-secondary); border-top: 1px solid var(--border); padding-top: 4px; }
 </style>

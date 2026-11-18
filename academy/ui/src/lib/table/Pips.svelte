@@ -38,8 +38,8 @@
   .pips { display: inline-flex; gap: max(1px, calc(var(--pip) * 0.12)); align-items: center; flex: none; }
   .pip {
     width: var(--pip); height: var(--pip); border-radius: 50%; display: inline-grid; place-items: center;
-    font: 700 calc(var(--pip) * 0.7)/1 var(--font-sans); font-style: normal; color: #2a2116; letter-spacing: 0;
-    box-shadow: 0 0 0 1px rgb(20 14 8 / 0.45);
+    font: 600 calc(var(--pip) * 0.7)/1 var(--font-sans); color: var(--pip-ink);
+    box-shadow: 0 0 0 1px var(--pip-edge);
     background: var(--pip-generic);
   }
   .w { background: var(--pip-w); } .u { background: var(--pip-u); } .b { background: var(--pip-b); }

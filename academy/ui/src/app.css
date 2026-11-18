@@ -1,55 +1,45 @@
 @import 'tailwindcss';
 
+/* Two families (DESIGN.md): Literata for the game's things, Source Sans 3 for
+   the interface. Variable weights, Latin and Latin Extended subsets. */
 @font-face {
-  font-family: 'Cormorant Garamond';
-  src: url('/fonts/CormorantGaramond-Regular.otf') format('opentype');
+  font-family: 'Literata';
+  src: url('/fonts/Literata-latin.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 400;
+  font-weight: 200 900;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Cormorant Garamond';
-  src: url('/fonts/CormorantGaramond-Medium.otf') format('opentype');
+  font-family: 'Literata';
+  src: url('/fonts/Literata-latin-ext.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 500;
+  font-weight: 200 900;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
 @font-face {
-  font-family: 'Cormorant Garamond';
-  src: url('/fonts/CormorantGaramond-SemiBold.otf') format('opentype');
+  font-family: 'Source Sans 3';
+  src: url('/fonts/SourceSans3-latin.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 200 900;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Lato';
-  src: url('/fonts/Lato-Regular.ttf') format('truetype');
+  font-family: 'Source Sans 3';
+  src: url('/fonts/SourceSans3-latin-ext.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 400 600;
+  font-weight: 200 900;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-@font-face {
-  font-family: 'Lato';
-  src: url('/fonts/Lato-Bold.ttf') format('truetype');
-  font-display: swap;
-  font-style: normal;
-  font-weight: 700 900;
-}
-
-@font-face {
-  font-family: 'JetBrains Mono';
-  src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
-  font-display: swap;
-  font-style: normal;
-  font-weight: 400 700;
-}
-
-/* Wash (light) and Night (dark): neutral grounds, charcoal or near-white ink,
-   and colour only where Magic puts it, on the cards. Every value a component
+/* Light and dark themes: neutral grounds, charcoal or near-white ink, and
+   colour only where Magic puts it, on the cards. Every value a component
    draws resolves through these tokens. */
 :root {
   color-scheme: light dark;
@@ -74,7 +64,7 @@
   --text: #1c1c1e;
   --text-secondary: #55555b;
   --text-tertiary: #67676e;
-  /* The act colour: the primary button and what is selected. Wash's is charcoal. */
+  /* The act colour: the primary button and what is selected; charcoal in light. */
   --accent: #1c1c1e;
   --accent-text: #1c1c1e;
   --accent-hover: #3a3a3f;
@@ -111,9 +101,10 @@
   --pip-c: #d8d2c4;
   --pip-generic: #d8d2c4;
   --pip-ink: #1c160e;
+  --pip-edge: rgb(20 14 8 / 0.45);
 
-  /* A card's name bar carries its colour: pale tints in Wash, solid jewel
-     bars in Night. White is a neutral ivory-grey and colourless a cool grey,
+  /* A card's name bar carries its colour: pale tints in light, solid jewel
+     bars in dark. White is a neutral ivory-grey and colourless a cool grey,
      so the two never read alike; several colours blend (TableCard). */
   --card-w: #f3f2ee;
   --card-u: #dde9f6;
@@ -131,6 +122,7 @@
   /* Lift + Quiet: what you can act on is raised; what you cannot steps back. */
   --lift: 0 6px 14px rgb(0 0 0 / 0.18), 0 1px 2px rgb(0 0 0 / 0.2);
   --lift-selected: 0 12px 24px rgb(0 0 0 / 0.25);
+  --lift-attacking: 0 10px 20px rgb(0 0 0 / 0.25);
   --dim-hand: saturate(0.35) contrast(0.7) brightness(1.12);
   --dim-idle: saturate(0.8) brightness(1.02) contrast(0.94);
 
@@ -159,6 +151,9 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-full: 9999px;
+  /* A printed card's corner, upright and on its side. */
+  --radius-card: max(4px, 5%);
+  --radius-card-turned: max(4px, 3.5%);
   --motion-fast: 100ms;
   --motion-move: 180ms;
   --motion-move-ease: cubic-bezier(0.2, 0, 0, 1);
@@ -186,7 +181,7 @@
     --text: #ececee;
     --text-secondary: #a9a9b0;
     --text-tertiary: #8f8f97;
-    /* Night's act colour is near-white; its hover deepens. */
+    /* The dark theme's act colour is near-white; its hover deepens. */
     --accent: #ececee;
     --accent-text: #ececee;
     --accent-hover: #d6d6da;
@@ -217,6 +212,7 @@
     --card-c-ink: #ffffff;
     --lift: 0 8px 18px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.18);
     --lift-selected: 0 12px 24px rgb(0 0 0 / 0.6);
+    --lift-attacking: 0 10px 20px rgb(0 0 0 / 0.6);
     --dim-hand: saturate(0.35) brightness(0.72) contrast(0.9);
     --dim-idle: saturate(0.8) brightness(0.94);
     /* Washes lift on dark grounds: 10% vanishes there. */
@@ -229,9 +225,10 @@
 
 /* The semantic vocabulary: every component color resolves through these. */
 @theme inline {
-  --font-serif: 'Cormorant Garamond', Georgia, serif;
-  --font-sans: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  /* serif is the game's face, sans the interface's; mono is for code alone. */
+  --font-serif: 'Literata', Georgia, serif;
+  --font-sans: 'Source Sans 3', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
   /*
    * The system's vocabulary. Components speak these names and no others:
@@ -283,73 +280,67 @@
 }
 
 /* ————————————————————————————————————————————————
-   The voices: one text style per role, defined once. Components use these
-   and never set font sizes, families, or tracking inline. Mono is the
-   notation register — rubrics, tempo lines, frame counters — and nothing
-   else. The annotation voice — serif italic — belongs to prompts and
-   marginalia alone.
+   The voices: one text style per role, on the six sizes of DESIGN.md
+   (12/16, 14/20, 16/24, 20/28, 28/32, 40/44) and two weights. Labels are
+   sentence case in the interface face, never tracked capitals.
    ———————————————————————————————————————————————— */
+@utility type-brand {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 32px;
+}
 @utility type-display {
   font-family: var(--font-serif);
   font-size: 20px;
   font-weight: 600;
   line-height: 28px;
-  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
+/* A player's or a thing's name: the game's face. */
 @utility type-title {
   font-family: var(--font-serif);
   font-size: 16px;
   font-weight: 600;
+  line-height: 24px;
+}
+/* A prompt: what the game asks, in the interface face. */
+@utility type-prompt {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  text-wrap: pretty;
+}
+/* A region's name ("Stack", "Your decision"). */
+@utility type-heading {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
   line-height: 20px;
-  letter-spacing: 0;
+}
+@utility type-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
 }
 @utility type-label {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  letter-spacing: 0.04em;
 }
 @utility type-caption {
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 400;
   line-height: 16px;
-  letter-spacing: 0;
-}
-@utility type-rubric {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-@utility type-numeral {
-  font-family: var(--font-sans);
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 28px;
-  letter-spacing: -0.01em;
-}
-@utility type-brand {
-  font-family: var(--font-serif);
-  font-size: 30px;
-  font-weight: 600;
-  line-height: 36px;
-  letter-spacing: -0.01em;
 }
 @utility motion-move {
   transition-property: opacity, transform;
   transition-duration: var(--motion-move);
   transition-timing-function: var(--motion-move-ease);
-}
-@utility type-annotation {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 13.5px;
-  line-height: 20px;
-  letter-spacing: 0;
 }
 
 /* ————————————————————————————————————————————————
@@ -372,9 +363,9 @@
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  line-height: 20px;
   white-space: nowrap;
   user-select: none;
   cursor: pointer;
@@ -385,7 +376,8 @@
 @utility btn-sm {
   height: 26px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
 }
 @utility btn-primary {
   background: var(--accent);
@@ -440,7 +432,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-size: 14px;
   line-height: 20px;
   font-variant-numeric: tabular-nums;
@@ -451,15 +443,26 @@ body {
 h1,
 h2,
 h3 {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-serif);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 code,
-kbd,
 pre {
-  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-family: var(--font-mono);
+}
+
+/* A key hint is interface text in a thin keycap. */
+kbd {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  font: 600 12px/16px var(--font-sans);
+  text-align: center;
+  opacity: 0.8;
 }
 
 button,

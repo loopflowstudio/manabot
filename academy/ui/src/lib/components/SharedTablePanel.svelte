@@ -48,7 +48,7 @@
 >
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <p class="type-rubric text-mountain-ink">Shared table · {table.mode}</p>
+      <p class="type-label text-mountain-ink">Shared table · {table.mode}</p>
       <h2 id="shared-table-heading" class="type-title mt-1 text-display">
         You are the {table.access.role}
       </h2>
@@ -102,7 +102,7 @@
           {/each}
         </div>
       {:else}
-        <p class="type-annotation mt-3 text-ink-2">Decisions appear after the pilot commits them.</p>
+        <p class="type-body mt-3 text-ink-2">Decisions appear after the pilot commits them.</p>
       {/if}
 
       {#if restored}

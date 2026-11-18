@@ -84,11 +84,11 @@
   .ticks { position: absolute; left: 8px; right: 8px; bottom: 0; height: 12px; pointer-events: none; }
   .ticks i { position: absolute; top: 0; }
   .turn { width: 1px; height: 12px; background: var(--border-strong); }
-  .turn b { position: absolute; left: 3px; top: -1px; font: 600 9px/12px var(--font-mono); color: var(--text-tertiary); }
-  .decision { width: 3px; height: 5px; margin-left: -1px; top: 1px !important; border-radius: 1px; background: var(--info-text, var(--accent)); }
+  .turn b { position: absolute; left: 3px; top: -2px; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
+  .decision { width: 3px; height: 5px; margin-left: -1px; top: 1px !important; border-radius: 0; background: var(--info-text, var(--accent)); }
   .decision.theirs { background: var(--text-tertiary); }
   .spacer { flex: 1 1 auto; }
   .counter { flex: none; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
   .speed { flex: none; display: flex; align-items: center; gap: 4px; color: var(--text-secondary); }
-  .speed select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 1px 4px; color: var(--text); }
+  .speed select { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-field); padding: 1px 4px; color: var(--text); }
 </style>

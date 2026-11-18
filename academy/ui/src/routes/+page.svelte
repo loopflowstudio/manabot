@@ -365,7 +365,7 @@
 
 {#snippet result()}
   <div data-testid="game-result-dialog" class="result">
-    <p class="type-rubric text-ink-3">Game over</p>
+    <p class="type-label text-ink-3">Game over</p>
     <h2 data-testid="game-result" class="type-display text-display">{ending?.headline}</h2>
     {#if ending}
       <p class="text-ink-2" data-testid="game-result-how">{ending.how}</p>
@@ -415,7 +415,7 @@
           onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
       </fieldset>
       {#if gameStore.table}
-        <details><summary class="type-rubric cursor-pointer">Table and Study tools</summary>
+        <details><summary class="type-label cursor-pointer">Table and Study tools</summary>
           <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
             announcement={gameStore.tableAnnouncement} onTransferPilot={sendTransferPilot} onRestoreDecision={sendRestoreDecision}
             onReturnFromBranch={sendReturnFromBranch} onReturnToLive={sendReturnToLive} />
@@ -470,7 +470,7 @@
   {:else if atHome}
     {@render notices()}
     <section class="home" aria-label="Play" data-testid="home">
-      <p class="type-rubric text-ink-3">{lastMatchup ? 'Your last matchup' : 'Ready to play'}</p>
+      <p class="type-label text-ink-3">{lastMatchup ? 'Your last matchup' : 'Ready to play'}</p>
       <p class="home-matchup type-title" data-testid="home-matchup">
         <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
         <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
@@ -491,7 +491,7 @@
     <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
       <div class="sheet-content px-5 pb-4 pt-3">
         <div data-testid="game-header" class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-line pb-4">
-          <span class="type-annotation text-ink-2">{gameStore.observation ? 'A game is in progress' : 'No game in progress'}</span>
+          <span class="type-body text-ink-2">{gameStore.observation ? 'A game is in progress' : 'No game in progress'}</span>
           <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
             {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
             {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Start game repeats setup.</p>{/if}
@@ -532,7 +532,7 @@
         {/if}
         {#if !gameStore.observation}
           <div class="mx-auto max-w-xl py-12 text-center">
-            <p class="type-annotation mb-1 text-ink-2">The table is set.</p>
+            <p class="type-body mb-1 text-ink-2">The table is set.</p>
             <p role="status" class="type-caption mb-5 text-ink-2">{gameStore.newGamePending ? 'Preparing the game. This may take a moment…' : 'Start a game to begin.'}</p>
             <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
               <fieldset disabled={!gameStore.hasCapability('configure_match')}>
