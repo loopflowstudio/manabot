@@ -552,7 +552,8 @@ def narrate_move(
     `own` is the person's own steps of this move (`own_steps`) when the move is
     theirs, and empty for another seat, whose hidden choices are never named.
     What was visible becomes the move ("Cast Yip Yip!, targeting Earth Kingdom
-    Jailer", "Play Forest", "Attack with Ally, Otter-Penguin"); a priority pass
+    Jailer", "Play Forest", "Attack with Ally, Otter-Penguin", "Reveal Pop
+    Quiz"); a priority pass
     is "Pass priority". The person's own moves add what only they saw:
     "Activate Fire Nation Cadets", "Learn: take Accumulate Wisdom", "Ordered
     triggers: Tiger-Seal, then Ally". A step that completes later (announcing a
@@ -584,7 +585,10 @@ def narrate_move(
 
     phrases: list[str] = []
     spells: list[str] = []
+    revealed: list[str] = []
     for kind in events:
+        if kind["kind"] == "revealed" and kind["player"] == actor:
+            revealed.extend(kind["cards"])
         if kind["kind"] == "cast" and kind["controller"] == actor:
             spell = (
                 name({"kind": "stack", "id": kind["stack"]})
@@ -620,6 +624,9 @@ def narrate_move(
         phrases[:0] = [f"Play {land}" for land in arrived["lands"]]
         if arrived["discarded"]:
             phrases.append(f"Discard {_listed(arrived['discarded'])}")
+    # The person's own move names what they revealed ("Learn: take X").
+    if revealed and not own:
+        phrases.append(f"Reveal {_listed(revealed)}")
     if phrases:
         return "; ".join(phrases)
     following = after.get("decision_context") or {}

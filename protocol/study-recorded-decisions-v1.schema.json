@@ -2247,6 +2247,34 @@
             "objects",
             "player"
           ]
+        },
+        {
+          "description": "Cards a player revealed (CR 701.20a), by name in reveal order: a card\nrevealed into a hand or from outside the game has no public object, so\nits name is all a viewer learns.",
+          "type": "object",
+          "properties": {
+            "cards": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "revealed"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "cards",
+            "player"
+          ]
         }
       ]
     },

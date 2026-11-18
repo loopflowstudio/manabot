@@ -845,6 +845,13 @@ pub enum PresentationKind {
         objects: Vec<ObjectRenderId>,
         player: PlayerId,
     },
+    /// Cards a player revealed (CR 701.20a), by name in reveal order: a card
+    /// revealed into a hand or from outside the game has no public object, so
+    /// its name is all a viewer learns.
+    Revealed {
+        cards: Vec<String>,
+        player: PlayerId,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

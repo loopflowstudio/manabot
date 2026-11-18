@@ -471,6 +471,7 @@ export const PRESENTATION_KIND_NAMES = [
   'turn_started',
   'land_played',
   'discarded',
+  'revealed',
 ] as const;
 
 /**
@@ -532,6 +533,12 @@ export type PresentationKind =
   | {
       kind: 'discarded';
       objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      /** Cards revealed to every player, by name: a reveal has no public object. */
+      kind: 'revealed';
+      cards: string[];
       player: number;
     };
 

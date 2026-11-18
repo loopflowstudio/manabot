@@ -314,3 +314,21 @@ def test_repeated_cards_placed_together_read_once_with_their_count() -> None:
         )
         == "Wisdom: put Island ×2, then Pop Quiz on the bottom"
     )
+
+
+def test_a_reveal_is_the_move_another_seat_made() -> None:
+    revealed = [{"kind": "revealed", "cards": ["Kyoshi Warriors"], "player": 0}]
+    assert (
+        narrate_move(board("resolution_choice"), board("priority"), revealed)
+        == "Reveal Kyoshi Warriors"
+    )
+    # The person's own move names the card in its own words.
+    assert (
+        narrate_move(
+            board("learn"),
+            board("priority"),
+            revealed,
+            [own("learn", 0, "Take Kyoshi Warriors")],
+        )
+        == "Learn: take Kyoshi Warriors"
+    )

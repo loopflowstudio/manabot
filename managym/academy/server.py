@@ -59,6 +59,7 @@ from managym.experience import (
 from managym.experience_projection import (
     HERO_PLAYER_INDEX,
     decision_surface_view,
+    definition_names,
     describe_actions,
     enum_name,
     object_records,
@@ -1694,7 +1695,11 @@ class GameSession:
                 semantic_events,
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
-        self.presentation.observe(next_obs, event_subjects=event_subjects)
+        self.presentation.observe(
+            next_obs,
+            event_subjects=event_subjects,
+            definition_names=definition_names(self.env),
+        )
         # The turn a logged move was made in is the one before the step.
         turn = int(before_observation.turn.turn_number)
         if auto:
@@ -2654,7 +2659,11 @@ class GameSession:
         except (managym.AgentError, StudyBranchUnavailableError) as exc:
             raise StudyCommandUnavailableError("study_command_rejected") from exc
         event_subjects.update(branch.presentation_subjects())
-        projector.observe(observation, event_subjects=event_subjects)
+        projector.observe(
+            observation,
+            event_subjects=event_subjects,
+            definition_names=branch.definition_names(),
+        )
         presentation = projector.drain(
             from_revision=restored.revision,
             to_revision=restored.revision + 1,

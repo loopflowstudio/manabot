@@ -511,8 +511,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     if context is not None:
         data["decision_context"] = context
     data["definition_names"] = {
-        str(row["card_def_id"]): row["registry_name"]
-        for row in env.content_pack_manifest()["definitions"]
+        str(definition): name for definition, name in definition_names(env).items()
     }
     data["stack_objects"] = [
         {
@@ -539,6 +538,14 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
         }
     redact_observation(data)
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
+
+
+def definition_names(env: managym.Env) -> dict[int, str]:
+    """Every card definition of the game's content pack, by id, by name."""
+    return {
+        int(row["card_def_id"]): row["registry_name"]
+        for row in env.content_pack_manifest()["definitions"]
+    }
 
 
 def _player_label(player: managym.Player) -> str:

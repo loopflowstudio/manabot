@@ -1,4 +1,4 @@
-"""Land plays and discards reach the person's presentation track as the public
+"""Land plays, discards and reveals reach the person's presentation track as the public
 objects they became, so the table can tell and point at every move."""
 
 from pathlib import Path
@@ -7,6 +7,7 @@ from typing import Any
 from test_recording_narration import play_passing
 
 from managym.academy import server
+from managym.academy.server import CURATED_PACK, LogEntry
 
 CONFIG: dict[str, Any] = {
     # The person never plays a land, so their hand passes seven and they
@@ -40,3 +41,47 @@ def test_land_plays_and_discards_name_the_objects_on_the_table(
     assert {
         graveyard.get(obj["entity"]) for kind in discards for obj in kind["objects"]
     } == {"Island"}
+
+
+def test_the_opponent_s_reveals_are_told_and_named_in_the_log(
+    tmp_path: Path,
+) -> None:
+    """GW Allies reveals the creatures it puts into its hand; the person sees
+    them as presentation events and in the move list, by name."""
+    logged: list[LogEntry] = []
+    game = server.GameSession(tmp_path)
+    drain = game._drain_pending_action_log
+
+    def record() -> list[LogEntry]:
+        entries = drain()
+        logged.extend(entries)
+        return entries
+
+    game._drain_pending_action_log = record  # type: ignore[method-assign]
+    game.new_game(
+        {
+            "hero_deck_name": CURATED_PACK.villain_deck_id,
+            "villain_deck_name": CURATED_PACK.hero_deck_id,
+            "villain_type": "random",
+            "seed": 0,
+            "auto_pass": False,
+        }
+    )
+    play_passing(game, 120)
+    logged.extend(game._pending_action_log)
+    human = game.current_message()["frame"]["projection"]["agent"]["player_index"]
+
+    reveals = [
+        event["kind"]
+        for event in game.presentation_events
+        if event["kind"]["kind"] == "revealed"
+    ]
+    assert reveals and all(kind["player"] == 1 - human for kind in reveals)
+    named = {card for kind in reveals for card in kind["cards"]}
+    assert "Kyoshi Warriors" in named
+    told = {
+        entry["text"].removeprefix("Reveal ")
+        for entry in logged
+        if entry["actor"] == "villain" and entry["text"].startswith("Reveal ")
+    }
+    assert told == named

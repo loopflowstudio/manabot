@@ -1,6 +1,6 @@
 """Authority-side projection of committed engine facts into presentation events.
 
-The projector follows committed spells, land plays, discards and
+The projector follows committed spells, land plays, discards, reveals and
 combat-to-turn sequences. Meaning
 comes from server-authored interaction offers confirmed by
 ``recent_events``; observation snapshots are viewer-safe label catalogs only
@@ -9,6 +9,7 @@ and are never diffed to invent game facts.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -99,8 +100,13 @@ class PresentationProjector:
         observation: managym.Observation,
         *,
         event_subjects: dict[str, dict[str, Any]],
+        definition_names: Mapping[int, str],
     ) -> None:
-        """Consume the committed semantic events produced by one engine step."""
+        """Consume the committed semantic events produced by one engine step.
+
+        ``definition_names`` names the game's card definitions by id
+        (``definition_names(env)``); a reveal reports only a definition.
+        """
 
         events = list(observation.recent_events)
         cast_events = [event for event in events if _event_type(event) == "SPELL_CAST"]
@@ -116,6 +122,7 @@ class PresentationProjector:
         for event in resolved_events:
             self._observe_resolution(event, events, event_subjects)
         self._observe_moves(events, event_subjects)
+        self._observe_reveals(events, definition_names)
         self._observe_combat_death_and_turn(events)
 
     def drain(
@@ -278,6 +285,32 @@ class PresentationProjector:
                     suggested_ms=450,
                     sound=None,
                     kind={"kind": "discarded", "objects": objects, "player": player},
+                )
+            )
+
+    def _observe_reveals(
+        self, events: list[managym.EventData], definition_names: Mapping[int, str]
+    ) -> None:
+        """Cards revealed to every player, one event per player and step.
+
+        A reveal (a hand revealed, a card revealed as it is put into a hand, a
+        Lesson revealed from outside the game) names a definition, never an
+        object, so the event carries the names themselves.
+        """
+        revealed: dict[int, list[str]] = {}
+        for event in events:
+            if _event_type(event) != "CARD_REVEALED":
+                continue
+            name = definition_names.get(int(event.source_id))
+            if name is not None:
+                revealed.setdefault(int(event.controller_id), []).append(name)
+        for player, cards in revealed.items():
+            self._facts.append(
+                _PresentationFact(
+                    importance="normal",
+                    suggested_ms=450,
+                    sound=None,
+                    kind={"kind": "revealed", "cards": cards, "player": player},
                 )
             )
 

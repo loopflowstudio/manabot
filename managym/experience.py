@@ -749,6 +749,12 @@ class DiscardedPresentation(ProtocolModel):
     player: UInt8
 
 
+class RevealedPresentation(ProtocolModel):
+    kind: Literal["revealed"]
+    cards: list[str]
+    player: UInt8
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
@@ -760,7 +766,8 @@ PresentationKind: TypeAlias = Annotated[
     | BlockedPresentation
     | TurnStartedPresentation
     | LandPlayedPresentation
-    | DiscardedPresentation,
+    | DiscardedPresentation
+    | RevealedPresentation,
     Field(discriminator="kind"),
 ]
 

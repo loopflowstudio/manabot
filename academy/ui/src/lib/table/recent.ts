@@ -5,7 +5,7 @@
  * `recentView(frame, since, events, labels)` reads the authority's presentation
  * events (never a diff of snapshots) for what happened after revision `since`:
  * spells cast and whether they are still on the stack, lands played, discards,
- * attacks, blocks, damage and deaths, and how much damage each object and player was dealt.
+ * reveals, attacks, blocks, damage and deaths, and how much damage each object and player was dealt.
  * `tableLines(frame, events)` draws standing facts: a spell on the stack to
  * each of its targets, and each blocker to the attacker it blocks, from the
  * projection while combat lasts and from the block events since the person's
@@ -55,7 +55,7 @@ export interface ResolvedSpell {
 }
 
 /** What a fact reports; beats group consecutive facts of one kind. */
-export type FactKind = 'cast' | 'damage' | 'died' | 'destroyed' | 'attacked' | 'blocked' | 'land' | 'discarded';
+export type FactKind = 'cast' | 'damage' | 'died' | 'destroyed' | 'attacked' | 'blocked' | 'land' | 'discarded' | 'revealed';
 
 export interface RecentFact {
   seq: number;
@@ -307,6 +307,11 @@ export function recentView(
         const by = playerSide(frame, kind.player);
         const cards = kind.objects.map(object => objectName(object, labels, book) ?? 'a card');
         fact(by, 'discarded', `${sideName(by)} discarded ${list(cards)}`, null, kind.objects.map(object => object.entity));
+        break;
+      }
+      case 'revealed': {
+        const by = playerSide(frame, kind.player);
+        fact(by, 'revealed', `${sideName(by)} revealed ${list(kind.cards)}`);
         break;
       }
     }

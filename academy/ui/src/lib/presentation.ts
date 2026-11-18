@@ -218,6 +218,12 @@ function validatePresentationKind(value: unknown, seq: number): void {
       }
       requireInteger(value.player, 'kind.player', seq);
       return;
+    case 'revealed':
+      if (!Array.isArray(value.cards) || !value.cards.every(card => typeof card === 'string')) {
+        throw new Error(`Presentation event ${seq} has invalid kind.cards`);
+      }
+      requireInteger(value.player, 'kind.player', seq);
+      return;
     default:
       throw new Error(`Presentation event ${seq} has unsupported kind ${value.kind}`);
   }
@@ -383,6 +389,12 @@ export function presentationBeat(
       detail = `${player} discards ${event.kind.objects.map((object) => objectLabel(object, labels)).join(', ')}.`;
       break;
     }
+    case 'revealed': {
+      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
+      heading = 'Reveal';
+      detail = `${player} reveals ${event.kind.cards.join(', ')}.`;
+      break;
+    }
   }
 
   return {
@@ -412,6 +424,7 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'turn_started': return [{ kind: 'player', id: kind.player }];
     case 'land_played': return [object(kind.object), { kind: 'player', id: kind.player }];
     case 'discarded': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
+    case 'revealed': return [{ kind: 'player', id: kind.player }];
   }
 }
 

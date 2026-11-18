@@ -70,7 +70,7 @@ describe('nameBook', () => {
   });
 });
 
-describe('lands and discards', () => {
+describe('lands, discards and reveals', () => {
   it("tells the opponent's land play and discard as facts about the cards they became", () => {
     const after = withBoard(bolt.recovery.frame, projection => {
       projection.opponent.battlefield = [permanent(95, 'Plains')];
@@ -86,6 +86,15 @@ describe('lands and discards', () => {
       ['opponent', 'Search 64 played Plains', [95]],
       ['opponent', 'Search 64 discarded Earth Kingdom Jailer and Yip Yip!', [96, 97]],
     ]);
+  });
+
+  it("tells the opponent's reveal by the cards' names", () => {
+    const base = bolt.recovery.presentation_tail[0];
+    const reveal: PresentationEvent = { ...base, seq: 7, from_revision: 3, to_revision: 4,
+      kind: { kind: 'revealed', cards: ['Kyoshi Warriors'], player: 1 } };
+    const frame = bolt.recovery.frame;
+    const view = recentView(frame, 3, [reveal], () => ({ objects: {}, players: {}, stacks: {} }), names, nameBook([frame], []));
+    expect(view.facts.map(fact => [fact.by, fact.kind, fact.text])).toEqual([['opponent', 'revealed', 'Search 64 revealed Kyoshi Warriors']]);
   });
 });
 

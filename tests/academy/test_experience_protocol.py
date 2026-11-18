@@ -87,6 +87,7 @@ UNION_VARIANTS = {
         "TurnStartedPresentation",
         "LandPlayedPresentation",
         "DiscardedPresentation",
+        "RevealedPresentation",
     ),
 }
 
