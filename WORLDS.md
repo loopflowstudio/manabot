@@ -26,16 +26,9 @@ when reading measurements from different revisions.
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
 | **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 512 × 12 fact rows (policy input v9, the only input on main); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, name/group joins | `world` (the default pack): every defined card (340 supported); `semantic-kernel-w17-v2`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
-**Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Win rates
-from earlier worlds are **not comparable** to w17; do not reuse them. A
-checkpoint that still loads is measured again here before its strength is
-cited. Exp-11 historically ported opponent components with
-`port_legacy_state_dict` and behavioral validation; that utility is now retired.
-Cross-world *measurements* are regenerated, never ported (exp-10's
-precedent).
-
-Update the open world's row, section and receipts in the same PR as any
-rules-meaning or shape change.
+w17 is the last number: `managym.WORLD_VERSION` stays `w17` as a label and
+no longer moves. The sections below record what each change added while the
+numbers were in use.
 
 MTG-241 extends the open world with retained simultaneous proposals and causal
 counter replacements, logical token creation before allocation, and complete

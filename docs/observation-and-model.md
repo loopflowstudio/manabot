@@ -410,7 +410,7 @@ its array and named in `managym.observation_layout`; a checkpoint trained
 before it keeps reading the columns it knows
 ([running a checkpoint on a later revision](#running-a-checkpoint-on-a-later-revision)).
 Removing, renaming or reordering a column refuses every checkpoint that reads
-it, so it waits for a world freeze.
+it.
 
 ### Input v11: one row per game thing
 

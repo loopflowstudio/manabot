@@ -165,13 +165,8 @@ def restore_policy(
 
 def read_written(path: Path) -> PolicyCheckpoint:
     """The writer's tensors and metadata from either format, before admission."""
-    if _is_torch_file(path):
-        return read_torch_checkpoint(path)
-    return read_saved_container(path)
-
-
-def read_torch_checkpoint(path: Path) -> PolicyCheckpoint:
-    """Read the writer's original tensors under canonical names."""
+    if not _is_torch_file(path):
+        return read_saved_container(path)
     record = torch.load(path, map_location="cpu", weights_only=True)
     config = record["hypers"]
     observation = ObservationConfig.from_checkpoint(config["observation_hypers"])

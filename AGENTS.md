@@ -283,7 +283,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
   (`ac601834d` is the last revision supporting v1-v8). Add no other version
-  branch; a new layout replaces these at a world freeze.
+  branch.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`

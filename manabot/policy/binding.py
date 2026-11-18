@@ -23,27 +23,19 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class BindingReport:
+    """What binding moved, for the load log; `changed_programs` counts stored
+    programs that differ from the running catalog's spelling."""
+
     stored_programs: int
-    changed_programs: tuple[str, ...]
+    changed_programs: int
     new_tokens: int
     new_names: int
     retired_keys: int
     renamed_keys: int
 
-    @property
-    def changed(self) -> bool:
-        """Whether binding moved anything the pilot reads."""
-        return bool(
-            self.changed_programs
-            or self.new_tokens
-            or self.new_names
-            or self.retired_keys
-            or self.renamed_keys
-        )
-
     def summary(self) -> str:
         return (
-            f"{self.stored_programs} stored programs, {len(self.changed_programs)} changed; "
+            f"{self.stored_programs} stored programs, {self.changed_programs} changed; "
             f"keys renamed {self.renamed_keys}, retired {self.retired_keys}; "
             f"{self.new_tokens} new token rows, {self.new_names} new name rows"
         )
@@ -175,7 +167,7 @@ def bind_catalog(
     programs = buffers["tokens"]
     width = max(programs.shape[1], old["tokens"].shape[1])
     programs = np.pad(programs, ((0, 0), (0, width - programs.shape[1])))
-    changed: list[str] = []
+    changed = 0
     for index, key in enumerate(definitions):
         if key not in now:
             continue
@@ -188,7 +180,7 @@ def bind_catalog(
             raise ValueError(f"invalid stored card program for {key}")
         stored = writer_to_bound[stored]
         if not np.array_equal(programs[row, : lengths[row]], stored):
-            changed.append(key)
+            changed += 1
         programs[row].fill(0)
         programs[row, :length] = stored
         lengths[row] = length
@@ -211,7 +203,7 @@ def bind_catalog(
     result["name_candidates.program_rows"] = buffers["definition_rows"][name_defs]
     return replace(checkpoint, parameters=params, buffers=result), BindingReport(
         stored_programs=len(now.keys() & definitions),
-        changed_programs=tuple(changed),
+        changed_programs=changed,
         new_tokens=count,
         new_names=len(set(names) - set(stored_names)),
         retired_keys=retired,

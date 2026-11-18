@@ -414,10 +414,7 @@ Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.
 
-An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w15** (`managym.WORLD_VERSION`); its rules, tensor shape,
-and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w14 artifacts, are not compatible with w15. Elemental combat,
+Elemental combat,
 [sacrifice/landfall](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-sacrifice.md) and [Temur](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local

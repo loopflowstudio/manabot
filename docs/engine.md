@@ -1195,13 +1195,12 @@ human-only payment flow.
 
 ## Worlds
 
-A world names rules meaning plus observation and action shape, and the running
-engine always knows its own: `managym.WORLD_VERSION`
-([`world.rs`](../managym/src/world.rs)). The number says which measurements
-are comparable; it does not decide which checkpoints load
-([compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision)). Main
-carries at most one open world; a rules or shape change extends it, and
-freezing it is a deliberate step with re-run baselines ([WORLDS.md](../WORLDS.md)).
+`managym.WORLD_VERSION` ([`world.rs`](../managym/src/world.rs)) is a fixed
+label that existing records and bindings carry; no change moves it
+([history](../WORLDS.md)). Which checkpoints load is
+[compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision);
+which measurements line up is
+[evaluation](evaluation.md#comparing-measurements-across-revisions).
 
 ## Decks
 

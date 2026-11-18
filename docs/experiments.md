@@ -143,8 +143,8 @@ matter most on day one:
 - **Games are paired.** Candidates play the same deals, with both decks and
   both seats, which removes a large source of variance
   ([evaluation](evaluation.md#one-deal)).
-- **Results belong to a world.** Numbers don't carry across
-  [world versions](../WORLDS.md).
+- **Results line up only when the measurement matches.** See
+  [comparing measurements across revisions](evaluation.md#comparing-measurements-across-revisions).
 - **Refutations stay on the record,** dated and never silently edited.
 
 ## From a result to a decision
