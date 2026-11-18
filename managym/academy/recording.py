@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from threading import RLock
 from time import monotonic
 from typing import Any, Literal
@@ -32,6 +33,33 @@ from managym.experience_projection import redact_observation
 ANNOUNCING_STAGES = frozenset(
     {"payment", "additional_cost", "targets", "mode", "announcement"}
 )
+# Stages of a choice made while a spell or ability resolves (the suspended
+# decisions of `decision_context.rs`). Mana payment, Learn and casting during
+# resolution are named by their own lines.
+RESOLVING_STAGES = frozenset(
+    {
+        "resolution_choice",
+        "private_inspection",
+        "scry",
+        "surveil",
+        "order_library_bottom",
+        "order_library_top",
+        "order_replacement",
+        "resolution_payment",
+        "private_search",
+        "name_card",
+        "resolution_mode",
+        "discard",
+        "select_cards",
+        "revealed_hand",
+        "distribute_counters",
+        "retarget",
+        "choose_to_exile",
+        "keep_creatures",
+        "linked_exile",
+        "split_revealed",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -44,34 +72,48 @@ class OwnStep:
     action_type: str
     offered: tuple[str, ...]
     chosen_index: int
+    # What the choice is for: the resolving spell or ability, by its label.
+    source: str | None = None
 
 
 def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
     """The person's own steps of the move that `events[index]` (theirs) ends.
 
-    Trigger ordering takes one step per trigger placed, so its move is the run
-    of the person's consecutive ordering steps; any other move ends in one step.
+    Trigger ordering takes one step per trigger placed, and a resolving spell's
+    choices one per choice, so those moves are the run of the person's
+    consecutive steps of that kind (for one source); any other move ends in one
+    step.
     `events` are trace events (the `TraceEvent` fields, as a mapping).
     """
 
     def step(event: Mapping[str, Any]) -> OwnStep:
         actions = event["actions"]
+        context = event["observation"].get("decision_context") or {}
         return OwnStep(
-            stage=(event["observation"].get("decision_context") or {}).get("stage"),
+            stage=context.get("stage"),
             chosen=event["action_description"],
             action_type=str(actions[event["action"]].get("type", "")),
             offered=tuple(str(action.get("description", "")) for action in actions),
             chosen_index=int(event["action"]),
+            source=(context.get("source") or {}).get("label"),
+        )
+
+    def same_move(earlier: OwnStep, last: OwnStep) -> bool:
+        if last.stage == "order_triggers":
+            return earlier.stage == last.stage
+        return (
+            last.stage in RESOLVING_STAGES
+            and earlier.stage in RESOLVING_STAGES
+            and earlier.source == last.source
         )
 
     last = step(events[index])
     run = [last]
-    if last.stage == "order_triggers":
-        for event in reversed(events[:index]):
-            earlier = step(event)
-            if event["actor"] != events[index]["actor"] or earlier.stage != last.stage:
-                break
-            run.insert(0, earlier)
+    for event in reversed(events[:index]):
+        earlier = step(event)
+        if event["actor"] != events[index]["actor"] or not same_move(earlier, last):
+            break
+        run.insert(0, earlier)
     return run
 
 
@@ -595,6 +637,12 @@ def narrate_move(
     continues = following.get("actor") == actor and (
         following.get("stage") in ANNOUNCING_STAGES
         or (own and following.get("stage") == own[-1].stage == "order_triggers")
+        or (
+            own
+            and own[-1].stage in RESOLVING_STAGES
+            and following.get("stage") in RESOLVING_STAGES
+            and (following.get("source") or {}).get("label") == own[-1].source
+        )
     )
     if continues:
         # The same seat goes straight on with what it began (targets, costs,
@@ -618,6 +666,8 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
         return "Ordered triggers: " + ", then ".join(_trigger_source(p) for p in placed)
     if stage == "learn":
         return f"Learn: {last.chosen[:1].lower()}{last.chosen[1:]}"
+    if last.stage in RESOLVING_STAGES:
+        return _resolution(own)
     if last.chosen.startswith("Activate ability: "):
         return "Activate " + last.chosen.removeprefix("Activate ability: ")
     if stage in ("declare_attackers", "declare_blockers"):
@@ -628,6 +678,48 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
     # A choice while something resolves ("Put Island into your hand") is
     # named as the person made it.
     return last.chosen
+
+
+def _resolution(own: Sequence[OwnStep]) -> str:
+    """ "Accumulate Wisdom: kept Island, put Pop Quiz, then Firebending Lesson
+    on the bottom": the person's choices for one resolving source, in order.
+
+    A library ordering takes one step per card placed and places the last one
+    itself, so a run of ordering steps is one phrase naming every card.
+    """
+    phrases: list[str] = []
+    index = 0
+    while index < len(own):
+        step = own[index]
+        if step.stage in ("order_library_bottom", "order_library_top"):
+            run = [step]
+            while index + 1 < len(own) and own[index + 1].stage == step.stage:
+                index += 1
+                run.append(own[index])
+            last = run[-1]
+            placed = [s.offered[s.chosen_index] for s in run] + [
+                offer for i, offer in enumerate(last.offered) if i != last.chosen_index
+            ]
+            cards = [_ORDERED.sub(r"\1", offer) for offer in placed]
+            end = "on the bottom" if step.stage == "order_library_bottom" else "on top"
+            phrases.append(f"put {', then '.join(cards)} {end}")
+        else:
+            kept = _KEPT.fullmatch(step.chosen)
+            phrases.append(
+                f"kept {kept.group(1)}"
+                if kept
+                else f"{step.chosen[:1].lower()}{step.chosen[1:]}"
+            )
+        index += 1
+    text = ", ".join(phrases)
+    return (
+        f"{own[-1].source}: {text}" if own[-1].source else text[:1].upper() + text[1:]
+    )
+
+
+# Offer labels of library choices (`managym/src/flow/action.rs`).
+_ORDERED = re.compile(r"^Put (.+) next on the (?:bottom|top)$")
+_KEPT = re.compile(r"Put (.+) into your hand")
 
 
 def _trigger_source(offer: str) -> str:

@@ -287,3 +287,47 @@ def test_the_opponent_s_activations_are_narrated_live_and_in_review(
     ]
     # Each ability that reached the stack is one move, named by its source.
     assert labels.count("Activate Fire Nation Cadets") == len(activations)
+
+
+def test_a_resolution_s_choices_are_one_line_for_its_source() -> None:
+    wisdom = {"label": "Accumulate Wisdom"}
+    look = OwnStep(
+        "private_inspection",
+        "Put Island into your hand",
+        "SELECT_CARD",
+        ("Put Pop Quiz into your hand", "Put Island into your hand"),
+        1,
+        "Accumulate Wisdom",
+    )
+    order = OwnStep(
+        "order_library_bottom",
+        "Put Pop Quiz next on the bottom",
+        "SELECT_CARD",
+        (
+            "Put Pop Quiz next on the bottom",
+            "Put Igneous Inspiration next on the bottom",
+        ),
+        0,
+        "Accumulate Wisdom",
+    )
+    # The first choice goes straight on to the next one for the same spell.
+    assert (
+        narrate_move(
+            board("private_inspection", source=wisdom),
+            board("order_library_bottom", source=wisdom),
+            [],
+            [look],
+        )
+        is None
+    )
+    # The last one names them all, the card placed for the person included.
+    assert (
+        narrate_move(
+            board("order_library_bottom", source=wisdom),
+            board("priority"),
+            [],
+            [look, order],
+        )
+        == "Accumulate Wisdom: kept Island, put Pop Quiz, then Igneous Inspiration"
+        " on the bottom"
+    )
