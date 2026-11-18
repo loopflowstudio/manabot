@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.records import CheckpointPlayer, Inference, Match
+from etude.eval.records import CheckpointPlayer, Code, Inference, Match
 from etude.records import ArtifactRef
 import pytest
 import torch
@@ -17,6 +17,7 @@ from manabot.eval import pairing
 from manabot.eval.evaluation import EvaluationRequest, EvaluationResult
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
+from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 import managym
 
@@ -137,3 +138,59 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     for game in range(4):
         assert sum(float(row["score"]) for row in rows if row["game"] == game) == 1.0
     assert (tmp_path / "output" / "arena" / match.key).is_dir()
+
+
+def test_pairing_plays_a_checkpoint_against_the_heuristic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    torch.set_num_threads(1)
+    matchup = AuthoredMatchup(
+        pack_key="ur-lessons-vs-gw-allies",
+        role_a="ur_lessons",
+        role_b="gw_allies",
+        decklists="closed",
+        world=managym.WORLD_SETUP,
+    )
+    space = ObservationSpace(ObservationConfig())
+    torch.manual_seed(19)
+    model = ActorCritic(
+        space,
+        ModelConfig(
+            world=managym.WORLD_SETUP,
+            hidden_dim=8,
+            num_attention_heads=2,
+            attention_on=True,
+            attention_layers=1,
+            policy_film=True,
+            value_aggregation="masked_mean",
+        ),
+    )
+    path = tmp_path / "19.safetensors"
+    save_checkpoint(model, space, path, player_configs=None)
+    ref = CheckpointRef(
+        experiment="fixture",
+        job="pairing",
+        seed=19,
+        name="fixture-19",
+        artifact=ArtifactRef(
+            uri=path.as_uri(),
+            sha256=file_sha256(path),
+            size_bytes=path.stat().st_size,
+        ),
+    )
+    heuristic = Code(name="heuristic", source=heuristic_source_paths())
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
+    match = Match(players=(Inference().player(ref), heuristic), games=4)
+    tables = pairing.play_pairing(
+        match,
+        matchup=matchup,
+        deal=123,
+        matchup_mode="cross",
+        game_seconds=60,
+        arena="fixture-pairing",
+        backend=BACKEND,
+    )
+    rows = tables["plays"]
+    assert len(rows) == 8 and all(row["valid"] for row in rows)
+    for game in range(4):
+        assert sum(float(row["score"]) for row in rows if row["game"] == game) == 1.0

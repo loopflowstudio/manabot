@@ -16,7 +16,14 @@ from pathlib import Path
 import random
 
 from etude.eval.match import Tables
-from etude.eval.records import Benchmark, Environment, Inference, Match, Seating
+from etude.eval.records import (
+    Benchmark,
+    Code,
+    Environment,
+    Inference,
+    Match,
+    Seating,
+)
 from etude.experiment import observe
 from etude.jobs import EvalJob, ExperimentState, TrainingRunSummary
 from etude.launch.records import Job
@@ -31,6 +38,7 @@ from manabot.experiment.job import PretrainedInitialization, TrainingJob, machin
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.recipes.builders import sampled_self_play
+from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.training.decks import UniformDecks
 from manabot.training.panels import ML, PERF
@@ -63,6 +71,8 @@ class PilotStage:
 
 TRUNK = PilotStage(3_300_000, 90, 3.5, Decimal("2.40"))
 MILESTONES = (40, 80, 120)
+# Paired deals per final checkpoint against the heuristic, each disclosure.
+HEURISTIC_DEALS = 50
 
 
 @dataclass(frozen=True)
@@ -250,6 +260,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
     source = [*sorted((ROOT / "manabot").rglob("*.py")), Path(__file__)]
     intact = Inference(source=source)
     blanked = Inference(source=source, config={"blank_decision_memory": True})
+    heuristic = Code(name="heuristic", source=heuristic_source_paths())
     found: list[Seating] = []
     for size, model in SIZES.items():
         for seed in SEEDS:
@@ -278,6 +289,30 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
                 ("final", "control", gru.final, control.final, intact, 200),
                 ("final", "reliance", gru.final, gru.final, blanked, 50),
             ]
+            # Each arm's final checkpoint against the fixed native heuristic.
+            for arm, branch in zip(("control", "gru"), branches, strict=True):
+                if branch.final is None:
+                    continue
+                for disclosure in DISCLOSURES:
+                    found.append(
+                        Seating(
+                            name=seating_name(
+                                size, seed, disclosure, f"{arm}-heuristic", "final"
+                            ),
+                            players=(branch.final.player(intact), heuristic),
+                            configs=tuple(
+                                Conditions(
+                                    design=DESIGN.name,
+                                    decklists=disclosure,
+                                    **pairing.model_dump(),
+                                ).model_dump()
+                                for pairing in DESIGN.pairings[:HEURISTIC_DEALS]
+                            ),
+                            games=DESIGN.legs,
+                            tags=("heuristic", f"{size}-heuristic"),
+                            seeds="one",
+                        )
+                    )
             for point, tag, first, second, inference, deals in lines:
                 if first is None or second is None:
                     continue
@@ -406,6 +441,11 @@ def report() -> Report:
                         for disclosure in DISCLOSURES
                     ),
                     split="decklists",
+                ),
+                Ranking(
+                    title=f"Final checkpoints against the heuristic — {size}",
+                    by="decklists",
+                    matches=Matches(tag=f"{size}-heuristic"),
                 ),
                 Matrix(
                     title=f"Descriptive arm versus control matchups — {size}",

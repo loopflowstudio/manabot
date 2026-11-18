@@ -1,7 +1,9 @@
-"""Play a paired authored deal between checkpoints through the replay-checked arena.
+"""Play a paired authored deal through the replay-checked arena.
 
-The caller owns the experimental schedule and backend. This module owns checkpoint
-admission, retained arena evidence and disclosure labels on the resulting tables.
+The candidate is a checkpoint; the opponent is a checkpoint or the native
+heuristic (`Code(name="heuristic")`). The caller owns the experimental schedule
+and backend. This module owns player admission, retained arena evidence and
+disclosure labels on the resulting tables.
 """
 
 import os
@@ -11,9 +13,9 @@ from tempfile import TemporaryDirectory
 from typing import Literal
 
 from etude.eval.match import Tables
-from etude.eval.records import CheckpointPlayer, Match
+from etude.eval.records import CheckpointPlayer, Code, Match
 
-from manabot.eval.admission import register_checkpoint
+from manabot.eval.admission import register_anchor, register_checkpoint
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
@@ -42,8 +44,15 @@ def play_pairing(
     players: list[PlayerRegistration] = []
     paths: dict[str, str] = {}
     for index, player in enumerate(match.players):
+        if index == 1 and isinstance(player, Code):
+            if player.name != "heuristic":
+                raise ValueError("a pairing's code opponent must be the heuristic")
+            players.append(
+                register_anchor(players[0], "heuristic", player_id="opponent")
+            )
+            continue
         if not isinstance(player, CheckpointPlayer):
-            raise ValueError("pairing players must be checkpoints")
+            raise ValueError("pairing players are checkpoints or a heuristic opponent")
         blank = player.inference.config.get("blank_decision_memory", False)
         if not isinstance(blank, bool):
             raise ValueError("blank_decision_memory must be a boolean")
