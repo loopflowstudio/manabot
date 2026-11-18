@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field, model_validator
 
 from manabot.infra.config import MatchConfig
@@ -19,13 +21,21 @@ def _deck_pair[T](pair: tuple[T, T], leg: int) -> tuple[T, T]:
 
 
 class AuthoredMatchup(StrictModel):
-    """Two native authored roles; labels never substitute for actual deck identity."""
+    """Two native authored roles; labels never substitute for actual deck identity.
+
+    `world=WORLD_SETUP` submits both authored decks to the world, which a
+    world-bound checkpoint requires; omitted, the decks run as given and the
+    matchup keeps its earlier `content_suite`.
+    """
 
     pack_key: str = Field(min_length=1)
     role_a: str = Field(min_length=1)
     role_b: str = Field(min_length=1)
     decklists: DecklistDisclosure = Field(
         default="open", exclude_if=lambda value: value == "open"
+    )
+    world: Literal["world"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
 
     @model_validator(mode="after")
@@ -42,13 +52,14 @@ class AuthoredMatchup(StrictModel):
         return _deck_pair((self.role_a, self.role_b), leg)
 
     def match(self, leg: int = 0) -> MatchConfig:
-        return MatchConfig.authored(
+        authored = MatchConfig.authored(
             self.pack_key,
             *self.decks(leg),
             hero="arena-seat-0",
             villain="arena-seat-1",
             decklists=self.decklists,
         )
+        return authored.model_copy(update={"world": self.world})
 
 
 class DeckMatchup(StrictModel):

@@ -22,20 +22,29 @@ import managym
 
 
 @pytest.mark.parametrize(
-    "disclosure,blank", [("open", False), ("closed", False), ("open", True)]
+    "disclosure,blank,world",
+    [
+        ("open", False, None),
+        ("closed", False, None),
+        ("open", True, None),
+        ("closed", False, managym.WORLD_SETUP),
+    ],
 )
 def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     disclosure: Literal["open", "closed"],
     blank: bool,
+    world: Literal["world"] | None,
 ) -> None:
+    """A world matchup admits world-bound checkpoints, as trained recipes write them."""
     torch.set_num_threads(1)
     matchup = AuthoredMatchup(
         pack_key="ur-lessons-vs-gw-allies",
         role_a="ur_lessons",
         role_b="gw_allies",
         decklists=disclosure,
+        world=world,
     )
     space = ObservationSpace(
         ObservationConfig(
@@ -64,7 +73,10 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
         )
         path = tmp_path / f"{seed}.safetensors"
         save_checkpoint(
-            model, space, path, player_configs=EnvMatch(matchup.match()).to_rust()
+            model,
+            space,
+            path,
+            player_configs=None if world else EnvMatch(matchup.match()).to_rust(),
         )
         ref = CheckpointRef(
             experiment="fixture",

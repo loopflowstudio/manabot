@@ -357,6 +357,7 @@ def play(match: Match) -> Tables:
             role_a=pairing.role_a,
             role_b=pairing.role_b,
             decklists=conditions.decklists,
+            world=managym.WORLD_SETUP,
         ),
         deal=pairing.deal,
         matchup_mode=DESIGN.matchup_mode,
