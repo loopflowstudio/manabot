@@ -1,10 +1,71 @@
 # Do fixed-source mana taps at priority and during payments change TLA learnability?
 
-**Offering mana taps slowed training and hurt early playing strength.** Across the three paired seeds through update 50, the median increase was 89% in surfaced decisions per game and 55% in seconds per update. At update 25 the raw learners with taps scored 34/192 against the heuristic, compared with 70/192 without taps. At the last scored checkpoint, update 100, that gap narrowed to 93/192 versus 97/192. The raw on arm scored 80/188 head-to-head, with one seed tied and two behind. There is a substantial early learning cost. These three seeds do not establish a lasting deficit of the same size.
+**Offering mana taps everywhere slowed training and hurt early playing strength.** Across the three paired seeds through update 50, the median increase was 89% in surfaced decisions per game and 55% in seconds per update. At update 25 the raw learners with taps scored 34/192 against the heuristic, compared with 70/192 without taps. At the last scored checkpoint, update 100, that gap narrowed to 93/192 versus 97/192. The raw on arm scored 80/188 head-to-head, with one seed tied and two behind. There is a substantial early learning cost. These three seeds do not establish a lasting deficit of the same size.
 
 **The update-25 and update-50 EMA exports still played much like initialization.** At update 50, on scored 0/192 against the heuristic, off scored 14/192, and on lost head-to-head in all three seeds. Those exports alone could not tell whether the trained agents had learned to skip floats. The separately scored raw learners did skip most floats: in the fixed-deal checks against the heuristic, the share of surfaced decisions spent floating fell from 39.8% at initialization to 8.9% at update 50 and 9.9% at update 100 (233/2,348). The EMA on policies still floated on 39.8% at update 100.
 
 Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16 and undo disabled. Through update 50 each seed pair used one L4. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Each checkpoint played the same 16 fixed deck pairs against the first-64 heuristic and its paired checkpoint, with seats and decks crossed. Training seeds are the three units of evidence.
+
+## Usable-only priority floats on CPU
+
+On the same 40 TLA deals, limiting priority floats to a mana spend or a tap
+trigger removed **62% of the extra decisions** introduced by offering every
+legal tap. Random self-play still needed **47% more decisions per game** than
+with taps off. All 120 games finished.
+
+| Per-seat mode | Decisions/game | Forced decisions skipped¹ | Priority floats offered / chosen² | Surfaced steps/s |
+| --- | ---: | ---: | ---: | ---: |
+| Off | 227.60 | 73.4% | 0 / 0 | ~24,900 |
+| Everywhere | 508.25 | 60.5% | 12,885 / 8,182 | ~33,800 |
+| Usable only | 334.18 | 67.2% | 4,971 / 2,699 | ~25,600 |
+
+¹ Skipped divided by skipped plus surfaced decisions. ² Number of surfaced
+priority decisions with at least one float, and number at which a float was
+chosen. In usable mode, floats accounted for 20.2% of all choices, down from
+40.2% everywhere.
+
+Both seats sampled uniformly from the full native legal list. Deck selection,
+reset seeds 1000–1039 and the policy RNG state after deck selection match the
+earlier experiment. The off and everywhere decision counts reproduced exactly.
+The release engine on an Apple M4 Max took 0.366, 0.601 and 0.522 seconds for
+the three rows, respectively. These short scalar runs include observation
+construction and choice inspection. Steps/s weights every surfaced decision
+equally, while time per game includes the extra decisions.
+
+The filter reads the costs of already admitted actions. It keeps fixed taps
+with matching battlefield tap triggers and leaves explicit activated abilities
+and payment-time choices available. It does not match individual mana colors
+or spending restrictions. In 40 alternating-order paired refreshes of a
+three-Mountain position, usable minus everywhere took a median of 0.00 µs with
+a castable Gray Ogre (same offers) and −0.42 µs with only a land drop (three
+offers removed). This measures net priority refresh time including observation
+construction. The spend fixture did not resolve a timing difference.
+
+Reproduce the deal panel and refresh check with
+`uv run --extra artifacts --extra reports -m experiments.mana_taps`.
+
+### Native step and search benchmarks
+
+| Release benchmark | Off | Usable only |
+| --- | ---: | ---: |
+| Random steps across 512 curated games | 124,687 | 165,799 |
+| Steps/s | 19,360 | 33,434 |
+| Search-64 rollout count across 120 replies | 23,296 | 27,392 |
+| Total search time | 88.84 s | 182.84 s |
+| Slowest search reply | 2.47 s | 9.25 s |
+
+The off run reproduced the committed step digest and all three search digests.
+Neither mode hit a game or playout cap. Search took **2.06× as long** with
+usable floats. The largest difference was seed 3 (24.02 s off, 104.04 s
+usable). Search allocates 64 rollouts per legal action, and subsequent
+decisions and playouts can differ between modes. The search totals therefore
+measure the cost to the player, including a different search tree. Timings are
+single local runs. The same-runner CI performance gate remains separate.
+
+Run the release examples `bench_steps` and `bench_search` with default
+arguments for off and `--usable-taps` for usable-only. This CPU comparison
+used no rentals. Learning rate for usable-only remains unmeasured; the
+checkpoint results below are for the historical everywhere treatment.
 
 ## Raw learners through update 50
 

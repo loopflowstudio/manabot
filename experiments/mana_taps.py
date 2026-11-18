@@ -17,7 +17,9 @@ import hashlib
 import os
 from pathlib import Path
 import random
+from statistics import median
 from tempfile import mkdtemp
+from time import perf_counter
 from typing import TYPE_CHECKING, Literal
 
 from etude.checkpoints import CheckpointRecord
@@ -510,3 +512,83 @@ def report() -> Report:
         ),
         ml=ML,
     )
+
+
+def random_deals() -> None:
+    """Repeat the original 40 CPU deals and each post-deck-selection RNG stream."""
+    rng = random.Random(385)
+    decks = rng.sample(corpus().decks, 24)
+    deals: list[tuple[list[managym.PlayerConfig], object]] = []
+    for mode in (False, True, "usable"):
+        steps = skipped = offered = chosen = 0
+        start = perf_counter()
+        for game in range(40):
+            if mode is False:
+                players = [deck.player() for deck in rng.sample(decks, 2)]
+                deals.append((players, rng.getstate()))
+            else:
+                players, state = deals[game]
+                rng.setstate(state)
+            env = managym.Env(seed=1000 + game)
+            obs, _ = env.reset(managym.GameSetup(players, mana_taps=(mode, mode)))
+            for _ in range(5000):
+                space = obs.action_space
+                actions = space.actions
+                index = rng.randrange(len(actions))
+                if space.action_space_type == managym.ActionSpaceEnum.PRIORITY:
+                    tap = managym.ActionEnum.TAP_FOR_COST
+                    offered += any(action.action_type == tap for action in actions)
+                    chosen += actions[index].action_type == tap
+                obs, _, done, truncated, _ = env.step(index)
+                steps += 1
+                if truncated:
+                    raise ValueError(f"truncated seed {1000 + game}")
+                if done:
+                    break
+            else:
+                raise ValueError(f"step cap at seed {1000 + game}")
+            skipped += env.skip_trivial_count()
+        elapsed = perf_counter() - start
+        print(
+            f"{mode=} {steps=} {skipped=} {offered=} {chosen=} {elapsed=:.3f}",
+            flush=True,
+        )
+
+
+def priority_check_timing() -> None:
+    """Pair refresh times on identical board positions, including observation construction."""
+    decks = [
+        managym.PlayerConfig(name, {"Gray Ogre": 8, "Mountain": 32})
+        for name in ("a", "b")
+    ]
+    for spend in (False, True):
+        differences = []
+        for seed in range(40):
+            times = {}
+            for mode in (True, "usable") if seed % 2 else ("usable", True):
+                env = managym.Env(seed=1000 + seed)
+                env.reset(managym.GameSetup(decks, mana_taps=(mode, mode)))
+                env.scenario_clear_hand(0)
+                # A legal land drop keeps even the no-spend fixture at priority.
+                env.scenario_force_card_in_hand(0, "Mountain")
+                if spend:
+                    env.scenario_force_card_in_hand(0, "Gray Ogre")
+                for _ in range(3):
+                    env.scenario_force_battlefield(0, "Mountain", True)
+                env.scenario_refresh()
+                start = perf_counter()
+                obs = env.scenario_refresh()
+                times[mode] = perf_counter() - start
+                assert sum(
+                    a.action_type == managym.ActionEnum.TAP_FOR_COST
+                    for a in obs.action_space.actions
+                ) == (3 if spend or mode is True else 0)
+            differences.append((times["usable"] - times[True]) * 1e6)
+        print(
+            f"{spend=} paired median usable minus everywhere {median(differences):.2f} us"
+        )
+
+
+if __name__ == "__main__":
+    random_deals()
+    priority_check_timing()
