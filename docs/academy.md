@@ -574,19 +574,41 @@ and wrap onto a further line before anything scrolls, and each half gives the
 crowded row more of its height.
 
 Hover or focus a card to preview it in full. The top bar shows the turn, the
-current step and the steps where your priority stops hold.
+current step and the steps where your priority stops hold. The hand strip is
+as tall as it needs to be: an empty hand is a label, and a short hand or a
+crowded board leaves more height to the battlefield.
 
 The rail holds:
 
-- **Stack**, top first; a stack entry an action applies to is outlined.
-- **The decision**: who decides, the instruction, and its buttons. Passing
-  priority and paying a cost are the primary button (Space). Declining, and a
-  combat answer that does not name another creature, are separate buttons, so a
-  click on a card never declines.
+- **Stack**, top first, each entry with its card and who controls it; a stack
+  entry an action applies to is outlined. A line joins a spell on the stack to
+  each of its targets.
+- **Since your last move**: what happened after your last choice, as the
+  server reports it: spells cast and what they targeted, attacks, blocks,
+  damage and deaths. A spell that already resolved keeps its card here, and its
+  line to a target that is still on the table, until your next move. Cards that
+  attacked, blocked, were targeted or were dealt damage are ringed on the board.
+- **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
+  Accumulate Wisdom. Space pays automatically, or click lands to tap them"),
+  and its buttons. **Rules detail** holds the engine's full instruction.
+  Passing priority and paying a cost are the primary button (Space). Declining,
+  and a combat answer that does not name another creature, are separate
+  buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
   count. It is the complete list; press a number key to choose one of the first
   nine.
-- **Log**.
+- **Moves**: the game's moves grouped by turn, each turn headed by whose turn
+  it was. Each move names the player who made it; priority-stop automation is
+  marked **auto** and never counts as your move, and repeated automatic passes
+  collapse into one line with a count. Hover or focus a card name to see the
+  card.
+
+While the opponent decides, the rail and the opponent's plate say so
+("Search 64 is choosing…"). An attacking creature steps toward the player it
+attacks, and a blocker is joined to the attacker it blocks by a line. Cards
+move between zones (hand to stack, stack to battlefield, an opponent's new
+card from their plate) instead of appearing; with reduced motion they appear
+in place and every fact above stays.
 
 Choices with no card on the table, such as Lessons outside the game, appear in
 a tray over the board. During combat the creature the prompt asks about is
@@ -723,14 +745,14 @@ game's server settings.
 When **Pass Turn (F6)** is available, activating it yields through priority
 windows, including checked stops and stack responses, until the turn ends or
 a non-priority decision needs you. With **Use priority stops** off, priority
-windows continue to appear. Automatic passes retain **Auto** labels in the
-action log and recording. Pausing narration does not change these settings.
+windows continue to appear. Automatic passes are marked **auto** in the
+move list and recording. Pausing narration does not change these settings.
 
 ### Reading consequences and controlling narration
 
-The live table's rail keeps the action log. Recorded cast, target, resolution
-and damage consequences, including deaths, are read in **Replay**; the live
-table does not yet show the consequence history described below.
+The live table's rail shows what happened since your last move and keeps the
+move list; the paged consequence history described below is read in
+**Replay**.
 
 History groups consequences under recorded turns. Use the earlier/later page
 controls to browse up to 100 events at a time; the counts describe the available

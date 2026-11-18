@@ -33,7 +33,8 @@
       const from = element(line.from)?.getBoundingClientRect();
       const to = element(line.to)?.getBoundingClientRect();
       if (!from || !to) return [];
-      const a = { x: from.left + from.width / 2, y: from.top + from.height / 2 };
+      // A stack entry is a row of text in the rail; start at its card, not across its name.
+      const a = { x: line.from.kind === 'stack' ? from.left + 14 : from.left + from.width / 2, y: from.top + from.height / 2 };
       const b = { x: to.left + to.width / 2, y: to.top + to.height / 2 };
       // Stop at the target's edge, so the arrow points at the card rather than under it.
       const inset = Math.min(to.width, to.height) / 2 + 4;

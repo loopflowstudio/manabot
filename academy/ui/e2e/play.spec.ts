@@ -44,14 +44,14 @@ test('play page reacts to the full game loop', async ({ page }) => {
 
   // 3. Start game must actually render a board (observation applied to DOM).
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  const board = page.getByTestId('game-board');
+  const board = page.getByTestId('table');
   await expect(board).toBeVisible({ timeout: 15_000 });
-  await expect(board).toContainText('Battlefield');
-  await expect(board).toContainText('Turn');
+  await expect(page.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
+  await expect(page.getByTestId('turn-number')).toContainText('Turn');
 
   const logEntries = page.getByTestId('log-entry');
   const actionButtons = page.getByTestId('action-option');
-  const gameOverOverlay = page.getByText('Game Over', { exact: true });
+  const gameOverOverlay = page.getByTestId('game-result');
 
   const boardSnapshots = new Set<string>();
   let actionsTaken = 0;
@@ -69,7 +69,7 @@ test('play page reacts to the full game loop', async ({ page }) => {
         gameOver = true;
         break;
       }
-      await page.getByRole('button', { name: 'Play Again' }).click();
+      await page.getByTestId('game-result-action').click();
       await expect(board).toBeVisible({ timeout: 15_000 });
       continue;
     }
@@ -101,8 +101,8 @@ test('play page reacts to the full game loop', async ({ page }) => {
     actionsTaken += 1;
 
     // THE regression assertion: every action must visibly mutate the DOM.
-    // The store appends a `Hero: ...` log line for each action, so the log
-    // must grow; a frozen DOM keeps the count constant forever.
+    // The store appends the person's move to the move list for each action,
+    // so the list must grow; a frozen DOM keeps the count constant forever.
     await expect
       .poll(async () => logEntries.count(), {
         timeout: 30_000,

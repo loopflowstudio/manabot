@@ -148,7 +148,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto(play);
       await expect(page.getByTestId('action-option').first()).toBeEnabled();
       const frame = await retainedFrame(page);
-      const opponent = await page.locator('.player-status').first().textContent();
+      const opponent = await page.locator('[data-testid=player-plate][data-plate-side=opponent] [data-testid=player-target]').textContent();
       expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('etude.gui.resume')!).identity?.opponent?.name)).toContain('Independent');
       await stopChild(child);
       child = await childServer(port);
@@ -174,7 +174,7 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(frame!.revision));
         await expect(page.getByTestId('action-option').first()).toBeDisabled();
         expect(await retainedFrame(page)).toBeNull();
-        expect(await page.locator('.player-status').first().textContent()).toBe(opponent);
+        expect(await page.locator('[data-testid=player-plate][data-plate-side=opponent] [data-testid=player-target]').textContent()).toBe(opponent);
       }
       await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/interrupted-${theme}.png`, import.meta.url)) });
       const setup = page.getByRole('banner').getByRole('link', {name: 'New game', exact: true});

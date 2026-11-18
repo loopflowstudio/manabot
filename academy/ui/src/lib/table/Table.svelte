@@ -247,7 +247,8 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null} bind:this={root}>
+<div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
+  data-turn={projection.turn.turn_number} data-step={projection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">

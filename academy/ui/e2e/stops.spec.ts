@@ -34,11 +34,16 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
   }
 }
 
-async function openStopsPanel(page: Page): Promise<void> {
-  const secondary = page.locator('details.secondary-panels');
-  if (await secondary.count() && !await secondary.evaluate((node: HTMLDetailsElement) => node.open)) {
-    await secondary.locator(':scope > summary').click();
+/** On the table, stops and the session live in the top bar's Menu. */
+async function openMenu(page: Page): Promise<void> {
+  const menu = page.locator('details.table-menu');
+  if (await menu.count() && !await menu.evaluate((node: HTMLDetailsElement) => node.open)) {
+    await page.getByTestId('table-menu').click();
   }
+}
+
+async function openStopsPanel(page: Page): Promise<void> {
+  await openMenu(page);
   const panel = page.getByTestId('stops-panel');
   if (!(await panel.getAttribute('open'))) {
     await panel.locator('summary').first().click();
@@ -58,7 +63,8 @@ async function updateSeq(page: Page): Promise<number> {
 // scrolling/layout waits; pointer submission is covered by the release suite.
 async function playUntilComparisonTurn(page: Page): Promise<number> {
   const actionButtons = page.getByTestId('action-option');
-  const gameOverOverlay = page.getByText('Game Over', { exact: true });
+  const gameOverOverlay = page.getByTestId('game-result');
+  const table = page.getByTestId('table');
   let inputs = 0;
 
   for (let i = 0; i < MAX_ACTIONS; i += 1) {
@@ -66,8 +72,9 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
     await expect(gameOverOverlay).not.toBeVisible();
     await expect(page.locator('[data-testid="action-option"]:enabled').first().or(gameOverOverlay)).toBeVisible();
     await expect(gameOverOverlay).not.toBeVisible();
-    const board = await page.getByTestId('game-board').textContent();
-    if (board?.includes(`Turn ${COMPARISON_TURN} · Your turn · Precombat Main`)) return inputs;
+    if (await table.getAttribute('data-turn') === String(COMPARISON_TURN)
+      && await table.getAttribute('data-turn-owner') === 'you'
+      && (await table.getAttribute('data-step'))?.startsWith('PRECOMBAT_MAIN')) return inputs;
 
     const seqBefore = await updateSeq(page);
     const labels = await actionButtons.allTextContents();
@@ -110,7 +117,7 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   await setCheckbox(page, 'auto-pass-toggle', false);
 
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('table')).toBeVisible({ timeout: 15_000 });
   const baselineInputs = await playUntilComparisonTurn(page);
 
   // ---- Run 2: same seed, stops on main phases only. ----
@@ -137,11 +144,11 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   expect(baselineInputs).toBeGreaterThan(stopsInputs * 2);
   expect(stopsInputs).toBeGreaterThan(0);
 
-  // The narrative survives the fast-forward: villain actions inside skipped
-  // stretches are logged, and the auto-passed windows are called out.
-  const logTexts = await page.getByTestId('log-entry').allTextContents();
-  expect(logTexts.some((text) => text.trimStart().startsWith('Villain'))).toBe(true);
-  expect(logTexts.some((text) => /Auto-passed \d+ priority window/.test(text))).toBe(true);
+  // The narrative survives the fast-forward: the opponent's moves inside
+  // skipped stretches are in the move list, and automated passes are marked
+  // as automation, never as the person's moves.
+  await expect(page.locator('[data-testid=log-entry][data-actor=opponent]').first()).toBeAttached();
+  await expect(page.locator('[data-testid=log-entry][data-actor=auto]').first()).toContainText('Pass priority');
 });
 
 test('F6 passes the turn from the keyboard', async ({ page }) => {
@@ -154,20 +161,17 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await selectDeck(page, 'villain', 'interactive');
 
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  const board = page.getByTestId('game-board');
-  await expect(board).toBeVisible({ timeout: 15_000 });
+  const table = page.getByTestId('table');
+  await expect(table).toBeVisible({ timeout: 15_000 });
 
   // Default stops: the game opens at my main1 on turn 1.
-  await expect(board).toContainText('Turn 1');
+  await expect(table).toHaveAttribute('data-turn', '1');
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
   await page.keyboard.press('F6');
 
   // The rest of turn 1 (including the my-main2 stop) is yielded server-side;
   // the next surfaced decision is on a later turn.
-  await expect(board).toContainText(/Turn (?!1 )\d+/, { timeout: 30_000 });
-  const logTexts = await page.getByTestId('log-entry').allTextContents();
-  expect(
-    logTexts.some((text) => /Hero\s*Pass turn/.test(text.replace(/\s+/g, ' '))),
-  ).toBe(true);
+  await expect(table).not.toHaveAttribute('data-turn', '1', { timeout: 30_000 });
+  await expect(page.locator('[data-testid=log-entry][data-actor=you]').filter({ hasText: 'Pass turn' })).toHaveCount(1);
 });

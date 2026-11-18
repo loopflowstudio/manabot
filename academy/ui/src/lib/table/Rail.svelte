@@ -155,7 +155,7 @@
   <section class="block choices" aria-label="All legal choices">
     <h2 class="heading type-rubric text-ink-2">
       <span class="type-rubric">{interrupted ? 'Recorded choices' : 'All legal choices'}</span>
-      <span class="type-rubric" data-testid="legal-choice-count" aria-label={`${frame.offers.length} ${interrupted ? 'recorded' : 'legal'} choices`}>{frame.offers.length}</span>
+      <span class="type-rubric" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
     </h2>
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}

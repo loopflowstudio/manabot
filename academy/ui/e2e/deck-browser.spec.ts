@@ -47,14 +47,19 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
+  // On the table, the session controls are in the top bar's Menu.
+  await page.getByTestId('table-menu').click();
   await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
   await page.getByText('Browse decks and cards',{exact:true}).click();
   await browser.getByTestId('browse-elemental_bg').click();
   await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);
-  await expect(page.getByTestId('deck-names')).toContainText('Temur Lessons');
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to the game', exact: true }).click();
   await expect(browser).not.toBeVisible();
+  // Editing the next game leaves the running game's matchup unchanged.
+  await expect(page.getByTestId('deck-names')).toContainText('Temur Lessons');
+  // On the table, the session controls are in the top bar's Menu.
+  await page.getByTestId('table-menu').click();
   await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
   await page.getByText('Browse decks and cards',{exact:true}).click();
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id','elemental_ug');
@@ -124,9 +129,8 @@ test('priority automation advances into a real choice and remains visible in the
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
-  await page.getByText('History and settings', { exact: true }).click();
-  await page.getByText('Decision log', { exact: true }).click();
-  const automated = page.getByTestId('log-entry').filter({ hasText: 'Auto: Pass priority' });
+  // Automated passes are their own actor in the table's move list.
+  const automated = page.locator('[data-testid=log-entry][data-actor=auto]').filter({ hasText: 'Pass priority' });
   for (let input = 0; input < 6 && await automated.count() === 0; input++) {
     const revision = Number(await page.locator('main').getAttribute('data-frame-revision'));
     const labels = await page.getByTestId('action-option').allTextContents();
