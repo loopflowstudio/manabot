@@ -167,10 +167,7 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
     if (position.kind === 'consequences' && position.label === null) return;
     const auto = position.kind === 'consequences' && position.automatic;
     let text = (position.label ?? 'Choice').replace(/^Auto: /, '');
-    if (seatName) text = text.replace(/\bSeat ([12])\b/g, (_, seat: string) => {
-      const name = seatName(seat === '1' ? 0 : 1);
-      return name === 'You' ? 'you' : name;
-    });
+    if (seatName) text = nameSeats(text, seatName);
     entries.push({
       id: position.key,
       actor: auto ? 'auto' : position.actor === null ? 'villain' : position.actor === heroSeat ? 'hero' : 'villain',
@@ -179,6 +176,14 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
     });
   });
   return entries;
+}
+
+/** Names the players a narration calls "Seat 1" and "Seat 2": "you", or the seat's name. */
+export function nameSeats(text: string, seatName: (seat: 0 | 1) => string): string {
+  return text.replace(/\bSeat ([12])\b/g, (_, seat: string) => {
+    const name = seatName(seat === '1' ? 0 : 1);
+    return name === 'You' ? 'you' : name;
+  });
 }
 
 /** The move a position belongs to: the latest move at or before it. */

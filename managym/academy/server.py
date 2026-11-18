@@ -115,7 +115,7 @@ from .play_session import (
     setup_draft,
 )
 from .presentation import PresentationProjector
-from .recording import Recording, read_cache
+from .recording import Recording, narrate_move, person_board, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -1695,15 +1695,12 @@ class GameSession:
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(next_obs, event_subjects=event_subjects)
-        if auto or actor == "villain":
-            # Priority-stop automation stays identifiable in the hero's log; the
-            # turn is the one the action was taken in, before the step.
+        # The turn a logged move was made in is the one before the step.
+        turn = int(before_observation.turn.turn_number)
+        if auto:
+            # Priority-stop automation stays identifiable in the hero's log.
             self._pending_action_log.append(
-                {
-                    "actor": "auto" if auto else "villain",
-                    "turn": int(before_observation.turn.turn_number),
-                    "text": action_description,
-                }
+                {"actor": "auto", "turn": turn, "text": action_description}
             )
         self.trace.events.append(
             TraceEvent(
@@ -1727,6 +1724,24 @@ class GameSession:
             actor=actor_index,
             caused_by=caused_by,
         )
+        if actor == "villain" and not auto:
+            # The opponent's move as the person saw it, with Review's narration:
+            # never its private action.
+            after = decision_surface_view(
+                self.env,
+                self.human_seat
+                if next_obs.game_over
+                else int(next_obs.agent.player_index),
+            )
+            text = narrate_move(
+                person_board(observation, self.human_seat),
+                person_board(after, self.human_seat),
+                [event["kind"] for event in presentation_events],
+            )
+            if text is not None:
+                self._pending_action_log.append(
+                    {"actor": "villain", "turn": turn, "text": text}
+                )
         if self._capture_authority_evidence:
             assert state_before is not None and state_after is not None
             self.authority_transitions.append(

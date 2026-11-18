@@ -77,3 +77,51 @@ def test_opponent_moves_are_narrated_from_the_person_s_view(tmp_path: Path) -> N
         or "Lightning Bolt" in names["stacks"].values()
         for names in read["history_labels"]
     )
+
+
+def test_live_log_narrates_the_opponent_as_review_does(tmp_path: Path) -> None:
+    game = server.GameSession(tmp_path)
+    game.new_game(CONFIG)
+    live: list[str] = []
+    for index in range(120):
+        frame = game.current_message()["frame"]
+        if frame["status"] == "game_over":
+            break
+        offer = next(
+            (
+                o
+                for o in frame["offers"]
+                if o["action_type"] == "PRIORITY_PASS_PRIORITY"
+            ),
+            frame["offers"][0],
+        )
+        result = game.hero_command(
+            {
+                "command_id": f"pass.{index}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": offer["id"],
+                "answers": [],
+            }
+        )
+        assert result["status"] == "accepted"
+        live += [
+            line["text"]
+            for line in result["update"].get("log", [])
+            if line["actor"] == "villain"
+        ]
+    payload = game.attempt_store.load(game.match_id)
+    assert payload is not None
+    recording = Recording(game.match_id, payload)
+    review = [
+        label
+        for position in recording.positions
+        if position.kind == "consequences"
+        and payload["events"][position.event_index]["actor"] == "villain"
+        and (label := recording.metadata(position)["label"]) is not None
+    ]
+    # Live play prints the same moves Review does, never the private action.
+    assert live == review
+    assert any(text.startswith("Cast Lightning Bolt, targeting Seat ") for text in live)
+    assert not any(text.startswith(("Target ", "Pay ")) for text in live)

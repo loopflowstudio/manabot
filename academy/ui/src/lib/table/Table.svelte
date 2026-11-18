@@ -26,7 +26,7 @@
   import { prefersReducedMotion, Travel } from './motion';
   import { BEAT_MS, beatsFor, type Beat } from './beats';
   import { moveList, type MoveTurn } from './moves';
-  import { EVIDENCE, type OfferEvidence } from './replay';
+  import { EVIDENCE, nameSeats, type OfferEvidence } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { primaryLabel, promptLine } from './prompt';
   import { nameBook, recentView, tableLines, turnOwners, visibleNames } from './recent';
@@ -182,7 +182,10 @@
     return () => clearTimeout(timer);
   });
   function skipBeats(): void { beats = []; beatAt = 0; }
-  const moves = $derived(movesGiven ?? moveList(log, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
+  // The opponent's moves are narrated as Review narrates them, players named by seat.
+  const seatName = (seat: 0 | 1): string => (seat === projection.agent.player_index ? 'You' : said);
+  const named = $derived(log.map(entry => (entry.actor === 'villain' ? { ...entry, text: nameSeats(entry.text, seatName) } : entry)));
+  const moves = $derived(movesGiven ?? moveList(named, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion
 

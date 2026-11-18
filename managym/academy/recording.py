@@ -22,7 +22,8 @@ from managym.academy.replay_index import (
     load_canonical_replay,
     project_replay,
 )
-from managym.academy.trace import load_trace, prepare_trace_payload
+from managym.academy.trace import load_trace, normalize_observation_to_hero
+from managym.experience_projection import redact_observation
 from managym.experience import PresentationEvent
 
 
@@ -132,17 +133,9 @@ class Recording:
 
     def _board(self, position: Position) -> dict[str, Any]:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
-        # Reuse the established redaction boundary on only the selected board.
         index = position.event_index + (position.kind == "consequences")
         if index not in self._boards:
-            self._boards[index] = prepare_trace_payload(
-                {
-                    "config": self.payload["config"],
-                    "events": [],
-                    "final_observation": self._raw_board(position),
-                    "end_reason": self.payload.get("end_reason"),
-                }
-            )["final_observation"]
+            self._boards[index] = person_board(self._raw_board(position), self.human_seat)
         return self._boards[index]
 
     def _cursor(self, position: Position, viewer: int) -> int:
@@ -223,98 +216,16 @@ class Recording:
     # ———————————————— Narrating another seat's move
 
     def _narration(self, index: int) -> str | None:
-        """Another seat's move at event `index`, as the recorded person saw it.
-
-        Reads only the recorded person's presentation track for this transition
-        and the redacted boards on either side of it (the established viewer
-        boundary), so a hidden choice is never named. What was visible becomes
-        the move ("Cast Yip Yip!, targeting Earth Kingdom Jailer", "Play
-        Forest", "Attack with Ally, Otter-Penguin"); a priority pass is "Pass
-        priority". A step that completes later (announcing a spell before it
-        reaches the stack, one attacker of several) is None: its move is named
-        where it becomes visible.
-        """
-        if index in self._narrations:
-            return self._narrations[index]
-        before = self._board(Position("", "choice", index))
-        after = self._board(Position("", "consequences", index))
-        revision = self.revisions.get(index)
-        events = self._transition_events(revision) if revision is not None else []
-        context = before.get("decision_context") or {}
-        actor = context.get("actor")
-        # Names of what either redacted board shows, by object; a spell on the
-        # stack is named by its card.
-        names = {
-            card["id"]: card["name"]
-            for board in (before, after)
-            for side_name in ("agent", "opponent")
-            for zone in ("battlefield", "graveyard", "exile", "stack", "hand")
-            for card in board.get(side_name, {}).get(zone, [])
-            if isinstance(card, dict) and card.get("name") and "id" in card
-        }
-        side = _side_of(after, actor)
-        arrived = _new_cards(before, after, side)
-
-        def name(subject: dict[str, Any]) -> str | None:
-            if subject.get("kind") == "player":
-                return f"Seat {int(subject['id']) + 1}"
-            if subject.get("kind") == "stack":
-                return names.get(int(subject["id"]))
-            identity = subject.get("id", subject)
-            return names.get(int(identity["entity"]))
-
-        phrases: list[str] = []
-        spells: list[str] = []
-        for event in events:
-            kind = event.kind.model_dump(mode="json")
-            if kind["kind"] == "cast" and kind["controller"] == actor:
-                spell = (
-                    name({"kind": "stack", "id": kind["stack"]})
-                    or name({"kind": "object", "id": kind["object"]})
-                    or next((card for card in arrived["spells"] if card not in spells), None)
-                )
-                targets = [
-                    target
-                    for other in events
-                    if (other_kind := other.kind.model_dump(mode="json"))["kind"] == "targeted"
-                    and other_kind["source"] in (
-                        {"kind": "stack", "id": kind["stack"]},
-                        {"kind": "object", "id": kind["object"]},
-                    )
-                    and (target := name(other_kind["target"]))
-                ]
-                spells.append(spell or "a spell")
-                phrases.append(
-                    f"Cast {spell or 'a spell'}"
-                    + (f", targeting {_listed(targets)}" if targets else "")
-                )
-            elif kind["kind"] == "attack_group":
-                attackers = [n for a in kind["attackers"] if (n := name({"id": a}))]
-                phrases.append(f"Attack with {_listed(attackers) or 'creatures'}")
-            elif kind["kind"] == "blocked":
-                blockers = [n for b in kind["blockers"] if (n := name({"id": b}))]
-                attacker = name({"id": kind["attacker"]}) or "an attacker"
-                phrases.append(f"Block {attacker} with {_listed(blockers) or 'creatures'}")
-        if not spells:
-            phrases[:0] = [f"Play {land}" for land in arrived["lands"]]
-            if arrived["discarded"]:
-                phrases.append(f"Discard {_listed(arrived['discarded'])}")
-        if phrases:
-            text: str | None = "; ".join(phrases)
-        elif context.get("stage") != "priority":
-            text = None
-        else:
-            # Nothing visible at priority is a pass, unless the same seat goes
-            # straight on to announce what it began (targets, costs, modes).
-            following = after.get("decision_context") or {}
-            text = (
-                None
-                if following.get("actor") == actor
-                and following.get("stage") in ANNOUNCING_STAGES
-                else "Pass priority"
+        """Another seat's move at event `index`, as the recorded person saw it (`narrate_move`)."""
+        if index not in self._narrations:
+            revision = self.revisions.get(index)
+            events = self._transition_events(revision) if revision is not None else []
+            self._narrations[index] = narrate_move(
+                self._board(Position("", "choice", index)),
+                self._board(Position("", "consequences", index)),
+                [event.kind.model_dump(mode="json") for event in events],
             )
-        self._narrations[index] = text
-        return text
+        return self._narrations[index]
 
     def _transition_events(self, revision: int) -> list[PresentationEvent]:
         if self._events_by_revision is None:
@@ -514,6 +425,103 @@ class ReadCache:
 
 
 read_cache = ReadCache()
+
+
+# ———————————————— Narrating another seat's move
+
+
+def person_board(observation: dict[str, Any], human_seat: int) -> dict[str, Any]:
+    """A retained board as the person saw it: hero-oriented and redacted (the
+    established viewer boundary, `prepare_trace_payload`)."""
+    board = deepcopy(observation)
+    normalize_observation_to_hero(board, human_seat)
+    redact_observation(board)
+    return board
+
+
+def narrate_move(
+    before: dict[str, Any], after: dict[str, Any], events: list[dict[str, Any]]
+) -> str | None:
+    """Another seat's move, as the person saw it: Review's move list and live
+    play's log both read this.
+
+    `before` and `after` are the person's boards on either side of the move
+    (`person_board`); `before` carries the mover's decision context. `events`
+    are the kinds of the person's presentation events for this transition. A
+    hidden choice is never named. What was visible becomes the move ("Cast Yip
+    Yip!, targeting Earth Kingdom Jailer", "Play Forest", "Attack with Ally,
+    Otter-Penguin"); a priority pass is "Pass priority". A step that completes
+    later (announcing a spell before it reaches the stack, one attacker of
+    several) is None: its move is named where it becomes visible.
+    """
+    context = before.get("decision_context") or {}
+    actor = context.get("actor")
+    # Names of what either board shows, by object; a spell on the stack is
+    # named by its card.
+    names = {
+        card["id"]: card["name"]
+        for board in (before, after)
+        for side_name in ("agent", "opponent")
+        for zone in ("battlefield", "graveyard", "exile", "stack", "hand")
+        for card in board.get(side_name, {}).get(zone, [])
+        if isinstance(card, dict) and card.get("name") and "id" in card
+    }
+    side = _side_of(after, actor)
+    arrived = _new_cards(before, after, side)
+
+    def name(subject: dict[str, Any]) -> str | None:
+        if subject.get("kind") == "player":
+            return f"Seat {int(subject['id']) + 1}"
+        if subject.get("kind") == "stack":
+            return names.get(int(subject["id"]))
+        identity = subject.get("id", subject)
+        return names.get(int(identity["entity"]))
+
+    phrases: list[str] = []
+    spells: list[str] = []
+    for kind in events:
+        if kind["kind"] == "cast" and kind["controller"] == actor:
+            spell = (
+                name({"kind": "stack", "id": kind["stack"]})
+                or name({"kind": "object", "id": kind["object"]})
+                or next((card for card in arrived["spells"] if card not in spells), None)
+            )
+            targets = [
+                target
+                for other in events
+                if other["kind"] == "targeted"
+                and other["source"] in (
+                    {"kind": "stack", "id": kind["stack"]},
+                    {"kind": "object", "id": kind["object"]},
+                )
+                and (target := name(other["target"]))
+            ]
+            spells.append(spell or "a spell")
+            phrases.append(
+                f"Cast {spell or 'a spell'}"
+                + (f", targeting {_listed(targets)}" if targets else "")
+            )
+        elif kind["kind"] == "attack_group":
+            attackers = [n for a in kind["attackers"] if (n := name({"id": a}))]
+            phrases.append(f"Attack with {_listed(attackers) or 'creatures'}")
+        elif kind["kind"] == "blocked":
+            blockers = [n for b in kind["blockers"] if (n := name({"id": b}))]
+            attacker = name({"id": kind["attacker"]}) or "an attacker"
+            phrases.append(f"Block {attacker} with {_listed(blockers) or 'creatures'}")
+    if not spells:
+        phrases[:0] = [f"Play {land}" for land in arrived["lands"]]
+        if arrived["discarded"]:
+            phrases.append(f"Discard {_listed(arrived['discarded'])}")
+    if phrases:
+        return "; ".join(phrases)
+    if context.get("stage") != "priority":
+        return None
+    # Nothing visible at priority is a pass, unless the same seat goes
+    # straight on to announce what it began (targets, costs, modes).
+    following = after.get("decision_context") or {}
+    if following.get("actor") == actor and following.get("stage") in ANNOUNCING_STAGES:
+        return None
+    return "Pass priority"
 
 
 def _side_of(observation: dict[str, Any], seat: object) -> str | None:
