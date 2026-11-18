@@ -60,211 +60,202 @@
 <body>
 <main>
 <h1>What a trained player is tied to</h1>
-<p class="lede">Concept review of MTG-353 as built (branch at <code>2ec5f2334c</code>, against base
+<p class="lede">Second concept review of MTG-353 as built (branch at <code>8651676a7a</code>, against base
 <code>44f76fe987</code>; PR #558). Area taken: everything between a finished training run and using
-it again on a later revision: loading it, knowing it still computes what it computed, and knowing a
-recorded score still means something. That is the whole change, not its last pass, because the
-loader, the pinned pilots and <code>recheck</code> share one idea of what a player "knows".
-The review before the build is in this file's git history (<code>ac3467a86c</code>).</p>
+it again on a later revision: reading the file, deciding it can run here, knowing it still computes
+what it computed, and knowing a recorded score still means something. The whole change, not the last
+pass. The first built review is in this file's history at <code>daf59011f7</code>; it asked for the
+load report to become a record, and that is now built.</p>
 <div class="legend">
   <span><span class="tag yes">yes</span> concepts line up</span>
   <span><span class="tag no">no</span> they do not</span>
   <span><span class="tag new">proposed</span> not in the code today</span>
 </div>
 
+<h2>What the last pass set out to do, and what happened</h2>
+<table>
+  <tr><th>Intended</th><th>Observed</th></tr>
+  <tr><td>The load report is a value on the bound checkpoint</td>
+  <td><code>read_policy("final.pt").report</code> is a <code>BindingReport</code>: 360 stored
+  programs, 136 changed keys, 396 new token rows, 103 new names, 1 renamed, 45 retired (QA round 2,
+  unmodified u1952).</td></tr>
+  <tr><td><code>recheck --out</code> keeps it</td>
+  <td><code>binding.json</code> written before the first game, so it survives a run that stops
+  early. One <code>binding</code> line of counts above the score.</td></tr>
+  <tr><td>The log line drops the card list</td><td>Counts only.</td></tr>
+  <tr><td>Saving a carried player is tested</td>
+  <td><code>tests/model/test_checkpoint_binding.py</code> writes a bound container, reloads it and
+  compares action probabilities exactly.</td></tr>
+  <tr><td>(not intended) compress</td><td>Academy's metadata-only check is gone; the listing runs
+  the same admission as loading, so the two cannot disagree. Seven files listed correctly, including
+  an unexplained key.</td></tr>
+  <tr><td>(not intended) QA</td><td>Two CI regressions from the pass found and fixed: a
+  <code>Path</code> taken for an admitted checkpoint, and a container saved under a <code>.pt</code>
+  name. Pushed; Linux CI was still running when this page was written, so it is not claimed here.</td></tr>
+</table>
+
 <h2>One interaction, walked</h2>
-<p>You have frontier Small u1952 (input v9, written at <code>ab2b757d9</code>, 0.72 against the
-heuristic). Main has 100 more names and several hundred more card tokens.</p>
 <div class="grid">
   <div class="box">
-    <h3>Normal path, as built</h3>
-<pre>load_checkpoint("final.pt")      # loads, unmodified file
-manabot recheck experiments/references/
-    tla-frontier-small-u1952.json
+    <h3>Normal path</h3>
+<pre>manabot recheck experiments/references/
+    tla-frontier-small-u1952.json --out run/
   recorded  0.72 (0.61–0.81), 64 games, at ab2b757d9
+  binding   360 stored programs, 136 changed; keys
+            renamed 1, retired 45; 396 new token
+            rows, 103 new name rows
   opponent  heuristic changed since the record
   measured  0.68 (0.59–0.76), 128 games
-  inside the recorded interval</pre>
-    <p class="small">Measured on the mini: 160 games finished and replayed, including 32 on decks
-    with cards the player never saw.</p>
+  inside the recorded interval
+run/binding.json   run/measured.json</pre>
+    <p class="small">The score now sits beside what was loaded to produce it.</p>
   </div>
   <div class="box">
-    <h3>Failure and recovery, as built</h3>
-<pre>ValueError: unexplained record_name key 5779523629;
-classify it in managym/src/cards/token_renames.rs
+    <h3>Failure and recovery</h3>
+<pre>unexplained record_token key 12884914233; classify
+it in managym/src/cards/token_renames.rs; it
+records no source revision
 
-scripts/pinned_pilot.py names --at ab2b757d9
-  record_name 5779523629 execution/6/land choices remaining</pre>
-    <p class="small">One reviewed line in the rename table recovers it. The same refusal fails CI
-    through the committed v9 pilot, and shows on the bot's row in Academy. This path holds.</p>
+scripts/pinned_pilot.py names --at ab2b757d9</pre>
+    <p class="small">The same sentence comes from <code>load_checkpoint</code>, from CI through the
+    committed v9 pilot, and on the bot's disabled row in Academy. One reviewed line in the rename
+    table recovers it. This path holds.</p>
   </div>
 </div>
-<p>Where the walk goes soft: "what did the loader do to this player here?" The answer (360 stored
-programs, 136 written differently on main, 396 new token rows, 103 new names, 1 rename, 45 retired)
-exists for one moment as a log line and is then gone.</p>
 
 <h2>Do the product's concepts and the code's concepts line up?</h2>
 <table>
   <tr><th>What you know about</th><th>What the code has</th><th></th><th>What is wrong, if anything</th></tr>
-  <tr>
-    <td><b>A trained player</b>: one file</td>
-    <td><code>PolicyCheckpoint</code>; <code>read_policy</code> reads <code>.pt</code> and
-    containers through one <code>admit_checkpoint</code></td>
+  <tr><td><b>Can it run here?</b></td>
+    <td><code>model_interface</code>, reached only through <code>admit_checkpoint</code>; one
+    <code>refusal</code> helper turns it into Academy's sentence</td>
     <td><span class="tag yes">yes</span></td>
-    <td>The second loader and the second field table are gone. Torch, MLX and Academy share the
-    admission.</td>
-  </tr>
-  <tr>
-    <td><b>Can it run here?</b></td>
-    <td><code>model_interface</code> in <code>manabot/model/interface.py</code>; refusals are
-    sentences through one <code>refusal</code> helper</td>
+    <td>One answer for loading, listing and recheck. Remaining wart: it returns <code>None</code>
+    for a fixed-match checkpoint.</td></tr>
+  <tr><td><b>What the loader did to it here</b></td>
+    <td><code>BindingReport</code> on <code>PolicyCheckpoint.report</code>, carried through
+    <code>CheckpointAdmission</code> and <code>LocalComparison</code> to
+    <code>binding.json</code></td>
     <td><span class="tag yes">yes</span></td>
-    <td>One answer, by name: columns, token and record names, action kinds. Small wart:
-    it returns <code>None</code> for a fixed-match checkpoint, so one function answers two
-    questions.</td>
-  </tr>
-  <tr>
-    <td><b>What the loader did to it here</b> (the load report)</td>
-    <td><code>BindingReport</code>, built by <code>bind_catalog</code>, formatted into one INFO
-    log line in <code>admit_checkpoint</code> and dropped. <code>recheck</code> shows it by
-    configuring logging inside a child process (<code>show_binding</code>)</td>
+    <td>Was the biggest mismatch last pass. A record now, with one owner.</td></tr>
+  <tr><td><b>A card, as the player knows it</b></td>
+    <td>The stored token program, references rebound by definition key</td>
+    <td><span class="tag yes">yes</span></td><td>360 vectors match the writer's.</td></tr>
+  <tr><td><b>A renamed Rust name</b></td>
+    <td><code>managym/src/cards/token_renames.rs</code></td>
+    <td><span class="tag yes">yes</span></td><td></td></tr>
+  <tr><td><b>Where an old file's row names come from</b></td>
+    <td><code>recorded_writer</code>: embedded, the running catalog, or
+    <code>writer_catalogs/&lt;world_digest&gt;.json</code></td>
+    <td><span class="tag yes">yes</span></td><td>Named as its own step since compress.</td></tr>
+  <tr><td><b>Does it still compute what it computed?</b></td>
+    <td>Pinned pilots and <code>record --reason</code></td>
+    <td><span class="tag yes">yes</span></td><td></td></tr>
+  <tr><td><b>Does a recorded score still hold?</b></td>
+    <td><code>StrengthReference</code>, <code>manabot recheck</code></td>
+    <td><span class="tag yes">yes</span></td><td></td></tr>
+  <tr><td><b>The world</b></td>
+    <td><code>WORLD_VERSION</code>, recorded and never a gate for deck-source players</td>
+    <td><span class="tag yes">yes</span></td><td></td></tr>
+  <tr><td><b>A player file, as written</b> and <b>that player, admitted here</b></td>
+    <td>One <code>PolicyCheckpoint</code> for both. Four readers:
+    <code>read_written</code> and <code>read_saved_container</code> return the first;
+    <code>read_policy</code> and <code>read_container</code> return the second.
+    <code>load_policy(path: str | Path | PolicyCheckpoint)</code> assembles whichever it is given.
+    <code>write_container</code> decides "carried" by <code>column_widths is not None</code></td>
     <td><span class="tag no">no</span></td>
-    <td><b>The biggest mismatch.</b> See below.</td>
-  </tr>
-  <tr>
-    <td><b>A card, as the player knows it</b></td>
-    <td>The token program stored in the checkpoint, references rebound by definition key; cards
-    added since read main's program</td>
-    <td><span class="tag yes">yes</span></td>
-    <td>Was the biggest mismatch before the build. All 360 vectors match the writer's.</td>
-  </tr>
-  <tr>
-    <td><b>A renamed Rust name</b></td>
-    <td><code>managym/src/cards/token_renames.rs</code>; unexplained keys refuse</td>
-    <td><span class="tag yes">yes</span></td>
-    <td>One list, beside the serializer that hashes the names.</td>
-  </tr>
-  <tr>
-    <td><b>Where an old file's row names come from</b></td>
-    <td><code>writer_catalog</code>: embedded in new files, the running catalog when digests
-    match, or <code>writer_catalogs/&lt;world_digest&gt;.json</code></td>
-    <td><span class="tag yes">yes</span></td>
-    <td>One idea with three sources, checked against the file's own naming digest.</td>
-  </tr>
-  <tr>
-    <td><b>Does it still compute what it computed?</b></td>
-    <td><code>tests/fixtures/pinned_pilot/</code>, <code>test_pinned_pilot.py</code>,
-    <code>pinned_pilot.py record --reason</code></td>
-    <td><span class="tag yes">yes</span></td>
-    <td>A break is a reason in the recording's header; git history is the list.</td>
-  </tr>
-  <tr>
-    <td><b>Does a recorded score still hold?</b></td>
-    <td><code>StrengthReference</code>, <code>manabot recheck</code>, exit status by interval</td>
-    <td><span class="tag yes">yes</span></td>
-    <td>The opponent-changed warning is honest about what the number cannot attribute.</td>
-  </tr>
-  <tr>
-    <td><b>The world</b>: the span where recorded scores compare</td>
-    <td><code>WORLD_VERSION</code>; recorded in <code>world_binding</code>, no longer a gate for
-    deck-source checkpoints</td>
-    <td><span class="tag yes">yes</span></td>
-    <td>For the players self-play publishes. See the next row.</td>
-  </tr>
-  <tr>
-    <td><b>A fixed-match player</b> (trained on authored setups)</td>
-    <td><code>validate_checkpoint_world</code>: whole-binding equality, "trained in w4, engine is
-    w17"</td>
+    <td><b>The biggest mismatch now.</b> See below.</td></tr>
+  <tr><td><b>A fixed-match player</b></td>
+    <td><code>validate_checkpoint_world</code>: whole-binding equality</td>
     <td><span class="tag no">no</span></td>
-    <td>The world number still locks these, against "it never decides whether a checkpoint
-    loads". Left on purpose (choice 13) and documented as the exception. Larger than this work:
-    it would take binding the setups' card content by key the same way.</td>
-  </tr>
-  <tr>
-    <td><b>A player as written</b> and <b>the same player carried to this revision</b></td>
-    <td>One <code>PolicyCheckpoint</code> for both, told apart by
-    <code>column_widths is not None</code>; <code>write_container</code> on the second rewrites
-    <code>writer_catalog</code>, <code>input_columns</code> and <code>source</code> to this
-    revision</td>
+    <td>Still stops loading when cards are added. Left on purpose (choice 13), documented as the
+    exception. Larger than this work.</td></tr>
+  <tr><td><b>Why a bot is disabled in Academy</b></td>
+    <td>The loader's sentence. <code>docs/academy.md</code>'s troubleshooting row quotes examples
+    written before the build (<code>reads column agent_player.life, absent here</code>,
+    <code>learned token Variant 0x51c2e9a4, not in the rename table</code>)</td>
     <td><span class="tag no">no</span></td>
-    <td>Saving a carried player is an action with no name and no test: nothing in the tree calls
-    that branch, and the new file's <code>source</code> no longer says which run trained it.
-    Naming the action and its lineage is MTG-386's grow. For this change: one round-trip test so
-    the branch cannot silently write a file that binds wrongly.</td>
-  </tr>
+    <td>The doc shows sentences the product does not print. Two example strings to replace with
+    the real ones; work for gate, no loop.</td></tr>
 </table>
 
-<h2>The biggest mismatch: the load report is a sentence, not a record</h2>
+<h2>The biggest mismatch: two things a person tells apart, one type</h2>
+<p>A person knows two things: the file a run wrote, and that player as it runs on this revision
+(columns narrowed, rows moved, a report of what moved). <code>convert</code> needs the first and
+must not write the second; play needs the second and must never get the first. The code tells them
+apart by which function made the value.</p>
 <div class="grid">
   <div class="box">
-    <h3>Before (as built)</h3>
-<pre>INFO manabot.policy.checkpoint: Policy input v9 (it
-records no source revision). Player columns 73/74.
-Stored programs 360, changed 136: tla.aang_…;
-tla.…; (134 more) … Token keys renamed 1,
-retired 45, unexplained 0. New embedding rows
-396 tokens, 103 names.</pre>
-    <p class="small">Visible only if the caller raised the log level. <code>recheck</code> does
-    that inside its child process, so 136 card keys fill the screen above the score.
-    <code>measured.json</code> keeps the score and not what was loaded. The experiment report's
-    "136 changed, 396 rows initialized" was copied from a terminal.</p>
+    <h3>Today (as built)</h3>
+<pre>read_written(path)        -> PolicyCheckpoint  # as written
+read_saved_container(path)-> PolicyCheckpoint  # as written
+read_policy(path)         -> PolicyCheckpoint  # admitted
+read_container(path)      -> PolicyCheckpoint  # admitted
+backend.load_policy(path | PolicyCheckpoint)
+write_container(p, c)   # rewrites writer, columns,
+                        # source if c.column_widths
+                        # is not None</pre>
+    <p class="small">Every caller in the tree is right: <code>convert</code> admits a copy and
+    writes the original; <code>register_checkpoint</code> passes the admitted value. Nothing but
+    care stops <code>load_policy(read_written(p))</code>, which would build a model with no
+    interface check and unmoved rows. The slip QA caught (a <code>Path</code> taken for an admitted
+    checkpoint) is the same union.</p>
   </div>
   <div class="box proposed">
-    <h3>After <span class="tag new">proposed</span></h3>
-<pre>checkpoint = read_policy("final.pt")
-checkpoint.report        # BindingReport, or None
-  .stored_programs  360
-  .changed_programs ("tla.aang_…", …)   # 136
-  .new_tokens 396  .new_names 103
-  .renamed_keys 1  .retired_keys 45
-
-manabot recheck … --out run/
-  binding   360 stored programs, 136 changed;
-            396 new token rows, 103 new names
-  run/binding.json      # the whole report</pre>
-    <p class="small">The log line keeps the counts and drops the card list.
-    <code>load_checkpoint</code>'s return type does not change.</p>
+    <h3>The simpler model <span class="tag new">proposed, for MTG-386</span></h3>
+<pre>read(path)   -> PolicyCheckpoint   # the file
+admit(file)  -> Admitted           # .checkpoint
+                                   # .widths .report
+backend.load_policy(path | Admitted)
+write_container(p, file)           # only a file
+grow(admitted) -> PolicyCheckpoint # new writer,
+                                   # lineage to the
+                                   # run that trained</pre>
+    <p class="small"><code>column_widths</code> and <code>report</code> leave
+    <code>PolicyCheckpoint</code>. Saving a carried player becomes the named action MTG-386
+    already plans, and the implicit rewrite in <code>write_container</code> goes.</p>
   </div>
 </div>
-<p>Why it matters beyond tidiness: the list of trained cards whose program changed is the input
-MTG-386 needs to say what a warm start alters, and it is the evidence that ties a rechecked score
-to what was actually loaded. A record makes both readable later; a log line makes neither.</p>
+<p><b>Choice made for review:</b> not built in this change. It touches both backends'
+<code>assemble</code>, <code>tables()</code>/<code>dimensions()</code>, the protocol and the
+Etude-fingerprinted evaluation callers, to prevent a mistake no caller makes, and its last piece
+(<code>grow</code> with lineage) is MTG-386's first. Passed over: a guard that refuses an unadmitted
+value (adds a precondition without removing the union), and putting the report on the loaded
+module so <code>load_policy</code> takes only a path (moves a record onto a neural module).</p>
 
 <h2>Tested on three paths</h2>
 <table>
-  <tr><th>Path</th><th>What must survive</th><th>Does the proposal hold?</th></tr>
-  <tr><td>Normal: u1952 loads and is rechecked</td><td>Unmodified bytes, same probabilities, same
-  exit status</td><td>Yes. The report is carried beside the bound arrays; nothing about binding
-  changes.</td></tr>
-  <tr><td>Failure: unexplained key</td><td>Refusal names the key and the file</td><td>Yes. A
-  refusal raises before any report exists; <code>report</code> is never half-filled.</td></tr>
-  <tr><td>Recovery: a checkpoint written on this revision</td><td>No binding work, no noise</td>
-  <td>Yes. <code>report</code> is <code>None</code> and recheck prints no binding line.</td></tr>
-  <tr><td>Counterexample: a carried player saved and loaded again</td><td>Same outputs</td>
-  <td>Unproven in the tree today (manual probe only). The round-trip test settles it.</td></tr>
+  <tr><th>Path</th><th>What must survive</th><th>As built</th></tr>
+  <tr><td>Normal: u1952 loads and is rechecked</td><td>Unmodified bytes; score beside what was
+  loaded</td><td>Holds (mini run for the score, QA round 2 for <code>binding.json</code>).</td></tr>
+  <tr><td>Failure: unexplained key</td><td>One sentence everywhere, naming the key and file</td>
+  <td>Holds in loader, CI pilot and Academy.</td></tr>
+  <tr><td>Recovery: a file written on this revision</td><td>No noise</td>
+  <td>Holds: zero-change report, no <code>binding</code> line.</td></tr>
+  <tr><td>Counterexample: carried, saved, reloaded</td><td>Same outputs</td>
+  <td>Holds, tested. Its <code>source</code> then names this revision and not the training run:
+  the lineage gap MTG-386 closes.</td></tr>
+  <tr><td>Counterexample: an as-written value handed to <code>load_policy</code></td>
+  <td>Refused or admitted</td><td>Neither; assembled as is. No caller does it.</td></tr>
 </table>
 
 <h2>Outcome</h2>
-<p>The plan changed: one narrow slice 5 was added. The load report becomes a value on the bound
-checkpoint, <code>recheck</code> writes it beside its measurement instead of configuring logging
-in a child, and a round-trip test covers saving a carried player. Everything else in the built
-change lines up and is left alone. Two items are larger than this work and stay on this page:
-fixed-match players, and naming the "carry forward and save" action (MTG-386).</p>
-<p><b>Choice made for review:</b> Academy does not show the report on a loaded bot's row, only
-refusals. The plan's choice 14 said it would be summarised there; that is a new UI surface and was
-passed over here.</p>
+<p>Nothing to change in the build. The last pass did what it set out to do, with evidence. The plan
+gains this review's record and one small doc item for gate (the Academy troubleshooting examples).
+Three things are larger than this work and stay on this page: the written/admitted split with
+<code>grow</code> (MTG-386), fixed-match players, and the report on a loaded bot's row in Academy.</p>
 
 <h2>Questions</h2>
 <ol class="q">
+  <li>The written/admitted split.
+    <ol><li>Carry it into MTG-386 with <code>grow</code> (chosen).</li>
+    <li>Build the two types in this PR before review.</li></ol></li>
   <li>The load report in Academy.
-    <ol><li>Leave it out: refusals only (as built).</li>
+    <ol><li>Refusals only (as built).</li>
     <li>Show the counts on a loaded bot's row ("136 of 360 cards read as trained").</li></ol></li>
   <li>Fixed-match (setup-bound) players still stop loading when cards are added.
     <ol><li>Leave as the documented exception.</li>
     <li>File a Task to bind them by key as well.</li></ol></li>
-  <li>Saving a player after it was carried to a later revision.
-    <ol><li>Keep the implicit rewrite, now tested, until MTG-386 names the action.</li>
-    <li>Refuse to write a carried player until MTG-386 adds lineage.</li></ol></li>
 </ol>
 </main>
 </body>

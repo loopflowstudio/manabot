@@ -112,3 +112,11 @@ say so if they should carry a note.
 28. `checkpoint_request` stays a wrapper over `local_comparison` with the same
     keywords. Returning the report from it would change
     `experiments/etude_execution.py`, whose source Etude fingerprints.
+
+## Concept review, second built pass, 2026-11-18 (nobody present; reversible)
+
+29. The written/admitted split of `PolicyCheckpoint` (one type, four readers,
+    `load_policy` accepting either) is left for MTG-386 with `grow`. Passed
+    over: two types in this PR.
+30. `docs/academy.md` quotes pre-build refusal examples; left for gate to
+    replace with the loader's real sentences.

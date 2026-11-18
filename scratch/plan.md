@@ -390,6 +390,30 @@ requirement, the legacy encoder.
    Both targeted test files passed locally (9 tests).
    The next step is human review of PR #558.
 
+## Concept review of the built change, second pass (2026-11-18)
+
+Page: `scratch/concept-review.html`, branch at `8651676a7a`. Slice 5 did what
+it set out to do (report on the value, `binding.json`, counts-only log line,
+carried-player round trip), compress put Academy's listing on the loader's own
+admission, and QA fixed two regressions the pass introduced. Nothing in the
+build changes.
+
+- **For gate (docs only):** `docs/academy.md`'s "A checkpoint is listed but
+  disabled" row quotes refusal sentences written before the build (`reads
+  column agent_player.life, absent here`, `learned token Variant 0x51c2e9a4,
+  not in the rename table`). Replace them with sentences the loader prints
+  (`unexplained record_token key …; classify it in
+  managym/src/cards/token_renames.rs`, `incompatible agent_player columns …`).
+- **Chosen, for MTG-386:** a file as written and that player admitted here
+  share one `PolicyCheckpoint`, told apart by which of four readers made it
+  (`read_written`, `read_saved_container` against `read_policy`,
+  `read_container`); `load_policy` assembles either. Every caller is correct.
+  The split (`Admitted` holding the checkpoint, widths and report;
+  `write_container` taking only a file; `grow` writing a carried player with
+  lineage) belongs with MTG-386's grow. Passed over: building it here, a guard
+  that refuses an unadmitted value, the report on the loaded module.
+- Linux CI on `8651676a7a` was running at review time; gate reads it.
+
 ## Done when
 
 - `load_checkpoint` on main returns the best player from its original file,
