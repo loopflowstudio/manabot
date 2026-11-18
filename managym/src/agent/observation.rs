@@ -835,7 +835,6 @@ pub enum EventType {
     TurnStarted = 11,
     CardRevealed = 12,
     AbilityCountered = 13,
-    AbilityActivated = 14,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1855,15 +1854,6 @@ impl Observation {
                 ..
             } => vec![Self::card_event_data(
                 EventType::AbilityCountered,
-                *source_object,
-                *controller,
-            )],
-            GameEvent::AbilityActivated {
-                source_object,
-                controller,
-                ..
-            } => vec![Self::card_event_data(
-                EventType::AbilityActivated,
                 *source_object,
                 *controller,
             )],

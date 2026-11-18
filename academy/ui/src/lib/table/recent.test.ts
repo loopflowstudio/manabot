@@ -89,25 +89,6 @@ describe('lands and discards', () => {
   });
 });
 
-describe('activations', () => {
-  it("tells the opponent's activation by its source, with its target", () => {
-    const after = withBoard(bolt.recovery.frame, projection => {
-      projection.opponent.battlefield = [permanent(95, 'Water Tribe Rallier')];
-      projection.agent.battlefield = [permanent(41, 'Tiger-Seal')];
-    });
-    const base = bolt.recovery.presentation_tail[0];
-    const source = { entity: 95, incarnation: 1 };
-    const activated: PresentationEvent = { ...base, seq: 7, from_revision: 3, to_revision: 4,
-      kind: { kind: 'activated', object: source, controller: 1 } };
-    const targeted: PresentationEvent = { ...base, seq: 8, from_revision: 3, to_revision: 4,
-      kind: { kind: 'targeted', source: { kind: 'object', id: source }, target: { kind: 'object', id: { entity: 41, incarnation: 1 } } } };
-    const view = recentView(after, 3, [activated, targeted], () => ({ objects: {}, players: {}, stacks: {} }), names, nameBook([after], []));
-    expect(view.facts.map(fact => [fact.by, fact.kind, fact.text, fact.subjects])).toEqual([
-      ['opponent', 'activated', 'Search 64 activated Water Tribe Rallier, targeting Tiger-Seal', [95, 41]],
-    ]);
-  });
-});
-
 describe('tableLines', () => {
   it('draws a spell on the stack to its target, and drops the line once it leaves', () => {
     const onStack = withBoard(bolt.recovery.frame, projection => { projection.agent.stack = [card(4001, 'Lightning Bolt')]; });

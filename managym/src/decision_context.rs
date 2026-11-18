@@ -239,10 +239,6 @@ impl Game {
                         "{} was countered.",
                         self.state.source_base(*object).1.name
                     )),
-                    GameEvent::AbilityActivated { source_object, .. } => Some(format!(
-                        "An ability of {} was activated.",
-                        self.state.source_base(*source_object).1.name
-                    )),
                     GameEvent::AbilityCountered { source_object, .. } => Some(format!(
                         "An ability of {} was countered.",
                         self.state.source_base(*source_object).1.name

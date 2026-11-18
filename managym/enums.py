@@ -95,7 +95,6 @@ class EventTypeEnum(IntEnum):
     TURN_STARTED = 11
     CARD_REVEALED = 12
     ABILITY_COUNTERED = 13
-    ABILITY_ACTIVATED = 14
 
 
 class EventEntityKindEnum(IntEnum):

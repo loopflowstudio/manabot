@@ -743,12 +743,6 @@ class LandPlayedPresentation(ProtocolModel):
     player: UInt8
 
 
-class ActivatedPresentation(ProtocolModel):
-    kind: Literal["activated"]
-    object: ObjectRenderId
-    controller: UInt8
-
-
 class DiscardedPresentation(ProtocolModel):
     kind: Literal["discarded"]
     objects: list[ObjectRenderId]
@@ -766,8 +760,7 @@ PresentationKind: TypeAlias = Annotated[
     | BlockedPresentation
     | TurnStartedPresentation
     | LandPlayedPresentation
-    | DiscardedPresentation
-    | ActivatedPresentation,
+    | DiscardedPresentation,
     Field(discriminator="kind"),
 ]
 

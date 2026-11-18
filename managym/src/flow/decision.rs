@@ -1369,11 +1369,6 @@ impl Game {
                         {
                             ability.source_object = source;
                         }
-                        self.emit(GameEvent::AbilityActivated {
-                            source_object: ability.source_object,
-                            controller: ability.controller,
-                            ability: ability.id,
-                        });
                         self.emit_permanents_targeted(
                             &ability.targets,
                             Target::StackAbility(ability.id),

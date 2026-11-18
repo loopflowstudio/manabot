@@ -809,7 +809,6 @@ pub enum EventTypeEnum {
     TurnStarted = EventType::TurnStarted as i32,
     CardRevealed = EventType::CardRevealed as i32,
     AbilityCountered = EventType::AbilityCountered as i32,
-    AbilityActivated = EventType::AbilityActivated as i32,
 }
 
 #[cfg(feature = "python")]
@@ -843,8 +842,6 @@ impl EventTypeEnum {
     const CARD_REVEALED: Self = Self::CardRevealed;
     #[classattr]
     const ABILITY_COUNTERED: Self = Self::AbilityCountered;
-    #[classattr]
-    const ABILITY_ACTIVATED: Self = Self::AbilityActivated;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -2689,7 +2686,6 @@ impl From<EventData> for PyEventData {
                 x if x == EventType::PermanentsDied as i32 => EventTypeEnum::PermanentsDied,
                 x if x == EventType::CardRevealed as i32 => EventTypeEnum::CardRevealed,
                 x if x == EventType::AbilityCountered as i32 => EventTypeEnum::AbilityCountered,
-                x if x == EventType::AbilityActivated as i32 => EventTypeEnum::AbilityActivated,
                 _ => EventTypeEnum::TurnStarted,
             },
             source_kind: match value.source_kind {

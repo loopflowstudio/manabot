@@ -226,67 +226,17 @@ def test_your_own_unseen_moves_are_named_as_you_made_them() -> None:
         )
         == "Learn: take Accumulate Wisdom"
     )
-    # An activation is named by its event, with its targets, for either seat.
-    cadets = {"entity": 7, "incarnation": 1}
-    seen = {
-        "decision_context": {"actor": 1, "stage": "payment"},
-        "opponent": {
-            "player_index": 1,
-            "battlefield": [{"id": 7, "name": "Fire Nation Cadets"}],
-        },
-        "agent": {"player_index": 0, "battlefield": [{"id": 9, "name": "Ally"}]},
-    }
-    activation = [
-        {"kind": "activated", "object": cadets, "controller": 1},
-        {
-            "kind": "targeted",
-            "source": {"kind": "object", "id": cadets},
-            "target": {"kind": "object", "id": {"entity": 9, "incarnation": 1}},
-        },
-    ]
+    paid = board(
+        "payment",
+        announcing="activated_ability",
+        source={"label": "Fire Nation Cadets"},
+    )
     assert (
-        narrate_move(seen, board("priority"), activation)
-        == "Activate Fire Nation Cadets, targeting Ally"
+        narrate_move(paid, board("priority"), [], [own("payment", 0, "Pay the cost")])
+        == "Activate Fire Nation Cadets"
     )
     # Another seat's hidden choices stay unnamed.
     assert narrate_move(board("learn"), board("priority"), []) is None
-
-
-def test_the_opponent_s_activations_are_narrated_live_and_in_review(
-    tmp_path: Path,
-) -> None:
-    game = server.GameSession(tmp_path)
-    game.new_game(
-        {
-            "hero_deck": {"Island": 30},
-            "villain_deck": {"Mountain": 12, "Fire Nation Cadets": 12},
-            "villain_type": "random",
-            "seed": 0,
-            "auto_pass": False,
-        }
-    )
-    play_passing(game, 200)
-    activations = [
-        event["kind"]
-        for event in game.presentation_events
-        if event["kind"]["kind"] == "activated"
-    ]
-    projection = game.current_message()["frame"]["projection"]
-    assert activations and all(
-        kind["controller"] == projection["opponent"]["player_index"]
-        for kind in activations
-    )
-    payload = game.attempt_store.load(game.match_id)
-    assert payload is not None
-    recording = Recording(game.match_id, payload)
-    labels = [
-        recording.metadata(position)["label"]
-        for position in recording.positions
-        if position.kind == "consequences"
-        and payload["events"][position.event_index]["actor"] == "villain"
-    ]
-    # Each ability that reached the stack is one move, named by its source.
-    assert labels.count("Activate Fire Nation Cadets") == len(activations)
 
 
 def test_a_resolution_s_choices_are_one_line_for_its_source() -> None:

@@ -95,15 +95,6 @@ pub enum GameEvent {
         controller: PlayerId,
         by: Option<ObjectId>,
     },
-    /// An activated ability other than a mana ability was put on the stack
-    /// as `ability` (CR 602.2). Presentation only: the policy's event rows
-    /// stop at `AbilityTriggered`.
-    AbilityActivated {
-        #[serde(rename = "source_card")]
-        source_object: ObjectId,
-        controller: PlayerId,
-        ability: PublicId,
-    },
     /// A triggered ability was put on the stack as `ability`; `attacker` is
     /// the attacking creature whose attack triggered its own ability.
     AbilityTriggered {
@@ -211,7 +202,6 @@ pub enum EventKind {
     SpellResolved,
     SpellCountered,
     AbilityCountered,
-    AbilityActivated,
     AbilityTriggered,
     CardDrawn,
     PermanentTapped,
@@ -252,7 +242,6 @@ impl GameEvent {
             GameEvent::SpellResolved { .. } => EventKind::SpellResolved,
             GameEvent::SpellCountered { .. } => EventKind::SpellCountered,
             GameEvent::AbilityCountered { .. } => EventKind::AbilityCountered,
-            GameEvent::AbilityActivated { .. } => EventKind::AbilityActivated,
             GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
             GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
             GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,

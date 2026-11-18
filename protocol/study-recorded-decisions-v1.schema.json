@@ -2196,31 +2196,6 @@
           ]
         },
         {
-          "description": "An activated ability put on the stack (CR 602.2), named by its source\nas that object stands after the costs were paid. Mana abilities never\nuse the stack and have no event.",
-          "type": "object",
-          "properties": {
-            "controller": {
-              "type": "integer",
-              "format": "uint8",
-              "maximum": 255,
-              "minimum": 0
-            },
-            "kind": {
-              "type": "string",
-              "const": "activated"
-            },
-            "object": {
-              "$ref": "#/$defs/ObjectRenderId"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "object",
-            "controller"
-          ]
-        },
-        {
           "description": "A land played from hand (CR 305.1), named as the permanent it became.",
           "type": "object",
           "properties": {
