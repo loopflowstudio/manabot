@@ -59,13 +59,15 @@ def test_corpus_queries_use_completed_games_through_update(
         artifact.write_bytes(b"checkpoint at update one")
         run.checkpoint(artifact, updates=1)
     (checkpoint,) = read(tmp_path, "corpus", run.name).checkpoints
-    assert training_corpus(checkpoint, source=tmp_path).project("games").fetchall() == [
+    assert training_corpus(checkpoint, source=tmp_path).sql(
+        "select games from corpus"
+    ).fetchall() == [
         (1,)
     ]
 
     def corpus_sql(update: int, sql: str) -> list[tuple[object, ...]]:
         corpus = training_corpus(read(tmp_path, "corpus", run.name), update)
-        return corpus.query("corpus", sql).fetchall()
+        return corpus.sql(sql).fetchall()
 
     assert corpus_sql(
         1,
@@ -116,7 +118,7 @@ def test_logged_empty_outcomes_are_distinct_from_missing_evidence(
         run.log_table(OUTCOME_TABLE, [], updates=1)
         run.log({"loss": 1}, updates=2)
     data = read(tmp_path, "empty", run.name)
-    assert training_corpus(data, 1).fetchall() == []
+    assert training_corpus(data, 1).sql("from corpus").fetchall() == []
     with pytest.raises(UnknownCoverage, match="coverage unknown at update 2"):
         training_corpus(data, 2)
 
@@ -168,8 +170,7 @@ def test_card_statistics_count_terminal_games_at_the_outcome_update(
 
     (path / "games.jsonl").write_text(game(0, True) * 2 + game(1, False))
     corpus = training_corpus(data, 1, statistics=path)
-    assert corpus.query(
-        "corpus",
+    assert corpus.sql(
         """
         select c.games, s.games, s.wins, s.drawn_copies, s.selections, s.resolutions
         from corpus c join card_statistics s using (update_number)
@@ -201,21 +202,18 @@ def test_pretrained_corpus_follows_the_published_parent_checkpoint(
         self_play(settings.model_copy(update={"pretrained": parent}), run, updates=1)
     data = read(tmp_path / "track", "second", "child")
     corpus = training_corpus(data, 1)
-    assert corpus.query(
-        "corpus",
+    assert corpus.sql(
         """select run, update_number, sum(games) from corpus
         group by all order by run""",
     ).fetchall() == [("child", 1, 2), ("parent", 1, 2)]
-    assert corpus.query(
-        "corpus",
+    assert corpus.sql(
         """select run, decklists, learning_seats, parent_run,
         parent_update from settings order by run""",
     ).fetchall() == [
         ("child", "open", "both", "parent", 1),
         ("parent", "open", "both", None, None),
     ]
-    assert corpus.query(
-        "corpus",
+    assert corpus.sql(
         """select distinct board, card from deck_cards where copies > 0
         order by card""",
     ).fetchall() == [

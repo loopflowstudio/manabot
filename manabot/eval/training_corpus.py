@@ -215,12 +215,20 @@ def training_corpus(
     *,
     source: Storage | Path | str | None = None,
     statistics: Path | None = None,
-) -> duckdb.DuckDBPyRelation:
-    """Return one row per update and ordered matchup, inclusive of the cutoff.
+) -> duckdb.DuckDBPyConnection:
+    """Return the training corpus through the cutoff as a DuckDB database.
 
     Supply a run and update, or a published Etude checkpoint and its storage.
-    Card lists include both main deck and sideboard. Each completed game
-    contributes once, even in mirrors. Missing update evidence raises.
+    Query the result with `.sql(...)`:
+
+    - `corpus`: one row per update and ordered matchup, with both decks' card
+      lists (main deck and sideboard). Each completed game contributes once,
+      even in mirrors.
+    - `settings`: one row per run, including the parent checkpoint it followed.
+    - `deck_cards`: recorded deck entries by board, copies and definition key.
+    - `card_statistics`: per update, seat and card, when `statistics` is given.
+
+    Missing update evidence raises `UnknownCoverage`.
     """
     if isinstance(run, CheckpointRecord):
         if source is None or through is not None:
@@ -278,13 +286,15 @@ def training_corpus(
                 f"cannot resolve parent checkpoint {name} at {update} with SHA-256 {digest}"
             )
         data, through = matches[0], update
-    return db.sql("""
+    db.execute("""
+        create view corpus as
         select m.update_number, m.play, m.draw, m.games, p.cards as play_cards,
                d.cards as draw_cards, m.experiment, m.run
         from matchups m
         join decks p on (p.experiment, p.run, p.deck) = (m.experiment, m.run, m.play)
         join decks d on (d.experiment, d.run, d.deck) = (m.experiment, m.run, m.draw)
     """)
+    return db
 
 
 def add_run(

@@ -251,44 +251,42 @@ from manabot.eval.training_corpus import roster, training_corpus
 
 storage = Path("runs")
 run = read(storage, "tla_frontier", "59718fe34945")
+# A DuckDB connection holding the corpus, settings and deck_cards relations.
 corpus = training_corpus(run, through=1)
 decks = roster(run)
 print("Roster decks and distinct card keys:", len(decks),
       len({key for deck in decks for key in deck["cards"]}))
 
-def query(sql: str) -> list[tuple[object, ...]]:
-    return corpus.query("corpus", sql).fetchall()
-
-print("Completed games:", query("select coalesce(sum(games), 0) from corpus"))
-print("Observed decks:", query("""
+print("Completed games:", corpus.sql("select coalesce(sum(games), 0) from corpus").fetchall())
+print("Observed decks:", corpus.sql("""
     select count(distinct deck) from (select unnest([play, draw]) as deck from corpus)
-"""))
+""").fetchall())
 
 # Matchup membership and counts. Filter either seat by Deck.identity to
 # inspect a particular matchup. Swapping play and draw gives the reverse leg.
-print(query("""
+print(corpus.sql("""
     select play, draw, sum(games) as played from corpus
     group by play, draw order by played desc, play, draw
-"""))
+""").fetchall())
 
 # Which definition keys in a proposed deck are new to this corpus?
-print(query("""
+print(corpus.sql("""
     select unnest(['lea.island', 'lea.lightning_bolt'])
     except select unnest(play_cards || draw_cards) from corpus
-"""))
+""").fetchall())
 
 # Games with Island in either list, counting a mirror once.
-print(query("""
+print(corpus.sql("""
     select coalesce(sum(games), 0) from corpus
     where list_contains(play_cards || draw_cards, 'lea.island')
-"""))
+""").fetchall())
 
 # Deck mix at each update. A mirror contributes two seats.
-print(query("""
+print(corpus.sql("""
     select experiment, run, update_number, deck, sum(games) as seats from
         (select experiment, run, update_number, unnest([play, draw]) as deck, games from corpus)
     group by all order by experiment, run, update_number, seats desc, deck
-"""))
+""").fetchall())
 ```
 
 Each run keeps its own update numbers. If a learner started from a published
@@ -298,12 +296,12 @@ An unresolved parent raises `UnknownCoverage`. Inspect each contributing run’s
 decision settings and its exact deck entries with SQL:
 
 ```python
-print(query("""
+print(corpus.sql("""
     select experiment, run, decklists, mana_taps, max_actions, action_overflow,
            policy_input_version, behavior, opponent_mode, learning_seats, matchup_curriculum
     from settings order by experiment, run
-"""))
-print(query("select run, entry, deck, board, card, copies from deck_cards order by all"))
+""").fetchall())
+print(corpus.sql("select run, entry, deck, board, card, copies from deck_cards order by all").fetchall())
 ```
 
 Self-play and the minimal loop write these tables at update zero. A roster
@@ -331,7 +329,7 @@ joining because several matchups and seats can contribute to the same update.
 
 ```python
 corpus = training_corpus(run, through=1, statistics=Path("out/statistics"))
-print(corpus.query("corpus", """
+print(corpus.sql("""
     select (select sum(games) from corpus
             where list_contains(play_cards || draw_cards, 'lea.island')) as list_games,
            sum(drawn_copies) as draws, sum(selections) as choices
