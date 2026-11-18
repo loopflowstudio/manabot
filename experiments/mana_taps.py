@@ -20,6 +20,7 @@ import random
 from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Literal
 
+from etude.checkpoints import CheckpointRecord
 from etude.eval.match import environment
 from etude.eval.records import (
     Benchmark,
@@ -30,7 +31,8 @@ from etude.eval.records import (
     checkpoint_player,
 )
 from etude.eval.result import Result, Row
-from etude.jobs import EvalJob, ExperimentState, TrainingJob
+from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
+from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report, Score, Series
 from etude.spec import Input
 from etude.train.tracking import track
@@ -207,27 +209,58 @@ def deals() -> Deals:
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     """Compare complete seed pairs. Etude smoke supplies one seed per distinct job."""
-    checkpoints: dict[tuple[int, bool], dict[int, CheckpointPlayer]] = {}
-    names = {Arm(taps=t).name for t in (False, True)}
-    seeds = sorted(
-        {
-            r.seed
-            for r in state.runs
-            if r.launch in names and r.seed in SEEDS and r.seed is not None
+    names = {Arm(taps=taps).name: taps for taps in (False, True)}
+    runs: dict[tuple[int, bool], TrainingRunSummary] = {}
+    for run in state.runs:
+        if run.launch not in names or run.seed not in SEEDS or run.seed is None:
+            continue
+        key = (run.seed, names[run.launch])
+        if key in runs:
+            raise ValueError(f"multiple training runs for {run.launch} seed {run.seed}")
+        if not run.ended:
+            return []
+        runs[key] = run
+    if not runs or any((seed, not taps) not in runs for seed, taps in runs):
+        return []
+    if not any(run.checkpoints for run in runs.values()):
+        return []
+    jobs = [paired_evaluation(runs, raw=False)]
+    # Delivered runs identify raw exports by digest in out/. Local smoke
+    # supplies only the registered EMA records.
+    if any(run.out for run in runs.values()):
+        jobs.append(paired_evaluation(runs, raw=True))
+    return jobs
+
+
+def raw_export(run: TrainingRunSummary, ema: CheckpointRecord) -> CheckpointRecord:
+    """Seat the raw sibling saved at the EMA's clocks using its own stored digest."""
+    update = int(ema.at["updates"])
+    member = run.out.file(f"policies/{update:08d}-raw.safetensors")
+    return ema.model_copy(
+        update={
+            "role": "raw",
+            "file": member.key,
+            "tags": (),
+            "artifact": ArtifactRef(
+                uri=member.uri, sha256=member.sha256, size_bytes=member.size_bytes
+            ),
         }
     )
-    for seed in seeds:
-        for taps in (False, True):
-            name = Arm(taps=taps).name
-            runs = [r for r in state.runs if r.launch == name and r.seed == seed]
-            if len(runs) > 1:
-                raise ValueError(f"multiple training runs for {name} seed {seed}")
-            if not runs or not runs[0].ended:
-                return []
-            checkpoints[seed, taps] = {
-                int(c.at["updates"]): checkpoint_player(c.ref)
-                for c in runs[0].checkpoints
-            }
+
+
+def paired_evaluation(
+    runs: dict[tuple[int, bool], TrainingRunSummary], *, raw: bool
+) -> EvalJob:
+    exports: list[CheckpointRecord] = []
+    checkpoints: dict[tuple[int, bool], dict[int, CheckpointPlayer]] = {}
+    for key, run in runs.items():
+        records: Sequence[CheckpointRecord] = run.checkpoints
+        if raw:
+            records = [raw_export(run, c) for c in records]
+            exports.extend(records)
+        checkpoints[key] = {
+            int(c.at["updates"]): checkpoint_player(c.ref) for c in records
+        }
     conditions = deals()
     heuristic = Code(
         name="heuristic", source=heuristic_source_paths(), config=HEURISTIC
@@ -243,51 +276,47 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         seatings.append(
             Seating(
                 name=name,
-                tags=(tag,),
+                tags=(f"raw-{tag}" if raw else tag,),
                 players=(candidate, opponent),
                 config=conditions,
                 games=len(conditions.pairs),
             )
         )
 
-    for seed in seeds:
+    for seed in sorted({seed for seed, _ in runs}):
         off, on = (checkpoints[seed, t] for t in (False, True))
         for label, saved in (("off", off), ("on", on)):
-            if saved:
-                for u in sorted(saved):
-                    compare(
-                        f"seed {seed} {label} u{u} vs heuristic",
-                        "heuristic",
-                        saved[u],
-                        heuristic,
-                    )
-        shared = off.keys() & on.keys()
-        if shared:
-            for u in sorted(shared):
-                compare(f"seed {seed} on vs off u{u}", "on-vs-off", on[u], off[u])
-    if not seatings:
-        return []
-    return [
-        EvalJob(
-            play=mana_taps.play,
-            agents=AGENTS,
-            tournament=Benchmark(
-                name="mana-taps-paired",
-                environment=environment(
-                    name="mana-taps",
-                    files=[Path(__file__)],
-                    config=conditions.model_dump(mode="json"),
-                ),
-                seatings=tuple(seatings),
+            for update, player in sorted(saved.items()):
+                compare(
+                    f"seed {seed} {label} u{update} vs heuristic",
+                    "heuristic",
+                    player,
+                    heuristic,
+                )
+        for update in sorted(off.keys() & on.keys()):
+            compare(
+                f"seed {seed} on vs off u{update}", "on-vs-off", on[update], off[update]
+            )
+    return EvalJob(
+        play=mana_taps.play,
+        agents=AGENTS,
+        checkpoints=exports,
+        tournament=Benchmark(
+            name="mana-taps-raw" if raw else "mana-taps-paired",
+            environment=environment(
+                name="mana-taps",
+                files=[Path(__file__)],
+                config=conditions.model_dump(mode="json"),
             ),
-            setup=machine_setup(" --extra artifacts --extra evaluation"),
-            inputs=(corpus_input(),),
-            extras=("artifacts", "evaluation"),
-            max_hours=1,
-            max_usd=Decimal("1.50"),
-            max_attempts=1,
-        )
-    ]
+            seatings=tuple(seatings),
+        ),
+        setup=machine_setup(" --extra artifacts --extra evaluation"),
+        inputs=(corpus_input(),),
+        extras=("artifacts", "evaluation"),
+        max_hours=1,
+        max_usd=Decimal("1.50"),
+        max_attempts=1,
+    )
 
 
 @dataclass
@@ -453,10 +482,16 @@ def report() -> Report:
         clock="updates",
         score=Score(table="games", value="score", reference=0.5, unit="games"),
         evals=(
+            Curve(title="EMA against the heuristic", matches=Matches(tag="heuristic")),
+            Curve(title="EMA, taps on against off", matches=Matches(tag="on-vs-off")),
             Curve(
-                title="Score against the heuristic", matches=Matches(tag="heuristic")
+                title="Raw learner against the heuristic",
+                matches=Matches(tag="raw-heuristic"),
             ),
-            Curve(title="Mana taps on against off", matches=Matches(tag="on-vs-off")),
+            Curve(
+                title="Raw learners, on against off",
+                matches=Matches(tag="raw-on-vs-off"),
+            ),
         ),
         perf=tuple(
             Series(title=title, keys=(key,), unit=unit)

@@ -21,10 +21,12 @@ from etude.jobs import (
     Checkpoints,
     EvalJob,
     ExperimentState,
+    OutMembers,
     TrainingJob,
     TrainingRunSummary,
     checkpoint_inputs,
 )
+from etude.out import OutMember
 from etude.page import experiment_files
 from etude.records import ArtifactRef
 import pytest
@@ -142,6 +144,46 @@ def test_mana_taps_rental_limits_apply_to_all_six_runs() -> None:
     assert all(request.job.max_attempts == 2 for request in requests)
     assert all(request.job.max_hours == 0.875 for request in requests)
     assert all(str(request.job.max_usd) == "0.79" for request in requests)
+
+
+def test_mana_eval_delivers_raw_and_ema_bytes_at_each_milestone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def out(run: TrainingRunSummary) -> OutMembers:
+        return OutMembers(
+            (
+                OutMember(
+                    run=run.name,
+                    key="out/policies/00000075-raw.safetensors",
+                    sha256="a" * 64,
+                    size_bytes=17,
+                    uri=f"r2://fixture/{run.name}/out/policies/00000075-raw.safetensors",
+                ),
+            )
+        )
+
+    monkeypatch.setattr(TrainingRunSummary, "out", property(out))
+    runs = tuple(
+        replace(
+            _finished_run(tmp_path, range(75, 76), name=f"{name}@21501", job=name),
+            seed=21501,
+        )
+        for name in ("mana-taps-w64-off", "mana-taps-w64-on")
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    ema, raw = mana_taps.eval_jobs(state)
+    for job, digest in ((ema, "0" * 64), (raw, "a" * 64)):
+        assert len(job.tournament.seatings) == 3
+        inputs = [
+            item
+            for item in job.lower(state).inputs
+            if item.name.startswith("checkpoint-")
+        ]
+        assert len(inputs) == 2
+        assert {item.sha256 for item in inputs} == {digest}
+    assert {c.file for c in raw.checkpoints} == {
+        "out/policies/00000075-raw.safetensors"
+    }
 
 
 def test_training_declarations_return_typed_jobs_that_lower() -> None:
