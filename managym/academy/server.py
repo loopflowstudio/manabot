@@ -56,6 +56,7 @@ from managym.experience import (
     Command,
     ExperienceFrame,
     InteractionOffer,
+    PresentationEvent,
 )
 from managym.experience_projection import (
     HERO_PLAYER_INDEX,
@@ -86,6 +87,7 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
+from .append_json import encode_list, splice
 from .attempts import (
     CLOSED_RECORD_ENDINGS,
     AttemptStore,
@@ -920,6 +922,18 @@ class GameSession:
         self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
+        # The (match, revision, events) last written while active: projecting
+        # the same frame again (recovery caches, the committed boundary, the
+        # settled reply) does not rewrite the whole trace.
+        self._persisted: tuple[str, int, int] | None = None
+        # Each trace event's, decision's and presentation event's JSON, so a
+        # save encodes only what the last step added (`append_json`).
+        self._encoded_events: list[tuple[TraceEvent, str]] = []
+        self._encoded_decisions: list[tuple[ReplayDecision, str]] = []
+        self._encoded_presentation: dict[int, list[tuple[dict[str, Any], str]]] = {
+            0: [],
+            1: [],
+        }
         self._pending_action_log: list[LogEntry] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
         self.stops: dict[str, list[str]] = {
@@ -2363,6 +2377,9 @@ class GameSession:
             return
         if end_reason == "game_over" and not self.obs.game_over:
             raise ValueError("Only an authoritative terminal game can be completed.")
+        written = (self.match_id, self.revision, len(self.trace.events))
+        if not finished and written == self._persisted:
+            return
 
         canonical = self._canonical_replay_snapshot()
         study_provider = (
@@ -2373,7 +2390,8 @@ class GameSession:
             final_observation=decision_surface_view(self.env, self.human_seat),
             winner=self.env.winner_index() if self.obs.game_over else None,
             end_reason=end_reason if finished else self.trace.end_reason,
-            canonical_replay=canonical.model_dump(mode="json"),
+            # Only a finished trace is kept; a live save encodes the replay incrementally.
+            canonical_replay=canonical.model_dump(mode="json") if finished else None,
         )
         if finished:
             self.trace = retained
@@ -2387,6 +2405,9 @@ class GameSession:
                 "experience_source_sha256": PLAY_SOURCE_SHA256,
             },
             retained.to_record(),
+            trace_json=retained.to_json(
+                self._encoded_events, self._canonical_replay_json(canonical)
+            ),
             finished=finished,
             players=self.record_players,
             session_start=self._session_start,
@@ -2399,6 +2420,7 @@ class GameSession:
             ),
         )
         self._session_start = None
+        self._persisted = written
         if finished:
             self._study_provider = study_provider
             self._trace_saved = True
@@ -2432,6 +2454,46 @@ class GameSession:
                 )
                 for viewer, events in sorted(self.canonical_presentation.items())
             ],
+        )
+
+    def _canonical_replay_json(self, canonical: CanonicalReplayV1) -> str:
+        """`json.dumps(canonical.model_dump(mode="json"))`, encoding only new rows.
+
+        Decisions and presentation events are append-only, so each is encoded
+        once. Decision rows are the snapshot's own objects; a track's events
+        are validated from `canonical_presentation`'s dicts, so they are
+        encoded from those dicts through the same model.
+        """
+        head = canonical.model_dump(
+            mode="json", exclude={"decisions", "presentation_tracks"}
+        )
+        tracks = [
+            splice(
+                {"viewer": viewer, "head": len(events)},
+                {
+                    "events": encode_list(
+                        events,
+                        self._encoded_presentation.setdefault(viewer, []),
+                        lambda event: json.dumps(
+                            PresentationEvent.model_validate(event).model_dump(
+                                mode="json"
+                            )
+                        ),
+                    )
+                },
+            )
+            for viewer, events in sorted(self.canonical_presentation.items())
+        ]
+        return splice(
+            head,
+            {
+                "decisions": encode_list(
+                    canonical.decisions,
+                    self._encoded_decisions,
+                    lambda row: json.dumps(row.model_dump(mode="json")),
+                ),
+                "presentation_tracks": "[" + ", ".join(tracks) + "]",
+            },
         )
 
     def study_fork_provider(self) -> StudyForkProvider:
