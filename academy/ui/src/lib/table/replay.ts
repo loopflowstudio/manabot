@@ -184,7 +184,7 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
     const auto = position.kind === 'consequences' && position.automatic;
     let text = ((narrated ? after.label : position.label) ?? 'Choice').replace(/^Auto: /, '');
     if (seatName) {
-      text = nameSeats(text, seatName);
+      text = nameSeats(text, seatName, position.actor === heroSeat);
       // A recorded choice names players by setup role: Hero is the seat named "you".
       const chooser = position.actor === heroSeat ? 'hero' : 'villain';
       text = text.replace(/^Target (Hero|Villain)$/, (_, role: string) => {
@@ -203,11 +203,14 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
   return entries;
 }
 
-/** Names the players a narration calls "Seat 1" and "Seat 2": "you", or the seat's name. */
-export function nameSeats(text: string, seatName: (seat: 0 | 1) => string): string {
+/**
+ * Names the players a narration calls "Seat 1" and "Seat 2": the seat's name,
+ * or the person: "you", and "yourself" in the person's own move.
+ */
+export function nameSeats(text: string, seatName: (seat: 0 | 1) => string, yours = false): string {
   return text.replace(/\bSeat ([12])\b/g, (_, seat: string) => {
     const name = seatName(seat === '1' ? 0 : 1);
-    return name === 'You' ? 'you' : name;
+    return name !== 'You' ? name : yours ? 'yourself' : 'you';
   });
 }
 

@@ -33,6 +33,14 @@ describe('recentView', () => {
     expect(view.resolved).toEqual([{ id: 4001, name: 'Lightning Bolt', by: 'you', targets: ['Search 64'] }]);
   });
 
+  it('calls the person "you" mid-sentence, and "yourself" in their own move', () => {
+    const atYou = bolt.recovery.presentation_tail.map(event =>
+      event.kind.kind === 'targeted' || event.kind.kind === 'damage'
+        ? { ...event, kind: { ...event.kind, target: { kind: 'player' as const, id: 0 } } } : event);
+    const view = recentView(bolt.recovery.frame, 1, atYou, () => labels, names);
+    expect(view.facts.slice(0, 2).map(fact => fact.text)).toEqual(['You cast Lightning Bolt, targeting yourself', 'An effect dealt 3 to you']);
+  });
+
   it('adds up the damage each player and object was dealt', () => {
     const view = recentView(bolt.recovery.frame, 1, bolt.recovery.presentation_tail, () => labels, names);
     expect([...view.damage.players]).toEqual([[1, 3]]);

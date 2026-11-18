@@ -14,11 +14,11 @@ describe("the opponent's moves as beats", () => {
       fact(2, null, 'Shock dealt 2 to Ally', [7], 'damage'),
       fact(3, 'opponent', 'Heuristic cast Yip Yip!, targeting Jailer', [9]),
       fact(4, 'opponent', 'Heuristic attacked with Jailer', [9], 'attacked'),
-      fact(5, null, 'Jailer dealt 3 to You', [], 'damage'),
+      fact(5, null, 'Jailer dealt 3 to you', [], 'damage'),
     ];
     expect(beatsFor(facts, 0, NAMES).map(beat => beat.seq)).toEqual([2, 3, 4, 5]);
     expect(beatsFor(facts, 3, NAMES).map(beat => [beat.text, beat.subjects])).toEqual([
-      ['Heuristic attacked with Jailer', [9]], ['Jailer dealt 3 to You', []],
+      ['Heuristic attacked with Jailer', [9]], ['Jailer dealt 3 to you', []],
     ]);
   });
 
@@ -31,13 +31,13 @@ describe("the opponent's moves as beats", () => {
     const facts = [
       fact(1, 'opponent', 'Heuristic played Plains', [1], 'land'),
       fact(2, 'opponent', 'Heuristic attacked with Ally and Kyoshi Warriors', [2, 3], 'attacked'),
-      fact(3, null, 'Ally dealt 2 to You', [2], 'damage'),
-      fact(4, null, 'Kyoshi Warriors dealt 3 to You', [3], 'damage'),
+      fact(3, null, 'Ally dealt 2 to you', [2], 'damage'),
+      fact(4, null, 'Kyoshi Warriors dealt 3 to you', [3], 'damage'),
       fact(5, null, 'Ally died', [2], 'died'),
     ];
     expect(beatsFor(facts, 0, NAMES).map(beat => [beat.text, beat.subjects])).toEqual([
       ['Heuristic played Plains and attacked with Ally and Kyoshi Warriors', [1, 2, 3]],
-      ['Ally dealt 2 to You and Kyoshi Warriors dealt 3 to You', [2, 3]],
+      ['Ally dealt 2 to you and Kyoshi Warriors dealt 3 to you', [2, 3]],
       ['Ally died', [2]],
     ]);
     // Four facts or fewer still read one at a time.

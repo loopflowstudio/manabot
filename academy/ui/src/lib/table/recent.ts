@@ -130,10 +130,11 @@ function objectName(id: ObjectRenderId, labels: PresentationLabels, book: NameBo
   return labels.objects[key(id)] ?? book.ids.get(id.entity) ?? null;
 }
 
+/** What a fact calls `subject` mid-sentence: the person is "you" ("dealt 3 to you"). */
 function nameOf(subject: SubjectRef, labels: PresentationLabels, frame: ExperienceFrame, names: { you: string; opponent: string }, book: NameBook): string {
   if (subject.kind === 'player') {
     const side = playerSide(frame, subject.id);
-    return side ? names[side] : 'a player';
+    return !side ? 'a player' : names[side] === 'You' ? 'you' : names[side];
   }
   if (subject.kind === 'stack') return labels.stacks[String(subject.id)] ?? book.ids.get(subject.id) ?? 'a spell';
   return objectName(subject.id, labels, book) ?? 'a permanent';
@@ -242,9 +243,10 @@ export function recentView(
         break;
       }
       case 'targeted': {
-        const target = nameOf(kind.target, labels, frame, names, book);
-        if (kind.source.kind === 'stack') casts.get(kind.source.id)?.targets.push(target);
         const last = view.facts.at(-1);
+        const named = nameOf(kind.target, labels, frame, names, book);
+        const target = named === 'you' && last?.by === 'you' ? 'yourself' : named;
+        if (kind.source.kind === 'stack') casts.get(kind.source.id)?.targets.push(target);
         if (last) last.text += `${last.text.includes(', targeting ') ? ' and ' : ', targeting '}${target}`;
         if (kind.target.kind === 'object') {
           view.touched.add(kind.target.id.entity);
@@ -255,7 +257,8 @@ export function recentView(
       case 'resolved':
         break;
       case 'damage': {
-        const source = kind.source ? nameOf(kind.source, labels, frame, names, book) : 'An effect';
+        const named = kind.source ? nameOf(kind.source, labels, frame, names, book) : 'An effect';
+        const source = named.charAt(0).toUpperCase() + named.slice(1);
         fact(null, 'damage', `${source} dealt ${kind.amount} to ${nameOf(kind.target, labels, frame, names, book)}`, null,
           [kind.source, kind.target].flatMap(subject => subject?.kind === 'object' ? [subject.id.entity] : []));
         if (kind.target.kind === 'object') {

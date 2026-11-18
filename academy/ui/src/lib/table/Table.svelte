@@ -198,9 +198,9 @@
     return () => clearTimeout(timer);
   });
   function skipBeats(): void { beats = []; beatAt = 0; }
-  // The opponent's moves are narrated as Review narrates them, players named by seat.
+  // Both players' moves are narrated as Review narrates them, players named by seat.
   const seatName = (seat: 0 | 1): string => (seat === projection.agent.player_index ? 'You' : said);
-  const named = $derived(log.map(entry => (entry.actor === 'villain' ? { ...entry, text: nameSeats(entry.text, seatName) } : entry)));
+  const named = $derived(log.map(entry => (entry.actor === 'villain' || entry.actor === 'hero' ? { ...entry, text: nameSeats(entry.text, seatName, entry.actor === 'hero') } : entry)));
   const moves = $derived(movesGiven ?? moveList(named, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
-import { bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { bottomSeat, moveAt, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
 import { tableView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -120,6 +120,13 @@ describe('the move list and strip read the index', () => {
     expect(steps.map(entry => [entry.id, entry.text])).toEqual([
       ['cast', 'Cast Divide by Zero, targeting Tiger-Seal'], ['order', 'Ordered triggers: Ally, then Tiger-Seal'],
     ]);
+  });
+
+  it('calls the person "you" mid-sentence, and "yourself" in their own move', () => {
+    const names = (seat: 0 | 1): string => (seat === 0 ? 'You' : 'Heuristic');
+    expect(nameSeats('Cast Shock, targeting Seat 1', names)).toBe('Cast Shock, targeting you');
+    expect(nameSeats('Cast Shock, targeting Seat 1', names, true)).toBe('Cast Shock, targeting yourself');
+    expect(nameSeats('Cast Shock, targeting Seat 2', names, true)).toBe('Cast Shock, targeting Heuristic');
   });
 
   it('names players a recorded target choice calls Hero and Villain', () => {
