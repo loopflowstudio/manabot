@@ -186,8 +186,8 @@ The earlier trophy pilots execute from their pinned source; see the
 
 `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
-contract. Stable population entry IDs distinguish events even when lists match;
-checkpoints still bind the world, never the population.
+contract. Stable population entry IDs distinguish events even when lists match.
+A checkpoint can also play newly admitted decks.
 
 Run its local evaluation from the training run's pinned source and native world.
 Local Etude evaluation needs an explicit directory for its replay evidence
@@ -382,15 +382,12 @@ including the unresolved near-singleton latency target.
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
-This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
-content manifest and input schema. Deck-source runs bind the world itself
-(`deck_world`: version, card digest, rules and input contract), so the model
-plays any deck the world admits. For these the version and card digest are
-recorded facts, not gates: loading compares input columns, token names and
-action kinds by name
+When the binding records exact decks and sideboards, loading compares the
+whole binding, including the content manifest. Otherwise the model can play
+any admitted deck. The version and card digest describe the writing revision.
+Loading compares input columns, token names and action kinds by name
 ([compatibility](../docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
-A setup-bound checkpoint still compares its whole binding. A missing binding
-or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
+A missing binding or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
@@ -682,7 +679,7 @@ hash. Each reads the row of the card token for the same concept (a granted
 the card tokens. Captured program tokens read their card-token rows; integers
 and booleans read one row per kind plus their exact value. Fact and effect
 sources read the card encoder's row for that definition, and ability or frame
-ordinals are numbers. An id outside the vocabulary fails. World checkpoints
+ordinals are numbers. An id outside the vocabulary fails. Checkpoints with `world="world"`
 that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
 (elsewhere both values build the same model and omission reads as the default): 4096
 learned rows per id column, which held 80% of a w64 L2 model (1,958,402

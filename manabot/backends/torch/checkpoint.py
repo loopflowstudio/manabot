@@ -259,8 +259,8 @@ def save_checkpoint(
 ) -> None:
     """Save a portable policy with its explicit world, input and value semantics.
 
-    `player_configs` binds those setups; `None` binds the world itself, so the
-    policy may play any deck the world admits.
+    Pass `player_configs` to record the exact setups in the binding. Passing
+    `None` allows the policy to play any admitted deck.
     """
 
     path = Path(path)

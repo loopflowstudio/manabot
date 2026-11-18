@@ -33,10 +33,7 @@ WORLD = managym.WORLD_VERSION
 # The authored setup whose decks form the Elemental roster (`elemental-world-v1`
 # names the same decks).
 _ROSTER_SETUP = "optional_payments"
-WORLD_DECKS_ONLY = (
-    "checkpoint is bound to the world, so it plays decks submitted to the "
-    "world (a DeckMatchup), not a fixed authored setup"
-)
+WORLD_DECKS_ONLY = "Supply a DeckMatchup with submitted decks for this checkpoint."
 
 
 def _digest(value: Any) -> str:
@@ -106,8 +103,8 @@ def validate_agent_decks(
 ) -> None:
     """Check that a checkpoint may play every one of these decks, in any pairing.
 
-    A world binding admits each deck the world admits natively; a setup binding
-    admits only the decks of its setups.
+    Exact decks in the binding restrict play to that roster. Otherwise native
+    admission checks each submitted deck.
     """
     binding = getattr(agent, "world_binding", None)
     if binding is None:
@@ -133,10 +130,10 @@ def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
 
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
-    """A world-bound policy reads the world's complete semantic program input."""
+    """Check the semantic program input required by the recorded binding."""
     if _binds_world(binding) and agent.config.world != managym.WORLD_SETUP:
         raise ValueError(
-            "world checkpoint requires its complete semantic program input"
+            "checkpoint requires the complete semantic program input"
         )
 
 

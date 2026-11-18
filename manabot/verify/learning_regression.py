@@ -125,7 +125,7 @@ class PolicySnapshot(Strict):
 def inspect_policy(
     path: Path, cases: list[Case], updates: int, *, backend: TrainingBackend
 ) -> PolicySnapshot:
-    """Use the ordinary world-bound loader and exact setup; never refit weights."""
+    """Use the checkpoint loader and exact setup; never refit weights."""
     return backend.verification.inspect_policy(path, cases, updates)
 
 

@@ -1,4 +1,4 @@
-"""Record and replay complete games with immutable, world-bound policy fixtures."""
+"""Record and replay complete games with immutable policy fixtures."""
 
 import argparse
 import json

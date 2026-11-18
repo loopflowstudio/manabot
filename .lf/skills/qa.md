@@ -419,13 +419,13 @@ publish, land or choose the next Graph step from here.
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
   `experiments/regimes/tla-frontier-c5fba4-w64.json`; `experiments/tla_frontier.py` trains that record on the current loop.
-- Old checkpoints in a local evaluation: a world-bound checkpoint (any TLA
-  frontier run, such as u1952 at `.runs/qa/final.pt` or the
+- Old checkpoints in a local evaluation: a checkpoint from a TLA
+  frontier run (such as u1952 at `.runs/qa/final.pt` or the
   `experiments/best_player_on_main.py` artifact) refuses the CLI's default
   Allies/Lessons setup. Write a `DeckMatchup` JSON (for example
   `new_card_pairs()[0].matchup.model_dump_json()` from that experiment) and
   pass it with `--matchup`; one deal of four games took about 75 s. Read
-  `checkpoint_source` and `stored_programs` from `<out>/request.json`'s
+  `writer_revision` and `stored_programs` from `<out>/request.json`'s
   `candidate`; `evaluation.json` is under `<out>/panel/`. To act as a returning
   user, strip those two fields from a request and repeat it with `--request`.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,

@@ -125,7 +125,7 @@ checkpoints or experiment evidence.
   `experiments/reports/<name>.md`. Do not add a protocol document, a serialized regime,
   a digest check or a test suite for one experiment's schedule; reusable
   machinery belongs in `manabot/` or Etude, tested once there.
-- Paired deals, replay verification, world-bound checkpoints and training
+- Paired deals, replay verification, checkpoint input compatibility and training
   seeds as the unit of evidence are measurement quality and stay as they are.
 
 ### Python structure and documentation
@@ -253,9 +253,8 @@ change already touches it; do not rewrite a module only for style. Rust in
   (`checkpoint_source`), its column names, definition keys and naming names.
   `manabot.model.interface.model_interface` checks the recorded input contract.
   The shared policy reader then binds the learned arrays by key. Academy uses
-  that reader when listing checkpoints. For a deck-source checkpoint,
-  the card digest and naming digest are recorded facts, never
-  gates (setup-bound checkpoints still compare their whole binding). Append
+  that reader when listing checkpoints. When the checkpoint records exact decks, compare its
+  whole binding. Otherwise the card and naming digests record what the writer used. Append
   input columns to named buffers. Shared host preparation projects each buffer
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in

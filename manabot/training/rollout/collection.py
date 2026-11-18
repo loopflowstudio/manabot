@@ -499,7 +499,7 @@ def open_collector(
         if matchup_curriculum != "fixed":
             raise ValueError("a deck source cannot be combined with a curriculum")
         if match.config.world != WORLD_SETUP:
-            raise ValueError("deck-source games play in the world")
+            raise ValueError("sampling decks requires a match configured for submitted decks")
         if (
             deck_source.decklists != "mixed"
             and match.config.decklists != deck_source.decklists

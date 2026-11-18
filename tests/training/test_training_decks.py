@@ -237,7 +237,7 @@ def test_sampled_decks_agree_across_producer_counts(
         close_collector(many)
 
 
-def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
+def test_checkpoint_plays_unseen_admitted_decks(
     decks: UniformDecks, tmp_path: Path
 ) -> None:
     target = tmp_path / "policy.pt"
@@ -267,7 +267,10 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     with pytest.raises(ValueError, match="not admitted by"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
-    with pytest.raises(ValueError, match="plays decks submitted to the world"):
+    with pytest.raises(
+        ValueError,
+        match="Supply a DeckMatchup with submitted decks",
+    ):
         validate_agent_setup(policy, [unseen, other_pack])
 
     for key, change in (
@@ -288,7 +291,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
 
     # Producer admission for a deck run checks the world, not one pair.
     validate_agent_decks(policy, decks.players())
-    # A setup-bound checkpoint plays only its roster, under the shared rule.
+    # Recording exact decks restricts play to that roster.
     authored = deepcopy(policy)
     authored.world_binding = checkpoint_world(
         [

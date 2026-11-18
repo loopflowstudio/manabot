@@ -85,7 +85,7 @@ def bind_catalog(
 ) -> tuple[PolicyCheckpoint, BindingReport]:
     """Return the policy with current public joins and unchanged trained programs.
 
-    `model_interface` has admitted a world pilot with catalog records."""
+    `model_interface` has admitted the checkpoint’s catalog records."""
     catalog = catalog_tables(managym.WORLD_SETUP, records=True)
     buffers = catalog.buffers.copy()
     prefix = "semantic_cards."

@@ -164,7 +164,7 @@ observation, and a mechanic reaches all three in the change that adds it
 **Identity is typed.** An `ObjectId` names one appearance of an object in one
 zone and fails after a zone change; a `CardId` names the physical card and
 follows it. An action index is valid only in one decision epoch. Checkpoints
-bind the named policy inputs they read. Fixed-match checkpoints also bind the
+bind the named policy inputs they read. If the binding records exact decks, it also checks the
 deck setup. Every durable value has a canonical serialization and digest
 (`manabot.infra.identity`), and locators are not identity.
 
@@ -190,7 +190,7 @@ support is an explicit result.
 **A recipe is a function.** An update learns from one batch, a loop keeps
 playing and updating until it is done, and a recipe calls our loops with our
 settings. A loop saves its learner atomically and resumes from that file when
-it is run again, and writes world-bound raw and EMA checkpoints. Etude
+it is run again, and writes raw and EMA checkpoints. Etude
 launches, tracks, retries and evaluates a recipe; nothing else runs it.
 Self-play refuses belief inputs; the trained model sees the current
 observation only ([training](docs/training.md)).

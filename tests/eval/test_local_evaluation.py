@@ -304,7 +304,7 @@ def test_cli_admission_deadline_is_retained(tmp_path: Path) -> None:
 def test_cli_matchup_file_accepts_deck_pairs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A world-bound checkpoint can be seated from the CLI on two deck lists."""
+    """A checkpoint can be seated from the CLI on two deck lists."""
     deck = managym.Deck({"Mountain": 20, "Lightning Bolt": 40})
     matchup = DeckMatchup(
         population_sha256="0" * 64, entries=("a", "b"), lists=(deck, deck)

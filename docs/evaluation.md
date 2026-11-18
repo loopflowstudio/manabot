@@ -214,7 +214,15 @@ Seat an older checkpoint alongside its comparator in the same evaluation on
 one revision to compare them directly. Etude reports can also line up existing
 measurements across revisions when the opponent identity, decks, deals,
 decision settings and choice of raw or averaged policy match. Throughput
-comparisons also require the same machine.
+comparisons also require the same machine. For a comparison within the
+training corpus, verify that both runs trained on the evaluation matchups by
+the selected updates. A matchup outside a checkpoint’s corpus measures transfer.
+See [training corpus](observation-and-model.md#what-a-checkpoint-is-bound-to).
+
+For example, frontier Small (Etude run `59718fe34945`) recorded 259 games
+through update 1. Counting the play seat once per game, those matchups used
+132 of the 134 decks in its configured roster. Even two decks that both
+appeared can form a pairing the run had yet to play.
 
 Check the revisions between the measurements for a declared change that
 affects the metric. Pinned-pilot recordings give the reason for a change in

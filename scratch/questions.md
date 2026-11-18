@@ -135,3 +135,14 @@ say so if they should carry a note.
 33. The participant record's writing commit is named `writer_revision`, not
     `checkpoint_source`, which elsewhere names the commit, dirty flag and
     Etude run together. Passed over: storing that whole record.
+
+34. Etude change needed for the corpus query (2026-11-18). Its training reader
+    selects logged tables correctly. Its evaluation query database ingests
+    training checkpoints but skips training metrics and logged row tables.
+    Expose selected training rows by experiment, run and clock coordinate to
+    queries, including historical scalar outcome columns, preserving resume
+    supersession. A checkpoint's recorded update should bound the selection.
+    Manabot can then supply the deck/card join and game-specific queries.
+    The corpus query stops here for upstream review, per the revised plan.
+    Historical reports, serialized identifiers and UI control IDs retain
+    their spelling.

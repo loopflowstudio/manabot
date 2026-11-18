@@ -1,4 +1,4 @@
-"""Self-play uses real Etude saves and preserves world-bound policy evidence."""
+"""Self-play uses real Etude saves and preserves published policy evidence."""
 
 import json
 from pathlib import Path

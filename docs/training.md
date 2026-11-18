@@ -63,7 +63,7 @@ written under `~/.etude/track` (moved by `ETUDE_HOME`):
         learner.pt        raw weights (a `state_dict` written with `torch.save`)
         optimizer.pt      Adam
         ema.pt            EMA weights
-    policies/             world-bound raw and EMA policies, named by update and never rewritten
+    policies/             raw and EMA policies, named by update and never rewritten
     game-attempts/        append-only ledgers when game-error handling is configured
     failures/             private replay evidence, created when a game fails
 ```
@@ -212,9 +212,8 @@ What stays on main:
   from main: every report naming a regime, a `RegimeRun` or an
   `experiments/data/<name>/` SQLite store is rebuilt from the revision it
   records, or from the one above.
-- Policy checkpoints. `load_checkpoint` loads every world-bound checkpoint as
-  before, with serialized keys unchanged, including fields named for the
-  regime that wrote them (`regime_digest`, the regime tag).
+- Policy checkpoints. `load_checkpoint` reads the original serialized keys, including
+  fields named for the regime that wrote them (`regime_digest`, the regime tag).
 - Run history written through Etude. Update rows, row tables, checkpoints and
   evaluation runs are read with `etude.train.read`, `etude report` and
   [the readers that remain](experiment-metrics.md).
@@ -394,7 +393,7 @@ The pieces that are manabot's:
 | `self_play_games(settings, run, counts)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. Streams, sampling and minibatch order are seeded from `run.seed` and the update the attempt starts at, so a resumed loop plays fresh, reproducible games. |
 | `step(settings, learner, ema, collector, counts, rng, out=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the metric row. The learner, Adam, EMA and `counts` are updated in place. |
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
-| `publish(settings, run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
+| `publish(settings, run, learner, ema, counts)` | Writes raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
 The loop takes Etude's `TrainingRun` (`etude.train.tracking`); there is no
 untracked path through it. The updates and pieces it calls need no run
@@ -853,8 +852,8 @@ learning quality. Throughput is cumulative work over observed elapsed cost.
 
 ### Checkpoint cadence
 
-`SelfPlay.checkpoint_every` (`n`) makes the loop publish a world-bound
-policy at absolute updates n, 2n, … with `run.checkpoint`; the loop always
+`SelfPlay.checkpoint_every` (`n`) makes the loop publish a policy at absolute
+updates n, 2n, … with `run.checkpoint`. The loop always
 publishes the untrained policy at update 0 and its last update. A run's final
 checkpoint is the last one of a finished run, including after extension.
 Elemental uses a 50-update grid, chosen by the recipe rather than estimated

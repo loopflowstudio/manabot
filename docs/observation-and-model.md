@@ -306,13 +306,16 @@ can use an expanded card set on a later revision.
 | The possible-world version changed | Refused only for a model with belief inputs; no other model reads it. |
 | Engine rules changed | Loads. Play uses the current rules. An evaluation measures the effect on strength. |
 
-A checkpoint bound to an authored setup (`setups` and `content_manifest`, from
-a fixed-match run) is the exception: it still compares its whole binding and
-stops loading when cards are added. Deck-source checkpoints, which is what
-self-play recipes publish, follow the table.
+If the checkpoint recorded exact decks (`setups` and `content_manifest`), the
+loader compares its whole binding. When adding cards changes the manifest,
+the loader refuses the checkpoint.
 
 The terms:
 
+- The **training corpus** of a checkpoint consists of the decks its run actually
+  trained on through the update that wrote it. Recorded outcomes identify each
+  completed matchup, including which deck was on the play. The configured
+  roster alone cannot establish which matchups occurred.
 - A **format** (TLA Limited, Standard) is a named card pool plus deck rules.
 - The **model interface** is what the table above compares: input columns,
   token and record names, and action kinds. It has no version number. A name

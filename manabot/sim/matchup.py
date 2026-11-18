@@ -1,4 +1,4 @@
-"""Deck/seat matrices for authored and imported world-bound evaluation pairs."""
+"""Deck/seat matrices for authored and imported evaluation pairs."""
 
 from __future__ import annotations
 

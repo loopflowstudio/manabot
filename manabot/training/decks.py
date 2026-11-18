@@ -11,7 +11,7 @@ game's reset seed. `uniform-independent-v1` draws each seat independently,
 including mirrors; historical `uniform-distinct-v1` excludes mirrors. Exact
 resume reproduces the same decks for the same games, and the run also records
 each game's actual decks.
-Checkpoints never know the source; they bind only the world.
+Sampling settings belong to the run.
 """
 
 from __future__ import annotations

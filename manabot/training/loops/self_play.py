@@ -2,8 +2,7 @@
 
 `SelfPlay` describes the learning problem; `Counts` is the cumulative work
 registered with the run. `step` collects and learns in place. `self_play`
-registers raw weights, Adam, EMA and counts, then publishes immutable,
-world-bound policies for evaluation. No native game or RNG is persisted.
+registers raw weights, Adam, EMA and counts, then publishes immutable policies for evaluation. No native game or RNG is persisted.
 
 Model initialization uses the run seed s. At starting update u, native streams
 use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
@@ -114,9 +113,8 @@ CLOCKS = [
 class SelfPlay(BaseModel):
     """What one self-play loop plays, how it learns and where it runs.
 
-    The match (or deck source), observation and model configs bind the world
-    once; a world other than the installed native runtime fails validation,
-    as do combinations the collector or learner cannot run.
+    Validation checks the configured match or deck source, observation and
+    model against the installed runtime and the collector and learner.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -377,7 +375,6 @@ def write_policy(
     if path.exists():
         return path
     temporary = path.with_name(f".{path.name}.tmp")
-    # A deck-source run binds the world (`None`); a fixed match binds its setups.
     players = (
         None
         if settings.deck_source is not None

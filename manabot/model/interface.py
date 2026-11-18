@@ -55,7 +55,7 @@ def world_fields(
 
 @dataclass(frozen=True)
 class ModelInterface:
-    """A world pilot's writer vocabulary, the running one, and its saved column
+    """A checkpoint's writer vocabulary, the running one, and its saved column
     prefixes (only the arrays narrower than the runtime's)."""
 
     writer: WriterCatalog
@@ -66,8 +66,8 @@ class ModelInterface:
 def model_interface(
     checkpoint: Mapping[str, Any], space: ObservationSpace
 ) -> ModelInterface | None:
-    """Resolve the world pilot's writer vocabulary, or return None once a
-    setup-bound checkpoint has passed its whole binding comparison."""
+    """Resolve the writer vocabulary. Return None after validating a binding
+    that records exact decks."""
     saved = checkpoint.get("world_binding")
     if not isinstance(saved, dict):
         raise ValueError(f"trained without a world binding; engine is {WORLD}")
@@ -79,7 +79,7 @@ def model_interface(
     model = ModelConfig.from_checkpoint(checkpoint["hypers"]["agent_hypers"])
     if model.world != managym.WORLD_SETUP:
         raise ValueError(
-            "world checkpoint requires its complete semantic program input"
+            "checkpoint requires the complete semantic program input"
         )
     expected = deck_world(space)
     location = written_at(checkpoint)
