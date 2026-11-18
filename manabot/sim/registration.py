@@ -50,7 +50,7 @@ class PlayerRegistration(StrictModel):
     checkpoint_bytes: int | None = Field(default=None, gt=0)
     parameter_count: int | None = Field(default=None, gt=0)
     # Producer metadata may be unavailable for a standalone policy export.
-    checkpoint_source: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    writer_revision: str | None = Field(default=None, exclude_if=lambda v: v is None)
     stored_programs: int | None = Field(
         default=None, ge=0, exclude_if=lambda v: v is None
     )
@@ -68,7 +68,7 @@ class PlayerRegistration(StrictModel):
                 self.checkpoint_sha256,
                 self.checkpoint_bytes,
                 self.parameter_count,
-                self.checkpoint_source,
+                self.writer_revision,
                 self.stored_programs,
                 self.training_seed,
                 self.artifact_id,

@@ -188,7 +188,7 @@ def registration(
         runner_kind="checkpoint",
         player_spec=dict(ETUDE_SAMPLER_SPEC),
         checkpoint_sha256=digest,
-        checkpoint_source=checkpoint.writer_revision,
+        writer_revision=checkpoint.writer_revision,
         stored_programs=checkpoint.stored_programs,
         checkpoint_bytes=path.stat().st_size,
         parameter_count=sum(int(p.size) for p in checkpoint.parameters.values()),

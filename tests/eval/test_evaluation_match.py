@@ -396,7 +396,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path: Path) -
         }
     )
     validate_player_compatibility(candidate, key, runtime)
-    assert candidate.checkpoint_source is None and candidate.stored_programs is None
+    assert {"writer_revision", "stored_programs"}.isdisjoint(candidate.model_dump())
     paths, loaded_space = validate_registered_player(
         candidate, path, backend=TORCH_BACKEND
     )

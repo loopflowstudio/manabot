@@ -78,7 +78,7 @@ def test_loader_batches_prepared_rows_without_sampling(
         content_suite="fixture",
         role="challenger",
     )
-    assert participant.checkpoint_source == "a" * 40
+    assert participant.writer_revision == "a" * 40
     assert participant.stored_programs == 0
     forward = load(ref)
     sampler = build(checkpoint_player(ref), {ref.key: forward})

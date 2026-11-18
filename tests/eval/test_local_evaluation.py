@@ -67,7 +67,8 @@ def test_checkpoint_request_records_writer_and_stored_programs(
     write_safetensors(path, arrays, metadata)
     request = checkpoint_request(path, backend=TORCH_BACKEND)
     saved = EvaluationRequest.model_validate_json(request.model_dump_json())
-    assert saved.candidate.checkpoint_source == revision
+    assert saved.candidate.writer_revision == revision
+    assert ("writer_revision" in saved.candidate.model_dump()) == (revision is not None)
     assert saved.candidate.stored_programs == len(
         arrays["buffer/semantic_cards.tokens"]
     )

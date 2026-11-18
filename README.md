@@ -78,9 +78,10 @@ cards are added, bound by name to what it reads
 
 ## What it trains on now
 
-The current world is *Avatar: The Last Airbender* Limited. Every card in the
-set is defined as a typed rules program (336 supported in
-[world w17](WORLDS.md)), and training draws both seats of each game at random
+Training uses *Avatar: The Last Airbender* Limited. The engine defines every
+card in the set as a typed rules program. Across all sets,
+[443 cards are eligible for deck entry](managym/src/cards/pool.rs).
+Training draws both seats of each game at random
 from real trophy decks: 134 seven-win Premier Draft lists admitted whole from
 the [17Lands public dataset](https://www.17lands.com/public_datasets) (CC BY
 4.0), built by [`experiments/tla_corpus.py`](experiments/tla_corpus.py) and

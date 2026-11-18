@@ -94,10 +94,9 @@ with their original fields and hashes. The authored matchup, ABI and viewing
 boundary govern arena compatibility. A retained w2 participant served a
 checkpoint in a current selected matchup and its games replayed.
 
-## Concept review of the built change, 2026-11-18 — build this next
+## Concept review of the built change, 2026-11-18 — implemented
 
-The build matches the revision above. Three small corrections remain, all
-inside items 2, 4 and 5; nothing else changes.
+The three corrections to items 2, 4 and 5 are built.
 
 1. Rename `PlayerRegistration.checkpoint_source` to `writer_revision`
    (`manabot/sim/registration.py`, `manabot/eval/admission.py`,
@@ -116,7 +115,9 @@ inside items 2, 4 and 5; nothing else changes.
 3. `README.md` "What it trains on now" links "world w17" as the current
    world. Link the card count to the pool without a world number.
 
-Then gate and publish for human review. No landing or paid run.
+The native pool returned 443 eligible definitions when checked for the README.
+The three requested evaluation test files passed (42 tests).
+Next step is to gate and publish for human review. No landing or paid run.
 
 Left as they are and shown on `scratch/concept-review.html`: the several
 names for the two kinds of checkpoint (world-bound, deck-source; setup-bound,

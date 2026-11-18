@@ -94,7 +94,7 @@ def register_checkpoint(
         },
         compute_class_id="policy-cpu-one-thread-one-pass",
         checkpoint_sha256=digest,
-        checkpoint_source=checkpoint.writer_revision,
+        writer_revision=checkpoint.writer_revision,
         stored_programs=checkpoint.stored_programs,
         checkpoint_bytes=size,
         parameter_count=agent.parameter_count,

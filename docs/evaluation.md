@@ -223,7 +223,7 @@ moved, and the heuristic registration records its source hash. When a relevant
 change intervenes, measure both participants on the same revision.
 
 Local evaluation requests and Etude match records carry the checkpoint
-registration. `checkpoint_source` gives the writing revision when known.
+registration. `writer_revision` gives the writing revision when known.
 `stored_programs` counts trained card definitions whose saved program the
 policy reads, including programs identical to the current catalog. Earlier
 registrations can omit both fields.
