@@ -165,3 +165,10 @@ The paired runs target 50 updates and export at 0, 25 and 50. At the
 previous on arm's first-update pace, 250 updates would take about 38 hours
 on that host. The complete-games collector closes games after its transition
 quota, so equal update counts can contain different numbers of decisions.
+
+Two additional packed rentals for seed 21502 failed admission. RunPod
+acquired no machine for either L4 launch `1dfbfa40f973` or A40 launch
+`6b04a0e6a69b`. Single-slot L4s were available for sequential training.
+Launch `cb970eff0754` for seed 21502 and launch `e377ebc1adc0` for seed
+21503 each recorded one USD8.7975 rental ceiling. The three acquired
+ceilings total USD22.08 against a remaining USD27.55 training allowance.
