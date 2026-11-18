@@ -469,6 +469,27 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
             choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+            // The nested filter paid once: the Angel's receipt holds its five
+            // units, names the Prism for the one it made, and never counts
+            // the unit the Prism's own fee consumed.
+            let spent = s
+                .game()
+                .state
+                .stack_objects
+                .iter()
+                .find_map(|object| match object {
+                    managym::state::stack_object::StackObject::Spell(spell) => {
+                        Some(spell.spent.clone())
+                    }
+                    _ => None,
+                })
+                .expect("the Angel is on the stack");
+            assert_eq!(spent.total(), 5);
+            let sources = spent.mana_sources();
+            assert_eq!(sources.len(), 1);
+            assert_eq!(s.game().state[sources[0].object].name, "Prophetic Prism");
+            let from_prism = spent.mana().iter().filter(|unit| unit.source.is_some());
+            assert_eq!(from_prism.count(), 1);
         }
     }
 }
