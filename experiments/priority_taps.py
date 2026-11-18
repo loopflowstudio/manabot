@@ -28,9 +28,8 @@ from etude.eval.records import (
 )
 from etude.eval.result import Row, Tables
 from etude.jobs import EvalJob, ExperimentState, TrainingJob
-from etude.launch import client
-from etude.spec import Input
 from etude.report import Curve, Matches, Report, Score, Series
+from etude.spec import Input
 from etude.train.tracking import track
 
 from experiments import priority_taps
@@ -205,16 +204,10 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             runs = [run for run in state.runs if run.launch == name]
             if len(runs) > 1:
                 raise ValueError(f"multiple training runs for {name}")
-            if not runs:
+            # ExperimentState already joins lost rentals to their last stored export.
+            if not runs or not runs[0].ended:
                 return []
             run = runs[0]
-            if not run.ended:
-                # A lost rental cannot write its own end into the checkpoint store.
-                if run.state not in {"running", "stopped"}:
-                    return []
-                status = client.status(run.name)
-                if not status.done or status.outcome == "succeeded":
-                    return []
             checkpoints[name] = {
                 int(c.at["updates"]): checkpoint_player(c.ref) for c in run.checkpoints
             }
