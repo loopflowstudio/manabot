@@ -173,7 +173,11 @@ def execute_game(
         space = spaces[0] if spaces else ObservationSpace()
         if match is not None:
             first, second = game["seat_players"]
-            match.priority_mana_taps = (first in tap_players, second in tap_players)
+            match = match.model_copy(
+                update={
+                    "priority_mana_taps": (first in tap_players, second in tap_players)
+                }
+            )
             resolved = match.model_dump(mode="json")
             if resolved != game["match_hypers"]:
                 game["match_hypers"] = resolved
