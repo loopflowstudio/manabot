@@ -60,7 +60,7 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
-    (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-on": 3}),
+    (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
 

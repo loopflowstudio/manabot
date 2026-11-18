@@ -522,16 +522,61 @@ def random_deals() -> None:
     rng = random.Random(385)
     decks = rng.sample(corpus().decks, 24)
     deals: list[tuple[list[managym.PlayerConfig], object]] = []
+    # MTG-385's original off policy shared the RNG with deck selection.
+    # Preserve its positions (32-bit draws from seed 385) as the policy changes.
+    deal_offsets = (
+        25,
+        210,
+        783,
+        1191,
+        1446,
+        1703,
+        1974,
+        2699,
+        3234,
+        3771,
+        4244,
+        4611,
+        4896,
+        5347,
+        5646,
+        6055,
+        6196,
+        6382,
+        6661,
+        6866,
+        7502,
+        7900,
+        8157,
+        8434,
+        8585,
+        9155,
+        9454,
+        9778,
+        9935,
+        10251,
+        10787,
+        11169,
+        12346,
+        12735,
+        13354,
+        13906,
+        14189,
+        14476,
+        15223,
+        15529,
+    )
+    for offset in deal_offsets:
+        rng.seed(385)
+        for _ in range(offset):
+            rng.getrandbits(32)
+        players = [deck.player() for deck in rng.sample(decks, 2)]
+        deals.append((players, rng.getstate()))
     for mode in ("off", "always", "usable"):
         steps = skipped = offered = chosen = 0
         start = perf_counter()
-        for game in range(40):
-            if mode == "off":
-                players = [deck.player() for deck in rng.sample(decks, 2)]
-                deals.append((players, rng.getstate()))
-            else:
-                players, state = deals[game]
-                rng.setstate(state)
+        for game, (players, state) in enumerate(deals):
+            rng.setstate(state)
             env = managym.Env(seed=1000 + game)
             obs, _ = env.reset(managym.GameSetup(players, mana_taps=(mode, mode)))
             for _ in range(5000):
