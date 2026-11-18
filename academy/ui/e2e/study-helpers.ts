@@ -115,3 +115,9 @@ export async function openPriorityStudyDecision(page: Page, traceId: string) {
   await expect(page.getByTestId('study-reveal')).toHaveCount(0);
   return decision;
 }
+
+/** The objects the table draws, by id and name: the board a Study attempt must return to. */
+export async function boardObjects(page: Page): Promise<string> {
+  return page.getByTestId('game-board').evaluate(board => [...board.querySelectorAll<HTMLElement>('[data-object-id]')]
+    .map(card => `${card.dataset.objectId}:${card.dataset.cardName ?? ''}`).sort().join('|'));
+}

@@ -159,10 +159,10 @@ test('shared history identifies both players and preserves private prefixes and 
     // Trivial opening windows are skipped natively; the first frame is a real decision.
     await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByRole('textbox', { name: /How did this game feel/ })).toHaveCount(0);
-    await visitor.getByTestId('study-decision').first().click();
+    await visitor.getByTestId('game-log').locator('button[data-move]').first().click();
     await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await visitor.getByRole('link', { name: 'Back to games' }).focus();
+    await visitor.getByRole('link', { name: 'Games', exact: true }).focus();
     await visitor.keyboard.press('Enter');
     expect(failures).toEqual([]);
     await expect(visitor).toHaveURL(filtered);

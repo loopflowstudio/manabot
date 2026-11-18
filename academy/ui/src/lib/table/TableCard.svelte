@@ -16,7 +16,9 @@
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace } from '$lib/card-faces.svelte';
   import type { CardState, PermanentState } from '$lib/types';
+  import { getContext } from 'svelte';
   import { keywordsOf } from './inspect';
+  import { cardEvidence, EVIDENCE, formatProbability, type OfferEvidence } from './replay';
   import type { PlannedSource } from './payment';
   import Pips from './Pips.svelte';
   import { CARD_RATIO, FRAME_RATIO, type PlacedOffer } from './view';
@@ -53,6 +55,10 @@
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
     toward = null, blocks = null, side = 'you', touched = false, dealt = 0, planned = null, count = null, onactivate, onpreview,
   }: Props = $props();
+
+  // At a recorded choice: the policy's mass on this card's offers, and whether one was played.
+  const recordedPolicy = getContext<(() => OfferEvidence | null) | undefined>(EVIDENCE);
+  const recorded = $derived(cardEvidence(recordedPolicy?.() ?? null, offers.map(placed => placed.offer.id)));
 
   const landscape = $derived(shape === 'landscape');
   const height = $derived(Math.round(width / (landscape ? FRAME_RATIO : CARD_RATIO)));
@@ -98,6 +104,8 @@
     permanent?.is_token ? 'token' : '',
     dealt ? `dealt ${dealt} since your last move` : '',
     planned ? `would tap for ${planned.output || 'mana'} (payment plan, source ${planned.order})` : '',
+    recorded?.p != null ? `recorded policy ${formatProbability(recorded.p)}` : '',
+    recorded?.chosen ? 'chosen' : '',
   ].filter(Boolean).join(', '));
   const label = $derived([
     `${name}${creature && power !== null ? ` ${power}/${toughness}` : ''}`,
@@ -120,6 +128,8 @@
     class:landscape
     class:tapped
     class:legal={live && offers.length > 0}
+    class:offered={!live && recorded !== null}
+    class:chosen={recorded?.chosen}
     class:asked
     class:attacking={permanent?.attacking}
     class:touched
@@ -171,6 +181,9 @@
     {#if offers.length > 1 && live}<span class="many" aria-hidden="true">{offers.length}</span>{/if}
     {#if planned}
       <span class="plan" aria-hidden="true"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
+    {/if}
+    {#if recorded && (recorded.p !== null || recorded.chosen)}
+      <span class="policy" aria-hidden="true" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
     {/if}
     {#if dealt}{#key dealt}<span class="dealt" aria-hidden="true" data-testid="damage-dealt">−{dealt}</span>{/key}{/if}
   </button>
@@ -227,6 +240,16 @@
   .tcard.touched { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 1px 2px rgb(20 14 8 / 0.25); }
   .tcard.legal { box-shadow: 0 0 0 2px var(--legal), 0 0 12px color-mix(in srgb, var(--legal) 45%, transparent); }
   .tcard.legal:hover { box-shadow: 0 0 0 3px var(--legal), 0 0 16px color-mix(in srgb, var(--legal) 60%, transparent); transform: translateY(-2px); }
+  /* A recorded choice's legal space, read-only: offered cards are outlined thinly, the played one solidly. */
+  .tcard.offered { box-shadow: 0 0 0 1px color-mix(in srgb, var(--legal) 70%, transparent); }
+  .tcard.chosen { box-shadow: 0 0 0 2px var(--text), 0 4px 10px rgb(20 14 8 / 0.3); }
+  .policy {
+    position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); padding: 0 5px; border-radius: 8px;
+    font: 700 10.5px/15px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
+    color: var(--text); background: var(--bg-surface); border: 1px solid var(--border-strong);
+  }
+  .policy[data-chosen='true'] { color: var(--bg-surface); background: var(--text); border-color: var(--text); }
+  .tcard:not(.landscape) .policy { bottom: calc(var(--bar) + 3px); }
   .tcard.asked { box-shadow: 0 0 0 2px var(--accent), 0 8px 18px rgb(20 14 8 / 0.35); transform: translateY(-8px); }
 
   /* Planned payment: dashed, and what tapping it adds. Distinct from the solid "legal" outline. */

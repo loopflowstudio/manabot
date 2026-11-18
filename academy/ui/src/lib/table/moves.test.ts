@@ -41,9 +41,11 @@ describe('moveList', () => {
     expect(turns[0].moves.map(move => [move.actor, move.passes?.length ?? 0])).toEqual([['you', 0], ['note', 1], ['you', 0]]);
   });
 
-  it('still collapses repeated automated moves that are not passes', () => {
-    const turns = moveList([entry('auto', 2, 'Tap Island'), entry('auto', 2, 'Tap Island')], players, new Map(), []);
-    expect(turns[0].moves.map(move => [move.actor, move.count])).toEqual([['auto', 2]]);
+  it('collapses repeated automated and opponent moves, never the person\'s', () => {
+    const turns = moveList([entry('auto', 2, 'Tap Island'), entry('auto', 2, 'Tap Island'),
+      entry('villain', 2, 'Opponent decision'), entry('villain', 2, 'Opponent decision'),
+      entry('hero', 2, 'Tap Island'), entry('hero', 2, 'Tap Island')], players, new Map(), []);
+    expect(turns[0].moves.map(move => [move.actor, move.count])).toEqual([['auto', 2], ['opponent', 2], ['you', 1], ['you', 1]]);
   });
 });
 

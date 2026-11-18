@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  boardObjects,
   collectStudyConsoleErrors,
   createCompletedStudyTrace,
   openPriorityStudyDecision,
@@ -24,7 +25,7 @@ test('Retry before reveal compares bounded plans and returns to the Score', asyn
   const traceId = await createCompletedStudyTrace(page);
 
   const decision = await openPriorityStudyDecision(page, traceId);
-  const recordedBoard = await page.getByTestId('game-board').innerHTML();
+  const recordedBoard = await boardObjects(page);
   const retryResponse = page.waitForResponse(
     (response) => response.url().includes('/retry') && response.request().method() === 'POST',
   );
@@ -73,7 +74,7 @@ test('Retry before reveal compares bounded plans and returns to the Score', asyn
 
   await search.press('Escape');
   await expect(decision).toBeFocused();
-  await expect.poll(() => page.getByTestId('game-board').innerHTML()).toBe(recordedBoard);
+  await expect.poll(() => boardObjects(page)).toBe(recordedBoard);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await decision.click();
@@ -95,6 +96,6 @@ test('Retry before reveal compares bounded plans and returns to the Score', asyn
 
   await page.getByTestId('study-return').click();
   await expect(decision).toBeFocused();
-  await expect.poll(() => page.getByTestId('game-board').innerHTML()).toBe(recordedBoard);
+  await expect.poll(() => boardObjects(page)).toBe(recordedBoard);
   expect(consoleErrors, `console errors: ${consoleErrors.join('\n')}`).toEqual([]);
 });

@@ -5,7 +5,8 @@
  * with their moves: who made each one (a player's name, or automation, which is
  * never the person's), how many times in a row (consecutive identical automated
  * moves collapse to one line with a count), and the move's text split so card
- * names can be inspected. A run of the opponent's and automation's priority
+ * names can be inspected. The opponent's identical consecutive moves collapse
+ * the same way. A run of the opponent's and automation's priority
  * passes folds into one quiet line that still counts each actor's passes; the
  * person's own passes stay moves. It reads only what the log says; it never
  * infers moves.
@@ -94,7 +95,8 @@ export function moveList(
       }
       continue;
     }
-    if (last && actor === 'auto' && last.actor === 'auto' && last.segments.map(s => s.text).join('') === entry.text) {
+    // Repeats by automation or the opponent collapse with a count; the person's own moves never do.
+    if (last && actor !== 'you' && last.actor === actor && last.segments.map(s => s.text).join('') === entry.text) {
       last.count += 1;
       continue;
     }

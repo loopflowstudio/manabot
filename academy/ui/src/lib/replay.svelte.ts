@@ -19,7 +19,6 @@ export class ReplayStore {
   work = $state<WorkStatus | null>(null);
   workDisconnected = $state(false);
   reveal = $state(false);
-  nearSeat = $state(0);
   private generation = 0;
   private id = '';
   private sourceGeneration = 0;

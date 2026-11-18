@@ -115,9 +115,9 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
 
   await finishGame(page);
   await page.goto('/replay');
-  const traceSelect = page.getByTestId('trace-select');
-  await expect(traceSelect).toBeVisible({ timeout: 15_000 });
-  await traceSelect.selectOption({ index: 1 });
+  const newest = page.getByTestId('recording-link').first();
+  await expect(newest).toBeVisible({ timeout: 15_000 });
+  await newest.click();
   await expect(board).toBeVisible({ timeout: 15_000 });
   await expect(board.getByTestId('card-treatment').first()).toHaveAttribute(
     'data-asset-source',

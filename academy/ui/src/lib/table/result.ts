@@ -44,10 +44,10 @@ export function gameResult(
 ): GameResult {
   const { agent, opponent, turn } = frame.projection;
   const nameOf = (index: number): string => (index === agent.player_index ? names.you : names.opponent);
-  const headline = winner === null ? 'Draw' : winner === agent.player_index ? 'You win' : `${names.opponent} wins`;
+  const headline = winner === null ? 'Draw' : winner === agent.player_index ? (names.you === 'You' ? 'You win' : `${names.you} wins`) : `${names.opponent} wins`;
   const loser = winner === null ? null : winner === agent.player_index ? opponent : agent;
   const on = `on turn ${turn.turn_number}`;
-  const lowerYou = (who: string): string => (who === names.you ? 'you' : who);
+  const lowerYou = (who: string): string => (who === 'You' ? 'you' : who);
   const how = loser === null ? `Neither player won, ${on}`
     : loser.life <= 0 ? `${nameOf(loser.player_index)} went to ${signed(loser.life)} life ${on}`
       : `${nameOf(loser.player_index)} lost ${on}`;

@@ -25,6 +25,8 @@
   import { builtinOpponentName } from '$lib/opponent-name';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/table/result';
+  import Strip from '$lib/table/Strip.svelte';
+  import { logMarks } from '$lib/table/replay';
   import {
     connect,
     disconnect,
@@ -295,6 +297,10 @@
 
   const ending = $derived(gameStore.gameOver && boardFrame
     ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: opponentName }, gameStore.winner) : null);
+  // The game so far as a strip of decisions, folded unless opened. Live play
+  // shows no past position yet: positions open in Review once the game ends.
+  let stripOpen = $state(false);
+  const liveMarks = $derived(logMarks(gameStore.actionLog));
   const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
 </script>
 
@@ -338,11 +344,16 @@
       {/if}
     </div>
     <p class="type-caption result-links">
-      {#if gameStore.recordingId}<a class="underline" data-testid="game-result-recording" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open the recording</a> · {/if}
+      {#if gameStore.recordingId}<a class="underline" data-testid="game-result-recording" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}&review=1`}>Review this game</a> · {/if}
       <a class="underline" href="/?setup=1">New game</a>
     </p>
     {#if gameStore.newGamePending}<p role="status" class="type-caption text-ink-2">Preparing the next game…</p>{/if}
   </div>
+{/snippet}
+
+{#snippet liveStrip()}
+  <Strip marks={liveMarks} selected={null} open={stripOpen} ontoggle={() => (stripOpen = !stripOpen)}
+    note={gameStore.gameOver ? null : 'Positions open in Review after the game'} />
 {/snippet}
 
 {#snippet menu()}
@@ -402,6 +413,7 @@
       onact={handleActionSelect}
       onpassturn={handlePassTurn}
       {notices}
+      bottom={liveStrip}
       result={gameStore.gameOver ? result : undefined}
       {menu}
     />

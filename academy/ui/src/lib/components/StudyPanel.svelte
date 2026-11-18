@@ -1,11 +1,14 @@
 <script lang="ts">
-  import DecisionSurface from './DecisionSurface.svelte';
+  /**
+   * Study's controls beside the table: the attempt's phase, Reveal, the three
+   * plans, and Return. The historical offers themselves are the table's: a
+   * person tries a line by choosing one on the board or in its list.
+   */
   import { tick } from 'svelte';
 
   import type { RestoredReplayDecision } from '$lib/replay-index';
   import type { StudyDisplayPlan, StudyPlanKind } from '$lib/study-runtime';
   import type { StudyPhase } from '$lib/study.svelte';
-  import type { InteractionOffer } from '$lib/types';
 
   interface Props {
     phase: StudyPhase;
@@ -15,7 +18,6 @@
     busy?: boolean;
     inspected?: boolean;
     errorMessage?: string | null;
-    onRetry?: (offer: InteractionOffer) => void;
     onReveal?: () => void;
     onReturn?: () => void;
     onPreview?: (plan: StudyPlanKind) => void;
@@ -30,7 +32,6 @@
     busy = false,
     inspected = false,
     errorMessage = null,
-    onRetry = undefined,
     onReveal = undefined,
     onReturn = undefined,
     onPreview = undefined,
@@ -50,7 +51,7 @@
     if (nextBusy) return;
     void tick().then(() => {
       if (nextPhase === 'restored') {
-        controls?.querySelector<HTMLButtonElement>('[data-testid="action-option"]')?.focus();
+        document.querySelector<HTMLButtonElement>('[data-testid="action-option"]:not(:disabled)')?.focus();
       } else if (nextPhase === 'retried') {
         controls?.querySelector<HTMLButtonElement>('[data-testid="study-reveal"]')?.focus();
       } else if (nextPhase === 'revealed') {
@@ -87,7 +88,7 @@
   bind:this={controls}
   data-testid="study-panel"
   aria-labelledby="study-heading"
-  class="mt-4 rounded border border-line-strong bg-field px-4 py-4"
+  class="rounded border border-line-strong bg-field px-3 py-3"
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -120,9 +121,8 @@
 
   {#if phase === 'restored'}
     <p class="type-annotation mt-3 text-ink-2">
-      {inspected ? 'Choose your line from the exact historical offer. The recorded match stays at its current decision.' : 'Choose your line from the exact historical offer. Policy and Search stay sealed until one command is accepted.'}
+      {inspected ? 'Choose your line on the table from the exact historical offer. The recorded match stays at its current decision.' : 'Choose your line on the table from the exact historical offer. Policy and Search stay sealed until one command is accepted.'}
     </p>
-    <DecisionSurface frame={restored.frame} disabled={busy} onSelectAction={onRetry} />
   {:else if phase === 'retried'}
     <p class="type-annotation mt-3 text-ink-2">
       {inspected ? 'Your line ran on an isolated rules branch. Return to compare it with the recorded bot choice.' : 'Your prediction is locked. Reveal asks the evidence provider now; returning leaves it sealed.'}
@@ -143,7 +143,7 @@
       Played, Policy, and Search are separate judgments. Focus a plan to highlight its authoritative table objects; select it to play its bounded continuation.
     </p>
     <div
-      class="mt-3 grid gap-3 lg:grid-cols-3"
+      class="mt-3 grid gap-2"
       role="radiogroup"
       aria-label="Study plans"
       tabindex="-1"

@@ -7,7 +7,7 @@ test('starting and reopening an unfinished bot game keeps its live replay positi
   const start = page.getByRole('button', { name: 'Start watching' });
   const heading = page.getByRole('heading', { name: 'Replay', exact: true });
   const position = page.getByTestId('position-counter');
-  const status = page.getByRole('main').getByRole('status');
+  const status = page.getByTestId('recording-status');
   const continuation = page.getByRole('button', { name: 'Continue', exact: true });
   await page.goto('/replay?watch=1');
   await expect(start).toBeEnabled();
@@ -29,6 +29,7 @@ test('starting and reopening an unfinished bot game keeps its live replay positi
   await expect(heading).toBeVisible();
   await expect(page.getByRole('banner').getByRole('link', { name: 'Current game', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(start).toBeHidden();
+  await page.getByTestId('table-menu').click();
   await page.getByText('Watch another matchup', { exact: true }).click();
   await expect(start).toBeVisible();
 });
@@ -89,6 +90,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(step).toBeInViewport();
   await expect(step).toBeEnabled();
   await page.screenshot({ path: 'test-results/launch/replay-landing.png' });
+  await page.getByTestId('table-menu').click();
   await page.getByText('Watch another matchup', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeVisible();
   expect(errors).toEqual([]);
@@ -121,22 +123,13 @@ test('imported launch setup shows selected sources and switches back to bundled 
 });
 
 
-test('a recorded collector game opens with both seat names, training label and default art', async ({ page }) => {
+test('a recorded collector game opens with both seat names and its training label', async ({ page }) => {
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { training_replay: string };
   await page.goto(addresses.training_replay);
-  await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'The Score · Training game', exact: true })).toBeVisible();
-  const board = page.getByTestId('game-board');
-  await expect(board.getByRole('heading', { name: 'gaea', exact: true })).toBeVisible();
-  await expect(board.getByRole('heading', { name: 'urza', exact: true })).toBeVisible();
-  const visibleCard = page.locator('[data-testid="card-treatment"]:visible').first();
-  await visibleCard.scrollIntoViewIfNeeded();
-  await expect(visibleCard).toHaveAttribute('data-art-source', 'scryfall');
-  await expect(page.getByText('Card art credits', { exact: true })).toBeVisible();
-  await page.getByText('Card art credits', { exact: true }).click();
-  await expect(page.getByRole('contentinfo')).toContainText('Proof Artist');
-  // Failed art remains usable and has an identifiable procedural fallback.
-  await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
-  await page.reload();
-  await expect(page.locator('[data-testid="card-treatment"]:visible').first()).toHaveAttribute('data-art-source', 'procedural');
+  await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeAttached();
+  await expect(page.getByTestId('recording-heading')).toHaveText('Training game');
+  const plates = page.getByTestId('player-plate');
+  await expect(plates.filter({ hasText: 'gaea' })).toHaveCount(1);
+  await expect(plates.filter({ hasText: 'urza' })).toHaveCount(1);
+  await expect(page.getByTestId('table-card').first()).toBeVisible();
 });

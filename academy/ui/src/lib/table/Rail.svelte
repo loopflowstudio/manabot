@@ -10,6 +10,7 @@
   import type { MoveTurn } from './moves';
   import type { PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
+  import { formatProbability, type OfferEvidence } from './replay';
   import Thumb from './Thumb.svelte';
   import { stackName, type PlacedOffer, type StackItem, type TableView } from './view';
 
@@ -45,12 +46,23 @@
     over?: boolean;
     /** The docked inspect pane, when inspecting docks to the rail. */
     dock?: Snippet;
+    /** The recorded policy at a recorded choice. */
+    evidence?: OfferEvidence | null;
+    /** The recap's heading. */
+    recapTitle?: string;
+    /** Moves jump to their position when set. */
+    onjump?: (id: string) => void;
+    currentMove?: string | null;
   }
 
   let {
     view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock,
+    evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null,
   }: Props = $props();
+
+  const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
+  const isChosen = (placed: PlacedOffer): boolean => evidence?.chosen === placed.offer.id;
 
   const context = $derived(frame.projection.decision_context);
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
@@ -76,10 +88,17 @@
   });
 
   let logEnd = $state<HTMLElement | null>(null);
+  let logList = $state<HTMLElement | null>(null);
+  // The list follows the newest move live, and the shown position's move in a recording.
   $effect(() => {
     void moves.length;
     void moves.at(-1)?.moves.length;
-    logEnd?.scrollIntoView({ block: 'end' });
+    const current = currentMove;
+    if (current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
+    const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!row || !logList) return;
+    const top = row.offsetTop - logList.offsetTop;
+    if (top < logList.scrollTop || top + row.offsetHeight > logList.scrollTop + logList.clientHeight) logList.scrollTop = top - logList.clientHeight / 2;
   });
 
   function anchorText(placed: PlacedOffer): string {
@@ -131,7 +150,7 @@
     {/if}
     {#if recent.facts.length}
       <div class="recent" data-testid="recent">
-        <h3 class="type-rubric text-ink-3">Since your last move</h3>
+        <h3 class="type-rubric text-ink-3">{recapTitle}</h3>
         <ol>
           {#each facts as fact (fact.seq)}
             {@const spell = fact.spell === null ? undefined : resolved.get(fact.spell)}
@@ -168,17 +187,43 @@
           </details>
         {/if}
       {/if}
+      {#if evidence}
+        <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
+          {#each evidence.summary as fact (fact)}<p class="type-caption text-ink-2">{fact}</p>{/each}
+          {#if evidence.search || evidence.provenance.length}
+            <details class="search-detail" data-testid="search-detail">
+              <summary class="type-caption text-ink-3">Search detail</summary>
+              {#if evidence.search}
+                <table class="type-caption">
+                  <thead><tr><th>Offer</th>{#if evidence.search.some(row => row.prior !== null)}<th>Raw policy</th>{/if}<th>Search value</th><th>Updated policy</th></tr></thead>
+                  <tbody>
+                    {#each evidence.search as row (row.id)}
+                      <tr class:chosen={row.id === evidence.chosen}>
+                        <td>{row.id === evidence.chosen ? '✓ ' : ''}{row.label}</td>
+                        {#if evidence.search.some(candidate => candidate.prior !== null)}<td>{row.prior === null ? '—' : formatProbability(row.prior)}</td>{/if}
+                        <td>{row.score === null ? '—' : row.score.toFixed(3)}</td>
+                        <td>{row.updated === null ? '—' : formatProbability(row.updated)}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {/if}
+              {#each evidence.provenance as line (line)}<p class="type-caption text-ink-3 provenance">{line}</p>{/each}
+            </details>
+          {/if}
+        </div>
+      {/if}
       {#if view.primary}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label}
+        <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} onclick={() => onact(view.primary!)}>
-          <span>{primaryText?.text ?? view.primary.offer.label}</span><kbd>Space</kbd>
+          <span>{#if isChosen(view.primary)}✓ {/if}{primaryText?.text ?? view.primary.offer.label}</span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
-        <button type="button" class="btn btn-secondary secondary" data-testid="prompt-action" data-offer-id={placed.offer.id}
+        <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
           disabled={!live} onclick={() => onact(placed)}>
-          <kbd>{placed.number}</kbd>{placed.offer.label}
+          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}{placed.offer.label}{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {#if canPassTurn}
@@ -192,19 +237,23 @@
 
   <section class="block choices" aria-label="All legal choices">
     <h2 class="heading type-rubric text-ink-2">
-      <span class="type-rubric">{interrupted ? 'Recorded choices' : 'All legal choices'}</span>
+      <span class="type-rubric">{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
       <span class="type-rubric" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
     </h2>
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
         <li>
-          <button type="button" class="row" data-testid="action-option" data-offer-id={placed.offer.id}
-            data-action-type={placed.offer.action_type} data-action-description={placed.offer.label}
-            aria-label={placed.offer.label} disabled={!live} onclick={() => onact(placed)}
+          <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
+            data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
+            aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
+            disabled={!live} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{placed.offer.label}</span>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}{placed.offer.label}</span>
+            {#if recordedP(placed) !== undefined}
+              <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
+            {/if}
             {#if anchorText(placed)}<span class="type-caption text-ink-3">{anchorText(placed)}</span>{/if}
           </button>
         </li>
@@ -214,13 +263,22 @@
 
   <section class="block log" aria-label="Moves">
     <h2><span class="type-rubric text-ink-2">Moves</span></h2>
-    <ol class="turns" data-testid="game-log">
+    <ol class="turns" data-testid="game-log" bind:this={logList}>
       {#each moves as turn, index (`${turn.turn}:${index}`)}
         <li class="turn" data-turn={turn.turn}>
           <p class="turn-head type-rubric"><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
           <ol>
             {#each turn.moves as move, at (move.id)}
-              {#if move.passes}
+              {#if onjump}
+                <!-- A recording's move jumps to its position. -->
+                <li class="move type-caption jump" class:quiet={move.passes !== null} class:auto={move.actor === 'auto'} class:you={move.actor === 'you'}
+                  data-testid={move.passes ? 'pass-run' : 'log-entry'} data-actor={move.actor}>
+                  <button type="button" aria-current={currentMove === move.id ? 'true' : undefined} data-move={move.id} onclick={() => onjump(move.id)}>
+                    <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
+                    <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
+                  </button>
+                </li>
+              {:else if move.passes}
                 <li class="move type-caption quiet" data-testid="pass-run">
                   <span class="who" aria-hidden="true"></span>
                   <span class="what">passed{#each move.passes as part, at (part.actor)}{at ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
@@ -314,6 +372,24 @@
   .card-name { text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
   .card-name:hover, .card-name:focus-visible { color: var(--accent-text); }
   .times { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+  .evidence { display: grid; gap: 1px; padding: 4px 8px; border-left: 2px solid var(--border-strong); min-width: 0; }
+  .search-detail summary { cursor: pointer; width: max-content; }
+  .search-detail table { width: 100%; margin-top: 4px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .search-detail th { text-align: left; font-weight: 600; color: var(--text-tertiary); padding: 0 4px 2px 0; }
+  .search-detail td { padding: 1px 4px 1px 0; vertical-align: top; }
+  .search-detail tr.chosen td { font-weight: 600; }
+  .provenance { overflow-wrap: anywhere; }
+  .p { margin-left: auto; flex: none; font: 600 11px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-secondary);
+    padding: 0 4px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--legal) 28%, transparent) calc(var(--p, 0) * 100%), transparent 0); }
+  .row.chosen, .secondary.chosen { border-color: var(--text); }
+  .row.chosen .label { font-weight: 600; }
+  .row:disabled.chosen { color: var(--text); }
+  .primary.chosen { outline: 2px solid var(--text); outline-offset: 2px; }
+  .primary .p { color: inherit; background: none; }
+  .move.jump { padding-left: 0; }
+  .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: 3px; text-align: left; color: inherit; }
+  .move.jump button:hover { background: var(--bg-field); }
+  .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
   @media (prefers-reduced-motion: reduce) {
     .thinking { animation: none; }
   }

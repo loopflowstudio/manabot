@@ -323,14 +323,14 @@ test('historical positions stay separate from blocked frontier work and late sou
     await expect(page.getByRole('region', {name: 'Live frontier work'})).toContainText('Reading a saved position; bot work belongs to the frontier.');
     await expect.poll(() => releaseStatus !== null).toBe(true);
     await page.screenshot({path: fileURLToPath(new URL('../test-results/policy/historical-frontier.png', import.meta.url))});
-    await page.getByTestId('trace-select').selectOption(other.id);
-    await expect(page.getByTestId('trace-select')).toHaveValue(other.id);
+    await page.goto(`${origin}/replay?trace=${other.id}`);
+    await expect.poll(() => new URL(page.url()).searchParams.get('trace')).toBe(other.id);
     for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/release`);
     releaseStatus?.();
     await pendingStep;
     await expect.poll(() => delivered).toBe(true);
     await expect(page.getByTestId('work-status')).toHaveCount(0);
-    await expect(page.getByTestId('trace-select')).toHaveValue(other.id);
+    expect(new URL(page.url()).searchParams.get('trace')).toBe(other.id);
   } finally {
     releaseStatus?.();
     for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/release`);

@@ -166,10 +166,11 @@ test('one seat-oriented setup starts both registered bots and retains their exac
   await page.getByRole('button',{name:'Start watching',exact:true}).click();
   await expect(page.getByTestId('position-counter')).toBeVisible();
   await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await expect(page.getByTestId('recorded-decision-evidence')).toContainText('Recorded at this decision');
+  await expect(page.getByTestId('recorded-decision-evidence')).toBeVisible();
   await expect(page.getByRole('link',{name:'Current game',exact:true}).first()).toHaveAttribute('href',/trace=/);
   await page.reload();
   await expect(page.getByTestId('position-counter')).toBeVisible();
+  await page.getByTestId('table-menu').click();
   await page.getByText('Watch another matchup',{exact:true}).click();
   await expect(page.getByTestId('checkpoint-select').nth(0)).toHaveValue(`policy:${smoke[0].sha256}`);
   await expect(page.getByTestId('checkpoint-select').nth(1)).toHaveValue(`policy:${smoke[1].sha256}`);

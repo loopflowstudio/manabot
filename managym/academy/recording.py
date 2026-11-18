@@ -180,7 +180,38 @@ class Recording:
             "automatic": bool(self.payload["events"][position.event_index].get("auto"))
             if position.kind == "consequences"
             else False,
+            # A summary of what `read` returns at this position, so a score can
+            # name and place every position without reading each one.
+            "revision": row.revision
+            if position.kind == "choice" and row
+            else self.revisions.get(position.event_index)
+            if position.kind == "consequences"
+            else None,
+            "label": row.offer.label
+            if position.kind == "choice" and row
+            else self._description(position),
+            "value": self._value(position),
         }
+
+    def _description(self, position: Position) -> str | None:
+        """What a consequences position narrates; another seat's choice stays unnamed."""
+        if position.kind != "consequences":
+            return None
+        source = self.payload["events"][position.event_index]
+        description = (
+            source.get("action_description")
+            if source.get("actor") == "hero"
+            else "Opponent decision"
+        )
+        return f"Auto: {description}" if source.get("auto") else description
+
+    def _value(self, position: Position) -> float | None:
+        """The chooser's recorded value at a choice, as `read` returns it in `outputs`."""
+        if position.kind != "choice" or not position.decision:
+            return None
+        recorded = self.payload["events"][position.event_index].get("bot_decision")
+        value = recorded.get("value") if isinstance(recorded, dict) else None
+        return float(value) if isinstance(value, int | float) else None
 
     def _raw_board(self, position: Position) -> dict[str, Any]:
         index = position.event_index + (position.kind == "consequences")
@@ -299,21 +330,14 @@ class Recording:
                 transition_start = bisect_right(
                     self.track_revisions.get(viewer, []), revision
                 )
-        description: str | None = None
-        note_key = position.key
-        if position.kind == "consequences":
-            source_event = self.payload["events"][position.event_index]
-            description = (
-                source_event.get("action_description")
-                if source_event.get("actor") == "hero"
-                else "Opponent decision"
-            )
-            if source_event.get("auto"):
-                description = f"Auto: {description}"
-            note_key = f"replay-{position.event_index}"
+        note_key = (
+            f"replay-{position.event_index}"
+            if position.kind == "consequences"
+            else position.key
+        )
         return {
             **self.metadata(position),
-            "description": description,
+            "description": self._description(position),
             "note_key": note_key,
             "observation": deepcopy(analysis) if reveal else observation,
             "decision": decision,

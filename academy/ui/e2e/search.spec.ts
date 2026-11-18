@@ -41,20 +41,31 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByLabel('Seed', { exact: true }).fill('0');
     await page.getByRole('button', { name: 'Start watching' }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    // The updated policy is on each offer's card and row; the search's own columns open beside the prompt.
+    await expect(page.getByTestId('card-policy').first()).toBeVisible();
+    await page.getByTestId('search-detail').locator('summary').click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Updated policy', exact: true })).toBeVisible();
     await expect(page.getByText('Uniform belief (physical deal):', { exact: false })).toBeVisible();
     await page.reload();
+    await page.getByTestId('search-detail').locator('summary').click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     await page.getByRole('columnheader', { name: 'Raw policy', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/search/watch-${theme}.png`, import.meta.url)) });
 
     await page.goto(addresses.saved);
-    await page.getByRole('button', { name: 'Inspect bot search', exact: true }).click();
-    await expect(page.getByTestId('replay-perspective')).toContainText('Chooser: seat 2');
+    // The bot's first searched decision, reached with the transport's next-decision control.
+    const perspective = page.getByTestId('replay-perspective');
+    await expect(page.getByTestId('position-counter')).toBeVisible();
+    for (let step = 0; step < 20 && !(await perspective.textContent())?.includes('chooser seat 2'); step += 1) {
+      await page.getByRole('button', { name: 'Next decision', exact: true }).click();
+      await page.waitForTimeout(150);
+    }
+    await expect(perspective).toContainText('chooser seat 2');
+    await page.getByTestId('search-detail').locator('summary').click();
     await expect(page.getByRole('columnheader', { name: 'Updated policy', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'The Score · Recorded Play game', exact: true })).toBeVisible();
+    await expect(page.getByTestId('recording-heading')).toHaveText('Recorded Play game');
     await page.getByRole('columnheader', { name: 'Updated policy', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/search/replay-${theme}.png`, import.meta.url)) });
     expect(errors).toEqual([]);

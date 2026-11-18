@@ -10,8 +10,13 @@
    * receives the exact offer a person chose, and the caller binds it to the
    * frame's revision as one Command. What happened is read from the
    * authority's presentation events; motion only shows it.
+   *
+   * A recorded game draws the same table read-only (`live` false): the caller
+   * supplies where the recap starts (`since`), the move list (`moves`, which
+   * may jump), the recorded policy (`evidence`, shown on each offer's card and
+   * row) and a bottom edge (`bottom`: the transport and the decision strip).
    */
-  import { onMount, untrack, type Snippet } from 'svelte';
+  import { onMount, setContext, untrack, type Snippet } from 'svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig } from '$lib/types';
@@ -19,7 +24,8 @@
   import Inspect from './Inspect.svelte';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
-  import { moveList } from './moves';
+  import { moveList, type MoveTurn } from './moves';
+  import { EVIDENCE, type OfferEvidence } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { primaryLabel, promptLine } from './prompt';
   import { nameBook, recentView, tableLines, turnOwners, visibleNames } from './recent';
@@ -36,8 +42,9 @@
     you: { name: string; deck: string | null };
     opponent: { name: string; deck: string | null; description?: string };
     stops: StopsConfig;
-    connection: ConnectionState;
-    connectionLabel: string;
+    /** The live connection; a recording has none. */
+    connection?: ConnectionState | null;
+    connectionLabel?: string;
     log: GameLogEntry[];
     canPassTurn: boolean;
     /** The live presentation track: what happened, as the authority reports it. */
@@ -51,20 +58,38 @@
     /** The live session is gone; offers are the last recorded decision's. */
     interrupted: boolean;
     /** The automatic payer's answer for the offer last asked about, if any. */
-    payment: PreviewState | null;
+    payment?: PreviewState | null;
     /** Ask for the payment preview of this offer, or of none. Asking sends no action. */
-    onpreview: (offer: InteractionOffer | null) => void;
+    onpreview?: (offer: InteractionOffer | null) => void;
     onact: (offer: InteractionOffer) => void;
-    onpassturn: () => void;
+    onpassturn?: () => void;
+    /** Where "since your last move" starts, when the caller knows (a recording); else the person's last commit. */
+    since?: number | null;
+    /** The move list, when the caller keeps it (a recording); else read from `log`. */
+    moves?: MoveTurn[];
+    /** Jump to the position a move names; moves are buttons when set. */
+    onjump?: (id: string) => void;
+    /** The move the shown position belongs to. */
+    currentMove?: string | null;
+    /** The recorded policy at a recorded choice. */
+    evidence?: OfferEvidence | null;
+    /** The recap's heading, when it is not the person's last move. */
+    recapTitle?: string;
+    /** Under the board: a recording's transport and decision strip, or live play's strip. */
+    bottom?: Snippet;
     notices?: Snippet;
     result?: Snippet;
     menu?: Snippet;
   }
 
   let {
-    frame, live, status, you, opponent, stops, connection, connectionLabel, log, canPassTurn,
-    presentation, thinking, opponentChoosing, workStarted, interrupted, payment, onpreview, onact, onpassturn, notices, result, menu,
+    frame, live, status, you, opponent, stops, connection = null, connectionLabel = '', log, canPassTurn,
+    presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
+    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, bottom, notices, result, menu,
   }: Props = $props();
+
+  // Cards read the recorded policy for their own offers.
+  setContext(EVIDENCE, () => evidence);
 
   // The table is the whole screen; the page behind it must not scroll.
   onMount(() => {
@@ -82,7 +107,9 @@
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])));
   const whose = $derived(frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
-      : frame.prompt.actor === projection.agent.player_index ? (live ? 'Your decision' : 'Your decision · waiting') : `${opponent.name}'s decision`);
+      : frame.prompt.actor === projection.agent.player_index
+        ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${you.name}'s decision`
+        : `${opponent.name}'s decision`);
   // ———————————————— Payment preview
 
   // The offer the board previews: the one a person points at or focuses, when
@@ -117,10 +144,11 @@
   // The revision your last move was made at; events after it are "since your last move".
   let since = $state.raw<{ revision: number; frame: ExperienceFrame; logLength: number } | null>(null);
   const players = $derived({ you: you.name, opponent: opponent.name });
-  const book = $derived(nameBook(since ? [since.frame, frame] : [frame], since ? log.slice(since.logLength) : []));
-  const recent = $derived(recentView(frame, since?.revision ?? null, presentation.events, index => presentation.labelsAt(index), players, book));
-  const lines = $derived(tableLines(frame, presentation.events, recent.resolved, since?.revision ?? null));
-  const moves = $derived(moveList(log, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
+  const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since?.revision ?? null);
+  const book = $derived(nameBook(since && sinceGiven === undefined ? [since.frame, frame] : [frame], since && sinceGiven === undefined ? log.slice(since.logLength) : []));
+  const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players, book));
+  const lines = $derived(tableLines(frame, presentation.events, recent.resolved, sinceRevision));
+  const moves = $derived(movesGiven ?? moveList(log, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion
 
@@ -341,7 +369,7 @@
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
-      <span class="text-ink">You</span>{#if you.deck}<span class="text-ink-3">{' · '}{you.deck}</span>{/if}
+      <span class="text-ink">{you.name}</span>{#if you.deck}<span class="text-ink-3">{' · '}{you.deck}</span>{/if}
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={opponent.description}>{opponent.name}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
@@ -357,18 +385,20 @@
       </ol>
     </nav>
     <div class="right">
-      <span class="connection" data-state={connection}>
-        <i aria-hidden="true"></i>
-        <span data-testid="connection-badge" data-connection-state={connection} role="status" aria-live="polite" aria-atomic="true"
-          aria-label={`Connection status: ${connectionLabel}`} class="type-rubric">{connectionLabel}</span>
-      </span>
+      {#if connection}
+        <span class="connection" data-state={connection}>
+          <i aria-hidden="true"></i>
+          <span data-testid="connection-badge" data-connection-state={connection} role="status" aria-live="polite" aria-atomic="true"
+            aria-label={`Connection status: ${connectionLabel}`} class="type-rubric">{connectionLabel}</span>
+        </span>
+      {/if}
       <button type="button" class="inspect-toggle type-caption" data-testid="inspect-toggle" aria-pressed={inspectMode === 'dock'}
         title="Show inspected cards in a pane on the rail, or beside the card" onclick={toggleInspect}>{inspectMode === 'dock' ? 'Inspect: docked' : 'Inspect: beside card'}</button>
       {#if menu}{@render menu()}{/if}
     </div>
   </header>
 
-  <div class="board" id="table-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
+  <div class="board" id="table-board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
     <section class="half opponent" aria-label={`${opponent.name}'s battlefield`}>
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
@@ -436,8 +466,11 @@
   <div class="rail-slot" id="table-choices">
     <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={opponent.name} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
-      onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined} />
+      onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
+      {evidence} {recapTitle} {onjump} {currentMove} />
   </div>
+
+  {#if bottom}<div class="bottom">{@render bottom()}</div>{/if}
 </div>
 
 <Lines {lines} {root} revision={frame.revision} />
@@ -489,7 +522,7 @@
   .table {
     position: fixed; inset: 0; z-index: 10; display: grid;
     grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px);
-    grid-template-rows: 40px minmax(0, 1fr);
+    grid-template-rows: 40px minmax(0, 1fr) auto;
     background: var(--bg); color: var(--text);
   }
   .topbar {
@@ -552,7 +585,8 @@
   .result-card .fold { justify-self: end; color: var(--text-secondary); }
   .result-card .fold:hover { color: var(--text); }
 
-  .rail-slot { min-height: 0; }
+  .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
+  .bottom { grid-row: 3; grid-column: 1; min-width: 0; border-top: 1px solid var(--border); background: var(--bg-surface); }
 
   .menu {
     position: fixed; z-index: 300; min-width: 220px; max-width: 320px; padding: 8px; display: grid; gap: 2px;
