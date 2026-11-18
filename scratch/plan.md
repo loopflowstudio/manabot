@@ -179,9 +179,11 @@ committed; `~/src/manabot.mtg-349-value-probe` is detached at that revision.
 
 ### Pinned pilots in CI
 
-**Chosen:** two small pilots committed under `tests/fixtures/pinned_pilot/`
-(about 100 KB each), each with a short recorded game on fixed decks: seed,
-actions taken, and the pilot's action probabilities at every decision. The v11
+**Chosen:** two width-eight pilots committed under
+`tests/fixtures/pinned_pilot/` (2.1 and 3.0 MiB as saved; the native catalog
+buffers dominate, not the weights), each with one complete recorded game on
+fixed decks: seed, actions taken, and the pilot's action probabilities at
+every decision. The v11
 pilot is written on main. The v9 pilot is written from the `ab2b757d9`
 checkout (a small model saved there, its `.pt` committed as written), so it is
 the best player's kind of file: 73 player columns, no column names, no
