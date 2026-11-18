@@ -166,7 +166,12 @@ class TrainingGame:
         ):
             raise ValueError("two nonempty player names required")
         game = record_actions(
-            GameInputs(seed=receipt.game.seed, players=trace.player_configs),
+            GameInputs(
+                seed=receipt.game.seed,
+                players=trace.player_configs,
+                decision_memory=trace.decision_memory,
+                decision_memory_include_own=trace.decision_memory_include_own,
+            ),
             trace.actions,
             players=(first, second),
             source={

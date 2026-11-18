@@ -106,6 +106,10 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
+- Etude report curves average runs within a job. For a per-seed readout,
+  select that seed's fixed checkpoint seatings in its own panel and declare
+  `Seating(seeds="one")`; otherwise other seeds can make the curve a gap.
+
 - Most runs are exploratory: calibration, throughput, capacity, pilots and
   anything run to make later work possible. They need no prediction, protocol
   or review; the report ends them. A finding, a result that will be cited as a claim
@@ -168,6 +172,26 @@ checkpoints or experiment evidence.
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
 
+Execution row limits bound prefix materialization before preparation, independently
+of stream counts and logical optimizer minibatches. Accumulate actor and critic
+terms with their own logical denominators and clip/step once. Collection keeps
+one sampling call per original row group. A prefetch generator must release its
+previous Prepared input and completed Future before submitting another chunk;
+the completed Future also owns the host result.
+
+Decision-memory capture is opt-in from positive record capacity or include-own;
+search clones never append hypothetical records, while rollback snapshots preserve
+capture. Raw prefix chunks can be interned across streams with identical early
+content: a growing serving segment belongs to its native stream, never that shared
+chunk. Historical diagnostic inputs without the capture setting mean enabled.
+
+Profile observation retention separately from policy preparation: `_retain_obs_rows`
+runs before the preparation track and includes MemoryStore capture. Capture is
+nested under retention; do not add both as disjoint collection costs.
+
+Jagged CUDA attention's static sequence bound must not exceed the physical
+packed token total, even when a short execution chunk retains more padded
+slots. Bound it from host shape metadata; do not read a CUDA scalar for it.
 ### Functions and objects (Python)
 
 Use a class where it offers something genuinely valuable, and avoid one where
@@ -313,6 +337,11 @@ change already touches it; do not rewrite a module only for style. Rust in
   (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
   regimes); native `agent/record_vocabulary.rs` lists every name the encoders
   hash, so a new hashed name must appear there or the policy rejects it.
+  Schema-specific labels use an owner prefix (for example `OpponentMemory::Role`):
+  the token namespace is shared, and an unprefixed label can collide with an
+  existing rules field that has a different token meaning. Optional model
+  capabilities select their catalog rows explicitly so disabled capabilities
+  do not grow the default model's lookup buffers or parameters.
 
 ## Commands
 
@@ -422,6 +451,10 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+- Native `Env.encode_observation_into` reports capacity overflow as `ValueError`
+  with `observation capacity exceeded:`; the Python memory encoder raises
+  `managym.AgentError` with `Capacity:`. Collectors that count capacity failures
+  must recognize those specific messages and propagate other failures.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never
@@ -700,6 +733,19 @@ with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
 the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
+### Decision-memory rows
+
+Collected and bootstrap rows retain immutable prefixes; materialize raw memory
+only for admission/preparation, never as configured padded buffers per row. Prepared learner rows keep
+ordinary action fields for reference distributions, never a second padded memory
+owner beside Prepared (including prefetch). Numerical incidents are bounded
+diagnostics and must report omitted complete prefixes explicitly. Etude's game
+sampler prepares the log for a memory checkpoint and forwards each such row as
+its own batch; `blank_decision_memory` on a seat's config is the ablation.
+
+Read-only native transport metadata must also be exposed through
+`managym.recording._VECTOR_READS` and flattened in `ShardedVectorEnv`;
+collectors use these wrappers rather than raw native vectors.
 CLI subcommands import their execution runtime at the command boundary when
 needed to keep migration/help available without the training SDK.
 

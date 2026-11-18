@@ -38,7 +38,9 @@ class _RecordTables:
     size: int
 
 
-def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
+def _record_tables(
+    vocabulary: dict[tuple[int, int], int], *, decision_memory: bool = False
+) -> _RecordTables:
     """A name whose card token exists reads that token's row, so a granted
     keyword and the printed keyword share one embedding; every other name,
     token and numeric kind gets a row appended after the card tokens."""
@@ -52,6 +54,8 @@ def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
         return size - 1
 
     for space, name, value, kind, token in managym.record_vocabulary():
+        if name.startswith("DecisionMemory::") and not decision_memory:
+            continue
         key = (int(RecordNamespace[space.upper()]), value)
         if key in names:
             raise ValueError(f"record name {name!r} shares an id with another")
@@ -98,6 +102,7 @@ class SemanticCardEncoder(nn.Module):
         decklists: bool = False,
         *,
         records: bool = False,
+        decision_memory: bool = False,
         library: bool = False,
     ) -> None:
         """`decklists` adds a projection of the pooled
@@ -151,7 +156,11 @@ class SemanticCardEncoder(nn.Module):
             maximum_program_tokens=width,
             padded_tokens=len(rows) * width,
         )
-        tables = _record_tables(vocabulary) if records else None
+        tables = (
+            _record_tables(vocabulary, decision_memory=decision_memory)
+            if records
+            else None
+        )
         # Appended record rows follow the card tokens, whose rows are unchanged.
         self.token_embedding = nn.Embedding(
             len(vocabulary) + 1 if tables is None else tables.size, hidden_dim

@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from manabot.backends import resolve
 from manabot.llm.schema import InferenceConfig
 from manabot.llm.session import InferenceSession
@@ -10,8 +12,18 @@ from manabot.verify.llm_game import GameConfig, play
 from tests.fixtures.llm_process import FirstReferenceRuntime
 
 
-def test_native_random_control_completes_and_replays(tmp_path: Path) -> None:
-    summary = play(GameConfig(), tmp_path / "game", None, backend=resolve("torch"))
+@pytest.mark.parametrize("decision_memory", [False, True])
+def test_native_random_control_completes_and_replays(
+    tmp_path: Path, decision_memory: bool
+) -> None:
+    """The decision log is opt-in, and a game with it on still replays exactly."""
+    assert GameConfig().decision_memory is False
+    summary = play(
+        GameConfig(decision_memory=decision_memory),
+        tmp_path / "game",
+        None,
+        backend=resolve("torch"),
+    )
     assert summary.completed and summary.failure is None
     assert summary.replay_matches
     assert summary.decisions > 100

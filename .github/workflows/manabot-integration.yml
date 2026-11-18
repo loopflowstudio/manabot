@@ -81,6 +81,8 @@ jobs:
             tests/training/test_deck_building_foundations.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
             tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py \
+            tests/training/test_memory_prefix_storage.py tests/training/test_memory_execution_rows.py \
+            tests/training/test_memory_self_play.py \
             tests/training/test_rl_objectives.py tests/training/test_collection.py \
             tests/training/test_action_cutoff.py tests/training/test_packed_action_rollouts.py \
             tests/training/test_credit_assignment.py \
@@ -98,6 +100,7 @@ jobs:
           uv run pytest -n logical --durations=20 \
             tests/training/test_monitor_evaluation.py \
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py \
+            tests/verify/test_decision_memory_probe.py \
             tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py \
             tests/verify/test_observation_parity.py::test_encodes_every_observed_permanent_and_card_field_in_parity \
             tests/verify/test_observation_parity.py::test_fact_capacity_fills_exactly_and_rejects_overflow \

@@ -149,3 +149,17 @@ through the shared-effect section (including performance, delivery and accountin
 and the training failure recovery discussion. Other sections were not read in this
 pass, and that memory was not curated. Its v7 batching traces do not establish a
 hashed-v6 speedup.
+
+## Staged Etude launches (3dca91, 2026-11-17)
+
+- `etude launch --max-usd` is a cumulative ceiling for the experiment, including
+  earlier spending. With USD2.95 already committed, the planned USD7.20 trunk
+  quote selected only one of three trunks; a cumulative USD10.20 selected all
+  three. Each stage's ceiling is the prior spend plus that stage's caps.
+- A second stage that reads a first stage's published run must take the attempt
+  record whose producer status is `completed`, not require exactly one
+  `attempts/*/training/run.json`. Otherwise a trunk that was retried and then
+  completed can never be branched from. Etude merges relaunches of one launch
+  name and seed into one run, so one-run-per-seed checks still hold.
+- A no-supply quote refusal (A40 at USD0.59/h, none available) is a result to
+  record, not a reason to queue.

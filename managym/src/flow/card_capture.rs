@@ -181,6 +181,7 @@ impl Game {
     /// Transactions preserve diagnostic sinks; search clones deliberately omit them.
     pub(crate) fn rollback_snapshot(&self) -> Self {
         let mut snapshot = self.clone();
+        snapshot.decision_memory_enabled = self.decision_memory_enabled;
         snapshot.card_capture = self.card_capture.clone();
         snapshot.statistics = self.statistics.clone();
         snapshot.capture_originals = self.capture_originals.clone();

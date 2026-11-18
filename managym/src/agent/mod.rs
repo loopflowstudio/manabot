@@ -1,6 +1,7 @@
 pub(crate) mod ability_description;
 pub mod action;
 pub mod continuation;
+pub mod decision_memory;
 pub(crate) mod effect_execution;
 pub mod env;
 pub mod heuristic;

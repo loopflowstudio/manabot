@@ -33,8 +33,8 @@ class TinyPolicy(torch.nn.Module):
             ~valid, -torch.inf
         ), self.value.expand(len(valid), 1)
 
-    def get_value(self, obs):
-        return self(obs)[1]
+    def forward_distribution(self, obs):
+        return self(obs)
 
 
 class TinyRollout:
@@ -51,6 +51,11 @@ class TinyRollout:
             key: torch.as_tensor(value, device=device)
             for key, value in self.batch.next_obs.items()
         }
+
+    def next_observations(
+        self, device: torch.device, size: int
+    ) -> Iterator[dict[str, torch.Tensor]]:
+        yield self.next_observation(device)
 
     def rows(
         self, indexes: np.ndarray, device: torch.device

@@ -197,6 +197,7 @@ def execute_game(
         )
         send(("identities", game["runtime_identities"]))
         with perf.span("native_reset_and_encoding"):
+            memory = space.encoder.config
             if "scenario_root" not in game:
                 capture_path = Path(
                     game.get("capture_path", Path(temporary.name) / "journal.jsonl")
@@ -207,6 +208,9 @@ def execute_game(
                     context={"source_kind": "evaluation"},
                     context_provider=lambda: {"evaluation": evaluation_metadata(game)},
                     failure_directory=capture_path.parent,
+                    # The journal must replay the log the players observe.
+                    decision_memory=memory.max_decision_records > 0,
+                    decision_memory_include_own=memory.decision_memory_include_own,
                 )
             env, obs = replay_environment(game, space, capture=capture)
         if capture is None:

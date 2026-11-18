@@ -44,7 +44,11 @@ class ObservationArrayLayout(TypedDict):
     element: NotRequired[ObservationValueLayout]
 
 def observation_layout(
-    *, policy_history: bool = False, turn_state: bool = True, legacy: bool = False
+    *,
+    policy_history: bool = False,
+    turn_state: bool = True,
+    legacy: bool = False,
+    decision_memory: bool = False,
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
@@ -152,6 +156,8 @@ class Env:
         enable_profiler: bool = False,
         enable_behavior_tracking: bool = False,
         *,
+        decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         player_policies: tuple[
             Literal["agent", "random", "heuristic"],
             Literal["agent", "random", "heuristic"],
@@ -278,6 +284,9 @@ class Env:
         rollouts: int,
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
+    def decision_memory_counts(self) -> list[list[int]]:
+        """Record/detail/reference/member counts for each viewer, transport only."""
+        ...
     def encode_observation(
         self,
         obs: Observation,
@@ -351,6 +360,8 @@ class VectorEnv:
         opponent_policy: Literal["none", "random", "heuristic"] | None = None,
         seed_stride: int | None = None,
         *,
+        decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         player_policies: tuple[
             Literal["agent", "random", "heuristic"],
             Literal["agent", "random", "heuristic"],
@@ -393,6 +404,13 @@ class VectorEnv:
     def decision_observations(self, active: list[bool]) -> list[Observation | None]:
         """Detached chooser views for active rows; does not advance games."""
     def current_game_seeds(self) -> list[int]: ...
+    def decision_memory_cursors(self) -> list[list[list[int]]]:
+        """Per-viewer record/detail/reference/member counts and tail revision."""
+        ...
+
+    def decision_memory_counts(self) -> list[list[list[int]]]:
+        """Per-stream, per-viewer counts; generations authorize prefix reuse."""
+        ...
     def current_game_generations(self) -> list[int]:
         """Opaque process-local game identities; every reset or replacement changes them."""
     def write_observations_for_players(
@@ -999,6 +1017,7 @@ class Observation:
         text: str, *, continuation_json: str | None = None
     ) -> Observation: ...
     def continuation_json(self) -> str: ...
+    def decision_memory_json(self) -> str: ...
     game_over: bool
     won: bool
     turn: Turn

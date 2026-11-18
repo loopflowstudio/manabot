@@ -28,9 +28,15 @@ class SampledRows:
 
 class CollectionScope(Protocol):
     def sample(
-        self, observation: ObservationBuffers, profiler: Profiler
+        self,
+        observation: ObservationBuffers,
+        profiler: Profiler,
+        *,
+        execution_rows: int | None = None,
     ) -> SampledRows: ...
-    def opponent_actions(self, observation: ObservationBuffers) -> np.ndarray: ...
+    def opponent_actions(
+        self, observation: ObservationBuffers, *, execution_rows: int | None = None
+    ) -> np.ndarray: ...
 
 
 class CollectionSession(ActionValidator, Protocol):

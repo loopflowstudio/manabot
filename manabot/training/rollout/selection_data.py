@@ -136,8 +136,18 @@ def collect_selection_game(
             "selection collection requires ordinary observation-only policy"
         )
     validate_agent_setup(agent, match.to_rust())
-    env = managym.Env(seed=spec.seed, skip_trivial=True)
-    capture = ScalarCapture(spec.seed, True)
+    env = managym.Env(
+        seed=spec.seed,
+        skip_trivial=True,
+        decision_memory=space.encoder.config.max_decision_records > 0,
+        decision_memory_include_own=space.encoder.config.decision_memory_include_own,
+    )
+    capture = ScalarCapture(
+        spec.seed,
+        True,
+        decision_memory=space.encoder.config.max_decision_records > 0,
+        decision_memory_include_own=space.encoder.config.decision_memory_include_own,
+    )
     raw, _ = capture.reset(env, match.to_rust())
     rows: list[SelectionDecision] = []
     capture.context["receipt_path"] = str(path)
@@ -153,6 +163,17 @@ def collect_selection_game(
                     "seed": spec.seed,
                     "match": match.config.model_dump(mode="json"),
                     "skip_trivial": True,
+                    **(
+                        {"decision_memory": False}
+                        if space.encoder.config.max_decision_records == 0
+                        and not space.encoder.config.decision_memory_include_own
+                        else {}
+                    ),
+                    **(
+                        {"decision_memory_include_own": True}
+                        if space.encoder.config.decision_memory_include_own
+                        else {}
+                    ),
                 }
             )
             + "\n"
@@ -225,7 +246,14 @@ def replay_selection_game(path: Path) -> int:
     """
     with path.open() as source:
         header = json.loads(next(source))
-        env = managym.Env(seed=header["seed"], skip_trivial=header["skip_trivial"])
+        env = managym.Env(
+            seed=header["seed"],
+            skip_trivial=header["skip_trivial"],
+            decision_memory=header.get("decision_memory", True),
+            decision_memory_include_own=header.get(
+                "decision_memory_include_own", False
+            ),
+        )
         env.reset(Match(MatchConfig(**header["match"])).to_rust())
         count = 0
         complete = False

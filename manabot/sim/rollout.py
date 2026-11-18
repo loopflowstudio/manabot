@@ -27,6 +27,7 @@ import numpy as np
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
+from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.model.world import validate_agent_setup
@@ -59,7 +60,11 @@ class BatchedSampler:
         epsilon: float = 0.0,
         seed: int = 0,
         device: str = "cpu",
+        execution_rows: int | None = None,
     ) -> None:
+        if execution_rows is not None and execution_rows < 1:
+            raise ValueError("execution_rows must be positive")
+        self.execution_rows = execution_rows
         self.agent = agent.to(device)
         self.agent.eval()
         self.deterministic = deterministic
@@ -73,12 +78,15 @@ class BatchedSampler:
     def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
         """Actions (len(rows),) for the given rows of the observation buffers."""
 
-        obs = self.agent.prepare(
-            {key: buffers[key][rows] for key in self.agent.observation_space.shapes},
-            inference=True,
-        )
-        actions = self.agent.sample(
-            obs,
+        logits: list[np.ndarray] = []
+        width = self.execution_rows or max(1, len(rows))
+        with self.agent.inference_scope() as scope:
+            for start in range(0, len(rows), width):
+                selected = select_rows(buffers, rows[start : start + width])
+                logits.append(scope.infer(selected).logits)
+                del selected
+        actions = self.agent.sample_logits(
+            np.concatenate(logits),
             deterministic=self.deterministic,
             temperature=self.temperature,
             sampling="multinomial",

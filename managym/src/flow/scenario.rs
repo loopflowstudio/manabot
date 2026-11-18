@@ -79,6 +79,7 @@ impl Game {
         *names = Arc::clone(&fixture);
         *scope = fixture.root();
         self.policy_history = Default::default();
+        self.decision_memory = Default::default();
         self.publish_action_space(
             self.suspended_decision_action_space()
                 .expect("naming decision"),
@@ -89,6 +90,7 @@ impl Game {
     /// Set a player's life total directly.
     pub fn scenario_set_life(&mut self, player: PlayerId, life: i32) {
         self.policy_history = Default::default();
+        self.decision_memory = Default::default();
         self.state.players[player.0].life = life;
     }
 
@@ -103,6 +105,7 @@ impl Game {
     pub fn scenario_clear_hand(&mut self, player: PlayerId) {
         self.scenario_forget_knowledge(player);
         self.policy_history = Default::default();
+        self.decision_memory = Default::default();
         let hand: Vec<ObjectId> = self
             .state
             .zones
@@ -134,6 +137,7 @@ impl Game {
             if let Some(object) = found {
                 self.scenario_forget_knowledge(player);
                 self.policy_history = Default::default();
+                self.decision_memory = Default::default();
                 self.state.place_object(object, player, ZoneType::Hand);
                 return Ok(());
             }
@@ -173,6 +177,7 @@ impl Game {
 
         self.scenario_forget_knowledge(player);
         self.policy_history = Default::default();
+        self.decision_memory = Default::default();
         self.state
             .place_object(object_id, player, ZoneType::Battlefield);
 
