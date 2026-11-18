@@ -238,7 +238,9 @@ close to initialization while the raw policy is improving.
 
 Use the `evaluation` extra for DuckDB and open an Etude run from its storage root. For frontier Small, use a local copy
 of `r2://manabot/jobs` containing the run declaration, writer record and sealed
-metrics block covering update 1. The query also accepts a published checkpoint
+metrics block covering update 1. A run of `etude train manabot/recipes/local.py`
+opens as `read(Path(etude_home) / "track", "local", "local")`, where
+`etude_home` is its `ETUDE_HOME`. The query also accepts a published checkpoint
 as `training_corpus(checkpoint, source=storage)` and uses its recorded update.
 
 ```python

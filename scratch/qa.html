@@ -1,80 +1,57 @@
-<!doctype html><meta charset="utf-8"><title>MTG-353 QA (third round)</title>
+<!doctype html><meta charset="utf-8"><title>MTG-353 QA (fifth round)</title>
 <style>body{font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#222}
 h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #ddd}pre{background:#f6f4ee;padding:.75rem;white-space:pre-wrap;font-size:12.5px}
 .ok{color:#176b2c;font-weight:600}.fix{color:#9a4b00;font-weight:600}.bad{color:#a11;font-weight:600}</style>
-<h1>MTG-353 QA, third round: after recheck removal and the admission record</h1>
-<p>2026-11-18, branch at d5935065d0, laptop load average 18–36. Outputs are in the ignored <code>.runs/qa3/</code>.
-Earlier rounds covered loading, pinned pilots, Academy listing and play; this round covers what the revision changed.</p>
+<h1>MTG-353 QA, fifth round: the training-corpus query</h1>
+<p>2026-11-18, branch at cb278b4e33, laptop load average about 40. Outputs are in the ignored <code>.runs/qa5/</code>; scripts in <code>/tmp/qa5/</code>.
+Earlier rounds covered loading, pinned pilots, Academy, local evaluation and returning requests. This round covers <code>manabot.eval.training_corpus</code> and its guide, docs/evaluation.md "Querying the training corpus".</p>
 
-<h2>1. <code>manabot recheck</code> is gone <span class="ok">works</span></h2>
-<pre>$ uv run manabot recheck x
-No such command 'recheck'.</pre>
-<p><code>manabot --help</code> lists no recheck. <code>git grep</code> finds no "manabot recheck", StrengthReference or experiments/references outside scratch and wave notes.
-WORLDS.md opens by saying the numbers are history and that <code>WORLD_VERSION</code> stays w17 as a label.</p>
+<h2>1. Fresh local run, guide code as written <span class="fix">fixed (docs)</span></h2>
+<pre>ETUDE_HOME=$PWD/.runs/qa5/etude-home uv run etude train manabot/recipes/local.py    # 25 s
+uv run --extra evaluation python /tmp/qa5/guide_local.py   # guide block, storage and ids substituted</pre>
+<p>First try I passed the writer id from the metrics file name (<code>b0b923393ea1</code>) as the run; the query refused with
+<code>UnknownCoverage: b0b923393ea1: resolved training decks are unknown</code>. Correct, but the guide only showed how to open frontier Small.
+The run id is <code>local</code>. Fix: one sentence in the guide giving <code>read(Path(etude_home) / "track", "local", "local")</code>.</p>
+<pre>Roster decks and distinct card keys: 2 29
+Completed games: [(2,)]
+Observed decks: [(2,)]
+[('fc948195…', '7d663f0e…', 2)]
+[('lea.lightning_bolt',)]            # Island is in the corpus, Bolt is new
+[(2,)]                               # games with Island
+[(1, '7d663f0e…', 2), (1, 'fc948195…', 2)]   # mirror-free pair: two seats per deck</pre>
 
-<h2>2. Documented quick local evaluation with a fresh checkpoint <span class="ok">works</span></h2>
-<pre>ETUDE_HOME=.runs/qa3/etude-home uv run etude train manabot/recipes/local.py     # 29 s
-uv run python -m manabot.eval.local --checkpoint …/00000002-ema.safetensors --opponent heuristic --deal-seed 101 --out .runs/qa3/local-check --seconds 300
-completed: 1/1 complete deals; 4/4 games; evidence: .runs/qa3/local-check/panel
-score: 0.000 (1 deal block; …); local-check-not-admission</pre>
-<p>request.json's candidate: <code>checkpoint_source = d5935065d0…</code> (HEAD, the writer), <code>stored_programs = 470</code>.
-All four game records in <code>panel/games/</code> carry the same registration.</p>
+<h2>2. Checkpoint entry point and raw cross-check <span class="ok">works</span></h2>
+<p><code>training_corpus(CheckpointRecord.model_validate_json(checkpoints/updates-N.json), source=root)</code>:</p>
+<pre>ckpt 0 sum(games)=None rows=0
+ckpt 1 sum(games)=2   rows=1
+ckpt 2 sum(games)=4   rows=2
+raw self_play_outcomes update 1: play 2, draw 2;  update 2: play 2, draw 2</pre>
+<p>Counting the play seat once per game matches the raw rows. Misuse gives plain errors: a checkpoint without source or with an explicit update →
+"supply a checkpoint and its source"; -1 or <code>True</code> → "supply a nonnegative update"; update 5 of a 2-update run →
+<code>UnknownCoverage: local: coverage unknown at update 3</code>.</p>
 
-<h2>3. The old best player (u1952) in a new evaluation <span class="fix">fixed</span></h2>
-<p>First try, as a user would, on the CLI's default setup:</p>
-<pre>incomplete: ValueError: execution deck is not submitted to the world</pre>
-<p>That refusal is correct (u1952 is world-bound; the default is a fixed authored setup), but it did not say what to do,
-and the CLI's <code>--matchup</code> took only <code>AuthoredMatchup</code>, so a world-bound checkpoint could not be evaluated from the CLI at all.
-Only the Python API (as in <code>best_player_on_main.py</code>) could seat it.</p>
-<p>Fix: <code>--matchup</code> now reads an <code>AuthoredMatchup</code> or a <code>DeckMatchup</code> file (<code>manabot/eval/local.py</code>),
-the refusal reads <i>"checkpoint is bound to the world, so it plays decks submitted to the world (a DeckMatchup), not a fixed authored setup"</i>
-(<code>manabot/model/world.py</code>), and <code>docs/evaluation.md</code> says so. A test covers the CLI parse.</p>
-<p>After the fix, with the first new-card pair from <code>best_player_on_main.new_card_pairs()</code> written as a file:</p>
-<pre>uv run python -m manabot.eval.local --checkpoint .runs/qa/final.pt --opponent heuristic --matchup .runs/qa3/m/new-cards-0.json --deal-seed 21591000 --out .runs/qa3/u1952-newcards --seconds 550
-completed: 1/1 complete deals; 4/4 games
-score: 0.500 …</pre>
-<p>Replay passed for 4 games and 711 decisions. The candidate record has <code>stored_programs = 360</code>, which matches the load report's "360 stored programs".
-It has no <code>checkpoint_source</code>, because u1952 records no source revision. The docs say that field is present only "when known".</p>
+<h2>3. Frontier Small historical run, guide verbatim <span class="ok">works</span></h2>
+<p>Against the local R2 copy at <code>/private/tmp/mtg353-corpus-run</code> (declaration, writer record, sealed block 0–12), 2.3 s:</p>
+<pre>Roster decks and distinct card keys: 134 262
+Completed games: [(259,)]
+Observed decks: [(132,)]
+top matchup 7b246825… on the play vs a3d4b7c3… : 2
+new keys in Island+Bolt deck: lea.lightning_bolt
+games with Island: 218</pre>
+<p>Same numbers as the plan's record. Through update 12: 3,112 games across 3,084 ordered matchup rows, 2.2 s. Update 13 →
+<code>UnknownCoverage: 59718fe34945: coverage unknown at update 13</code>.</p>
 
-<h2>4. Returning user: a request saved before this change <span class="ok">works</span></h2>
-<p>I removed both new fields from the fresh request, which gives the shape a request had before this change, and repeated it with <code>--request</code>.
-It completed with 4 of 4 games and the same score. The repeated request.json has no <code>stored_programs</code>, so nothing is invented.</p>
+<h2>4. Returning user: a local run trained before this change <span class="ok">refuses honestly</span></h2>
+<p>The QA3 run (<code>.runs/qa3/etude-home</code>, trained at d5935065d0) has no update-zero roster and its declaration carries no deck source:
+<code>UnknownCoverage: local: resolved training decks are unknown</code>. That is unknown, not empty, as the plan requires; old runs were called "Not a problem".</p>
 
-<h2>5. Docs against the real tool <span class="ok">works</span></h2>
-<p>The refusal examples in <code>docs/academy.md</code> (<code>incompatible agent_player columns: checkpoint …, runtime …</code>, <code>unexplained record_token key …; classify it in managym/src/cards/token_renames.rs</code>)
-match the f-strings in <code>manabot/model/interface.py:174</code> and <code>manabot/policy/binding.py:137</code>. The <code>#what-a-checkpoint-is-bound-to</code> anchor exists.
-The <code>docs/evaluation.md</code> section "Comparing measurements across revisions" covers the four points of the plan.</p>
+<h2>5. Tests</h2>
+<pre>uv run --extra dev --extra evaluation --extra artifacts pytest tests/eval/test_training_corpus.py -q   # 3 passed</pre>
 
 <h2>Summary</h2>
-<p><b>Works now:</b> the recheck command is gone; fresh and old checkpoints are seated in ordinary local evaluation and record their writer revision and stored-program count; old requests repeat unchanged;
-a world-bound checkpoint can now be evaluated from the CLI with a deck-pair file.</p>
-<p><b>Not reached:</b> the report's full 128-game historical arm and the 32-game new-card arm. The laptop was loaded, and the published run is the evidence.
-I did not re-run Academy, because this revision did not touch its loader path.</p>
-<p><b>Still wrong, worst first:</b></p>
-<ol>
-<li>The CLI has no <code>--heuristic-actions</code>, so a CLI run cannot reproduce the report's first-64 heuristic opponent; it uses the default. That is outside this change.</li>
-<li><code>scripts/check_loopflow_workflows.py</code> still fails its coverage-graph assertion, which is unrelated to this change (rounds 1–2).</li>
-<li>The Quick local evaluation docs mention <code>evaluation.json</code>, but it is written to <code>&lt;out&gt;/panel/</code>, not <code>&lt;out&gt;/</code>. This predates the branch and is small.</li>
-</ol>
-<p>QA skill: added how to seat a world-bound checkpoint from the CLI and where the record fields live.</p>
-
-<h1>Fourth round: after the writer_revision rename</h1>
-<p>2026-11-18, branch at 6b928fc30c, load average about 36. Outputs are in the ignored <code>.runs/qa4/</code>.</p>
-<h2>1. Fresh checkpoint records its writer <span class="ok">works</span></h2>
-<pre>uv run python -m manabot.eval.local --checkpoint .runs/qa3/etude-home/.../00000002-ema.safetensors --opponent heuristic --deal-seed 101 --out .runs/qa4/local-check --seconds 300
-completed: 1/1 complete deals; 4/4 games   (21 s)</pre>
-<p>request.json and panel/evaluation.json carry <code>"writer_revision": "d5935065d0…"</code> and <code>stored_programs: 470</code>. The checkpoint was written at d5935065d0 and evaluated at 6b928fc30c, so the field names the writer, not the running revision. No evaluation output contains <code>checkpoint_source</code>.</p>
-<h2>2. u1952 on a new-card pair <span class="ok">works</span></h2>
-<pre>... --checkpoint .runs/qa/final.pt --matchup .runs/qa3/m/new-cards-0.json --deal-seed 21591000
-completed: 1/1 complete deals; 4/4 games; score: 0.500   (51 s, same as round 3)</pre>
-<p><code>stored_programs: 360</code>. It has no <code>writer_revision</code>, because the file records no source.</p>
-<h2>3. Returning users <span class="ok">works</span></h2>
-<p>A request without either field, which is the shape main writes, repeats with <code>--request</code>: 4/4 games, same score.
-The round-3 request is refused with <code>candidate.checkpoint_source  Extra inputs are not permitted</code>. It was written only on this branch before the rename, which the plan accepts because no retained record carries that key.</p>
-<h2>4. Docs <span class="ok">works</span></h2>
-<p>README's "443 cards are eligible for deck entry" matches <code>managym.content_pool("world")</code>: 443 eligible and 27 unsupported (back faces and fixtures). The <code>managym/src/cards/pool.rs</code> link resolves.
-The <code>docs/observation-and-model.md</code> paragraph now gives counts only, which matches what <code>BindingReport</code> holds. The remaining <code>checkpoint_source</code> mentions in <code>docs/training.md</code> and <code>manabot/model/world.py</code> refer to the checkpoint's own source record. That is correct.</p>
-<p>The three evaluation test files pass: 42 tests.</p>
-<h2>Summary of round 4</h2>
-<p>Works now: the rename reaches every record a person reads, old main-shaped requests repeat, and the docs match the tool. Nothing broke and nothing was fixed.
-Still wrong: the same three items as round 3. The CLI has no <code>--heuristic-actions</code>, the <code>check_loopflow_workflows.py</code> coverage assertion fails for an unrelated reason, and the docs give the wrong location for <code>evaluation.json</code>. None of them is in this change.</p>
+<ul>
+<li><b>Works:</b> the documented queries on a new run, from a published checkpoint, and on frontier Small; counts match raw rows; missing evidence raises.</li>
+<li><b>Fixed:</b> the guide now says how to open a local recipe run.</li>
+<li><b>Not reached:</b> the plan's remaining item 2 (card statistics relation) is not built yet, so there was nothing to use. No R2 fetch as a new reader (used the existing local copy).</li>
+<li><b>Still rough, minor:</b> a cutoff of 0 returns an empty relation, so <code>sum(games)</code> is <code>None</code> (the guide's Island query wraps it in <code>coalesce</code>; the "Completed games" one doesn't).</li>
+</ul>
