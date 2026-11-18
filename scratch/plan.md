@@ -119,8 +119,13 @@ collector, changed at the parent/child boundary through the real loop, and
 dropped counts raising), `tests/training/test_self_play.py`,
 `test_outcome_tables.py`, `test_minimal_loop.py`, `test_self_play_loop.py`.
 The guide's three `game_settings` queries are the SQL those tests assert.
-Not run here: the guide's blocks against `etude train manabot/recipes/local.py`
-and frontier Small (QA). #559 was not on main; `mana_payment` and
+Realign ran the guide's `runs` query and three `game_settings` queries on a
+fresh `etude train manabot/recipes/local.py --until updates=2`: four games,
+`decklists` `open` and `skip_trivial` `true` in all four (share 1.0), both
+holding over updates 1-2. Its excerpt of the self-play loop in
+`docs/training.md` still passed `disclosure=`; removed. Not run: the guide's
+blocks against frontier Small, which exercises the derived `decklists` rows
+for a run that predates the table (QA). #559 was still open at realign; `mana_payment` and
 `mana_floats` per seat are added as `GameSetting(seat, ...)` rows in
 `_refresh_roots` by whichever PR merges second.
 
