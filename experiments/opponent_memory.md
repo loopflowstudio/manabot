@@ -2800,3 +2800,30 @@ cases each); update time alone is 0.9995×. Collection time drifted by about
 balances; two cases per side give no confidence bound. With history off the
 branch costs the same as main on the training GPU, to within this
 measurement.
+
+### Hand information in the memory, larger corpus — 2026-11-18
+
+Before training an arm from a hand-fitted memory encoder, the fit itself was
+checked. 240 heuristic games at the pilot's memory capacities gave 7,634
+labelled decisions (5,338 fit, 1,144 validation, 1,152 test; no capacity
+losses). For each seed, the GRU branch's start checkpoint kept its trunk
+frozen while the memory encoder and a linear head were fitted to
+opponent-hand presence for four epochs; the baseline is the same head on the
+public state vector alone. Test log loss per card, game-weighted, at the
+best validation epoch:
+
+| Readout | Open | Closed |
+| --- | ---: | ---: |
+| public state only | 0.0765 | 0.0937 |
+| + memory, seed 39101 | 0.0820 | 0.0913 |
+| + memory, seed 39102 | 0.0779 | 0.0899 |
+| + memory, seed 39103 | 0.0805 | 0.0888 |
+
+The memory adds 0.002 to 0.005 with closed decklists and nothing with open
+ones. The 2026-11-16 probe's 0.016 closed gain came from 1,812 decisions,
+where the state-only head scored 0.138; with three times the data that
+baseline reaches 0.094 and the gain mostly disappears. On heuristic games
+the opponent's decision history carries almost no hand information beyond
+the public state, so a hand-prediction auxiliary loss has little to teach
+the encoder. Limits: scripted opponents, one fitting recipe, no interval on
+the differences. No arm was trained from these encoders.
