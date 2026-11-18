@@ -72,7 +72,10 @@ runs. DuckDB plans used hash joins on the two deck identities.
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude
    Task; this PR does not wait for it.
-2. Gate and publish for human review. No landing, paid run, corpus label in
+2. File after this PR: publish statistics rows as Etude run artifacts with
+   the attempt in their context, so a checkpoint plus storage reaches them
+   and supersession applies (question 38).
+3. Gate and publish for human review. No landing, paid run, corpus label in
    the checkpoint or change to exact-deck refusal.
 
 ## Training settings, deck contents and parent checkpoints (built)
@@ -93,56 +96,24 @@ examples reported Lightning Bolt as new in the proposed two-card list.
 ## Card statistics in the corpus (built)
 
 Shape chosen in the concept review of 2026-11-18 with nobody present;
-reversible. Page: `scratch/concept-review.html`.
+reversible (`scratch/concept-review.html`, questions 37 and 39).
 
-A run declared with `statistics: true` writes one `GameStatistics` row per
-game to `out/statistics/*.jsonl` (`managym.statistics.read_statistics`).
-Each row carries the seed, terminal flag, winner, per-seat card counts by
-printed name and native definition index, the `card_digest` binding those
-indices, and a context holding the update. Rows hold main-deck copies only,
-so they cannot name a deck. Etude run storage does not carry the directory.
+`training_corpus(..., statistics=path)` adds `card_statistics` to the same
+DuckDB connection: terminal-game sums per update, native seat and definition
+key, through the cutoff, mapped through the digest-selected writer catalog
+by native definition index (Clue and Ally have no printed-name join). No deck
+column: rows hold main-deck copies only. A path with no rows, or fewer
+terminal statistics games than corpus games at an update, raises
+`UnknownCoverage`; more is allowed. A corpus that follows a parent checkpoint
+refuses a single statistics path. Docs paragraph and query are in the corpus
+section of `docs/evaluation.md`, including that resumed runs keep superseded
+attempts' rows.
 
-Build in `manabot/eval/training_corpus.py`:
-
-- `training_corpus(run, through, *, source=None, statistics: Path | None =
-  None)`. With a path, the relation's connection also holds
-  `card_statistics`: `update_number, seat, card, games, wins, deck_copies,
-  opening_copies, drawn_copies, opportunities, selections, resolutions`,
-  summed over terminal games per update, native seat (0 is on the play) and
-  definition key, for updates 1 through the cutoff. `corpus` is unchanged.
-- Use the same digest-selected writer catalog as the roster. The local run
-  showed that Clue and Ally have no printed-name join. Their recorded native
-  indices 72 and 21 resolve to token.clue and token.ally in definition_keys.
-- Without the keyword there is no `card_statistics` relation. A supplied
-  path with no rows raises `UnknownCoverage`. An update through the cutoff
-  where statistics hold fewer terminal games than the corpus raises
-  `UnknownCoverage` naming both counts. More is allowed.
-- No deck column, no new counter, no game record, no read of `run.out`
-  from library code, no change to what training writes.
-
-Original verification plan: run the
-local two-update recipe with `statistics: true`, and compare terminal
-statistics games per context update with corpus games per update. The
-writer labels a row with the finished-update count when the game ended
-(`CaptureScope` context in `manabot/training/loops/self_play.py`); if that
-is one behind the outcome table's update, map it in the reader and state
-the rule in a comment. If the two cannot be aligned, stop and record what
-was seen in `scratch/questions.md` instead of guessing.
-
-Then: one test in `tests/eval/test_training_corpus.py` over a real short
-run or its retained rows (join works; missing directory raises; fewer games
-raises), and a paragraph plus one query in the corpus section of
-`docs/evaluation.md`. State there that a resumed run's statistics keep rows
-from superseded attempts, so card counts can exceed the corpus.
-
-The two-update local run with statistics recorded two terminal games at
-capture coordinate 0 and two at 1, plus two nonterminal rows on close.
-The outcome table held two games each at updates 1 and 2. The combined
-query found four list games with Island, nine draws and 72 choices.
-
-Not this PR, to file: publish statistics rows as run artifacts with the
-attempt in their context, so a checkpoint plus storage reaches them and
-supersession applies.
+Alignment, from the two-update local run with statistics: two terminal games
+at capture coordinate 0 and two at 1, plus two nonterminal rows on close;
+the outcome table held two games each at updates 1 and 2. The capture
+coordinate is one behind the outcome update and the reader maps it. The
+combined query found four list games with Island, nine draws and 72 choices.
 
 ## Review direction
 
