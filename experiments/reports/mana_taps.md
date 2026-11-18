@@ -1,21 +1,41 @@
 # Do fixed-source mana taps at priority and during payments change TLA learnability?
 
-**On the first L4 update of seed 21501, enabling taps increased decisions per
-completed game from 246 to 526.** Active training throughput fell from 296 to
-248 retained decisions/s and the update took 544 seconds instead of 213.
-The arms ran on separate L4 hosts. Only this seed delivered metrics from both
-arms, and neither delivered a trained policy export. The sustained throughput
-effect and the effect on learnability remain open.
-The comparison uses three matched training seeds (21501–21503), all 1,000
-TLA trophy decks and the same 16 evaluation pairs per checkpoint. Each seed
-trains w64 in BF16 with and without the additional fixed-source taps, targeting
-250 updates. The USD35 whole-experiment cap includes startup and evaluation.
-Undo is disabled. The learning outcomes are strength against the heuristic
-over updates and hours, and head-to-head strength at matched updates.
-Training performance is measured in decisions per game, decisions per second
-and seconds per update. At initialization and each evaluated checkpoint, the
-spot checks measure how often the acting policy sees a priority float, chooses
-it, and leaves that mana unspent when the pool empties.
+**Offering fixed-source mana taps made the w64 policy weaker on these TLA deals and slowed training per update.** After 50 updates the on arm scored 0/192 against the heuristic. The off arm scored 14/192 (7.3%). Head to head, the on arm scored 39/192 (20.3%) and lost the comparison in all three seeds. The on arm already trailed at initialization. Its score against the heuristic stayed at zero, while the off arm improved by two scored games across three seeds. This measures an early strength disadvantage. The longer-run learning rate remains unresolved.
+
+Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16, and undo disabled. Each seed pair used one L4. The common target was reduced from 250 to 50 updates based on the previous on-arm pace and the USD35 whole-experiment cap. The comparison uses EMA exports at updates 0, 25 and 50. Each checkpoint played the same 16 fixed deck pairs, with seats and decks crossed over four legs. Training seeds are the three units of evidence. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Both choices affect how often a starting policy taps.
+
+## Strength by update and active training time
+
+Each cell lists the observations at updates **0 / 25 / 50**. Scores are points out of 64 scored games unless another denominator appears. At roughly 0.7–0.85 active hours, the on arm scored 0/64 for every seed at update 25. The nearest off-arm observations were 5/64 at 0.83 hours, 4/64 at 0.70 hours and 4/64 at 0.85 hours, respectively.
+
+| Seed | Off vs heuristic | On vs heuristic | On vs off | Off active hours | On active hours |
+| --- | --- | --- | --- | --- | --- |
+| 21501 | 4 / 4 / 5 | 0 / 0 / 0 | 13 of 60 / 11 / 16 | 0 / 0.43 / 0.83 | 0 / 0.82 / 1.48 |
+| 21502 | 4 / 4 / 5 | 0 / 0 / 0 | 16 / 9 / 15 | 0 / 0.70 / 1.15 | 0 / 0.75 / 1.29 |
+| 21503 | 4 / 4 / 4 | 0 / 0 / 0 | 12 / 16 / 8 | 0 / 0.45 / 0.85 | 0 / 0.75 / 1.32 |
+
+Etude completed all 432 scheduled matches. Of 1,728 game legs, 1,724 contributed scores across 431 complete deals. One leg of seed 21501's initialization head-to-head encountered `PanicException: current object appearance: Stale` on deal 385011. Scoring excluded all four legs of that deal. All endpoint deals were complete.
+
+On the four replayed legs of fixed pair 0 against the heuristic, every on-arm checkpoint saw a priority float on 234/322 decisions (72.7%) and chose one on 128/322 (39.8%). Of 128 mana produced that way, 118–119 units (92.2–93.0%) expired. Every off-arm checkpoint offered zero priority floats over 241 decisions. These counts come from one fixed deck pair. The full spot-check table covers every seating, including head-to-head, with 216 seat rows linked to 108 replays.
+
+## Training performance through update 50
+
+Each pair used the same L4 host and seed. Seed 21501 shared its GPU until
+the off arm finished. On the two other hosts the off arm finished before
+the on arm started. Hours include active collection and learning.
+Decisions/game and decisions/s use total retained decisions divided by
+completed games and active seconds, respectively.
+
+| Seed | Decisions/game off → on | Decisions/s off → on | Seconds/update off → on | Active hours off → on |
+| --- | ---: | ---: | ---: | ---: |
+| 21501 | 198.3 → 387.0 | 875 → 929 | 59.7 → 106.6 | 0.83 → 1.48 |
+| 21502 | 198.5 → 374.7 | 635 → 1,035 | 82.5 → 92.7 | 1.15 → 1.29 |
+| 21503 | 208.2 → 373.7 | 890 → 1,006 | 61.6 → 95.2 | 0.85 → 1.32 |
+
+The median paired increase was 89% in decisions/game, 13% in decisions/s
+and 55% in seconds/update. The complete-games collector retained more
+decisions in each on-arm batch. Host conditions still varied over time.
+For seed 21502 the off arm's first update alone took 705 seconds.
 
 ## Reading the checkpoint spot checks
 
@@ -51,7 +71,7 @@ and 1 within each arm. Each row below describes one checkpoint.
 
 Local Etude runs were `312dfa8ab7b3` (off), `0c379dda01b7` (on) and
 `mana-taps-paired-654696ec2472` (evaluation). These counts exercise the
-measurement on one deck pair. The three-seed learning comparison remains open.
+measurement on one deck pair.
 
 ## Widened native treatment on 40 seeded deals
 
@@ -60,7 +80,7 @@ on and 227.60 with it off (2.23×). Against the heuristic, the random seat's
 treatment changed the game average from 171.30 to 157.75. In random self-play
 a priority float was offered at 12,885 of 20,330 decisions (63.4%) and chosen
 at 8,182 (40.2%). These are uniform random choices from the full native
-space. Initialization and learning curves for the w64 policy remain pending.
+space.
 
 | Players | Taps | Decisions/game | Skipped share | Decisions offering a priority float | Priority floats chosen | Scalar steps/s |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -101,7 +121,6 @@ Lium and its ID subsequently returned HTTP 404. The statement endpoint also
 returned 404. The launcher's final cost is pending.
 
 There are no GPU checkpoints or scored evaluation deals from this launch.
-The four planned charts and the result artifacts await a completed comparison.
 
 On 2026-11-18 UTC, Etude quoted USD3.10 for four 52½-minute RunPod L4
 training jobs. No RunPod rental was started. The quote allowed USD3.16
@@ -161,7 +180,7 @@ USD4.485 at USD0.69/hour. The runs share one L4 with at least 12 vCPUs and
 16.55 GiB off and 31.37 GiB on, which left little room for workers on the
 original 48 GB template.
 
-The paired runs target 50 updates and export at 0, 25 and 50. At the
+All six runs completed 50 updates and exported at 0, 25 and 50. At the
 previous on arm's first-update pace, 250 updates would take about 38 hours
 on that host. The complete-games collector closes games after its transition
 quota, so equal update counts can contain different numbers of decisions.
@@ -172,3 +191,23 @@ acquired no machine for either L4 launch `1dfbfa40f973` or A40 launch
 Launch `cb970eff0754` for seed 21502 and launch `e377ebc1adc0` for seed
 21503 each recorded one USD8.7975 rental ceiling. The three acquired
 ceilings total USD22.08 against a remaining USD27.55 training allowance.
+
+Etude ran the evaluation as `mana-taps-paired-l4/evals-229c77cb7099` in
+launch `302f3d92743c`, with a USD1.20 cpu32 rental ceiling. Training run
+addresses are `mana-taps-paired-l4/mana-taps-w64-{off,on}@{seed}`.
+Etude confirmed deletion of all four machines. Its machine ledger on
+2026-11-18 showed USD0.7925, USD1.1239 and USD1.0536 billed for seeds
+21501–21503, respectively, and approximately USD0.37 for evaluation.
+The earlier cancelled RunPod run and unresolved Lium charge are recorded
+above. The final whole-experiment bill remains open.
+
+## Published results
+
+Fetch the five artifacts with
+`uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg385/paired-l4`.
+The interactive report can switch its horizontal axis between updates and hours.
+[Learning curves](../data/mtg385/paired-l4/mana-taps-paired-l4.html) ·
+[Training updates](../data/mtg385/paired-l4/training.csv) ·
+[Scored games](../data/mtg385/paired-l4/games.csv) ·
+[Spot checks](../data/mtg385/paired-l4/mana_spot_checks.csv) ·
+[108 replay blobs named by SHA-256](../data/mtg385/paired-l4/replays.tar)

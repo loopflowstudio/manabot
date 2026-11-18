@@ -40910,6 +40910,26 @@
    "sha256": "51f188e1f86a8b6b56988227045a8ee279386abaa73481c566a30e0936601b7d",
    "bytes": 3771
   },
+  "experiments/data/mtg385/paired-l4/games.csv": {
+   "sha256": "36314f8f30a6aafd5ad70a05d44e6770bae372e125745a4623f3f021b685ff49",
+   "bytes": 802790
+  },
+  "experiments/data/mtg385/paired-l4/mana-taps-paired-l4.html": {
+   "sha256": "97eb524294881dd65769d09bda64d036602de5f3adf2c70d557738682193686b",
+   "bytes": 1602366
+  },
+  "experiments/data/mtg385/paired-l4/mana_spot_checks.csv": {
+   "sha256": "7e5d6cfa0a5ed84280148da72796646a389dc46c9c773d54c857f1bddef2e594",
+   "bytes": 54242
+  },
+  "experiments/data/mtg385/paired-l4/replays.tar": {
+   "sha256": "3a845b85d8b7a6efc81591ec8f8696301029d4cc5d8715657bc970d6f15700fd",
+   "bytes": 8099840
+  },
+  "experiments/data/mtg385/paired-l4/training.csv": {
+   "sha256": "6b913e2d11063305bb2a3ee7f50bf6df3f9ddae84878f1f54c23972d83290c21",
+   "bytes": 60187
+  },
   "experiments/data/one_token_layout/costs.json": {
    "sha256": "dbcde3d1ceac7efe618bbdaec50f6605670aa6a650627dd15490d705e1689791",
    "bytes": 553
