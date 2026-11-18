@@ -216,15 +216,15 @@ uv run manabot recheck experiments/references/tla-frontier-small-u1952.json
 ```
 
 ```text
-tla-frontier-small-u1952: Small u1952 against heuristic, 16 deck pairs
+tla-frontier-small-u1952 against heuristic, 16 deck pairs
   recorded  0.72 (0.61–0.81), 64 games, at ab2b757d9
-  measured  0.69 (0.62–0.75), 256 games, at 44f76fe987
-  inside the recorded interval
   opponent  heuristic changed since the record (452d7b5357, 86ad8e9c6a)
+  measured  0.68 (0.59–0.76), 128 games, at 5f12080d81
+  inside the recorded interval
 ```
 
-The numbers above show the form; the measurement for this player on main is in
-[best player on main](../experiments/reports/best-player-on-main.md). Exit
+The [proof run](../experiments/reports/best-player-on-main.md) retains the
+games and the new-card comparison. Exit
 status is 0 when the measured score is inside the recorded interval and 1 when
 it is outside or the cohort is incomplete. `--out DIR` keeps the evaluation's
 journals and replays; `--seconds` bounds the run.

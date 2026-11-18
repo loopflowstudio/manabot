@@ -2590,6 +2590,14 @@
    "sha256": "7471dd3676eabc33a9ea5ea7efadac8f970a6fe83f5371495291a37473b0e640",
    "bytes": 9321
   },
+  "experiments/data/best-player-on-main/frontier.tar.gz": {
+   "sha256": "8bc7be34a9af851424970981d276327f5581625e65d09bd9aae448f66f6bca01",
+   "bytes": 18165760
+  },
+  "experiments/data/best-player-on-main/new-cards.tar.gz": {
+   "sha256": "af930416f846c95fecceec10809c08bec7faeaf8a3a011fa62439942696da10e",
+   "bytes": 5519360
+  },
   "experiments/data/bf16_behavior_logs/cpu-smoke/etude-result.json": {
    "sha256": "b510b901e0e475ad00a6c0eae6162030a9cd10cd36557319c2fb2c24df43f070",
    "bytes": 70

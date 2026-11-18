@@ -342,12 +342,12 @@ requirement, the legacy encoder.
    30/30 terminated, zero truncations or refusals, 4,346 decisions in 214.2 s.
    Original PyTorch → safetensors → MLX also served a v9 decision on this
    checkout. Re-exporting the bound container preserved every Torch tensor.
-   Strength and the unseen-card arm remain unmeasured.
+   Slice 3 below records strength on the original and new-card decks.
    General appended-column projection beyond the two player buffers and catalog
    display of tensor-level refusals still need reconciliation at slice 4.
 
-   Still open from slice 1's risk: fact and effect records the runtime emits
-   under retired names start unseen; slice 3 measures what that costs.
+   Fact and effect records under retired names start unseen. Slice 3 measures
+   overall play strength; it cannot isolate the cost of a single row.
 2. **Pinned pilots (complete).** Width-eight v9 and v11 pilots were saved
    by the ab2b757d9 and 44f76fe987 writers. Padded catalog buffers put the
    originals at 2.1 and 3.0 MiB (172 and 202 KiB as compressed Git objects).
@@ -360,14 +360,17 @@ requirement, the legacy encoder.
    the full v9 replay. Inserting a named column at index
    72 failed v9's recorded player prefix. Three replay cases passed locally.
    The existing Integration model job collects the test. Cross-platform
-   agreement awaits CI. **Next:** slice 3.
-3. **recheck and the proof run** (under USD 3; the mini costs nothing). The
-   strength reference records, the command, and one report,
-   `experiments/reports/best-player-on-main.md`: recorded against measured on
-   the 16 recorded deck pairs with more seeds, and a second arm on decks with
-   cards added since the run. The heuristic changed since the record
-   (`452d7b5357`, `86ad8e9c6a`), so a gap confounds pilot drift with opponent
-   drift; the report says which it cannot separate. Exploratory.
+   agreement awaits CI.
+3. **recheck and the proof run (complete).** References bind the unmodified
+   u25, u800 and u1952 bytes, the exact 16 historical deck pairs, the first-64
+   heuristic and the unrounded intervals. All three checkpoints passed ordinary
+   admission. On the mini, u1952 scored 87/128 (0.680, 95% interval
+   0.586–0.758) against the recorded 0.719 (0.609–0.813). Original deal seeds
+   gave 42/64, additional deals 45/64. The first eight eligible trophy decks
+   with a new main-deck card gave 23/32 (0.719, 0.500–0.938). All 160 games
+   finished and passed replay with zero integrity counts. USD 0. The opponent
+   changed; attribution to the pilot alone is impossible. Report and receipts:
+   `experiments/reports/best-player-on-main.md`. **Next:** slice 4.
 4. **New checkpoints and the docs.** Saved checkpoints record column names,
    definition keys, naming names and `source`; MLX and the container reader
    pass through the same bind; Academy shows the interface result; the docs
