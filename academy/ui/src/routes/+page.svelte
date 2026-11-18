@@ -251,7 +251,7 @@
       && gameStore.work.chooser !== null && gameStore.work.chooser !== heroSeat)
     || (tableFrame?.prompt != null && tableFrame.prompt.actor !== heroSeat)));
   const thinking = $derived(!gameActive ? null
-    : opponentChoosing ? `${opponentIdentity.compact} is choosing…`
+    : opponentChoosing ? `${opponentIdentity.compact} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
       : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The table is working…' : null);
 
   function winnerText(winner: number | null): string {
@@ -276,7 +276,7 @@
       <button class="btn btn-secondary btn-sm mt-1" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
     </section>
   {/if}
-  <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />
+  {#if !onTable}<WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />{/if}
   {#if gameStore.tableUnavailable}<p role="status" class="type-caption">The previous table is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
   {#if gameStore.storageWarning}<p role="status" class="type-caption">{gameStore.storageWarning}</p>{/if}
   {#if participantStudying}<p class="type-caption text-ink-2">Study position. {gameStore.branchProjection ? 'Alternate action played; return to the recorded decision to try another.' : 'Choosing an offer tries it in a separate branch.'}</p>{/if}
@@ -341,6 +341,7 @@
       presentation={presentationPlayer}
       {thinking}
       {opponentChoosing}
+      workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
       interrupted={gameStore.resumeFailed}
       onact={handleActionSelect}
       onpassturn={handlePassTurn}

@@ -8,6 +8,7 @@
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
   import type { MoveTurn } from './moves';
+  import type { PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import Thumb from './Thumb.svelte';
   import { stackName, type PlacedOffer, type StackItem, type TableView } from './view';
@@ -18,10 +19,14 @@
     live: boolean;
     /** What to do now, in plain words. */
     line: string;
+    /** What the primary button does next. */
+    primaryText: PrimaryLabel | null;
     status: string;
     whose: string;
     /** "Search 64 is choosing…" while someone else decides. */
     thinking: string | null;
+    /** When the awaited work started, epoch seconds. */
+    workStarted: number | null;
     interrupted: boolean;
     canPassTurn: boolean;
     recent: RecentView;
@@ -33,11 +38,13 @@
     onpreviewname: (name: string | null, element: HTMLElement | null) => void;
     notices?: Snippet;
     result?: Snippet;
+    /** The docked inspect pane, when inspecting docks to the rail. */
+    dock?: Snippet;
   }
 
   let {
-    view, frame, live, line, status, whose, thinking, interrupted, canPassTurn, recent, moves, opponentName,
-    onact, onpassturn, onstack, onpreviewname, notices, result,
+    view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
+    onact, onpassturn, onstack, onpreviewname, notices, result, dock,
   }: Props = $props();
 
   const context = $derived(frame.projection.decision_context);
@@ -45,6 +52,23 @@
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
   const resolved = $derived(new Map(recent.resolved.map(spell => [spell.id, spell])));
+
+  // The recap shows its first lines; the rest open on demand and fold again when the recap changes.
+  const RECAP_LINES = 3;
+  let recapOpen = $state(false);
+  $effect(() => { void recent.facts; recapOpen = false; });
+  const facts = $derived(recapOpen ? recent.facts : recent.facts.slice(0, RECAP_LINES));
+
+  // Seconds the opponent or the table has been working, beside "… is choosing".
+  let elapsed = $state(0);
+  $effect(() => {
+    const started = workStarted;
+    if (started === null || thinking === null) { elapsed = 0; return; }
+    const update = (): void => { elapsed = Math.max(0, Math.floor(Date.now() / 1000 - started)); };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  });
 
   let logEnd = $state<HTMLElement | null>(null);
   $effect(() => {
@@ -72,6 +96,8 @@
 
 <aside class="rail" aria-label="Stack, decision and legal choices">
   {#if notices}<div class="notices">{@render notices()}</div>{/if}
+
+  {#if dock}<div class="block docked">{@render dock()}</div>{/if}
 
   <section class="block stack" aria-label="Stack">
     <h2><span class="type-rubric text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
@@ -101,7 +127,7 @@
       <div class="recent" data-testid="recent">
         <h3 class="type-rubric text-ink-3">Since your last move</h3>
         <ol>
-          {#each recent.facts as fact (fact.seq)}
+          {#each facts as fact (fact.seq)}
             {@const spell = fact.spell === null ? undefined : resolved.get(fact.spell)}
             <li class="type-caption fact" class:theirs={fact.by === 'opponent'} data-testid="recent-fact">
               {#if spell}
@@ -111,12 +137,19 @@
             </li>
           {/each}
         </ol>
+        {#if recent.facts.length > RECAP_LINES}
+          <button type="button" class="more type-caption" data-testid="recent-more" aria-expanded={recapOpen} onclick={() => (recapOpen = !recapOpen)}>
+            {recapOpen ? 'Fewer' : `${recent.facts.length - RECAP_LINES} more`}
+          </button>
+        {/if}
       </div>
     {/if}
   </section>
 
   <section class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
-    <p class="type-rubric whose" class:yours={live}>{#if thinking}<i class="thinking" aria-hidden="true"></i>{/if}{thinking ?? whose}</p>
+    <p class="type-rubric whose" class:yours={live}>
+      {#if thinking}<i class="thinking" aria-hidden="true"></i><span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
+    </p>
     {#if result}
       {@render result()}
     {:else}
@@ -132,9 +165,9 @@
         {/if}
       {/if}
       {#if view.primary}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-offer-id={view.primary.offer.id}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} onclick={() => onact(view.primary!)}>
-          {view.primary.offer.label}<kbd>Space</kbd>
+          <span>{primaryText?.text ?? view.primary.offer.label}</span><kbd>Space</kbd>
         </button>
       {/if}
       {#each secondary as placed (placed.offer.id)}
@@ -180,11 +213,18 @@
           <p class="turn-head type-rubric"><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
           <ol>
             {#each turn.moves as move, at (move.id)}
+              {#if move.passes}
+                <li class="move type-caption quiet" data-testid="pass-run">
+                  <span class="who" aria-hidden="true"></span>
+                  <span class="what">passed{#each move.passes as part, at (part.actor)}{at ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
+                </li>
+              {:else}
               <li class="move type-caption" class:auto={move.actor === 'auto'} class:you={move.actor === 'you'} data-testid="log-entry" data-actor={move.actor}>
                 <!-- A score names the player once per run of their moves. -->
                 <span class="who" class:repeat={turn.moves[at - 1]?.who === move.who}>{move.who}</span>
                 <span class="what">{#each move.segments as segment, at (at)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}</span>
               </li>
+              {/if}
             {/each}
           </ol>
         </li>
@@ -253,6 +293,12 @@
   .move .who.repeat { visibility: hidden; }
   .move.you .who { color: var(--info-text); }
   .move.auto { color: var(--text-tertiary); font-style: italic; }
+  .move.quiet { color: var(--text-tertiary); font-size: 11px; line-height: 14px; }
+  .move.quiet .auto { font-style: italic; }
+  .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: 3px; text-decoration: underline dotted; }
+  .more:hover { color: var(--text); }
+  .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+  .docked { flex: 0 1 auto; max-height: 42%; min-height: 0; overflow-y: auto; }
   .card-name { text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
   .card-name:hover, .card-name:focus-visible { color: var(--accent-text); }
   .times { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }

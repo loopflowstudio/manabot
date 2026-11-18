@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { promptLine } from './prompt';
+import { primaryLabel, promptLine } from './prompt';
 import { tableView } from './view';
 
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
@@ -51,5 +51,48 @@ describe('stack names in the prompt', () => {
     frame.projection.stack_objects = [{ id: 9, kind: 'triggered_ability', controller: 0,
       label: 'Fire Nation Cadets — Whenever this attacks (while your graveyard has at least 1 Lesson): Add {R}{R}.' }];
     expect(promptLine(frame, tableView(frame))).toBe("Fire Nation Cadets's trigger is on the stack. Respond, or Space to let it resolve");
+  });
+});
+
+describe('primaryLabel', () => {
+  const PROTOCOL = new URL('../../../../../protocol/fixtures/', import.meta.url);
+  const priority = readdirSync(PROTOCOL).filter(name => name.endsWith('.json'))
+    .flatMap(name => framesIn(JSON.parse(readFileSync(new URL(name, PROTOCOL), 'utf8'))))
+    .filter(frame => frame.offers.some(offer => offer.verb === 'pass_priority'));
+
+  it('has priority frames to check', () => expect(priority.length).toBeGreaterThan(0));
+
+  it.each(priority.map(frame => [frame.projection.turn.step, frame] as const))('%s: says what passing does next', (_, frame) => {
+    const view = tableView(frame);
+    const label = primaryLabel(frame, view)!;
+    if (view.stack.length) expect(label.text).toMatch(/^Resolve /);
+    else expect(label.text).toMatch(/^To /);
+    expect(label.description).toContain('Pass priority');
+  });
+
+  function emptyStack(): ExperienceFrame {
+    const frame = structuredClone(priority[0]);
+    frame.projection.stack_objects = [];
+    frame.projection.agent.stack = [];
+    frame.projection.opponent.stack = [];
+    return frame;
+  }
+
+  it('names the stack top while something waits to resolve', () => {
+    const frame = emptyStack();
+    frame.projection.stack_objects = [{ id: 9001, kind: 'spell', controller: 0, label: 'Lightning Bolt' }];
+    expect(primaryLabel(frame, tableView(frame))?.text).toBe('Resolve Lightning Bolt');
+  });
+
+  it('skips blockers when nothing attacks', () => {
+    const frame = emptyStack();
+    frame.projection.turn.step = 'COMBAT_DECLARE_ATTACKERS';
+    [frame.projection.agent, frame.projection.opponent].forEach(player => player.battlefield.forEach(permanent => { permanent.attacking = false; }));
+    expect(primaryLabel(frame, tableView(frame))?.text).toBe('To end of combat');
+  });
+
+  it('shows the cost a payment pays', () => {
+    const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
+    expect(primaryLabel(pay, tableView(pay))?.text).toBe(`Pay ${pay.projection.decision_context!.mana_cost}`);
   });
 });

@@ -107,13 +107,18 @@ describe('where decisions land', () => {
 });
 
 describe('fitRow', () => {
-  const limits = { gap: 8, minCard: 44, maxCard: 140, maxLines: 3 };
-  const upright = (n: number) => Array.from({ length: n }, () => ({ count: 1, tapped: false }));
+  const limits = { gap: 8, minCard: 44, maxCard: 140, maxLines: 3, ratio: 5 / 7 };
+  const upright = (n: number) => Array.from({ length: n }, () => 1);
 
   it('uses the full height for a small board', () => {
     const fit = fitRow(upright(3), 800, 150, limits);
     expect(fit.lines).toBe(1);
     expect(fit.card).toBe(Math.floor(150 * 5 / 7));
+  });
+
+  it('sizes landscape frames by their own ratio', () => {
+    const fit = fitRow(upright(3), 800, 90, { ...limits, maxCard: 200, ratio: 4 / 3 });
+    expect(fit.card).toBe(120);
   });
 
   it('keeps twenty-four distinct creatures readable by wrapping', () => {
@@ -124,7 +129,7 @@ describe('fitRow', () => {
   });
 
   it('fits a pile of twelve lands in less width than twelve cards', () => {
-    const pile = fitRow([{ count: 12, tapped: false }], 400, 120, limits);
+    const pile = fitRow([12], 400, 120, limits);
     const spread = fitRow(upright(12), 400, 120, limits);
     expect(pile.card).toBeGreaterThan(spread.card);
   });
@@ -135,11 +140,11 @@ describe('fitRow', () => {
 });
 
 describe('splitHalf', () => {
-  const limits = { gap: 6, creatures: { gap: 8, minCard: 40, maxCard: 132, maxLines: 3 }, support: { gap: 8, minCard: 36, maxCard: 104, maxLines: 2 } };
-  const upright = (n: number) => Array.from({ length: n }, () => ({ count: 1, tapped: false }));
+  const limits = { gap: 6, creatures: { gap: 8, minCard: 40, maxCard: 132, maxLines: 3, ratio: 5 / 7 }, support: { gap: 8, minCard: 36, maxCard: 104, maxLines: 2, ratio: 5 / 7 } };
+  const upright = (n: number) => Array.from({ length: n }, () => 1);
 
   it('gives a crowded creature row the height a few land piles do not need', () => {
-    const split = splitHalf(upright(18), [{ count: 5, tapped: false }, { count: 5, tapped: true }], 840, 280, limits);
+    const split = splitHalf(upright(18), [5, 5], 840, 280, limits);
     expect(split.creatures).toBeGreaterThan(280 * 0.58);
     expect(split.creatureFit.card).toBeGreaterThanOrEqual(60);
     expect(split.creatureFit.overflow || split.supportFit.overflow).toBe(false);

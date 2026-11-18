@@ -146,9 +146,9 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
 
   // The narrative survives the fast-forward: the opponent's moves inside
   // skipped stretches are in the move list, and automated passes are marked
-  // as automation, never as the person's moves.
+  // as automation, never as the person's moves; passes fold into quiet runs.
   await expect(page.locator('[data-testid=log-entry][data-actor=opponent]').first()).toBeAttached();
-  await expect(page.locator('[data-testid=log-entry][data-actor=auto]').first()).toContainText('Pass priority');
+  await expect(page.locator('[data-testid=pass-run] [data-testid=log-entry][data-actor=auto]').first()).toBeAttached();
 });
 
 test('F6 passes the turn from the keyboard', async ({ page }) => {

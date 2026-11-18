@@ -102,6 +102,14 @@
   --neutral-text: #554b6e;
   /* The table's one interaction colour: an outline on anything a legal offer acts on. */
   --legal: #2b68b0;
+  /* Mana symbols on card frames, the printed pip colours: constants in both modes, like card art. */
+  --pip-w: #f4ecd2;
+  --pip-u: #a8cdea;
+  --pip-b: #b6a9a2;
+  --pip-r: #eba68c;
+  --pip-g: #a3cf9a;
+  --pip-c: #d6cec4;
+  --pip-generic: #ddd3c0;
 
   /* Washes are tokens, not arithmetic: each family's container tint is
      pre-mixed with the panel ground per mode, so a wash can never silently

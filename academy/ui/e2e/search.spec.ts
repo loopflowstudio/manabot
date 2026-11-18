@@ -161,8 +161,10 @@ test('the waiting line remains legible while a real response awaits delivery', a
     armed = true;
     await page.getByTestId('action-option').first().click();
     await expect.poll(() => holding).toBe(true);
-    await expect(page.getByTestId('work-status')).toContainText('Searching · Seat 2');
-    await expect(page.getByTestId('work-status')).toContainText(/\d+ s elapsed/);
+    // The rail names who is searching and for how long, once.
+    await expect(page.getByTestId('work-status')).toContainText('is searching');
+    await expect(page.getByTestId('work-status')).toContainText(/· \d+ s/);
+    await expect(page.getByTestId('work-status')).toHaveCount(1);
     await page.screenshot({ path: fileURLToPath(new URL('../test-results/search/thinking.png', import.meta.url)) });
     armed = false;
     holding = false;

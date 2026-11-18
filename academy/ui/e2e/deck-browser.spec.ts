@@ -129,8 +129,8 @@ test('priority automation advances into a real choice and remains visible in the
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
-  // Automated passes are their own actor in the table's move list.
-  const automated = page.locator('[data-testid=log-entry][data-actor=auto]').filter({ hasText: 'Pass priority' });
+  // Automated passes are their own actor in the move list's quiet pass runs.
+  const automated = page.locator('[data-testid=pass-run] [data-testid=log-entry][data-actor=auto]');
   for (let input = 0; input < 6 && await automated.count() === 0; input++) {
     const revision = Number(await page.locator('main').getAttribute('data-frame-revision'));
     const labels = await page.getByTestId('action-option').allTextContents();

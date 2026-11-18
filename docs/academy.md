@@ -573,7 +573,19 @@ count, and each copy remains its own control. Crowded rows shrink their cards
 and wrap onto a further line before anything scrolls, and each half gives the
 crowded row more of its height.
 
-Hover or focus a card to preview it in full. The top bar shows the turn, the
+Permanents are drawn as landscape frames: the name and mana cost on a bar
+above the art, power and toughness on an upright plate, keywords at the lower
+edge (a keyword an effect granted is outlined), counters on the art. A tapped
+permanent keeps its frame and place, its art greyed and labelled **Tapped**.
+Cards in hand keep the printed shape, with the type line under the name.
+
+Hover or focus a card to inspect it: its rules text, type line and cost,
+keywords with the effect that granted each, where its power and toughness come
+from (printed or set, counters, each effect by its source and duration, and
+whatever those do not explain as "other effects"), and its state. The
+inspection floats beside the card and closes when you click or the game moves
+on; **Inspect: docked** in the top bar keeps it in a pane at the top of the rail
+instead, showing the last card you inspected. The top bar shows the turn, the
 current step and the steps where your priority stops hold. The hand strip is
 as tall as it needs to be: an empty hand is a label, and a short hand or a
 crowded board leaves more height to the battlefield.
@@ -585,13 +597,15 @@ The rail holds:
   each of its targets.
 - **Since your last move**: what happened after your last choice, as the
   server reports it: spells cast and what they targeted, attacks, blocks,
-  damage and deaths. A spell that already resolved keeps its card here, and its
+  damage and deaths. The first three lines show; the rest open with **more**. A spell that already resolved keeps its card here, and its
   line to a target that is still on the table, until your next move. Cards that
   attacked, blocked, were targeted or were dealt damage are ringed on the board.
 - **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
   Accumulate Wisdom. Space pays automatically, or click lands to tap them"),
   and its buttons. **Rules detail** holds the engine's full instruction.
-  Passing priority and paying a cost are the primary button (Space). Declining,
+  Passing priority and paying a cost are the primary button (Space), labelled
+  with what it does next: **Resolve** and the spell on top of the stack, the
+  step it moves to ("To combat", "To blockers"), or the cost it pays. Declining,
   and a combat answer that does not name another creature, are separate
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
@@ -599,12 +613,13 @@ The rail holds:
   nine.
 - **Moves**: the game's moves grouped by turn, each turn headed by whose turn
   it was. Each move names the player who made it; priority-stop automation is
-  marked **auto** and never counts as your move, and repeated automatic passes
-  collapse into one line with a count. Hover or focus a card name to see the
-  card.
+  marked **auto** and never counts as your move. A run of the opponent's and
+  automation's priority passes folds into one quiet **passed** line that counts
+  each one's passes; your own passes stay moves. Hover or focus a card name to
+  see the card.
 
-While the opponent decides, the rail and the opponent's plate say so
-("Search 64 is choosing…"). An attacking creature steps toward the player it
+While the opponent decides, the rail and the opponent's plate say so, with
+the seconds it has taken ("Search 64 is searching… · 3 s"). An attacking creature steps toward the player it
 attacks, and a blocker is joined to the attacker it blocks by a line. Cards
 move between zones (hand to stack, stack to battlefield, an opponent's new
 card from their plate) instead of appearing; with reduced motion they appear

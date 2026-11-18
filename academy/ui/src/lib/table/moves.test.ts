@@ -18,14 +18,32 @@ describe('moveList', () => {
       entry('auto', 4, 'Pass priority'),
     ], players, owners, ['Mountain', 'Water Tribe Rallier']);
     expect(turns.map(turn => [turn.turn, turn.owner])).toEqual([[3, 'You'], [4, 'Search 64']]);
-    expect(turns[0].moves.map(move => [move.who, move.count])).toEqual([['You', 1], ['auto', 2]]);
-    expect(turns[1].moves.map(move => move.actor)).toEqual(['opponent', 'auto']);
+    expect(turns[0].moves.map(move => [move.who, move.passes])).toEqual([['You', null], ['', [{ actor: 'auto', who: 'auto', count: 2 }]]]);
+    expect(turns[1].moves.map(move => move.actor)).toEqual(['opponent', 'note']);
   });
 
-  it('never folds a deliberate move into automation', () => {
+  it("folds a run of the opponent's and automation's passes into one quiet line that counts each", () => {
+    const turns = moveList([
+      entry('villain', 5, 'Pass priority'), entry('auto', 5, 'Pass priority'), entry('villain', 5, 'Pass priority'),
+      entry('auto', 5, 'Pass priority'), entry('villain', 5, 'Pass priority'), entry('villain', 5, 'Cast Kyoshi Warriors'),
+      entry('villain', 5, 'Pass priority'),
+    ], players, new Map(), []);
+    expect(turns[0].moves.map(move => move.passes ?? move.segments.map(segment => segment.text).join(''))).toEqual([
+      [{ actor: 'opponent', who: 'Search 64', count: 3 }, { actor: 'auto', who: 'auto', count: 2 }],
+      'Cast Kyoshi Warriors',
+      [{ actor: 'opponent', who: 'Search 64', count: 1 }],
+    ]);
+  });
+
+  it('keeps the person\'s own passes as moves, never folded into automation', () => {
     const turns = moveList([entry('hero', 2, 'Pass priority'), entry('auto', 2, 'Pass priority'), entry('hero', 2, 'Pass priority')],
       players, new Map(), []);
-    expect(turns[0].moves.map(move => [move.actor, move.count])).toEqual([['you', 1], ['auto', 1], ['you', 1]]);
+    expect(turns[0].moves.map(move => [move.actor, move.passes?.length ?? 0])).toEqual([['you', 0], ['note', 1], ['you', 0]]);
+  });
+
+  it('still collapses repeated automated moves that are not passes', () => {
+    const turns = moveList([entry('auto', 2, 'Tap Island'), entry('auto', 2, 'Tap Island')], players, new Map(), []);
+    expect(turns[0].moves.map(move => [move.actor, move.count])).toEqual([['auto', 2]]);
   });
 });
 

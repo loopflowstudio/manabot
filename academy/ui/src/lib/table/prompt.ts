@@ -65,3 +65,42 @@ export function promptLine(frame: ExperienceFrame, view: TableView): string {
       return frame.prompt?.title ?? '';
   }
 }
+
+/** Where passing priority on an empty stack leads: the next step, in words. */
+const NEXT_STEP: Record<string, string> = {
+  BEGINNING_UNTAP: 'To draw', BEGINNING_UPKEEP: 'To draw', BEGINNING_DRAW: 'To main',
+  PRECOMBAT_MAIN_STEP: 'To combat', COMBAT_BEGIN: 'To attackers', COMBAT_DECLARE_ATTACKERS: 'To blockers',
+  DECLARE_ATTACKERS_STEP: 'To blockers', COMBAT_DECLARE_BLOCKERS: 'To damage', DECLARE_BLOCKERS_STEP: 'To damage',
+  COMBAT_FIRST_STRIKE_DAMAGE: 'To damage', COMBAT_DAMAGE: 'To end of combat', COMBAT_END: 'To main 2',
+  POSTCOMBAT_MAIN_STEP: 'To end step', ENDING_END: 'To cleanup', END_STEP: 'To cleanup', ENDING_CLEANUP: 'To next turn',
+};
+
+export interface PrimaryLabel {
+  /** What pressing it does next, shortly: "Resolve Lightning Bolt", "To combat", "Pay {1}{U}". */
+  text: string;
+  /** The offer it commits and what follows, for the accessible name. */
+  description: string;
+}
+
+/**
+ * The primary button's words: what pressing it does next rather than the
+ * offer's verb. Passing with a spell on the stack lets it resolve (if the
+ * other player passes too); on an empty stack it moves to the next step. The
+ * offer committed is unchanged and named in the description.
+ */
+export function primaryLabel(frame: ExperienceFrame, view: TableView): PrimaryLabel | null {
+  const primary = view.primary;
+  if (!primary) return null;
+  const offer = primary.offer.label;
+  if (primary.offer.verb === 'pay') {
+    const cost = frame.projection.decision_context?.mana_cost;
+    return cost ? { text: `Pay ${cost}`, description: `${offer}: ${cost}` } : { text: offer, description: offer };
+  }
+  const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
+  if (top) return { text: `Resolve ${top}`, description: `${offer}: let ${top} resolve` };
+  const { turn } = frame.projection;
+  const attackers = [frame.projection.agent, frame.projection.opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
+  const declaring = turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP';
+  const next = declaring && !attackers ? 'To end of combat' : NEXT_STEP[turn.step];
+  return next ? { text: next, description: `${offer}: ${next.toLowerCase()}` } : { text: offer, description: offer };
+}

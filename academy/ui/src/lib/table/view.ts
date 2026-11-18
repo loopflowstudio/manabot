@@ -49,7 +49,6 @@ export interface PermanentItem {
 export interface Pile {
   key: string;
   items: PermanentItem[];
-  tapped: boolean;
 }
 
 export interface SideView {
@@ -189,7 +188,7 @@ function piles(items: PermanentItem[]): Pile[] {
     const key = pileKey(item);
     const pile = byKey.get(key);
     if (pile) pile.items.push(item);
-    else byKey.set(key, { key, items: [item], tapped: item.permanent.tapped });
+    else byKey.set(key, { key, items: [item] });
   }
   return [...byKey.values()];
 }
@@ -306,11 +305,13 @@ export function offerPlacements(view: TableView): Map<number, number> {
 
 // ———————————————————————————————————————— Sizing
 
-/** Cards are 5:7, as printed. */
+/** Cards in hand are 5:7, as printed. */
 export const CARD_RATIO = 5 / 7;
+/** Battlefield frames are landscape: name bar above the art, 4:3. */
+export const FRAME_RATIO = 4 / 3;
 
 export interface RowFit {
-  /** Card width in px; a tapped card occupies its height across. */
+  /** Card width in px. */
   card: number;
   /** Horizontal offset between copies in one pile, px. */
   fan: number;
@@ -324,18 +325,15 @@ export interface RowLimits {
   minCard: number;
   maxCard: number;
   maxLines: number;
+  /** Card width over height. A tapped card keeps its frame, so this is every card's shape. */
+  ratio: number;
 }
 
-function pileWidth(pile: { count: number; tapped: boolean }, card: number, fan: number): number {
-  const face = pile.tapped ? card / CARD_RATIO : card;
-  return face + (pile.count - 1) * fan;
-}
-
-function linesNeeded(piles: { count: number; tapped: boolean }[], width: number, card: number, fan: number, gap: number): number {
+function linesNeeded(piles: number[], width: number, card: number, fan: number, gap: number): number {
   let lines = 1;
   let used = 0;
-  for (const pile of piles) {
-    const w = pileWidth(pile, card, fan);
+  for (const count of piles) {
+    const w = card + (count - 1) * fan;
     if (used > 0 && used + gap + w > width) { lines += 1; used = w; }
     else used += (used > 0 ? gap : 0) + w;
   }
@@ -343,19 +341,17 @@ function linesNeeded(piles: { count: number; tapped: boolean }[], width: number,
 }
 
 /**
- * The largest card that fits `piles` into a `width` × `height` row.
- * A row of n lines gives each line height / n; a wider fan is tried before a
- * narrower one, and a smaller card before another line.
+ * The largest card that fits piles of `piles[i]` copies into a `width` ×
+ * `height` row. A row of n lines gives each line height / n; a wider fan is
+ * tried before a narrower one, and a smaller card before another line.
  */
-export function fitRow(piles: { count: number; tapped: boolean }[], width: number, height: number, limits: RowLimits): RowFit {
-  const { gap, minCard, maxCard, maxLines } = limits;
+export function fitRow(piles: number[], width: number, height: number, limits: RowLimits): RowFit {
+  const { gap, minCard, maxCard, maxLines, ratio } = limits;
   if (!piles.length || width <= 0 || height <= 0) return { card: maxCard, fan: Math.round(maxCard * 0.3), lines: 1, overflow: false };
   let best: RowFit | null = null;
   for (let lines = 1; lines <= maxLines; lines += 1) {
-    // A line holds an upright card, or a tapped one turned on its side.
     const lineHeight = (height - gap * (lines - 1)) / lines;
-    const tallest = piles.some(pile => !pile.tapped) ? lineHeight * CARD_RATIO : lineHeight;
-    for (let card = Math.min(maxCard, Math.floor(tallest)); card >= minCard; card -= 1) {
+    for (let card = Math.min(maxCard, Math.floor(lineHeight * ratio)); card >= minCard; card -= 1) {
       const fan = Math.max(8, Math.round(card * 0.22));
       if (linesNeeded(piles, width, card, fan, gap) <= lines) {
         if (!best || card > best.card) best = { card, fan, lines, overflow: false };
@@ -367,12 +363,9 @@ export function fitRow(piles: { count: number; tapped: boolean }[], width: numbe
   return { card: minCard, fan: 8, lines: maxLines, overflow: true };
 }
 
-/** What `fitRow` needs of each pile: its cards, attachments included, and whether it is turned. */
-export function pileCounts(piles: Pile[]): { count: number; tapped: boolean }[] {
-  return piles.map(pile => ({
-    count: pile.items.reduce((total, item) => total + 1 + item.attached.length, 0),
-    tapped: pile.tapped,
-  }));
+/** What `fitRow` needs of each pile: its cards, attachments included. */
+export function pileCounts(piles: Pile[]): number[] {
+  return piles.map(pile => pile.items.reduce((total, item) => total + 1 + item.attached.length, 0));
 }
 
 export interface HalfSplit {
@@ -389,8 +382,8 @@ export interface HalfSplit {
  * row may run a little smaller than the creatures before it gains height.
  */
 export function splitHalf(
-  creatures: { count: number; tapped: boolean }[],
-  support: { count: number; tapped: boolean }[],
+  creatures: number[],
+  support: number[],
   width: number,
   height: number,
   limits: { creatures: RowLimits; support: RowLimits; gap: number },

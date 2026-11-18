@@ -28,7 +28,7 @@
   let height = $state(0);
   // A pixel of slack keeps rounding from wrapping a row that just fits.
   const fit = $derived(fitRow(pileCounts(piles), width - 2, height, limits));
-  const cardHeight = $derived(Math.round(fit.card * 7 / 5));
+  const cardHeight = $derived(Math.round(fit.card / limits.ratio));
 
   function blocked(item: PermanentItem): string | null {
     const attacker = item.permanent.blocking;
@@ -52,13 +52,13 @@
   {#if width > 0}
     {#each piles as pile (pile.key)}
       {@const members = pile.items.flatMap(item => [item, ...item.attached.map(attached => ({ ...attached, host: item }))])}
-      {@const face = pile.tapped ? cardHeight : fit.card}
-      <div class="pile" style:width={`${face + (members.length - 1) * fit.fan}px`} style:height={`${cardHeight}px`}>
+      <div class="pile" style:width={`${fit.card + (members.length - 1) * fit.fan}px`} style:height={`${cardHeight}px`}>
         {#each members as item, index (item.permanent.id)}
           <div class="member" style:left={`${index * fit.fan}px`} style:z-index={members.length - index}>
             <TableCard
               name={item.permanent.name ?? 'Unknown permanent'}
               width={fit.card}
+              shape="landscape"
               permanent={item.permanent}
               offers={item.offers}
               {live}

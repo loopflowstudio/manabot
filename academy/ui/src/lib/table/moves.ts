@@ -4,8 +4,11 @@
  * `moveList(entries, players, owners, names)` turns the store's log into turns
  * with their moves: who made each one (a player's name, or automation, which is
  * never the person's), how many times in a row (consecutive identical automated
- * passes collapse to one line with a count), and the move's text split so card
- * names can be inspected. It reads only what the log says; it never infers moves.
+ * moves collapse to one line with a count), and the move's text split so card
+ * names can be inspected. A run of the opponent's and automation's priority
+ * passes folds into one quiet line that still counts each actor's passes; the
+ * person's own passes stay moves. It reads only what the log says; it never
+ * infers moves.
  */
 import type { GameLogEntry } from '$lib/types';
 
@@ -25,6 +28,14 @@ export interface Move {
   segments: Segment[];
   /** Consecutive identical moves collapsed into this one. */
   count: number;
+  /** Set on a folded run of priority passes: each actor's passes, in first-pass order. */
+  passes: PassCount[] | null;
+}
+
+export interface PassCount {
+  actor: 'opponent' | 'auto';
+  who: string;
+  count: number;
 }
 
 export interface MoveTurn {
@@ -35,6 +46,7 @@ export interface MoveTurn {
 }
 
 const ACTORS: Record<GameLogEntry['actor'], MoveActor> = { hero: 'you', villain: 'opponent', auto: 'auto', system: 'note' };
+const PASS = 'Pass priority';
 
 /** Splits `text` on the longest known card names first, so "Cast Fire Nation Cadets" names one card. */
 export function segments(text: string, names: readonly string[]): Segment[] {
@@ -71,12 +83,23 @@ export function moveList(
     }
     const actor = ACTORS[entry.actor];
     const last = turn.moves.at(-1);
+    if (entry.text === PASS && (actor === 'opponent' || actor === 'auto')) {
+      const who = actor === 'opponent' ? players.opponent : 'auto';
+      if (last?.passes) {
+        const part = last.passes.find(candidate => candidate.actor === actor);
+        if (part) part.count += 1;
+        else last.passes.push({ actor, who, count: 1 });
+      } else {
+        turn.moves.push({ id: entry.id, actor: 'note', who: '', segments: [{ text: 'passed', card: null }], count: 1, passes: [{ actor, who, count: 1 }] });
+      }
+      continue;
+    }
     if (last && actor === 'auto' && last.actor === 'auto' && last.segments.map(s => s.text).join('') === entry.text) {
       last.count += 1;
       continue;
     }
     const who = actor === 'you' ? players.you : actor === 'opponent' ? players.opponent : actor === 'auto' ? 'auto' : '';
-    turn.moves.push({ id: entry.id, actor, who, segments: segments(entry.text, names), count: 1 });
+    turn.moves.push({ id: entry.id, actor, who, segments: segments(entry.text, names), count: 1, passes: null });
   }
   return turns;
 }

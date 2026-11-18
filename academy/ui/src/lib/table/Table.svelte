@@ -13,19 +13,19 @@
    */
   import { onMount, type Snippet } from 'svelte';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
-  import { artUrl, loadArt } from '$lib/card-art';
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig } from '$lib/types';
   import Field from './Field.svelte';
+  import Inspect from './Inspect.svelte';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
   import { moveList } from './moves';
-  import { promptLine } from './prompt';
+  import { primaryLabel, promptLine } from './prompt';
   import { nameBook, recentView, tableLines, turnOwners, visibleNames } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
   import TableCard from './TableCard.svelte';
   import { phaseTrack } from './phases';
-  import { CARD_RATIO, pileCounts, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, FRAME_RATIO, pileCounts, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -44,6 +44,8 @@
     thinking: string | null;
     /** The opponent is the one choosing now. */
     opponentChoosing: boolean;
+    /** When the work the table waits on started, epoch seconds; null when nothing runs. */
+    workStarted: number | null;
     /** The live session is gone; offers are the last recorded decision's. */
     interrupted: boolean;
     onact: (offer: InteractionOffer) => void;
@@ -55,7 +57,7 @@
 
   let {
     frame, live, status, you, opponent, stops, connection, connectionLabel, log, canPassTurn,
-    presentation, thinking, opponentChoosing, interrupted, onact, onpassturn, notices, result, menu,
+    presentation, thinking, opponentChoosing, workStarted, interrupted, onact, onpassturn, notices, result, menu,
   }: Props = $props();
 
   // The table is the whole screen; the page behind it must not scroll.
@@ -76,6 +78,7 @@
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index ? (live ? 'Your decision' : 'Your decision · waiting') : `${opponent.name}'s decision`);
   const line = $derived(promptLine(frame, view));
+  const primaryText = $derived(primaryLabel(frame, view));
 
   // ———————————————— What happened since your last move
 
@@ -100,8 +103,10 @@
     travel.play(root, prefersReducedMotion());
   });
 
-  const CREATURES: RowLimits = { gap: 8, minCard: 40, maxCard: 132, maxLines: 3 };
-  const SUPPORT: RowLimits = { gap: 8, minCard: 36, maxCard: 104, maxLines: 2 };
+  // Battlefield frames are landscape so names stay legible as rows shrink;
+  // lands and other support permanents are smaller tiles of the same frame.
+  const CREATURES: RowLimits = { gap: 8, minCard: 64, maxCard: 172, maxLines: 3, ratio: FRAME_RATIO };
+  const SUPPORT: RowLimits = { gap: 6, minCard: 52, maxCard: 128, maxLines: 2, ratio: FRAME_RATIO };
   const ROW_GAP = 6;
 
   // Each half divides its height between its two rows by what they hold.
@@ -123,18 +128,29 @@
   // ———————————————— Menus and preview
 
   type Menu = { title: string; offers: PlacedOffer[]; x: number; y: number };
-  type Preview = { name: string; text: string | null; x: number; y: number; flip: boolean };
   type Zone = { title: string; cards: CardState[]; x: number; y: number };
+  /** What is inspected: a name, and the object it names when there is one. */
+  type Subject = { name: string; text: string | null; permanent: number | null; card: number | null };
   let menuAt = $state<Menu | null>(null);
   let zoneAt = $state<Zone | null>(null);
-  let preview = $state<Preview | null>(null);
   let menuElement = $state<HTMLElement | null>(null);
+
+  // Inspecting: a preview floats beside the card under the pointer or focus,
+  // or the rail's docked pane keeps the last card inspected.
+  const INSPECT_KEY = 'academy.table.inspect';
+  let inspectMode = $state<'float' | 'dock'>(typeof localStorage !== 'undefined' && localStorage.getItem(INSPECT_KEY) === 'dock' ? 'dock' : 'float');
+  function toggleInspect(): void {
+    inspectMode = inspectMode === 'dock' ? 'float' : 'dock';
+    localStorage.setItem(INSPECT_KEY, inspectMode);
+  }
+  let hovered = $state<{ subject: Subject; x: number; y: number } | null>(null);
+  let docked = $state<Subject | null>(null);
 
   // A new frame replaces the cards a menu or preview was opened from.
   $effect(() => {
     void frame.revision;
     menuAt = null;
-    preview = null;
+    hovered = null;
   });
   $effect(() => {
     if (menuAt) menuElement?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
@@ -143,6 +159,7 @@
   function act(placed: PlacedOffer): void {
     if (!live) return;
     menuAt = null;
+    hovered = null;
     since = { revision: frame.revision, frame, logLength: log.length };
     onact(placed.offer);
   }
@@ -154,34 +171,40 @@
   }
 
   function activate(title: string, offers: PlacedOffer[], element: HTMLElement): void {
+    hovered = null;
     if (!live || !offers.length) return;
     if (offers.length === 1) { act(offers[0]); return; }
     const rect = element.getBoundingClientRect();
     menuAt = { title, offers, x: Math.min(rect.left, window.innerWidth - 300), y: rect.bottom + 6 > window.innerHeight - 160 ? Math.max(8, rect.top - 8 - 36 * offers.length - 30) : rect.bottom + 6 };
   }
 
-  function show(name: string | null, text: string | null, element: HTMLElement | null): void {
-    if (!name || !element) { preview = null; return; }
+  function show(subject: Subject | null, element: HTMLElement | null): void {
+    if (!subject || !element) { hovered = null; return; }
+    docked = subject;
     const rect = element.getBoundingClientRect();
-    const flip = rect.right + 260 > window.innerWidth - 280;
-    preview = { name, text, x: flip ? rect.left - 252 : rect.right + 12, y: Math.max(48, Math.min(rect.top - 40, window.innerHeight - 360)), flip };
+    const flip = rect.right + 290 > window.innerWidth - 290;
+    hovered = { subject, x: flip ? rect.left - 282 : rect.right + 12, y: Math.max(48, Math.min(rect.top - 40, window.innerHeight - 440)) };
   }
 
-  const previewFull = $derived(preview ? artUrl(preview.name, 'full') : null);
-  let previewLoaded = $state<string | null>(null);
-  $effect(() => {
-    const url = previewFull;
-    if (!url) return;
-    let active = true;
-    void loadArt(url).then(ok => { if (active && ok) previewLoaded = url; });
-    return () => { active = false; };
-  });
+  // The inspected object as it is in this frame, by id; a name alone when it has left.
+  const permanents = $derived(new Map([...projection.agent.battlefield, ...projection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
+  const cards = $derived(new Map([projection.agent, projection.opponent]
+    .flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).map(card => [card.id, card])));
+  const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
+  const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
+  const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
 
   function onPermanent(item: PermanentItem, element: HTMLElement): void {
     activate(item.permanent.name ?? 'Permanent', item.offers, element);
   }
   function previewPermanent(item: PermanentItem | null, element: HTMLElement | null): void {
-    show(item?.permanent.name ?? null, item?.permanent.text_box ?? null, element);
+    show(item ? { name: item.permanent.name ?? 'Permanent', text: item.permanent.text_box ?? null, permanent: item.permanent.id, card: null } : null, element);
+  }
+  function previewCard(card: CardState | null, element: HTMLElement | null): void {
+    show(card ? { name: card.name, text: card.text_box ?? null, permanent: null, card: card.id } : null, element);
+  }
+  function previewName(name: string | null, element: HTMLElement | null): void {
+    show(name ? { name, text: textOf(name), permanent: null, card: null } : null, element);
   }
   function onStack(item: StackItem, element: HTMLElement): void {
     activate(item.entry.label, item.offers, element);
@@ -231,7 +254,7 @@
 
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
-    if (event.key === 'Escape') { menuAt = null; zoneAt = null; preview = null; return; }
+    if (event.key === 'Escape') { menuAt = null; zoneAt = null; hovered = null; return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
@@ -273,6 +296,8 @@
         <span data-testid="connection-badge" data-connection-state={connection} role="status" aria-live="polite" aria-atomic="true"
           aria-label={`Connection status: ${connectionLabel}`} class="type-rubric">{connectionLabel}</span>
       </span>
+      <button type="button" class="inspect-toggle type-caption" data-testid="inspect-toggle" aria-pressed={inspectMode === 'dock'}
+        title="Show inspected cards in a pane on the rail, or beside the card" onclick={toggleInspect}>{inspectMode === 'dock' ? 'Inspect: docked' : 'Inspect: beside card'}</button>
       {#if menu}{@render menu()}{/if}
     </div>
   </header>
@@ -301,7 +326,7 @@
           <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * handStep}px`}>
             <TableCard name={item.card.name} width={handCard} card={item.card} offers={item.offers} {live} asked={view.asked.has(item.card.id)}
               onactivate={element => activate(item.card.name, item.offers, element)}
-              onpreview={element => show(element ? item.card.name : null, item.card.text_box ?? null, element)} />
+              onpreview={element => previewCard(element ? item.card : null, element)} />
           </div>
         {/each}
       </div>
@@ -316,7 +341,7 @@
               <div class="tray-card">
                 <TableCard name={item.name} width={104} offers={[item.placed]} {live}
                   onactivate={() => act(item.placed)}
-                  onpreview={element => show(element ? item.name : null, null, element)} />
+                  onpreview={element => previewName(element ? item.name : null, element)} />
                 <span class="type-caption">{item.placed.offer.label}</span>
               </div>
             {:else}
@@ -331,9 +356,9 @@
   </div>
 
   <div class="rail-slot" id="table-choices">
-    <Rail {view} {frame} {live} {line} {status} {whose} {thinking} {interrupted} {canPassTurn} {recent} {moves}
+    <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={opponent.name} onact={act} onpassturn={passTurn}
-      onstack={onStack} onpreviewname={(name, element) => show(name, name ? textOf(name) : null, element)} {notices} {result} />
+      onstack={onStack} onpreviewname={previewName} {notices} {result} dock={inspectMode === 'dock' ? dock : undefined} />
   </div>
 </div>
 
@@ -355,24 +380,30 @@
     <p class="type-rubric text-ink-2">{zoneAt.title}</p>
     <ol>
       {#each zoneAt.cards as card (card.id)}
-        <li><button type="button" onmouseenter={event => show(card.name, card.text_box ?? null, event.currentTarget)} onmouseleave={() => (preview = null)}
-          onfocus={event => show(card.name, card.text_box ?? null, event.currentTarget)} onblur={() => (preview = null)}>{card.name}</button></li>
+        <li><button type="button" onmouseenter={event => previewCard(card, event.currentTarget)} onmouseleave={() => (hovered = null)}
+          onfocus={event => previewCard(card, event.currentTarget)} onblur={() => (hovered = null)}>{card.name}</button></li>
       {/each}
     </ol>
     <button type="button" class="cancel" onclick={() => (zoneAt = null)}><kbd>Esc</kbd>Close</button>
   </div>
 {/if}
 
-{#if preview}
-  <div class="preview" aria-hidden="true" style:left={`${preview.x}px`} style:top={`${preview.y}px`} data-testid="card-preview">
-    {#if previewLoaded === previewFull}
-      <img src={previewFull} alt="" />
+{#snippet dock()}
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrolling region must be reachable by keyboard) -->
+  <section class="dock" aria-label="Inspect" data-testid="inspect-dock" tabindex="0">
+    {#if docked}
+      <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard}
+        blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} art={72} />
     {:else}
-      <div class="preview-text">
-        <p class="type-title">{preview.name}</p>
-        {#if preview.text}<p class="type-caption">{preview.text}</p>{/if}
-      </div>
+      <p class="type-annotation text-ink-3">Hover or focus a card to inspect it.</p>
     {/if}
+  </section>
+{/snippet}
+
+{#if inspectMode === 'float' && hovered}
+  <div class="preview" aria-hidden="true" style:left={`${hovered.x}px`} style:top={`${hovered.y}px`} data-testid="card-preview">
+    <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard}
+      blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} />
   </div>
 {/if}
 
@@ -446,9 +477,13 @@
   .zone ol { max-height: 260px; overflow-y: auto; }
   kbd { font-family: var(--font-mono); font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 3px; border: 1px solid currentColor; opacity: 0.7; min-width: 16px; text-align: center; }
 
-  .preview { position: fixed; z-index: 250; width: 240px; pointer-events: none; }
-  .preview img { width: 240px; border-radius: 12px; box-shadow: var(--shadow-raised); display: block; }
-  .preview-text { padding: 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised); display: grid; gap: 6px; white-space: pre-line; }
+  .preview {
+    position: fixed; z-index: 250; width: 270px; max-height: calc(100vh - 60px); overflow: hidden; pointer-events: none;
+    padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised);
+  }
+  .dock { max-height: 100%; overflow-y: auto; }
+  .inspect-toggle { color: var(--text-secondary); padding: 2px 6px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+  .inspect-toggle:hover { color: var(--text); background: var(--bg-field); }
 
   @media (prefers-reduced-motion: reduce) {
     .hand-card, .board { transition: none; }

@@ -36,6 +36,7 @@ from starlette.websockets import WebSocketState
 
 import managym
 from managym.academy.card_art import card_art
+from managym.academy.card_faces import CardFace, card_faces
 from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
@@ -3608,6 +3609,12 @@ def _art_response(path: Path | None) -> Response:
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
+
+
+@app.get("/api/card-faces")
+def get_card_faces(names: list[str] = Query(default=[])) -> dict[str, CardFace]:
+    """Printed cost, type line and keywords for names the viewer already sees."""
+    return card_faces(names[:1024])
 
 
 @app.get("/api/card-art/back.jpg")
