@@ -4,7 +4,9 @@ from managym.academy.opponent import opponent_kind
 
 
 def test_scripted_policies_have_no_artifact() -> None:
-    assert opponent_kind({"artifacts": {}, "config": {"kind": "heuristic"}}) == "scripted"
+    assert (
+        opponent_kind({"artifacts": {}, "config": {"kind": "heuristic"}}) == "scripted"
+    )
 
 
 def test_a_checkpoint_names_its_world_when_recorded() -> None:

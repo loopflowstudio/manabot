@@ -662,5 +662,7 @@ def test_wire_message_includes_pending_action_log_on_game_over(monkeypatch):
 
     assert payload["type"] == "game_over"
     assert payload["winner"] == 1
-    assert payload["log"] == [{"actor": "villain", "turn": 3, "text": "Attack with Gray Ogre"}]
+    assert payload["log"] == [
+        {"actor": "villain", "turn": 3, "text": "Attack with Gray Ogre"}
+    ]
     assert session._pending_action_log == []

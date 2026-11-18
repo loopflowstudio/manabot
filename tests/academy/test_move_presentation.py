@@ -4,8 +4,9 @@ objects they became, so the table can tell and point at every move."""
 from pathlib import Path
 from typing import Any
 
-from managym.academy import server
 from test_recording_narration import play_passing
+
+from managym.academy import server
 
 CONFIG: dict[str, Any] = {
     # The person never plays a land, so their hand passes seven and they
@@ -31,9 +32,7 @@ def test_land_plays_and_discards_name_the_objects_on_the_table(
     lands = [kind for kind in kinds if kind["kind"] == "land_played"]
     battlefield = {p["id"]: p["name"] for p in projection["opponent"]["battlefield"]}
     assert lands and all(kind["player"] == 1 - human for kind in lands)
-    assert {battlefield.get(kind["object"]["entity"]) for kind in lands} == {
-        "Mountain"
-    }
+    assert {battlefield.get(kind["object"]["entity"]) for kind in lands} == {"Mountain"}
 
     discards = [kind for kind in kinds if kind["kind"] == "discarded"]
     graveyard = {card["id"]: card["name"] for card in projection["agent"]["graveyard"]}
