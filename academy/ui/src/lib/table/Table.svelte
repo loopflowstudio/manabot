@@ -75,6 +75,8 @@
     evidence?: OfferEvidence | null;
     /** The recap's heading, when it is not the person's last move. */
     recapTitle?: string;
+    /** What the shown position is, when the caller knows (a recording): "After Heuristic's move". */
+    heading?: string | null;
     /** Under the board: a recording's transport and decision strip, or live play's strip. */
     bottom?: Snippet;
     notices?: Snippet;
@@ -85,7 +87,7 @@
   let {
     frame, live, status, you, opponent, stops, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
-    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, bottom, notices, result, menu,
+    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, notices, result, menu,
   }: Props = $props();
 
   // Cards read the recorded policy for their own offers.
@@ -105,11 +107,11 @@
   const track = $derived(phaseTrack(projection.turn, stops, yourTurn));
   const names = $derived(new Map([...projection.agent.battlefield, ...projection.opponent.battlefield]
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])));
-  const whose = $derived(frame.status === 'game_over' ? 'Game over'
+  const whose = $derived(heading ?? (frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index
         ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${you.name}'s decision`
-        : `${opponent.name}'s decision`);
+        : `${opponent.name}'s decision`));
   // ———————————————— Payment preview
 
   // The offer the board previews: the one a person points at or focuses, when

@@ -63,6 +63,22 @@ test('verified evaluation import reads the same timeline without producing a pol
   const moves = page.getByTestId('game-log').locator('button[data-move]');
   expect(await moves.count()).toBeGreaterThan(1);
   await expect(page.getByTestId('decision-strip')).toHaveAttribute('data-open', 'true');
+  // One line: the open strip is the slider; folded, the transport's ticked scrubber returns.
+  await expect(slider).toHaveCount(1);
+  await expect(page.getByTestId('decision-strip').getByRole('slider')).toHaveCount(1);
+  await expect(page.getByTestId('replay-transport').getByRole('slider')).toHaveCount(0);
+  await page.getByTestId('strip-toggle').click();
+  await expect(page.getByTestId('replay-transport').getByRole('slider')).toHaveValue(String(last - 1));
+  await page.getByTestId('strip-toggle').click();
+  await expect(slider).toHaveCount(1);
+  // Every position says what it is; the end says who won.
+  await expect(page.getByTestId('action-panel')).toContainText('Game over ·');
+  const end = page.url();
+  await slider.fill('1');
+  await expect(page.getByTestId('action-panel').locator('.whose')).toHaveText(/choice|After .* move|automatic pass/);
+  await slider.fill(String(last - 2));
+  await page.getByRole('button', {name: 'Next', exact: true}).click();
+  await expect.poll(() => page.url()).toBe(end);
   const perspective = page.getByRole('combobox', {name: 'Perspective'});
   const before = await perspective.inputValue();
   await perspective.selectOption(before === '1' ? '0' : '1');

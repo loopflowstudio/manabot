@@ -16,6 +16,7 @@
  *   read from the index alone (each position's label, value and revision).
  * - `sinceRevision(…)`: where "since your last move" starts at a position: the
  *   chooser's previous decision, or the transition itself.
+ * - `positionHeading(…)`: what the shown position is, in words.
  *
  * Nothing here reads a later position to describe an earlier one, and history
  * stays the acting viewer's recorded track: labels come from the index, never
@@ -269,4 +270,36 @@ export function cardEvidence(evidence: OfferEvidence | null, offerIds: readonly 
   if (!evidence || !offerIds.length) return null;
   const recorded = offerIds.map(id => evidence.probability.get(id)).filter((p): p is number => p !== undefined);
   return { p: recorded.length ? recorded.reduce((sum, p) => sum + p, 0) : null, chosen: evidence.chosen !== null && offerIds.includes(evidence.chosen) };
+}
+
+// ———————————————————————————————————————— Heading
+
+/** "your", "Heuristic's": a seat's name as an owner. */
+function possessive(name: string): string {
+  return name === 'You' ? 'your' : `${name}'s`;
+}
+
+/**
+ * What a recorded position is, in words, for the rail's heading: "Your choice",
+ * "After Heuristic's move", "Game over · Heuristic wins". `gameOver` is the
+ * shown board's; `winner` the recording's (null for a draw).
+ */
+export function positionHeading(
+  position: Pick<Position, 'kind' | 'actor' | 'automatic'>,
+  seatName: (seat: 0 | 1) => string,
+  gameOver: boolean,
+  winner: number | null,
+): string {
+  if (gameOver) return winner === 0 || winner === 1 ? `Game over · ${seatName(winner)} ${seatName(winner) === 'You' ? 'win' : 'wins'}` : 'Game over · Draw';
+  const seat = position.actor === 0 || position.actor === 1 ? position.actor : null;
+  if (position.kind === 'choice') {
+    if (seat === null) return 'A recorded choice';
+    const owner = possessive(seatName(seat));
+    return `${owner[0].toUpperCase()}${owner.slice(1)} choice`;
+  }
+  if (position.kind === 'consequences') {
+    if (position.automatic) return 'After an automatic pass';
+    return seat === null ? 'After a move' : `After ${possessive(seatName(seat))} move`;
+  }
+  return 'The latest position';
 }

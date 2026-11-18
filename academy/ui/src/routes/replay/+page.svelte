@@ -29,7 +29,7 @@
   import { moveList } from '$lib/table/moves';
   import { gameResult } from '$lib/table/result';
   import {
-    bottomSeat, moveAt, offerEvidence, perspectiveOf, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
+    bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/table/replay';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
@@ -490,7 +490,7 @@
   {#if index}
     <Transport selected={replayStore.selected} total={positions.length} {marks} playing={replayStore.playing} speed={replayStore.speed}
       disabled={locked} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce && !replayStore.headUncertain} {retrySearch}
-      retryBot={!!index.mirror_retry && !retrySearch} onPrevious={() => seek(replayStore.selected - 1)} onNext={next} onDecision={decision}
+      retryBot={!!index.mirror_retry && !retrySearch} line={!stripOpen} onPrevious={() => seek(replayStore.selected - 1)} onNext={next} onDecision={decision}
       onTogglePlaying={togglePlaying} onScrub={seek} onSpeedChange={speed => (replayStore.speed = speed)} />
     <Strip {marks} selected={replayStore.selected} open={stripOpen} ontoggle={() => (stripOpen = !stripOpen)} onjump={locked ? undefined : seek} />
   {/if}
@@ -515,6 +515,7 @@
     onact={offer => void retryStudyOffer(offer)}
     {since}
     recapTitle={studying ? 'This line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
+    heading={studying || !current ? null : positionHeading(current, nameOf, frame.projection.game_over, index?.winner ?? null)}
     {moves}
     onjump={locked ? undefined : jump}
     {currentMove}

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
-import { bottomSeat, moveAt, offerEvidence, perspectiveOf, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
 import { tableView } from './view';
 
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
@@ -121,5 +121,19 @@ describe('the move list and strip read the index', () => {
     expect(sinceRevision(positions, 4)).toBe(3);
     expect(sinceRevision(positions, 2)).toBe(4);
     expect(sinceRevision(positions, 0)).toBeNull();
+  });
+});
+
+describe('a position says what it is', () => {
+  const names = (seat: 0 | 1): string => (seat === 0 ? 'You' : 'Heuristic');
+  it('names the chooser, the mover and the end', () => {
+    expect(positionHeading({ kind: 'choice', actor: 0, automatic: false }, names, false, null)).toBe('Your choice');
+    expect(positionHeading({ kind: 'choice', actor: 1, automatic: false }, names, false, null)).toBe("Heuristic's choice");
+    expect(positionHeading({ kind: 'consequences', actor: 1, automatic: false }, names, false, null)).toBe("After Heuristic's move");
+    expect(positionHeading({ kind: 'consequences', actor: 0, automatic: false }, names, false, null)).toBe('After your move');
+    expect(positionHeading({ kind: 'consequences', actor: null, automatic: true }, names, false, null)).toBe('After an automatic pass');
+    expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 1)).toBe('Game over · Heuristic wins');
+    expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 0)).toBe('Game over · You win');
+    expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, null)).toBe('Game over · Draw');
   });
 });

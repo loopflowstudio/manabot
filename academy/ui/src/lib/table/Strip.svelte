@@ -3,9 +3,10 @@
    * The game's decisions as one line under the board, folded to a single row
    * until opened. Each decision is a tick, coloured by whose it was; where the
    * chooser's value was recorded it is a point on that chooser's line instead.
-   * Turns are ruled and numbered. In a recording a click jumps to the nearest
-   * position (`onjump`); the keyboard path is the transport and the move list.
-   * Live play has no past positions to show yet, so its marks only count.
+   * Turns are ruled and numbered. In a recording the open strip is the
+   * recording's one navigable line (`onjump`): a slider over it, so a click,
+   * a drag or the arrow keys move to a position. Live play has no past
+   * positions to show yet, so its marks only count.
    */
   import { labelledTurns, type StripMark } from './replay';
 
@@ -38,11 +39,7 @@
   const line = (side: 'you' | 'opponent'): string => decisions
     .filter(mark => mark.side === side && mark.value !== null).map(mark => `${x(mark.at)},${y(mark.value!)}`).join(' ');
 
-  function jump(event: MouseEvent): void {
-    if (!onjump || !marks.length) return;
-    const box = (event.currentTarget as SVGElement).getBoundingClientRect();
-    onjump(Math.round(((event.clientX - box.left) / box.width) * span));
-  }
+  const turn = $derived(selected !== null ? marks[selected]?.turn ?? null : null);
 </script>
 
 <section class="strip" class:open aria-label="Decisions" data-testid="decision-strip" data-open={open}>
@@ -52,8 +49,8 @@
     {#if note}<span class="note type-caption text-ink-3">{note}</span>{/if}
   </button>
   {#if open}
-    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (the transport and the move list are the keyboard path to every position) -->
-    <svg class="line" class:jumps={!!onjump} viewBox={`0 0 1000 ${HEIGHT}`} preserveAspectRatio="none" onclick={jump} aria-hidden="true">
+    <div class="lane" class:jumps={!!onjump}>
+    <svg class="line" viewBox={`0 0 1000 ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
       {#if range && range.low < 0}<line class="zero" x1="0" x2="1000" y1={y(0)} y2={y(0)} />{/if}
       {#each marks as mark (mark.key)}
         {#if mark.turnStart}<line class="turn" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
@@ -65,6 +62,12 @@
       <polyline class="value theirs" points={line('opponent')} />
       {#if selected !== null && marks[selected]}<line class="here" x1={x(selected)} x2={x(selected)} y1="0" y2={HEIGHT} />{/if}
     </svg>
+    {#if onjump && selected !== null}
+      <input type="range" class="seek" aria-label="Replay position" min="0" max={Math.max(0, marks.length - 1)} value={selected}
+        aria-valuetext={`Position ${selected + 1} of ${marks.length}${turn !== null ? `, turn ${turn}` : ''}`}
+        oninput={event => onjump(Number(event.currentTarget.value))} />
+    {/if}
+    </div>
     <div class="turns" aria-hidden="true">
       {#each labelledTurns(marks, 0.02) as mark (mark.key)}<span style:left={`${(mark.at / span) * 100}%`}>{mark.turn ?? ''}</span>{/each}
     </div>
@@ -77,8 +80,14 @@
   .head:hover { color: var(--text); }
   .chevron { width: 10px; }
   .note { margin-left: auto; text-transform: none; letter-spacing: 0; }
+  .lane { position: relative; border-radius: 4px; }
+  .lane:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
   .line { display: block; width: 100%; height: 44px; background: var(--bg-field); border-radius: 4px; }
-  .line.jumps { cursor: pointer; }
+  /* The slider is the line's input: invisible, the full lane, a hairline thumb so
+     a click lands on the position drawn under it. */
+  .seek { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .seek::-webkit-slider-thumb { appearance: none; width: 1px; height: 44px; }
+  .seek::-moz-range-thumb { width: 1px; height: 44px; border: 0; }
   .turn { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .zero { stroke: var(--border-strong); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
   .tick { stroke: var(--info-text, var(--accent)); stroke-width: 2; vector-effect: non-scaling-stroke; }

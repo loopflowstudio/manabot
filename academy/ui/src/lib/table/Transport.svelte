@@ -2,9 +2,11 @@
   /**
    * A recording's transport, in place of the hand's live input: step by
    * position or by decision, play at a speed, and scrub a line ticked by turn
-   * with each decision marked. At a Watch's live edge, Next asks the bots for
-   * the next decision (Continue). Keys are the page's: ←/→ step, Shift+←/→
-   * jump decisions, Space plays, Home/End.
+   * with each decision marked. While the decision strip is open it is the one
+   * line (`line` false): the transport keeps its buttons and counter. At a
+   * Watch's live edge, Next asks the bots for the next decision (Continue).
+   * Keys are the page's: ←/→ step, Shift+←/→ jump decisions, Space plays,
+   * Home/End.
    */
   import { labelledTurns, type StripMark } from './replay';
 
@@ -20,6 +22,8 @@
     canProduce?: boolean;
     retrySearch?: boolean;
     retryBot?: boolean;
+    /** Draw the scrubber; false while the decision strip carries the line. */
+    line?: boolean;
     onPrevious: () => void;
     onNext: () => void;
     onDecision: (direction: -1 | 1) => void;
@@ -30,7 +34,7 @@
 
   let {
     selected, total, marks, playing, speed, disabled = false, busy = false, producing = false, canProduce = false,
-    retrySearch = false, retryBot = false, onPrevious, onNext, onDecision, onTogglePlaying, onScrub, onSpeedChange,
+    retrySearch = false, retryBot = false, line = true, onPrevious, onNext, onDecision, onTogglePlaying, onScrub, onSpeedChange,
   }: Props = $props();
 
   const edge = $derived(selected + 1 === total);
@@ -55,7 +59,7 @@
     <button type="button" class="btn btn-ghost btn-sm" disabled={disabled || !hasDecisionAfter} onclick={() => onDecision(1)}
       aria-label="Next decision" title="Next decision (Shift+→)">⇥</button>
   </div>
-  <div class="scrub">
+  {#if line}<div class="scrub">
     <input type="range" aria-label="Replay position" aria-valuetext={`Position ${selected + 1} of ${total}${turn !== null ? `, turn ${turn}` : ''}`}
       min="0" max={Math.max(0, total - 1)} value={selected} {disabled} oninput={event => onScrub(Number(event.currentTarget.value))} />
     <div class="ticks" aria-hidden="true">
@@ -64,7 +68,7 @@
         {#if mark.decision}<i class="decision" class:theirs={mark.side === 'opponent'} style:left={at(mark.at)}></i>{/if}
       {/each}
     </div>
-  </div>
+  </div>{:else}<span class="spacer"></span>{/if}
   <span class="type-caption counter" data-testid="position-counter">Position {selected + 1} / {total}</span>
   <label class="type-caption speed">Speed
     <select value={speed} onchange={event => onSpeedChange(Number(event.currentTarget.value))}>{#each [1, 2, 4, 16] as value (value)}<option {value}>{value}×</option>{/each}</select>
@@ -83,6 +87,7 @@
   .turn b { position: absolute; left: 3px; top: -1px; font: 600 9px/12px var(--font-mono); color: var(--text-tertiary); }
   .decision { width: 3px; height: 5px; margin-left: -1px; top: 1px !important; border-radius: 1px; background: var(--info-text, var(--accent)); }
   .decision.theirs { background: var(--text-tertiary); }
+  .spacer { flex: 1 1 auto; }
   .counter { flex: none; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
   .speed { flex: none; display: flex; align-items: center; gap: 4px; color: var(--text-secondary); }
   .speed select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 1px 4px; color: var(--text); }
