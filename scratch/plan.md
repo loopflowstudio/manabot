@@ -94,8 +94,31 @@ with their original fields and hashes. The authored matchup, ABI and viewing
 boundary govern arena compatibility. A retained w2 participant served a
 checkpoint in a current selected matchup and its games replayed.
 
-Next: gate and publish for human review. No landing or paid run.
+## Concept review of the built change, 2026-11-18 — build this next
 
-Off-plan: `scratch/concept-review.html` (`c61d05e`) proposes a paired-replay
-baseline. The 2026-11-18 direction puts "paired verdicts" outside this PR.
-Read it as background only; it goes when scratch/ is deleted before landing.
+The build matches the revision above. Three small corrections remain, all
+inside items 2, 4 and 5; nothing else changes.
+
+1. Rename `PlayerRegistration.checkpoint_source` to `writer_revision`
+   (`manabot/sim/registration.py`, `manabot/eval/admission.py`,
+   `manabot/eval/agents.py`, `tests/eval/test_local_evaluation.py`,
+   `tests/eval/test_etude_agents.py`, `tests/eval/test_evaluation_match.py`,
+   and the paragraph in `docs/evaluation.md`). Elsewhere `checkpoint_source`
+   names the record of commit, dirty flag and Etude run; the registration
+   holds only the commit, which `PolicyCheckpoint.writer_revision` already
+   names. The key is serialized into evaluation records, so it is renamed
+   before any retained record carries it. Keep it omitted when absent so old
+   registrations hash unchanged. Passed over: storing the whole source record.
+2. `docs/observation-and-model.md`, "Running a checkpoint on a later
+   revision": `BindingReport` holds counts only. Remove "and changed card
+   keys" and "The report names the 136 that serialize differently"; say the
+   count instead.
+3. `README.md` "What it trains on now" links "world w17" as the current
+   world. Link the card count to the pool without a world number.
+
+Then gate and publish for human review. No landing or paid run.
+
+Left as they are and shown on `scratch/concept-review.html`: the several
+names for the two kinds of checkpoint (world-bound, deck-source; setup-bound,
+fixed-match), and fixed-match checkpoints refusing after cards are added.
+`scratch/` goes before landing.

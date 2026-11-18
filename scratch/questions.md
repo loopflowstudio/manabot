@@ -129,3 +129,9 @@ say so if they should carry a note.
     rows used directly by the loader (zero for a model without card programs).
     A retained registration lacking the count stays unknown. Etude already
     stores these fields in the match participant's registration config.
+
+## Concept review of the revised build, 2026-11-18 (nobody present; reversible)
+
+33. The participant record's writing commit is named `writer_revision`, not
+    `checkpoint_source`, which elsewhere names the commit, dirty flag and
+    Etude run together. Passed over: storing that whole record.
