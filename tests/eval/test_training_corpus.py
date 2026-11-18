@@ -71,6 +71,11 @@ def test_corpus_queries_use_completed_games_through_update(
         1,
         "select policy_input_version, max_actions, behavior, learning_seats, mana_taps from settings",
     ) == [(9, 64, "current-self", None, None) if historical else (None,) * 5]
+    assert corpus_sql(1, "select board, card, copies from deck_cards order by all") == [
+        ("main", "lea.forest", 10),
+        ("main", "lea.island", 10),
+        ("sideboard", "lea.island", 1),
+    ]
     assert corpus_sql(1, "select play, draw, games from corpus") == [
         (island.identity, island.identity, 1)
     ]

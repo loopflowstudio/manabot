@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from itertools import batched
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import duckdb
 from etude.checkpoints import CheckpointRecord
@@ -16,7 +16,7 @@ from pydantic import TypeAdapter
 
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
 from manabot.reports.update_metrics import scalar_updates
-from manabot.training.decks import CorpusDeck, DeckCard, corpus_decks
+from manabot.training.decks import DeckCard, deck_cards
 from manabot.training.rollout.self_play import SelfPlayOutcome
 from manabot.training.update_metrics import DECK_TABLE, OUTCOME_TABLE, SETTINGS_TABLE
 from managym import Deck
@@ -35,26 +35,37 @@ def bound_catalog(digest: str, location: str, current: WriterCatalog) -> WriterC
     )
 
 
+class CorpusDeck(TypedDict):
+    deck: str
+    cards: list[str]
+
+
 def roster(data: RunData) -> list[CorpusDeck]:
     """Resolve all declared population entries, including decks never played."""
-    rows = recorded_deck_cards(data)
-    return declared_roster(data) if rows is None else roster_from_cards(rows)
-
-
-def recorded_deck_cards(data: RunData) -> list[DeckCard] | None:
-    for table in data.read_table(DECK_TABLE, "updates"):
-        if table.x == 0:
-            return TypeAdapter(list[DeckCard]).validate_python(table.rows)
-    return None
-
-
-def roster_from_cards(rows: list[DeckCard]) -> list[CorpusDeck]:
     cards: dict[tuple[int, str], set[str]] = defaultdict(set)
-    for row in rows:
+    for row in deck_rows(data):
         cards[row["entry"], row["deck"]].add(row["card"])
     return [
         CorpusDeck(deck=deck, cards=sorted(keys)) for (_, deck), keys in cards.items()
     ]
+
+
+def deck_rows(data: RunData) -> list[DeckCard]:
+    """Each roster entry's cards: the update-zero table, or the declared deck
+    source of a run that predates it, read through the writer's catalog."""
+    for table in data.read_table(DECK_TABLE, "updates"):
+        if table.x == 0:
+            return TypeAdapter(list[DeckCard]).validate_python(table.rows)
+    training = declared_training(data)
+    try:
+        decks = training["regime"]["deck_source"]["decks"]
+        digest = training["identities"]["content_digest"]
+    except (KeyError, TypeError) as error:
+        raise UnknownCoverage(
+            f"{data.name}: resolved training decks are unknown"
+        ) from error
+    catalog = bound_catalog(digest, data.name, writer_catalog())
+    return deck_cards((Deck.from_dict(deck) for deck in decks), catalog)
 
 
 def declared_training(data: RunData) -> dict[str, Any]:
@@ -83,20 +94,6 @@ def declared_settings(data: RunData) -> dict[str, object]:
         values = {stage.get(key) for stage in stages}
         settings[key] = values.pop() if len(values) == 1 else None
     return settings
-
-
-def declared_roster(data: RunData) -> list[CorpusDeck]:
-    """Read the decks of a run that predates `DECK_TABLE` from its declaration."""
-    training = declared_training(data)
-    try:
-        decks = training["regime"]["deck_source"]["decks"]
-        digest = training["identities"]["content_digest"]
-    except (KeyError, TypeError) as error:
-        raise UnknownCoverage(
-            f"{data.name}: resolved training decks are unknown"
-        ) from error
-    catalog = bound_catalog(digest, data.name, writer_catalog())
-    return corpus_decks((Deck.from_dict(deck) for deck in decks), catalog)
 
 
 def games_by_update(data: RunData, through: int) -> dict[int, Counter[tuple[str, str]]]:
@@ -225,7 +222,7 @@ def training_corpus(
       lists (main deck and sideboard). Each completed game contributes once,
       even in mirrors.
     - `settings`: one row per run, including the parent checkpoint it followed.
-    - `deck_cards`: recorded deck entries by board, copies and definition key.
+    - `deck_cards`: each roster entry by board, copies and definition key.
     - `card_statistics`: per update, seat and card, when `statistics` is given.
 
     Missing update evidence raises `UnknownCoverage`.
@@ -251,9 +248,6 @@ def training_corpus(
         parent_update bigint, parent_sha256 varchar)""")
     db.execute("""create table deck_cards(experiment varchar, run varchar, entry bigint,
         deck varchar, card varchar, copies bigint, board varchar)""")
-    db.execute(
-        "create table decks(experiment varchar, run varchar, deck varchar, cards varchar[])"
-    )
     db.execute("""create table matchups(experiment varchar, run varchar, update_number bigint,
         play varchar, draw varchar, games bigint)""")
     visited: set[tuple[str, str]] = set()
@@ -287,6 +281,11 @@ def training_corpus(
             )
         data, through = matches[0], update
     db.execute("""
+        create table decks as
+        select experiment, run, deck, list(distinct card order by card) as cards
+        from deck_cards group by all
+    """)
+    db.execute("""
         create view corpus as
         select m.update_number, m.play, m.draw, m.games, p.cards as play_cards,
                d.cards as draw_cards, m.experiment, m.run
@@ -301,17 +300,13 @@ def add_run(
     db: duckdb.DuckDBPyConnection, data: RunData, through: int, statistics: Path | None
 ) -> tuple[str, int, str] | None:
     identity = [data.experiment, data.name]
-    rows = recorded_deck_cards(data)
-    if rows is not None:
-        population = roster_from_cards(rows)
-        if rows:
-            db.execute(
-                "insert into deck_cards by name select ? as experiment, ? as run, unnest(?, recursive := true)",
-                [*identity, rows],
-            )
-    else:
-        population = declared_roster(data)
-    cards = {row["deck"]: row["cards"] for row in population}
+    rows = deck_rows(data)
+    if rows:
+        db.execute(
+            "insert into deck_cards by name select ? as experiment, ? as run, unnest(?, recursive := true)",
+            [*identity, rows],
+        )
+    declared = {row["deck"] for row in rows}
     games = games_by_update(data, through)
     matchups = [
         (update, play, draw, count)
@@ -319,12 +314,10 @@ def add_run(
         for (play, draw), count in pairs.items()
         if count
     ]
-    if any(deck not in cards for _, play, draw, _ in matchups for deck in (play, draw)):
+    if any(
+        deck not in declared for _, play, draw, _ in matchups for deck in (play, draw)
+    ):
         raise UnknownCoverage(f"{data.name}: an outcome names an undeclared deck")
-    db.execute(
-        "insert into decks select ?, ?, unnest(?::varchar[]), unnest(?::varchar[][])",
-        [*identity, list(cards), list(cards.values())],
-    )
     # One columnar insert: frontier runs hold hundreds of matchups per update.
     columns = [list(column) for column in zip(*matchups)] or [[], [], [], []]
     db.execute(

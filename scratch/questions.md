@@ -207,3 +207,10 @@ say so if they should carry a note.
 44. In the sync onto main, use the same observation capacity switch for
     fresh and rebound decision-memory catalog tables. This keeps the
     log-enabled control and its memory branch on the same learned rows.
+
+45. Compress, 2026-11-18: a run that predates the update-zero deck table now
+    supplies `deck_cards` rows too, derived from its declared deck source
+    through the writer catalog (the same inputs its roster already used).
+    That left one deck path in the reader: `decks` is built from `deck_cards`,
+    and `corpus_decks` is gone. Reversible; the guide no longer says older
+    runs have no per-board rows.

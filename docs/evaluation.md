@@ -307,7 +307,7 @@ print(corpus.sql("select run, entry, deck, board, card, copies from deck_cards o
 Self-play and the minimal loop write these tables at update zero. A roster
 can contain several entries with the same deck identity. Older runs use their declared observation
 settings and values shared by every declared stage. They have NULL for
-unrecorded or varying settings and supply no per-board rows in `deck_cards`.
+unrecorded or varying settings.
 Card membership includes main decks and sideboards.
 For historical scalar outcomes, the roster comes from the declared deck source
 and card keys come from the writer's catalog. An explicitly logged empty

@@ -40,7 +40,7 @@ def log_corpus_setup(
         [
             {
                 "decklists": disclosure,
-                "mana_taps": observation.model_dump().get("mana_taps", False),
+                "mana_taps": getattr(observation, "mana_taps", False),
                 "max_actions": observation.max_actions,
                 "action_overflow": observation.action_overflow,
                 "policy_input_version": observation.policy_input_version,

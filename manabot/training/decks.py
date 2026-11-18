@@ -96,24 +96,6 @@ class UniformDecks(StrictModel):
         )
 
 
-class CorpusDeck(TypedDict):
-    deck: str
-    cards: list[str]
-
-
-def definition_names(catalog: WriterCatalog) -> dict[str, str]:
-    keys = catalog["definition_keys"]
-    names = {key: key for key in keys}
-    names.update(
-        {
-            entry["name"]: keys[index]
-            for entry in catalog["naming_catalog"]
-            if (index := entry["definition"]) is not None
-        }
-    )
-    return names
-
-
 class DeckCard(TypedDict):
     entry: int
     deck: str
@@ -123,7 +105,13 @@ class DeckCard(TypedDict):
 
 
 def deck_cards(decks: Iterable[Deck], catalog: WriterCatalog) -> list[DeckCard]:
-    names = definition_names(catalog)
+    """One row per roster entry, board and card, keyed by the catalog's definition."""
+    keys = catalog["definition_keys"]
+    names = {key: key for key in keys} | {
+        entry["name"]: keys[index]
+        for entry in catalog["naming_catalog"]
+        if (index := entry["definition"]) is not None
+    }
     rows: list[DeckCard] = []
     for entry, deck in enumerate(decks):
         identity = deck.identity
@@ -140,16 +128,3 @@ def deck_cards(decks: Iterable[Deck], catalog: WriterCatalog) -> list[DeckCard]:
                     )
                 )
     return rows
-
-
-def corpus_decks(decks: Iterable[Deck], catalog: WriterCatalog) -> list[CorpusDeck]:
-    names = definition_names(catalog)
-    return [
-        CorpusDeck(
-            deck=deck.identity,
-            cards=sorted(
-                {names[name] for name in deck.main.keys() | deck.sideboard.keys()}
-            ),
-        )
-        for deck in decks
-    ]
