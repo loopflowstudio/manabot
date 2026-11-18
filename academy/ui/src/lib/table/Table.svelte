@@ -389,11 +389,13 @@
     { creatures: pileCounts(view.you.creatures), support: pileCounts(view.you.support), width: yourRows.width },
   ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
   { min: boardCount >= 24 ? 96 : 112, max: Math.max(112, Math.min(236, Math.round(boardHeight * 0.32))), step: 8 })}px`);
+  /** The players' plates' column: the hand's cards centre under the rows beside it, its label in it. */
+  const PLATE_WIDTH = 148;
   let handWidth = $state(0);
   let handHeight = $state(0);
   const handCard = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
   const handStep = $derived(view.hand.length <= 1 ? handCard + 10
-    : Math.min(handCard + 10, Math.max(24, (handWidth - 24 - handCard) / (view.hand.length - 1))));
+    : Math.min(handCard + 10, Math.max(24, (handWidth - PLATE_WIDTH - 24 - handCard) / (view.hand.length - 1))));
 
   // ———————————————— Keyboard
 
@@ -431,13 +433,13 @@
 <svelte:window onkeydown={onKeydown} onpointermove={onPointerMove} />
 
 <div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
-  data-turn={projection.turn.turn_number} data-step={projection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} bind:this={root}>
+  data-turn={projection.turn.turn_number} data-step={projection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
       <span class="text-ink">{you.name}</span>{#if you.deck}<span class="text-ink-3">{' · '}{you.deck}</span>{/if}
       <span class="text-ink-3">{' vs '}</span>
-      <span class="text-ink" title={opponent.description}>{opponent.name}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
+      <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
     <nav class="track" aria-label={`Turn ${projection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}`}>
       <span class="type-rubric turn" data-testid="turn-number">Turn {projection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</span>
@@ -608,10 +610,10 @@
   .brand { font-family: var(--font-serif); font-weight: 600; font-size: 19px; color: var(--accent-text); }
   .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The matchup gives way first: the phase track and the controls keep their width. */
-  .track { display: flex; align-items: center; gap: 12px; margin: 0 auto; flex-shrink: 0; }
+  .track { display: flex; align-items: center; gap: 10px; margin: 0 auto; flex-shrink: 0; }
   .track .turn { color: var(--text); white-space: nowrap; }
-  .track ol { display: flex; gap: 2px; }
-  .track li { position: relative; padding: 2px 7px; border-radius: 10px; color: var(--text-tertiary); white-space: nowrap; }
+  .track ol { display: flex; gap: 1px; }
+  .track li { position: relative; padding: 2px 5px; border-radius: 10px; color: var(--text-tertiary); white-space: nowrap; }
   .track li.current { background: var(--accent); color: var(--ivory); }
   .track .stop { position: absolute; left: 50%; bottom: -3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 2px; background: var(--accent); }
   .track li.current .stop { background: var(--ivory); }
@@ -625,7 +627,7 @@
     position: relative; min-height: 0; min-width: 0; display: grid;
     transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
   }
-  .half { display: grid; grid-template-columns: 148px minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); }
+  .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); }
   .half.opponent { background: color-mix(in srgb, var(--bg-muted) 55%, var(--bg)); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
   .rows { display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
@@ -633,10 +635,9 @@
   .you .rows { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); }
   .row { min-height: 0; min-width: 0; }
   .row.support { border-top: 1px dashed transparent; }
-  .opponent .row.creatures { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); padding-top: 4px; }
-  .you .row.support { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); padding-top: 4px; }
+  .opponent .row.creatures, .you .row.support { padding-top: 4px; }
 
-  .hand { position: relative; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px; overflow: hidden; }
+  .hand { position: relative; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--plate); overflow: hidden; }
   .hand-label { position: absolute; left: 14px; bottom: 10px; }
   .hand-cards { position: relative; height: 100%; }
   .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }
@@ -690,7 +691,7 @@
     padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
   .dock { max-height: 100%; overflow-y: auto; }
-  .inspect-toggle { color: var(--text-secondary); padding: 2px 6px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+  .inspect-toggle { color: var(--text-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
   .inspect-toggle:hover { color: var(--text); background: var(--bg-field); }
 
   @media (prefers-reduced-motion: reduce) {

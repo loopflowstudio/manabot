@@ -43,9 +43,9 @@
 </script>
 
 <section class="strip" class:open aria-label="Decisions" data-testid="decision-strip" data-open={open}>
-  <button type="button" class="head type-rubric" aria-expanded={open} onclick={ontoggle} data-testid="strip-toggle">
+  <button type="button" class="head" aria-expanded={open} onclick={ontoggle} data-testid="strip-toggle">
     <span class="chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
-    Decisions · {decisions.length}{#if values.length}<span class="text-ink-3"> · value recorded at {values.length}</span>{/if}
+    <span class="type-rubric">Decisions · {decisions.length}{#if values.length}<span class="text-ink-3"> · value recorded at {values.length}</span>{/if}</span>
     {#if note}<span class="note type-caption text-ink-3">{note}</span>{/if}
   </button>
   {#if open}

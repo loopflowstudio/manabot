@@ -153,7 +153,7 @@
     {/if}
     {#if recent.facts.length}
       <div class="recent" data-testid="recent">
-        <h3 class="type-rubric text-ink-3">{recapTitle}</h3>
+        <h3><span class="type-rubric text-ink-3">{recapTitle}</span></h3>
         <ol>
           {#each facts as fact (fact.seq)}
             {@const spell = fact.spell === null ? undefined : resolved.get(fact.spell)}
@@ -161,7 +161,7 @@
               {#if spell}
                 <span class="resolved" data-stack-card={spell.id} tabindex="-1" {...hover(spell.name)}><Thumb name={spell.name} /></span>
               {/if}
-              <span>{fact.text}</span>
+              <span class="fact-text" title={fact.text}>{fact.text}</span>
             </li>
           {/each}
         </ol>
@@ -183,12 +183,6 @@
         <p class="type-annotation text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
       {:else if frame.prompt}
         <p class="line type-title text-ink" data-testid="decision-prompt" data-kind={frame.action_space}>{line}</p>
-        {#if detail}
-          <details class="detail">
-            <summary class="type-caption text-ink-3">Rules detail</summary>
-            <p class="type-caption text-ink-2">{detail}</p>
-          </details>
-        {/if}
       {/if}
       {#if evidence}
         <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
@@ -232,6 +226,13 @@
       {#if canPassTurn}
         <button type="button" class="pass-turn type-caption" data-testid="pass-turn" onclick={onpassturn}
           title="Pass every priority window until the turn ends">Pass turn <kbd>F6</kbd></button>
+      {/if}
+      <!-- The engine's own words stay one click away, under the answers. -->
+      {#if detail && frame.prompt && !interrupted}
+        <details class="detail">
+          <summary class="type-caption text-ink-3">Rules detail</summary>
+          <p class="type-caption text-ink-2">{detail}</p>
+        </details>
       {/if}
     {/if}
     <!-- While you may act, the prompt above already says what the status would. -->
@@ -324,6 +325,7 @@
   .recent ol { display: grid; gap: 3px; }
   .fact { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); line-height: 15px; }
   .fact.theirs { color: var(--text); }
+  .fact-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .resolved { display: inline-flex; border-radius: 3px; outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
   .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .whose { color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
@@ -349,10 +351,10 @@
   .status { min-height: 16px; }
   .choices { flex: 1 1 auto; min-height: 110px; display: flex; flex-direction: column; }
   .heading { display: flex; justify-content: space-between; }
-  .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 2px; margin: 0 -6px; padding: 2px 6px; }
+  .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 0; margin: 0 -6px; padding: 2px 6px; }
   .row {
-    width: 100%; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; text-align: left;
-    border: 1px solid transparent; font-size: 13.5px; line-height: 18px; color: var(--text); background: none;
+    width: 100%; display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 5px; text-align: left;
+    border: 1px solid transparent; font-size: 13px; line-height: 17px; color: var(--text); background: none;
   }
   .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-field); }
   .row:disabled { color: var(--text-secondary); cursor: default; }

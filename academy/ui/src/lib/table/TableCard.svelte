@@ -295,7 +295,8 @@
   .tcard:not(.landscape) .many { top: 3px; left: 3px; right: auto; }
   .count {
     flex: none; padding: 0 4px; border-radius: 3px; font-family: var(--font-sans); font-weight: 700; line-height: 1.25;
-    font-variant-numeric: tabular-nums; color: var(--bg-surface); background: var(--text);
+    font-variant-numeric: tabular-nums; color: var(--text); background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+    border: 1px solid var(--border-strong); border-radius: 8px;
   }
   .tcard:not(.landscape) .count { position: absolute; top: 3px; right: 3px; }
   .counters {

@@ -94,14 +94,14 @@
   @media (prefers-reduced-motion: reduce) { .choosing i { animation: none; } }
   .life { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
   .numeral { font-family: var(--font-serif); font-size: 34px; font-weight: 600; line-height: 36px; color: var(--text); font-variant-numeric: tabular-nums; }
-  .zones { display: grid; grid-template-columns: 1fr; gap: 3px; margin: 0; }
+  .zones { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
   .zones > li, .zone-open {
-    display: flex; justify-content: space-between; gap: 4px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px;
-    font-family: var(--font-sans); font-size: 11.5px; line-height: 18px; color: var(--text-secondary); background: var(--bg-field); min-width: 0;
+    display: flex; justify-content: space-between; gap: 4px; padding: 0 4px; border-radius: 3px;
+    font-family: var(--font-sans); font-size: 11.5px; line-height: 19px; color: var(--text-secondary); min-width: 0;
   }
-  .zones > li:has(.zone-open) { padding: 0; border: 0; background: none; }
-  .zone-open { width: 100%; cursor: pointer; }
-  .zone-open:hover { border-color: var(--accent); }
+  .zones > li:has(.zone-open) { padding: 0; }
+  .zone-open { width: 100%; height: 19px; min-height: 0; cursor: pointer; text-decoration: underline dotted color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
+  .zone-open:hover, .zone-open:focus-visible { background: var(--bg-field); color: var(--text); }
   .zones span { overflow: hidden; text-overflow: ellipsis; }
   .zones b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
   .pool { color: var(--text-secondary); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
