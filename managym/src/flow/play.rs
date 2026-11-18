@@ -2282,7 +2282,7 @@ impl Game {
         let remaining_generic = remaining_generic - 1;
         let tapped = tapped + 1;
         if remaining_generic == 0
-            && (!self.mana_taps[self.decision_controller(player).0]
+            && (!self.offers_mana_taps(player)
                 || self
                     .payment_mana_cost(player, &payment, None)
                     .reduced_generic(tapped)

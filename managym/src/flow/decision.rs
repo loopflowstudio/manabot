@@ -1629,9 +1629,7 @@ impl Game {
                     )
                 } else {
                     let mut actions = self.mana_ability_actions(*player, None);
-                    if self.mana_taps[self.decision_controller(*player).0]
-                        && self.can_pay_mana_upfront(*player)
-                    {
+                    if self.offers_mana_taps(*player) && self.can_pay_mana_upfront(*player) {
                         actions.push(Action::PayCost { player: *player });
                     }
                     self.append_mana_taps(*player, &mut actions);

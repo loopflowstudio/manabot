@@ -1957,7 +1957,7 @@ impl Game {
     /// Append fixed sources after the ordinary offers. A committed payment
     /// must still have a witness after the tap, including any saved callers.
     pub(crate) fn append_mana_taps(&self, player: PlayerId, actions: &mut Vec<Action>) {
-        if self.mana_taps == [false; 2] || !self.mana_taps[self.decision_controller(player).0] {
+        if !self.offers_mana_taps(player) {
             return;
         }
         let obligations = self.payment_obligations(player);
@@ -1991,6 +1991,18 @@ impl Game {
             }
             actions.push(tap);
         }
+    }
+
+    /// Whether the seat deciding for `player` was set up with mana tap offers.
+    pub(crate) fn offers_mana_taps(&self, player: PlayerId) -> bool {
+        // Skip the control lookup in the common game with no offers.
+        self.mana_taps.contains(&true) && self.mana_taps[self.decision_controller(player).0]
+    }
+
+    fn has_mana_taps(&self, player: PlayerId) -> bool {
+        let mut taps = Vec::new();
+        self.append_mana_taps(player, &mut taps);
+        !taps.is_empty()
     }
 
     /// Ordinary source choices make progress toward the announced cost.
@@ -2101,14 +2113,9 @@ impl Game {
         player: PlayerId,
         sacrifice: Option<PermanentId>,
     ) -> bool {
-        if !self.mana_ability_actions(player, sacrifice).is_empty()
+        !self.mana_ability_actions(player, sacrifice).is_empty()
             || !self.useful_payment_taps(player).is_empty()
-        {
-            return true;
-        }
-        let mut taps = Vec::new();
-        self.append_mana_taps(player, &mut taps);
-        !taps.is_empty()
+            || self.has_mana_taps(player)
     }
 
     pub(crate) fn can_pay_with_mana_abilities(
@@ -2404,16 +2411,15 @@ impl Game {
         if tap_remaining > 0 {
             return Ok(());
         }
+        // With taps on, a mana-costed activation waits for the payer's taps
+        // or PayCost instead of committing the automatic prefix.
         if self.characteristics(permanent).activated_abilities[ability_index]
             .mana_cost
             .mana_value
             > 0
+            && self.has_mana_taps(player)
         {
-            let mut taps = Vec::new();
-            self.append_mana_taps(player, &mut taps);
-            if !taps.is_empty() {
-                return Ok(());
-            }
+            return Ok(());
         }
         self.pay_mana_upfront(player)
     }
