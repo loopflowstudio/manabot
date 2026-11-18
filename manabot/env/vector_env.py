@@ -69,6 +69,9 @@ class VectorEnv:
     def _build_rust_env(self, seed: int) -> CapturedVector:
         return CapturedVector(
             num_envs=self.num_envs,
+            decision_memory=self.observation_space.encoder.config.max_decision_records
+            > 0,
+            decision_memory_include_own=self.observation_space.encoder.config.decision_memory_include_own,
             seed=seed,
             skip_trivial=self._skip_trivial,
             player_policies=self._player_policies,

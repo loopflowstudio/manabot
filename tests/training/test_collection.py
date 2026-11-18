@@ -13,8 +13,8 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.training.rollout.collection import (
     Collector,
+    ObservationRows,
     RolloutBatch,
-    _ObservationRows,
     collect,
     open_collector,
 )
@@ -203,7 +203,7 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
 
 def test_recorded_rows_survive_growth_and_later_appends() -> None:
     buffers = {"x": np.arange(12, dtype=np.float32).reshape(4, 3)}
-    store = _ObservationRows(buffers, ["x"], 1)
+    store = ObservationRows(buffers, ["x"], 1)
     assert store.append(np.array([2, 0])) == 0
     first = store.arrays()["x"]
     buffers["x"] += 100  # The native buffers are overwritten every step.

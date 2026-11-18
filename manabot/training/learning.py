@@ -71,6 +71,24 @@ class IterationSchedule(Strict):
         return 1 + progress * (self.reference_steps - 1)
 
 
+class LearnerDecisionSchedule(Strict):
+    """Map completed learner decisions onto the method's reference curve.
+
+    Position is sampled before collection/update, so a complete game batch uses
+    one rate. A run started from pretrained weights begins at zero; a resumed
+    run retains its absolute decision count. Passing the endpoint holds the
+    final rate.
+    """
+
+    transitions: int = Field(ge=1, strict=True)
+    reference_steps: int = Field(default=10_000, ge=2, strict=True)
+
+    def at(self, completed: int) -> float:
+        if completed < 0:
+            raise ValueError("completed learner transitions must be nonnegative")
+        return 1 + min(1.0, completed / self.transitions) * (self.reference_steps - 1)
+
+
 class DampedPolicyLearning(Strict):
     """Unnormalized clipped policy update with reverse-KL regularization.
 
@@ -99,22 +117,40 @@ class DampedPolicyLearning(Strict):
     iteration_schedule: IterationSchedule | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    decision_schedule: LearnerDecisionSchedule | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def valid_learning_rate_bounds(self) -> "DampedPolicyLearning":
         if self.learning_rate_min > self.learning_rate_max:
             raise ValueError("learning rate minimum exceeds maximum")
+        if self.iteration_schedule is not None and self.decision_schedule is not None:
+            raise ValueError("choose an iteration or learner-decision schedule")
         return self
 
-    def rates(self, iteration: int) -> tuple[float, float]:
-        """One-based completed collection/update iteration, including skips."""
+    def rates(
+        self, iteration: int, *, learner_transitions: int | None = None
+    ) -> tuple[float, float]:
+        """Rates at the start of an update, including skipped optimizer work.
+
+        `iteration` is the one-based collection/update iteration. A decision
+        schedule reads `learner_transitions`, the decisions learned before it.
+        """
         if iteration < 1:
             raise ValueError("Damped policy iteration must be positive")
-        position = (
-            self.iteration_schedule.at(iteration)
-            if self.iteration_schedule is not None
-            else iteration
-        )
+        if self.decision_schedule is not None:
+            if learner_transitions is None:
+                raise ValueError(
+                    "learner-decision schedule requires completed transitions"
+                )
+            position = self.decision_schedule.at(learner_transitions)
+        else:
+            position = (
+                self.iteration_schedule.at(iteration)
+                if self.iteration_schedule is not None
+                else iteration
+            )
         rate = self.learning_rate_scale / position**self.learning_rate_power
         return (
             min(self.learning_rate_max, max(self.learning_rate_min, rate)),

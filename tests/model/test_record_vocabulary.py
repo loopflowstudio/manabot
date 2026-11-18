@@ -45,7 +45,10 @@ _value = managym.catalog_token_value
 @pytest.fixture(scope="module")
 def cards() -> SemanticCardEncoder:
     torch.manual_seed(30)
-    return SemanticCardEncoder(managym.WORLD_SETUP, WIDTH, True, records=True)
+    # Memory names are an optional capability; select them so every name has a row.
+    return SemanticCardEncoder(
+        managym.WORLD_SETUP, WIDTH, True, records=True, decision_memory=True
+    )
 
 
 def _halves(value: int) -> tuple[int, int]:

@@ -89,7 +89,7 @@ def _policy(
         numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
     return PolicyFixture(
-        agent, collector, collection._slice_obs_rows(collector, np.arange(2))
+        agent, collector, collection._retain_obs_rows(collector, np.arange(2))
     )
 
 

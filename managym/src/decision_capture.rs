@@ -180,6 +180,17 @@ impl Game {
             );
             ids.extend(frame.sacrifice.and_then(|r| r.definition));
         }
+        for record in agent.decision_memory.iter() {
+            for reference in record
+                .context
+                .mana_sources
+                .iter()
+                .chain(&record.response)
+                .chain(&record.choice.references)
+            {
+                ids.extend(reference.definition);
+            }
+        }
         let mut definitions = BTreeMap::new();
         for id in ids {
             let definition = default_content_pack()
