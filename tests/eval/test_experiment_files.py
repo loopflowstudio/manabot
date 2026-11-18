@@ -338,12 +338,15 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
                 for disclosure in opponent_memory.DISCLOSURES
                 for point in (40, 80, 120, "final")
             }
-        ranking = next(
-            panel
+        rankings = {
+            panel.matches
             for panel in opponent_memory.report().evals
             if isinstance(panel, Ranking) and size in panel.title
-        )
-        assert ranking.matches == Matches(tag=f"{size}-control")
+        }
+        assert rankings == {
+            Matches(tag=f"{size}-control"),
+            Matches(tag=f"{size}-heuristic"),
+        }
     drawn = {
         selection.seating
         for panel in curves
@@ -352,10 +355,18 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
         )
         if isinstance(selection, Matches)
     }
-    assert {seating.name for seating in seatings} == drawn
+    heuristic = [seating for seating in seatings if "heuristic" in seating.tags]
+    head_to_head = [seating for seating in seatings if seating not in heuristic]
+    assert {seating.name for seating in head_to_head} == drawn
+    # Both arms' final checkpoints, each disclosure, against the heuristic.
+    assert len(heuristic) == 2 * 3 * 2 * 2
+    for seating in heuristic:
+        assert (
+            seating.players[1].kind == "code" and seating.players[1].name == "heuristic"
+        )
     games = sum(len(seating.configs) * seating.games for seating in seatings)
-    assert games == 19200
-    for seating in seatings:
+    assert games == 19200 + len(heuristic) * 50 * 4
+    for seating in head_to_head:
         assert seating.fixed and seating.seeds == "one"
         size, _, seed, *_ = seating.name.split("-")
         prefix = "wide-" if size == "wide" else ""
