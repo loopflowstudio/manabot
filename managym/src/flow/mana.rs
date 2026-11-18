@@ -2048,6 +2048,16 @@ impl Game {
         {
             return Some(pay.clone());
         }
+        // The witness models the ordinary and waterbend portions as separate
+        // spends, but the game charges their combined remainder only once.
+        // Every offered waterbend tap preserves a witness for that remainder.
+        if let Some(tap) = space
+            .actions
+            .iter()
+            .find(|a| matches!(a, Action::WaterbendTap { .. }))
+        {
+            return Some(tap.clone());
+        }
         let path = self
             .payment_model(player, None)
             .plan(
@@ -2056,7 +2066,14 @@ impl Game {
                 SourcePolicy::All,
             )
             .expect("committed cost has a payment witness");
-        match path.first().expect("committed payment has a next step") {
+        let next = if matches!(self.pending_choice, Some(PendingChoice::Waterbend { .. }))
+            && self.state.suspended_decision.is_none()
+        {
+            path.iter().find(|step| !matches!(step, PaymentStep::Spend))
+        } else {
+            path.first()
+        };
+        match next.expect("committed payment has a next step") {
             PaymentStep::Spend => Some(Action::PayCost { player }),
             PaymentStep::Fixed(permanent) => Some(Action::TapForMana {
                 player,

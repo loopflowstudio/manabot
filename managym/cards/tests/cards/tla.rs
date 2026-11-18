@@ -9504,7 +9504,22 @@ fn waterbend_pays_entirely_with_creature_taps() {
     clear_hand(&mut s, 0);
     s.advance_to_active_step(0, StepKind::Main);
 
-    // No lands — the ability is affordable only through waterbend.
+    // The same activation needs all five waterbend contributions in either mode.
+    let mut automatic = s.game().clone();
+    automatic.mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let activation = automatic
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|action| action.action_type() == ActionType::PriorityActivateAbility)
+        .unwrap();
+    automatic.step(activation).unwrap();
+    assert_eq!(automatic.state.stack_objects.len(), 1);
+    assert!(creatures
+        .iter()
+        .all(|id| automatic.state.permanents[*id].as_ref().unwrap().tapped));
+
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
     for expected_remaining in (0..5).rev() {
         let space = s.action_space().clone();

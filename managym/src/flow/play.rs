@@ -2281,16 +2281,19 @@ impl Game {
         self.tap_permanent(tap_permanent, false);
         let remaining_generic = remaining_generic - 1;
         let tapped = tapped + 1;
-        if remaining_generic == 0
-            && (!self.offers_extra_payment_taps(player)
-                || self
-                    .payment_mana_cost(player, &payment, None)
-                    .reduced_generic(tapped)
-                    .mana_value
-                    == 0)
-        {
-            self.pending_choice = None;
-            return self.commit_payment(player, *payment, None, None, tapped);
+        if remaining_generic == 0 {
+            let owed = self
+                .payment_mana_cost(player, &payment, None)
+                .reduced_generic(tapped);
+            // A remaining colored cost can still need a mana ability such as
+            // sacrificing Treasure. Leave the committed payment open for it.
+            if owed.mana_value == 0
+                || (!self.offers_extra_payment_taps(player)
+                    && self.can_pay_mana_cost(player, &owed))
+            {
+                self.pending_choice = None;
+                return self.commit_payment(player, *payment, None, None, tapped);
+            }
         }
         self.pending_choice = Some(PendingChoice::Waterbend {
             player,
