@@ -117,7 +117,10 @@
   // payment itself. Previewing is a read-only query; it commits nothing.
   let pointed = $state<PlacedOffer | null>(null);
   const payOffer = $derived(view.primary?.offer.verb === 'pay' ? view.primary : null);
-  const previewing = $derived(!live ? null : pointed && previewable(pointed.offer) ? pointed : payOffer);
+  // Pointing at the pending payment's own row is still that payment: the
+  // prompt keeps its plan and note, so nothing shifts under the pointer.
+  const previewing = $derived(!live ? null
+    : pointed && previewable(pointed.offer) && pointed.offer.id !== payOffer?.offer.id ? pointed : payOffer);
   $effect(() => { onpreview(previewing?.offer ?? null); });
   const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
   const plan = $derived(paymentPlan(answered, frame));
