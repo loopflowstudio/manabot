@@ -40,10 +40,13 @@ test('live Watch resumes the same timeline after Study and reload', async ({ pag
 test('verified evaluation import reads the same timeline without producing a policy decision', async ({page}, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   // Terminal playback needs a completed recording, not a randomly sized
-  // native game produced through hundreds of browser requests.
-  const sourceResponse = await page.request.get('/api/__fixtures/recorded-evaluation');
+  // native game produced through hundreds of browser requests. The fixture
+  // plays and replay-verifies one evaluation game in three child processes:
+  // about 2 s on an idle laptop, but process starts stretch under suite load,
+  // so the request waits for that work rather than the 20 s action timeout.
+  const sourceResponse = await page.request.get('/api/__fixtures/recorded-evaluation', {timeout: 60_000});
   expect(sourceResponse.ok()).toBe(true);
   const source = await sourceResponse.text();
   const steps: string[] = [];
