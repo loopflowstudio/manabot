@@ -15,6 +15,7 @@ import numpy as np
 from manabot.model.writer_catalog import WriterCatalog
 from manabot.policy.catalog import catalog_tables
 from manabot.policy.prepare import RecordNamespace, record_key
+from manabot.semantic.learning import TOKEN_KINDS
 import managym
 
 if TYPE_CHECKING:
@@ -126,7 +127,7 @@ def bind_catalog(
         runtime = dict(zip(buffers[keys].tolist(), buffers[rows].tolist(), strict=True))
         for key, row in zip(old[keys].tolist(), old[rows].tolist(), strict=True):
             kind, value = divmod(key, 1 << 32)
-            if family == "record_token" and kind == 7:
+            if family == "record_token" and kind == TOKEN_KINDS["definition_ref"]:
                 if value >= len(definitions) or definitions[value] not in now:
                     raise ValueError(
                         f"missing referenced definition for writer row {value}"

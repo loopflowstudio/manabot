@@ -33,7 +33,6 @@ WORLD = managym.WORLD_VERSION
 # The authored setup whose decks form the Elemental roster (`elemental-world-v1`
 # names the same decks).
 _ROSTER_SETUP = "optional_payments"
-WORLD_DECKS_ONLY = "Supply a DeckMatchup with submitted decks for this checkpoint."
 
 
 def _digest(value: Any) -> str:
@@ -84,8 +83,6 @@ def validate_setup_binding(
     if _binds_world(binding):
         if len(player_configs) != 2:
             raise ValueError("execution requires two decks")
-        if any(p.world != managym.WORLD_SETUP for p in player_configs):
-            raise ValueError(WORLD_DECKS_ONLY)
         admit_world_decks(player_configs)
         return
     actual = _setups(player_configs)
@@ -110,8 +107,6 @@ def validate_agent_decks(
     if binding is None:
         return
     if _binds_world(binding):
-        if any(p.world != managym.WORLD_SETUP for p in player_configs):
-            raise ValueError(WORLD_DECKS_ONLY)
         admit_world_decks(player_configs)
         return
     if any(setup not in binding["setups"] for setup in _setups(player_configs)):
@@ -120,6 +115,10 @@ def validate_agent_decks(
 
 def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
     """Admit every deck by the world's native validation; membership grants nothing."""
+    if any(p.world != managym.WORLD_SETUP for p in player_configs):
+        raise ValueError(
+            "Supply a DeckMatchup with submitted decks for this checkpoint."
+        )
     checked = managym.check_decks([player.deck for player in player_configs])
     for player, issues in zip(player_configs, checked, strict=True):
         if issues:
