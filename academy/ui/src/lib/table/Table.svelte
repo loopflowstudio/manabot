@@ -94,6 +94,14 @@
   $effect(() => { onpreview(previewing?.offer ?? null); });
   const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
   const plan = $derived(paymentPlan(answered, frame));
+  // Piles part around the pending payment's own plan only, and keep that
+  // layout while a person points at other lands: a preview never moves a card
+  // from under the pointer.
+  let payPlan = $state.raw<{ revision: number; sources: ReadonlyMap<number, unknown> } | null>(null);
+  $effect(() => {
+    if (plan && previewing === payOffer) payPlan = { revision: frame.revision, sources: plan.sources };
+  });
+  const unpiled = $derived(payPlan && payPlan.revision === frame.revision ? payPlan.sources : null);
   const primaryText = $derived(primaryLabel(frame, view, payOffer && previewing === payOffer ? answered : null));
   const line = $derived(promptLine(frame, view, plan !== null && previewing === payOffer && plan.sources.size > 0));
   const paymentNote = $derived(payOffer && previewing === payOffer
@@ -334,16 +342,16 @@
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="half you" aria-label="Your battlefield">
       <Plate player={projection.agent} name={you.name} deck={you.deck} offers={view.you.offers} {live} damage={recent.damage.players.get(projection.agent.player_index) ?? 0}
         active={yourTurn} side="you" onactivate={element => activate(you.name, view.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>

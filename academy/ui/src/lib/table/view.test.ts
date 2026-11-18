@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { fitRow, offerPlacements, splitHalf, tableView, type PermanentItem, type TableView } from './view';
+import { fitRow, offerPlacements, splitHalf, tableView, unpilePlanned, type PermanentItem, type TableView } from './view';
 
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 const PROTOCOL = new URL('../../../../../protocol/fixtures/', import.meta.url);
@@ -111,6 +111,16 @@ describe('where decisions land', () => {
     expect(attacker.offers.map(placed => placed.offer.label)).toEqual([frame.offers[0].label]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual([frame.offers[1].label]);
     expect(view.asked.has(creature)).toBe(true);
+  });
+
+  it('takes each land the payer would tap out of its pile', () => {
+    const view = tableView(navigation.CHOOSE_TARGET.frame);
+    const pile = [...view.you.support].find(candidate => candidate.items.length > 2)!;
+    const planned = new Map([[pile.items[0].permanent.id, 1]]);
+    const split = unpilePlanned([pile], planned);
+    expect(split.map(candidate => candidate.items.length)).toEqual([1, pile.items.length - 1]);
+    expect(split[0].items[0].permanent.id).toBe(pile.items[0].permanent.id);
+    expect(unpilePlanned([pile], new Map())).toEqual([pile]);
   });
 
   it('fans identical lands into one pile, keeping each copy', () => {

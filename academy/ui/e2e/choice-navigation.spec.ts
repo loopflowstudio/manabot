@@ -53,71 +53,58 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
   return commands;
 }
 
-for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
-  test(`${family}: every original offer survives filtering and keyboard recovery`, async ({ page }) => {
+const FAMILIES = ['CHOOSE_TARGET', 'DISCARD', 'LEARN', 'DECLARE_BLOCKER', 'PAY_OR_NOT'] as const;
+
+/** Where the table draws an offer besides its rail row: a card, a player, a prompt button or the tray. */
+function drawn(page: Page, offer: { id: number; label: string }, number: number) {
+  return page.locator([
+    `[data-testid=table-card][aria-label*="${offer.label} (${number})"]`,
+    `[data-testid=player-target][aria-label*="${offer.label} (${number})"]`,
+    `[data-testid=primary-action][data-offer-id="${offer.id}"]`,
+    `[data-testid=prompt-action][data-offer-id="${offer.id}"]`,
+    `[data-testid=tray] button:has-text("${offer.label}")`,
+  ].join(', '));
+}
+
+for (const family of FAMILIES) {
+  test(`${family}: every offer is a numbered row and drawn on the table, and a click commits exactly it`, async ({ page }) => {
     const commands = await installPosition(page, family);
-    const offers = positions[family].frame.offers;
-    const options = page.getByTestId('action-option');
-    const filter = page.getByRole('searchbox', { name: 'Find an action' });
-    await expect(options).toHaveCount(offers.length);
-    for (const offer of offers) {
-      await filter.fill(`  ${offer.label.toUpperCase()}  `);
-      const matching = offers.filter(candidate => candidate.label.toLowerCase().includes(offer.label.toLowerCase()));
-      await expect(options).toHaveCount(matching.length);
-      expect(await options.evaluateAll(buttons => buttons.map(button => Number(button.getAttribute('data-offer-id')))))
-        .toEqual(matching.map(candidate => candidate.id));
+    const frame = positions[family].frame as ExperienceFrame;
+    await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
+    await expect(page.getByTestId('legal-choice-count')).toContainText(String(frame.offers.length));
+    expect(await page.getByTestId('action-option').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-offer-id')))))
+      .toEqual(frame.offers.map(offer => offer.id));
+    for (const [index, offer] of frame.offers.entries()) {
+      expect(await drawn(page, offer, index + 1).count(), offer.label).toBeGreaterThanOrEqual(1);
     }
+    // Pointing and inspecting send nothing.
+    await page.getByTestId('table-card').first().hover();
     expect(commands).toEqual([]);
-    await filter.fill('no such card');
-    await expect(options).toHaveCount(0);
-    await expect(page.getByText('No matching actions. Clear the filter to see every choice.')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(filter).toHaveValue('');
-    await expect(filter).toBeFocused();
-    await expect(options).toHaveCount(offers.length);
-    const choice = offers[0];
-    await filter.fill(choice.label);
-    await page.getByRole('button', { name: 'Clear filter', exact: true }).click();
-    await expect(filter).toBeFocused();
-    await expect(options).toHaveCount(offers.length);
-    await filter.fill(choice.label);
-    await page.keyboard.press('Tab'); // Clear filter
-    await page.keyboard.press('Tab'); // keyboard-scrollable offer region
-    await expect(page.getByRole('group', { name: 'Legal choices', exact: true })).toBeFocused();
-    await page.keyboard.press('Tab'); // first matching offer
-    await expect(options.first()).toBeFocused();
-    await page.keyboard.press('Enter');
+
+    // A card with exactly one offer commits that offer; a number key commits its row.
+    const card = page.locator('[data-testid=table-card].legal[data-offer-count="1"]').first();
+    const number = Number((await card.getAttribute('aria-label'))!.match(/\((\d+)\)$/)![1]);
+    const target = frame.offers[number - 1];
+    const box = (await card.boundingBox())!;
+    await card.click({ position: { x: box.width - 6, y: box.height / 2 } });
     await expect.poll(() => commands.length).toBe(1);
-    expect(commands[0]).toMatchObject({ offer_id: choice.id,
-      expected_revision: positions[family].frame.revision,
-      prompt_id: positions[family].frame.prompt!.id,
-      match_id: positions[family].frame.match_id, answers: [] });
-    await expect(filter).toHaveValue('');
-    await expect(options).toHaveCount(offers.length);
-    await expect(options.first()).toBeFocused();
+    expect(commands[0]).toMatchObject({ offer_id: target.id, expected_revision: frame.revision, prompt_id: frame.prompt!.id, answers: [] });
+    await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
+    await page.mouse.move(2, 2);
+    await page.keyboard.press(String(Math.min(2, frame.offers.length)));
+    await expect.poll(() => commands.length).toBe(2);
+    expect(commands[1].offer_id).toBe(frame.offers[Math.min(2, frame.offers.length) - 1].id);
   });
 }
 
-test('small optional and combat decisions retain every direct choice', async ({ page }) => {
-  for (const family of ['PAY_OR_NOT', 'DECLARE_BLOCKER'] as const) {
-    const commands = await installPosition(page, family);
-    await expect(page.getByRole('searchbox', { name: 'Find an action' })).toHaveCount(0);
-    await expect(page.getByTestId('action-option')).toHaveCount(positions[family].frame.offers.length);
-    expect(commands).toEqual([]);
-    await page.unrouteAll();
-  }
-});
-
-test('retained large Learn decision keeps modes, cancellation and all original copies', async ({ page }) => {
+test('Learn draws Lessons from outside the game in the tray, and declining stays a button', async ({ page }) => {
   const commands = await installPosition(page, 'LEARN');
-  for (const [label, type] of [['Discard and draw', 'LEARN_DISCARD'], ['Take a Lesson', 'LEARN_TAKE_LESSON']]) {
-    await page.getByRole('button', { name: label, exact: true }).click();
-    await expect(page.getByTestId('action-option')).toHaveCount(
-      positions.LEARN.frame.offers.filter(offer => offer.action_type === type).length,
-    );
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
-  }
-  await expect(page.getByRole('button', { name: 'Decline Learn', exact: true })).toBeVisible();
+  const frame = positions.LEARN.frame as ExperienceFrame;
+  const lessons = frame.offers.filter(offer => offer.action_type === 'LEARN_TAKE_LESSON');
+  await expect(page.getByTestId('tray').getByTestId('table-card')).toHaveCount(lessons.length);
+  await expect(page.getByTestId('prompt-action').filter({ hasText: 'Decline Learn' })).toBeVisible();
+  // A click on the Learn spell never declines it.
+  await expect(page.getByTestId('stack-entry').locator('xpath=self::*[contains(@class, "legal")]')).toHaveCount(0);
   expect(commands).toEqual([]);
 });
 
@@ -160,7 +147,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
-    await expect(page.getByTestId('action-option').first()).toBeVisible();
+    await expect(page.getByTestId('table')).toBeVisible();
     for (const [ordinal, step] of position.prefix.entries()) {
       await expect.poll(() => page.evaluate(() => window.__choiceNavigation.working)).toBe(false);
       const revision = await page.evaluate(({ ordinal, step }) => {
@@ -191,9 +178,11 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
       await page.pause();
       return;
     }
-    const intended = position.frame.offers[0].label;
-    if (actual.offers.length >= 8) await page.getByRole('searchbox', { name: 'Find an action' }).fill(intended);
-    await page.getByRole('button', { name: intended, exact: true }).first().click();
+    // The intended choice, made on the card it acts on.
+    const intended = position.frame.offers[0];
+    const card = drawn(page, intended, 1).first();
+    const box = (await card.boundingBox())!;
+    await card.click({ position: { x: box.width - 6, y: box.height / 2 } });
     await expect.poll(() => page.evaluate(() =>
       window.__choiceNavigation.frame!.revision,
     )).toBeGreaterThan(actual.revision);

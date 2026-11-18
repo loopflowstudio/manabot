@@ -567,21 +567,24 @@ clicked.
 
 The board is split at the centre line: the opponent's creatures face yours,
 with each side's lands and other permanents behind them. A plate at the left of
-each half shows the player, life, zone counts and floating mana; open a
-graveyard or exile count to list its cards. A player who can be targeted has an
+each half shows the player, life, zone counts and floating mana as mana
+symbols, with any restriction or expiry written under them; open a graveyard or
+exile count to list its cards. A player who can be targeted has an
 outlined plate. Identical permanents with the same choices share a pile with a
 count, and each copy remains its own control. Crowded rows shrink their cards
 and wrap onto a further line before anything scrolls, and each half gives the
 crowded row more of its height.
 
 Permanents are drawn as landscape frames: the name and mana cost on a bar
-above the art, power and toughness on an upright plate, keywords at the lower
-edge (a keyword an effect granted is outlined), counters on the art. A tapped
+above the art, power and toughness on an upright plate, the keywords the
+permanent has now at the lower edge (one it was granted is outlined), counters
+on the art. Mana symbols carry their letter, and ◇ for colourless. A tapped
 permanent keeps its frame and place, its art greyed and labelled **Tapped**.
 Cards in hand keep the printed shape, with the type line under the name.
 
 Hover or focus a card to inspect it: its rules text, type line and cost,
-keywords with the effect that granted each, where its power and toughness come
+keywords with why it has each (printed, the effect that granted it, or
+"another ability" for a grant from another permanent's static ability), where its power and toughness come
 from (printed or set, counters, each effect by its source and duration, and
 whatever those do not explain as "other effects"), and its state. The
 inspection floats beside the card and closes when you click or the game moves
@@ -600,13 +603,18 @@ The rail holds:
   server reports it: spells cast and what they targeted, attacks, blocks,
   damage and deaths. The first three lines show; the rest open with **more**. A spell that already resolved keeps its card here, and its
   line to a target that is still on the table, until your next move. Cards that
-  attacked, blocked, were targeted or were dealt damage are ringed on the board.
+  attacked, blocked, were targeted or were dealt damage are ringed on the board,
+  and damage dealt since your last move shows on the card or the player's plate
+  as it lands ("−2").
 - **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
-  Accumulate Wisdom. Space pays automatically, or click lands to tap them"),
+  Accumulate Wisdom. Space taps the dashed lands, or click lands to tap them
+  yourself"),
   and its buttons. **Rules detail** holds the engine's full instruction.
   Passing priority and paying a cost are the primary button (Space), labelled
   with what it does next: **Resolve** and the spell on top of the stack, the
-  step it moves to ("To combat", "To blockers"), or the cost it pays. Declining,
+  step it moves to ("To combat", "To blockers"), or the cost and the lands it
+  taps ("Pay {1}{U} · Island, Island"; see
+  [Previewing payments](#previewing-payments)). Declining,
   and a combat answer that does not name another creature, are separate
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
@@ -621,15 +629,18 @@ The rail holds:
 
 While the opponent decides, the rail and the opponent's plate say so, with
 the seconds it has taken ("Search 64 is searching… · 3 s"). An attacking creature steps toward the player it
-attacks, and a blocker is joined to the attacker it blocks by a line. Cards
+attacks, and a blocker is joined to the attacker it blocks by a line. Combat
+usually ends before your next decision, so the line stays after it, until your
+next move, while both creatures are on the table. Cards
 move between zones (hand to stack, stack to battlefield, an opponent's new
 card from their plate) instead of appearing; with reduced motion they appear
 in place and every fact above stays.
 
 Choices with no card on the table, such as Lessons outside the game, appear in
 a tray over the board. During combat the creature the prompt asks about is
-raised; click an outlined attacker to block it, or use the prompt's buttons.
-Each combat answer commits separately; there is no draft of a whole attack or
+raised. To attack with it, click it; to block with it, click the outlined
+attacker it should block. Not attacking and not blocking are the prompt's
+buttons. Each combat answer commits separately; there is no draft of a whole attack or
 block to edit and confirm. **Pass turn** (F6) passes priority until the turn
 ends.
 
@@ -656,22 +667,15 @@ outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 ### Previewing payments
 
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
-(`{1}{G}`). Hover its cast action in **Your choices**, or move keyboard
-focus to it. On a laptop, the **Payment preview** opens between the board and
-the choices. On smaller screens it appears below the choices:
+(`{1}{G}`). Point at the Cub in your hand, or focus it. The lands the
+automatic payer would tap get a dashed outline and a mark with their order and
+what each adds: the first Mountain `1 {R}`, the Forest `2 {G}`. Nothing has
+happened yet; pointing and focusing send no action. Pointing at a row of **All
+legal choices** previews that choice the same way.
 
-```text
-Payment preview
-Cast Badgermole Cub · Cost {1}{G}
-Would tap
-  1. Mountain · your battlefield · copy 1 of 2 → 1 {R}
-  2. Forest · your battlefield → 1 {G}
-Left over · nothing floating
-```
-
-The same Mountain and Forest carry a proposal mark on the board. Nothing has
-happened yet. Hovering and focusing send no action. Cast the spell and
-choose **Pay the cost** to tap the proposed lands.
+Cast the Cub. At the payment prompt the same lands stay dashed and the primary
+button reads the plan: **Pay {1}{G} · Mountain, Forest**. Press Space or the
+button to tap exactly those lands.
 
 The preview is the automatic payer's own plan for the position in front of
 you. Academy asks the game for it; the browser never works one out. What it
@@ -679,59 +683,56 @@ shows is what **Pay the cost** does, including the lands it keeps back for other
 cards in your hand and any mana it would produce beyond the cost.
 
 **Choosing sources yourself.** When a cost leaves a real choice of sources,
-the payment prompt lists **Pay the cost** first, then each source you may tap.
-Focus arrives on **Pay the cost** and shows its proposal without paying.
+each land you may tap is outlined.
 
-1. To accept the proposal, activate **Pay the cost**.
-2. To choose a source, activate its tap. Tab moves through the sources and
-   Shift+Tab moves back; each source is a separate choice even when several
-   produce the same color. Focusing a source previews "tap this one, then pay
-   the rest automatically", with your source listed first.
-3. After each tap the source shows as tapped, its mana appears in your
-   floating pool, and the proposal for the rest is requested again. Tap
-   another source or activate **Pay the cost** to finish. When your tap
-   leaves no choice for the rest, the game finishes the payment at once,
-   tapping what the focused preview listed.
+1. To accept the plan, press Space or the primary button.
+2. Point at another land to preview "tap this one, then pay the rest
+   automatically": that land becomes `1` and the marks move. A land the plan
+   picked out of a pile of identical lands stands on its own, so its mark is
+   never hidden.
+3. Click a land to tap it. It shows as tapped, its mana appears on your plate,
+   and the plan for the rest is asked again and redrawn. Tap another land or
+   press Space to finish. When your tap leaves no choice for the rest, the game
+   finishes the payment at once, tapping what the plan showed.
 
 A cost that every available source is needed for has no source choice. The
-game pays it as soon as you cast, with no payment prompt, so the preview on
-the cast action is where you see those taps beforehand.
+game pays it as soon as you cast, with no payment prompt, so the marks you see
+while pointing at the spell are where you see those taps beforehand.
 
-**Reading the preview.**
+**When there is no plan to draw.** The primary button then shows only the
+cost, and a line under it says why when the game does:
 
-| The preview says | Meaning |
+| The game says | Meaning |
 | --- | --- |
-| Sources and their output | The automatic plan for this cost, in tapping order. **Left over** is the pool after the cost when the spending is forced. When several spends are legal it shows the pool after production and says which choices you will be prompted for. |
-| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. The preview names the missing choice and marks no sources. The preview returns at the completing target or at the payment prompt when there is one; when the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
-| No sources needed | The cost is zero or your floating mana already covers it. |
+| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. Nothing is marked until that choice is made; the plan returns at the completing target or at the payment prompt when there is one. When the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
+| No sources needed | The cost is zero or your floating mana already covers it; the button reads "· floating mana". |
 | No automatic payment | The automatic payer cannot fund this cost from fixed sources. Use an offered mana ability and make its choices first. |
 | Nothing | There is no automatic payment to preview. When choosing which floating mana to spend, choose the unit directly. Mana abilities with their own fee also have no preview. |
 
 Mana with a spending restriction, an effect when spent or an end-of-combat
-expiry is labeled as such in the preview, as it is in the floating-mana
-readout. Restricted amounts are part of the pool totals, not extra mana.
+expiry is written under the pips on your plate. Restricted amounts are part of
+the pool, not extra mana.
 
-**Proposal and commitment.** A proposal mark means "would tap". A tapped
-source means "has tapped". The floating-mana readout beside the board is the
-only statement of mana you actually have. Clearing the preview, moving focus or
-clearing a selection dismisses a proposal and changes nothing in the game.
-A tapped source stays tapped and its mana stays in your pool until it is spent
-or empties; there is no undo and no refund for a tap you regret.
+**Proposal and commitment.** A dashed outline means "would tap". A tapped
+land means "has tapped". The pips on your plate are the only statement of mana
+you actually have. Moving the pointer away changes nothing in the game. A
+tapped source stays tapped and its mana stays in your pool until it is spent or
+empties; there is no undo and no refund for a tap you regret.
 
 Source taps are offered only while a cost is being paid. Academy has no action
 for tapping lands at priority to float mana before choosing a spell.
 
-**When a preview goes away.** A preview belongs to one decision. Submitting
-an action, a new decision, a change of viewed player or a lost connection
-clears it, and an answer that arrives late for an earlier decision is
-discarded. If the request fails, the panel says so and offers **Retry**; every
-legal choice stays usable without it. After a reload or reconnect in the same
-tab the pending payment is restored and its proposal is requested again.
-Nothing about a preview is saved in the recording or the browser.
+**When a plan goes away.** A plan belongs to one decision. Submitting an
+action, a new decision or a lost connection clears it, and an answer that
+arrives late for an earlier decision is discarded. If the request fails, the
+line under the button says so; **Pay** still pays automatically and every legal
+choice stays usable. After a reload or reconnect in the same tab the pending
+payment is restored and its plan is asked for again. Nothing about a plan is
+saved in the recording or the browser.
 
 Replay, Watch history and Study show the taps and spending that were recorded.
-They show no proposal: a preview was never part of the recording, and a live
-game is never consulted to decorate a recorded position.
+They show no plan: a preview was never part of the recording, and a live game
+is never consulted to decorate a recorded position.
 
 ### Pending input, waits and recovery
 

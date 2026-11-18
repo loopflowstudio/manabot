@@ -1,13 +1,16 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { Command, ExperienceFrame } from '../src/lib/types';
-import { finishBoardNarration } from './presentation-readiness';
+
+// Payment on the table: the automatic payer's plan is drawn on the lands it
+// would tap, the primary button reads it, and tapping a land yourself is the
+// authority's own offer. Previewing never sends a Command.
 
 declare global {
-  interface Window { __mana: { frame: ExperienceFrame | null; commands: Command[] } }
+  interface Window { __mana: { frame: ExperienceFrame | null; commands: Command[]; previews: number } }
 }
 async function track(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    window.__mana = { frame: null, commands: [] };
+    window.__mana = { frame: null, commands: [], previews: 0 };
     const Native = window.WebSocket;
     class PaymentSocket extends Native {
       constructor(url: string | URL, protocols?: string | string[]) {
@@ -33,120 +36,105 @@ async function track(page: Page): Promise<void> {
     window.WebSocket = PaymentSocket;
   });
 }
-async function startPaymentGame(page: Page): Promise<void> {
-  await track(page);
-  await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await expect(page.getByTestId('decision-surface')).toBeVisible();
-  await finishBoardNarration(page);
+const frame = (page: Page): Promise<ExperienceFrame> => page.evaluate(() => window.__mana.frame!);
+const commands = (page: Page): Promise<number> => page.evaluate(() => window.__mana.commands.length);
+const planned = (page: Page): Locator => page.locator('.board [data-testid=table-card][data-payment-source]');
+const rail = (page: Page, text: string | RegExp): Locator => page.getByTestId('action-option').filter({ hasText: text });
+
+async function waitForRevision(page: Page, before: number): Promise<void> {
+  await expect.poll(async () => (await frame(page)).revision, { timeout: 20_000 }).toBeGreaterThan(before);
+  await expect(page.getByTestId('table')).toHaveAttribute('data-live', 'true');
 }
-async function choose(page: Page, id: number): Promise<void> {
-  const before = await page.evaluate(() => window.__mana.frame!.revision);
-  await page.locator(`[data-testid="action-option"][data-offer-id="${id}"]`).focus();
-  await page.keyboard.press('Enter');
-  await expect.poll(() => page.evaluate(() => window.__mana.frame?.revision), { timeout: 20_000 }).toBeGreaterThan(before);
-  await finishBoardNarration(page);
+async function clickCard(card: Locator): Promise<void> {
+  // A copy under another in its pile shows only its right edge.
+  const box = (await card.boundingBox())!;
+  await card.click({ position: { x: box.width - 6, y: box.height / 2 } });
 }
+
 for (const [width, height] of [[1280, 800], [1440, 900]]) {
-  test(`preview and choose native payments at ${width}`, async ({ page }, testInfo) => {
+  test(`pay through the plan drawn on the lands at ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
-    await startPaymentGame(page);
-    const produce = page.getByTestId('action-option').filter({hasText: 'White Lotus Hideout'}).first();
-    await produce.click();
-    await page.getByRole('button', {name: /Add \{U\} .*Lesson/}).click();
-    const floating = page.getByTestId('mana-pool').last();
-    await floating.locator('summary').click();
-    await expect(floating).toContainText('Lesson');
-    await expect(floating).toContainText('step end');
-    await floating.locator('summary').click();
-    // The preceding Hideout activation brought the last page of lands into view.
-    await page.getByRole('button', {name: 'Previous lands'}).click();
-    const commands = await page.evaluate(() => window.__mana.commands.length);
-    const cast = page.getByRole('button', { name: 'Cast Lightning Strike', exact: true });
-    const panel = page.getByTestId('payment-preview');
-    await cast.focus();
-    await expect(panel).toContainText('Would tap');
-    await expect(panel).toContainText('Lesson');
-    await expect(page.locator('[data-payment-source]')).toHaveCount(2);
-    expect(await page.evaluate(() => window.__mana.commands.length)).toBe(commands);
-    await cast.press('Enter');
-    await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'CHOOSE_TARGET');
-    const target = await page.evaluate(() => window.__mana.frame!.offers.find(o => o.label === 'Target Villain')!.id);
-    await choose(page, target);
-    const pay = page.getByTestId('action-option').filter({hasText: 'Pay the cost'});
-    await expect(pay).toBeFocused();
-    await expect(panel).toContainText('Would tap');
+    await track(page);
+    await page.goto('/');
+    await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
+    await expect(page.getByTestId('table')).toHaveAttribute('data-live', 'true');
+
+    // Restricted floating mana says what it is beside its pips.
+    let before = (await frame(page)).revision;
+    await rail(page, 'White Lotus Hideout').first().click();
+    await waitForRevision(page, before);
+    before = (await frame(page)).revision;
+    await rail(page, /Add \{U\} .*Lesson/).first().click();
+    await waitForRevision(page, before);
+    const pool = page.locator('[data-plate-side=you]');
+    await expect(pool.getByTestId('mana-pool')).toContainText('Floating');
+    await expect(pool.getByTestId('mana-pool-class')).toContainText('Lesson');
+
+    // Pointing at the spell shows its plan on the lands and sends nothing.
+    const sent = await commands(page);
+    const strike = page.locator('.hand [data-testid=table-card][data-card-name="Lightning Strike"]');
+    await strike.hover();
+    await expect(planned(page)).toHaveCount(2);
+    await expect(planned(page).first()).toHaveAttribute('aria-label', /would tap for \{[WUBRGC]\}/);
+    expect(await commands(page)).toBe(sent);
+
+    // Cast it on the card, target the opponent on their plate, then pay.
+    before = (await frame(page)).revision;
+    await strike.click();
+    await waitForRevision(page, before);
+    await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'CHOOSE_TARGET');
+    before = (await frame(page)).revision;
+    await page.locator('[data-plate-side=opponent] [data-testid=player-target]').click();
+    await waitForRevision(page, before);
+    await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PAY_OR_NOT');
+    const primary = page.getByTestId('primary-action');
+    await expect(primary).toHaveText(/^Pay \{1\}\{R\} · \S+, \S+/);
+    await expect(planned(page)).toHaveCount(2);
+    await expect(page.getByTestId('decision-prompt')).toContainText('Space taps the dashed lands');
+    await expect(page.getByTestId('action-option')).toHaveCount((await frame(page)).offers.length);
     for (const colorScheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-      await expect(panel.getByRole('list', { name: 'Would tap' })).toBeVisible();
-      await expect(panel.getByRole('button', {name: 'Clear preview'})).toHaveText('Clear');
-      await expect(page.getByTestId('action-option')).toHaveCount(9);
-      await expect(page.locator('[data-payment-source]').first()).toBeInViewport();
-      await expect(pay).toBeInViewport({ ratio: 1 });
-      await expect(page.getByTestId('action-option').filter({hasText: 'Tap Island'}).first()).toBeInViewport({ ratio: 1 });
-      await expect(page.getByText('History and settings', {exact: true})).toBeInViewport({ ratio: 1 });
-      const leftOver = panel.getByText(/^Left over/);
-      const panelBox = await panel.boundingBox();
-      const remainderBox = await leftOver.boundingBox();
-      expect(remainderBox!.y + remainderBox!.height).toBeLessThanOrEqual(panelBox!.y + panelBox!.height);
-      await page.screenshot({path: testInfo.outputPath(`payment-${width}-${colorScheme}.png`)});
+      await expect(planned(page).first()).toBeInViewport();
+      await expect(primary).toBeInViewport({ ratio: 1 });
+      await page.screenshot({ path: testInfo.outputPath(`payment-${width}-${colorScheme}.png`) });
     }
-    const paymentHash = await page.evaluate(() => window.__mana.frame!.frame_hash);
-    const beforeClear = await page.evaluate(() => window.__mana.commands.length);
-    await panel.getByRole('button', {name: 'Clear preview'}).press('Enter');
-    await expect(panel).toBeFocused();
-    await expect(panel).toContainText('Focus or point to a payment choice.');
-    await expect(page.locator('[data-payment-source]')).toHaveCount(0);
-    expect(await page.evaluate(() => window.__mana.commands.length)).toBe(beforeClear);
+
+    // A reload finds the same pending payment and asks for its plan again.
+    const paymentHash = (await frame(page)).frame_hash;
+    const plannedIds = await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')).sort());
     await page.reload();
-    await expect.poll(() => page.evaluate(() => window.__mana.frame?.frame_hash)).toBe(paymentHash);
-    await expect(panel).toContainText('Would tap');
-    const activate = page.getByTestId('action-option').filter({hasText: 'Activate ability: Prophetic Prism'});
-    await activate.focus();
-    await expect(panel).toContainText('Focus or point to a payment choice.');
-    await expect(page.locator('[data-payment-source]')).toHaveCount(0);
-    const tap = page.getByTestId('action-option').filter({hasText: 'Tap Island'}).first();
-    await tap.focus();
-    await expect(panel.getByRole('listitem').first()).toContainText('Island');
-    if (width === 1280) {
-      await tap.press('Enter');
-    } else {
-      // Hold an authentic answer for the old offer until after the source commits.
-      const other = page.getByTestId('action-option').filter({hasText: 'Tap Mountain'}).first();
-      let release!: () => void;
-      const hold = new Promise<void>(resolve => { release = resolve; });
-      let arrived!: () => void;
-      const waiting = new Promise<void>(resolve => { arrived = resolve; });
-      await page.route('**/payment-preview', async route => {
-        const response = await route.fetch();
-        arrived();
-        await hold;
-        await route.fulfill({response});
-      }, {times: 1});
-      await other.hover();
-      await waiting;
-      await tap.click();
-      await expect.poll(() => page.evaluate(() => window.__mana.frame!.frame_hash)).not.toBe(paymentHash);
-      release();
+    await expect.poll(async () => (await frame(page))?.frame_hash).toBe(paymentHash);
+    await expect(planned(page)).toHaveCount(2);
+    expect(await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')).sort())).toEqual(plannedIds);
+
+    // Pointing at a land outside the plan previews "tap this, then the rest"; clicking it is the authority's tap.
+    const own = page.locator('.you .row.support [data-testid=table-card].legal:not([data-payment-source])').filter({ hasText: 'Mountain' }).first();
+    const ownId = await own.getAttribute('data-object-id');
+    const edge = (await own.boundingBox())!;
+    await page.mouse.move(edge.x + edge.width - 6, edge.y + edge.height / 2);
+    await expect(page.locator(`[data-object-id="${ownId}"][data-payment-source="1"]`)).toHaveCount(1);
+    await expect(primary).toHaveText(/^Pay \{1\}\{R\}\s*Space$/);
+    before = (await frame(page)).revision;
+    await clickCard(page.locator(`[data-object-id="${ownId}"]`));
+    await waitForRevision(page, before);
+    expect((await page.evaluate(() => window.__mana.commands.at(-1)!)).offer_id).toBeDefined();
+    await page.mouse.move(2, 2);
+    await expect(page.locator(`[data-object-id="${ownId}"]`)).toHaveAttribute('aria-label', /tapped/);
+
+    // Space pays what remains along the plan the button reads.
+    const after = await frame(page);
+    if (after.action_space === 'PAY_OR_NOT') {
+      // The tap paid {R}; the plan for the rest is one more source.
+      await expect(primary).toHaveText(/^Pay \{1\}\{R\} · \S+/);
+      await expect(planned(page)).toHaveCount(1);
+      const remaining = await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')));
+      before = after.revision;
+      await page.keyboard.press('Space');
+      await waitForRevision(page, before);
+      for (const id of remaining) await expect(page.locator(`[data-object-id="${id}"]`)).toHaveAttribute('aria-label', /tapped/);
     }
-    await expect.poll(() => page.evaluate(() => window.__mana.frame?.projection.agent.mana?.[1])).toBe(1);
-    await expect(pay).toBeFocused();
-    await expect(page.locator('[data-payment-source]')).toHaveCount(1);
-    const source = await page.locator('[data-payment-source]').getAttribute('data-object-id');
-    await pay.click();
-    await expect(page.locator(`[data-object-id="${source}"]`)).toHaveAttribute('aria-label', /tapped/);
-    const afterPayment = await page.evaluate(() => window.__mana.frame!);
-    if (!afterPayment.projection.game_over) {
-      const pass = afterPayment.offers.find(o => o.label === 'Pass priority')!;
-      await choose(page, pass.id);
-    }
-    await expect.poll(() => page.evaluate(() => window.__mana.frame?.projection.game_over)).toBe(true);
-    const requests: string[] = [];
-    page.on('request', request => { if (request.url().endsWith('/payment-preview') && new URL(request.frame().url()).pathname === '/replay') requests.push(request.url()); });
-    await page.getByRole('link', {name: 'Open replay', exact: true}).click();
-    await expect(page.getByRole('slider', { name: 'Replay position' })).toBeVisible();
-    await expect(panel).toHaveCount(0);
-    expect(requests).toEqual([]);
+    await expect(page.getByTestId('stack-entry').filter({ hasText: 'Lightning Strike' })).toHaveCount(1);
+    await expect(planned(page)).toHaveCount(0);
   });
 }

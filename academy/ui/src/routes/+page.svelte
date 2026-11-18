@@ -76,13 +76,11 @@
   const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
 
   // The automatic payer's plan for the offer the table asks about: a
-  // read-only query bound to this exact decision, dropped on every update.
+  // read-only query bound to this exact decision. The controller drops an
+  // answer for any other frame, and the table asks for nothing while it
+  // cannot act, so a commit or a lost connection clears the plan.
   let paymentState = $state<PreviewState | null>(null);
   const payments = new PaymentPreviewController(fetchPaymentPreview, state => { paymentState = state; });
-  $effect(() => {
-    void gameStore.updateSeq;
-    untrack(() => payments.invalidate());
-  });
   function previewPayment(offer: InteractionOffer | null): void {
     if (offer && tableFrame && canSubmitLive) void payments.select(tableFrame, offer.id, offer.label);
     else payments.clear();

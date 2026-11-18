@@ -8,8 +8,8 @@
  * and deaths, and how much damage each object and player was dealt.
  * `tableLines(frame, events)` draws standing facts: a spell on the stack to
  * each of its targets, and each blocker to the attacker it blocks, from the
- * projection while combat lasts and from this combat's block events after it,
- * as long as both creatures are still on the table.
+ * projection while combat lasts and from the block events since the person's
+ * last move after it, as long as both creatures are still on the table.
  * Both are pure, so the table's motion is a rendering of facts that remain
  * readable when motion is reduced.
  *
@@ -180,13 +180,11 @@ export function tableLines(
       add({ from: { kind: 'object', id: permanent.id }, to: { kind: 'object', id: permanent.blocking }, kind: 'block' });
     }
   }
-  // Combat usually ends before the person's next decision, so a frame rarely
-  // holds a block; this turn's block events since their last move keep it drawn.
-  const turn = frame.projection.turn.turn_number;
-  let eventTurn: number | null = null;
+  // With default stops combat ends before the person's next decision, so a
+  // frame rarely holds a block; the block events since their last move keep
+  // it drawn, like the recap that says it, while both creatures remain.
   for (const event of events) {
-    if (event.kind.kind === 'turn_started') eventTurn = event.kind.turn_number;
-    if (event.kind.kind !== 'blocked' || since === null || event.from_revision < since || (eventTurn !== null && eventTurn !== turn)) continue;
+    if (event.kind.kind !== 'blocked' || since === null || event.from_revision < since) continue;
     const attacker = event.kind.attacker.entity;
     for (const blocker of event.kind.blockers) {
       if (onBoard.has(blocker.entity) && onBoard.has(attacker)) {

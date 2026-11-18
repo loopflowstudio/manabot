@@ -6,7 +6,7 @@
    */
   import TableCard from './TableCard.svelte';
   import type { PlannedSource } from './payment';
-  import { fitRow, pileCounts, type PermanentItem, type Pile, type RowLimits } from './view';
+  import { fitRow, pileCounts, unpilePlanned, type PermanentItem, type Pile, type RowLimits } from './view';
 
   interface Props {
     piles: Pile[];
@@ -20,6 +20,8 @@
     damage: Map<number, number>;
     /** Sources the automatic payer would tap, by permanent id. */
     planned: Map<number, PlannedSource> | null;
+    /** Copies to take out of their piles: the pending payment's own plan. */
+    unpiled: ReadonlyMap<number, unknown> | null;
     toward: 'up' | 'down';
     align?: 'start' | 'end';
     names: Map<number, string>;
@@ -27,12 +29,14 @@
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, damage, planned, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
+  let { piles, label, limits, live, asked, touched, damage, planned, unpiled, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
+
+  const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
   let width = $state(0);
   let height = $state(0);
   // A pixel of slack keeps rounding from wrapping a row that just fits.
-  const fit = $derived(fitRow(pileCounts(piles), width - 2, height, limits));
+  const fit = $derived(fitRow(pileCounts(shown), width - 2, height, limits));
   const cardHeight = $derived(Math.round(fit.card / limits.ratio));
 
   function blocked(item: PermanentItem): string | null {
@@ -55,7 +59,7 @@
   style:--lean={fit.lines > 1 ? '8%' : '20%'}
 >
   {#if width > 0}
-    {#each piles as pile (pile.key)}
+    {#each shown as pile (pile.key)}
       {@const members = pile.items.flatMap(item => [item, ...item.attached.map(attached => ({ ...attached, host: item }))])}
       <div class="pile" style:width={`${fit.card + (members.length - 1) * fit.fan}px`} style:height={`${cardHeight}px`}>
         {#each members as item, index (item.permanent.id)}

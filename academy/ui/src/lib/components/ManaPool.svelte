@@ -1,17 +1,8 @@
 <script lang="ts">
-  import { manaText, pooledManaText } from '$lib/mana';
-  import type { PlayerState, RestrictedMana } from '$lib/types';
+  import { floatingTotal, manaText, pooledManaText, spendingText } from '$lib/mana';
+  import type { PlayerState } from '$lib/types';
   let { player, label }: { player: PlayerState; label: string } = $props();
-  function spendingText(restricted: RestrictedMana): string {
-    if (restricted.except_nonartifact_spells) return 'anything but nonartifact spells';
-    const parts = [];
-    if (restricted.spells?.length) parts.push(`${restricted.spells.join(' or ')} spells`);
-    if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
-    return parts.join(' or ');
-  }
-  // Native `mana` holds unrestricted mana only; restricted mana is counted
-  // separately in `lesson_mana`, so the floating total is their sum.
-  const total = $derived(player.mana?.map((amount, color) => amount + (player.lesson_mana?.[color] ?? 0)));
+  const total = $derived(player.mana ? floatingTotal(player) : undefined);
   const hasParts = $derived(Boolean(
     player.restricted_mana?.length || player.lesson_mana?.some(Boolean)
     || player.pooled_mana_classes?.length || player.combat_mana,

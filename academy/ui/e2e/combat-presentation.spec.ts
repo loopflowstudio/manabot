@@ -1,7 +1,7 @@
 import { tableSnapshot } from './fixtures/table';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import combatSequence from '../src/lib/fixtures/curated-combat-to-turn.json' with { type: 'json' };
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
@@ -15,15 +15,6 @@ import type {
   RecoveryEnvelope,
 } from '../src/lib/types';
 
-import { finishBoardNarration } from './presentation-readiness';
-
-type InputMode = 'keyboard' | 'pointer';
-
-interface CombatPromptReceipt {
-  attackerMode: InputMode;
-  blockerMode: InputMode;
-  commands: Command[];
-}
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 
@@ -65,64 +56,53 @@ function combatObservation(): Observation {
   return observation;
 }
 
+function subject(id: number, label: string): NonNullable<InteractionOffer['subjects']>[number]['object'] {
+  return { entity_id: id, subject: { kind: 'object', id: { entity: id, incarnation: 0 } }, display_id: id, label };
+}
+
+/** A combat offer as the authority builds it: the attack names its creature as source, a block names the attacker as target. */
 function offer(
   id: number,
   verb: 'declare_attackers' | 'declare_blockers' | 'pass_priority',
   label: string,
   actionType: string,
   focus: number[],
+  subjects: InteractionOffer['subjects'] = undefined,
 ): InteractionOffer {
-  return {
-    id,
-    actor: 0,
-    verb,
-    source: null,
-    label,
-    help: null,
-    choices: [],
-    confirm_label: label,
-    action_type: actionType,
-    focus,
-  };
+  return { id, actor: 0, verb, source: null, label, help: null, choices: [], confirm_label: label, action_type: actionType, focus, ...(subjects ? { subjects } : {}) };
 }
+
+const OTTER = subject(83, 'Otter-Penguin');
+const CUB = subject(84, 'Badgermole Cub');
 
 function frameAt(stage: 'attack' | 'block' | 'priority'): ExperienceFrame {
   const base = structuredClone(boltFixture.recovery.frame);
   const revision = stage === 'attack' ? 10 : stage === 'block' ? 11 : 12;
-  const promptId = stage === 'attack' ? 110 : stage === 'block' ? 111 : 112;
   const observation = combatObservation();
-  const actionSpace = stage === 'attack'
-    ? 'DECLARE_ATTACKER'
-    : stage === 'block'
-      ? 'DECLARE_BLOCKER'
-      : 'PRIORITY';
+  const actionSpace = stage === 'attack' ? 'DECLARE_ATTACKER' : stage === 'block' ? 'DECLARE_BLOCKER' : 'PRIORITY';
   if (stage === 'block') {
-    observation.turn.step = 'DECLARE_BLOCKERS_STEP';
+    observation.turn = { ...observation.turn, active_player_id: 1, step: 'DECLARE_BLOCKERS_STEP' };
+    observation.opponent.battlefield[0].attacking = true;
   }
+  if (stage === 'priority') observation.turn = { ...observation.turn, active_player_id: 1, phase: 'COMBAT', step: 'COMBAT_END' };
   const offers = stage === 'attack'
     ? [
-        offer(101, 'declare_attackers', 'Attack with Otter-Penguin', 'DECLARE_ATTACKER', [83]),
-        offer(102, 'declare_attackers', 'Do not attack with Otter-Penguin', 'DECLARE_ATTACKER', [83]),
+        offer(101, 'declare_attackers', 'Attack with Otter-Penguin', 'DECLARE_ATTACKER', [83], [{ role: 'source', object: OTTER }]),
+        offer(102, 'declare_attackers', 'Do not attack with Otter-Penguin', 'DECLARE_ATTACKER', [83], [{ role: 'choice', object: OTTER }]),
       ]
     : stage === 'block'
       ? [
-          offer(201, 'declare_blockers', 'Block Badgermole Cub with Otter-Penguin', 'DECLARE_BLOCKER', [84, 83]),
-          offer(202, 'declare_blockers', 'Otter-Penguin: do not block', 'DECLARE_BLOCKER', [83]),
+          offer(201, 'declare_blockers', 'Block Badgermole Cub with Otter-Penguin', 'DECLARE_BLOCKER', [83, 84],
+            [{ role: 'choice', object: OTTER }, { role: 'target', object: CUB }]),
+          offer(202, 'declare_blockers', 'Otter-Penguin: do not block', 'DECLARE_BLOCKER', [83], [{ role: 'choice', object: OTTER }]),
         ]
       : [offer(301, 'pass_priority', 'Pass priority', 'PRIORITY_PASS_PRIORITY', [])];
-
   return {
     ...base,
     match_id: 'combat-prompt-proof',
     revision,
     frame_hash: `combat-frame-${revision}`,
-    prompt: {
-      id: promptId,
-      actor: 0,
-      kind: actionSpace.toLowerCase(),
-      title: 'Choose a combat action',
-      instruction: 'Choose a combat action',
-    },
+    prompt: { id: 100 + revision, actor: 0, kind: actionSpace.toLowerCase(), title: 'Choose a combat action', instruction: 'Choose a combat action' },
     projection: observation,
     offers,
     action_space: actionSpace,
@@ -130,359 +110,122 @@ function frameAt(stage: 'attack' | 'block' | 'priority'): ExperienceFrame {
   };
 }
 
-function acceptedUpdate(command: Command, frame: ExperienceFrame): FrameUpdate {
+/** What the authority reports after the block: the block, damage both ways, nobody dies. */
+function combatEvents(from: number): PresentationEvent[] {
+  const event = (seq: number, kind: PresentationEvent['kind']): PresentationEvent => ({
+    seq, from_revision: from, to_revision: from + 1, caused_by: null, group: 0, importance: 'normal', suggested_ms: 80, sound: null, kind,
+  });
+  return [
+    event(0, { kind: 'blocked', attacker: { entity: 84, incarnation: 0 }, blockers: [{ entity: 83, incarnation: 0 }] }),
+    event(1, { kind: 'damage', source: { kind: 'object', id: { entity: 84, incarnation: 0 } }, target: { kind: 'object', id: { entity: 83, incarnation: 0 } }, amount: 1 }),
+    event(2, { kind: 'damage', source: { kind: 'object', id: { entity: 83, incarnation: 0 } }, target: { kind: 'object', id: { entity: 84, incarnation: 0 } }, amount: 2 }),
+  ];
+}
+
+function acceptedUpdate(command: Command, frame: ExperienceFrame, presentation: PresentationEvent[] = []): FrameUpdate {
   return {
     base_revision: command.expected_revision,
     frame,
-    presentation: [],
+    presentation,
     receipt: {
-      command_id: command.command_id,
-      actor: 0,
-      accepted_at: command.expected_revision,
-      resulting_revision: frame.revision,
-      resulting_frame_hash: frame.frame_hash,
+      command_id: command.command_id, actor: 0, accepted_at: command.expected_revision,
+      resulting_revision: frame.revision, resulting_frame_hash: frame.frame_hash,
     },
   };
 }
 
-async function installCombatAuthority(
-  page: Page,
-  commands: Command[],
-  events: PresentationEvent[] = [],
-  terminal = false,
-): Promise<void> {
-  let starts = 0;
+/** Attack, then block, then the combat's end; each Command answers the frame it was made at. */
+async function installCombatAuthority(page: Page, commands: Command[]): Promise<void> {
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage((raw) => {
-      const message = JSON.parse(String(raw)) as {
-        type?: string;
-        command?: Command;
-      };
+      const message = JSON.parse(String(raw)) as { type?: string; command?: Command };
       if (message.type === 'new_game') {
         const frame = frameAt('attack');
-        if (starts++ > 0) frame.match_id += `-${starts}`;
-        if (terminal) {
-          frame.projection.game_over = true;
-          frame.winner = 1;
-          frame.prompt = null;
-          frame.offers = [];
-        }
         socket.send(JSON.stringify({
-          type: 'observation', table: tableSnapshot(),
-          data: frame.projection,
-          actions: [],
-          session_id: 'combat-session',
-          resume_token: 'combat-resume-token',
-          recovery: {
-            ...structuredClone(boltFixture.recovery),
-            reason: 'initial_connect',
-            frame,
-            presentation_tail: events,
-            presentation_cursor: events[0]?.seq ?? 0,
-            accepted_commands: [],
-            replay_cursor: frame.revision,
-          },
+          type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
+          session_id: 'combat-session', resume_token: 'combat-resume-token',
+          recovery: { ...structuredClone(boltFixture.recovery), reason: 'initial_connect', frame, presentation_tail: [],
+            presentation_cursor: 0, accepted_commands: [], replay_cursor: frame.revision },
         }));
         return;
       }
-      if (message.type !== 'command' || !message.command) {
-        return;
-      }
-
+      if (message.type !== 'command' || !message.command) return;
       const command = message.command;
       commands.push(command);
+      const blocked = command.expected_revision === 11;
       const next = command.expected_revision === 10 ? frameAt('block') : frameAt('priority');
-      socket.send(JSON.stringify({
-        type: 'command_outcome',
-        status: 'accepted',
-        update: acceptedUpdate(command, next),
-      }));
+      if (blocked) next.projection.agent.battlefield[0].damage = 1;
+      if (blocked) next.projection.opponent.battlefield[0].damage = 2;
+      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted',
+        update: acceptedUpdate(command, next, blocked ? combatEvents(11) : []) }));
     });
   });
 }
 
-async function updateSequence(page: Page): Promise<number> {
-  return Number(await page.locator('main').getAttribute('data-update-seq'));
-}
-
-async function assertPrompt(
-  page: Page,
-  family: 'DECLARE_ATTACKER' | 'DECLARE_BLOCKER',
-  expectedLabels: string[],
-): Promise<void> {
-  const panel = page.getByTestId('action-panel');
-  const options = page.getByTestId('action-option');
-  await expect(panel).toHaveAttribute('data-action-space-kind', family);
-  await expect(page.getByTestId('decision-prompt')).toHaveAttribute('data-kind', family);
-  await expect(options).toHaveCount(expectedLabels.length);
-  await expect(options.first()).toBeFocused();
-  for (let index = 0; index < expectedLabels.length; index += 1) {
-    await expect(options.nth(index)).toHaveAccessibleName(expectedLabels[index]);
-    await expect(options.nth(index)).toBeEnabled();
-  }
-  await page.keyboard.press('Tab');
-  await expect(options.nth(1)).toBeFocused();
-  await expect(options.nth(1)).toHaveCSS('outline-style', 'solid');
-  await page.keyboard.press('Shift+Tab');
-  await expect(options.first()).toBeFocused();
-  await expect(options.first()).toHaveCSS('outline-style', 'solid');
-}
-
-async function activate(
-  page: Page,
-  mode: InputMode,
-  expected: { offerId: number; promptId: number; revision: number },
-  commands: Command[],
-): Promise<void> {
-  const before = await updateSequence(page);
-  const option = page.getByTestId('action-option').first();
-  if (mode === 'keyboard') {
-    await expect(option).toBeFocused();
-    await expect(option).toHaveCSS('outline-style', 'solid');
-    await page.keyboard.press('Enter');
-  } else {
-    await option.click();
-  }
-  await expect.poll(() => commands.length).toBeGreaterThan(0);
-  expect(commands.at(-1)).toMatchObject({
-    match_id: 'combat-prompt-proof',
-    expected_revision: expected.revision,
-    prompt_id: expected.promptId,
-    offer_id: expected.offerId,
-    answers: [],
-  });
-  expect(commands.at(-1)?.command_id).toMatch(/\S+/);
-  await expect.poll(() => updateSequence(page)).toBeGreaterThan(before);
-}
-
-async function runPromptProof(
-  browser: Browser,
-  attackerMode: InputMode,
-  blockerMode: InputMode,
-): Promise<CombatPromptReceipt> {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  const commands: Command[] = [];
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error' && !message.text().includes('favicon')) {
-      errors.push(message.text());
-    }
-  });
+async function startCombat(page: Page, commands: Command[]): Promise<void> {
   await installCombatAuthority(page, commands);
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
-
-  await assertPrompt(page, 'DECLARE_ATTACKER', [
-    'Attack with Otter-Penguin',
-    'Do not attack with Otter-Penguin',
-  ]);
-  await activate(page, attackerMode, { offerId: 101, promptId: 110, revision: 10 }, commands);
-
-  await assertPrompt(page, 'DECLARE_BLOCKER', [
-    'Block Badgermole Cub with Otter-Penguin',
-    'Otter-Penguin: do not block',
-  ]);
-  await activate(page, blockerMode, { offerId: 201, promptId: 111, revision: 11 }, commands);
-
-  expect(errors).toEqual([]);
-  await context.close();
-  return { attackerMode, blockerMode, commands };
+  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
 }
 
-test('combat prompts submit only current offers by pointer and keyboard', async ({ browser }) => {
-  const pointerThenKeyboard = await runPromptProof(browser, 'pointer', 'keyboard');
-  const keyboardThenPointer = await runPromptProof(browser, 'keyboard', 'pointer');
+const card = (page: Page, id: number) => page.locator(`.board [data-testid=table-card][data-object-id="${id}"]`);
 
-  expect(pointerThenKeyboard.commands.map((command) => command.offer_id)).toEqual([101, 201]);
-  expect(keyboardThenPointer.commands.map((command) => command.offer_id)).toEqual([101, 201]);
-});
+for (const mode of ['pointer', 'keyboard'] as const) {
+  test(`combat is answered on the board by ${mode}: attack with the creature, block on the attacker`, async ({ page }) => {
+    const commands: Command[] = [];
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await startCombat(page, commands);
 
-test('a taller decision sidebar does not stretch the board', async ({ page }) => {
-  await page.setViewportSize({ width: 1600, height: 1200 });
-  await installCombatAuthority(page, [], combatSequence.events as PresentationEvent[]);
-  await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'Start game' }).first().click();
-  const board = page.getByTestId('game-board');
-  await expect(board).toBeVisible();
-  await page.evaluate(() => document.fonts.ready);
-  const initialHeight = (await board.boundingBox())!.height;
-  await page.getByTestId('current-decision').evaluate((status) => {
-    const content = document.createElement('div');
-    content.style.height = '3000px';
-    status.parentElement!.append(content);
-  });
-  expect((await board.boundingBox())!.height).toBe(initialHeight);
-});
+    // The creature asked about is lifted and is the attack; declining is a separate button.
+    await expect(card(page, 83)).toHaveClass(/asked/);
+    await expect(card(page, 83)).toHaveClass(/legal/);
+    await expect(card(page, 83)).toHaveAccessibleName(/Attack with Otter-Penguin \(1\)$/);
+    await expect(page.getByTestId('prompt-action')).toHaveText(['2Do not attack with Otter-Penguin']);
+    await expect(page.getByTestId('action-option')).toHaveCount(2);
+    if (mode === 'pointer') await card(page, 83).click();
+    else await page.keyboard.press('1');
+    await expect.poll(() => commands.length).toBe(1);
+    expect(commands[0]).toMatchObject({ match_id: 'combat-prompt-proof', expected_revision: 10, prompt_id: 110, offer_id: 101, answers: [] });
 
-for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`consequences survive playback and Finish with ${reducedMotion}`, async ({ page }) => {
-    await page.emulateMedia({ reducedMotion });
-    await installCombatAuthority(page, [], combatSequence.events as PresentationEvent[]);
-    await page.goto('/');
-    await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.clock.install({ time: 0 });
-    await page.clock.pauseAt(10_000);
-    await page.getByRole('button', { name: 'Start game' }).first().click();
-    const history = page.getByTestId('presentation-history');
-    await page.getByText('History and settings', { exact: true }).click();
-    await history.locator('summary').click();
-    const stage = page.getByTestId('presentation-stage');
-    await expect(history.getByRole('listitem')).toHaveCount(6);
-    await expect(history).toContainText('Otter-Penguin deals 2 damage to Badgermole Cub.');
-    await expect(page.getByTestId('current-decision')).toHaveText('Your decision — Choose a combat action');
-    await page.getByRole('button', { name: 'Pause narration' }).click();
-    await page.clock.runFor(5000);
-    await expect(stage).toHaveAttribute('data-presentation-kind', 'damage');
-    await page.getByRole('button', { name: 'Resume narration' }).click();
-    await page.clock.runFor(10000);
-    await expect(stage).toBeHidden();
-    await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
-    await expect(history).toContainText("Hero's turn begins.");
-
-    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
-    await page.clock.runFor(32); // Flush the navigation's animation frame while narration time is controlled.
-    page.once('dialog', dialog => dialog.accept());
-    await page.getByRole('button', { name: 'Start game', exact: true }).click();
-    await expect(stage).toBeVisible();
-    await page.getByRole('button', { name: 'Skip beat' }).click();
-    await page.getByRole('button', { name: 'Fast-forward' }).click();
-    await page.getByRole('button', { name: 'Finish', exact: true }).click();
-    await expect(stage).toBeHidden();
-    await expect(history.getByRole('listitem')).toHaveCount(6);
-    await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
-    await expect(page.getByTestId('action-option').first()).toBeEnabled();
+    // Blocking: the attacker is the control; the blocker asked about is lifted; not blocking is a button.
+    await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
+    await expect(card(page, 83)).toHaveClass(/asked/);
+    await expect(card(page, 84)).toHaveClass(/legal/);
+    await expect(card(page, 84)).toHaveAccessibleName(/Block Badgermole Cub with Otter-Penguin \(1\)$/);
+    await expect(page.getByTestId('prompt-action')).toHaveText(['2Otter-Penguin: do not block']);
+    if (mode === 'pointer') await card(page, 84).click();
+    else await page.keyboard.press('1');
+    await expect.poll(() => commands.length).toBe(2);
+    expect(commands[1]).toMatchObject({ expected_revision: 11, prompt_id: 111, offer_id: 201, answers: [] });
+    expect(errors).toEqual([]);
   });
 }
 
-
-test('terminal capture finishes JavaScript narration and retains consequences', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await installCombatAuthority(page, [], combatSequence.events as PresentationEvent[], true);
-  await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.clock.install({ time: 0 });
-  await page.clock.pauseAt(10_000);
-  await page.getByRole('button', { name: 'Start game' }).first().click();
-  const board = page.getByTestId('game-board');
-  const stage = page.getByTestId('presentation-stage');
-  const resultAction = page.getByTestId('game-result-action');
-  await expect(resultAction).toBeFocused();
-  await expect(page.getByTestId('action-option')).toHaveCount(0);
-  await page.evaluate(() => document.fonts.ready);
-
-  // Semantic narration still advances under the terminal dialog. Finish must
-  // settle it without losing the retained consequences.
-  await expect(stage).toHaveAttribute('data-presentation-kind', 'damage');
-  await page.clock.runFor(1000);
-  await expect(stage).toHaveAttribute('data-presentation-kind', 'died');
-
-  await finishBoardNarration(page);
-  await expect(stage).toBeHidden();
-  await expect(resultAction).toBeFocused();
-  const history = page.getByTestId('presentation-history');
-  // Inspect the retained disclosures without moving focus out of the terminal dialog.
-  await page.locator('details.secondary-panels').evaluate((element: HTMLDetailsElement) => { element.open = true; });
-  await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
-  await expect(history.getByRole('listitem')).toHaveCount(6);
-  await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
-  const settled = await board.screenshot({ animations: 'disabled' });
-  await page.clock.runFor(10000);
-  expect((await board.screenshot({ animations: 'disabled' })).equals(settled)).toBe(true);
-  await finishBoardNarration(page);
-  await expect(resultAction).toBeFocused();
+test('after combat, the block stays drawn and damage shows on the cards it landed on', async ({ page }, testInfo) => {
+  const commands: Command[] = [];
+  await startCombat(page, commands);
+  await card(page, 83).click();
+  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
+  await card(page, 84).click();
+  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PRIORITY');
+  // No frame holds the block any longer; the block events since the move draw it.
+  await expect(page.locator('[data-testid=table-lines] [data-line-kind=block]')).toHaveCount(1);
+  await expect(card(page, 84).getByTestId('damage-dealt')).toHaveText('−2');
+  await expect(card(page, 83).getByTestId('damage-dealt')).toHaveText('−1');
+  await expect(card(page, 84)).toHaveAccessibleName(/dealt 2 since your last move/);
+  await expect(page.getByTestId('recent-fact')).toHaveText([
+    'Otter-Penguin blocked Badgermole Cub',
+    'Badgermole Cub dealt 1 to Otter-Penguin',
+    'Otter-Penguin dealt 2 to Badgermole Cub',
+  ]);
+  await page.screenshot({ path: testInfo.outputPath('after-combat.png') });
+  // Passing is the person's next move: the marks of the last one go.
+  await page.keyboard.press('Space');
+  await expect.poll(() => commands.length).toBe(3);
 });
-
-
-for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
-  for (const colorScheme of ['light', 'dark'] as const) {
-    test(`history respects reading and decision access ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
-      await page.setViewportSize(viewport);
-      await page.emulateMedia({ colorScheme });
-      const commands: Command[] = [];
-      // Fixed semantic pagination fixture, not a simulated workload or game.
-      const history: PresentationEvent[] = Array.from({ length: 105 }, (_, seq) => ({
-        ...structuredClone(combatSequence.events[seq % 6]) as PresentationEvent,
-        seq, from_revision: 8, to_revision: 9, suggested_ms: 80,
-      }));
-      let append = (): void => { throw new Error('Fixture not connected'); };
-      await page.routeWebSocket('**/ws/play', socket => {
-        socket.onMessage(raw => {
-          const message = JSON.parse(String(raw));
-          if (message.type === 'command') { commands.push(message.command); return; }
-          if (message.type !== 'new_game') return;
-          const frame = frameAt('attack');
-          socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
-            session_id: 'history', resume_token: 'history', recovery: {
-              ...structuredClone(boltFixture.recovery), frame,
-              presentation_tail: history, presentation_cursor: 0,
-            },
-          }));
-          append = () => {
-            const next = structuredClone(frame);
-            next.revision = 11;
-            const presentation = [{ ...structuredClone(history[0]), seq: 105, from_revision: 10, to_revision: 11 }];
-            socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update: {
-              base_revision: 10, frame: next, presentation, receipt: null,
-            }}));
-          };
-        });
-      });
-      await page.goto('/');
-      await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-      await page.clock.install({ time: 0 });
-      await page.clock.pauseAt(10000);
-      await page.getByRole('button', { name: 'Start game', exact: true }).click();
-      await page.getByText('History and settings', { exact: true }).click();
-      const panel = page.getByTestId('presentation-history');
-      await panel.locator('summary').click();
-      await expect(panel.getByRole('listitem')).toHaveCount(100);
-      await expect(panel).toContainText('6–105 of 105');
-      await expect(page.getByTestId('action-option').first()).toBeEnabled();
-      const geometry = await page.evaluate(() => {
-        const rect = (testid: string): DOMRect => document.querySelector(`[data-testid="${testid}"]`)!.getBoundingClientRect();
-        const board = rect('game-board');
-        const stage = rect('presentation-stage');
-        return { width: innerWidth, height: innerHeight, dpr: devicePixelRatio, scale: visualViewport!.scale, scroll: scrollY,
-          board: board.toJSON(), stage: stage.toJSON(), intersects: stage.left < board.right && stage.right > board.left && stage.top < board.bottom && stage.bottom > board.top };
-      });
-      expect(geometry.intersects).toBe(false);
-      expect(geometry.scroll).toBe(0);
-      expect(geometry.scale).toBe(1);
-      await testInfo.attach('history-geometry', { body: JSON.stringify(geometry), contentType: 'application/json' });
-      await page.getByRole('button', { name: 'Pause narration' }).click();
-      await panel.getByRole('button', { name: 'Earlier events' }).click();
-      const region = panel.getByRole('list', { name: 'Recorded game events' });
-      await region.focus();
-      await region.evaluate(element => { element.scrollTop = 80; });
-      const before = await region.evaluate(element => element.scrollTop);
-      append();
-      await expect(panel.getByRole('button', { name: 'Latest (1 unread)' })).toBeVisible();
-      expect(await region.evaluate(element => element.scrollTop)).toBe(before);
-      await expect(region).toBeFocused();
-      await expect(panel.locator('[data-presentation-seq="0"]')).toHaveCount(1);
-      await panel.getByRole('button', { name: /^Inspect Otter-Penguin/ }).first().click();
-      await expect(panel.getByRole('region', { name: 'History card inspection' })).toContainText('Otter-Penguin');
-      expect(commands).toEqual([]);
-      expect(await panel.getByRole('button', { name: /^Inspect / }).evaluateAll(buttons => buttons.every(button => button.scrollHeight <= button.clientHeight + 1 && button.scrollWidth <= button.clientWidth + 1))).toBe(true);
-      await panel.getByRole('button', { name: 'Close history inspection' }).click();
-      await panel.getByRole('button', { name: 'Latest (1 unread)' }).click();
-      await expect(panel).toContainText('7–106 of 106');
-      await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath('history-reading.png') });
-      await page.getByRole('button', { name: 'Finish', exact: true }).click();
-      await expect(page.getByTestId('presentation-stage')).toBeHidden();
-      await page.getByTestId('action-option').first().click();
-      await expect.poll(() => commands.length).toBe(1);
-      expect(commands[0].expected_revision).toBe(11);
-      expect(await page.evaluate(() => scrollY)).toBe(0);
-      await page.screenshot({ path: testInfo.outputPath('read-history.png') });
-    });
-  }
-}
 
 test('Replay seeks retain exactly the recorded prefix and label missing old consequences', async ({ page }) => {
   const observation = combatObservation();
@@ -541,108 +284,6 @@ test('Replay seeks retain exactly the recorded prefix and label missing old cons
 });
 
 
-test('player damage emphasizes its exact subject while choices stay focused', async ({ page }) => {
-  const event: PresentationEvent = {
-    ...combatSequence.events[0] as PresentationEvent, seq: 0,
-    kind: { kind: 'damage', source: null, target: { kind: 'player', id: 0 }, amount: 1 },
-  };
-  await installCombatAuthority(page, [], [event]);
-  await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.clock.install({ time: 0 });
-  await page.clock.pauseAt(10000);
-  await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await expect(page.locator('[data-player-id="0"]')).toHaveAttribute('data-narrated-seq', '0');
-  await expect(page.locator('[data-player-id="0"]')).toHaveCSS('outline-style', 'solid');
-  await expect(page.locator('[data-player-id="1"]')).not.toHaveAttribute('data-narrated-seq');
-  await expect(page.getByTestId('action-option').first()).toBeFocused();
-  await page.clock.runFor(1000);
-  await expect(page.locator('[data-player-id="0"]')).not.toHaveAttribute('data-narrated-seq');
-});
-
-test('partial history recovery preserves event pixels, focus and recovered unread identities', async ({ page }) => {
-  const events: PresentationEvent[] = Array.from({ length: 105 }, (_, index) => ({
-    ...structuredClone(combatSequence.events[0]) as PresentationEvent,
-    seq: 900 + index, from_revision: 8, to_revision: 9, suggested_ms: 80,
-  }));
-  events[0].kind = { kind: 'turn_started', player: 0, turn_number: 1 };
-  events[50].kind = { kind: 'turn_started', player: 0, turn_number: 2 };
-  let recover = (_events: PresentationEvent[], _match = 'combat-prompt-proof'): void => { throw new Error('Not connected'); };
-  await page.routeWebSocket('**/ws/play', socket => {
-    recover = (tail, match = 'combat-prompt-proof') => {
-      const frame = frameAt('attack');
-      frame.match_id = match;
-      if (match === 'different-viewer-scope') frame.projection.opponent.battlefield[0].name = 'Scope-only name';
-      socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
-        session_id: 'partial-history', resume_token: 'partial-history', recovery: {
-          ...structuredClone(boltFixture.recovery), frame, presentation_tail: tail, presentation_cursor: tail[0]?.seq ?? 0,
-        },
-      }));
-    };
-    socket.onMessage(raw => {
-      if (JSON.parse(String(raw)).type === 'new_game') {
-        // Each transport tail is contiguous; retained history can have intervals
-        // between tails when reconnect misses earlier events.
-        recover(events.slice(0, 1));
-        recover(events.slice(3, 50));
-        recover(events.slice(51));
-      }
-    });
-  });
-  await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.clock.install({ time: 0 });
-  await page.clock.pauseAt(10000);
-  await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await page.getByText('History and settings', { exact: true }).click();
-  const panel = page.getByTestId('presentation-history');
-  await panel.locator('summary').click();
-  const region = panel.getByRole('list', { name: 'Recorded game events' });
-  await expect(panel).toContainText('Events 950–950 unavailable');
-  await expect(region.getByRole('heading').first()).toHaveText('Turn unknown');
-  await region.evaluate(element => {
-    element.scrollTop = 200;
-    // The clock is paused, so deliver the reader's scroll before recovery can
-    // arrive and mark the recovered events as read while still following.
-    element.dispatchEvent(new Event('scroll'));
-  });
-  const anchor = await region.evaluate(element => {
-    const row = Array.from(element.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
-      .find(row => row.getBoundingClientRect().bottom > element.getBoundingClientRect().top)!;
-    return { seq: row.dataset.presentationSeq!, top: row.getBoundingClientRect().top };
-  });
-  const row = panel.locator(`[data-presentation-seq="${anchor.seq}"]`);
-  await row.getByRole('button').first().focus();
-  const top = (await row.boundingBox())!.y;
-  recover(events.slice(1, 3));
-  await expect(panel.getByRole('button', { name: 'Latest (2 unread)' })).toBeVisible();
-  recover(events.slice(50, 51));
-  await expect(panel.getByRole('button', { name: 'Latest (3 unread)' })).toBeVisible();
-  expect(Math.abs((await row.boundingBox())!.y - top)).toBeLessThan(1);
-  await expect(row.getByRole('button').first()).toBeFocused();
-  await expect(panel.locator('[data-history-gap]')).toHaveCount(0);
-  // The same recovery contains no newly available facts and cannot restart motion.
-  await page.getByRole('button', { name: 'Finish', exact: true }).click();
-  recover(events);
-  await expect(page.getByTestId('presentation-stage')).toBeHidden();
-  await expect(panel.getByRole('button', { name: 'Latest (3 unread)' })).toBeVisible();
-  await panel.getByRole('button', { name: 'Latest (3 unread)' }).click();
-  await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
-  await panel.locator('[data-presentation-seq="1004"]').getByRole('button').first().click();
-  await expect(panel.getByRole('region', { name: 'History card inspection' })).toBeFocused();
-  recover([events[3]], 'different-viewer-scope');
-  await expect(region.locator('[data-presentation-seq]')).toHaveCount(1);
-  await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
-  await expect(panel.getByRole('region', { name: 'History card inspection' })).toHaveCount(0);
-  await expect(region).toBeFocused();
-  await expect(panel).toContainText('Scope-only name');
-  await expect(panel).not.toContainText('Badgermole Cub');
-  recover([events[3]]);
-  await expect(panel).toContainText('Badgermole Cub');
-  await expect(panel).not.toContainText('Scope-only name');
-  await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => scrollY)).toBe(0);
-});
 
 test('history seek removes inspection and repositions to a preceding retained event', async ({ page }) => {
   const observation = combatObservation();

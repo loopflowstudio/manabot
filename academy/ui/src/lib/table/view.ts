@@ -305,6 +305,20 @@ export function offerPlacements(view: TableView): Map<number, number> {
   return counts;
 }
 
+/**
+ * A copy the payer would tap is told apart from its pile: each planned copy
+ * stands alone, showing its own place in the plan; the rest stay piled.
+ */
+export function unpilePlanned(piles: Pile[], planned: ReadonlyMap<number, unknown>): Pile[] {
+  return piles.flatMap(pile => {
+    const marked = pile.items.filter(item => planned.has(item.permanent.id));
+    if (!marked.length) return [pile];
+    const rest = pile.items.filter(item => !planned.has(item.permanent.id));
+    return [...marked.map(item => ({ key: `${pile.key}#plan${item.permanent.id}`, items: [item] })),
+      ...(rest.length ? [{ ...pile, items: rest }] : [])];
+  });
+}
+
 // ———————————————————————————————————————— Sizing
 
 /** Cards in hand are 5:7, as printed. */

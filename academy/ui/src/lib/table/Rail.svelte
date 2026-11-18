@@ -270,6 +270,8 @@
   .detail summary { cursor: pointer; width: max-content; }
   .detail p { margin-top: 2px; max-height: 6em; overflow-y: auto; }
   .primary { height: auto; min-height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: normal; text-align: center; }
+  .primary span { min-width: 0; }
+  .primary kbd { flex: none; opacity: 1; }
   .payment-note { margin-top: -4px; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   .secondary { width: 100%; height: auto; min-height: 32px; padding-block: 5px; justify-content: flex-start; text-align: left; white-space: normal; }

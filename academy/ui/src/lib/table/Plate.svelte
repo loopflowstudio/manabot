@@ -3,7 +3,7 @@
    * A player's plate: who they are, life, zones and floating mana. The plate
    * is the player as a target, so offers on the player outline it.
    */
-  import { manaText } from '$lib/mana';
+  import { floatingTotal, manaText, pooledManaText, spendingText } from '$lib/mana';
   import { poolSymbols } from './payment';
   import Pips from './Pips.svelte';
   import type { CardState, PlayerState } from '$lib/types';
@@ -34,7 +34,14 @@
     { key: 'Graveyard', count: Math.max(player.zone_counts.GRAVEYARD ?? 0, player.graveyard.length), cards: player.graveyard },
     { key: 'Exile', count: Math.max(player.zone_counts.EXILE ?? 0, player.exile.length), cards: player.exile },
   ]);
-  const pool = $derived(player.mana?.some(Boolean) ? manaText(player.mana) : null);
+  const total = $derived(floatingTotal(player));
+  const pool = $derived(total.some(Boolean) ? manaText(total) : null);
+  // Mana that is not plain (restricted, with an effect when spent, or lasting
+  // only to end of combat) says so beside the pips; each is part of the total.
+  const special = $derived([
+    ...(player.restricted_mana ?? []).map(part => `${manaText(part.mana)} only for ${spendingText(part)}`),
+    ...(player.pooled_mana_classes ?? []).map(pooledManaText),
+  ]);
   const label = $derived(`${name}, ${player.life} life${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
@@ -69,8 +76,9 @@
     {/each}
   </ul>
   <p class="type-caption pool" class:empty={!pool} data-testid="mana-pool">
-    {#if pool}<span class="text-ink-3" aria-hidden="true">Floating</span><span aria-hidden="true"><Pips cost={poolSymbols(player.mana ?? [])} size={15} /></span><span class="sr-only">Floating: {pool}</span>{:else}No floating mana{/if}
+    {#if pool}<span class="text-ink-3" aria-hidden="true">Floating</span><span aria-hidden="true"><Pips cost={poolSymbols(total)} size={15} /></span><span class="sr-only">Floating: {pool}</span>{:else}No floating mana{/if}
   </p>
+  {#each special as text, index (index)}<p class="type-caption pool-class" data-testid="mana-pool-class">{text}</p>{/each}
 </section>
 
 <style>
@@ -104,4 +112,5 @@
   @keyframes land { from { transform: translateY(-40%) scale(1.2); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .dealt { animation: none; } }
   .pool.empty { color: var(--text-secondary); }
+  .pool-class { color: var(--text-secondary); font-size: 11px; line-height: 14px; margin-top: -3px; }
 </style>

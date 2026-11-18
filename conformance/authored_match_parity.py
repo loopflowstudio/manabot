@@ -33,7 +33,7 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "1738c611b086d8d8d88ac899a3be726037b78300d6e972bb1d0108686f6e8192"
+AUTHORITY_SHA256 = "b2dddeea9f1732b822f3d225da42f8d2dc5ccb84f7ef01e7d5bb1011a2f2cd8e"
 TERMINAL_STATE = "1fd1fedb3ac0f737c83c9097e63f49d17cdea8668fbd8e074b38e92ce7c82421"
 
 COMMAND_COUNT = 191
