@@ -9,8 +9,44 @@ Undo is disabled. The learning outcomes are strength against the heuristic
 over updates and hours, and head-to-head strength at matched updates.
 Training performance is measured in decisions per game, decisions per second
 and seconds per update. At initialization and each evaluated checkpoint, the
-on-arm spot checks will cover how often the acting policy sees a float, chooses
-it, and leaves floated mana unspent when the pool empties.
+spot checks measure how often the acting policy sees a priority float, chooses
+it, and leaves that mana unspent when the pool empties.
+
+## Reading the checkpoint spot checks
+
+Etude's `mana_spot_checks` table keeps one row per seat and leg of the
+first fixed evaluation pair at each seating. Divide `float_offered` and
+`float_chosen` by `surfaced` to get the shares of chooser decisions.
+Offers count only actions in the policy's first 64 slots. The
+`replay_sha256` names the gzip-compressed game record in the match's blobs.
+
+`regular_expired` and `combat_expired` count units actually lost at their
+respective native pool boundaries, including automatic steps. Replacement
+effects can keep some or all of a pool. For the share of priority-floated
+mana lost, divide `priority_expired_min` and `priority_expired_max` by
+`priority_produced`. A zero denominator leaves that share undefined. Equal
+bounds give an exact count. The bounds use unit totals, so spending or
+partial retention from a mixed pool can leave a range even when color or
+a spending restriction would narrow it.
+
+### Local w64 smoke at `eaaa473837`
+
+The CPU smoke trained seed 21501 for one update per arm and evaluated
+initialization and the endpoint. All 24 legs across the six seatings
+completed and passed replay. All 48 seat rows resolved to their retained
+replays and their surfaced counts matched the recorded decision counts.
+
+Against the heuristic, the four legs gave identical counts at updates 0
+and 1 within each arm. Each row below describes one checkpoint.
+
+| Arm | Decisions offering a float | Decisions choosing a float | Priority-produced units lost | All regular units lost | Combat units lost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Off | 0 / 241 | 0 / 241 | 0 produced | 9 | 7 |
+| On | 234 / 322 (72.7%) | 128 / 322 (39.8%) | 118–119 / 128 | 129 | 0 |
+
+Local Etude runs were `312dfa8ab7b3` (off), `0c379dda01b7` (on) and
+`mana-taps-paired-654696ec2472` (evaluation). These counts exercise the
+measurement on one deck pair. The three-seed learning comparison remains open.
 
 ## Widened native treatment on 40 seeded deals
 
@@ -68,7 +104,6 @@ for training and USD1.50 for cpu32 while the earlier Lium rental retained
 a USD5.33 cap. Its statement still returned HTTP 404.
 
 The requested comparison covers legal mana taps shared by bots and people
-in Academy. At the rehearsed revision, a funded cast drops surplus tap
+in Academy. At the earlier priority-only revision, a funded cast drops surplus tap
 choices, resolution payments omit ordinary fixed-source taps, and Academy
-starts both seats with priority taps off. Training and evaluation await
-a revision that exercises those choices through the shared action space.
+starts both seats with priority taps off. The local w64 smoke above used the widened treatment.
