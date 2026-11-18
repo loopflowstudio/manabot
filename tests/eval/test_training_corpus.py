@@ -61,9 +61,7 @@ def test_corpus_queries_use_completed_games_through_update(
     (checkpoint,) = read(tmp_path, "corpus", run.name).checkpoints
     assert training_corpus(checkpoint, source=tmp_path).sql(
         "select games from corpus"
-    ).fetchall() == [
-        (1,)
-    ]
+    ).fetchall() == [(1,)]
 
     def corpus_sql(update: int, sql: str) -> list[tuple[object, ...]]:
         corpus = training_corpus(read(tmp_path, "corpus", run.name), update)
