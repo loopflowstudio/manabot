@@ -72,7 +72,15 @@ runs. DuckDB plans used hash joins on the two deck identities.
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude
    Task; this PR does not wait for it.
-2. Gate and publish for human review after the query is built. No landing,
+2. Card statistics relation (steer, Jack Heart, 2026-11-18: "didnt this
+   land?", "i do think we should play well with it"). When a run recorded
+   `managym.statistics` (RunSettings.statistics, under out/statistics/, read
+   with `managym.statistics.read_statistics`), the corpus reader exposes it
+   as one more relation keyed by run, update, deck or seat and definition
+   key; absent statistics make the relation absent and say so, never zero.
+   No new counter or game record. Old runs: "Not a problem"; value-estimate
+   trustworthiness: "agreed, leave this out".
+3. Gate and publish for human review after the query is built. No landing,
    paid run, corpus label in the checkpoint or change to exact-deck refusal.
 
 ## Review direction

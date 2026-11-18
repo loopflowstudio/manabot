@@ -11,7 +11,6 @@ from etude.train.read import RunData, read
 from pydantic import TypeAdapter
 
 from manabot.model.writer_catalog import archived_catalog, writer_catalog
-from manabot.reports.self_play import self_play_points
 from manabot.reports.update_metrics import scalar_updates
 from manabot.training.decks import CorpusDeck, corpus_decks
 from manabot.training.rollout.self_play import SelfPlayOutcome
@@ -48,21 +47,22 @@ def roster(data: RunData) -> list[CorpusDeck]:
 def games_by_update(data: RunData, through: int) -> dict[int, Counter[tuple[str, str]]]:
     """Count the play seat once in each recorded matchup, including mirrors."""
     games: dict[int, Counter[tuple[str, str]]] = {}
-    # Current writers use a table. Only historical writers need scalar decoding.
+    # Historical writers logged each count as the scalar
+    # `self_play_outcomes/<deck>/<opponent>/<seat>/<outcome>`; decode scalars
+    # only when such a series exists, since current writers log the table.
     if any(
         c.name.startswith(OUTCOME_TABLE + "/")
         for b in data.blocks
         for c in b.header.series
     ):
         for update, row in scalar_updates(data, through).items():
-            points = self_play_points(
-                [row | {"coordinates/updates": update}], window_updates=1
-            )
-            for point in points:
-                if point.position == "play":
-                    games.setdefault(update, Counter())[
-                        point.deck, point.opponent_deck
-                    ] += point.games
+            for name, count in row.items():
+                parts = name.split("/")
+                if update > 0 and len(parts) == 5 and parts[0] == OUTCOME_TABLE:
+                    if parts[3] == "play":
+                        games.setdefault(update, Counter())[parts[1], parts[2]] += int(
+                            count
+                        )
     outcomes = TypeAdapter(list[SelfPlayOutcome])
     for table in data.read_table(OUTCOME_TABLE, "updates"):
         if 0 < table.x <= through:
@@ -104,35 +104,31 @@ def training_corpus(
     if type(through) is not int or through < 0:
         raise ValueError("supply a nonnegative update")
 
-    games = games_by_update(data, through)
     cards = {row["deck"]: row["cards"] for row in roster(data)}
+    matchups = [
+        (update, play, draw, count)
+        for update, pairs in games_by_update(data, through).items()
+        for (play, draw), count in pairs.items()
+        if count
+    ]
+    if any(deck not in cards for _, play, draw, _ in matchups for deck in (play, draw)):
+        raise UnknownCoverage(f"{data.name}: an outcome names an undeclared deck")
     db = duckdb.connect()
     db.execute("create table decks(deck varchar, cards varchar[])")
     db.execute(
         "insert into decks select unnest(?::varchar[]), unnest(?::varchar[][])",
         [list(cards), list(cards.values())],
     )
+    # One columnar insert: frontier runs hold hundreds of matchups per update.
+    columns = [list(column) for column in zip(*matchups)] or [[], [], [], []]
     db.execute(
         "create table matchups(update_number bigint, play varchar, draw varchar, games bigint)"
     )
-    for update, pairs in games.items():
-        if not 0 < update <= through or not pairs:
-            continue
-        if any(deck not in cards for pair in pairs for deck in pair):
-            raise UnknownCoverage(
-                f"{data.name}: outcome at {update} names an undeclared deck"
-            )
-        db.execute(
-            "insert into matchups select ?, unnest(?::varchar[]), unnest(?::varchar[]), unnest(?::bigint[])",
-            [
-                update,
-                [p for p, _ in pairs],
-                [d for _, d in pairs],
-                list(pairs.values()),
-            ],
-        )
+    db.execute(
+        "insert into matchups select unnest(?::bigint[]), unnest(?::varchar[]), unnest(?::varchar[]), unnest(?::bigint[])",
+        columns,
+    )
     return db.sql("""
         select m.*, p.cards as play_cards, d.cards as draw_cards
         from matchups m join decks p on p.deck = m.play join decks d on d.deck = m.draw
-        where games > 0
     """)

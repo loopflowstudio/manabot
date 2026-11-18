@@ -132,9 +132,7 @@ def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
 def validate_policy_input(agent: Any, binding: dict) -> None:
     """Check the semantic program input required by the recorded binding."""
     if _binds_world(binding) and agent.config.world != managym.WORLD_SETUP:
-        raise ValueError(
-            "checkpoint requires the complete semantic program input"
-        )
+        raise ValueError("checkpoint requires the complete semantic program input")
 
 
 def _input_binding(observation_space: Any) -> dict:

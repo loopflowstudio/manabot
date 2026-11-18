@@ -75,9 +75,7 @@ def model_interface(
         return None
     model = ModelConfig.from_checkpoint(checkpoint["hypers"]["agent_hypers"])
     if model.world != managym.WORLD_SETUP:
-        raise ValueError(
-            "checkpoint requires the complete semantic program input"
-        )
+        raise ValueError("checkpoint requires the complete semantic program input")
     expected = deck_world(space)
     location = written_at(checkpoint)
     for key in (
