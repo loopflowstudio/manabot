@@ -99,41 +99,29 @@ art keeps the procedural card treatment, `ACADEMY_CARD_ART=off` disables
 fetching, and artist credits are in the footer. See
 [card art](../../docs/academy.md#card-art).
 
-The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
-draw**, or **Decline Learn**. The first two modes show card previews and a
-Back control; only choosing its explicit offer commits the choice. **Start game** repeats
+The Learn demo opens `/?demo=learn`: click a Lesson in the tray to take it, an
+outlined hand card to discard it and draw, or **Decline Learn**. **Start game** repeats
 the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
-The table reads **Who decides / What is happening / Your choices**. In **Play**,
-select a hand card, then activate its labeled action; an unambiguous play/cast
-can also be committed by dragging into the play area. Hover, focus and **Inspect
-card** retain inspection without submission. **Inspect**, the initial default,
-keeps card inspection and the complete legal-offer workflow. Switching modes
-clears uncommitted selection without changing the game or priority automation.
-See [Play and Inspect controls](../../docs/academy.md#play-and-inspect-modes)
-for keyboard, drag cancellation, combat and recovery behavior.
-Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
-is displayed while a card or text filter narrows navigation; **Show all** and
-**Clear filter** restore the full set. In live play at laptop widths and heights,
-the board sits beside independently scrolling offers; instruction, legal count
-and filter navigation stay available. Long instructions have their own scroll
-area. **History and settings** opens decision details, consequences and
-stop configuration while the pending decision stays available. **Edit stops**
-beside the choices opens **Your turn** / **Opponent turn** settings; changing
-them may immediately advance priority. See
+Live play renders the table (`academy/ui/src/lib/table/`): one window with the
+board, the hand and a rail holding the stack, the decision and every legal
+offer by number. `tableView` places each offer exactly once in that list and
+at least once on the card or player it acts on, as a prompt button (pass, pay,
+declines and combat answers without another creature) or in a tray for subjects
+the table does not draw. A card with one offer commits it on click; several
+open at the card. Number keys, Space (primary) and F6 act from the keyboard. Rows size
+their cards with `fitRow`, piling identical permanents and wrapping before
+scrolling. See [playing on the table](../../docs/academy.md#playing-on-the-table).
+Priority stops are in the table's menu; see
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
-stack responses and F6. Narrow or short windows stack
-the board above choices, with links between them. History and table tools remain contextual. Recorded policy/search evidence is
-attached to the decision it describes; the live table has no example Advice panel. Native card
-types group creatures, lands, other
-permanents and artifact tokens into bounded battlefield lanes; dense lanes
-compact their cards, then offer explicit paging beside their headings. Occupied
-lanes precede compact empty counts and secondary-zone disclosures. Focusing a legal offer reveals
-its objects' pages without submitting a choice. Public mana
-pools, spending restrictions and chooser-only inspected cards come from native
-observations. Historical frames without those fields say details were not recorded.
+stack responses and F6. Recorded policy/search evidence is attached to the
+decision it describes; the live table has no example Advice panel. Replay,
+Watch and Study keep the earlier lane board and choice panel until they move to
+the table. Public mana pools, spending restrictions and chooser-only inspected
+cards come from native observations. Historical frames without those fields say
+details were not recorded.
 
 Academy uses native trivial-decision skipping, like every game runner: the
 engine resolves sole legal actions for either seat, so no forced prompt reaches

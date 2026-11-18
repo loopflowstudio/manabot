@@ -100,6 +100,8 @@
   --info-text: #31599a;
   --neutral: #6a5f86;
   --neutral-text: #554b6e;
+  /* The table's one interaction colour: an outline on anything a legal offer acts on. */
+  --legal: #2b68b0;
 
   /* Washes are tokens, not arithmetic: each family's container tint is
      pre-mixed with the panel ground per mode, so a wash can never silently
@@ -168,6 +170,7 @@
     --error-text: #de9181;
     --info-text: #8ab8e8;
     --neutral-text: #b4a9d1;
+    --legal: #6aa4e6;
     /* Washes lift by lamplight: 10% reads on parchment but vanishes on umber. */
     --wash-strength: 26%;
     --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.22), 0 16px 40px rgb(0 0 0 / 0.16);
