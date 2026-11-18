@@ -247,15 +247,14 @@ as `training_corpus(checkpoint, source=storage)` and uses its recorded update.
 from pathlib import Path
 
 from etude.train.read import read
-from manabot.eval.training_corpus import roster, training_corpus
+from manabot.eval.training_corpus import training_corpus
 
 storage = Path("runs")
 run = read(storage, "tla_frontier", "59718fe34945")
 # A DuckDB connection holding the corpus, settings and deck_cards relations.
 corpus = training_corpus(run, through=1)
-decks = roster(run)
-print("Roster decks and distinct card keys:", len(decks),
-      len({key for deck in decks for key in deck["cards"]}))
+print("Deck entries and distinct card keys:", corpus.sql(
+    "select count(distinct entry), count(distinct card) from deck_cards").fetchall())
 
 print("Completed games:", corpus.sql("select coalesce(sum(games), 0) from corpus").fetchall())
 print("Observed decks:", corpus.sql("""
@@ -304,15 +303,15 @@ print(corpus.sql("""
 print(corpus.sql("select run, entry, deck, board, card, copies from deck_cards order by all").fetchall())
 ```
 
-Self-play and the minimal loop write these tables at update zero. A roster
-can contain several entries with the same deck identity. Older runs use their declared observation
+Self-play and the minimal loop write these tables at update zero. A run's
+`deck_cards` can hold several entries with the same deck identity. Older runs use their declared observation
 settings and values shared by every declared stage. They have NULL for
 unrecorded or varying settings.
 Card membership includes main decks and sideboards.
-For historical scalar outcomes, the roster comes from the declared deck source
+For historical scalar outcomes, the `deck_cards` entries come from the declared deck source
 and card keys come from the writer's catalog. An explicitly logged empty
 outcome table records zero completed games. An update missing its outcomes
-raises `UnknownCoverage`, as does a missing roster. With Etude SDK 0.4.1 the
+raises `UnknownCoverage`, as do missing deck entries. With Etude SDK 0.4.1 the
 table reader loads all selected table artifacts in the supplied history, even
 when the requested update is early.
 

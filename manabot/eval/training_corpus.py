@@ -1,11 +1,11 @@
 """Query completed training games by update, ordered deck pair and card identity."""
 
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Iterator
 from itertools import batched
 import json
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
 import duckdb
 from etude.checkpoints import CheckpointRecord
@@ -33,21 +33,6 @@ def bound_catalog(digest: str, location: str, current: WriterCatalog) -> WriterC
         if current["world_digest"] == digest
         else archived_catalog(digest, location)
     )
-
-
-class CorpusDeck(TypedDict):
-    deck: str
-    cards: list[str]
-
-
-def roster(data: RunData) -> list[CorpusDeck]:
-    """Resolve all declared population entries, including decks never played."""
-    cards: dict[tuple[int, str], set[str]] = defaultdict(set)
-    for row in deck_rows(data):
-        cards[row["entry"], row["deck"]].add(row["card"])
-    return [
-        CorpusDeck(deck=deck, cards=sorted(keys)) for (_, deck), keys in cards.items()
-    ]
 
 
 def deck_rows(data: RunData) -> list[DeckCard]:

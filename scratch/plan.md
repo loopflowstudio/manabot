@@ -82,19 +82,10 @@ gave 12 passed, 1 skipped. Nothing wider was run locally; CI owns the suite.
 
 ## Remaining work
 
-One small build remains, from the concept review of 2026-11-18 (sixth pass,
-`scratch/concept-review.html`, question 46):
-
-0. Delete `roster` and `CorpusDeck` from `manabot/eval/training_corpus.py`.
-   Since every run supplies `deck_cards`, the Python roster reader is a
-   second reader of the same rows and its only caller is the guide. In
-   `docs/evaluation.md` drop the import and `decks = roster(run)`, and print
-   the same two numbers from the connection:
-   `corpus.sql("select count(distinct entry), count(distinct card) from deck_cards")`
-   (frontier Small must still give 134 and 262; local 2 and 29). Reword the
-   two later sentences so "roster" means the run's `deck_cards` entries, not a
-   function. `deck_rows` stays as the one deck reader. Then run
-   `uv run --extra dev --extra evaluation pytest tests/eval/test_training_corpus.py -q`.
+Nothing remains to build in this PR. The sixth concept review's leftover
+(question 46) is done: `roster` and `CorpusDeck` are deleted, `deck_rows` is
+the one deck reader, and the guide prints its deck-entry and card counts from
+`deck_cards`.
 
 1. Etude follow-up, not blocking: its evaluation query database indexes
    `training_checkpoints` only (question 34). Once Etude ingests selected
