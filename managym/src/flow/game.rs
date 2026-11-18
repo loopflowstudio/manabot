@@ -1,7 +1,7 @@
 // game.rs
 // Core game structs: GameState and Game.
 
-use crate::state::player::ManaTaps;
+use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -751,7 +751,8 @@ pub struct Game {
     pub(crate) decision_memory: [crate::agent::decision_memory::DecisionLog; 2],
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
     pub skip_trivial: bool,
-    pub mana_taps: [ManaTaps; 2],
+    pub mana_floats: [ManaFloats; 2],
+    pub mana_payment: [ManaPayment; 2],
     pub current_action_space: Option<ActionSpace>,
     /// Monotonic identity for the currently published external decision.
     ///
@@ -784,7 +785,8 @@ impl Clone for Game {
             decision_memory_enabled: false,
             decision_memory_include_own: self.decision_memory_include_own,
             skip_trivial: self.skip_trivial,
-            mana_taps: self.mana_taps,
+            mana_floats: self.mana_floats,
+            mana_payment: self.mana_payment,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,
             semantic_object_candidates: self.semantic_object_candidates.clone(),

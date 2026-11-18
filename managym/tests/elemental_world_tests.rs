@@ -1,7 +1,7 @@
 // Full Elemental admission: exact rosters, complete native coherence and bounded games.
 use managym::{
     cards::setups::authored_setup,
-    state::player::{GameSetup, ManaTaps},
+    state::player::{GameSetup, ManaFloats},
     Game,
 };
 
@@ -16,7 +16,7 @@ fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
     ];
     let mut env = managym::agent::env::Env::new(2165384, true, false, false);
     let mut setup = GameSetup::from(configs);
-    setup.mana_taps = [ManaTaps::Usable; 2];
+    setup.mana_floats = [ManaFloats::Usable; 2];
     env.reset(setup).unwrap();
     // Includes the retained deliberate green Prism float and manual source decisions.
     let prefix = [

@@ -118,7 +118,7 @@ def corpus() -> UniformDecks:
 
 
 class Arm(StrictModel):
-    taps: managym.ManaTaps
+    taps: managym.ManaFloats
     device: Literal["cpu", "cuda"] = "cuda"
     updates: int = 50
 
@@ -133,7 +133,7 @@ def settings(arm: Arm) -> SelfPlay:
     local = arm.device == "cpu"
     return SelfPlay(
         deck_source=corpus(),
-        observation=OBSERVATION.model_copy(update={"mana_taps": arm.taps}),
+        observation=OBSERVATION.model_copy(update={"mana_floats": arm.taps}),
         model=model("w64"),
         learning=learning("w64"),
         behavior="current-self",
@@ -210,7 +210,7 @@ def deals() -> Deals:
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     """Compare complete seed pairs. Etude smoke supplies one seed per distinct job."""
     names = {Arm(taps=taps).name: taps for taps in ("off", "usable")}
-    runs: dict[tuple[int, managym.ManaTaps], TrainingRunSummary] = {}
+    runs: dict[tuple[int, managym.ManaFloats], TrainingRunSummary] = {}
     for run in state.runs:
         if run.launch not in names or run.seed not in SEEDS or run.seed is None:
             continue
@@ -251,10 +251,10 @@ def raw_export(run: TrainingRunSummary, ema: CheckpointRecord) -> CheckpointReco
 
 
 def paired_evaluation(
-    runs: dict[tuple[int, managym.ManaTaps], TrainingRunSummary], *, raw: bool
+    runs: dict[tuple[int, managym.ManaFloats], TrainingRunSummary], *, raw: bool
 ) -> EvalJob:
     exports: list[CheckpointRecord] = []
-    checkpoints: dict[tuple[int, managym.ManaTaps], dict[int, CheckpointPlayer]] = {}
+    checkpoints: dict[tuple[int, managym.ManaFloats], dict[int, CheckpointPlayer]] = {}
     for key, run in runs.items():
         records: Sequence[CheckpointRecord] = run.checkpoints
         if raw:
@@ -572,13 +572,23 @@ def random_deals() -> None:
             rng.getrandbits(32)
         players = [deck.player() for deck in rng.sample(decks, 2)]
         deals.append((players, rng.getstate()))
-    for mode in ("off", "always", "usable"):
+    for payment, mode in (
+        ("manual", "off"),
+        ("manual", "all"),
+        ("manual", "usable"),
+        ("auto", "off"),
+        ("auto", "usable"),
+    ):
         steps = skipped = offered = chosen = 0
         start = perf_counter()
         for game, (players, state) in enumerate(deals):
             rng.setstate(state)
             env = managym.Env(seed=1000 + game)
-            obs, _ = env.reset(managym.GameSetup(players, mana_taps=(mode, mode)))
+            obs, _ = env.reset(
+                managym.GameSetup(
+                    players, mana_floats=(mode, mode), mana_payment=(payment, payment)
+                )
+            )
             for _ in range(5000):
                 space = obs.action_space
                 actions = space.actions
@@ -603,7 +613,7 @@ def random_deals() -> None:
             skipped += env.skip_trivial_count()
         elapsed = perf_counter() - start
         print(
-            f"{mode=} {steps=} {skipped=} {offered=} {chosen=} {elapsed=:.3f}",
+            f"{payment=} {mode=} {steps=} {skipped=} {offered=} {chosen=} {elapsed=:.3f}",
             flush=True,
         )
 
@@ -618,9 +628,9 @@ def priority_check_timing() -> None:
         differences = []
         for seed in range(40):
             times = {}
-            for mode in ("always", "usable") if seed % 2 else ("usable", "always"):
+            for mode in ("all", "usable") if seed % 2 else ("usable", "all"):
                 env = managym.Env(seed=1000 + seed)
-                env.reset(managym.GameSetup(decks, mana_taps=(mode, mode)))
+                env.reset(managym.GameSetup(decks, mana_floats=(mode, mode)))
                 env.scenario_clear_hand(0)
                 # A legal land drop keeps even the no-spend fixture at priority.
                 env.scenario_force_card_in_hand(0, "Mountain")
@@ -635,8 +645,8 @@ def priority_check_timing() -> None:
                 assert sum(
                     a.action_type == managym.ActionEnum.TAP_FOR_COST
                     for a in obs.action_space.actions
-                ) == (3 if spend or mode == "always" else 0)
-            differences.append((times["usable"] - times["always"]) * 1e6)
+                ) == (3 if spend or mode == "all" else 0)
+            differences.append((times["usable"] - times["all"]) * 1e6)
         print(
             f"{spend=} paired median usable minus everywhere {median(differences):.2f} us"
         )

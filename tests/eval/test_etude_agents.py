@@ -206,9 +206,9 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
         np.testing.assert_allclose(joined, single, atol=1e-6, rtol=1e-5)
 
 
-@pytest.mark.parametrize("mode", ["always", "usable"])
+@pytest.mark.parametrize("mode", ["all", "usable"])
 def test_checkpoint_priority_taps_follow_seats_through_replay(
-    tmp_path: Path, mode: managym.ManaTaps
+    tmp_path: Path, mode: managym.ManaFloats
 ) -> None:
     torch.manual_seed(385)
     matchup = DeckMatchup(
@@ -226,7 +226,11 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(
     registrations = {}
     agents = {}
     for name, taps in (("tap-on", mode), ("tap-off", "off")):
-        space = ObservationSpace(ObservationConfig(mana_taps=taps))
+        space = ObservationSpace(
+            ObservationConfig(
+                mana_floats=taps, mana_payment="auto" if name == "tap-on" else "manual"
+            )
+        )
         model = ActorCritic(
             space, ModelConfig(world="world", hidden_dim=8, num_attention_heads=2)
         )
@@ -270,8 +274,10 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(
             metadata = record.context["evaluation"]
             seat = metadata["seat_players"].index("tap-on")
             pair = (mode if seat == 0 else "off", mode if seat == 1 else "off")
-            assert tuple(metadata["match_hypers"]["mana_taps"]) == pair
-            assert record.games[0].setup().mana_taps == pair
+            assert tuple(metadata["match_hypers"]["mana_floats"]) == pair
+            assert record.games[0].setup().mana_floats == pair
+            assert record.games[0].setup().mana_payment[seat] == "auto"
+            assert record.games[0].setup().mana_payment[1 - seat] == "manual"
             replay = walk(record)
             offered = {
                 choice.observation.agent.player_index
@@ -282,12 +288,12 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(
                 )
             }
             # Basic-land decks have no payments; every offered tap is at priority.
-            assert offered == ({seat} if mode == "always" else set())
+            assert offered == ({seat} if mode == "all" else set())
             assert replay.stop is not None and replay.stop.status == "complete"
 
             # The native commitments still replay if only the outer match metadata
             # is changed. Verification must catch the conflicting seat assignment.
-            metadata["match_hypers"]["mana_taps"] = list(reversed(pair))
+            metadata["match_hypers"]["mana_floats"] = list(reversed(pair))
             assert not replay_games(
                 [record.model_dump(mode="json", by_alias=True)]
             ).passed

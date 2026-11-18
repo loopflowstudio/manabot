@@ -229,8 +229,12 @@ def _replay_record(
         counts["trace_mismatches"] += 1
     if "match_hypers" in game:
         seats = record.games[0].players
-        offered = tuple(player.mana_taps for player in seats)
-        if offered != tuple(game["match_hypers"].get("mana_taps", ("off", "off"))):
+        if tuple(p.mana_payment for p in seats) != tuple(
+            game["match_hypers"].get("mana_payment", ("manual", "manual"))
+        ):
+            counts["trace_mismatches"] += 1
+        offered = tuple(player.mana_floats for player in seats)
+        if offered != tuple(game["match_hypers"].get("mana_floats", ("off", "off"))):
             counts["trace_mismatches"] += 1
     if game["decisions"] != original["decisions"]:
         counts["trace_mismatches"] += 1

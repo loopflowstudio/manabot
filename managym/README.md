@@ -688,19 +688,19 @@ seat [asks for it](#mana-taps-at-priority-and-during-payment).
 The seat chooses when to offer mana abilities at priority, including sources
 with a choice of colors. With `off`, Kyoshi Village can pay for a green or
 white spell during payment and can activate its draw ability at priority.
-The option is per seat and off by default:
+Two independent settings follow each seat. `mana_payment="manual"` offers useful source taps and automatic completion. With `"auto"`, the engine chooses how to fund each accepted cost, including sources, their colors and the units to spend. Optional costs still offer pay or decline. A deliberately floated source retains its output choice. Both payment modes support all three float levels.
 
 ```python
 import managym
 
-setup = managym.GameSetup([first, second], mana_taps=("always", "off"))
+setup = managym.GameSetup([first, second], mana_floats=("all", "off"), mana_payment=("auto", "manual"))
 ```
 
-Use `mana_taps=("usable", "off")` to offer priority floats when a listed action can
+Use `mana_floats=("usable", "off")` to offer priority floats when a listed action can
 spend mana, the activation has additional costs or effects, or tapping that
 source can trigger an ability.
 The engine inspects the listed actions without checking individual mana colors.
-Both enabled modes give the same choices during payments.
+Manual payment with usable or all floats also offers extra payment-time taps.
 
 With two untapped Forests and a creature spell in hand, the first seat's
 priority space is what it was, followed by one tap per source:

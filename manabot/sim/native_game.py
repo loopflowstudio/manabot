@@ -43,7 +43,7 @@ from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration, require_open_decklists
 from manabot.sim.replay import replay_environment
 from manabot.sim.supervision import failure_record, is_game_error
-from managym import ManaTaps
+from managym import ManaFloats, ManaPayment
 from managym.bots import BeliefSummary
 from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
@@ -135,7 +135,8 @@ def execute_game(
     )
     try:
         built = {}
-        tap_players: dict[str, ManaTaps] = {}
+        payment_players: dict[str, ManaPayment] = {}
+        tap_players: dict[str, ManaFloats] = {}
         in_child = _InChildPlayers(backend_factory)
         match = (
             MatchConfig.model_validate(game["match_hypers"])
@@ -164,7 +165,8 @@ def execute_game(
                 registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
                 and player_space is not None
             ):
-                tap_players[responsible] = player_space.encoder.config.mana_taps
+                payment_players[responsible] = player_space.encoder.config.mana_payment
+                tap_players[responsible] = player_space.encoder.config.mana_floats
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -175,13 +177,21 @@ def execute_game(
             first, second = game["seat_players"]
             match = match.model_copy(
                 update={
-                    "mana_taps": (
+                    "mana_payment": (
+                        payment_players.get(first, "manual"),
+                        payment_players.get(second, "manual"),
+                    ),
+                    "mana_floats": (
                         tap_players.get(first, "off"),
                         tap_players.get(second, "off"),
-                    )
+                    ),
                 }
             )
             resolved = match.model_dump(mode="json")
+            resolved.update(
+                mana_payment=list(match.mana_payment),
+                mana_floats=list(match.mana_floats),
+            )
             if resolved != game["match_hypers"]:
                 game["match_hypers"] = resolved
                 send(("match", resolved))

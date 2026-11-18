@@ -73,12 +73,18 @@ class GameConfig:
     villain_source: dict[str, Any] | None = None
 
     # The human controller owns this mode, independent of the chosen seat.
-    mana_taps: managym.ManaTaps = "off"
+    mana_payment: managym.ManaPayment = "manual"
+    mana_floats: managym.ManaFloats = "off"
 
     def __post_init__(self) -> None:
         if type(self.human_seat) is not int or self.human_seat not in (0, 1):
             raise ValueError("human_seat must be 0 or 1.")
-        self.mana_taps = TypeAdapter(managym.ManaTaps).validate_python(self.mana_taps)
+        self.mana_payment = TypeAdapter(managym.ManaPayment).validate_python(
+            self.mana_payment
+        )
+        self.mana_floats = TypeAdapter(managym.ManaFloats).validate_python(
+            self.mana_floats
+        )
         self.mirror = TypeAdapter(SearchConfig | None).validate_python(self.mirror)
         if self.decklists == "closed" and self.mirror is not None:
             raise ValueError("Search requires open decklists.")
@@ -86,8 +92,10 @@ class GameConfig:
     def to_record(self) -> dict[str, Any]:
         """Omit default-off mana offers from retained game configuration."""
         config = asdict(self)
-        if self.mana_taps == "off":
-            del config["mana_taps"]
+        if self.mana_payment == "manual":
+            del config["mana_payment"]
+        if self.mana_floats == "off":
+            del config["mana_floats"]
         return config
 
     def to_rust(self) -> managym.GameSetup:
@@ -96,10 +104,22 @@ class GameConfig:
         return managym.GameSetup(
             configs if self.human_seat == 0 else list(reversed(configs)),
             decklists=self.decklists,
-            mana_taps=(
-                self.mana_taps if self.human_seat == 0 else "off",
-                self.mana_taps if self.human_seat == 1 else "off",
-            ),
+            mana_payment=self.payment_by_seat(),
+            mana_floats=self.floats_by_seat(),
+        )
+
+    def payment_by_seat(self) -> tuple[managym.ManaPayment, managym.ManaPayment]:
+        return (
+            (self.mana_payment, "manual")
+            if self.human_seat == 0
+            else ("manual", self.mana_payment)
+        )
+
+    def floats_by_seat(self) -> tuple[managym.ManaFloats, managym.ManaFloats]:
+        return (
+            (self.mana_floats, "off")
+            if self.human_seat == 0
+            else ("off", self.mana_floats)
         )
 
     def _role_configs(self) -> list[managym.PlayerConfig]:
@@ -227,6 +247,8 @@ class Trace:
         else:
             record["recording_import"] = asdict(self.recording_import)
         record["config"] = self.config.to_record()
+        record["mana_payment"] = list(self.config.payment_by_seat())
+        record["mana_floats"] = list(self.config.floats_by_seat())
         record["events"] = [
             {
                 **{item.name: getattr(event, item.name) for item in fields(event)},

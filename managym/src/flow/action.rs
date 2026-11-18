@@ -16,7 +16,7 @@ use crate::{
         card::ActivationZone,
         game_object::{CardId, ObjectId, PlayerId, PublicId},
         mana::Mana,
-        player::ManaTaps,
+        player::ManaFloats,
         zone::ZoneType,
     },
 };
@@ -258,12 +258,12 @@ impl Game {
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
         let _scan = self.board_scan();
         let _payments = self.payment_scan();
-        let mode = self.mana_tap_mode(player);
+        let mode = self.mana_float_mode(player);
         let mut spell_spends = false;
         let mut actions = Vec::new();
         for card in self.priority_candidate_cards(player) {
             if let Some((action, mana_value)) = self.priority_action_for_card(player, card) {
-                if mode == ManaTaps::Usable && !spell_spends {
+                if mode == ManaFloats::Usable && !spell_spends {
                     if let Action::CastSpell { object, .. } = action {
                         spell_spends = mana_value > 0
                             || self.cast_needs_x_announcement(
@@ -287,8 +287,8 @@ impl Game {
         actions.extend(self.priority_activate_ability_actions(player, mode, &mut floats));
         actions.push(Action::PassPriority { player });
         match mode {
-            ManaTaps::Off => {}
-            ManaTaps::Usable
+            ManaFloats::Off => {}
+            ManaFloats::Usable
                 if !spell_spends
                     && !actions
                         .iter()
@@ -297,7 +297,7 @@ impl Game {
             {
                 self.usable_floats_without_spend(player, &mut floats);
             }
-            _ => self.append_mana_taps(player, &mut floats),
+            _ => self.append_mana_floats(player, &mut floats),
         }
         actions.extend(floats);
         actions
@@ -335,7 +335,7 @@ impl Game {
     fn priority_activate_ability_actions(
         &self,
         player: PlayerId,
-        mode: ManaTaps,
+        mode: ManaFloats,
         floats: &mut Vec<Action>,
     ) -> Vec<Action> {
         let mut actions = Vec::new();
@@ -608,7 +608,7 @@ impl Game {
                 if self.can_pay_mana_cost(*player, &cost) {
                     actions.push(Action::PayCost { player: *player });
                 }
-                self.append_mana_taps(*player, &mut actions);
+                self.append_mana_floats(*player, &mut actions);
                 Some(ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::PayOrNot,
@@ -877,7 +877,7 @@ impl Game {
                 if self.can_pay_mana_cost(*player, &owed) {
                     actions.push(Action::PayCost { player: *player });
                 }
-                self.append_mana_taps(*player, &mut actions);
+                self.append_mana_floats(*player, &mut actions);
                 let focus = match payment.as_ref() {
                     Payment::Activation {
                         source: ActivationSource::Permanent(permanent),

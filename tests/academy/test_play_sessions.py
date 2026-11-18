@@ -77,7 +77,7 @@ def test_native_seats_complete_record_reconstruct_and_study(
     assert frame["prompt"]["actor"] == seat
     assert game.trace is not None
     configs = game.trace.config.to_rust()
-    assert configs.mana_taps == ("off", "off")
+    assert configs.mana_floats == ("off", "off")
     assert configs[seat].decklist == CONFIG["hero_deck"]
     finish(game)
     payload = game.attempt_store.load(game.match_id)
@@ -103,25 +103,27 @@ def test_native_seats_complete_record_reconstruct_and_study(
 
 def test_mana_tap_setup_records_default_off_identically_and_rejects_flags() -> None:
     omitted = server._parse_game_config(CONFIG).to_record()
-    assert "mana_taps" not in omitted
+    assert "mana_floats" not in omitted and "mana_payment" not in omitted
     assert (
-        server._parse_game_config({**CONFIG, "mana_taps": "off"}).to_record() == omitted
+        server._parse_game_config({**CONFIG, "mana_floats": "off"}).to_record()
+        == omitted
     )
     for flag in (True, False):
         with pytest.raises(ValueError):
-            server._parse_game_config({**CONFIG, "mana_taps": flag})
+            server._parse_game_config({**CONFIG, "mana_floats": flag})
 
 
 @pytest.mark.parametrize("seat", [0, 1])
-@pytest.mark.parametrize("mode", ["always", "usable"])
+@pytest.mark.parametrize("mode", ["all", "usable"])
 def test_mana_tap_survives_reconnect_and_records_source(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seat: int, mode: managym.ManaTaps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seat: int, mode: managym.ManaFloats
 ) -> None:
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
     config = {
         **CONFIG,
         "human_seat": seat,
-        "mana_taps": mode,
+        "mana_floats": mode,
+        "mana_payment": "auto",
         "hero_deck": {"Island": 8, "Consider": 4}
         if mode == "usable"
         else {"Island": 16},
@@ -131,7 +133,8 @@ def test_mana_tap_survives_reconnect_and_records_source(
         with client.websocket_connect("/ws/play") as ws:
             ws.send_json({"type": "new_game", "config": config})
             start = settled_message(ws)
-            assert start["play_session"]["draft"]["mana_taps"] == mode
+            assert start["play_session"]["draft"]["mana_floats"] == mode
+            assert start["play_session"]["draft"]["mana_payment"] == "auto"
             frame = start["recovery"]["frame"]
             land = _offer(frame, action_type="PRIORITY_PLAY_LAND")
             ws.send_json({"type": "command", "command": _command(frame, land, "land")})
@@ -168,7 +171,11 @@ def test_mana_tap_survives_reconnect_and_records_source(
             payload = game.attempt_store.load(game.match_id)
             assert payload is not None
             recorded = trace.GameConfig(**payload["config"])
-            assert recorded.to_rust().mana_taps == (
+            assert payload["mana_payment"] == list(recorded.to_rust().mana_payment)
+            assert payload["mana_floats"] == list(recorded.to_rust().mana_floats)
+            assert recorded.to_rust().mana_payment[seat] == "auto"
+            assert recorded.to_rust().mana_payment[1 - seat] == "manual"
+            assert recorded.to_rust().mana_floats == (
                 mode if seat == 0 else "off",
                 mode if seat == 1 else "off",
             )

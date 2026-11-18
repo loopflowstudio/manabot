@@ -157,17 +157,32 @@ impl DecklistMode {
     }
 }
 
-/// Additional fixed-source mana offers for the chooser.
+/// Who chooses sources and colors after a seat commits to a mana payment.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ManaTaps {
+pub enum ManaPayment {
+    Auto,
+    #[default]
+    Manual,
+}
+
+impl ManaPayment {
+    pub fn is_manual(&self) -> bool {
+        *self == Self::Manual
+    }
+}
+
+/// Priority float offers for the chooser.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ManaFloats {
     #[default]
     Off,
     Usable,
-    Always,
+    All,
 }
 
-impl ManaTaps {
+impl ManaFloats {
     pub fn is_off(&self) -> bool {
         *self == Self::Off
     }
@@ -178,7 +193,8 @@ impl ManaTaps {
 pub struct GameSetup {
     pub players: Vec<PlayerConfig>,
     pub decklists: DecklistMode,
-    pub mana_taps: [ManaTaps; 2],
+    pub mana_floats: [ManaFloats; 2],
+    pub mana_payment: [ManaPayment; 2],
 }
 
 impl From<Vec<PlayerConfig>> for GameSetup {
@@ -186,7 +202,8 @@ impl From<Vec<PlayerConfig>> for GameSetup {
         Self {
             players,
             decklists: DecklistMode::Open,
-            mana_taps: [ManaTaps::Off; 2],
+            mana_floats: [ManaFloats::Off; 2],
+            mana_payment: [ManaPayment::Manual; 2],
         }
     }
 }

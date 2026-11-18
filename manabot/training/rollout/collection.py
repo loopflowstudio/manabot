@@ -539,8 +539,13 @@ def open_collector(
         raise ValueError(
             "adaptive collection requires both-seat current-self, one producer and fixed roots"
         )
-    taps = observation_space.encoder.config.mana_taps
-    match = Match(match.config.model_copy(update={"mana_taps": (taps, taps)}))
+    taps = observation_space.encoder.config.mana_floats
+    payment = observation_space.encoder.config.mana_payment
+    match = Match(
+        match.config.model_copy(
+            update={"mana_floats": (taps, taps), "mana_payment": (payment, payment)}
+        )
+    )
     sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
     assignments = [sampler.draw() for _ in range(num_envs)] if sampler else []
     reverse_cells = _reverse_cells(adaptive) if adaptive is not None else []
@@ -768,7 +773,8 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
                 MatchConfig.from_players(
                     *setups[row],
                     decklists=setups[row].decklists,
-                    mana_taps=setups[row].mana_taps,
+                    mana_floats=setups[row].mana_floats,
+                    mana_payment=setups[row].mana_payment,
                 )
             )
     for row in rows:
@@ -1169,7 +1175,12 @@ def _assigned_match(collector: Collector, assignment: Assignment) -> Match:
     assert collector._sampler is not None
     config = collector._sampler.config.cells[assignment.cell]
     match = Match(
-        config.model_copy(update={"mana_taps": collector.match.config.mana_taps})
+        config.model_copy(
+            update={
+                "mana_floats": collector.match.config.mana_floats,
+                "mana_payment": collector.match.config.mana_payment,
+            }
+        )
     )
     return match if assignment.seat == 0 else match.swapped()
 

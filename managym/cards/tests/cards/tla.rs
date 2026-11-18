@@ -420,17 +420,17 @@ fn airbend_permission_ends_when_the_card_leaves_exile() {
 
 #[test]
 fn kyoshi_village_priority_levels_preserve_both_payment_routes() {
-    use managym::state::player::ManaTaps;
+    use managym::state::player::ManaFloats;
     for manual in [false, true] {
         let mut s = five_color_unfunded_setup(&["Kyoshi Village", "Healer's Hawk"]);
         let land = s.force_permanent_on_battlefield(0, "Kyoshi Village");
-        for (mode, offered) in [(ManaTaps::Always, true), (ManaTaps::Usable, false)] {
-            s.game_mut().mana_taps[0] = mode;
+        for (mode, offered) in [(ManaFloats::All, true), (ManaFloats::Usable, false)] {
+            s.game_mut().mana_floats[0] = mode;
             assert_eq!(offers_ability(&mut s, land, 1), offered);
         }
         let hawk = move_to_hand(&mut s, "Healer's Hawk");
         assert!(offers_ability(&mut s, land, 1));
-        s.game_mut().mana_taps[0] = ManaTaps::Off;
+        s.game_mut().mana_floats[0] = ManaFloats::Off;
         assert!(!offers_ability(&mut s, land, 1));
         choose(
             &mut s,
@@ -449,19 +449,44 @@ fn kyoshi_village_priority_levels_preserve_both_payment_routes() {
 }
 
 #[test]
+fn kyoshi_payment_and_priority_floats_are_independent() {
+    use managym::state::player::{ManaFloats, ManaPayment};
+    for payment in [ManaPayment::Manual, ManaPayment::Auto] {
+        for floats in [ManaFloats::Off, ManaFloats::Usable, ManaFloats::All] {
+            let mut s = five_color_unfunded_setup(&["Kyoshi Village", "Healer's Hawk"]);
+            let land = s.force_permanent_on_battlefield(0, "Kyoshi Village");
+            let hawk = move_to_hand(&mut s, "Healer's Hawk");
+            s.game_mut().mana_payment[0] = payment;
+            s.game_mut().mana_floats[0] = floats;
+            assert_eq!(offers_ability(&mut s, land, 1), floats != ManaFloats::Off);
+            choose(
+                &mut s,
+                |a| matches!(a, Action::CastSpell { object, .. } if *object == hawk),
+            );
+            if payment == ManaPayment::Manual {
+                activate(&mut s, land, 1);
+            }
+            assert!(tapped(&s, land));
+            settle(&mut s);
+            assert_eq!(s.battlefield_permanents_named(0, "Healer's Hawk").len(), 1);
+        }
+    }
+}
+
+#[test]
 fn treasure_float_is_a_usable_sacrifice_even_without_a_mana_spend() {
-    use managym::state::player::ManaTaps;
+    use managym::state::player::ManaFloats;
     let mut s = five_color_unfunded_setup(&[]);
     let token = s
         .game_mut()
         .create_token("token.treasure", PlayerId(0), false)
         .unwrap();
     for (mode, offered) in [
-        (ManaTaps::Off, false),
-        (ManaTaps::Usable, true),
-        (ManaTaps::Always, true),
+        (ManaFloats::Off, false),
+        (ManaFloats::Usable, true),
+        (ManaFloats::All, true),
     ] {
-        s.game_mut().mana_taps[0] = mode;
+        s.game_mut().mana_floats[0] = mode;
         assert_eq!(offers_ability(&mut s, token, 0), offered);
     }
 }
@@ -9827,7 +9852,7 @@ fn optional_decline_retains_mana_activation_costs_and_chosen_output() {
 }
 
 #[test]
-fn waterbend_and_mana_taps_have_distinct_bonus_accounting() {
+fn waterbend_and_mana_floats_have_distinct_bonus_accounting() {
     use managym::state::{
         ability::Actor,
         card::{TriggeredManaAbility, TriggeredManaOutput},

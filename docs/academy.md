@@ -696,11 +696,12 @@ With the default setup, a cost that needs every available fixed source
 can be paid as soon as you cast. The cast preview shows the taps before
 you commit.
 
-Under **Mana tap offers**, **Off** is the default. Choose **Only when the mana could be used** to float when a legal action can spend mana or tapping the source
+**Mana payment** defaults to **Manual**. Choose **Automatic** to have the engine select sources, colors and spending after you accept a cost. You still choose whether to pay optional costs, which spells to cast, and which abilities to activate.
+
+Under **Mana floats**, **Off** is the default. Choose **Only when the mana could be used** to float when a legal action can spend mana or tapping the source
 can trigger an ability. Usable also offers an activation that pays life,
-sacrifices a permanent or has another effect. **Always** offers every legal
-mana activation at priority. **Off** keeps these abilities available during
-payment, including a land’s choice of color. The setting follows you when you swap sides.
+sacrifices a permanent or has another effect. **All** offers every legal
+mana activation at priority. With **Manual** payment you can select these abilities and choose a land’s output while paying. A deliberate float at priority also lets you choose its output. The setting follows you when you swap sides.
 Your priority stops still determine which windows pause for a decision.
 
 **Reading the preview.**

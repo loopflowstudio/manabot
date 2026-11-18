@@ -219,7 +219,7 @@ def test_stack_text_uses_exact_native_links_over_frozen_card_ids() -> None:
 
 
 def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
-    env = priority_root((), ("Jasmine Dragon Tea Shop",), mana_taps="always")
+    env = priority_root((), ("Jasmine Dragon Tea Shop",), mana_floats="all")
     decision = capture_text_decision(env)
     tap = next(
         a
@@ -296,7 +296,7 @@ def test_once_each_turn_use_reaches_text_and_both_encoders(
     """Barrels' once-each-turn mana ability, once used, is in the text and in
     the same permanent column of the reference and native encoders."""
     env = priority_root(
-        (), ("Barrels of Blasting Jelly", "Mountain"), mana_taps="always"
+        (), ("Barrels of Blasting Jelly", "Mountain"), mana_floats="all"
     )
     decision = capture_text_decision(env)
     barrels = next(

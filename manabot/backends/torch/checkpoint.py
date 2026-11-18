@@ -282,6 +282,13 @@ def save_checkpoint(
             "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": obs_space.encoder.config.model_dump(),
             "train_hypers": {},
+            # The collector applies the policy's decision settings to both seats.
+            # Training provenance is independent of strict world/ABI admission.
+            "training_setup": {
+                "mana_payment": [obs_space.encoder.config.mana_payment] * 2,
+                "mana_floats": [obs_space.encoder.config.mana_floats] * 2,
+                "skip_trivial": True,
+            },
         },
         "bc": extra or {},
     }

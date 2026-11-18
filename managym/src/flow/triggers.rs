@@ -1578,7 +1578,7 @@ impl Game {
     pub(crate) fn usable_floats_without_spend(&self, player: PlayerId, floats: &mut Vec<Action>) {
         let listeners = self.indexed_sources(EventKinds::of(EventKind::PermanentTapped));
         if !listeners.is_empty() {
-            self.append_mana_taps(player, floats);
+            self.append_mana_floats(player, floats);
         }
         floats.retain(|action| {
             let permanent = match *action {

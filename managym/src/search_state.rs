@@ -5,7 +5,7 @@
 //! `ContentPack` definitions are named once by digest; every mutable match fact
 //! a fork must preserve is serialized.
 
-use crate::state::player::ManaTaps;
+use crate::state::player::{ManaFloats, ManaPayment};
 use rand::RngCore;
 use serde::Serialize;
 
@@ -77,7 +77,9 @@ struct CanonicalAuthorityState<'a> {
     decision_epoch: u64,
     pending_choice: &'a Option<PendingChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    mana_taps: Option<[ManaTaps; 2]>,
+    mana_floats: Option<[ManaFloats; 2]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mana_payment: Option<[ManaPayment; 2]>,
     skip_trivial: bool,
     skip_trivial_count: usize,
     rng_probe: [u64; 8],
@@ -110,7 +112,8 @@ fn identity_with_rng(game: &Game, rng_probe: [u64; 8]) -> SearchStateIdentity {
         current_action_space: &game.current_action_space,
         decision_epoch: game.decision_epoch,
         pending_choice: &game.pending_choice,
-        mana_taps: (game.mana_taps != [ManaTaps::Off; 2]).then_some(game.mana_taps),
+        mana_payment: (game.mana_payment != [ManaPayment::Manual; 2]).then_some(game.mana_payment),
+        mana_floats: (game.mana_floats != [ManaFloats::Off; 2]).then_some(game.mana_floats),
         skip_trivial: game.skip_trivial,
         skip_trivial_count: game.skip_trivial_count,
         rng_probe,

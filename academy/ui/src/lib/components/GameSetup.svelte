@@ -73,11 +73,18 @@
               onSearchChange={value => {if (hero) setup.watchSearchConfig = value; else setup.searchConfig = value;}} />
           {:else}
             <label class="flex items-center gap-2">
-              Mana tap offers
-              <select bind:value={setup.manaTaps} class="rounded border border-line bg-panel p-2">
+              Mana payment
+              <select bind:value={setup.manaPayment} class="rounded border border-line bg-panel p-2">
+                <option value="manual">Manual</option>
+                <option value="auto">Automatic</option>
+              </select>
+            </label>
+            <label class="flex items-center gap-2">
+              Mana floats
+              <select bind:value={setup.manaFloats} class="rounded border border-line bg-panel p-2">
                 <option value="off">Off</option>
                 <option value="usable">Only when the mana could be used</option>
-                <option value="always">Always</option>
+                <option value="all">All</option>
               </select>
             </label>
           {/if}

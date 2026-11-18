@@ -1,6 +1,6 @@
 #[cfg(feature = "python")]
 use crate::search_state::{identity, SearchStateIdentity};
-use crate::state::player::ManaTaps;
+use crate::state::player::{ManaFloats, ManaPayment};
 use crate::{
     agent::{
         action::AgentError,
@@ -128,7 +128,8 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
-    mana_taps: [ManaTaps; 2],
+    mana_floats: [ManaFloats; 2],
+    mana_payment: [ManaPayment; 2],
     decision_memory_enabled: bool,
     decision_memory_include_own: bool,
     disclosure: DecklistDisclosure,
@@ -144,17 +145,21 @@ impl serde::Serialize for NativeActionTrace {
         struct RetainedSeat<'a> {
             #[serde(flatten)]
             player: &'a PlayerConfig,
-            #[serde(skip_serializing_if = "ManaTaps::is_off")]
-            mana_taps: ManaTaps,
+            #[serde(skip_serializing_if = "ManaFloats::is_off")]
+            mana_floats: ManaFloats,
+            #[serde(skip_serializing_if = "ManaPayment::is_manual")]
+            mana_payment: ManaPayment,
             #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
             disclosure: DecklistDisclosure,
         }
         let players: Vec<_> = self
             .player_configs
             .iter()
-            .zip(self.mana_taps)
-            .map(|(player, mana_taps)| RetainedSeat {
-                mana_taps,
+            .zip(self.mana_floats)
+            .zip(self.mana_payment)
+            .map(|((player, mana_floats), mana_payment)| RetainedSeat {
+                mana_payment,
+                mana_floats,
                 player,
                 disclosure: self.disclosure,
             })
@@ -352,7 +357,8 @@ impl Env {
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
             disclosure: player_configs.decklists.resolve(self.seed),
-            mana_taps: player_configs.mana_taps,
+            mana_floats: player_configs.mana_floats,
+            mana_payment: player_configs.mana_payment,
             player_configs: Arc::from(player_configs.players.clone()),
             decision_memory_enabled: self.decision_memory_enabled
                 || self.decision_memory_include_own,
@@ -523,10 +529,16 @@ impl Env {
             .map_or(Default::default(), |game| game.state.disclosure)
     }
 
-    pub fn mana_taps(&self) -> [ManaTaps; 2] {
+    pub fn mana_payment(&self) -> [ManaPayment; 2] {
         self.game
             .as_ref()
-            .map_or([ManaTaps::Off; 2], |game| game.mana_taps)
+            .map_or([ManaPayment::Manual; 2], |game| game.mana_payment)
+    }
+
+    pub fn mana_floats(&self) -> [ManaFloats; 2] {
+        self.game
+            .as_ref()
+            .map_or([ManaFloats::Off; 2], |game| game.mana_floats)
     }
 
     /// Setups this game was reset with; empty before the first reset.

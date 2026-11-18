@@ -355,9 +355,10 @@ impl PyVectorEnv {
             .current_player_configs()
             .into_iter()
             .zip(self.inner.current_decklists())
-            .zip(self.inner.current_mana_taps())
-            .map(|((players, disclosure), taps)| {
-                super::bindings::python_game_setup(py, players, disclosure, taps)
+            .zip(self.inner.current_mana_floats())
+            .zip(self.inner.current_mana_payment())
+            .map(|(((players, disclosure), taps), payment)| {
+                super::bindings::python_game_setup(py, players, disclosure, taps, payment)
             })
             .collect()
     }

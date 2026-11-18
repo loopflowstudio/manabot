@@ -20,11 +20,11 @@ mod autotapper;
 mod preview;
 pub use preview::PaymentPreview;
 
-use crate::state::player::ManaTaps;
+use crate::state::player::{ManaFloats, ManaPayment};
 use std::{cell::RefCell, collections::VecDeque, num::NonZeroUsize, sync::Arc};
 
 use crate::{
-    agent::action::{Action, AgentError},
+    agent::action::{Action, ActionSpace, AgentError},
     flow::{
         decision::{
             Decision, EffectFrame, ManaProduction, PendingManaBonus, SpendCompletion,
@@ -1957,8 +1957,11 @@ impl Game {
 
     /// Append fixed sources after the ordinary offers. A committed payment
     /// must still have a witness after the tap, including any saved callers.
-    pub(crate) fn append_mana_taps(&self, player: PlayerId, actions: &mut Vec<Action>) {
-        if !self.offers_mana_taps(player) {
+    pub(crate) fn append_mana_floats(&self, player: PlayerId, actions: &mut Vec<Action>) {
+        if self.mana_float_mode(player).is_off()
+            || (self.automatic_mana_payment(player)
+                && (self.pending_choice.is_some() || self.state.suspended_decision.is_some()))
+        {
             return;
         }
         let obligations = self.payment_obligations(player);
@@ -1995,20 +1998,84 @@ impl Game {
     }
 
     /// Whether the seat deciding for `player` was set up with mana tap offers.
-    pub(crate) fn offers_mana_taps(&self, player: PlayerId) -> bool {
-        !self.mana_tap_mode(player).is_off()
+    pub(crate) fn offers_extra_payment_taps(&self, player: PlayerId) -> bool {
+        !self.mana_float_mode(player).is_off() && !self.automatic_mana_payment(player)
     }
 
-    pub(crate) fn mana_tap_mode(&self, player: PlayerId) -> ManaTaps {
-        if self.mana_taps == [ManaTaps::Off; 2] {
-            return ManaTaps::Off;
+    pub(crate) fn automatic_mana_payment(&self, player: PlayerId) -> bool {
+        self.mana_payment != [ManaPayment::Manual; 2]
+            && self.mana_payment[self.decision_controller(player).0] == ManaPayment::Auto
+    }
+
+    /// Follow one step of the live payment witness. Optional costs still offer
+    /// Pay/Decline, and a deliberate priority float still chooses its output.
+    pub(crate) fn automatic_payment_action(&self, space: &ActionSpace) -> Option<Action> {
+        let player = space.player?;
+        if !self.automatic_mana_payment(player) {
+            return None;
         }
-        self.mana_taps[self.decision_controller(player).0]
+        match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
+            Some(Decision::Payment(progress)) if !progress.can_decline() => {}
+            Some(Decision::ManaUpfront { .. }) => {}
+            Some(Decision::ManaSpend { .. }) => return space.actions.first().cloned(),
+            Some(Decision::ManaChoice {
+                choices, resume, ..
+            }) if resume.is_some() || self.pending_choice.is_some() => {
+                return space
+                    .actions
+                    .iter()
+                    .min_by_key(|action| {
+                        let Action::ChooseMode { mode, .. } = action else {
+                            unreachable!()
+                        };
+                        let (pool, obligations) = self.after_mana_choice(player, &choices[*mode]);
+                        self.payment_model(player, None)
+                            .plan(pool, obligations, SourcePolicy::All)
+                            .map_or(usize::MAX, |remaining| remaining.len())
+                    })
+                    .cloned();
+            }
+            None if matches!(
+                self.pending_choice,
+                Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. })
+            ) => {}
+            _ => return None,
+        }
+        if let Some(pay) = space
+            .actions
+            .iter()
+            .find(|a| matches!(a, Action::PayCost { .. }))
+        {
+            return Some(pay.clone());
+        }
+        let path = self
+            .payment_model(player, None)
+            .plan(
+                self.pooled_mana(player),
+                self.payment_obligations(player),
+                SourcePolicy::All,
+            )
+            .expect("committed cost has a payment witness");
+        match path.first().expect("committed payment has a next step") {
+            PaymentStep::Spend => Some(Action::PayCost { player }),
+            PaymentStep::Fixed(permanent) => Some(Action::TapForMana {
+                player,
+                permanent: *permanent,
+            }),
+            step => step.action(player),
+        }
     }
 
-    fn has_mana_taps(&self, player: PlayerId) -> bool {
+    pub(crate) fn mana_float_mode(&self, player: PlayerId) -> ManaFloats {
+        if self.mana_floats == [ManaFloats::Off; 2] {
+            return ManaFloats::Off;
+        }
+        self.mana_floats[self.decision_controller(player).0]
+    }
+
+    fn has_mana_floats(&self, player: PlayerId) -> bool {
         let mut taps = Vec::new();
-        self.append_mana_taps(player, &mut taps);
+        self.append_mana_floats(player, &mut taps);
         !taps.is_empty()
     }
 
@@ -2122,7 +2189,7 @@ impl Game {
     ) -> bool {
         !self.mana_ability_actions(player, sacrifice).is_empty()
             || !self.useful_payment_taps(player).is_empty()
-            || self.has_mana_taps(player)
+            || self.has_mana_floats(player)
     }
 
     pub(crate) fn can_pay_with_mana_abilities(
@@ -2291,6 +2358,12 @@ impl Game {
     /// witness, counting the triggered mana abilities that still resolve
     /// after it from the same production.
     pub(crate) fn mana_choice_completes_payment(&self, player: PlayerId, mana: &Mana) -> bool {
+        let (pool, obligations) = self.after_mana_choice(player, mana);
+        self.payment_model(player, None)
+            .payable(pool, obligations, SourcePolicy::All)
+    }
+
+    fn after_mana_choice(&self, player: PlayerId, mana: &Mana) -> (Mana, Vec<Obligation>) {
         let mut pool = self.pooled_mana(player);
         pool.add(mana);
         let mut obligations = self.payment_obligations(player);
@@ -2321,8 +2394,7 @@ impl Game {
                 );
             }
         }
-        self.payment_model(player, None)
-            .payable(pool, obligations, SourcePolicy::All)
+        (pool, obligations)
     }
 
     pub(crate) fn activate_mana_ability(
@@ -2424,7 +2496,7 @@ impl Game {
             .mana_cost
             .mana_value
             > 0
-            && self.has_mana_taps(player)
+            && self.has_mana_floats(player)
         {
             return Ok(());
         }

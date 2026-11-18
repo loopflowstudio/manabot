@@ -262,14 +262,17 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
 }
 
 for (const [mode, deck] of [
-  ['Always', '16 Island'],
+  ['All', '16 Island'],
   ['Only when the mana could be used', '4 Island\n4 Consider'],
 ]) {
   test(`a human can float mana from the chosen land at priority with ${mode}`, async ({page}) => {
     await page.goto('/?setup=1');
-    const taps = page.getByRole('combobox', {name: 'Mana tap offers'});
+    const taps = page.getByRole('combobox', {name: 'Mana floats'});
     await expect(taps.locator('option:checked')).toHaveText('Off');
     await taps.selectOption({label: mode});
+    const payment = page.getByRole('combobox', {name: 'Mana payment'});
+    await expect(payment.locator('option:checked')).toHaveText('Manual');
+    await payment.selectOption('auto');
     await page.getByText('Import decklist files', {exact: true}).click();
     await page.getByLabel('Use imported decks for the next game').check();
     await page.getByLabel('Your deck source', {exact: true}).fill(deck);

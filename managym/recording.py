@@ -60,7 +60,10 @@ class PlayerSetup(BaseModel):
     name: str
     decklist: dict[str, int]
     sideboard: dict[str, int]
-    mana_taps: managym.ManaTaps = Field(
+    mana_payment: managym.ManaPayment = Field(
+        default="manual", exclude_if=lambda value: value == "manual"
+    )
+    mana_floats: managym.ManaFloats = Field(
         default="off", exclude_if=lambda value: value == "off"
     )
     # Earlier evidence names the selector `content_pack`.
@@ -76,7 +79,8 @@ class PlayerSetup(BaseModel):
         cls,
         player: managym.PlayerConfig,
         decklists: DecklistDisclosure,
-        mana_taps: managym.ManaTaps = "off",
+        mana_floats: managym.ManaFloats = "off",
+        mana_payment: managym.ManaPayment = "manual",
     ) -> "PlayerSetup":
         return cls(
             name=player.name,
@@ -84,7 +88,8 @@ class PlayerSetup(BaseModel):
             sideboard=player.sideboard,
             world=player.world,
             disclosure=decklists,
-            mana_taps=mana_taps,
+            mana_floats=mana_floats,
+            mana_payment=mana_payment,
         )
 
 
@@ -100,8 +105,8 @@ def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
     disclosure = managym.resolve_decklists(players, seed)
     setup = managym.GameSetup(players)
     return [
-        PlayerSetup.retain(player, disclosure, taps)
-        for player, taps in zip(setup, setup.mana_taps)
+        PlayerSetup.retain(player, disclosure, taps, payment)
+        for player, taps, payment in zip(setup, setup.mana_floats, setup.mana_payment)
     ]
 
 
@@ -162,14 +167,17 @@ class GameInputs(BaseModel):
         return managym.GameSetup(
             [
                 managym.PlayerConfig(
-                    **player.model_dump(exclude={"disclosure", "mana_taps"})
+                    **player.model_dump(
+                        exclude={"disclosure", "mana_floats", "mana_payment"}
+                    )
                 )
                 for player in self.players
             ],
             decklists=decklists,
-            mana_taps=(
-                self.players[0].mana_taps,
-                self.players[1].mana_taps,
+            mana_payment=(self.players[0].mana_payment, self.players[1].mana_payment),
+            mana_floats=(
+                self.players[0].mana_floats,
+                self.players[1].mana_floats,
             ),
         )
 

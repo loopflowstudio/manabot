@@ -360,7 +360,7 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
                 managym.authored_deck_setup(PACK, key)
                 for key in ("elemental_wb", "elemental_ug")
             ],
-            mana_taps=("usable", "usable"),
+            mana_floats=("usable", "usable"),
         )
         obs, _ = env.reset(setup)
         for action in prefix:

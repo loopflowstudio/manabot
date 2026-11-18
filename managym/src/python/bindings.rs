@@ -4,7 +4,7 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use crate::state::player::ManaTaps;
+use crate::state::player::{ManaFloats, ManaPayment};
 #[cfg(feature = "python")]
 use std::{
     collections::BTreeMap,
@@ -5591,7 +5591,7 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         .filter_map(|player| player.legacy_disclosure)
         .map(DecklistMode::from);
     let setup_type = value.py().import_bound("managym")?.getattr("GameSetup")?;
-    let (decklists, mana_taps, conflict) = if value.is_instance(&setup_type)? {
+    let (decklists, mana_floats, mana_payment, conflict) = if value.is_instance(&setup_type)? {
         let name: String = value.getattr("decklists")?.extract()?;
         let decklists = match name.as_str() {
             "mixed" => DecklistMode::Mixed,
@@ -5600,14 +5600,23 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         (
             decklists,
             {
-                let (first, second): (String, String) = value.getattr("mana_taps")?.extract()?;
+                let (first, second): (String, String) = value.getattr("mana_floats")?.extract()?;
                 let mode = |name: &str| match name {
-                    "off" => Ok(ManaTaps::Off),
-                    "usable" => Ok(ManaTaps::Usable),
-                    "always" => Ok(ManaTaps::Always),
+                    "off" => Ok(ManaFloats::Off),
+                    "usable" => Ok(ManaFloats::Usable),
+                    "all" => Ok(ManaFloats::All),
                     _ => Err(PyValueError::new_err(
-                        "mana_taps must be off, usable or always",
+                        "mana_floats must be off, usable or all",
                     )),
+                };
+                [mode(&first)?, mode(&second)?]
+            },
+            {
+                let (first, second): (String, String) = value.getattr("mana_payment")?.extract()?;
+                let mode = |name: &str| match name {
+                    "auto" => Ok(ManaPayment::Auto),
+                    "manual" => Ok(ManaPayment::Manual),
+                    _ => Err(PyValueError::new_err("mana_payment must be auto or manual")),
                 };
                 [mode(&first)?, mode(&second)?]
             },
@@ -5617,7 +5626,8 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         // A bare seat list takes its game value from the first hint, if any.
         (
             hints.clone().next().unwrap_or_default(),
-            [ManaTaps::Off; 2],
+            [ManaFloats::Off; 2],
+            [ManaPayment::Manual; 2],
             "deprecated per-seat disclosure values disagree",
         )
     };
@@ -5627,7 +5637,8 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
     Ok(GameSetup {
         players: players.into_iter().map(PlayerConfig::from).collect(),
         decklists,
-        mana_taps,
+        mana_floats,
+        mana_payment,
     })
 }
 
@@ -5636,17 +5647,25 @@ pub(crate) fn python_game_setup(
     py: Python<'_>,
     players: Vec<PlayerConfig>,
     disclosure: DecklistDisclosure,
-    mana_taps: [ManaTaps; 2],
+    mana_floats: [ManaFloats; 2],
+    mana_payment: [ManaPayment; 2],
 ) -> PyResult<PyObject> {
     let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
     let kwargs = pyo3::types::PyDict::new_bound(py);
     kwargs.set_item("decklists", disclosure_name(disclosure))?;
-    let [first, second] = mana_taps.map(|mode| match mode {
-        ManaTaps::Off => "off",
-        ManaTaps::Usable => "usable",
-        ManaTaps::Always => "always",
+    let [first, second] = mana_floats.map(|mode| match mode {
+        ManaFloats::Off => "off",
+        ManaFloats::Usable => "usable",
+        ManaFloats::All => "all",
     });
-    kwargs.set_item("mana_taps", (first, second))?;
+    kwargs.set_item("mana_floats", (first, second))?;
+    kwargs.set_item(
+        "mana_payment",
+        mana_payment.map(|value| match value {
+            ManaPayment::Auto => "auto",
+            ManaPayment::Manual => "manual",
+        }),
+    )?;
     Ok(py
         .import_bound("managym")?
         .getattr("GameSetup")?

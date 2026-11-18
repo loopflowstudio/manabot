@@ -82,7 +82,8 @@ export class GameStore {
   playSession = $state<PlaySession | null>(null);
   storageWarning = $state('');
   tableUnavailable = $state(false);
-  manaTaps = $state<'off' | 'usable' | 'always'>('off');
+  manaPayment = $state<'auto' | 'manual'>('manual');
+  manaFloats = $state<'off' | 'usable' | 'all'>('off');
   humanSeat = $state<0 | 1>(0);
   watchMode = $state(false);
   watchPlayerChoice = $state<PlayerChoice>('random');
@@ -100,9 +101,12 @@ export class GameStore {
   }
 
   applySetupDraft(draft: Record<string, unknown>): void {
-    const mode = draft.mana_taps === undefined ? 'off' : draft.mana_taps;
-    if (mode !== 'off' && mode !== 'usable' && mode !== 'always') throw new Error('Invalid mana tap mode');
-    this.manaTaps = mode;
+    const payment = draft.mana_payment === undefined ? 'manual' : draft.mana_payment;
+    if (payment !== 'manual' && payment !== 'auto') throw new Error('Invalid mana payment mode');
+    this.manaPayment = payment;
+    const mode = draft.mana_floats === undefined ? 'off' : draft.mana_floats;
+    if (mode !== 'off' && mode !== 'usable' && mode !== 'all') throw new Error('Invalid mana tap mode');
+    this.manaFloats = mode;
     this.humanSeat = draft.human_seat === 1 ? 1 : 0;
     this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
     this.seed = String(draft.seed ?? '0');
@@ -273,7 +277,8 @@ export class GameStore {
     return {
       ...this.opponentConfig(),
       human_seat: this.humanSeat,
-      mana_taps: this.manaTaps,
+      mana_payment: this.manaPayment,
+      mana_floats: this.manaFloats,
       seed: this.dealMode === 'repeat' ? this.seed : null,
       ...(this.deckImport ? { deck_import: this.deckImport } : {}),
       hero_deck: this.decks.hero,

@@ -91,10 +91,15 @@ def _agent() -> ActorCritic:
 
 
 def _collector(
-    decks: UniformDecks, *, mana_taps: managym.ManaTaps = "off"
+    decks: UniformDecks,
+    *,
+    mana_floats: managym.ManaFloats = "off",
+    mana_payment: managym.ManaPayment = "manual",
 ) -> Collector:
     return open_collector(
-        ObservationSpace(ObservationConfig(mana_taps=mana_taps)),
+        ObservationSpace(
+            ObservationConfig(mana_floats=mana_floats, mana_payment=mana_payment)
+        ),
         Match(decks.match_config()),
         Reward(RewardConfig()),
         num_envs=2,
@@ -582,11 +587,11 @@ def test_mixed_training_games_export_the_resolved_disclosure(
     assert settings == {"open", "closed"}
 
 
-@pytest.mark.parametrize("mode", ["always", "usable"])
+@pytest.mark.parametrize("mode", ["all", "usable"])
 def test_priority_taps_follow_sampled_self_play_roots(
-    decks: UniformDecks, mode: managym.ManaTaps
+    decks: UniformDecks, mode: managym.ManaFloats
 ) -> None:
-    collector = _collector(decks, mana_taps=mode)
+    collector = _collector(decks, mana_floats=mode, mana_payment="auto")
     try:
         collect(collector, _agent(), 1)
         assert collector.stats.games > 0
@@ -601,6 +606,7 @@ def test_priority_taps_follow_sampled_self_play_roots(
             collector._env.current_player_configs(),
             strict=True,
         ):
-            assert setup.mana_taps == match.config.mana_taps == (mode, mode)
+            assert setup.mana_payment == match.config.mana_payment == ("auto", "auto")
+            assert setup.mana_floats == match.config.mana_floats == (mode, mode)
     finally:
         close_collector(collector)

@@ -9,7 +9,7 @@
 //! `cargo run --release --features benchmark --example bench_payment --manifest-path managym/Cargo.toml -- boards`.
 use managym::agent::env::Env;
 use managym::benchmark_payments::{reset, snapshot, Metrics};
-use managym::state::player::ManaTaps;
+use managym::state::player::ManaFloats;
 use managym::state::player::{DecklistMode, GameSetup, PlayerConfig};
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -35,7 +35,8 @@ fn replay(path: &str) {
     env.reset(GameSetup {
         players,
         decklists: DecklistMode::Closed,
-        mana_taps: [ManaTaps::Off; 2],
+        mana_floats: [ManaFloats::Off; 2],
+        mana_payment: Default::default(),
     })
     .unwrap();
     let mut digest = env.action_count().unwrap() as u64;
