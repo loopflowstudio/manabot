@@ -8,7 +8,7 @@ an Etude checkpoint record that could fetch remote bytes.
 
 import argparse
 import math
-import multiprocessing as mp
+import logging
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
@@ -30,10 +30,17 @@ from manabot.eval.evaluation import (
     evaluation_status,
 )
 from manabot.eval.models import EvaluationKey
+from manabot.infra.artifacts import StoredArtifact, materialize_artifact
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.policy.protocol import Backend
-from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
+from manabot.sim.child import ChildProcess
+from manabot.sim.matchup import (
+    SELECTED_SUITE,
+    AuthoredMatchup,
+    DeckMatchup,
+    selected_match,
+)
 
 
 def checkpoint_request(
@@ -42,8 +49,9 @@ def checkpoint_request(
     backend: Backend,
     opponent: Path | AnchorKind = "heuristic",
     deal_seeds: tuple[int, ...] = (101,),
-    authored_matchup: AuthoredMatchup | None = None,
+    authored_matchup: AuthoredMatchup | DeckMatchup | None = None,
     include_mirrors: bool = False,
+    heuristic_actions: int | None = None,
     game_seconds: float = 120,
     max_commands: int = 10_000,
 ) -> EvaluationRequest:
@@ -78,7 +86,10 @@ def checkpoint_request(
         paths[other.player_id] = str(opponent.resolve())
     else:
         other = register_anchor(
-            candidate, opponent, player_id="local-" + opponent.replace("_", "-")
+            candidate,
+            opponent,
+            player_id="local-" + opponent.replace("_", "-"),
+            heuristic_actions=heuristic_actions,
         )
     key = EvaluationKey(
         world=candidate.world,
@@ -105,15 +116,22 @@ def checkpoint_request(
 
 def _prepare(
     sender: Connection,
-    checkpoint: Path,
+    checkpoint: Path | StoredArtifact,
     opponent: Path | AnchorKind,
     seeds: tuple[int, ...],
-    matchup: AuthoredMatchup | None,
+    matchup: AuthoredMatchup | DeckMatchup | None,
     mirrors: bool,
     game_seconds: float,
     max_commands: int,
+    heuristic_actions: int | None,
+    show_binding: bool,
 ) -> None:
     try:
+        if show_binding:
+            logging.basicConfig()
+            logging.getLogger("manabot.policy.checkpoint").setLevel(logging.INFO)
+        if isinstance(checkpoint, StoredArtifact):
+            checkpoint = materialize_artifact(checkpoint)
         torch.set_num_threads(1)
         request = checkpoint_request(
             checkpoint,
@@ -122,6 +140,7 @@ def _prepare(
             deal_seeds=seeds,
             authored_matchup=matchup,
             include_mirrors=mirrors,
+            heuristic_actions=heuristic_actions,
             game_seconds=game_seconds,
             max_commands=max_commands,
         )
@@ -130,6 +149,47 @@ def _prepare(
         sender.send((None, f"{type(exc).__name__}: {exc}"))
     finally:
         sender.close()
+
+
+def prepare_local_request(
+    checkpoint: Path | StoredArtifact,
+    opponent: Path | AnchorKind,
+    seeds: tuple[int, ...],
+    matchup: AuthoredMatchup | DeckMatchup | None,
+    *,
+    deadline: float,
+    mirrors: bool = False,
+    game_seconds: float = 120,
+    max_commands: int = 10_000,
+    heuristic_actions: int | None = None,
+    show_binding: bool = False,
+) -> EvaluationRequest:
+    """Resolve and admit checkpoint bytes within the remaining allocation."""
+    process = ChildProcess(
+        "manabot.eval.local:_prepare",
+        (
+            checkpoint,
+            opponent,
+            seeds,
+            matchup,
+            mirrors,
+            game_seconds,
+            max_commands,
+            heuristic_actions,
+            show_binding,
+        ),
+    )
+    try:
+        if not process.connection.poll(max(0, deadline - time.time())):
+            raise TimeoutError(
+                "allocation deadline exhausted during checkpoint admission"
+            )
+        payload, error = process.connection.recv()
+        if error:
+            raise ValueError(error)
+        return EvaluationRequest.model_validate_json(payload)
+    finally:
+        process.close()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -226,39 +286,16 @@ def main(argv: list[str] | None = None) -> int:
                 if args.opponent in OPPONENT_NAMES
                 else Path(args.opponent)
             )
-            context = mp.get_context("spawn")
-            receiver, sender = context.Pipe(duplex=False)
-            process = context.Process(
-                target=_prepare,
-                args=(
-                    sender,
-                    args.checkpoint,
-                    opponent,
-                    tuple(args.deal_seed or [101]),
-                    matchup,
-                    args.include_mirrors,
-                    args.game_seconds,
-                    args.max_commands,
-                ),
+            request = prepare_local_request(
+                args.checkpoint,
+                opponent,
+                tuple(args.deal_seed or [101]),
+                matchup,
+                deadline=deadline,
+                mirrors=args.include_mirrors,
+                game_seconds=args.game_seconds,
+                max_commands=args.max_commands,
             )
-            try:
-                process.start()
-                sender.close()
-                if not receiver.poll(max(0, deadline - time.time())):
-                    raise TimeoutError(
-                        "allocation deadline exhausted during checkpoint admission"
-                    )
-                payload, error = receiver.recv()
-                if error:
-                    raise ValueError(error)
-                request = EvaluationRequest.model_validate_json(payload)
-            finally:
-                if process.is_alive():
-                    process.kill()
-                if process.pid is not None:
-                    process.join()
-                sender.close()
-                receiver.close()
         atomic_json(args.out / "request.json", request.model_dump(mode="json"))
         result = evaluate_local(request, deadline=deadline, out_dir=args.out / "panel")
     except Exception as exc:

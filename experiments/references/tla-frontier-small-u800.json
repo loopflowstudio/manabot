@@ -1,0 +1,27 @@
+{
+  "name": "tla-frontier-small-u800",
+  "checkpoint": {
+    "uri": "r2://manabot/jobs/59718fe34945/checkpoints/learner_transitions-36101600.pt",
+    "sha256": "ed0740acaf34a50ac1d4005c87a80db85ea6ce1807f2a54bc8caa939bdffb689",
+    "bytes": 3945963
+  },
+  "opponent": "heuristic",
+  "max_actions": 64,
+  "matchups": "tla-frontier-pairs.json",
+  "deal_offsets": [
+    0,
+    16
+  ],
+  "recorded": {
+    "score": 0.65625,
+    "low": 0.5625,
+    "high": 0.734375,
+    "games": 64,
+    "revision": "ab2b757d9",
+    "report": "experiments/reports/tla-frontier-c5fba4-results.md"
+  },
+  "opponent_changes": [
+    "452d7b5357",
+    "86ad8e9c6a"
+  ]
+}

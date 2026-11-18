@@ -103,10 +103,18 @@ def register_checkpoint(
 
 
 def register_anchor(
-    candidate: PlayerRegistration, kind: AnchorKind, *, player_id: str
+    candidate: PlayerRegistration,
+    kind: AnchorKind,
+    *,
+    player_id: str,
+    heuristic_actions: int | None = None,
 ) -> PlayerRegistration:
     """Keep frozen scripted/random source identities and the heuristic bundle."""
-    player_spec: dict[str, str] = {"kind": kind}
+    player_spec: dict[str, str | int] = {"kind": kind}
+    if heuristic_actions is not None:
+        if kind != "heuristic" or heuristic_actions < 1:
+            raise ValueError("an action cap requires a heuristic and a positive count")
+        player_spec.update(max_actions=heuristic_actions, action_overflow="first-legal")
     if kind == "heuristic":
         source = source_bundle_sha256(heuristic_source_paths())
         player_spec["version"] = "native-v2"
