@@ -57,3 +57,24 @@ I did not re-run Academy, because this revision did not touch its loader path.</
 <li>The Quick local evaluation docs mention <code>evaluation.json</code>, but it is written to <code>&lt;out&gt;/panel/</code>, not <code>&lt;out&gt;/</code>. This predates the branch and is small.</li>
 </ol>
 <p>QA skill: added how to seat a world-bound checkpoint from the CLI and where the record fields live.</p>
+
+<h1>Fourth round: after the writer_revision rename</h1>
+<p>2026-11-18, branch at 6b928fc30c, load average about 36. Outputs are in the ignored <code>.runs/qa4/</code>.</p>
+<h2>1. Fresh checkpoint records its writer <span class="ok">works</span></h2>
+<pre>uv run python -m manabot.eval.local --checkpoint .runs/qa3/etude-home/.../00000002-ema.safetensors --opponent heuristic --deal-seed 101 --out .runs/qa4/local-check --seconds 300
+completed: 1/1 complete deals; 4/4 games   (21 s)</pre>
+<p>request.json and panel/evaluation.json carry <code>"writer_revision": "d5935065d0…"</code> and <code>stored_programs: 470</code>. The checkpoint was written at d5935065d0 and evaluated at 6b928fc30c, so the field names the writer, not the running revision. No evaluation output contains <code>checkpoint_source</code>.</p>
+<h2>2. u1952 on a new-card pair <span class="ok">works</span></h2>
+<pre>... --checkpoint .runs/qa/final.pt --matchup .runs/qa3/m/new-cards-0.json --deal-seed 21591000
+completed: 1/1 complete deals; 4/4 games; score: 0.500   (51 s, same as round 3)</pre>
+<p><code>stored_programs: 360</code>. It has no <code>writer_revision</code>, because the file records no source.</p>
+<h2>3. Returning users <span class="ok">works</span></h2>
+<p>A request without either field, which is the shape main writes, repeats with <code>--request</code>: 4/4 games, same score.
+The round-3 request is refused with <code>candidate.checkpoint_source  Extra inputs are not permitted</code>. It was written only on this branch before the rename, which the plan accepts because no retained record carries that key.</p>
+<h2>4. Docs <span class="ok">works</span></h2>
+<p>README's "443 cards are eligible for deck entry" matches <code>managym.content_pool("world")</code>: 443 eligible and 27 unsupported (back faces and fixtures). The <code>managym/src/cards/pool.rs</code> link resolves.
+The <code>docs/observation-and-model.md</code> paragraph now gives counts only, which matches what <code>BindingReport</code> holds. The remaining <code>checkpoint_source</code> mentions in <code>docs/training.md</code> and <code>manabot/model/world.py</code> refer to the checkpoint's own source record. That is correct.</p>
+<p>The three evaluation test files pass: 42 tests.</p>
+<h2>Summary of round 4</h2>
+<p>Works now: the rename reaches every record a person reads, old main-shaped requests repeat, and the docs match the tool. Nothing broke and nothing was fixed.
+Still wrong: the same three items as round 3. The CLI has no <code>--heuristic-actions</code>, the <code>check_loopflow_workflows.py</code> coverage assertion fails for an unrelated reason, and the docs give the wrong location for <code>evaluation.json</code>. None of them is in this change.</p>
