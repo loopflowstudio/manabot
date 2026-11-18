@@ -143,7 +143,7 @@ say so if they should carry a note.
     queries, including historical scalar outcome columns, preserving resume
     supersession. A checkpoint's recorded update should bound the selection.
     Manabot can then supply the deck/card join and game-specific queries.
-    The corpus query stops here for upstream review, per the revised plan.
+    Decision 35 superseded waiting for it.
     Historical reports, serialized identifiers and UI control IDs retain
     their spelling.
 
