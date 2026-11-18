@@ -772,7 +772,9 @@ def _count_action_types(
     # fixed taps, including in a first-legal projection of the action space.
     taps = rows[chosen[:, ActionEnum.TAP_FOR_COST] > 0]
     if taps.size:
-        passes = collector._buffers["actions"][taps, :, ActionEnum.PRIORITY_PASS_PRIORITY]
+        passes = collector._buffers["actions"][
+            taps, :, ActionEnum.PRIORITY_PASS_PRIORITY
+        ]
         collector.stats.priority_taps += int(np.any(passes, axis=1).sum())
     typed = chosen.max(axis=1) > 0
     for idx, has_type in zip(type_indices, typed):
