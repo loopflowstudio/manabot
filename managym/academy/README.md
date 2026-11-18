@@ -119,7 +119,8 @@ the table does not draw. A card with one offer commits it on click; several
 open at the card. Number keys, Space (primary) and F6 act from the keyboard. Rows size
 their cards with `fitRow`, piling identical permanents, keeping a tapped card's
 sideways width and wrapping before scrolling. See [playing on the table](../../docs/academy.md#playing-on-the-table).
-Priority stops are set on the top bar's step track and in the table's menu; see
+Priority stops are set on the table's bottom step bar (off, every time or once)
+and in the table's menu; see
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
 stack responses and F6. Recorded policy/search evidence is attached to the
 decision it describes; the live table has no example Advice panel. Replay,

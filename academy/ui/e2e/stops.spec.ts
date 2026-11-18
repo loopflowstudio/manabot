@@ -176,31 +176,56 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await expect(page.locator('[data-testid=log-entry][data-actor=you]').filter({ hasText: 'Pass turn' })).toHaveCount(1);
 });
 
-test('the phase track sets the same stops as the Menu, for either turn', async ({ page }) => {
+test('the stop bar sets the same stops as the Menu, for either turn, and a once stop is spent', async ({ page }) => {
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
-  // Default stops show as filled markers: your main phases, the opponent's end step.
-  const marker = (side: string, step: string) => page.getByTestId(`track-stop-${side}-${step}`);
-  await expect(marker('my', 'main1')).toHaveAttribute('aria-pressed', 'true');
-  await expect(marker('opponent', 'end_step')).toHaveAttribute('aria-pressed', 'true');
-  await expect(marker('opponent', 'upkeep')).toHaveAttribute('aria-pressed', 'false');
+  // Default stops: your main phases and the opponent's end step stop every time.
+  const stop = (side: string, step: string) => page.getByTestId(`bar-stop-${side}-${step}`);
+  await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'every');
+  await expect(stop('opponent', 'end_step')).toHaveAttribute('data-state', 'every');
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'off');
 
-  // On your own turn, set a stop for the opponent's upkeep; the Menu shows it and the server keeps it.
-  await marker('opponent', 'upkeep').click();
-  await expect(marker('opponent', 'upkeep')).toHaveAttribute('aria-pressed', 'true');
+  // On your own turn, the opponent's upkeep: off → every time → once → off. The Menu shows the same stop.
+  await stop('opponent', 'upkeep').click();
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'every');
   await openStopsPanel(page);
   await expect(page.getByTestId('stop-opponent-upkeep').first()).toBeChecked();
+  await stop('opponent', 'upkeep').click();
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'once');
+  await expect(page.getByTestId('stop-opponent-upkeep').first()).toBeChecked();
+  await stop('opponent', 'upkeep').click();
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'off');
+  await expect(page.getByTestId('stop-opponent-upkeep').first()).not.toBeChecked();
 
-  // The Menu's change shows on the track; the markers are one Tab stop, moved by arrows.
+  // The Menu's change shows on the bar; the stops are one Tab stop, moved by arrows.
   await page.getByTestId('stop-my-main2').first().click();
-  await expect(marker('my', 'main2')).toHaveAttribute('aria-pressed', 'false');
-  await marker('opponent', 'upkeep').focus();
+  await expect(stop('my', 'main2')).toHaveAttribute('data-state', 'off');
+  await stop('opponent', 'upkeep').focus();
   await page.keyboard.press('ArrowUp');
-  await expect(marker('my', 'upkeep')).toBeFocused();
+  await expect(stop('my', 'upkeep')).toBeFocused();
   await page.keyboard.press('Space');
-  await expect(marker('my', 'upkeep')).toHaveAttribute('aria-pressed', 'true');
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');
+  await page.keyboard.press('Space');
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'once');
+  await page.keyboard.press('Space');
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'off');
+
+  // Your first main phase set to once: the next time the game arrives there it stops, and the
+  // client turns that stop off, saying so in the moves as automation.
+  await stop('my', 'main1').click();
+  await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'once');
+  const table = page.getByTestId('table');
+  for (let pass = 0; pass < 12; pass += 1) {
+    if (await stop('my', 'main1').getAttribute('data-state') === 'off') break;
+    const seq = await updateSeq(page);
+    await page.keyboard.press('F6');
+    await expect.poll(() => updateSeq(page), { timeout: 30_000 }).toBeGreaterThan(seq);
+  }
+  await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'off');
+  await expect(table).toHaveAttribute('data-turn-owner', 'you');
+  await expect(page.locator('[data-testid=log-entry][data-actor=auto]').filter({ hasText: 'Stopped once at First main' })).toHaveCount(1);
 });

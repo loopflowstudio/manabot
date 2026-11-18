@@ -448,8 +448,8 @@ the import option to return to bundled decks.
 
 The game fills the window: the board in the centre, your hand along the
 bottom and a rail with the stack, the current decision and every legal choice.
-Cards a legal action applies to are outlined; clicking one with a single action
-commits it ([controls below](#playing-on-the-table)). Decisions with a single
+Cards a legal action applies to are raised off the table; clicking one with a
+single action commits it ([controls below](#playing-on-the-table)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
 
@@ -577,10 +577,11 @@ in **Games** without being assigned to a session retroactively.
 
 ### Playing on the table
 
-Start a game and look at your hand: the cards you can play now are outlined.
+Start a game and look at your hand: the cards you can play now are raised off
+the table with a soft shadow, and the ones you cannot are dimmed.
 Click a land to play it; click a spell to cast it, then follow its target and
 payment prompts. A card with exactly one legal action commits that action when
-clicked, and its outline and accessible name say which action that is. A card
+clicked, and its accessible name says which action that is. A card
 with several actions opens them beside the card; choose one, or press Escape to
 close the list without acting. A card with no action sends nothing when
 clicked.
@@ -590,20 +591,36 @@ with each side's lands and other permanents behind them. A plate at the left of
 each half shows the player, life, zone counts and floating mana as mana
 symbols, with any restriction or expiry written under them; open a graveyard or
 exile count to list its cards. A player who can be targeted has an
-outlined plate. Identical permanents with the same choices share a pile with a
-count, and each copy remains its own control. Crowded rows shrink their cards
+outlined plate. Identical permanents with the same choices share a pile, its
+count after the name ("Forest ×4"), and each copy remains its own control. Crowded rows shrink their cards
 and wrap onto a further line before anything scrolls, and each half gives the
 crowded row more of its height.
 
 Every card has a printed card's proportions (63:88). A permanent's name is on
 a bar above its art, wrapping to a second line rather than being cut; its mana
-cost is left to the hand and the inspection. Power and toughness sit on an
-upright plate, the keywords the permanent has now at the lower edge of the art
-(one it was granted is outlined), counters and a pile's count on the art. Mana
-symbols carry their letter, and ◇ for colourless. A tapped permanent turns a
-quarter onto its side, in room its row keeps for it so it never covers a
-neighbour; its name bar stays across the top. Cards in hand have the type line
-under the name and the cost on the art.
+cost is left to the hand and the inspection. The name bar carries the card's
+colours: a pale tint in light mode and a solid bar in dark mode, white a
+neutral ivory-grey and colourless a cool grey, a land the colour of its basic
+land types, and a card of several colours blended left to right as printed
+hybrid frames are. Power and toughness sit on a plate at the lower right, and
+on a row above it the permanent's state: attacking, blocking, damage marked on
+it, summoning sickness, counters and the keywords it has now (one it was
+granted is edged in green). Mana symbols carry their letter, and ◇ for
+colourless. A tapped permanent turns a quarter onto its side, in room its row
+keeps for it so it never covers a neighbour; its name bar stays across the
+top. An attacker steps toward the player it attacks and tilts a few degrees:
+one that tapped lies just past the quarter, a vigilant one stays upright.
+Something a spell on the stack targets has a dashed red edge. Cards in hand
+have the type line under the name and the cost on the art.
+
+While you may act, what you can act on is raised and what you cannot steps
+back: a card in hand you cannot play now is dimmed most, a permanent of yours
+nothing acts on is slightly muted, and lands and the opponent's side are never
+dimmed. Summoning sickness is told by its label, not by more dimming. The
+selected card, such as the spell whose targets you are choosing, rises higher
+with a thin ink edge. Light mode is Wash (white and grey grounds, charcoal for
+what you act with) and dark mode is Night (near-black grounds, near-white);
+Academy follows the system setting.
 
 Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
 keywords with why it has each (printed, the effect that granted it, or
@@ -613,10 +630,11 @@ whatever those do not explain as "other effects"), and its state. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
 until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
-instead, showing the last card you inspected. The top bar shows the turn, the
-current step and, under each step, two rows of stop markers: **You** for your
-turn and **Them** for the opponent's, filled where the game stops. Press a
-marker to set or clear that stop (see [priority stops](#choosing-priority-stops)).
+instead, showing the last card you inspected. The top bar shows the turn. Along
+the bottom of the table runs the step bar: one cell per step, a line between
+phases, the current step shaded, and in each cell the stop for your turn above
+the step's name and the stop for the opponent's turn below it. Press a stop to
+change it (see [priority stops](#choosing-priority-stops)).
 Cards in hand are large, 136 to 150 px wide, and sit side by side while the
 strip has room; with 24 permanents or more on the battlefield the board may
 take the hand down to about 100 px wide. An empty hand is a label.
@@ -729,7 +747,7 @@ shows is what **Pay the cost** does, including the lands it keeps back for other
 cards in your hand and any mana it would produce beyond the cost.
 
 **Choosing sources yourself.** When a cost leaves a real choice of sources,
-each land you may tap is outlined.
+each land you may tap is raised.
 
 1. To accept the plan, press Space or the primary button.
 2. Point at another land to preview "tap this one, then pay the rest
@@ -861,12 +879,19 @@ it; there is no general browser undo.
 
 ### Choosing priority stops
 
-To hold up a response during the opponent's upkeep, press the **Them** marker
-under **Upkeep** on the top bar's step track, or open **Menu**, keep **Use
-priority stops** checked and check **Upkeep** under **Opponent turn**; the two
-are the same setting. Academy pauses at a priority window there when you have
-a real choice. The markers are one Tab stop: arrow keys move between them and
-Space or Enter toggles one. A recording's track shows its stops read-only.
+To hold up a response during the opponent's upkeep, press the lower stop in the
+**Upkeep** cell of the step bar, or open **Menu**, keep **Use priority stops**
+checked and check **Upkeep** under **Opponent turn**; the two are the same
+setting. Academy pauses at a priority window there when you have a real choice.
+
+Each stop on the step bar has three states, and a press moves to the next:
+**Off** (a hollow square), **Every time** (filled) and **Once** (a dot inside).
+A once stop pauses the next time the game arrives at that step on that turn and
+then turns itself off; the moves list says so ("Stopped once at Upkeep on the
+opponent's turn; that stop is now off"), marked as automation like the passes
+Academy makes for you. The Menu shows a once stop as checked. The stops are one
+Tab stop: arrow keys move between them, up and down between the two turns, and
+Space or Enter presses one. A recording's bar shows its stops read-only.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. A checked
 step stops automatic priority passing there; an unchecked step allows it unless

@@ -258,17 +258,23 @@
     syncStopsToServer();
   }
 
-  // A stop set to hold once is spent when the game stops there for you: the
+  // A stop set to hold once is spent when the game arrives at it for you: the
   // client clears it and the move list says so (automation, not your move).
+  // Acting again within the step the game stopped at spends nothing.
   let onceChecked = -1;
+  let arrivedAt = '';
   $effect(() => {
     const frame = gameStore.protocolFrame;
     if (!frame || frame.revision === onceChecked) return;
     onceChecked = frame.revision;
     if (gameStore.watchMode || frame.status === 'game_over' || frame.prompt?.actor !== frame.projection.agent.player_index) return;
+    const turn = frame.projection.turn;
+    const at = `${frame.match_id}:${turn.turn_number}:${turn.step}`;
+    if (at === arrivedAt) return;
+    arrivedAt = at;
     untrack(() => {
-      const yourTurn = frame.projection.turn.active_player_id === frame.projection.agent.id;
-      const spent = spentOnce(frame.projection.turn, yourTurn, gameStore.stops, gameStore.onceStops);
+      const yourTurn = turn.active_player_id === frame.projection.agent.id;
+      const spent = spentOnce(turn, yourTurn, gameStore.stops, gameStore.onceStops);
       if (!spent) return;
       gameStore.spendOnce(spent.side, spent.step);
       syncStopsToServer();
