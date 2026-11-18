@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 import json
+import os
 from pathlib import Path
 import subprocess
 from typing import Any
@@ -158,12 +159,14 @@ def test_cli_describes_deal_uncertainty_without_changing_statistics(
     assert request.purpose in output
 
 
-def test_cli_completes_without_training_cloud_or_callback(tmp_path: Path) -> None:
+def test_cli_completes_without_training_cloud_or_callback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _, _, _, path = fixture_policy(tmp_path)
-    # Spawn imports this module-level guard too, so admission/serving/game/replay
-    # children cannot silently take a managed route hidden from parent patches.
-    guard = tmp_path / "offline.py"
-    guard.write_text("""import importlib.abc
+    # Every interpreter, including standalone admission and replay children,
+    # imports the network guard without importing a policy backend.
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join((str(tmp_path), str(Path.cwd()))))
+    (tmp_path / "sitecustomize.py").write_text("""import importlib.abc
 import socket
 import sys
 
@@ -179,6 +182,9 @@ def forbidden(*args, **kwargs):
     raise AssertionError("forbidden cloud/credential/callback entry point")
 
 socket.create_connection = forbidden
+""")
+    guard = tmp_path / "offline.py"
+    guard.write_text("""from sitecustomize import forbidden
 from manabot.backends.torch import checkpoint
 from manabot.infra import artifacts
 artifacts.storage_from_uri = forbidden
