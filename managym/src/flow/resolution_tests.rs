@@ -2145,7 +2145,7 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
 }
 
 #[test]
-fn retained_search_permission_preserves_opponent_membership_until_caller_finishes() {
+fn retained_search_permission_preserves_decision_membership_until_caller_finishes() {
     use crate::agent::observation::Observation;
     use crate::flow::decision::{Decision, EffectFrame, SuspendedResolution};
 

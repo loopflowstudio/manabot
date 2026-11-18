@@ -3,10 +3,14 @@
 from hashlib import sha256
 import json
 from pathlib import Path
+import random
+import re
+from typing import Literal
 
 import numpy as np
 import pytest
 
+from manabot.env.match import Match
 from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
@@ -28,6 +32,7 @@ from manabot.verify.text_observation import collision_branches, priority_root, r
 import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
+from managym.decision_memory import DecisionRecord, read_records
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -1350,10 +1355,363 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
     assert env.state_digest() == before
 
 
-def test_manual_mana_sources_reach_text_commands_and_both_encoders() -> None:
-    env = priority_root(
-        ("Gray Ogre",), ("Mountain", "Mountain", "Mountain", "Forest")
+def test_decision_memory_text_lists_every_record_and_snapshot_once() -> None:
+    # A whole-game log repeats the same untapped sources at many choices; the
+    # prompt must keep every record without repeating their rules snapshots,
+    # or ordinary games pass the default budget after about 120 decisions.
+    env = managym.Env(seed=0, decision_memory=True)
+    env.reset(Match().to_rust())
+    rng = random.Random(0)
+    for _ in range(160):
+        if not env.action_count():
+            break
+        env.step(rng.randrange(env.action_count()))
+    viewer = env.current_agent_index()
+    memory = read_records(env.observation_for_player(viewer).decision_memory_json())
+    text = capture_text_decision(env).text
+    history, snapshots = text.split("Decision history, chronological")[1].split(
+        "Historical rules snapshots:\n"
     )
+    numbered = [line for line in history.splitlines() if line[:1].isdigit()]
+    assert len(numbered) == len(memory) > 50
+    described = {
+        reference.description
+        for record in memory
+        for reference in (
+            *record.context.mana_sources,
+            *record.response,
+            *record.choice.references,
+        )
+        if reference.description
+    }
+    table = snapshots.split("\n\n")[0].splitlines()
+    assert sorted(line.split(" — ", 1)[1] for line in table) == sorted(described)
+    assert all(text.count(description) == 1 for description in described)
+
+
+def test_decision_memory_text_reference_alias_preserves_historical_status() -> None:
+    from manabot.semantic.text_observation import _memory_lines
+    from managym.decision_memory import DecisionReference
+
+    env = managym.Env(seed=0, decision_memory=True)
+    env.reset(Match().to_rust())
+    for _ in range(12):
+        env.step(0)
+    records = read_records(env.observation_for_player(1).decision_memory_json())
+    reference = DecisionReference(
+        role=2,
+        definition=None,
+        appearance=None,
+        name="historical source",
+        description="historical rules",
+        power=2,
+        toughness=3,
+        tapped=False,
+        ready=True,
+        attacking=False,
+        blocking=False,
+        program=[],
+        mana=[],
+    )
+    first = records[0].model_copy(
+        update={
+            "response": [reference, reference],
+        }
+    )
+    second = first.model_copy(
+        update={
+            "ordinal": 1,
+            "response": [reference.model_copy(update={"tapped": True})],
+        }
+    )
+    text = "\n".join(_memory_lines([first, second]))
+    assert "Response: 2× M" in text
+    assert text.count("historical source") == 2
+    assert "status ready" in text and "status tapped, ready" in text
+    assert text.count("historical rules") == 1
+
+
+def _assert_memory_contexts(text: str, memory: list[DecisionRecord]) -> None:
+    """Read the documented changes independently and recover every native value."""
+    history = text.split("Decision history, chronological")[1].split(
+        "Historical reference snapshots:"
+    )[0]
+    lines = [line for line in history.splitlines() if line[:1].isdigit()]
+    assert len(lines) == len(memory)
+    reference_table = text.split("Historical reference snapshots:\n")[1].split(
+        "\n\nHistorical rules snapshots:"
+    )[0]
+    references = dict(line.split(" — ", 1) for line in reference_table.splitlines())
+    rules_table = (
+        text.split("Historical rules snapshots:")[1].lstrip("\n").split("\n\n")[0]
+    )
+    rules = dict(line.split(" — ", 1) for line in rules_table.splitlines())
+    context: dict[str, str] = {}
+    for line, record in zip(lines, memory, strict=True):
+        heading, *parts = line.split("; ")
+        assert (
+            heading
+            == f"{record.ordinal + 1}. {record.kind}/{record.choice.kind or 'unavailable'}"
+        )
+        values = dict(part.split(": ", 1) for part in parts)
+        assert values.pop("actor") == ("You" if record.actor == 1 else "Opponent")
+        assert values.pop("count") == str(record.count)
+        assert values.pop("span") == f"{record.first_position}..{record.last_position}"
+        for name in ("turn", "phase", "step", "life", "hand", "board", "mana"):
+            if name in values:
+                context[name] = values.pop(name)
+        native = record.context
+        assert context["turn"] == str(native.turn)
+        assert context["phase"] == str(native.phase)
+        assert context["step"] == str(native.step)
+        assert context["life"] == "/".join(map(str, native.life))
+        assert context["hand"] == "/".join(map(str, native.hand))
+        assert context["board"] == " | ".join(
+            "/".join(map(str, row)) for row in native.board_counts
+        )
+        for value, group in (
+            (context["mana"], native.mana_sources),
+            (values.pop("Response"), record.response),
+            (values.pop("Chosen subjects"), record.choice.references),
+        ):
+            expanded: list[str] = []
+            if value != "none":
+                for item in value.split(", "):
+                    count, key = item.split("× ") if "× " in item else ("1", item)
+                    expanded.extend([references[key]] * int(count))
+            assert len(expanded) == len(group)
+            for description, ref in zip(expanded, group, strict=True):
+                match = re.fullmatch(
+                    r"(.*?) \((H[0-9]+|rules snapshot unavailable); role (.*?); "
+                    r"P/T (-?[0-9]+)/(-?[0-9]+); status (.*?); untapped mana (.*?)\)",
+                    description,
+                )
+                assert match is not None
+                name, snapshot, role, power, toughness, status, mana = match.groups()
+                assert name == (ref.name or "unavailable")
+                assert rules.get(snapshot, "") == ref.description
+                assert role == ("none", "You", "Opponent")[ref.role]
+                assert (int(power), int(toughness)) == (ref.power, ref.toughness)
+                assert status == (
+                    ", ".join(
+                        label
+                        for label, enabled in zip(
+                            ("tapped", "ready", "attacking", "blocking"),
+                            (ref.tapped, ref.ready, ref.attacking, ref.blocking),
+                            strict=True,
+                        )
+                        if enabled
+                    )
+                    or "none"
+                )
+                assert mana == (
+                    " or ".join(
+                        "".join(
+                            f"{{{symbol}}}" * amount
+                            for symbol, amount in zip(
+                                "WUBRGC",
+                                alternative,
+                                strict=True,
+                            )
+                        )
+                        or "nothing"
+                        for alternative in ref.mana
+                    )
+                    or "none"
+                )
+        assert values == {
+            label: str(value)
+            for label, value in (
+                ("mode", record.choice.mode),
+                ("ability", record.choice.ability),
+                ("named", record.choice.named),
+                ("declared", record.choice.declared),
+            )
+            if value is not None
+        }
+
+
+@pytest.mark.parametrize("disclosure", ["open", "closed"])
+def test_distinct_long_game_decision_memory_fits_default_text_budget(
+    disclosure: Literal["open", "closed"],
+) -> None:
+    # Fixed native setup with a long library and peaceful play. Every record is
+    # emitted by this game, with changing turn/step/hand/board/source snapshots;
+    # no repeated prefix or hand-written chronological records size this proof.
+    env = managym.Env(seed=7, decision_memory=True)
+    deck = {"Mountain": 60, "Island": 20, "Gray Ogre": 120}
+    configs = [managym.PlayerConfig(name, deck) for name in ("a", "b")]
+    env.reset(managym.GameSetup(configs, decklists=disclosure))
+    remaining = [595, 1024]
+    for step in range(2500):
+        assert env.action_count(), "long-game setup ended before the size proof"
+        actor = env.current_agent_index()
+        obs = env.observation_for_player(actor)
+        if step % 50 == 0:
+            memory = read_records(obs.decision_memory_json())
+            if len(memory) >= remaining[0]:
+                decision = capture_text_decision(env)
+                _assert_memory_contexts(decision.text, memory)
+                assert len(decision.text.encode()) <= 262_144
+                # Hundreds of distinct contexts, rather than cycling a short prefix.
+                assert (
+                    len({r.context.model_dump_json() for r in memory})
+                    > remaining[0] // 2
+                )
+                assert render_decision(decision.capture_json).text == decision.text
+                with pytest.raises(RepresentationOverflow):
+                    render_decision(decision.capture_json, max_bytes=1000)
+                remaining.pop(0)
+                if not remaining:
+                    break
+        actions = obs.action_space.actions
+        build = [
+            i
+            for i, action in enumerate(actions)
+            if action.action_type
+            in (
+                managym.ActionEnum.PRIORITY_PLAY_LAND,
+                managym.ActionEnum.PRIORITY_CAST_SPELL,
+            )
+            and len(obs.agent_permanents) < 8
+        ]
+        peaceful = [
+            i
+            for i, action in enumerate(actions)
+            if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+            or (
+                action.action_type == managym.ActionEnum.DECLARE_ATTACKER
+                and action.declared is False
+            )
+        ]
+        env.step((build or peaceful or [0])[0])
+    assert not remaining
+
+
+def test_decision_memory_context_changes_and_empty_choices() -> None:
+    from manabot.semantic.text_observation import _memory_lines
+    from managym.decision_memory import DecisionReference
+
+    env = managym.Env(seed=0, decision_memory=True)
+    env.reset(Match().to_rust())
+    for _ in range(12):
+        env.step(0)
+    record = read_records(env.observation_for_player(1).decision_memory_json())[0]
+    reference = DecisionReference(
+        role=2,
+        definition=None,
+        appearance=None,
+        name=None,
+        description="",
+        power=-2,
+        toughness=0,
+        tapped=True,
+        ready=False,
+        attacking=True,
+        blocking=True,
+        program=[],
+        mana=[(1, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 2)],
+    )
+    first = record.model_copy(
+        update={
+            "context": record.context.model_copy(update={"mana_sources": [reference]}),
+            "response": [reference, reference],
+            "choice": record.choice.model_copy(
+                update={
+                    "mode": 0,
+                    "ability": 0,
+                    "named": "Island",
+                    "declared": False,
+                    "references": [reference],
+                }
+            ),
+        }
+    )
+    second = first.model_copy(
+        update={
+            "ordinal": 1,
+            "count": 3,
+            "first_position": 1,
+            "last_position": 3,
+            "context": first.context.model_copy(
+                update={
+                    "turn": 99,
+                    "phase": 4,
+                    "step": 11,
+                    "life": (-1, 0),
+                    "hand": (0, 0),
+                    "board_counts": ((0,) * 8, (0,) * 8),
+                    "mana_sources": [],
+                }
+            ),
+            "response": [],
+            "choice": record.choice.model_copy(
+                update={
+                    "kind": None,
+                    "mode": None,
+                    "ability": None,
+                    "named": None,
+                    "declared": None,
+                    "references": [],
+                }
+            ),
+        }
+    )
+    third = second.model_copy(update={"ordinal": 2})
+    text = "\n".join(_memory_lines([first, second, third]))
+    _assert_memory_contexts(text, [first, second, third])
+    assert "mana: none" in text
+    assert "Response: none; Chosen subjects: none" in text
+    third_line = next(line for line in text.splitlines() if line.startswith("3. "))
+    assert all(
+        f"{label}:" not in third_line
+        for label in ("turn", "phase", "step", "life", "hand", "board", "mana")
+    )
+
+
+def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> None:
+    manifest = json.loads(
+        Path(
+            "managym/academy/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json"
+        ).read_text()
+    )
+    matchup = manifest["matchup"]
+    env = managym.Env(seed=167, decision_memory=True)
+    env.reset(
+        [
+            managym.PlayerConfig(role, matchup[role]["cards"])
+            for role in ("hero", "villain")
+        ]
+    )
+    rng = random.Random(167)
+    for _ in range(600):
+        env.step(rng.randrange(env.action_count()))
+    memory = read_records(
+        env.observation_for_player(env.current_agent_index()).decision_memory_json()
+    )
+    assert len(memory) == 366
+    decision = capture_text_decision(env)
+    _assert_memory_contexts(decision.text, memory)
+    assert len({r.context.model_dump_json() for r in memory}) > 250
+    assert (
+        len(
+            {
+                ref.model_dump_json()
+                for r in memory
+                for ref in (
+                    *r.context.mana_sources,
+                    *r.response,
+                    *r.choice.references,
+                )
+            }
+        )
+        > 50
+    )
+    assert len(decision.text.encode()) < 180_000
+
+
+def test_manual_mana_sources_reach_text_commands_and_both_encoders() -> None:
+    env = priority_root(("Gray Ogre",), ("Mountain", "Mountain", "Mountain", "Forest"))
     priority = capture_text_decision(env)
     cast = next(action for action in priority.actions if "Cast" in action.description)
     submit_response(env, priority, cast.reference)
@@ -1363,7 +1721,9 @@ def test_manual_mana_sources_reach_text_commands_and_both_encoders() -> None:
         for action in payment.actions
         if "Tap for mana" in action.description and "Forest" in action.description
     )
-    assert any("Pay the offered cost" in action.description for action in payment.actions)
+    assert any(
+        "Pay the offered cost" in action.description for action in payment.actions
+    )
     assert len(payment.actions) == 5
     _assert_native_observation_parity(env, payment)
     submit_response(env, payment, source.reference)

@@ -540,11 +540,14 @@ updates a run has already made are the same whatever target it is later given:
 Learning(horizon=64)
 # Damped policy: the absolute iteration, here rescaled onto 3200 updates.
 DampedPolicyLearning(gradient="damped_policy", iteration_schedule=IterationSchedule(steps=3200))
+# Damped policy on learner decisions: the same curves over 8.8M collected rows.
+DampedPolicyLearning(gradient="damped_policy", decision_schedule=LearnerDecisionSchedule(transitions=8_800_000))
 ```
 
 | Learning record | What its rates read | Past the horizon |
 | --- | --- | --- |
 | `DampedPolicyLearning` | The absolute iteration, or that iteration mapped onto `iteration_schedule.steps` when a schedule is declared ([step sizes](learning.md#4-update)) | The mapped iteration stays at its last value |
+| `DampedPolicyLearning` with `decision_schedule` | Learner decisions completed before the update, as a fraction of `transitions`, so arms whose games differ in length follow one curve per decision | The rates stay at their final values |
 | `Learning` (PPO) | `update / horizon`, the fraction of the declared horizon completed | The rates stay at their final values |
 
 `Learning.horizon` is required for self-play: `SelfPlay` refuses a PPO record
@@ -556,6 +559,10 @@ config; to train under another horizon, start a new run. Extending a run past
 its horizon is allowed and trains on at the final rates. An unset `horizon` is omitted from serialization. Saved regimes took progress
 from each stage's own length and run only from the revision
 [saved regimes](#saved-regimes) names.
+
+`SelfPlay.learner_transitions` stops a run after the update that reaches that
+many learner decisions; it requires the decision schedule, and the launch's
+`updates` becomes a safety ceiling that fails the run if reached first.
 
 Evaluation is outside training and does not consume the training clock. Saved
 regimes with `schedule_clock="run_elapsed_budget"` divided elapsed wall time by
@@ -652,7 +659,9 @@ or observation configs, and an EMA policy never loads as raw.
 policy instead of random weights. Only the policy is inherited: Adam, EMA,
 streams and the schedule start fresh, so choose a schedule meant for a trained
 policy. To continue a run with its Adam and EMA, continue the run
-([recovery](#recovery)).
+([recovery](#recovery)). The published model must equal the run's, with one
+exception: a control that keeps the decision log may seed a memory encoder
+([starting from a control trunk](observation-and-model.md#starting-from-a-control-trunk)).
 
 ## Experiments
 

@@ -13,6 +13,9 @@ import torch
 
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.learning import DampedPolicyLearning, Learning, Schedule
 from manabot.training.rollout.collection import collect
@@ -118,14 +121,34 @@ def test_nested_phases_never_exceed_their_parent() -> None:
     assert stats["Learning/Minibatches/Optimizer step"]["count"] == calls
 
 
-def test_collection_timers_leave_the_batch_identical() -> None:
+@pytest.mark.parametrize("memory", [False, True])
+def test_collection_timers_leave_the_batch_identical(memory: bool) -> None:
     agent = _agent()
-    timed, untimed = _collector(agent), _collector(agent)
+    if memory:
+        space = ObservationSpace(
+            ObservationConfig(
+                max_decision_records=512,
+                max_decision_reference_details=16384,
+                max_decision_references=256,
+                max_decision_members=8192,
+            )
+        )
+        agent = ActorCritic(space, agent.config)
+    timed, untimed = (
+        _collector(agent, scripted=not memory),
+        _collector(agent, scripted=not memory),
+    )
     timed.profiler, untimed.profiler = Profiler(), Profiler(enabled=False)
     a, b = collect(timed, agent, 1), collect(untimed, agent, 1)
     for field in ("actions", "logprobs", "rewards", "dones", "values"):
         np.testing.assert_array_equal(getattr(a, field), getattr(b, field))
     assert any(path.startswith("Collection/") for path in timed.profiler.get_stats())
+    assert "Collection/Observation retention" in timed.profiler.get_stats()
+    if memory:
+        assert (
+            "Collection/Observation retention/Memory capture"
+            in timed.profiler.get_stats()
+        )
 
 
 def test_phase_rows_are_update_deltas_with_historical_names() -> None:

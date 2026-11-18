@@ -58,6 +58,10 @@ class GameConfig(BaseModel):
     # Forced decisions (one legal action) are resolved natively, never sent to a
     # model. Disable only to exercise forced-decision paths themselves.
     skip_trivial: bool = True
+    # Record the viewer-safe log of the opponent's decisions for the whole game
+    # and show it in the prompt, as `managym.Env(decision_memory=True)`. Off by
+    # default, like the policy's `ModelConfig.decision_memory`.
+    decision_memory: bool = False
     opponent_checkpoint: Path | None = None
     # Stop before another decision after this reported spend. An in-flight
     # decision (including its repair) can exceed the threshold; this is no hard cap.
@@ -333,11 +337,23 @@ def play(
         if opponent is not None:
             summary.opponent_sha256 = opponent.sha256
             opponent.admit(players, config.opponent_seed)
+
+        def root() -> managym.Env:
+            started_env = managym.Env(
+                seed=config.seed,
+                skip_trivial=config.skip_trivial,
+                decision_memory=config.decision_memory,
+            )
+            started_env.reset(players)
+            return started_env
+
         with observe("native_reset"):
-            env = managym.Env(seed=config.seed, skip_trivial=config.skip_trivial)
-            env.reset(players)
+            env = root()
         with observe("clone_replay"):
-            replay = env.clone_env()
+            # A second game from the same seed, not a clone: a clone is a search
+            # fork and records no decisions, so with decision memory on its
+            # viewer history would differ.
+            replay = root()
         while not env.is_game_over():
             if summary.decisions >= config.max_decisions:
                 raise TimeoutError("game decision limit reached")

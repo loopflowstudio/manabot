@@ -99,6 +99,8 @@ pub struct VectorEnv {
     seed_stride: u64,
     uniform_roster: RootRoster,
     skip_trivial: bool,
+    decision_memory_enabled: bool,
+    decision_memory_include_own: bool,
     fresh_roots: Vec<bool>,
 }
 
@@ -156,8 +158,30 @@ impl VectorEnv {
             seed_stride: num_envs.max(1) as u64,
             uniform_roster: RootRoster::default(),
             skip_trivial,
+            decision_memory_enabled: false,
+            decision_memory_include_own: false,
             fresh_roots: vec![false; num_envs],
         }
+    }
+
+    pub fn with_decision_memory(mut self, enabled: bool) -> Self {
+        self.decision_memory_enabled = enabled;
+        self.envs = self
+            .envs
+            .into_iter()
+            .map(|env| env.with_decision_memory(enabled))
+            .collect();
+        self
+    }
+
+    pub fn with_decision_memory_include_own(mut self, enabled: bool) -> Self {
+        self.decision_memory_include_own = enabled;
+        self.envs = self
+            .envs
+            .into_iter()
+            .map(|env| env.with_decision_memory_include_own(enabled))
+            .collect();
+        self
     }
 
     pub fn enable_statistics(&mut self) -> Result<(), AgentError> {
@@ -374,6 +398,14 @@ impl VectorEnv {
     /// replacement (including a repeated seed). Never a replay or world identity.
     pub fn current_game_generations(&self) -> Vec<u64> {
         self.envs.iter().map(|env| env.capture_generation).collect()
+    }
+
+    pub fn decision_memory_cursors(&self) -> Result<Vec<[[u64; 5]; 2]>, AgentError> {
+        self.envs.iter().map(Env::decision_memory_cursors).collect()
+    }
+
+    pub fn decision_memory_counts(&self) -> Result<Vec<[[usize; 4]; 2]>, AgentError> {
+        self.envs.iter().map(Env::decision_memory_counts).collect()
     }
 
     pub fn enable_profiler(&mut self) {
@@ -847,11 +879,16 @@ impl VectorEnv {
         let policy = self.player_policies;
         let stride = self.seed_stride;
         let skip_trivial = self.skip_trivial;
+        let include_own = self.decision_memory_include_own;
+        let memory_enabled = self.decision_memory_enabled;
         self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
             if !failed[index] {
                 return Ok(InfoDict::new());
             }
-            *env = Env::new(*next_seed, skip_trivial, false, false).with_player_policies(policy);
+            *env = Env::new(*next_seed, skip_trivial, false, false)
+                .with_player_policies(policy)
+                .with_decision_memory(memory_enabled)
+                .with_decision_memory_include_own(include_own);
             *fresh = true;
             let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
             write(index, &obs, 0.0, false, false)?;

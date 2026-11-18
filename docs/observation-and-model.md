@@ -10,7 +10,8 @@ outputs. This guide is the network between them.
 - [What the network does](#what-the-network-does)
 - [Sizes in the TLA pilot](#sizes-in-the-tla-pilot)
 - [Policy inputs](#policy-inputs)
-- [Proposed: state, records, history and memory](#proposed-state-records-history-and-memory)
+- [Whole-game decision memory](#whole-game-decision-memory)
+- [State, records and history](#state-records-and-history)
 - [What we know](#what-we-know)
 - [Where the code lives](#where-the-code-lives)
 
@@ -64,9 +65,10 @@ observation dictionary and does no validation or lookups of its own
    `value_token` and `attention_readout` replace the mean with a learned summary
    ([readout comparison](../experiments/reports/value-readout-252.md)).
 
-The GRU encodes a card's rules program, not game history. The network has no
-recurrent game memory, and the optional recent-event encoder is off by default.
-Each decision is judged from its current observation alone.
+The card GRU encodes a card's rules program. Optional recent events are off by
+default. [Whole-game decision memory](#whole-game-decision-memory) adds a
+separate encoder over past opponent decisions, recomputed from the observation
+at every forward rather than carried between calls.
 
 ### Scoring legal actions
 
@@ -573,29 +575,399 @@ shared object embeddings; an empty window gives exactly zero context.
 History-off keeps the historical `[E,7]` tensor and parameters. This is not
 complete decision history, and no training benefit has been measured.
 
-## Proposed: state, records, history and memory
+## Whole-game decision memory
 
-**Proposed, not accepted and not built.** This section records a contract under
-review. The rest of this guide describes shipped behavior; nothing here changes
-a tensor, model, default or checkpoint.
+**Unreleased.** Whole-game native logs, shared immutable prefixes and Torch
+encoders are implemented with bounded execution rows. Memory stays opt-in.
+The [cost report](../experiments/opponent_memory.md) records the current
+suffix A40 calibration: control costs 1.105× incumbent time and GRU-K1 1.201×. These are exploratory cost measurements;
+matched training and paired strength evaluation have not run. These CUDA receipts
+precede the record-cache and native opt-in cuts below. Transformer probe and
+earlier calibration evidence remain separate.
 
-### Recommendation
+Collection retains native table cursors and reuses unchanged prefix versions.
+The learner folds shared chunks assembled from the same cached per-record host
+features. Collection featurizes individual appended records and caches detached recurrent states after every record except
+the current last one. That last record is recomputed so coalesced passes keep
+their multiplicity. Each native stream owns its open serving segment; earlier
+issued prefixes retain their exact version. Unbranched new suffixes run in one
+packed GRU call, whose intermediate outputs supply the per-record states. Native
+game generation and prefix identity bound cache reuse, and scope exit discards the
+cache before a parameter update. These tensors never become observations,
+replays, checkpoints or search-fork state. Dense stateless encoding remains the
+reference, and arbitrary imported prefixes still undergo complete admission.
+The transformer keeps its full-sequence encoder. Raw storage and recovery keep
+content-addressed immutable chunks and full changed-chunk admission; this cache
+cut does not remove that retention cost.
 
-Give the policy complete typed current state and no persistent policy state as
-the first arm. A rules obligation that is still in force belongs in the
-observation, where the network reads it, not in a memory that must have seen it
-begin. A reducer that runs within one decision, such as the GRU over effect
-tokens, resets every forward call and is not memory. Memory is a later arm for
-inference from past behavior, compared against this stateless reference.
-"Sufficient" here means the viewer's decision-relevant observable state; it
-does not make hidden cards observable or the game fully observed.
+To disable history, set `decision_memory="none"`, all four decision-memory
+capacities to zero and `decision_memory_include_own=False`. Training then leaves
+native decision logs empty and bypasses capture. Positive record capacity enables
+capture even for a log-only control. Direct native callers opt in with
+`managym.Env(decision_memory=True)` or `managym.VectorEnv(decision_memory=True)`;
+`decision_memory_include_own=True` also enables it. Search clones retain existing
+facts and never append hypothetical decisions.
 
-| Layer | Holds | Shipped | Must not carry |
+To let a Torch policy use the opponent's earlier choices, select an encoder and
+one or four summaries in its model configuration:
+
+```python
+from manabot.infra.config import ModelConfig
+
+model = ModelConfig(
+    decision_memory="transformer",
+    decision_memory_summaries=1,
+    attention_on=True,
+    attention_layers=2,
+    policy_film=True,
+    value_aggregation="masked_mean",
+)
+```
+
+Use this model configuration in a recipe's `SelfPlay` settings. The settings
+must also declare the log's capacities and bounded execution rows, or
+validation names the missing fields:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+observation = ObservationConfig(
+    max_decision_records=512,
+    max_decision_reference_details=16_384,
+    max_decision_references=128,
+    max_decision_members=8192,
+    decision_memory_include_own=False,
+)
+settings = SelfPlay(
+    match=match, model=model, observation=observation, learning=learning,
+    collection_rows=2, bootstrap_rows=2, learner_rows=2,
+)
+```
+
+These are bounds selected from the seeded census; a game that exceeds them stops with a
+typed capacity error rather than dropping records. The policy receives the whole game's viewer-safe
+opponent decision records at each decision. For example, a pass with mana open
+and a card in hand remains available after later turns; a recent-event window
+can lose that context. The encoder produces summaries that condition the board
+attention, allowing both legal-action probabilities and the value estimate to
+depend on the earlier choice. This does not establish a learning benefit; the
+[three-arm pilot](../experiments/opponent_memory.md) compares both encoders with
+a control, after supervised probes select one shared summary count.
+
+| Setting | Choices and behavior |
+| --- | --- |
+| `decision_memory` | `"none"` (default), `"transformer"` or `"gru"`. Memory is opt-in. |
+| `decision_memory_summaries` | 1 or 4 for either encoder; default 1. Ignored when memory is `"none"`. |
+| `attention_on`, `policy_film` | Both must be `True` for memory. FiLM carries board context to actions without focus objects. |
+| `recent_events` | Must be `False` when decision memory is enabled. The bounded event encoder remains a separate option. |
+| `decision_memory_gate_scale` | Positive float, default 1.0. Multiplies each board layer's learned gate parameter inside `tanh`; a larger scale opens the join in fewer updates. Ignored when memory is `"none"`. |
+
+A control can use `decision_memory="none"` with the same positive
+observation capacities. Native encoding, immutable prefix retention and input
+validation still carry the full log. The control creates no memory parameters
+or prepared memory features. Its vocabulary shape differs from the
+history-disabled incumbent, so the two do not share identical initialization.
+Checkpoints retain the declared observation capacities in every arm.
+
+The LLM text observation lists every opponent record chronologically. Repeated
+historical references and rules descriptions appear once in alias tables; the
+aliases resolve snapshots at the choice, never today's objects. Paired life and
+hand values, and the two board rows, are ordered You/Opponent. Text representation
+`manabot-text-10` prints the first record's context in full, then only changed
+turn, phase, step, life, hand, board and untapped-source values. Omitted context
+fields keep the previous record's value; `none` explicitly clears a reference
+group. Choices and responses apply only to their own record, including empty
+groups. Every record retains its kind, count, chronological span and selectors.
+
+Native long-game fixtures with hundreds of distinct contexts fit the default
+256 KiB budget through 1,029 records under both disclosures. This is a bounded
+size check, not a guarantee for every game: sufficiently large distinct
+snapshots still raise `RepresentationOverflow` with the complete size, without
+trimming history. A byte fit does not establish a model's token fit; the LLM
+harness must check its tokenizer and chat-template budget.
+
+LLM games record and show this history only when `GameConfig.decision_memory`
+is set (`manabot.verify.llm_game`); it is off by default, like the policy's
+encoder.
+
+Run the headless software proof with:
+
+```bash
+uv run --extra dev python -m manabot.verify.decision_memory --out .runs/decision-memory-demo
+```
+
+Use a fresh output directory. It retains both viewers' logs, captures, text,
+replayed Commands, four policy checkpoints under each disclosure and a JSON
+summary. It checks a private selection followed by public revelation, a pass
+with mana open, a declined block, branch isolation, encoder parity, separate
+actor/value gradients and one ordinary CPU update with checkpoint reload.
+Controlled FiLM weights exercise memory sensitivity before training; the update
+uses ordinary initialization. This proves software connectivity and preserves
+legality and focus; CUDA admission, throughput and learning remain to be measured.
+
+Both encoders use record width 64 and zero dropout. The transformer has two
+layers, four heads and feedforward width 128. The GRU has one layer with hidden
+width 64 and projects its final valid state to the selected summaries. Both
+return zero summaries for an empty history. Record embeddings use absolute
+ordinal and span features. The GRU reads their chronological order; the
+transformer adds a learned projection of prefix-relative recency (rank / 128)
+as a sequence position signal, outside the shared record embedding. Memory
+requires the Torch backend; MLX raises `UnsupportedPolicy` for a memory-enabled configuration.
+
+### What a record means
+
+managym records committed, nontrivial opponent choices separately for each
+viewer. By default, your own choices are excluded; the optional own-seat mode is
+described below. Decisions with only one legal action are always excluded.
+A pass is eligible only when the opponent holds priority, has at least one
+untapped mana source and has a card in hand. This rule never tests whether a
+hidden card is castable. Consecutive eligible passes with identical public
+context, response and choice coalesce, retaining their count and chronological
+span. A changed public context prevents coalescing.
+
+Each record contains its order and turn/step, decision kind, life totals, hand
+sizes, board summary, untapped mana-source snapshots, what the choice responded
+to and the public projection of the chosen action. Historical characteristics
+are snapshots; leaving and returning objects do not rewrite them. Private
+choices remain unavailable, including after a later reveal. Open or closed
+decklists follow the match's native disclosure setting; memory grants no extra
+information. Native observations, JSON, policy tensors, learning tokens and LLM
+text carry the same viewer-safe records.
+
+### Replay, reset and checkpoints
+
+A new game starts with an empty log; turn boundaries preserve it. Rejected or
+stale Commands append nothing. Search forks inherit the viewer's prefix without
+appending hypothetical choices; sampled hidden cards never relabel that prefix.
+When capture is enabled, replaying the original Commands reconstructs the records,
+including after resume. Each seat keeps its own view.
+
+The policy summary depends on the entire available prefix. Collection may reuse
+stable-record results within an unchanged inference scope; the cache is discarded
+before parameter updates and excluded from game persistence. Training remains per decision;
+recurrent sequence batches and burn-in are unnecessary. A checkpoint retains
+the encoder choice and weights through ordinary persistence. Restoring a game
+still requires its original replay or exact native state; weights alone do not
+restore a game in progress.
+
+Collection retains immutable game/viewer prefixes, sharing unchanged records and
+details across decisions. Coalescing creates a new tail version; previously
+sampled decisions keep their original count. Record-aligned chunks own consecutive records, their members, the snapshots
+they introduce and those snapshots' details. Each immutable node is admitted
+against its predecessor's ordinal/span/member/reference/detail cursor. Cached
+features bind the checkpoint vocabulary's immutable bytes and definition bounds;
+sequence coordinates and batch offsets are assembled for the selected prefix.
+Cached record features do not change when the prefix grows. Dense imports
+and explicit dense exports still undergo complete content and padding checks. Ordinary collector recovery replays its bounded native
+journal and checks a compact chunk archive. Numerical incidents select rows and
+budget whole prefixes before copying them; evidence that cannot fit is explicitly
+marked incomplete. These diagnostics do not resume games.
+
+Bootstrap retains immutable prefixes with ordinary next-state fields. Collection,
+frozen opponents and bootstrap select prefix references and assemble one execution
+chunk directly from admitted fragments. Host feature caches expire with their
+prefix/segment owners and hold no learned embeddings or recurrent state. Sampling still uses one
+RNG call in the original group order.
+
+For GRU learning, each execution chunk prepares the distinct record chunks in
+its selected prefixes once. The backend embeds each node once, advances its GRU
+from the predecessor state and reads each policy row at its own tail. Repeated
+prefixes share gradient paths: their loss contributions still add with the
+logical actor and critic denominators. Rows keep their selected order; sampling
+and optimizer boundaries are unchanged. This temporary tree and its neural
+states expire with that execution chunk's backward graph. Collection uses the
+same causal fold with detached record roots, recomputing only each current last record.
+Bootstrap without an inference scope folds without cached roots. Dense inputs
+and the transformer retain the stateless full-prefix encoder.
+
+Memory-enabled self-play (including a control retaining the same logs)
+requires explicit positive `SelfPlay.collection_rows`, `bootstrap_rows` and
+`learner_rows` limits. For example, two rows each exercises the controlled CPU
+proof size; calibrate these resource limits for the target device. These Torch
+execution settings do not change native stream count,
+history capacities, learner selection, shuffled order or logical optimizer
+minibatches. Learner chunks accumulate gradients with the logical minibatch's
+separate actor and critic denominators, then clip and step once. PPO prepares
+at most one chunk ahead. Full histories remain intact even for an execution
+chunk of one row; inability to fit that row is a calibration failure.
+
+Host RSS and device memory remain separate limits. CPU chunk parity and
+residency measurements do not admit a CUDA worker, guarantee learned-game
+storage, or establish throughput or playing strength. The independent-game host
+measurement covers its recorded cohort and one logical execution minibatch.
+Recipes without memory retain their historical execution when row limits are
+omitted.
+
+Record, reference (an object's snapshot at the choice), reference-detail and
+member capacities belong to the supplied
+observation space: `max_decision_records`, `max_decision_references`,
+`max_decision_reference_details` and `max_decision_members`. All default to zero (disabled)
+and must be positive together for v11 memory. The example uses the 200-game
+Elemental heuristic census
+maxima rounded upward; it does not admit learned-game tails.
+
+The native viewer log interns exact immutable reference snapshots. Records own
+ordered mana-context, response and choice members, including repeated references.
+Life, hand and board counts occupy fixed named record columns with exact two-word
+integer transport. Eligible exact registered faces may omit their repeated rule
+program; preparation expands them through the same semantic route as full
+snapshots. Local table indexes and appearance identities are never numerical
+learning features. The nonlinear featurizer binds each detail's field, typed
+value and position before reference pooling, then pools the three member groups
+separately. Transformer records use pre-norm attention; summaries are normalized
+before the gated additive board join.
+
+`decision_memory_include_own=True` additionally records your own public signals,
+using the opposing viewer's entitled projection **at emission**, rebased to your
+seat. Non-announced references must also be entitled to you; the other viewer's
+private knowledge is never declassified into your history.
+It never stores your private choice or hand view as public evidence. Actor roles
+remain explicit and different actors never coalesce. Native scalar/vector
+constructors take the same default-false keyword; library training wrappers pass
+it from `ObservationConfig`. Configure it before reset, since missing history
+cannot be filled in later. Primary census and CPU comparisons keep it false.
+Disclosure is one symmetric game-level setting on `GameSetup`; both player
+rows carry `decklists_open`. That bit also tells the policy whether the
+opponent knows its list, so own-seat memory adds no disclosure flag.
+
+
+`ActorCritic.encode_decision_memory(device_prepared)` exposes the same
+production summaries as a differentiable `[batch, K, hidden_dim]` tensor for
+offline probes. It uses the policy's token, name and definition embeddings;
+its input is admitted Prepared data, and it evaluates no action or value head.
+
+### Starting from a control trunk
+
+Each arm is a fresh self-play run started through `SelfPlay.pretrained`.
+Collection retains record-aligned immutable chunks. Native transport counts and
+process-local game generations let each stream extend its previous viewer prefix:
+one bulk comparison of native generations and cursors reuses issued prefixes
+for unchanged rows before scalar capture. Changed rows reuse their game identity
+and pass transport shape/capacity checks in a batch; their immutable chunks still
+receive full admission. Vocabulary and definition admission batch only the new
+chunks, keeping temporal and partition checks on each exact predecessor chain.
+After a commit, closed chunks are reused and the open chunk is re-read to preserve coalesced
+passes. Reset, fork and replay restoration change the generation even when a
+seed repeats. These cursors are transport metadata, never policy features or
+replay identities. Dense imports and archives still validate the complete prefix.
+
+During collection, each record except the current last one caches a detached
+state and cumulative reference embeddings for the unchanged policy's inference
+scope. Preparation stops at that root and builds only newly appended records
+and the current last record; cached ancestors contribute no feature assembly or
+device transfer. Coalesced versions keep their own last-record fragment. New
+record fragments share one host featurization batch, and unbranched suffixes
+share one packed GRU call while retaining all intermediate states. Scope closure
+or a parameter change invalidates neural results; these caches never enter a replay,
+checkpoint or search fork. Learning continues to fold unique nodes with gradients
+inside each execution chunk.
+
+A control is a log-enabled policy with `decision_memory="none"`: it retains and
+validates the log and reserves its vocabulary without encoding it. An incumbent
+has history disabled. The true history-disabled incumbent remains the throughput
+reference.
+
+Set `SelfPlay.pretrained` to the trunk's published checkpoint; a launched job
+receives it as `TrainingJob(start=...)` and reads `run.input("start")`
+([training](training.md#reuse-a-published-policy)). Choose the memory encoder,
+summary count and gate scale in the branch's `model`. The control branch uses
+the trunk's identical model settings.
+
+Loading verifies the world and observation configuration. It permits a model
+change only from a control to a memory encoder, with only `decision_memory`,
+`decision_memory_summaries` and `decision_memory_gate_scale` differing. The
+trunk must declare the same positive decision capacities as the branch. The
+loop copies every shared tensor with strict shape checks and initializes only
+`decision_memory.*` and the per-layer memory projections and gates; missing
+shared or unexpected keys fail. A trunk from an older world or a different
+observation layout cannot be branched.
+
+At initialization, including long and empty histories, a branch gives the
+trunk's action probabilities and value bit for bit. Adam, EMA, streams and the
+schedule start fresh at branch iteration one. Etude records the starting
+checkpoint as the run's input; checkpoints retain their own source identity.
+
+Each board attention layer adds a gated projection of the mean memory summary
+(K=1 in the pilot; K=4 remains supported) to every real board token before its
+single self-attention call:
+
+```text
+board_input + tanh(scale * gate) * projection(mean(summaries))
+```
+
+The addition is owner-neutral, skips padding and leaves the optional value token's
+input untouched. The value token still reads the conditioned board through
+attention. No summary tokens extend the sequence. Each layer has its own
+nonzero-initialized, bias-free projection and scalar `gate` initialized to zero.
+The gate receives a finite gradient on the first update; projection and encoder
+receive gradients once the gate opens. Empty histories yield zero summaries and
+therefore zero additions, even with open gates. At initialization, the branch
+uses exactly the control's sequence, attention and feedforward arithmetic.
+Every memory policy uses this gated join, including one built without a trunk.
+
+This replaces the unmerged J1 token join, which computed both joint and control
+attention at every layer and blended the results. Frozen probe and CUDA receipts
+retain that earlier arithmetic and their original source identities; they do not
+measure the additive join.
+
+Training logs `decision_memory/gate_<layer>`, the value of
+`tanh(scale * gate)` for each board layer. A gate that stays near zero means
+the run still computes its board-only control, whatever its configuration says; read
+that metric before comparing a memory run with its control. A gate moves about
+one learning rate per Adam optimizer step, rather than per collection iteration,
+so a short run can end before it opens. Raise
+`decision_memory_gate_scale` for the whole comparison in that case, never for
+one run.
+
+To measure whether a trained policy uses its memory, play the checkpoint
+against itself with the memory blanked:
+
+```python
+from manabot.eval.admission import register_checkpoint
+
+intact = register_checkpoint(path, backend=backend, match=match,
+    content_suite=suite, player_id="gru", display_name="GRU")
+blanked = register_checkpoint(path, backend=backend, match=match,
+    content_suite=suite, player_id="gru-blanked", display_name="GRU, memory blanked",
+    blank_decision_memory=True)
+```
+
+The blanked registration carries `player_spec.blank_decision_memory=True`.
+Scalar and shared inference zero all four memory tables before ordinary input
+admission and preparation. The checkpoint, table shapes, current board, legal
+actions and native game history stay intact. The two registrations have
+distinct registration and serving keys, and are two Etude players; the default
+`False` leaves the registration exactly as it was. A score near one half means
+the policy plays the same without its memory. This measures use of the retained
+history, not the incremental value of every fact already on the board.
+
+Overflow or mismatched companion shapes raise a typed Capacity error with the
+required counts. Keep the failed game's evidence, increase the relevant
+capacities in a fresh configuration and start a compatible run. The log never
+drops old choices, truncates details or retries without memory. Paid-run
+overflow handling remains a pre-launch decision; retain and count every failed
+game.
+
+The changed v11 buffer layout uses normal world binding. Older checkpoints are
+refused with their source revision and differing buffer names; run them from
+that compatible revision. Increasing capacities also changes the input layout.
+Do not rebind checkpoints to a new world or edit their saved shapes to bypass
+admission. Memory does not change native legality, focus indexes or action
+capacity.
+
+## State, records and history
+
+Current rules obligations belong in the current observation even when memory
+is enabled. An active effect cannot depend on the policy remembering when it
+began. Opponent memory supplements that state with evidence of past behavior;
+it does not make hidden cards observable.
+
+| Layer | Holds | Representation | Must not carry |
 | --- | --- | --- | --- |
-| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, deck disclosure | Object rows and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
-| Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source, exact memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
-| History | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
-| Memory | Inference from everything the seat has been shown | Nothing | A fact the current observation should carry, or anything the viewer may not see |
+| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, game-level disclosure | Object rows, library facts and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
+| Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source and memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
+| Recent events | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
+| Decision memory | Whole-game viewer-safe decision records; optional own public signals | Unreleased: four decision tables and transformer/GRU summaries for board attention | Unavailable information, or a substitute for current native rules facts |
 
 ### Counterexamples
 
@@ -653,38 +1025,7 @@ this proof first.
 | All objects, effects and frames as global attention tokens | Unmeasured. Moves attention from N² to (N + E + F)². Memberships need not become tokens. Compact transport alone does not justify it. |
 | One whole-observation GRU or pooled vector | Rejected as the sole interface: it loses direct target addressing and imposes an arbitrary order. A summary may supplement object outputs. |
 | Effective state plus a finite event window, omitting active effects | Rejected by the expiry, source and eviction cases. Recovering active records from the suffix is as hard as the missing state, and impossible once the event is gone. |
-| Persistent memory on top of complete typed state | Viable later arm. Not a repair for lossy rules state, and it requires the lifecycle below. |
-
-### Memory lifecycle
-
-A persistent arm needs all of these together, and a random-weight forward smoke
-is not evidence for any of them:
-
-- **Ownership.** State belongs to match instance, stream generation, viewer seat
-  and policy generation, never to a vector slot or whichever player acted last.
-- **Reset.** A new game, rematch or slot reuse starts empty; turn boundaries
-  preserve state. A rejected or stale Command commits no transition, and forced
-  decisions stay skipped.
-- **Seat.** Each seat has independent state. A seat swap routes to the
-  corresponding state and never relabels one player's memory as another's.
-- **Hidden information.** Updates read only that seat's authorized observations
-  and the public events since its committed cursor. Opponent private frames,
-  sampled possible worlds and future trajectory facts never enter.
-- **Eviction.** Current effects, hand minima, retained library positions, disclosure and pending
-  obligations stay in native state regardless of memory or window. Old history
-  rows disappear explicitly and never change a legal decision.
-- **Fork.** A fork clones state and cursor, then evolves independently. Replay
-  reproduces the same ordered inputs and weights. A departed object's handle
-  never reconnects to a returned physical card.
-- **Restoration.** Exact restore stores hidden state, cursor, viewer and match
-  identity, observation schema, model hash and relevant RNG with committed
-  learning state. Weights alone are not a mid-game snapshot. Without the state,
-  restoring needs replay from the true initial viewer prefix; a missing prefix
-  is an explicit failure, never a zero-state fallback or a last-32-row burn-in.
-- **Training and serving.** Training uses contiguous same-seat sequences, episode
-  and padding masks, and declared truncation and burn-in. Loss reads admitted
-  learning rows only; burn-in adds no opponent reward. Parameter changes need a
-  declared refresh policy. Collection and serving call one transition API.
+| Whole-game decision memory | Supplements complete typed state through summary tokens; see the intended interface above. |
 
 ### Unresolved and unmeasured
 
@@ -703,8 +1044,8 @@ is not evidence for any of them:
   comparison has tested that.
 - Learned sums preserve multiplicity but are not injective; whether that loses
   decision-relevant distinctions in practice is unmeasured.
-- Sequence training changes collection, sampling and recovery, and that cost has
-  not been estimated.
+- Whole-game memory throughput, capacity and learning effects remain unmeasured;
+  the pilot must establish them before a default changes.
 
 ## What we know
 

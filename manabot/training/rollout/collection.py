@@ -37,6 +37,12 @@ import numpy as np
 
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
+from manabot.env.memory_store import (
+    MEMORY_FIELDS,
+    MemoryStore,
+    Prefix,
+    PrefixObservation,
+)
 from manabot.env.observation import (
     ACTION_TYPE_DIM,
     ActionEnum,
@@ -90,7 +96,7 @@ OPPONENT_MODES = ("random", "frozen", "self", "learning")
 # -----------------------------------------------------------------------------
 
 
-class _ObservationRows:
+class ObservationRows:
     """One update's recorded non-action observation rows, each copied once.
 
     Recording copies a step's sampled rows from the native buffers straight into
@@ -103,14 +109,22 @@ class _ObservationRows:
     copies used rows once. Beside the observation fields it keeps each row's
     bucket needs as admission measured them for the acting policy
     (`manabot.policy.buckets.row_needs`; -1 where none were measured), so the
-    learner regroups them instead of measuring the rows again.
+    learner regroups them instead of measuring the rows again. Opponent memory
+    is retained only as immutable prefix references in the collector's shared
+    MemoryStore; it never enters these dense per-update arrays.
     """
 
     def __init__(
         self, buffers: ObservationBuffers, keys: list[str], capacity: int
     ) -> None:
         self._buffers = buffers
-        self._keys = keys
+        self._keys = [key for key in keys if key not in MEMORY_FIELDS]
+        self.memory: list[Prefix] = []
+        self.memory_capacities = (
+            tuple(buffers[key].shape[1] for key in MEMORY_FIELDS)
+            if "decision_records" in buffers
+            else None
+        )
         self.rows = 0
         self.capacity = max(capacity, 1)
         self._arrays = self._allocate(self.capacity)
@@ -126,9 +140,19 @@ class _ObservationRows:
             for key in self._keys
         }
 
-    def append(self, rows: np.ndarray, needs: np.ndarray | None = None) -> int:
+    def append(
+        self,
+        rows: np.ndarray,
+        needs: np.ndarray | None = None,
+        *,
+        prefixes: tuple[Prefix, ...] = (),
+    ) -> int:
         """Copy buffer `rows` (and their bucket `needs`, when measured) to the end
         of the store; return the first store row."""
+        if self.memory_capacities is not None:
+            if len(prefixes) != len(rows):
+                raise ValueError("missing decision-memory prefix references")
+            self.memory.extend(prefixes)
         start, stop = self.rows, self.rows + len(rows)
         if stop > self.capacity:
             self.capacity = max(2 * self.capacity, stop)
@@ -161,7 +185,7 @@ class _ObservationRows:
 class _Pending:
     """A decision awaiting its reward at the same seat's next turn or game end."""
 
-    obs_row: int  # Row in this update's _ObservationRows.
+    obs_row: int  # Row in this update's ObservationRows.
     action: int
     logprob: float
     value: float
@@ -193,11 +217,18 @@ class RecordedObservations:
     index: np.ndarray
     # Recorded rows' bucket needs [N, len(AXES)], -1 where unmeasured.
     needs: np.ndarray | None = None
+    memory: tuple[Prefix, ...] = ()
+    memory_capacities: tuple[int, int, int, int] | None = None
 
     def gather(self, indexes: np.ndarray) -> dict[str, np.ndarray]:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
         recorded = self.index[indexes]
-        return {key: value[recorded] for key, value in self.rows.items()}
+        rows = {key: value[recorded] for key, value in self.rows.items()}
+        if self.memory_capacities is not None:
+            return PrefixObservation(
+                rows, [self.memory[int(i)] for i in recorded], self.memory_capacities
+            )
+        return rows
 
     def gather_needs(self, indexes: np.ndarray) -> np.ndarray | None:
         """Bucket needs of rollout `indexes` measured at collection, or None if
@@ -208,10 +239,10 @@ class RecordedObservations:
         return needs if bool((needs >= 0).all()) else None
 
     def ordered(self, shape: tuple[int, ...]) -> dict[str, np.ndarray]:
-        """Every rollout row gathered into `shape` (time, trajectory) order."""
+        """Ordinary fields in trajectory order; memory requires selected indexes."""
         return {
-            key: value.reshape(*shape, *value.shape[1:])
-            for key, value in self.gather(np.arange(len(self.index))).items()
+            key: array[self.index].reshape(*shape, *array.shape[1:])
+            for key, array in self.rows.items()
         }
 
 
@@ -245,11 +276,20 @@ class RolloutBatch:
         [time,trajectory,...] for bounded inspection. Learners always select a
         minibatch. Object data and compact actions are the only retained owners.
         """
+        if indexes is None and self.recorded.memory_capacities is not None:
+            raise ValueError(
+                "decision memory requires explicit selected rollout indexes"
+            )
         trajectory_shape = self.actions.shape if indexes is None else None
         if indexes is None:
             indexes = np.arange(self.actions.size)
         rows = self.action_data.unpack(indexes)
-        rows.observation.update(self.recorded.gather(indexes))
+        observed = self.recorded.gather(indexes)
+        if isinstance(observed, PrefixObservation):
+            observed.update(rows.observation)
+            rows.observation = observed
+        else:
+            rows.observation.update(observed)
         if trajectory_shape is not None:
             rows.observation = {
                 key: value.reshape(*trajectory_shape, *value.shape[1:])
@@ -261,7 +301,7 @@ class RolloutBatch:
         return rows
 
     def ordered_obs(self) -> ObservationBuffers:
-        """Non-action fields gathered into [time, trajectory, ...] order."""
+        """Ordinary non-action fields in [time, trajectory, ...] order."""
         return self.recorded.ordered(self.actions.shape)
 
 
@@ -370,6 +410,8 @@ class Collector:
     match: Match
     reward: Reward
     num_envs: int
+    # Rows per policy forward during collection; None runs each group whole.
+    execution_rows: int | None
     opponent_mode: str
     opponent_agent: BackendPolicy | None
     learning_seats: Literal["one", "both"]
@@ -392,7 +434,10 @@ class Collector:
     _env: Any
     _buffers: dict[str, np.ndarray]
     _observation_keys: list[str]
-    _observations: _ObservationRows
+    _observations: ObservationRows
+    # Shared immutable prefix chunks of the opponent decision log; None when
+    # the observation space has no decision-record capacity.
+    _memory_store: MemoryStore | None
     _record_attempt: RecordAttempt | None
     # The deck source's identity is fixed; every game attempt records it.
     _decks_digest: str | None
@@ -451,6 +496,7 @@ def open_collector(
     reward: Reward,
     *,
     num_envs: int,
+    execution_rows: int | None = None,
     seed: int = 0,
     opponent_mode: str = "random",
     numerics: CollectionSession,
@@ -549,13 +595,20 @@ def open_collector(
     if game_errors is not None and (record_attempt is None or root is not None):
         raise ValueError("game error recovery needs durable receipts and native games")
 
+    if execution_rows is not None and execution_rows < 1:
+        raise ValueError("execution_rows must be positive")
     env: Any
     if root is None:
+        # Native decision capture is opt-in from the observation's capacity.
+        memory = observation_space.encoder.config
+        capture_decisions = memory.max_decision_records > 0
         env = (
             ShardedVectorEnv(
                 num_envs,
                 seed,
                 workers,
+                decision_memory=capture_decisions,
+                decision_memory_include_own=memory.decision_memory_include_own,
                 games_path=games_path,
                 record_fraction=record_fraction,
             )
@@ -563,6 +616,8 @@ def open_collector(
             else CapturedVector(
                 num_envs=num_envs,
                 seed=seed,
+                decision_memory=capture_decisions,
+                decision_memory_include_own=memory.decision_memory_include_own,
                 skip_trivial=True,
                 player_policies=("agent", "agent"),
                 **(
@@ -584,11 +639,13 @@ def open_collector(
         observation_keys = [
             key for key in observation_space.shapes if key not in ACTION_FIELDS
         ]
+        observations = ObservationRows(buffers, observation_keys, 0)
         collector = Collector(
             observation_space=observation_space,
             match=match,
             reward=reward,
             num_envs=num_envs,
+            execution_rows=execution_rows,
             opponent_mode=opponent_mode,
             opponent_agent=opponent_agent,
             learning_seats=learning_seats,
@@ -604,7 +661,12 @@ def open_collector(
             _env=env,
             _buffers=buffers,
             _observation_keys=observation_keys,
-            _observations=_ObservationRows(buffers, observation_keys, 0),
+            _observations=observations,
+            _memory_store=(
+                MemoryStore(observations.memory_capacities)
+                if observations.memory_capacities is not None
+                else None
+            ),
             _record_attempt=record_attempt,
             _decks_digest=deck_source.digest if deck_source is not None else None,
             _uniform_roster=uniform_roster,
@@ -663,6 +725,7 @@ def open_collector(
                 deterministic=False,
                 seed=seed + 1,
                 device=numerics.device_name,
+                execution_rows=execution_rows,
             )
         for row in range(num_envs):
             _expose(collector, row, "game_roots")
@@ -741,18 +804,49 @@ def _opponent_actions(
 ) -> np.ndarray:
     with collector.operation("opponent_inference", per_step=True):
         if collector.opponent_mode == "self":
-            return inference.opponent_actions(_slice_obs_rows(collector, rows))
-        return collector._opponent.select(collector._buffers, rows)
+            return inference.opponent_actions(
+                _retain_obs_rows(collector, rows),
+                execution_rows=collector.execution_rows,
+            )
+        if collector.opponent_mode == "random":
+            return collector._opponent.select(collector._buffers, rows)
+        return collector._opponent.select(
+            _retain_obs_rows(collector, rows), np.arange(len(rows))
+        )
 
 
-def _slice_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffers:
-    """Host observation rows with the training action-focus dtype."""
-    obs = {
-        key: collector._buffers[key][rows] for key in collector.observation_space.shapes
-    }
-    # Training convention (VectorEnv): action_focus as float32.
-    obs["action_focus"] = obs["action_focus"].astype(np.float32)
-    return obs
+def _capture_memory(collector: Collector, rows: np.ndarray) -> tuple[Prefix, ...]:
+    if collector._memory_store is None:
+        return ()
+    with collector.profiler.track("Memory capture"):
+        env = collector._env
+        return collector._memory_store.capture_live_rows(
+            collector._buffers,
+            rows,
+            env.current_game_seeds(),
+            env.current_agent_indices(),
+            env.current_game_generations(),
+            env.decision_memory_cursors(),
+        )
+
+
+def _retain_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffers:
+    """Freeze bootstrap fields and prefix versions without padded memory."""
+    with collector.profiler.track("Observation retention"):
+        obs = {
+            key: collector._buffers[key][rows]
+            for key in collector.observation_space.shapes
+            if key not in MEMORY_FIELDS
+        }
+        if collector._memory_store is not None:
+            obs = PrefixObservation(
+                obs,
+                _capture_memory(collector, rows),
+                collector._memory_store.capacities,
+            )
+        # Training convention (VectorEnv): action_focus as float32.
+        obs["action_focus"] = obs["action_focus"].astype(np.float32)
+        return obs
 
 
 def _count_action_types(
@@ -872,7 +966,7 @@ def _collect(
             else num_steps * (num_envs if complete_games else len(collector._streams))
         )
         rows = max(collector._observations.rows, floor)
-        collector._observations = _ObservationRows(
+        collector._observations = ObservationRows(
             collector._buffers, collector._observation_keys, rows + rows // 4
         )
     while True:
@@ -1380,6 +1474,7 @@ def _settle_attempt(
             native_trace=native_trace,
             observation=collector.observation_space.encoder.config
             if outcome == "resource_limit"
+            or collector.observation_space.encoder.config.decision_memory_include_own
             else None,
             discarded_samples=discarded,
             learned_samples=learned,
@@ -1399,11 +1494,20 @@ def _sample_learning_rows(
     operation: str = "learner_inference",
 ) -> np.ndarray:
     with collector.operation(operation, per_step=True):
-        sampled = inference.sample(_slice_obs_rows(collector, rows), collector.profiler)
+        observation = _retain_obs_rows(collector, rows)
+        sampled = inference.sample(
+            observation, collector.profiler, execution_rows=collector.execution_rows
+        )
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs
     with collector.profiler.track("Rollout recording"):
-        first = collector._observations.append(rows, needs)
+        first = collector._observations.append(
+            rows,
+            needs,
+            prefixes=observation.prefixes
+            if isinstance(observation, PrefixObservation)
+            else (),
+        )
         packed = PackedActions.pack(
             {
                 key: collector._buffers[key][rows]
@@ -1492,10 +1596,9 @@ def _build_batch(
     rewards = np.zeros((num_steps, num_envs), dtype=np.float32)
     dones = np.zeros((num_steps, num_envs), dtype=bool)
     values = np.zeros((num_steps, num_envs), dtype=np.float32)
-    next_obs = {
-        key: collector._buffers[key][:num_envs].copy()
-        for key in collector.observation_space.shapes
-    }
+    if num_envs > collector.num_envs:
+        raise ValueError("bootstrap rows exceed native streams")
+    next_obs = _retain_obs_rows(collector, np.arange(num_envs))
     next_done = np.zeros((num_envs,), dtype=bool)
     # Flatten in time-major order, matching scalar credit/selected actions.
     action_data = PackedActions.concatenate(
@@ -1543,6 +1646,8 @@ def _build_batch(
             collector._observations.arrays(),
             obs_rows.reshape(-1),
             collector._observations.needs(),
+            tuple(collector._observations.memory),
+            collector._observations.memory_capacities,
         ),
         actions=actions,
         logprobs=logprobs,

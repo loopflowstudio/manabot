@@ -55,6 +55,7 @@ from manabot.model.world import (
     validate_agent_decks,
     validate_agent_setup,
 )
+from manabot.policy.checkpoint import pretrained_memory_branch
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import (
     BatchClosure,
@@ -147,8 +148,27 @@ class SelfPlay(BaseModel):
     threads: int = Field(default=1, ge=1, le=4)
     bucketed_shapes: bool = False
     live_tokens: bool = False
-    # A published policy to start from; only its weights are inherited.
+    # Rows per forward in collection, bootstrap and learning. They bound how
+    # many decision-memory prefixes are materialized at once, independently of
+    # streams and of the optimizer's logical minibatch; None runs groups whole.
+    collection_rows: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
+    bootstrap_rows: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
+    learner_rows: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
+    # A published policy to start from; only its weights are inherited. Its
+    # model must equal this one, except that a history-enabled control may
+    # seed a decision-memory encoder (`pretrained_memory_branch`).
     pretrained: Path | None = None
+    # Stop after the update that reaches this many learner decisions; `updates`
+    # stays a safety ceiling. Requires the damped decision schedule.
+    learner_transitions: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
     # Checkpoint at absolute updates 0, n, 2n, …; a continued run keeps the grid.
     checkpoint_every: int | None = Field(default=None, ge=1)
 
@@ -215,6 +235,30 @@ class SelfPlay(BaseModel):
             self.model.world is None or not 1 <= self.observation.max_events <= 32
         ):
             raise ValueError("recent events require a world and 1..32 event rows")
+        memory = (
+            self.observation.max_decision_records,
+            self.observation.max_decision_reference_details,
+            self.observation.max_decision_references,
+            self.observation.max_decision_members,
+        )
+        if self.model.decision_memory != "none" and not all(memory):
+            raise ValueError("decision memory requires all four decision capacities")
+        if memory[0] and None in (
+            self.collection_rows,
+            self.bootstrap_rows,
+            self.learner_rows,
+        ):
+            raise ValueError(
+                "decision-memory collection requires explicit collection_rows, "
+                "bootstrap_rows and learner_rows"
+            )
+        if self.learner_transitions is not None and (
+            not isinstance(self.learning, DampedPolicyLearning)
+            or self.learning.decision_schedule is None
+        ):
+            raise ValueError(
+                "a learner-decision target requires its damped decision schedule"
+            )
         self.observation = self.observation.model_copy(
             update={"policy_history_version": 1 if self.model.recent_events else 0}
         )
@@ -234,7 +278,16 @@ def learner_digest(settings: SelfPlay) -> str:
     """Identity of the learner `settings` train; machine fields excluded."""
     return canonical_sha256(
         settings.model_dump(
-            mode="json", exclude={"device", "workers", "threads", "run_settings"}
+            mode="json",
+            exclude={
+                "device",
+                "workers",
+                "threads",
+                "run_settings",
+                "collection_rows",
+                "bootstrap_rows",
+                "learner_rows",
+            },
         )
     )
 
@@ -264,6 +317,7 @@ def self_play_collector(
         Match(root_match(settings)),
         Reward(RewardConfig()),
         num_envs=settings.streams,
+        execution_rows=settings.collection_rows,
         seed=seed + COLLECTION_SEED + start,
         opponent_mode="random" if settings.behavior == "random" else "self",
         learning_seats=settings.learning_seats,
@@ -323,16 +377,13 @@ def behavior(
 
 def pretrained_weights(
     settings: SelfPlay, space: ObservationSpace
-) -> dict[str, torch.Tensor]:
-    """The published weights to start from, admitted against these settings."""
+) -> tuple[dict[str, torch.Tensor], ModelConfig]:
+    """The published weights and their model, admitted against these settings."""
     assert settings.pretrained is not None
     with torch.random.fork_rng(devices=[]):
         published, published_space = load_checkpoint(str(settings.pretrained))
-    if (
-        published.config != settings.model
-        or published_space.encoder.config != space.encoder.config
-    ):
-        raise ValueError("pretrained policy has other model or observation configs")
+    if published_space.encoder.config != space.encoder.config:
+        raise ValueError("pretrained policy has another observation config")
     if settings.deck_source is not None:
         validate_agent_decks(published, settings.deck_source.players())
     else:
@@ -340,7 +391,35 @@ def pretrained_weights(
     weights = published.state_dict()
     if any(not torch.isfinite(v).all() for v in weights.values()):
         raise ValueError("pretrained policy contains nonfinite tensors")
-    return weights
+    return weights, published.config
+
+
+def load_pretrained(
+    agent: ActorCritic, weights: dict[str, torch.Tensor], source: ModelConfig
+) -> None:
+    """Copy published weights into `agent` in place; strict unless a memory branch.
+
+    A memory encoder started from a same-layout control keeps its newly
+    initialized encoder, gates and projections. Every other tensor must come
+    from the published policy, with its exact shape.
+    """
+    if not pretrained_memory_branch(
+        source, agent.config, agent.observation_space.encoder.config
+    ):
+        agent.load_state_dict(weights, strict=True)
+        return
+    fresh = agent.state_dict()
+    memory = {
+        name
+        for name in fresh
+        if name.startswith("decision_memory.")
+        or name.endswith((".memory_gate", ".memory_projection.weight"))
+    }
+    if set(fresh) - set(weights) != memory or set(weights) - set(fresh):
+        raise ValueError(
+            "pretrained copy would leave non-memory parameters unused or uninitialized"
+        )
+    agent.load_state_dict({**fresh, **weights}, strict=True)
 
 
 def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | None]:
@@ -354,12 +433,14 @@ def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | Non
         live_tokens=settings.live_tokens,
     ).to(settings.device)
     if settings.pretrained is not None:
-        agent.load_state_dict(pretrained_weights(settings, space))
+        load_pretrained(agent, *pretrained_weights(settings, space))
     learner = Learner(
         agent,
         settings.device,
         minibatch_rows=settings.streams,
         precision=settings.precision,
+        execution_rows=settings.learner_rows,
+        bootstrap_rows=settings.bootstrap_rows,
     )
     ema = deepcopy(agent) if settings.learning.ema is not None else None
     return learner, ema
@@ -471,6 +552,7 @@ def learn(
             settings.learning,
             counts.updates + 1,
             bootstrap_agent=behavior(settings, learner, ema),
+            learner_transitions=counts.learner_transitions,
         )
     else:
         assert settings.learning.horizon is not None
@@ -526,6 +608,8 @@ def step(
         synchronize(device)
         with collector.operation("learning"), learner.profiler.track("Learning"):
             metrics = learn(settings, learner, ema, counts, batch, rng)
+            if settings.model.decision_memory != "none":
+                metrics["decision_memory"] = learner.agent.memory_gates()
             synchronize(device)
     except NumericalError as error:
         try:
@@ -718,4 +802,14 @@ def self_play(
                 run.save()
                 if is_checkpoint(settings, update):
                     publish(settings, run, learner, ema, counts)
+                if (
+                    settings.learner_transitions is not None
+                    and counts.learner_transitions >= settings.learner_transitions
+                ):
+                    break
+            else:
+                if settings.learner_transitions is not None:
+                    raise RuntimeError(
+                        "update safety ceiling reached before learner-decision target"
+                    )
         return publish(settings, run, learner, ema, counts)

@@ -14,6 +14,7 @@ from etude.eval.records import CheckpointPlayer, Code, Player
 from etude.jobs import Agents
 import numpy as np
 
+from manabot.env.decision_memory import blank_memory
 from manabot.env.env import Env
 from manabot.env.match import Match
 from manabot.env.observation import ObservationBuffers, ObservationSpace
@@ -42,6 +43,8 @@ class Sampler:
     world_binding: Mapping[str, Any]
     deterministic: bool = False
     allow_deck_repetition: bool = False
+    # Memory ablation: the policy sees the live board with an empty decision log.
+    blank_decision_memory: bool = False
 
     @property
     def space(self) -> ObservationSpace:
@@ -56,10 +59,22 @@ class Sampler:
 
     def choose(self, env: Env, obs: ObservationBuffers, seed: int) -> int:
         batch = {key: value[None] for key, value in obs.items()}
+        if self.blank_decision_memory:
+            batch = blank_memory(batch)
         legal = legal_mask(batch["actions_valid"])
         check(batch, self.spec, legal)
+        model = self.spec.model
         row = replace(
-            prepare(batch, self.spec.tables, binding=self.spec.binding), programs=None
+            prepare(
+                batch,
+                self.spec.tables,
+                binding=self.spec.binding,
+                memory_summaries=model.decision_memory_summaries
+                if model.decision_memory != "none"
+                else 0,
+                memory_fold=model.decision_memory == "gru",
+            ),
+            programs=None,
         )
         [output] = self.forward([row])
         logits = np.asarray(output, dtype=np.float32)
@@ -82,6 +97,14 @@ class Heuristic:
 
     def choose(self, env: Env, obs: ObservationBuffers, seed: int) -> int:
         return self.factory(seed).act(env, obs)
+
+
+def blank_decision_memory(player: CheckpointPlayer) -> bool:
+    """Whether the seat declares the memory ablation; only a literal true enables it."""
+    blank = player.config.get("blank_decision_memory", False)
+    if not isinstance(blank, bool):
+        raise ValueError("blank_decision_memory must be a boolean")
+    return blank
 
 
 def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
@@ -113,6 +136,7 @@ def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
             json.loads(checkpoint.metadata["world_binding"]),
             deterministic=bool(player_spec.get("deterministic", False)),
             allow_deck_repetition=bool(player_spec.get("allow_deck_repetition", False)),
+            blank_decision_memory=blank_decision_memory(player),
         )
     if isinstance(player, Code):
         if "registration" in player.config:
@@ -158,7 +182,11 @@ def registration(
     content_suite: str,
     role: Literal["anchor", "incumbent", "challenger"],
 ) -> PlayerRegistration:
-    """Admit local checkpoint bytes and its world without importing a framework."""
+    """Admit local checkpoint bytes and its world without importing a framework.
+
+    A seat declaring `blank_decision_memory` registers the same bytes as a
+    distinct memory-ablation player.
+    """
     checkpoint = read_container(player.checkpoint.path)
     validate_setup_binding(
         json.loads(checkpoint.metadata["world_binding"]),
@@ -186,7 +214,8 @@ def registration(
         player_seed_derivation_id="arena-pair-deal-player-v1",
         compute_class_id=ETUDE_COMPUTE_CLASS,
         runner_kind="checkpoint",
-        player_spec=dict(ETUDE_SAMPLER_SPEC),
+        player_spec=dict(ETUDE_SAMPLER_SPEC)
+        | ({"blank_decision_memory": True} if blank_decision_memory(player) else {}),
         checkpoint_sha256=digest,
         checkpoint_bytes=path.stat().st_size,
         parameter_count=sum(int(p.size) for p in checkpoint.parameters.values()),

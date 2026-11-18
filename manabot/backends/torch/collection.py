@@ -16,6 +16,7 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.backends.torch.rollout import check_packed, packing_mask
+from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared, reference_distribution
@@ -60,17 +61,12 @@ class CollectionScope:
     ) -> None:
         self.session, self.agent, self.inference = session, agent, inference
 
-    def opponent_actions(self, observation: ObservationBuffers) -> np.ndarray:
-        obs = self.inference.prepare(observation)
-        with torch.inference_mode():
-            with forward_precision(self.session.precision, self.session.device):
-                logits, _ = self.agent.forward(obs)
-            logits = logits.float()
-            probs = self._policy_logs(logits, obs).exp()
-            actions = torch.multinomial(probs, 1, generator=self.session.rng).squeeze(
-                -1
-            )
-        return actions.cpu().numpy().astype(np.int64)
+    def opponent_actions(
+        self, observation: ObservationBuffers, *, execution_rows: int | None = None
+    ) -> np.ndarray:
+        return self.sample(
+            observation, Profiler(), execution_rows=execution_rows
+        ).actions
 
     @staticmethod
     def _policy_logs(logits: torch.Tensor, obs: Prepared[torch.Tensor]) -> torch.Tensor:
@@ -86,46 +82,65 @@ class CollectionScope:
             raise
 
     def sample(
-        self, observation: ObservationBuffers, profiler: Profiler
+        self,
+        observation: ObservationBuffers,
+        profiler: Profiler,
+        *,
+        execution_rows: int | None = None,
     ) -> SampledRows:
-        with profiler.track("Observation preparation"):
-            obs_t = self.inference.prepare(observation)
-        with profiler.track("Policy inference and action selection"):
-            with torch.no_grad():
-                outcomes: np.ndarray | None = None
-                with forward_precision(self.session.precision, self.session.device):
+        if execution_rows is not None and execution_rows < 1:
+            raise ValueError("execution rows must be positive")
+        count = len(observation["actions_valid"])
+        width = execution_rows or count
+        if width < 1:
+            raise ValueError("execution rows must be positive")
+        logs_parts: list[torch.Tensor] = []
+        value_parts: list[torch.Tensor] = []
+        outcome_parts: list[np.ndarray] = []
+        needs_parts: list[np.ndarray] = []
+        with torch.no_grad():
+            for start in range(0, count, width):
+                with profiler.track("Observation preparation"):
+                    obs = self.inference.prepare(
+                        select_rows(
+                            observation, np.arange(start, min(start + width, count))
+                        )
+                    )
+                with profiler.track("Policy inference and action selection"):
+                    with forward_precision(self.session.precision, self.session.device):
+                        logits, value = self.agent.forward_distribution(obs)
+                    logits, value = logits.float(), value.float()
                     if self.agent.config.value_kind == "categorical_wdl":
-                        logits, value_t = self.agent.forward_distribution(obs_t)
-                    else:
-                        logits, value_t = self.agent(obs_t)
-                logits, value_t = logits.float(), value_t.float()
-                if self.agent.config.value_kind == "categorical_wdl":
-                    outcome_t = value_t.softmax(dim=-1)
-                    value_t = outcome_t[:, 2] - outcome_t[:, 0]
-                    outcomes = outcome_t.cpu().numpy()
-                logs = self._policy_logs(logits, obs_t)
-                require(
-                    torch.isfinite(value_t),
-                    "nonfinite_collection_values",
-                    values=value_t,
-                    valid=obs_t.legal,
-                )
-                weights = logs.exp()
-                action_t = torch.multinomial(
-                    weights, 1, generator=self.session.rng
-                ).squeeze(-1)
-                logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
-                log_probabilities = logs.cpu().numpy()
-            acts = action_t.cpu().numpy().astype(np.int64)
-            logprobs = logprob_t.cpu().numpy()
-            values = value_t.view(-1).cpu().numpy()
-
-        needs = (
-            None
-            if obs_t.bucket_needs is None
-            else np.asarray(obs_t.bucket_needs, dtype=np.int64)
+                        outcomes = value.softmax(-1)
+                        value = outcomes[:, 2] - outcomes[:, 0]
+                        outcome_parts.append(outcomes.cpu().numpy())
+                    logs_parts.append(self._policy_logs(logits, obs))
+                    require(
+                        torch.isfinite(value),
+                        "nonfinite_collection_values",
+                        values=value,
+                        valid=obs.legal,
+                    )
+                    value_parts.append(value.reshape(-1))
+                    if obs.bucket_needs is not None:
+                        needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
+                # Only small outputs survive a chunk, never Prepared or activations.
+                del obs, logits, value
+            logs = torch.cat(logs_parts)
+            values = torch.cat(value_parts)
+            # One call in the original row order preserves the sampling stream.
+            actions = torch.multinomial(
+                logs.exp(), 1, generator=self.session.rng
+            ).squeeze(-1)
+            selected = logs.gather(-1, actions[:, None]).squeeze(-1)
+        return SampledRows(
+            actions.cpu().numpy().astype(np.int64),
+            selected.cpu().numpy(),
+            values.cpu().numpy(),
+            logs.cpu().numpy(),
+            np.concatenate(outcome_parts) if outcome_parts else None,
+            np.concatenate(needs_parts) if needs_parts else None,
         )
-        return SampledRows(acts, logprobs, values, log_probabilities, outcomes, needs)
 
 
 class SelectionPredictor:

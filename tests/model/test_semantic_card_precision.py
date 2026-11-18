@@ -120,7 +120,7 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         numerics=TorchCollectionSession(device="cpu", seed=26400, precision="float32"),
     )
     try:
-        host = collection._slice_obs_rows(collector, np.arange(2))
+        host = collection._retain_obs_rows(collector, np.arange(2))
         with forward_precision(declared, torch.device("cuda")):
             full = cards.definitions(program_input(cards))
             selected = cards.definitions(

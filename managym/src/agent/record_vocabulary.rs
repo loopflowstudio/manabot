@@ -81,6 +81,11 @@ fn variant(name: &str) -> RecordName {
 pub fn record_names() -> Vec<RecordName> {
     use RecordNamespace::{Name, Restriction, Token};
     let mut out = Vec::new();
+    out.extend(
+        crate::agent::decision_memory::RECORD_NAMES
+            .iter()
+            .map(|name| variant(&format!("DecisionMemory::{name}"))),
+    );
     for keyword in Keyword::ALL {
         // Effects name a keyword bare; card text serializes the enum variant.
         let printed = format!("Keyword::{}", keyword.name());

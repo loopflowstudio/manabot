@@ -168,6 +168,10 @@ pub struct ObservationEncoderConfig {
     pub action_overflow: ActionOverflow,
     pub max_focus_objects: usize,
     pub max_events: usize,
+    pub max_decision_records: usize,
+    pub max_decision_reference_details: usize,
+    pub max_decision_references: usize,
+    pub max_decision_members: usize,
     pub policy_history: bool,
     /// Write `player_turn_state` and `card_turn_state` (inputs v10 and v11).
     /// Without them, an observation that needs that state is refused.
@@ -185,6 +189,10 @@ impl Default for ObservationEncoderConfig {
             action_overflow: ActionOverflow::Error,
             max_focus_objects: 2,
             max_events: 32,
+            max_decision_records: 0,
+            max_decision_reference_details: 0,
+            max_decision_references: 0,
+            max_decision_members: 0,
             policy_history: false,
             turn_state: true,
             max_facts: 512,
@@ -322,6 +330,10 @@ pub struct EncodedObservation {
     pub stack: Vec<f32>,
     pub actions: Vec<f32>,
     pub events: Vec<f32>,
+    pub decision_records: Vec<f32>,
+    pub decision_reference_details: Vec<f32>,
+    pub decision_references: Vec<f32>,
+    pub decision_members: Vec<f32>,
     pub action_focus: Vec<i32>,
     pub agent_player_valid: Vec<f32>,
     pub opponent_player_valid: Vec<f32>,
@@ -356,6 +368,10 @@ pub struct EncodedObservationMut<'a> {
     pub stack: &'a mut [f32],
     pub actions: &'a mut [f32],
     pub events: &'a mut [f32],
+    pub decision_records: &'a mut [f32],
+    pub decision_reference_details: &'a mut [f32],
+    pub decision_references: &'a mut [f32],
+    pub decision_members: &'a mut [f32],
     pub action_focus: &'a mut [i32],
     pub agent_player_valid: &'a mut [f32],
     pub opponent_player_valid: &'a mut [f32],
@@ -393,6 +409,10 @@ impl EncodedObservation {
             stack: &mut self.stack,
             actions: &mut self.actions,
             events: &mut self.events,
+            decision_records: &mut self.decision_records,
+            decision_reference_details: &mut self.decision_reference_details,
+            decision_references: &mut self.decision_references,
+            decision_members: &mut self.decision_members,
             action_focus: &mut self.action_focus,
             agent_player_valid: &mut self.agent_player_valid,
             opponent_player_valid: &mut self.opponent_player_valid,
@@ -497,6 +517,24 @@ pub fn encode(
         stack: vec![0.0; config.stack_len()],
         actions: vec![0.0; config.actions_len()],
         events: vec![0.0; config.events_len()],
+        decision_records: vec![
+            0.0;
+            config.max_decision_records * super::decision_memory::RECORD_DIM
+        ],
+        decision_reference_details: vec![
+            0.0;
+            config.max_decision_reference_details
+                * super::decision_memory::DETAIL_DIM
+        ],
+        decision_references: vec![
+            0.0;
+            config.max_decision_references
+                * super::decision_memory::REFERENCE_DIM
+        ],
+        decision_members: vec![
+            0.0;
+            config.max_decision_members * super::decision_memory::MEMBER_DIM
+        ],
         action_focus: vec![-1; config.action_focus_len()],
         agent_player_valid: vec![0.0; 1],
         opponent_player_valid: vec![0.0; 1],
@@ -521,6 +559,28 @@ pub fn encode_into(
     obs: &Observation,
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
+) -> Result<(), ObservationEncodeError> {
+    encode_into_memory(obs, config, out, None)
+}
+
+pub fn encode_into_incremental(
+    obs: &Observation,
+    config: &ObservationEncoderConfig,
+    out: EncodedObservationMut<'_>,
+    cursor: &mut super::decision_memory::MemoryEncoding,
+) -> Result<(), ObservationEncodeError> {
+    let result = encode_into_memory(obs, config, out, Some(cursor));
+    if result.is_err() {
+        *cursor = Default::default();
+    }
+    result
+}
+
+fn encode_into_memory(
+    obs: &Observation,
+    config: &ObservationEncoderConfig,
+    out: EncodedObservationMut<'_>,
+    cursor: Option<&mut super::decision_memory::MemoryEncoding>,
 ) -> Result<(), ObservationEncodeError> {
     // Deprecated v9/v10 rows read the card lists they were trained on.
     let legacy;
@@ -603,6 +663,83 @@ pub fn encode_into(
         config.action_focus_len(),
     )?;
     validate_buffer_len("events", out.events.len(), config.events_len())?;
+    validate_buffer_len(
+        "decision_records",
+        out.decision_records.len(),
+        config.max_decision_records * super::decision_memory::RECORD_DIM,
+    )?;
+    validate_buffer_len(
+        "decision_reference_details",
+        out.decision_reference_details.len(),
+        config.max_decision_reference_details * super::decision_memory::DETAIL_DIM,
+    )?;
+    validate_buffer_len(
+        "decision_references",
+        out.decision_references.len(),
+        config.max_decision_references * super::decision_memory::REFERENCE_DIM,
+    )?;
+    validate_buffer_len(
+        "decision_members",
+        out.decision_members.len(),
+        config.max_decision_members * super::decision_memory::MEMBER_DIM,
+    )?;
+    let memory = if config.max_decision_records != 0
+        || config.max_decision_reference_details != 0
+        || config.max_decision_references != 0
+        || config.max_decision_members != 0
+    {
+        if config.layout != InputLayout::OneToken
+            || [
+                config.max_decision_records,
+                config.max_decision_reference_details,
+                config.max_decision_references,
+                config.max_decision_members,
+            ]
+            .contains(&0)
+        {
+            return Err(ObservationEncodeError::InvalidShared(
+                "decision memory requires v11 and all companion capacities",
+            ));
+        }
+        let (starts, memory) = match cursor {
+            Some(cursor) => super::decision_memory::encode_suffix(&obs.decision_memory, cursor),
+            None => ([0; 4], super::decision_memory::encode(&obs.decision_memory)),
+        };
+        for (field, actual, capacity) in [
+            (
+                "decision_records",
+                starts[0] + memory.records.len(),
+                config.max_decision_records,
+            ),
+            (
+                "decision_references",
+                starts[2] + memory.references.len(),
+                config.max_decision_references,
+            ),
+            (
+                "decision_reference_details",
+                starts[1] + memory.details.len(),
+                config.max_decision_reference_details,
+            ),
+            (
+                "decision_members",
+                starts[3] + memory.members.len(),
+                config.max_decision_members,
+            ),
+        ] {
+            if actual > capacity {
+                return Err(ObservationEncodeError::Capacity {
+                    field,
+                    actual,
+                    capacity,
+                });
+            }
+        }
+        Some((starts, memory))
+    } else {
+        None
+    };
+
     validate_buffer_len("effects", out.effects.len(), config.effects_len())?;
     validate_buffer_len(
         "effect_details",
@@ -743,6 +880,62 @@ pub fn encode_into(
     out.actions.fill(0.0);
     out.name_candidates.fill(0.0);
     out.events.fill(0.0);
+    if let Some((starts, memory)) = memory {
+        for (target, start, width) in [
+            (
+                &mut *out.decision_records,
+                starts[0],
+                super::decision_memory::RECORD_DIM,
+            ),
+            (
+                &mut *out.decision_reference_details,
+                starts[1],
+                super::decision_memory::DETAIL_DIM,
+            ),
+            (
+                &mut *out.decision_references,
+                starts[2],
+                super::decision_memory::REFERENCE_DIM,
+            ),
+            (
+                &mut *out.decision_members,
+                starts[3],
+                super::decision_memory::MEMBER_DIM,
+            ),
+        ] {
+            if memory.reset {
+                target[start * width..].fill(0.);
+            }
+        }
+        for (source, target) in memory.records.iter().zip(
+            out.decision_records
+                .chunks_mut(super::decision_memory::RECORD_DIM)
+                .skip(starts[0]),
+        ) {
+            target.copy_from_slice(source);
+        }
+        for (source, target) in memory.details.iter().zip(
+            out.decision_reference_details
+                .chunks_mut(super::decision_memory::DETAIL_DIM)
+                .skip(starts[1]),
+        ) {
+            target.copy_from_slice(source);
+        }
+        for (source, target) in memory.references.iter().zip(
+            out.decision_references
+                .chunks_mut(super::decision_memory::REFERENCE_DIM)
+                .skip(starts[2]),
+        ) {
+            target.copy_from_slice(source);
+        }
+        for (source, target) in memory.members.iter().zip(
+            out.decision_members
+                .chunks_mut(super::decision_memory::MEMBER_DIM)
+                .skip(starts[3]),
+        ) {
+            target.copy_from_slice(source);
+        }
+    }
     out.action_focus.fill(-1);
     out.agent_player_valid.fill(0.0);
     out.opponent_player_valid.fill(0.0);
@@ -2175,6 +2368,7 @@ mod tests {
                 ..make_permanent(444, false)
             }],
             policy_history: Default::default(),
+            decision_memory: Default::default(),
             recent_events: vec![
                 EventData {
                     event_type: 3,
@@ -2339,6 +2533,10 @@ mod tests {
             max_actions: 3,
             max_focus_objects: 2,
             max_events: 2,
+            max_decision_records: 0,
+            max_decision_reference_details: 0,
+            max_decision_references: 0,
+            max_decision_members: 0,
             policy_history: false,
             ..ObservationEncoderConfig::default()
         };
@@ -2577,6 +2775,10 @@ mod tests {
             max_actions: 2,
             max_focus_objects: 2,
             max_events: 1,
+            max_decision_records: 0,
+            max_decision_reference_details: 0,
+            max_decision_references: 0,
+            max_decision_members: 0,
             policy_history: false,
             ..ObservationEncoderConfig::default()
         };
@@ -2631,6 +2833,10 @@ mod tests {
             stack_valid: &mut stack_valid,
             actions: &mut actions,
             events: &mut events,
+            decision_records: &mut [],
+            decision_reference_details: &mut [],
+            decision_references: &mut [],
+            decision_members: &mut [],
             effects: &mut effects,
             effect_details: &mut effect_details,
             effect_members: &mut effect_members,
