@@ -115,7 +115,7 @@ from .play_session import (
     setup_draft,
 )
 from .presentation import PresentationProjector
-from .recording import Recording, narrate_move, person_board, read_cache
+from .recording import Recording, narrate_move, own_steps, person_board, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -856,9 +856,9 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
 
 
 class LogEntry(TypedDict):
-    """One line of compatibility narration: an opponent or automated action."""
+    """One line of narration: either player's move, or an automated action."""
 
-    actor: Literal["villain", "auto"]
+    actor: Literal["hero", "villain", "auto"]
     turn: int
     text: str
 
@@ -1724,9 +1724,9 @@ class GameSession:
             actor=actor_index,
             caused_by=caused_by,
         )
-        if actor == "villain" and not auto:
-            # The opponent's move as the person saw it, with Review's narration:
-            # never its private action.
+        if not auto:
+            # Either player's move as the person saw it, with Review's
+            # narration: never the opponent's private action.
             after = decision_surface_view(
                 self.env,
                 self.human_seat
@@ -1737,10 +1737,20 @@ class GameSession:
                 person_board(observation, self.human_seat),
                 person_board(after, self.human_seat),
                 [event["kind"] for event in presentation_events],
+                own_steps(
+                    [vars(event) for event in self.trace.events],
+                    len(self.trace.events) - 1,
+                )
+                if actor == "hero"
+                else (),
             )
             if text is not None:
                 self._pending_action_log.append(
-                    {"actor": "villain", "turn": turn, "text": text}
+                    {
+                        "actor": "hero" if actor == "hero" else "villain",
+                        "turn": turn,
+                        "text": text,
+                    }
                 )
         if self._capture_authority_evidence:
             assert state_before is not None and state_after is not None

@@ -7,6 +7,7 @@ is checked separately on every request, including cache hits.
 
 from bisect import bisect_right
 from collections import OrderedDict
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,13 +24,55 @@ from managym.academy.replay_index import (
     project_replay,
 )
 from managym.academy.trace import load_trace, normalize_observation_to_hero
-from managym.experience_projection import redact_observation
 from managym.experience import PresentationEvent
-
+from managym.experience_projection import redact_observation
 
 # Native decision-context stages that continue announcing a spell or ability
 # (`managym/src/decision_context.rs`): the move is named once it is on the stack.
-ANNOUNCING_STAGES = frozenset({"payment", "additional_cost", "targets", "mode", "announcement"})
+ANNOUNCING_STAGES = frozenset(
+    {"payment", "additional_cost", "targets", "mode", "announcement"}
+)
+
+
+@dataclass(frozen=True)
+class OwnStep:
+    """One committed choice of the person a narration is for: their own, which
+    they may be told about. Another seat's private choice is never an OwnStep."""
+
+    stage: str | None
+    chosen: str
+    action_type: str
+    offered: tuple[str, ...]
+    chosen_index: int
+
+
+def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
+    """The person's own steps of the move that `events[index]` (theirs) ends.
+
+    Trigger ordering takes one step per trigger placed, so its move is the run
+    of the person's consecutive ordering steps; any other move ends in one step.
+    `events` are trace events (the `TraceEvent` fields, as a mapping).
+    """
+
+    def step(event: Mapping[str, Any]) -> OwnStep:
+        actions = event["actions"]
+        return OwnStep(
+            stage=(event["observation"].get("decision_context") or {}).get("stage"),
+            chosen=event["action_description"],
+            action_type=str(actions[event["action"]].get("type", "")),
+            offered=tuple(str(action.get("description", "")) for action in actions),
+            chosen_index=int(event["action"]),
+        )
+
+    last = step(events[index])
+    run = [last]
+    if last.stage == "order_triggers":
+        for event in reversed(events[:index]):
+            earlier = step(event)
+            if event["actor"] != events[index]["actor"] or earlier.stage != last.stage:
+                break
+            run.insert(0, earlier)
+    return run
 
 
 @dataclass(frozen=True)
@@ -135,7 +178,9 @@ class Recording:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
         index = position.event_index + (position.kind == "consequences")
         if index not in self._boards:
-            self._boards[index] = person_board(self._raw_board(position), self.human_seat)
+            self._boards[index] = person_board(
+                self._raw_board(position), self.human_seat
+            )
         return self._boards[index]
 
     def _cursor(self, position: Position, viewer: int) -> int:
@@ -208,15 +253,14 @@ class Recording:
         if position.kind != "consequences":
             return None
         source = self.payload["events"][position.event_index]
-        if source.get("actor") != "hero":
-            return self._narration(position.event_index)
-        description = source.get("action_description")
-        return f"Auto: {description}" if source.get("auto") else description
+        if source.get("auto"):
+            return f"Auto: {source.get('action_description')}"
+        return self._narration(position.event_index)
 
     # ———————————————— Narrating another seat's move
 
     def _narration(self, index: int) -> str | None:
-        """Another seat's move at event `index`, as the recorded person saw it (`narrate_move`)."""
+        """The move at event `index`, as the recorded person saw it (`narrate_move`)."""
         if index not in self._narrations:
             revision = self.revisions.get(index)
             events = self._transition_events(revision) if revision is not None else []
@@ -224,6 +268,9 @@ class Recording:
                 self._board(Position("", "choice", index)),
                 self._board(Position("", "consequences", index)),
                 [event.kind.model_dump(mode="json") for event in events],
+                own_steps(self.payload["events"], index)
+                if self.payload["events"][index].get("actor") == "hero"
+                else (),
             )
         return self._narrations[index]
 
@@ -231,7 +278,9 @@ class Recording:
         if self._events_by_revision is None:
             self._events_by_revision = {}
             for event in self.tracks.get(self.human_seat, []):
-                self._events_by_revision.setdefault(event.from_revision, []).append(event)
+                self._events_by_revision.setdefault(event.from_revision, []).append(
+                    event
+                )
         return self._events_by_revision.get(revision, [])
 
     def _value(self, position: Position) -> float | None:
@@ -318,7 +367,9 @@ class Recording:
                 arrived = _new_cards(before, after, _side_of(after, kind["controller"]))
                 if arrived["spells"]:
                     labels["objects"][key] = arrived["spells"][0]
-                    labels["stacks"].setdefault(str(kind["stack"]), arrived["spells"][0])
+                    labels["stacks"].setdefault(
+                        str(kind["stack"]), arrived["spells"][0]
+                    )
         return labels
 
     def study_source(self, key: str) -> dict[str, Any]:
@@ -427,7 +478,7 @@ class ReadCache:
 read_cache = ReadCache()
 
 
-# ———————————————— Narrating another seat's move
+# ———————————————— Narrating a move
 
 
 def person_board(observation: dict[str, Any], human_seat: int) -> dict[str, Any]:
@@ -440,19 +491,26 @@ def person_board(observation: dict[str, Any], human_seat: int) -> dict[str, Any]
 
 
 def narrate_move(
-    before: dict[str, Any], after: dict[str, Any], events: list[dict[str, Any]]
+    before: dict[str, Any],
+    after: dict[str, Any],
+    events: list[dict[str, Any]],
+    own: Sequence[OwnStep] = (),
 ) -> str | None:
-    """Another seat's move, as the person saw it: Review's move list and live
-    play's log both read this.
+    """A move, as the person saw it: Review's move list and live play's log
+    read this for both players.
 
     `before` and `after` are the person's boards on either side of the move
     (`person_board`); `before` carries the mover's decision context. `events`
-    are the kinds of the person's presentation events for this transition. A
-    hidden choice is never named. What was visible becomes the move ("Cast Yip
-    Yip!, targeting Earth Kingdom Jailer", "Play Forest", "Attack with Ally,
-    Otter-Penguin"); a priority pass is "Pass priority". A step that completes
-    later (announcing a spell before it reaches the stack, one attacker of
-    several) is None: its move is named where it becomes visible.
+    are the kinds of the person's presentation events for this transition.
+    `own` is the person's own steps of this move (`own_steps`) when the move is
+    theirs, and empty for another seat, whose hidden choices are never named.
+    What was visible becomes the move ("Cast Yip Yip!, targeting Earth Kingdom
+    Jailer", "Play Forest", "Attack with Ally, Otter-Penguin"); a priority pass
+    is "Pass priority". The person's own moves add what only they saw:
+    "Activate Fire Nation Cadets", "Learn: take Accumulate Wisdom", "Ordered
+    triggers: Tiger-Seal, then Ally". A step that completes later (announcing a
+    spell before it reaches the stack, one attacker of several, one trigger of
+    several placed) is None: its move is named where it completes.
     """
     context = before.get("decision_context") or {}
     actor = context.get("actor")
@@ -484,13 +542,16 @@ def narrate_move(
             spell = (
                 name({"kind": "stack", "id": kind["stack"]})
                 or name({"kind": "object", "id": kind["object"]})
-                or next((card for card in arrived["spells"] if card not in spells), None)
+                or next(
+                    (card for card in arrived["spells"] if card not in spells), None
+                )
             )
             targets = [
                 target
                 for other in events
                 if other["kind"] == "targeted"
-                and other["source"] in (
+                and other["source"]
+                in (
                     {"kind": "stack", "id": kind["stack"]},
                     {"kind": "object", "id": kind["object"]},
                 )
@@ -514,14 +575,55 @@ def narrate_move(
             phrases.append(f"Discard {_listed(arrived['discarded'])}")
     if phrases:
         return "; ".join(phrases)
+    following = after.get("decision_context") or {}
+    continues = following.get("actor") == actor and (
+        following.get("stage") in ANNOUNCING_STAGES
+        or (own and following.get("stage") == own[-1].stage == "order_triggers")
+    )
+    if continues:
+        # The same seat goes straight on with what it began (targets, costs,
+        # modes, the next trigger to place).
+        return None
+    if own:
+        return _own_move(context, own)
     if context.get("stage") != "priority":
         return None
-    # Nothing visible at priority is a pass, unless the same seat goes
-    # straight on to announce what it began (targets, costs, modes).
-    following = after.get("decision_context") or {}
-    if following.get("actor") == actor and following.get("stage") in ANNOUNCING_STAGES:
-        return None
     return "Pass priority"
+
+
+def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
+    """The person's own move that left nothing on the board to name it by."""
+    last = own[-1]
+    stage = context.get("stage")
+    if stage == "order_triggers":
+        placed = [step.offered[step.chosen_index] for step in own] + [
+            offer for i, offer in enumerate(last.offered) if i != last.chosen_index
+        ]
+        return "Ordered triggers: " + ", then ".join(_trigger_source(p) for p in placed)
+    if stage == "learn":
+        return f"Learn: {last.chosen[:1].lower()}{last.chosen[1:]}"
+    source = (context.get("source") or {}).get("label")
+    if context.get("announcing") == "activated_ability" and source:
+        targets = [t["label"] for t in context.get("targets") or [] if t.get("label")]
+        return f"Activate {source}" + (
+            f", targeting {_listed(targets)}" if targets else ""
+        )
+    if last.chosen.startswith("Activate ability: "):
+        return "Activate " + last.chosen.removeprefix("Activate ability: ")
+    if stage in ("declare_attackers", "declare_blockers"):
+        # Attacks and blocks are named by their events; holding back is no move.
+        return None
+    if stage == "priority" and last.action_type == "PRIORITY_PASS_PRIORITY":
+        return "Pass priority"
+    # A choice while something resolves ("Put Island into your hand") is
+    # named as the person made it.
+    return last.chosen
+
+
+def _trigger_source(offer: str) -> str:
+    """ "Put on stack next — Tiger-Seal — At the beginning…" names Tiger-Seal."""
+    parts = offer.split(" — ")
+    return parts[1] if len(parts) > 2 else offer
 
 
 def _side_of(observation: dict[str, Any], seat: object) -> str | None:
@@ -572,9 +674,17 @@ def _new_cards(
 
 
 def _listed(names: list[str]) -> str:
-    """"Ally", "Ally and Forest", "Badgermole Cub ×2, Forest and Ally"."""
+    """ "Ally", "Ally and Forest", "Badgermole Cub ×2, Forest and Ally"."""
     counts: dict[str, int] = {}
     for name in names:
         counts[name] = counts.get(name, 0) + 1
-    parts = [f"{name} ×{count}" if count > 1 else name for name, count in counts.items()]
-    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1] if parts else ""
+    parts = [
+        f"{name} ×{count}" if count > 1 else name for name, count in counts.items()
+    ]
+    return (
+        parts[0]
+        if len(parts) == 1
+        else ", ".join(parts[:-1]) + " and " + parts[-1]
+        if parts
+        else ""
+    )

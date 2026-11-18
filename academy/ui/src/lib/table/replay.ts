@@ -151,22 +151,38 @@ export function offerEvidence(frame: ExperienceFrame, outputs: BotDecision | nul
 
 /**
  * The recording as log entries, one per position a person would call a move,
- * with the position key as the entry id so a move jumps to its position. A
- * choice names its chosen offer; a transition with no choice position of its
- * own (an opponent's decision in a Play game, automation) names what the
- * recording narrates from the recorded person's view. A step of an opponent's
- * move that nobody could see apart (choosing a target before the spell is on
- * the stack) has no narration and is no move of its own. `heroSeat` is the seat
+ * with the position key as the entry id so a move jumps to its position. Every
+ * move reads as the recording narrates it from the recorded person's view: the
+ * person's own choices ("Cast Divide by Zero, targeting Tiger-Seal"), the
+ * opponent's decisions in a Play game and automation. A step of a move that
+ * completes later (a target or payment before the spell is on the stack) has
+ * no narration and is no move of its own. Another seat's choice in a watched
+ * game names its chosen offer. `heroSeat` is the seat
  * named as "you"; `seatName` names the players the narration calls "Seat N".
  */
 export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatName?: (seat: 0 | 1) => string): GameLogEntry[] {
   const entries: GameLogEntry[] = [];
+  // The first of the person's own steps in this step of the turn whose move
+  // has not been named yet: the decision where that move began.
+  let begun: Position | null = null;
   positions.forEach((position, i) => {
     if (position.kind === 'state') return;
     if (position.kind === 'consequences' && positions[i - 1]?.kind === 'choice') return;
     if (position.kind === 'consequences' && position.label === null) return;
+    // The recorded person's own choice reads as its narrated move, as the
+    // opponent's does. A step of a move that completes later is no line; the
+    // move jumps to the decision where it began.
+    const after = positions[i + 1];
+    const narrated = position.kind === 'choice' && position.actor === heroSeat && after?.kind === 'consequences';
+    const sameStep = begun !== null && begun.turn === position.turn && begun.step === position.step;
+    if (narrated && after.label === null) {
+      if (!sameStep) begun = position;
+      return;
+    }
+    const anchor = narrated && sameStep && begun ? begun : position;
+    begun = null;
     const auto = position.kind === 'consequences' && position.automatic;
-    let text = (position.label ?? 'Choice').replace(/^Auto: /, '');
+    let text = ((narrated ? after.label : position.label) ?? 'Choice').replace(/^Auto: /, '');
     if (seatName) {
       text = nameSeats(text, seatName);
       // A recorded choice names players by setup role: Hero is the seat named "you".
@@ -178,9 +194,9 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
       });
     }
     entries.push({
-      id: position.key,
+      id: anchor.key,
       actor: auto ? 'auto' : position.actor === null ? 'villain' : position.actor === heroSeat ? 'hero' : 'villain',
-      turn: position.turn,
+      turn: anchor.turn,
       text,
     });
   });

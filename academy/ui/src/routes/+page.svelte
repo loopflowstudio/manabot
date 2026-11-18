@@ -280,8 +280,8 @@
       return;
     }
     if (!canSubmitLive) return;
-    if (!sendAction(action.id)) return;
-    gameStore.appendHeroAction(action.label);
+    // The move list names it when the server narrates the move.
+    sendAction(action.id);
   }
 
   const onTable = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);

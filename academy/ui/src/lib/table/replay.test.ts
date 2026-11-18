@@ -92,7 +92,7 @@ describe('the move list and strip read the index', () => {
     position('consequences', { key: 'a2', actor: 1, label: 'Cast Shock, targeting Seat 1', revision: 4 }),
     position('consequences', { key: 'a3', actor: 0, automatic: true, label: 'Auto: Pass priority', revision: 5, turn: 2 }),
     position('choice', { key: 'c2', actor: 0, label: 'Cast Shock', revision: 7, turn: 2, value: 0.4 }),
-    position('consequences', { key: 'a4', actor: 1, label: null, revision: 8, turn: 2 }),
+    position('consequences', { key: 'a4', actor: 0, label: 'Cast Shock, targeting Seat 2', revision: 8, turn: 2 }),
     position('state', { key: 'latest', turn: 2 }),
   ];
   const entries = replayLog(positions, 0, seat => (seat === 0 ? 'You' : 'Heuristic'));
@@ -100,10 +100,26 @@ describe('the move list and strip read the index', () => {
   it('lists each move once, keyed by the position it jumps to', () => {
     // An opponent's step without narration is part of the move that follows it.
     expect(entries.map(entry => [entry.id, entry.actor, entry.text])).toEqual([
-      ['c1', 'hero', 'Play Island'], ['a2', 'villain', 'Cast Shock, targeting you'], ['a3', 'auto', 'Pass priority'], ['c2', 'hero', 'Cast Shock'],
+      ['c1', 'hero', 'Play Island'], ['a2', 'villain', 'Cast Shock, targeting you'], ['a3', 'auto', 'Pass priority'], ['c2', 'hero', 'Cast Shock, targeting Heuristic'],
     ]);
     const turns = moveList(entries, { you: 'Seat 1', opponent: 'Seat 2' }, new Map(), []);
     expect(turns.flatMap(turn => turn.moves.map(move => move.id))).toEqual(['c1', 'a2', 'a3', 'c2']);
+  });
+
+  it('names your own multi-step move once, as narrated, at the decision where it began', () => {
+    const steps = replayLog([
+      position('choice', { key: 'cast', actor: 0, label: 'Cast Divide by Zero', revision: 3 }),
+      position('consequences', { key: 'after-cast', actor: 0, label: null, revision: 3 }),
+      position('choice', { key: 'target', actor: 0, label: 'Target Tiger-Seal', revision: 4 }),
+      position('consequences', { key: 'after-target', actor: 0, label: null, revision: 4 }),
+      position('choice', { key: 'pay', actor: 0, label: 'Pay the cost', revision: 5 }),
+      position('consequences', { key: 'after-pay', actor: 0, label: 'Cast Divide by Zero, targeting Tiger-Seal', revision: 5 }),
+      position('choice', { key: 'order', actor: 0, label: 'Put on stack next — Ally — …', revision: 6 }),
+      position('consequences', { key: 'after-order', actor: 0, label: 'Ordered triggers: Ally, then Tiger-Seal', revision: 6 }),
+    ], 0, seat => (seat === 0 ? 'You' : 'Heuristic'));
+    expect(steps.map(entry => [entry.id, entry.text])).toEqual([
+      ['cast', 'Cast Divide by Zero, targeting Tiger-Seal'], ['order', 'Ordered triggers: Ally, then Tiger-Seal'],
+    ]);
   });
 
   it('names players a recorded target choice calls Hero and Villain', () => {

@@ -132,11 +132,15 @@ describe('GameStore', () => {
   it('records each move with its actor and the turn it was made in', () => {
     const store = createGameStore();
     store.applyObservation(makeObservation(), []);
-    store.appendHeroAction('Play land: Mountain');
-    store.applyObservation(makeObservation(), [], undefined, undefined, [{ actor: 'villain', turn: 2, text: 'Pass priority' }]);
+    store.appendHeroAction('Pass turn');
+    store.applyObservation(makeObservation(), [], undefined, undefined, [
+      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
+      { actor: 'villain', turn: 2, text: 'Pass priority' },
+    ]);
 
     expect(store.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text }))).toEqual([
-      { actor: 'hero', turn: 1, text: 'Play land: Mountain' },
+      { actor: 'hero', turn: 1, text: 'Pass turn' },
+      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
       { actor: 'villain', turn: 2, text: 'Pass priority' },
     ]);
   });

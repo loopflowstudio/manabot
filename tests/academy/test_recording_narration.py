@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from managym.academy import server
-from managym.academy.recording import Recording
+from managym.academy.recording import OwnStep, Recording, narrate_move
 
 CONFIG: dict[str, Any] = {
     "hero_deck": {"Island": 20},
@@ -125,3 +125,115 @@ def test_live_log_narrates_the_opponent_as_review_does(tmp_path: Path) -> None:
     assert live == review
     assert any(text.startswith("Cast Lightning Bolt, targeting Seat ") for text in live)
     assert not any(text.startswith(("Target ", "Pay ")) for text in live)
+
+
+def test_your_own_moves_read_as_the_opponent_s_do(tmp_path: Path) -> None:
+    game = server.GameSession(tmp_path)
+    game.new_game(
+        {
+            "hero_deck": {"Mountain": 10, "Lightning Bolt": 10},
+            "villain_deck": {"Island": 20},
+            "villain_type": "passive",
+            "seed": 5,
+            "auto_pass": False,
+        }
+    )
+    live: list[str] = []
+    for index in range(150):
+        frame = game.current_message()["frame"]
+        if frame["status"] == "game_over":
+            break
+        # Act whenever there is something to do: play lands, cast and aim Bolt.
+        offer = next(
+            (
+                o
+                for o in frame["offers"]
+                if o["action_type"] != "PRIORITY_PASS_PRIORITY"
+            ),
+            frame["offers"][0],
+        )
+        result = game.hero_command(
+            {
+                "command_id": f"act.{index}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": offer["id"],
+                "answers": [],
+            }
+        )
+        assert result["status"] == "accepted"
+        live += [
+            line["text"]
+            for line in result["update"].get("log", [])
+            if line["actor"] == "hero"
+        ]
+    payload = game.attempt_store.load(game.match_id)
+    assert payload is not None
+    recording = Recording(game.match_id, payload)
+    review = [
+        label
+        for position in recording.positions
+        if position.kind == "consequences"
+        and payload["events"][position.event_index]["actor"] == "hero"
+        and not payload["events"][position.event_index].get("auto")
+        and (label := recording.metadata(position)["label"]) is not None
+    ]
+    # One line per move, the same live and in Review: a cast names its target
+    # once it is on the stack, never the steps that announced and paid for it.
+    assert live == review
+    assert "Play Mountain" in live
+    assert any(text.startswith("Cast Lightning Bolt, targeting ") for text in live)
+    assert not any(text.startswith(("Target ", "Pay ", "Tap ")) for text in live)
+
+
+def board(stage: str, **context: Any) -> dict[str, Any]:
+    return {"decision_context": {"actor": 0, "stage": stage, **context}}
+
+
+def own(stage: str, chosen: int, *offers: str) -> OwnStep:
+    return OwnStep(stage, offers[chosen], "X", offers, chosen)
+
+
+def test_your_own_unseen_moves_are_named_as_you_made_them() -> None:
+    order = ("Put on stack next — Ally — When…", "Put on stack next — Tiger-Seal — At…")
+    three = ("Put on stack next — Kyoshi — When…", *order)
+    # Trigger ordering is named once the last trigger is placed, in order.
+    assert (
+        narrate_move(
+            board("order_triggers"),
+            board("order_triggers"),
+            [],
+            [own("order_triggers", 0, *three)],
+        )
+        is None
+    )
+    assert (
+        narrate_move(
+            board("order_triggers"),
+            board("priority"),
+            [],
+            [own("order_triggers", 0, *three), own("order_triggers", 1, *order)],
+        )
+        == "Ordered triggers: Kyoshi, then Tiger-Seal, then Ally"
+    )
+    assert (
+        narrate_move(
+            board("learn"),
+            board("priority"),
+            [],
+            [own("learn", 0, "Take Accumulate Wisdom")],
+        )
+        == "Learn: take Accumulate Wisdom"
+    )
+    paid = board(
+        "payment",
+        announcing="activated_ability",
+        source={"label": "Fire Nation Cadets"},
+    )
+    assert (
+        narrate_move(paid, board("priority"), [], [own("payment", 0, "Pay the cost")])
+        == "Activate Fire Nation Cadets"
+    )
+    # Another seat's hidden choices stay unnamed.
+    assert narrate_move(board("learn"), board("priority"), []) is None
