@@ -2,10 +2,12 @@
 
 Two families, each under the SIL Open Font License 1.1:
 
-- Literata — the game's face: card and player names, life, card names in the
-  move list ([OFL-Literata.txt](OFL-Literata.txt)).
-- Source Sans 3 — the interface's face ([OFL-SourceSans3.txt](OFL-SourceSans3.txt)).
+- Spectral — the game's face: card and player names, life, and the rail's
+  moves and legal choices ([OFL-Spectral.txt](OFL-Spectral.txt)). Regular and
+  SemiBold.
+- Work Sans — the interface's face, variable weight
+  ([OFL-WorkSans.txt](OFL-WorkSans.txt)).
 
-Each is the variable-weight Latin and Latin Extended subset served by Google
-Fonts, bundled locally so the certified play path stays independent of
-remote font services. `DESIGN.md` says where each is used.
+Each is the Latin and Latin Extended subset served by Google Fonts, bundled
+locally so the certified play path stays independent of remote font services.
+`DESIGN.md` says where each is used.

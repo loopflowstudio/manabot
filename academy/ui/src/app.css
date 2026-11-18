@@ -1,40 +1,59 @@
 @import 'tailwindcss';
 
-/* Two families (DESIGN.md): Literata for the game's things, Source Sans 3 for
-   the interface. Variable weights, Latin and Latin Extended subsets. */
+/* Two families (DESIGN.md): Spectral for the game's things and the rail's
+   moves and choices, Work Sans for the interface. Latin and Latin Extended
+   subsets; Work Sans is variable. */
 @font-face {
-  font-family: 'Literata';
-  src: url('/fonts/Literata-latin.woff2') format('woff2');
+  font-family: 'Spectral';
+  src: url('/fonts/Spectral-400-latin.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 200 900;
+  font-weight: 400;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Literata';
-  src: url('/fonts/Literata-latin-ext.woff2') format('woff2');
+  font-family: 'Spectral';
+  src: url('/fonts/Spectral-400-latin-ext.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 200 900;
+  font-weight: 400;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
 @font-face {
-  font-family: 'Source Sans 3';
-  src: url('/fonts/SourceSans3-latin.woff2') format('woff2');
+  font-family: 'Spectral';
+  src: url('/fonts/Spectral-600-latin.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 200 900;
+  font-weight: 600;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Source Sans 3';
-  src: url('/fonts/SourceSans3-latin-ext.woff2') format('woff2');
+  font-family: 'Spectral';
+  src: url('/fonts/Spectral-600-latin-ext.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
-  font-weight: 200 900;
+  font-weight: 600;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Work Sans';
+  src: url('/fonts/WorkSans-latin.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 600;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Work Sans';
+  src: url('/fonts/WorkSans-latin-ext.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 600;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
@@ -226,8 +245,8 @@
 /* The semantic vocabulary: every component color resolves through these. */
 @theme inline {
   /* serif is the game's face, sans the interface's; mono is for code alone. */
-  --font-serif: 'Literata', Georgia, serif;
-  --font-sans: 'Source Sans 3', system-ui, sans-serif;
+  --font-serif: 'Spectral', Georgia, serif;
+  --font-sans: 'Work Sans', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
   /*
@@ -281,7 +300,7 @@
 
 /* ————————————————————————————————————————————————
    The voices: one text style per role, on the six sizes of DESIGN.md
-   (12/16, 14/20, 16/24, 20/28, 28/32, 40/44) and two weights. Labels are
+   (12/16, 14/20, 16/24, 20/28, 28/32, 40/44) and three weights. Labels are
    sentence case in the interface face, never tracked capitals.
    ———————————————————————————————————————————————— */
 @utility type-brand {
@@ -316,7 +335,7 @@
 @utility type-heading {
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 20px;
 }
 @utility type-body {
@@ -328,7 +347,7 @@
 @utility type-label {
   font-family: var(--font-sans);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 16px;
 }
 @utility type-caption {

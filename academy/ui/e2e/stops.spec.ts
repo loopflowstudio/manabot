@@ -189,6 +189,20 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await expect(stop('opponent', 'end_step')).toHaveAttribute('data-state', 'every');
   await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'off');
 
+  // The bar has room: 12 px markers held against the step's name and kept 8 px or more in from the bar's edges.
+  const room = await page.getByTestId('stop-bar').evaluate(bar => {
+    const edge = bar.getBoundingClientRect();
+    const cell = bar.querySelector('[data-step=upkeep]')!.parentElement!;
+    const [above, below] = [...cell.querySelectorAll('.stop i')].map(marker => marker.getBoundingClientRect());
+    const name = cell.querySelector('.name')!.getBoundingClientRect();
+    return { height: edge.height, marker: above.height, top: above.top - edge.top, bottom: edge.bottom - below.bottom,
+      toName: [name.top - above.bottom, below.top - name.bottom] };
+  });
+  expect(room.height).toBeGreaterThanOrEqual(60);
+  expect(room.marker).toBe(12);
+  expect(Math.min(room.top, room.bottom)).toBeGreaterThanOrEqual(8);
+  for (const gap of room.toName) expect(gap).toBeLessThanOrEqual(2);
+
   // On your own turn, the opponent's upkeep: off → every time → once → off. The Menu shows the same stop.
   await stop('opponent', 'upkeep').click();
   await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'every');

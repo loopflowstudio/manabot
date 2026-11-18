@@ -6,11 +6,11 @@ test('the interface and the game faces load from the bundle', async ({ page }) =
   await page.goto('/?setup=1');
   await page.evaluate(() => document.fonts.ready);
 
-  await expect(page.locator('body')).toHaveCSS('font-family', /^"Source Sans 3"/);
-  await expect(page.getByTestId('brand-name')).toHaveCSS('font-family', /^Literata/);
+  await expect(page.locator('body')).toHaveCSS('font-family', /^"Work Sans"/);
+  await expect(page.getByTestId('brand-name')).toHaveCSS('font-family', /^Spectral/);
   const loaded = await page.evaluate(async () => ({
-    ui: await document.fonts.load('600 14px "Source Sans 3"').then(faces => faces.length),
-    game: await document.fonts.load('600 16px Literata').then(faces => faces.length),
+    ui: await document.fonts.load('500 14px "Work Sans"').then(faces => faces.length),
+    game: await document.fonts.load('600 16px Spectral').then(faces => faces.length),
   }));
   expect(loaded.ui).toBeGreaterThan(0);
   expect(loaded.game).toBeGreaterThan(0);

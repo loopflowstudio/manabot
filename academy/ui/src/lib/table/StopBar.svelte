@@ -84,28 +84,33 @@
 </div>
 
 <style>
-  .stopbar { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; height: 44px; background: var(--bg-surface); border-top: 1px solid var(--border); }
+  /* 64 px tall. A cell is three rows: your stop, the step's name, the opponent's
+     stop. Each stop's button fills its row to the bar's edge, a large target,
+     and draws its 12 px marker against the name (1 px away), so at least 8 px
+     stays between a marker and the bar's top and bottom edges. */
+  .stopbar { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; height: 64px; background: var(--bg-surface); border-top: 1px solid var(--border); }
   .steps { display: grid; grid-template-columns: var(--plate) repeat(9, minmax(0, 1fr)); min-width: 0; }
-  .key { display: grid; align-content: center; gap: 0; padding-left: 14px; font: 12px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
+  .key { display: grid; align-content: center; gap: 4px; padding-left: 14px; font: 14px/20px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
   .key .active { color: var(--text); }
-  .cell { display: grid; grid-template-rows: 14px 16px 14px; align-content: center; min-width: 0; border-left: 1px solid transparent; }
+  .cell { display: grid; grid-template-rows: minmax(0, 1fr) 20px minmax(0, 1fr); row-gap: 1px; min-width: 0; border-left: 1px solid transparent; }
   .cell.rule { border-left-color: var(--border); }
   .cell.current { background: var(--bg-muted); }
-  .name { font: 12px/16px var(--font-sans); color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name { font: 14px/20px var(--font-sans); color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .current .name { color: var(--text); font-weight: 600; }
 
-  /* A stop is a small square: hollow when off, filled every time, a dot inside once. The button is the whole row of its cell. */
-  .stop { display: grid; place-items: center; height: 14px; min-height: 0; padding: 0; border: 0; background: none; border-radius: var(--radius-sm); }
+  /* A stop is a small square: hollow when off, filled every time, a dot inside once. */
+  .stop { display: grid; justify-items: center; align-items: end; min-height: 0; padding: 0; border: 0; background: none; border-radius: var(--radius-sm); }
+  .stop.below { align-items: start; }
   button.stop { cursor: pointer; }
-  .stop i { position: relative; width: 10px; height: 10px; border-radius: 0; box-shadow: inset 0 0 0 1.25px var(--text-tertiary); }
-  .stop.every i { background: var(--text); box-shadow: inset 0 0 0 1.25px var(--text); }
-  .stop.once i { box-shadow: inset 0 0 0 1.25px var(--text); }
-  .stop.once i::after { content: ''; position: absolute; inset: 2.5px; border-radius: 0; background: var(--text); }
-  button.stop:hover i { box-shadow: inset 0 0 0 1.5px var(--text); }
+  .stop i { position: relative; width: 12px; height: 12px; border-radius: 0; box-shadow: inset 0 0 0 1.5px var(--text-tertiary); }
+  .stop.every i { background: var(--text); box-shadow: inset 0 0 0 1.5px var(--text); }
+  .stop.once i { box-shadow: inset 0 0 0 1.5px var(--text); }
+  .stop.once i::after { content: ''; position: absolute; inset: 3px; border-radius: 0; background: var(--text); }
+  button.stop:hover i { box-shadow: inset 0 0 0 2px var(--text); }
   button.stop:hover { background: var(--bg-field); }
   button.stop:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
 
-  .legend { display: flex; gap: 12px; align-items: center; justify-content: center; margin: 0; padding: 0 8px; border-left: 1px solid var(--border); font: 12px/16px var(--font-sans); color: var(--text-secondary); text-align: center; }
-  .legend > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-  .legend .stop { display: inline-grid; height: auto; }
+  .legend { display: flex; gap: 12px; align-items: center; justify-content: center; margin: 0; padding: 0 8px; border-left: 1px solid var(--border); font: 14px/20px var(--font-sans); color: var(--text-secondary); text-align: center; }
+  .legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .legend .stop { display: inline-grid; align-items: center; }
 </style>

@@ -612,13 +612,15 @@
   const HAND_MIN = 212;
   const HAND_MAX = 232;
   const HAND_CROWDED = 160;
+  /** The hand's most of the board's height: at 1280×800 it reaches `HAND_MAX` under the 64 px stop bar. */
+  const HAND_SHARE = 0.35;
   const boardCount = $derived(boardProjection.agent.battlefield.length + boardProjection.opponent.battlefield.length);
   let boardHeight = $state(0);
   const handTrack = $derived(board.hand.length === 0 ? '30px' : `${handStrip(boardHeight, [
     { creatures: pileShapes(board.opponent.creatures), support: pileShapes(board.opponent.support), width: theirRows.width },
     { creatures: pileShapes(board.you.creatures), support: pileShapes(board.you.support), width: yourRows.width },
   ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
-  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * 0.34))), step: 8 })}px`);
+  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * HAND_SHARE))), step: 8 })}px`);
   /** The players' plates' column. */
   const PLATE_WIDTH = 148;
   /** The hand's cards keep clear of its label at the left edge. */
@@ -942,7 +944,8 @@
     position: relative; min-height: 0; min-width: 0; display: grid;
     transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
   }
-  .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
+  /* One row the half's own height: a tall plate scrolls inside it rather than growing the rows past the half. */
+  .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
   .rows { display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
   .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); }

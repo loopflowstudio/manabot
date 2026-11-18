@@ -8,10 +8,10 @@ reads the permitted list below and fails on any literal outside it in
 `app.css` and in the table's Svelte styles (`src/lib/table/`).
 
 ```permitted
-families: Literata, Source Sans 3
+families: Spectral, Work Sans
 fallbacks: Georgia, serif, system-ui, sans-serif, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
 sizes: 12/16, 14/20, 16/24, 20/28, 28/32, 40/44
-weights: 400, 600
+weights: 400, 500, 600
 radii: --radius-sm, --radius-md, --radius-lg, --radius-xl, --radius-full, --radius-card, --radius-card-turned
 shadows: --lift, --lift-selected, --lift-attacking, --shadow-raised, --shadow-sheet, --shadow-surface
 ```
@@ -21,31 +21,32 @@ shadows: --lift, --lift-selected, --lift-attacking, --shadow-raised, --shadow-sh
 Two families, each with one job, bundled under `static/fonts/` (both under
 the SIL Open Font License):
 
-- **Literata**, the game's face (`--font-serif`, `font-serif`): card and
-  player names, life totals, card names in the move list, the inspected
-  card's name, and page titles.
-- **Source Sans 3**, the interface's face (`--font-sans`, the body default):
-  prompts, buttons, rows, labels, counts and key hints.
+- **Spectral**, the game's face (`--font-serif`, `font-serif`): card and
+  player names, life totals, the inspected card's name, page titles, and in
+  the rail the moves and the legal choices (a choice's words, not its key or
+  probability).
+- **Work Sans**, the interface's face (`--font-sans`, the body default):
+  prompts, buttons, labels, counts, the stop bar and key hints.
 
 Monospace (`--font-mono`, the system's) is for code a person copies, never
 for labels, and never on the table.
 
 Six sizes, each with its line height: 12/16, 14/20, 16/24, 20/28, 28/32 and
-40/44. Nothing is smaller than 12 px, on cards included. Two weights, 400 and
-600. Labels are sentence case ("Your decision", "Hand · 7"): no capitals by
-transform, no tracking. Numbers use tabular figures (the body sets
+40/44. Nothing is smaller than 12 px, on cards included. Three weights: 400,
+500 for headings and labels, 600 for names and emphasis. Labels are sentence
+case ("Your decision", "Hand · 7"): no capitals by transform, no tracking. Numbers use tabular figures (the body sets
 `tabular-nums`). The voices in `app.css` name the common roles:
 
 | Voice | Face | Size | Job |
 |---|---|---|---|
-| `type-brand` | Literata 600 | 28/32 | The brand mark |
-| `type-display` | Literata 600 | 20/28 | Page titles |
-| `type-title` | Literata 600 | 16/24 | A player's or a thing's name |
-| `type-prompt` | Source Sans 400 | 16/24 | What the game asks |
-| `type-heading` | Source Sans 600 | 14/20 | A region's name: Stack, Moves |
-| `type-body` | Source Sans 400 | 14/20 | Running text (the body default) |
-| `type-label` | Source Sans 600 | 12/16 | Small labels |
-| `type-caption` | Source Sans 400 | 12/16 | Counts, hints, empties |
+| `type-brand` | Spectral 600 | 28/32 | The brand mark |
+| `type-display` | Spectral 600 | 20/28 | Page titles |
+| `type-title` | Spectral 600 | 16/24 | A player's or a thing's name |
+| `type-prompt` | Work Sans 400 | 16/24 | What the game asks |
+| `type-heading` | Work Sans 500 | 14/20 | A region's name: Stack, Moves |
+| `type-body` | Work Sans 400 | 14/20 | Running text (the body default) |
+| `type-label` | Work Sans 500 | 12/16 | Small labels |
+| `type-caption` | Work Sans 400 | 12/16 | Counts, hints, empties |
 
 A mana symbol's letter scales with its pip (`calc(var(--pip) * k)`): it is a
 symbol, not text, and is the one size outside the scale.

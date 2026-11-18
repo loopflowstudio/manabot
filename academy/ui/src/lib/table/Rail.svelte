@@ -356,12 +356,13 @@
   .heading { display: flex; justify-content: space-between; }
   .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 0; margin: 0 -6px; padding: 2px 6px; }
   .row {
-    width: 100%; display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
+    width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
     border: 1px solid transparent; font-size: 14px; line-height: 20px; color: var(--text); background: none;
   }
   .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-field); }
   .row:disabled { color: var(--text-secondary); cursor: default; }
-  .row .label { flex: 1; min-width: 0; }
+  /* A choice's words are the game's face, and its row grows to fit them wrapped. */
+  .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   .hidden-key { visibility: hidden; }
   .log { position: relative; flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
   .reading { position: absolute; inset: 6px 8px; z-index: 5; display: grid; }
@@ -369,7 +370,8 @@
   .turn-head { display: flex; gap: 8px; align-items: baseline; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }
   .move { display: flex; align-items: baseline; gap: 6px; padding-left: 26px; color: var(--text); line-height: 16px; }
-  .move .what { flex: 1; min-width: 0; }
+  /* What happened is the game's face; who did it and the count stay the interface's. */
+  .move .what { flex: 1; min-width: 0; font: 14px/20px var(--font-serif); }
   .move .who { flex: none; width: 60px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .move .who.repeat { visibility: hidden; }
   .move.you .who { color: var(--info-text); }
