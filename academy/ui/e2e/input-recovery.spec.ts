@@ -323,7 +323,12 @@ test('historical positions stay separate from blocked frontier work and late sou
     await expect(page.getByRole('region', {name: 'Live frontier work'})).toContainText('Reading a saved position; bot work belongs to the frontier.');
     await expect.poll(() => releaseStatus !== null).toBe(true);
     await page.screenshot({path: fileURLToPath(new URL('../test-results/policy/historical-frontier.png', import.meta.url))});
-    await page.goto(`${origin}/replay?trace=${other.id}`);
+    // Open another recording in-app (a client navigation, as a link in Games is) while the step is pending.
+    await page.evaluate(id => {
+      const link = Object.assign(document.createElement('a'), {href: `/replay?trace=${id}`});
+      document.body.append(link);
+      link.click();
+    }, other.id);
     await expect.poll(() => new URL(page.url()).searchParams.get('trace')).toBe(other.id);
     for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/release`);
     releaseStatus?.();

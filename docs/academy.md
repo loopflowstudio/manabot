@@ -464,8 +464,8 @@ went to −2 life on turn 9"), the final life totals, and one line from the move
 list: turns, and each player's spells cast and attacks. Select **Rematch** to
 play again with that setup. After the next game, select **Swap sides**: you
 keep your deck and move from playing first to drawing first, or the reverse.
-**Change opponent** opens only the opponent settings, and **Open the recording**
-opens the game in Replay. Both games and the next one belong to the same
+**Change opponent** opens only the opponent settings, and **Review this game**
+opens the game in Replay from its first position. Both games and the next one belong to the same
 session.
 
 Academy names every opponent with how it decides: **Search 64 · search**,
@@ -871,65 +871,27 @@ a non-priority decision needs you. With **Use priority stops** off, priority
 windows continue to appear. Automatic passes are marked **auto** in the
 move list and recording. Pausing narration does not change these settings.
 
-### Reading consequences and controlling narration
+### Reading consequences
 
-The live table's rail shows what happened since your last move and keeps the
-move list; the paged consequence history described below is read in
-**Replay**.
+The table's rail tells what happened in prose. In live play it is **Since
+your last move**: spells cast and their targets, attacks, blocks, damage and
+deaths, read from the authority's presentation events after your last
+commit, with the move list beneath grouped by turn. In Replay the same recap
+covers **This move** at a consequences position and **Since the last
+decision** at a choice (from the same chooser's previous decision); the move
+list jumps to any move.
 
-History groups consequences under recorded turns. Use the earlier/later page
-controls to browse up to 100 events at a time; the counts describe the available
-history. Scroll back to read an earlier event: incoming events leave your reading
-position and keyboard focus in place and increase the unread count. **Latest**
-returns to the newest page and resumes following events while you stay near the
-bottom. Browsing an older page also stops following. Recovered older events also count
-as unread and leave the event you are reading at the same position. Unavailable
-intervals appear where they occur; the turn after a gap stays unknown until a
-recorded turn change. Seeking before the event you are reading moves to the
-nearest earlier available event (or the first available event). A removed
-inspection closes and returns focus to history. Switching match, viewer or Study
-scope starts at Latest with a fresh unread count.
+Consequences describe recorded game events. The move list separately
+identifies submitted choices and **Auto** passes. An action alone is not
+evidence that a spell resolved or a creature died.
 
-When a consequence offers inspection of a card still available in your permitted
-view, select that subject to inspect the exact object without making a move.
-Departed or unavailable subjects keep their recorded text; another copy with the
-same name is not a substitute. Tab reaches history controls, turn headings and
-inspectable subjects; focus the scrolling region to read with the keyboard.
-
-Narration occupies the history area, leaving cards and choices accessible.
-Its controls affect presentation only:
-
-| Control | Result |
-|---|---|
-| **Pause narration** / **Resume narration** | Pause or resume the current narration; live play can continue. |
-| **Fast-forward** | Play narration at 4× speed; toggle again for normal speed. |
-| **Skip beat** | Move past the current narration beat. |
-| **Finish** | Finish the queued narration immediately. |
-| System reduced-motion preference | Remove movement while keeping consequence text and reading controls. |
-
-During live play, narration catches up automatically when its backlog grows;
-skipped motion keeps its history entries. Pausing narration does not pause the
-match or its configured priority-stop automation. Submitted actions, costs and
-revealed information are unaffected by narration controls.
-
-Consequences describe recorded game events. The action log separately identifies
-submitted choices and **Auto** passes; observed-state summaries describe changes
-visible in a frame. An action or a summary alone is not evidence that a spell
-resolved or a creature died.
-
-Reconnect preserves available history already held in this page and avoids
-repeating seen motion. A fresh reload can recover only the latest 256 events of
-an active match; earlier unavailable history and gaps are labeled explicitly.
-An unknown earlier turn stays unknown. To review the saved consequences of a
-completed game, open it from **Games** in **Replay**. History there follows the
-selected timeline position: stepping back and forward does not duplicate rows.
-**Try another line** has separate history, and **Return to recorded decision**
-restores the recording's history. Replay pages the selected perspective's
-recorded history; a choice shows only events preceding that choice.
-Spectator reveal does not add names to acting-view history.
-Older recordings without event data say **Consequences not recorded**; missing
-events do not mean that nothing happened. A presentation error leaves the
-current board usable and marks retained history incomplete.
+Reconnect preserves the history already held in this page. A fresh reload can
+recover only the latest 256 events of an active match. Replay reads the
+selected perspective's recorded history; a choice shows only events preceding
+that choice, and spectator reveal never adds names to it. **Try another line**
+has its own recap, and **Return to recorded decision** restores the
+recording's. Older recordings without event data say **Consequences not
+recorded**; missing events do not mean that nothing happened.
 
 ### Card art
 
@@ -965,81 +927,81 @@ deleting the cache directory is safe.
 
 ### Inspect a replay
 
-Open **Games**, choose a finished game, then use **Next** to move from a recorded
-choice to its consequences. The board shows the recorded state after the action
-while narration follows its events. Keep stepping to reach the final consequences
-and result board, including the last attack or spell. Human games, watched bot
-games and imported training or evaluation games use these same controls.
+A recording opens on the same table as live play, read-only. Open **Games**,
+choose a game, and step through it; human games, watched bot games and
+imported training or evaluation games all use these controls. At the end of a
+game you played, **Review this game** on the result card opens it from the
+first position.
 
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
 newest first, with filters for player, deck, status, result and date. **My games**
 narrows the list to this browser. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
 game file through **Watch → Open a game file**, or
-[launch a replay directly](#open-a-replay-directly).
+[launch a replay directly](#open-a-replay-directly). `/replay` alone lists
+recent recordings.
 
 #### Follow the timeline
 
-| Position | What appears |
+| Position | What the table shows |
 |---|---|
-| Choice | The permitted recorded board, legal offers and action taken, with the chooser identified and policy/search evidence if recorded. History stops before the choice. |
-| Consequences | The recorded post-action board and ordered event groups. Narration emphasizes events on that board; it does not reconstruct an intermediate board for each beat. An action with no recorded events still has a post-action position. |
-| Result or latest state | The saved final board and outcome, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
+| Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
+| Consequences | The recorded board after the action, with what it did in the rail's recap. |
+| Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
 
-**Previous** and **Next** move through positions. Select a score line, use the
-labeled scrubber, or jump to a recorded turn and phase to seek; seeking pauses
-playback. **Play** follows the recorded consequences before moving on, and
-**Pause** holds your place. Choose 1×, 2×, 4× or 16× playback speed. The system
-reduced-motion preference removes movement while keeping the ordered facts.
-Use Tab to reach these controls, Enter or Space to activate buttons, and arrow
-keys on the focused scrubber to seek. Shortcuts do not intercept text editing.
+The transport bar sits where live play has your hand's input:
 
-The replay address retains your selected position, information perspective and
-seat orientation. Reloading restores them, with a saved position in this tab as
-a fallback. A position that is invalid or no longer available is explained so
-you can select an available one. Opening a recording still requires its normal
-access permissions; copying an address does not copy a participant credential.
+| Control | Key | Result |
+|---|---|---|
+| **Previous** / **Next** | ← / → | One position back or on |
+| ⇤ / ⇥ | Shift+← / Shift+→ | The previous or next recorded choice |
+| **Play** / **Pause** | Space | Advance a position per beat, at 1×, 2×, 4× or 16× |
+| Scrubber | arrows when focused | Any position; turns are ticked and choices marked under it |
+| | Home / End | The first or last position |
 
-#### Keep your place and perspective
+Under it, the **Decisions** strip draws the game as one line: each choice is a
+tick, coloured by whose it was, or a point on that chooser's value line where
+a value was recorded; turns are ruled and numbered. Click it to jump. It is
+open in Replay and folded in live play, where it counts decisions but past
+positions open only in Review after the game. Moves in the rail jump to their
+positions too. Keys never act while you type in a field.
 
-Seat 0 stays near you by default, even when the chooser changes. **Swap seats**
-changes the table's orientation. The chooser and information perspective are
-labeled separately: swapping seats does not reveal a hand or change the recorded
-policy inputs.
+The replay address keeps the position, the perspective and the information
+view. Reloading restores them, with a saved position in this tab as a
+fallback. A position that is no longer available is explained so you can
+select another. Opening a recording still requires its normal access
+permissions; copying an address does not copy a participant credential.
+
+#### Perspective
+
+The **Perspective** control in the top bar chooses who sits at the bottom:
+**Follow the chooser** (the default for bot games: each choice is drawn from
+its chooser's seat, hand included, and the board stays turned through that
+choice's consequences), or a fixed seat (the default for a game you played).
+Turning the board never reveals a hand or changes the recorded policy inputs.
 
 At bot choices, the acting view shows what that bot was allowed to see.
-**Show both hands** is available only where spectator reveal is authorized;
-it does not enrich the bot's recorded evidence or acting-view history.
-Human/shared replays keep their recorded seat-0 information boundary.
-Consequences and result boards use the recorded seat-0 view when a private
-post-action view for the actor was not captured. Read the perspective label;
-unrecorded views are disabled with an explanation.
+**Show both hands** appears only where spectator reveal is authorized; it does
+not enrich the bot's recorded evidence or acting-view history. Consequences and
+result boards use the recorded view of the seat named in the menu's
+perspective line when a private post-action view was not captured.
 
-Scroll back in history to read without incoming events pulling you to the
-bottom; **Latest** resumes following. Earlier/later history pages keep long
-recordings manageable. Changing information perspective starts a separate
-history-reading scope; swapping physical seats keeps your place. Card inspection
-stays open only while that exact object remains visible and permitted. If it
-becomes unavailable, inspection closes with an explanation and focus returns
-to the control that opened it. A later copy with the same name cannot supply
-missing historical details. Older snapshots that cannot certify the same object
-appearance also close inspection.
+**Menu** holds the recording's kind and status, each seat's identity (policy
+ID, runner, provenance), **Refresh saved head**, a note for the position,
+**Watch another matchup** for a Watch, and feedback for your own games.
 
-Opening card details or reading earlier history pauses replay. Close the details
-when ready, then press **Play** to resume. Returning to **Latest** does not start
-playback. A live decision already being produced may finish saving while you read;
-your selected board stays put. A pending Search timeout is
-retained across reload and shown with its message. At the live edge, **Retry
-search** explicitly retries that decision; browsing saved positions never retries
-it. The exact selected position remains selected after reload.
+A live decision already being produced may finish saving while you read; your
+selected board stays put. A pending Search timeout is retained across reload
+and shown with its message. At the live edge, **Retry search** explicitly
+retries that decision; browsing saved positions never retries it.
 
 #### Continue a live Watch
 
 Open **Watch** (`/replay?watch=1`), select both seats, decks and a seed, then
 press **Start watching**. Each seat uses the same player menu as Play's **Opponent**.
 A managym-only install offers Random and Search; manabot adds Greedy, Heuristic
-and trained checkpoints. The game opens in the replay viewer and is saved in
-**Games**. **Watch another matchup** opens setup for another bot game.
+and trained checkpoints. The game opens on the replay table and is saved in
+**Games**. **Watch another matchup** in the menu opens setup for another bot game.
 
 Browsing earlier positions reads the recording. At the latest position of a live
 Watch, **Continue** requests the next bot decision; **Play** can keep producing
@@ -1057,7 +1019,8 @@ subject to its access rules, but the original live producer cannot be resumed.
 #### Study and older recordings
 
 At an eligible choice, **Try another line** pauses playback and live production
-and opens an isolated branch. **Return to recorded decision** restores that
+and opens an isolated branch on the same table: the historical offers become
+live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
 A fresh branch requires the server's retained Study state. If that state has
 expired, recorded playback remains available.
@@ -1457,19 +1420,11 @@ The live table does not fetch or display that example as current-game analysis.
 
 ## Choice navigation
 
-In Replay, Watch and Study, `ActionPanel` offers **Find an action** when the
-current list has at least eight choices; the live table instead numbers every
-choice and places it on its card. It matches card/action label text case-insensitively; all
-offers remain visible until a filter is entered, and the complete offer count
-stays visible. **Clear filter** or Escape restores the list. Recovery, a new
-update, board selection and Learn-mode navigation clear the filter. Selecting a
-result sends its original offer through the revision-bound Command path;
-duplicate labels remain separate choices, and focusing a result highlights its
-exact board objects. Learn keeps its Take a Lesson / Discard and draw / Decline
-interaction with previews and Back; costs and other small choices stay direct.
-
-The eight-choice threshold and text filtering are reversible product
-hypotheses. Human usability acceptance (ETU-77) remains open.
+The table numbers every choice in the rail and places it on its card, in
+live play, Replay, Watch and Study alike; there is no filter. Selecting a
+choice sends its original offer through the revision-bound Command path, and
+duplicate labels remain separate choices. Human usability acceptance (ETU-77)
+remains open.
 
 [managym/academy/fixtures/choice-navigation-w17-token-cards.json](../managym/academy/fixtures/choice-navigation-w17-token-cards.json)
 pins actual GameSession positions (UR Lessons versus GW Allies) for five

@@ -64,7 +64,8 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await second.goto(addresses.game);
   await expect(second.getByTestId('action-option').first()).toBeEnabled();
   await second.close();
-  await page.getByRole('link', {name:'New game',exact:true}).first().click();
+  await page.getByTestId('table-menu').click();
+  await page.getByTestId('table').getByRole('link', {name:'New game',exact:true}).click();
   await expect(page.getByTestId('opponent-select')).toHaveValue('passive');
   await expect(page.getByRole('combobox',{name:'Seat 1 deck',exact:true})).toHaveValue('gw_allies_jeong');
   page.on('dialog',dialog => dialog.accept());
@@ -100,7 +101,8 @@ test('imported launch setup shows selected sources and switches back to bundled 
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { imported_game: string };
   await page.goto(addresses.imported_game);
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
-  await page.getByRole('link',{name:'New game',exact:true}).first().click();
+  await page.getByTestId('table-menu').click();
+  await page.getByTestId('table').getByRole('link',{name:'New game',exact:true}).click();
   page.on('dialog',dialog => dialog.accept());
   const imports = page.getByRole('checkbox', { name: 'Use imported decks for the next game' });
   await expect(imports).toBeVisible();

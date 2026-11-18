@@ -436,6 +436,27 @@
       <p class="type-rubric text-ink-2" data-testid="recording-heading">{sourceLabel}</p>
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
       <p class="type-caption text-ink-3" data-testid="replay-perspective">{perspectiveText}</p>
+      {#each [0, 1] as seat (seat)}
+        {@const who = identity(seat)}
+        {@const runtime = who.runtime ?? who.provenance?.policy}
+        <details class="player-status type-caption">
+          <summary>Seat {seat + 1} · {nameOf(seat)}</summary>
+          <div class="identity" data-testid="player-identity">
+            <p>{who.full}</p>
+            {#if who.digest}<p>{runtime ? 'Policy ID' : 'SHA-256'}: {who.digest}</p>{/if}
+            {#if who.producer}<p>Producer: {who.producer}</p>{/if}
+            {#if runtime}
+              <p>Runner: {runtime.runner}</p>
+              {#each Object.entries(runtime.artifacts) as [role, digest] (role)}<p>{role}: {digest}</p>{/each}
+              <p>Config: {JSON.stringify(runtime.config)}</p>
+            {/if}
+            {#each ['source', 'world', 'model', 'step'] as const as key (key)}
+              {@const value = who.provenance?.[key]}
+              {#if value != null}<p>{key}: {value}</p>{/if}
+            {/each}
+          </div>
+        </details>
+      {/each}
       <button class="btn btn-secondary btn-sm" disabled={locked} onclick={() => { if (replayStore.headUncertain) void replayStore.refreshHead(); else if (index) void replayStore.open(index.id, selectedKey); }}>Refresh saved head</button>
       {#if current}
         <label class="type-caption">Note for this position
@@ -486,7 +507,7 @@
     log={[]}
     canPassTurn={false}
     {presentation}
-    thinking={replayStore.producing && atLiveEdge ? 'The bots are choosing…' : null}
+    thinking={null}
     opponentChoosing={false}
     workStarted={null}
     interrupted={false}
@@ -505,7 +526,7 @@
 {:else}
   <main class="landing mx-auto w-full max-w-[900px] px-4 py-6">
     <header class="mb-4 flex flex-wrap items-baseline gap-3">
-      <h2 class="type-title text-display">Replay</h2>
+      <p class="type-title text-display" aria-hidden="true">Replay</p>
       <a class="underline type-caption" href="/games">Games</a>
       <a class="underline type-caption" href="/">Play</a>
     </header>
@@ -551,4 +572,6 @@
   }
   .note { display: block; width: 100%; margin-top: 4px; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 4px 6px; }
   .recordings { display: grid; gap: 4px; }
+  .player-status summary { cursor: pointer; }
+  .identity { padding: 4px 0 0 12px; overflow-wrap: anywhere; color: var(--text-secondary); }
 </style>

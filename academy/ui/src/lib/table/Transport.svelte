@@ -37,7 +37,7 @@
   const span = $derived(Math.max(1, total - 1));
   const at = (index: number): string => `${(index / span) * 100}%`;
   const turn = $derived(marks[selected]?.turn ?? null);
-  const numbered = $derived(new Set(labelledTurns(marks, 0.025).map(mark => mark.at)));
+  const numbered = $derived(new Set(labelledTurns(marks, 0.045).map(mark => mark.at)));
   const hasDecisionBefore = $derived(marks.some(mark => mark.decision && mark.at < selected));
   const hasDecisionAfter = $derived(marks.some(mark => mark.decision && mark.at > selected));
 </script>
