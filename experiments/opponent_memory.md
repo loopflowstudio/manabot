@@ -2753,3 +2753,27 @@ clip therefore shrinks the rest of the model's gradient by 3% to 30%, and
 Adam largely normalizes a uniform rescale. The cause of the GRU arm's slower
 sharpening is open; the candidates left are the memory term added to every
 board token and its interaction with the damped update.
+
+### Heuristic curve along training — 2026-11-18
+
+Run `decision-memory-elemental-v1-ead9d86f4363` (revision `3da9fb0686`)
+played stored checkpoints against the heuristic, 25 paired deals per
+disclosure. Cells pool open and closed (50 deals; finals 100 deals) with the
+standard error across deals. Update 0 is the trunk export both arms start
+from.
+
+| Seed | Arm | Update 0 | Update 40 | Update 80 | Update 120 | Final |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 39101 | control | 0.105 ± 0.023 | 0.225 ± 0.030 | 0.325 ± 0.038 | — | 0.310 ± 0.020 |
+| 39101 | GRU | | 0.240 ± 0.027 | 0.390 ± 0.034 | 0.410 ± 0.032 | 0.440 ± 0.020 |
+| 39102 | control | 0.095 ± 0.023 | 0.280 ± 0.027 | 0.365 ± 0.032 | — | 0.375 ± 0.024 |
+| 39102 | GRU | | 0.315 ± 0.031 | 0.435 ± 0.037 | 0.405 ± 0.030 | 0.417 ± 0.023 |
+| 39103 | control | 0.095 ± 0.023 | 0.265 ± 0.028 | 0.330 ± 0.033 | — | 0.415 ± 0.024 |
+| 39103 | GRU | | 0.260 ± 0.027 | 0.390 ± 0.035 | 0.410 ± 0.037 | 0.435 ± 0.025 |
+
+Both arms improve throughout; control does not decline as its policy
+sharpens. The trunk export scores about 0.10, so the branches did most of
+the learning. At equal updates the arms are close, with the GRU arm ahead
+at update 80 in all three seeds; control reached update 80 after 6.7M
+decisions (seed 39101) where the GRU arm needed 4.5M, because control's
+games hold more decisions.
