@@ -177,6 +177,35 @@ describe('fitRow', () => {
   it('reports overflow only past the smallest size', () => {
     expect(fitRow(upright(80), 600, 100, limits).overflow).toBe(true);
   });
+
+  it('finds the same largest card as trying every size', () => {
+    // Every card size from the largest down, as a person would by eye: the first that fits wins.
+    const walk = (piles: number[], width: number, height: number) => {
+      let best: { card: number; lines: number } | null = null;
+      for (let lines = 1; lines <= limits.maxLines; lines += 1) {
+        const lineHeight = (height - limits.gap * (lines - 1)) / lines;
+        for (let card = Math.min(limits.maxCard, Math.floor(lineHeight * limits.ratio)); card >= limits.minCard; card -= 1) {
+          const fan = Math.max(8, Math.round(card * 0.22));
+          let used = 0, needed = 1;
+          for (const count of piles) {
+            const w = card + (count - 1) * fan;
+            if (used > 0 && used + limits.gap + w > width) { needed += 1; used = w; } else used += (used > 0 ? limits.gap : 0) + w;
+          }
+          if (needed <= lines) { if (!best || card > best.card) best = { card, lines }; break; }
+        }
+      }
+      return best;
+    };
+    let seed = 7;
+    const random = (n: number) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+    for (let trial = 0; trial < 400; trial += 1) {
+      const piles = Array.from({ length: 1 + random(30) }, () => 1 + (random(4) === 0 ? random(9) : 0));
+      const width = 200 + random(1000), height = 40 + random(400);
+      const fit = fitRow(piles, width, height, limits);
+      const expected = walk(piles, width, height);
+      expect(fit.overflow ? null : { card: fit.card, lines: fit.lines }).toEqual(expected);
+    }
+  });
 });
 
 describe('splitHalf', () => {

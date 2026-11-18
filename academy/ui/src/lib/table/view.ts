@@ -420,20 +420,31 @@ function linesNeeded(piles: number[], width: number, card: number, fan: number, 
  * The largest card that fits piles of `piles[i]` copies into a `width` ×
  * `height` row. A row of n lines gives each line height / n; a wider fan is
  * tried before a narrower one, and a smaller card before another line.
+ *
+ * A larger card never needs fewer lines (every pile widens with it and lines
+ * wrap greedily), so each line count's largest fitting card is found by
+ * bisection. The table asks this thousands of times a frame (`splitHalf`,
+ * `handStrip`), so a pixel-by-pixel walk would cost tens of milliseconds on
+ * a crowded board.
  */
 export function fitRow(piles: number[], width: number, height: number, limits: RowLimits): RowFit {
   const { gap, minCard, maxCard, maxLines, ratio } = limits;
   if (!piles.length || width <= 0 || height <= 0) return { card: maxCard, fan: Math.round(maxCard * 0.3), lines: 1, overflow: false };
+  const fanOf = (card: number): number => Math.max(8, Math.round(card * 0.22));
+  const fits = (card: number, lines: number): boolean => linesNeeded(piles, width, card, fanOf(card), gap) <= lines;
   let best: RowFit | null = null;
   for (let lines = 1; lines <= maxLines; lines += 1) {
     const lineHeight = (height - gap * (lines - 1)) / lines;
-    for (let card = Math.min(maxCard, Math.floor(lineHeight * ratio)); card >= minCard; card -= 1) {
-      const fan = Math.max(8, Math.round(card * 0.22));
-      if (linesNeeded(piles, width, card, fan, gap) <= lines) {
-        if (!best || card > best.card) best = { card, fan, lines, overflow: false };
-        break;
-      }
+    let high = Math.min(maxCard, Math.floor(lineHeight * ratio));
+    if (high < minCard || !fits(minCard, lines)) continue;
+    // `low` fits; find the largest card up to `high` that does.
+    let low = minCard;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (fits(mid, lines)) low = mid;
+      else high = mid - 1;
     }
+    if (!best || low > best.card) best = { card: low, fan: fanOf(low), lines, overflow: false };
   }
   if (best) return best;
   return { card: minCard, fan: 8, lines: maxLines, overflow: true };
