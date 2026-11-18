@@ -1,6 +1,6 @@
 # Do fixed-source mana taps at priority and during payments change TLA learnability?
 
-**Offering mana taps slowed training per update. Both raw policies learned.** With taps on, the median seed pair took 55% longer per update and surfaced 89% more decisions per game. Against the heuristic the raw on arm trailed at 25 updates (34/192 vs 70/192) and narrowed the gap at 50 (82/192 vs 88/188). It won 80/188 head-to-head games at update 50. At similar active training time the off arm still led in every seed. These three seeds establish an early time cost. The longer-run strength difference remains open.
+**Offering mana taps slowed training per update. Both raw policies learned.** With taps on, the median seed pair took 55% longer per update and surfaced 89% more decisions per game. Against the heuristic the raw on arm trailed at 25 updates (34/192 vs 70/192) and narrowed the gap at 50 (82/192 vs 88/188). At update 75 the raw on arm scored 89/192 against the heuristic to the off arm’s 93/192, and won 88/192 head-to-head. At the early matched-time comparison below, the off arm led in every seed. These three seeds establish an early time cost. The longer-run strength difference remains open.
 
 **The learners learned to skip most priority taps.** In raw self-play the share of surfaced decisions spent tapping fell from 38.0–38.6% in the first collection to 15.1–17.6% at update 25 and 7.7–9.2% at update 50. The fixed-deal spot checks below also show a decline against the heuristic. The long-horizon EMA hid most of the change.
 
@@ -235,7 +235,25 @@ above. The final whole-experiment bill remains open.
 
 ### Continuation toward update 250
 
-On 2026-11-18 all six original run addresses resumed from their update-50 learner, optimizer and EMA states on revision `5794a91d97`. Etude retains the original config and applies the absolute target `updates=250`. Seed 21501 uses two L4s. Seeds 21502 and 21503 use A40s after L4 capacity ran out. Each run has its own rental. The six rental ceilings total USD18.01. The unresolved USD5.33 Lium allowance remains reserved within the USD35 whole-experiment cap. The raw checkpoint audit ran locally. Continuation costs and scores beyond update 50 are pending.
+On 2026-11-18 all six original run addresses resumed from their update-50 learner, optimizer and EMA states on revision `5794a91d97`. Etude retains the original config and applies the absolute target `updates=250`. Seed 21501 uses two L4s. Seeds 21502 and 21503 use A40s after L4 capacity ran out. Each run has its own rental. The six rental ceilings total USD18.01. The unresolved USD5.33 Lium allowance remains reserved within the USD35 whole-experiment cap. The raw checkpoint audit ran locally. Final continuation costs are pending.
+
+### Update 75
+
+Across updates 51–75, the on arms took 110, 126 and 127 active seconds per update, compared with 59, 70 and 66 for the paired off arms. At update 75 the raw heuristic scores differed by at most three games within each seed. Head-to-head, the on policy won more than half its games in one of three seeds. Separate rentals and the change of GPU for two pairs limit timing comparisons with the first 50 updates.
+
+| Seed | Raw off vs heuristic | Raw on vs heuristic | Raw on vs off | EMA off vs heuristic | EMA on vs heuristic | EMA on vs off |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 21501 | 30 | 27 | 30 | 5 | 0 | 15 |
+| 21502 | 31 | 32 | 33 | 6 | 0 | 16 |
+| 21503 | 32 | 30 | 25 | 5 | 0 | 20 |
+
+All cells scored 64 games. Both local evaluations completed 144 matches and all 72 replay blobs matched their digests. On the spot-check deck pair against the heuristic, the raw on policies chose 238 floats in 2,683 surfaced decisions (8.9%). The EMA on policies chose 384 in 966 (39.8%).
+
+![Raw and EMA scores by update and active training time](../data/mtg385/continuation/strength.png)
+
+Fetch the continuation scores, seat-level spot checks, replays and training rows with
+`uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg385/continuation`.
+[Raw games](../data/mtg385/continuation/u75/raw-games.csv) · [EMA games](../data/mtg385/continuation/u75/ema-games.csv) · [Continuation training rows](../data/mtg385/continuation/training.csv)
 
 ## Published results
 
