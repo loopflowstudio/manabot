@@ -613,7 +613,7 @@ The rail holds:
   Passing priority and paying a cost are the primary button (Space), labelled
   with what it does next: **Resolve** and the spell on top of the stack, the
   step it moves to ("To combat", "To blockers"), or the cost and the lands it
-  taps ("Pay {1}{U} · Island, Island"; see
+  taps ("Pay {1}{U} · Island ×2"; see
   [Previewing payments](#previewing-payments)). Declining,
   and a combat answer that does not name another creature, are separate
   buttons, so a click on a card never declines.

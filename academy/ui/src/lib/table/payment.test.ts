@@ -28,6 +28,11 @@ describe('paymentPlan', () => {
     expect(payLabel('{1}{U}', plan, null)).toBe('Pay {1}{U} · Mountain, Island');
   });
 
+  it('counts repeated sources on the button', () => {
+    const plan = paymentPlan(preview('exact', [[island, [0, 1, 0, 0, 0, 0]], [mountain, [0, 0, 0, 1, 0, 0]], [117, [0, 0, 0, 1, 0, 0]], [99, [0, 0, 0, 1, 0, 0]]]), pay)!;
+    expect(payLabel('{3}{U}', plan, null)).toBe('Pay {3}{U} · Island, Mountain ×3');
+  });
+
   it('marks nothing unless the preview is exact', () => {
     expect(paymentPlan(preview('needs_choice', [[mountain, [0, 0, 0, 1, 0, 0]]]), pay)).toBeNull();
     expect(paymentPlan(null, pay)).toBeNull();

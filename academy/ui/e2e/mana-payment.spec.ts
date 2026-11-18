@@ -89,7 +89,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await waitForRevision(page, before);
     await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PAY_OR_NOT');
     const primary = page.getByTestId('primary-action');
-    await expect(primary).toHaveText(/^Pay \{1\}\{R\} · \S+, \S+/);
+    await expect(primary).toHaveText(/^Pay \{1\}\{R\} · \S+/);
     await expect(planned(page)).toHaveCount(2);
     await expect(page.getByTestId('decision-prompt')).toContainText('Space taps the dashed lands');
     await expect(page.getByTestId('action-option')).toHaveCount((await frame(page)).offers.length);

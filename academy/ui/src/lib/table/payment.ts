@@ -5,7 +5,7 @@
  * answers for one offer: which sources **Pay the cost** would tap and what
  * each produces. `paymentPlan(preview, frame)` turns an exact answer into
  * marks on the lands it names ("would tap, for {U}") and the words the
- * primary button reads ("Pay {1}{U} · Island, Island"). It works nothing out:
+ * primary button reads ("Pay {1}{U} · Island ×2"). It works nothing out:
  * a preview that is not exact marks nothing, and the button keeps the cost.
  */
 import type { PaymentPreview, PreviewPool } from '$lib/payment-preview';
@@ -60,11 +60,18 @@ export function paymentPlan(preview: PaymentPreview | null, frame: ExperienceFra
   return { sources, cost: preview.cost, names: listed };
 }
 
+/** "Island ×2, Mountain": names in order of first appearance, each with its count. */
+function counted(names: readonly string[]): string {
+  const counts = new Map<string, number>();
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+  return [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name)).join(', ');
+}
+
 /** The primary button for a payment: the cost, then what pays it. */
 export function payLabel(cost: string | null, plan: PaymentPlan | null, preview: PaymentPreview | null): string | null {
   const price = cost ?? plan?.cost ?? null;
   if (!price) return null;
   if (!plan) return `Pay ${price}`;
-  if (plan.names.length) return `Pay ${price} · ${plan.names.join(', ')}`;
+  if (plan.names.length) return `Pay ${price} · ${counted(plan.names)}`;
   return emptyPool(preview?.pool_after_production ?? null) ? `Pay ${price}` : `Pay ${price} · floating mana`;
 }

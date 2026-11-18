@@ -105,7 +105,9 @@ describe('primaryLabel', () => {
       pool_after_production: null, pool_after_spending: null,
     };
     const cost = pay.projection.decision_context!.mana_cost;
-    expect(primaryLabel(pay, tableView(pay), preview)?.text).toBe(`Pay ${cost} · ${lands.map(land => land.name).join(', ')}`);
+    const names = lands.map(land => land.name);
+    const listed = names[0] === names[1] ? `${names[0]} ×2` : names.join(', ');
+    expect(primaryLabel(pay, tableView(pay), preview)?.text).toBe(`Pay ${cost} · ${listed}`);
     expect(promptLine(pay, tableView(pay), true)).toMatch(/Space taps the dashed lands/);
     // A preview that is not exact draws nothing; the button keeps the cost.
     expect(primaryLabel(pay, tableView(pay), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
