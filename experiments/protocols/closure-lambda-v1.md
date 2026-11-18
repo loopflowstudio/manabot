@@ -13,8 +13,8 @@ feed the other's comparison.
 
 ## Prior evidence
 
-`experiments/ataraxos-technique-screen.md` lists `policy-trace` (.5 vs .95) and
-`value-trace` (.8 vs 1) as candidates and `experiments/ataraxos-omitted-controls.md`
+`experiments/reports/ataraxos-technique-screen.md` lists `policy-trace` (.5 vs .95) and
+`value-trace` (.8 vs 1) as candidates and `experiments/reports/ataraxos-omitted-controls.md`
 lists trace controls, but neither file reports a trace result that narrows this sweep,
 and both predate the current world. Trace arms are therefore chosen from the weight
 the game result receives, not from an earlier winner.

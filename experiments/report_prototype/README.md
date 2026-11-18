@@ -37,8 +37,9 @@ selection time overlaps game wall. Unrecorded warmup, queue, tokenization,
 prefill/decode, inclusive billing and whole-attempt time remain unavailable.
 Memory distinguishes the process allocator from sampled whole-device occupancy.
 
-`--baseline-manifest experiments/inference_baselines/mtg185-l4.json` verifies the
-pinned historical corpus and includes its available receipts. Paths resolve
+`--baseline-manifest FILE` verifies a pinned corpus and includes its available
+receipts; the MTG-185 L4 manifest and the inference baseline runner were
+removed, and the last commit with them is `b49df79b49`. Paths resolve
 relative to the manifest. Absent receipt directories and unattempted cells stay
 visible; changed bytes, missing files within a present pinned directory, malformed
 records and duplicate imports fail validation. The historical manifest binds
@@ -103,8 +104,7 @@ admission and batches; CUDA allocated and reserved peaks describe the serving pr
 not whole-device occupancy. These instruments do not establish empirical CPU/GPU
 comparisons or a complete baseline protocol.
 
-Bounded new measurements use the [inference baseline runner](../inference_baselines/README.md).
-Its manifest links the frozen protocol, whole-attempt boundaries and child cleanup,
+A baseline manifest links the frozen protocol, whole-attempt boundaries and child cleanup,
 including failures before a game exists. Retained-input diagnostics keep their
 byte-pinned witnesses without creating evaluation rows or game throughput.
 

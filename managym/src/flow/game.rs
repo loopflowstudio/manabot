@@ -10,7 +10,7 @@ use std::{
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
+    agent::action::ActionSpace,
     decision::ObjectCandidateAddress,
     flow::{
         cast_permission::CastPermissions,
@@ -764,7 +764,6 @@ pub struct Game {
     pub(crate) semantic_object_candidates: RefCell<BTreeMap<ObjectCandidateAddress, ObjectId>>,
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
-    pub trackers: [BehaviorTracker; 2],
 }
 
 impl Clone for Game {
@@ -785,7 +784,6 @@ impl Clone for Game {
             semantic_object_candidates: self.semantic_object_candidates.clone(),
             pending_choice: self.pending_choice.clone(),
             skip_trivial_count: self.skip_trivial_count,
-            trackers: self.trackers.clone(),
             card_capture: None,
             statistics: None,
             capture_drawing: None,

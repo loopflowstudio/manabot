@@ -13,10 +13,10 @@ from manabot.backends.torch.checkpoint import (
     save_checkpoint,
 )
 from manabot.backends.torch.policy import ActorCritic, GameObjectAttention
-from manabot.backends.torch.state import restore_policy
 from manabot.env.decision_memory import blank_memory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
+from manabot.training.loops.self_play import load_pretrained
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -55,7 +55,7 @@ def test_trunk_branch_is_exact_and_checkpoint_retains_gates(
     arm = ActorCritic(
         space, template.config, live_tokens=live, bucketed_shapes=bucketed
     ).eval()
-    restore_policy(arm, admitted.state_dict(), source_config=admitted.config)
+    load_pretrained(arm, admitted.state_dict(), admitted.config)
     longer = {key: value.copy() for key, value in obs.items()}
     for index in range(128):
         longer["decision_records"][0, index] = obs["decision_records"][0, 0]
@@ -153,9 +153,7 @@ def test_pretrained_restore_keeps_shared_state_strict(fault: str) -> None:
     elif fault == "shape":
         state[key] = state[key][:0]
     with pytest.raises((ValueError, RuntimeError)):
-        restore_policy(
-            arm, state, source_config=None if fault == "strict" else trunk.config
-        )
+        load_pretrained(arm, state, arm.config if fault == "strict" else trunk.config)
 
 
 @pytest.mark.parametrize("scale", [0, -1, float("inf"), float("nan")])

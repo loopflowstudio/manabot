@@ -1,8 +1,7 @@
-"""Shared raw prefixes preserve sampled decisions through learning and recovery."""
+"""Shared raw prefixes preserve sampled decisions through learning and incident capture."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from io import BytesIO
 import random
 from typing import Literal
 import weakref
@@ -16,7 +15,7 @@ from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
-from manabot.backends.torch.state import capture_incident, load, save
+from manabot.backends.torch.state import capture_incident
 from manabot.env.match import Match, Reward
 import manabot.env.memory_store as memory_store
 from manabot.env.memory_store import (
@@ -33,9 +32,11 @@ from manabot.env.memory_store import (
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig, RewardConfig
 from manabot.training.rollout.collection import (
-    CollectorSnapshot,
+    Collector,
     RecordedObservations,
-    SeatRoutedCollector,
+    close_collector,
+    collect,
+    open_collector,
 )
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
@@ -138,7 +139,7 @@ def test_compact_memory_prepares_exactly_as_dense(
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
 @pytest.mark.parametrize("summaries", [1, 4])
-def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
+def test_memory_collector_retains_old_batches_and_incident_budget(
     encoder: Literal["transformer", "gru"],
     summaries: int,
     monkeypatch: pytest.MonkeyPatch,
@@ -153,8 +154,8 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
     )
     model = policy(space, encoder, summaries)
 
-    def collector() -> SeatRoutedCollector:
-        return SeatRoutedCollector(
+    def collector() -> Collector:
+        return open_collector(
             space,
             Match(),
             Reward(RewardConfig()),
@@ -162,13 +163,12 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
             learning_seats="one",
             batch_closure="exact-quota",
             opponent_mode="self",
-            recovery_max_game_microsteps=1000,
             numerics=CollectionSession(device="cpu", seed=111, precision="float32"),
         )
 
-    original, resumed = collector(), collector()
+    original = collector()
     try:
-        first = original.collect(model, 16)
+        first = collect(original, model, 16)
         before = first.observations(np.array([15, 0, 15])).observation.materialize()
         assert isinstance(first.next_obs, PrefixObservation)
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
@@ -229,25 +229,12 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
             )
         torch.testing.assert_close(actual_value, expected_value)
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
-        snapshot = original.snapshot()
-        assert not set(MEMORY_FIELDS).intersection(snapshot.buffers)
-        encoded = BytesIO()
-        save(snapshot, encoded)
-        encoded.seek(0)
-        decoded = load(encoded)
-        assert isinstance(decoded, CollectorSnapshot)
-        resumed.restore(decoded, lambda: None)
-        second = original.collect(model, 8)
-        replayed = resumed.collect(model, 8)
+        second = collect(original, model, 8)
         assert isinstance(second.next_obs, PrefixObservation)
-        assert isinstance(replayed.next_obs, PrefixObservation)
-        # Both retained bootstrap and collector replay survive native buffer reuse.
+        # The retained bootstrap survives native buffer reuse by later collection.
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
                 first.next_obs.materialize()[key], bootstrap_before[key]
-            )
-            np.testing.assert_array_equal(
-                second.next_obs.materialize()[key], replayed.next_obs.materialize()[key]
             )
         with torch.no_grad():
             torch.testing.assert_close(
@@ -260,10 +247,6 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
                     key
                 ],
                 before[key],
-            )
-            np.testing.assert_array_equal(
-                second.observations(np.arange(8)).observation.materialize()[key],
-                replayed.observations(np.arange(8)).observation.materialize()[key],
             )
         learner = Learner(model, "cpu", minibatch_rows=4)
         error = NumericalError(
@@ -315,8 +298,7 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
         )
         assert int(mapped.evidence["batch_row_indexes"][0]) == 1
     finally:
-        original.close()
-        resumed.close()
+        close_collector(original)
 
 
 def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
@@ -329,7 +311,7 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
         )
     )
     model = policy(space, "transformer", 4)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(),
         Reward(RewardConfig()),
@@ -341,14 +323,14 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
         numerics=CollectionSession(device="cpu", seed=111, precision="float32"),
     )
     try:
-        batch = collector.collect(model, 4)
+        batch = collect(collector, model, 4)
         assert batch.actions.size == 4
         assert isinstance(batch.next_obs, PrefixObservation)
         assert not set(MEMORY_FIELDS).intersection(batch.next_obs)
         assert len(batch.recorded.memory) == 4
         assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows)
     finally:
-        collector.close()
+        close_collector(collector)
 
 
 def test_live_suffix_capture_preserves_chunk_boundaries_coalescing_and_epochs() -> None:

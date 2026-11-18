@@ -10,17 +10,23 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from manabot.backends import resolve
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.decision_memory import blank_memory
+from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.recipes.local import local_smoke
-from manabot.training.execution import execute_regime
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.verify.store import VerifyStore
+from manabot.recipes.builders import gray_ogre_self_play
+from manabot.training.loops.self_play import (
+    Counts,
+    SelfPlay,
+    create,
+    root_match,
+    self_play_collector,
+    step,
+)
+from manabot.training.rollout.collection import close_collector
 import managym
 
 
@@ -115,33 +121,58 @@ def prove_policies(
 
 
 def ordinary_update(out: Path) -> dict[str, object]:
-    regime = local_smoke(steps=1, device="cpu")
-    regime.id = "opponent-memory-software-demo"
-    regime.agent.decision_memory = "gru"
-    regime.agent.decision_memory_summaries = 1
-    regime.observation = ObservationConfig(
-        max_decision_records=1024,
-        max_decision_reference_details=8192,
-        max_decision_references=256,
-        max_decision_members=16384,
+    """One unmodified self-play update of a GRU-memory policy, saved and reloaded."""
+    settings = gray_ogre_self_play(horizon=1).model_copy(
+        update={
+            "model": ModelConfig(
+                world=managym.WORLD_SETUP,
+                hidden_dim=16,
+                num_attention_heads=2,
+                attention_on=True,
+                policy_film=True,
+                decision_memory="gru",
+            ),
+            "observation": ObservationConfig(
+                max_decision_records=1024,
+                max_decision_reference_details=8192,
+                max_decision_references=256,
+                max_decision_members=16384,
+            ),
+            "collection_rows": 2,
+            "bootstrap_rows": 2,
+            "learner_rows": 2,
+        }
     )
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.execution.collection_rows = 2
-    stage.execution.bootstrap_rows = 2
-    stage.execution.learner_rows = 2
-    regime = TrainingRegime.model_validate(regime.model_dump())
-    with VerifyStore(out / "training.sqlite") as store:
-        run = execute_regime(
-            regime, 1, out / "training", store, backend=resolve("torch")
+    settings = SelfPlay.model_validate(settings.model_dump())
+    learner, ema = create(settings, seed=221)
+    counts = Counts()
+    collector = self_play_collector(settings, seed=221, start=0)
+    try:
+        step(
+            settings,
+            learner,
+            ema,
+            collector,
+            counts,
+            np.random.default_rng(221),
+            out=out / "training",
         )
-    assert run.status == "completed" and run.updates_through() == 1
-    model, _ = load_checkpoint(run.stages[0].artifacts["raw"]["path"])
+    finally:
+        close_collector(collector)
+    path = out / "training" / "raw.safetensors"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    save_checkpoint(
+        learner.agent,
+        ObservationSpace(settings.observation),
+        path,
+        player_configs=Match(root_match(settings)).to_rust(),
+    )
+    model, _ = load_checkpoint(str(path))
     assert model.decision_memory is not None
     assert all(torch.isfinite(parameter).all() for parameter in model.parameters())
     return {
-        "status": run.status,
-        "updates": 1,
-        "learner_transitions": run.stages[0].learner_transitions,
+        "status": "completed",
+        "updates": counts.updates,
+        "learner_transitions": counts.learner_transitions,
         "checkpoint_reload_finite": True,
     }

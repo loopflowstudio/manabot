@@ -137,7 +137,9 @@ def _advance(proof: Proof, verb: str, contains: str = "") -> None:
         if any(offer["verb"] == verb for offer in contract.frame.offers):
             proof.choose(verb, contains)
             return
-        proof.choose("pass_priority")
+        # An announced spell waits in its payment stage, which offers no pass.
+        paying = any(offer["verb"] == "pay_cost" for offer in contract.frame.offers)
+        proof.choose("pay_cost" if paying else "pass_priority")
     raise AssertionError(f"did not reach {verb}")
 
 

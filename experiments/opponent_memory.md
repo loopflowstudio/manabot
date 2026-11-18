@@ -30,8 +30,9 @@ Elemental 10v10. The history-disabled incumbent is the throughput reference only
   log loss by 0.002 to 0.005 over the public state and did not help with
   open lists. Scripted and weak play may be why: history is informative when
   choices depend on the hand in ways the board does not show.
-- **Cost.** With history off this source costs the same as main: 0.998× on
-  an A40 and 1.0044× on CPU. With memory on, the A40 measured 1.105× for
+- **Cost.** With history off this source cost the same as main before the
+  port: 0.998× on an A40 and 1.0044× on CPU. After the port onto main's new
+  loop a CPU check read 1.025×, within what two laptop cases resolve. With memory on, the A40 measured 1.105× for
   control and 1.201× for the GRU arm.
 
 The wide model was not run. Total rental was about USD 24.
@@ -87,40 +88,23 @@ control only.
 
 ### Running it
 
-Use the committed revision and the same store that holds the producer receipts.
-Each training selection below is independent. Run the small branches first
-once their three trunks finish. The wide commands describe the full design for
-the launching session after the budget decision.
+The runs reported here were launched from this file's earlier form (the
+revisions named in the appendix), which the training stack on main has since
+replaced. The file now declares the same design on the current self-play loop:
+typing the launch again declares what is new: the trunks, then both arms of
+each seed whose trunk has finished, then evaluation of the stored checkpoints.
 
 ```sh
 pilot=experiments/opponent_memory.py
 store=r2://manabot/jobs/opponent_memory
-revision=$(git rev-parse HEAD)
-train() {
-  uv run etude launch "$pilot" --source "$store" --revision "$revision" \
-    --rent mtg252-a40 --max-usd 29.95 "$@"
-}
-
-# Small branches
-for arm in control gru-k1; do
-  train --size small --trunks "$store" --job "decision-memory-$arm"
-done
-
-# Wide trunks
-train --size wide --job decision-memory-wide-trunk
-
-# Wide branches, once all three wide trunks finish
-for arm in control gru-k1; do
-  train --size wide --trunks "$store" --job "decision-memory-wide-$arm"
-done
-
-# Remote evaluation after the three small trunk addresses already exist.
-# Set eval_ceiling to current committed USD plus the remaining eval allowance.
-uv run etude launch "$pilot" --source "$store" --revision "$revision" \
-  --rent mtg252-a40 --max-usd "${eval_ceiling:?set cumulative evaluation ceiling}"
-
+uv run etude launch "$pilot" --source "$store" --revision "$(git rev-parse HEAD)" \
+  --size small --rent mtg252-a40 --max-usd "${ceiling:?set the cumulative ceiling}"
 uv run etude report "$pilot" --source "$store" --open
 ```
+
+An arm's job is named for its seed (`decision-memory-control-39101`), because
+each holds one trunk as its starting checkpoint. `--size wide` declares the
+wide design.
 
 Etude counts prior experiment commitments and may admit only part of a cohort.
 USD29.95 covers calibration plus the USD27 training allocation, including failed
@@ -2854,3 +2838,34 @@ open and 0.1031 closed from the public state, and 0.0862 and 0.0970 with
 memory: a 0.006 closed gain, none open. The result is not specific to the
 scripted heuristic, but this checkpoint still loses to that heuristic, so it
 says nothing about what a strong policy's history would carry.
+
+### 2026-11-18 — moved onto main's rewritten training loop
+
+Main replaced the training stack this work was built on (regimes, the
+executor and collector recovery became `SelfPlay` settings, one loop and a
+function collector). Decision memory, the learner-decision schedule, the
+control-to-memory start, blanked-memory evaluation and this experiment's
+declaration were ported onto it; none of the runs above were repeated. Removed
+with the machinery they tested: collector snapshot tests, the storage-proof
+script and the `history-off` job declaration. A two-stream CPU smoke trained
+trunk, control and GRU stages through the new declaration.
+
+History-off cost against the new main (`b8cd469722`) on the M4 Max CPU,
+`scripts/measure_history_off.py compare --device cpu --precision float32`,
+256 streams, three iterations, order candidate, main, main, candidate:
+
+| Case | Decisions (iterations 2–3) | Collection s | Update s | Decisions/s |
+| --- | ---: | ---: | ---: | ---: |
+| this source | 133,550 | 40.4 | 282.7 | 413.4 |
+| main | 131,131 | 39.0 | 272.6 | 420.8 |
+| main | 130,965 | 38.1 | 272.1 | 422.2 |
+| this source | 134,810 | 41.0 | 288.3 | 409.3 |
+
+The median ratio is 1.025× seconds per decision. The rollouts are not
+identical after the first update on either side (main's two runs differ from
+each other), so later iterations compare different batches. On the first
+iteration, where all four cases collect the same 63,854 decisions, this source
+took 19.6 and 19.5 s to collect against main's 18.7 and 19.1 s (about 3%
+more), and 133.3 and 132.9 s to update against 130.3 and 136.6 s (no
+difference). Two cases a side on a laptop do not resolve a total difference
+of this size; the A40 figure above predates the port and was not repeated.

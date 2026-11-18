@@ -1,245 +1,278 @@
-"""Manabot's experiment files are what `etude launch`, `etude eval` and `etude report` read.
+"""Manabot's experiment files are what `etude launch`, `etude train` and `etude report` read.
 
-A run tracked under a file's stem draws on that file's page with every metric
-its panels name and a flame graph of its phases; `eval(state)` asks for the
-same games the MTG-183 follower plays.
+Each kept file reads through Etude's declaration reader into one addressed run
+per job and seed, and its declarations return typed jobs that lower to plain
+ones: `training_jobs` only `TrainingJob`s, `eval_jobs(state)` only `EvalJob`s.
+`NOT_YET_RUNNABLE` lists the files checked in ahead of the Etude support they
+need; move one out of it, into the checks below, when it runs.
 """
 
-from collections.abc import Iterator
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
-import sys
+from types import ModuleType
 
-from etude.declarations import read_experiment, read_training_jobs
+from etude.checkpoints import CheckpointRecord
+from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
 from etude.eval.records import Match
-from etude.experiment import Checkpoint, TrainingRun
-from etude.jobs import Checkpoints, ExperimentState, evaluation_spec
-from etude.page import build, experiment_files
+from etude.experiment_file import defined_functions
+from etude.jobs import (
+    Checkpoints,
+    EvalJob,
+    ExperimentState,
+    TrainingJob,
+    TrainingRunSummary,
+    checkpoint_inputs,
+)
+from etude.page import experiment_files
 from etude.records import ArtifactRef
-from etude.report import Counters, Curve, Matches, Ranking, Series
+from etude.report import Curve, Matches, Ranking
 import pytest
 
-from experiments import elemental, opponent_memory, tla_frontier
-from experiments.elemental_long_eval import (
-    Checkpoint as FollowedCheckpoint,
-    EvalState,
-    units,
+from experiments import (
+    batched_baseline,
+    belief,
+    elemental,
+    llm_claude,
+    opponent_memory,
+    seat_comparison,
+    tla_frontier,
 )
-from manabot.backends import resolve
-from manabot.experiment.job import TrainingJob
-from manabot.infra.config import MatchConfig
-from manabot.training.execution import execute_regime
-from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
-from manabot.verify.store import VerifyStore
-import managym
-from tests.training.test_two_seat_learning import _agent
+from experiments.elemental_grid import DECKS
+from experiments.elemental_long import heuristic_games, pair_design, rated_updates
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = ROOT / "experiments"
+FRONTIER_JOBS = {"tla-frontier-c5fba4-w64": 1, "tla-frontier-c5fba4-w160l8": 1}
+# Each file, the flags its declaration needs, and its runs per job.
+DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
+    (batched_baseline, (), {"batched_baseline": 1}),
+    (
+        elemental,
+        ("--revision", "HEAD", "--updates", "2", "--hours", "1", "--usd-per-run", "1"),
+        {"elemental": 1},
+    ),
+    (
+        seat_comparison,
+        ("--revision", "HEAD"),
+        {"seat-comparison-one": 4, "seat-comparison-both": 4},
+    ),
+    (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
+]
 
 
-@pytest.fixture
-def keep_imported_modules() -> Iterator[None]:
-    """Restore modules `build` drops so later tests keep their imported objects.
+# Eval-only files Etude cannot run yet (EXP-70): a served or hosted player and
+# what its job needs (a secret, an API dollar limit, a server for the job's
+# lifetime, a per-game time limit). They are found as experiments and declare
+# `eval_jobs`; only Claude's declaration is read below, since Qwen's imports
+# need the `llm` extra.
+NOT_YET_RUNNABLE = {"llm_claude", "llm_qwen"}
 
-    `etude.page.build` re-imports repository neighbours. Restore saved modules
-    and remove newly imported neighbours so later imports, pickling and
-    monkeypatching agree with module-level references.
-    """
-    saved = dict(sys.modules)
-    yield
-    for name in set(sys.modules) - saved.keys():
-        source = getattr(sys.modules[name], "__file__", None)
-        if isinstance(source, str):
-            path = Path(source).resolve()
-            if path.is_relative_to(ROOT) and not any(
-                part.startswith(".") for part in path.relative_to(ROOT).parts
-            ):
-                del sys.modules[name]
-    sys.modules.update(saved)
+
+def _name(module: ModuleType) -> str:
+    return module.__name__.rsplit(".", 1)[-1]
 
 
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
-    assert found == {
-        "elemental_closure_calibration",
-        "llm_game",
-        "policy_inference_gpu",
-        "qwen_mtg183",
-        "qwen_mtg183_vllm",
-        "training_throughput",
-        "training_throughput_packing",
-        "training_throughput_sizes",
-        "batch_closure",
-        "bf16_behavior_logs",
+    assert found - NOT_YET_RUNNABLE == {
+        "batched_baseline",
+        "belief",
         "elemental",
-        "elemental_closure",
-        "elemental_lambda",
-        "lambda_sweep",
-        "mlx_pilot",
-        "mps_retest",
-        "mtg183-elemental-eval",
-        "one_token_layout",
+        "etude_execution",
         "opponent_memory",
-        "precision_ladder",
         "seat_comparison",
         "tla_frontier",
-        "tla_frontier_calibration",
-        "tla_frontier_vocabulary",
-        "two_seat",
-        "value_readout_252",
     }
+    assert NOT_YET_RUNNABLE <= found
 
 
-def test_a_tracked_self_play_run_draws_every_named_metric(
-    tmp_path: Path, keep_imported_modules: None
+def test_no_experiment_file_keeps_a_retired_declaration() -> None:
+    """Etude refuses `runs()` and `eval()`; no file may define either."""
+    for path in experiment_files(EXPERIMENTS):
+        assert not {"runs", "training_runs", "eval"} & defined_functions(path)
+
+
+def test_not_yet_runnable_files_are_eval_only() -> None:
+    for name in sorted(NOT_YET_RUNNABLE):
+        defined = defined_functions(EXPERIMENTS / f"{name}.py")
+        assert {"eval_jobs", "play", "report"} <= defined
+        assert "training_jobs" not in defined
+
+
+def test_claude_seats_the_outside_checkpoint_with_its_extras() -> None:
+    (job,) = llm_claude.eval_jobs(ExperimentState(experiment="llm_claude"))
+    assert "--extra evaluation --extra openrouter" in job.plain().command
+    matches = job.recorded().tournament.seatings[0].matches()
+    (seated,) = checkpoint_inputs(matches, ExperimentState(experiment="llm_claude"))
+    assert seated == llm_claude.MTG183_FINAL
+
+
+@pytest.mark.parametrize(
+    ("module", "given", "jobs"), DECLARED, ids=[_name(each[0]) for each in DECLARED]
+)
+def test_training_jobs_read_as_addressed_runs(
+    module: ModuleType, given: tuple[str, ...], jobs: dict[str, int]
 ) -> None:
-    stage = TrainSelfPlay(
-        id="learn",
-        operation="train_self_play",
-        updates=2,
-        streams=2,
-        transitions=1,
-        learning_seats="both",
-        games_per_stream=1,
-        learning=Learning(epochs=1, minibatches=1, retained_fraction=1, ema=0.9),
-    )
-    regime = TrainingRegime(
-        id="experiment-file-smoke",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig(),
-        agent=_agent().config,
-        stages=[stage],
-        wall_seconds=120,
-        schedule_clock="iteration_fraction",
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(
-            regime,
-            17,
-            tmp_path / "run",
-            store,
-            experiment="seat_comparison",
-            backend=resolve("torch"),
-        )
-    record = run.stages[0]
-
-    page = build(tmp_path / "run", EXPERIMENTS / "seat_comparison.py")
-    panels = (*page.report.perf, *page.report.ml)
-    named = {
-        key
-        for panel in panels
-        if isinstance(panel, Series | Counters)
-        for key in panel.keys
+    name = _name(module)
+    requests = read_training_jobs(EXPERIMENTS / f"{name}.py", given)
+    assert Counter(request.job.name for request in requests) == jobs
+    assert {request.job.experiment for request in requests} == {name}
+    assert {request.id for request in requests} == {
+        f"{name}/{request.job.name}@{request.seed}" for request in requests
     }
-    assert named - set(page.training.metrics) == set()
-    # Each row holds its update's seconds, so the flame graph's phases are the
-    # record's totals, with learning's subphases below them.
-    (timers,) = page.training.timers
-    phases = {child.name: child for child in timers.tree.children}
-    assert phases["learning"].seconds == pytest.approx(record.learning_seconds)
-    assert phases["collection"].seconds == pytest.approx(record.collection_seconds)
-    assert "minibatches" in {child.name for child in phases["learning"].children}
+    assert all("etude.call" in request.job.command for request in requests)
+    assert all(request.job.smoke is not None for request in requests)
 
 
-def test_launched_runs_track_under_the_file_stem(tmp_path: Path) -> None:
-    runs = read_training_jobs(
-        EXPERIMENTS / "seat_comparison.py", ["--revision", "HEAD"]
-    )
-    jobs = [TrainingJob.model_validate_json(run.job.config or "") for run in runs]
-    assert {job.experiment for job in jobs} == {"seat_comparison"}
-    assert sorted({run.job.name for run in runs}) == [
-        "seat-comparison-both-v1",
-        "seat-comparison-one-v1",
+def test_training_declarations_return_typed_jobs_that_lower() -> None:
+    declared = [
+        *batched_baseline.training_jobs(),
+        *elemental.training_jobs("HEAD", 2, 1.0, 1.0),
+        *seat_comparison.training_jobs("HEAD"),
+        *tla_frontier.training_jobs("HEAD"),
+        *belief.training_jobs(ExperimentState(experiment="belief")),
     ]
-    assert sorted(run.seed for run in runs) == sorted([64001, 64002, 64003, 64004] * 2)
+    assert len(declared) == 7
+    for job in declared:
+        assert isinstance(job, TrainingJob)
+        plain = job.plain()
+        assert plain.name == job.name and plain.config is not None
 
 
-def _finished_run(tmp_path: Path, updates: range, name: str = "seed-1") -> TrainingRun:
-    saved = []
-    for ordinal, update in enumerate(updates, start=1):
-        path = tmp_path / f"updates-{update}.pt"
-        path.write_bytes(str(update).encode())
-        saved.append(
-            Checkpoint(
-                run=name,
-                line=name,
-                experiment="elemental",
-                ordinal=ordinal,
-                artifact=ArtifactRef(uri=path.as_uri(), sha256="0" * 64, size_bytes=1),
-                at={"updates": float(update)},
-            )
-        )
-    return TrainingRun(
+def _checkpoint(
+    tmp_path: Path, run: str, ordinal: int, update: int
+) -> CheckpointRecord:
+    path = tmp_path / run / f"updates-{update}.pt"
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(str(update).encode())
+    return CheckpointRecord(
+        run=run,
+        line=run,
+        experiment="fixture",
+        ordinal=ordinal,
+        artifact=ArtifactRef(uri=path.as_uri(), sha256="0" * 64, size_bytes=1),
+        at={"updates": float(update)},
+        # An hour of wall time per update, from update zero.
+        wall_ms=update * 3_600_000,
+    )
+
+
+def _finished_run(
+    tmp_path: Path, updates: range, *, name: str = "seed-1", job: str = "seed-1"
+) -> TrainingRunSummary:
+    return TrainingRunSummary(
         name=name,
-        experiment="elemental",
-        job=name,
-        launch=name,
+        experiment="fixture",
+        job=job,
+        launch=job,
         line=name,
         state="finished",
-        checkpoints=Checkpoints(saved),
+        checkpoints=Checkpoints(
+            _checkpoint(tmp_path, name, ordinal, update)
+            for ordinal, update in enumerate(updates, start=1)
+        ),
+        seed=0,
     )
 
 
-def _design(matches: list[Match]) -> set[tuple[str, ...]]:
-    """Each match as its seated players' names and conditions, wherever it came from."""
-    return {
-        (
-            *(player.name for player in match.players),
-            str(match.conditions),
-            str(match.games),
-        )
-        for match in matches
+# ---------------------------------------------------------------------------
+# Belief: a later stage declared from stored state
+
+
+def test_belief_declares_the_sampler_once_the_policy_has_finished(
+    tmp_path: Path,
+) -> None:
+    file = EXPERIMENTS / "belief.py"
+    empty = ExperimentState(experiment="belief")
+    first = read_training_jobs(file, local=True, state=empty)
+    assert [request.id for request in first] == ["belief/policy@0"]
+
+    policy = _finished_run(tmp_path, range(0, 2), name="policy@0", job=belief.POLICY)
+    running = replace(policy, state="running")
+    waiting = read_training_jobs(
+        file, local=True, state=replace(empty, runs=(running,))
+    )
+    assert [request.id for request in waiting] == ["belief/policy@0"]
+
+    both = read_training_jobs(file, local=True, state=replace(empty, runs=(policy,)))
+    assert [request.id for request in both] == ["belief/policy@0", "belief/sampler@0"]
+    (start,) = both[1].job.inputs
+    final = policy.checkpoints[-1]
+    assert (start.name, start.sha256) == ("start", final.artifact.sha256)
+    assert ("ETUDE_START", final.key) in {
+        (variable.name, variable.value) for variable in both[1].job.environment
     }
 
 
-def test_elemental_eval_asks_for_the_followers_design(tmp_path: Path) -> None:
+# ---------------------------------------------------------------------------
+# Elemental: the rated grid and pairing graph
+
+
+def test_elemental_eval_jobs_ask_for_the_rated_design(tmp_path: Path) -> None:
     run = _finished_run(tmp_path, range(0, 501, 50))
-    jobs = elemental.eval_jobs(ExperimentState(experiment="elemental", runs=(run,)))
-    specs = {evaluation_spec(job).tournament.name: evaluation_spec(job) for job in jobs}
+    state = ExperimentState(experiment="elemental", runs=(run,))
+    declared = elemental.eval_jobs(state)
+    assert all(isinstance(job, EvalJob) for job in declared)
+    specs = {job.name: job.recorded() for job in declared}
     assert set(specs) == {elemental.GRID, elemental.SUBSET, elemental.PAIRS}
+    file = EXPERIMENTS / "elemental.py"
+    assert [job.name for job in asked(read_experiment(file).eval, state)] == list(specs)
 
-    asked: list[Match] = []
-    for spec in specs.values():
-        for matchup in spec.tournament.seatings:
-            if matchup.fixed:
-                asked += matchup.matches()
-            else:
-                for checkpoint in spec.checkpoints:
-                    asked += matchup.matches(checkpoint.ref)
+    rated = rated_updates(500, 500)
+    kinds = {update: heuristic_games(update, 500)[0] for update in rated}
+    held = {
+        name: sorted(int(each.at["updates"]) for each in spec.checkpoints)
+        for name, spec in specs.items()
+    }
+    assert held == {
+        elemental.GRID: [u for u in rated if kinds[u] == "full"],
+        elemental.SUBSET: [u for u in rated if kinds[u] == "subset"],
+        elemental.PAIRS: [],
+    }
+    # A new match owns one deck/seat group, never a whole grid row.
+    grid = specs[elemental.GRID].tournament.seatings
+    matches = [m for seating in grid for m in seating.matches(run.checkpoints[0].ref)]
+    assert {m.config["deck"] for m in matches} == set(DECKS)
+    assert all(len(m.config["groups"]) == 1 and m.games == 1 for m in matches)
+    assert len(matches) == len(DECKS) ** 2 * 2
+    assert {m.players[1].name for m in matches} == {"heuristic"}
+    assert all(job.agents == elemental.AGENTS for job in declared)
+    # Each pair of the design is one fixed seating: newer checkpoint first.
+    pairs: list[Match] = []
+    for seating in specs[elemental.PAIRS].tournament.seatings:
+        assert seating.fixed
+        pairs += seating.matches()
+    design = pair_design(rated, 500)
+    assert len(pairs) == len(design) * len(DECKS) ** 2 * 2
+    assert {(match.players[0].name, match.players[1].name) for match in pairs} == {
+        (f"updates-{pair.newer}.pt", f"updates-{pair.older}.pt") for pair in design
+    }
 
-    followed = EvalState(
-        checkpoints={
-            int(each.at["updates"]): FollowedCheckpoint(
-                updates=int(each.at["updates"]),
-                run=each.run,
-                artifact=each.artifact,
-                coordinates={},
-            )
-            for each in run.checkpoints
-        },
-        endpoint=500,
-        segment_outcome="succeeded",
+
+# ---------------------------------------------------------------------------
+# Frontier: one evaluation pass, and the recorded lost endpoint
+
+
+def test_frontier_eval_jobs_declare_one_typed_pass(tmp_path: Path) -> None:
+    small, large = (
+        _finished_run(tmp_path, range(0, 51, 25), name=f"{job}@21501", job=job)
+        for job in FRONTIER_JOBS
     )
-    # Halving pairs extend MTG-183's follower only, not the shared design.
-    expected = [
-        match
-        for unit in units(followed)
-        if unit.role != "halving"
-        for match in unit.matches
-    ]
-
-    def renamed(names: tuple[str, ...]) -> tuple[str, ...]:
-        # The follower names a checkpoint `uNNNNNN`; Etude by its file.
-        return tuple(
-            f"u{int(name.removeprefix('updates-').removesuffix('.pt')):06d}"
-            if name.startswith("updates-")
-            else name
-            for name in names
-        )
-
-    assert {renamed(each) for each in _design(asked)} == _design(expected)
+    state = ExperimentState(experiment="tla_frontier", runs=(small, large))
+    (job,) = tla_frontier.eval_jobs(state)
+    assert isinstance(job, EvalJob)
+    plain = job.plain()
+    assert plain.name == "tla-frontier-c5fba4-paired-v1-agents-v1"
+    assert "UV_NO_SYNC" not in {v.name for v in plain.environment}
+    assert "--extra evaluation" in plain.command
+    assert plain.setup is not None and "--extra evaluation" in plain.setup
+    seatings = job.recorded().tournament.seatings
+    assert {tag for seating in seatings for tag in seating.tags} >= {
+        "heuristic-w64",
+        "heuristic-w160l8",
+    }
 
 
 def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
@@ -258,48 +291,73 @@ def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
     assert closed.runs[1] == stored
     assert lost.state == "running"
 
+    # A run this pass only queues is not asked about: the launcher has no record yet.
+    queued = replace(stored, name="unknown-run", state="queued")
+    assert tla_frontier.with_launcher_ends(replace(state, runs=(queued,))).runs == (
+        queued,
+    )
+
     unknown = replace(lost, name="unknown-run")
     with pytest.raises(EtudeError, match="unknown-run"):
         tla_frontier.with_launcher_ends(replace(state, runs=(unknown,)))
 
 
-def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> None:
+# ---------------------------------------------------------------------------
+# Opponent memory: trunks, then both arms of each finished trunk
 
-    experiment = read_experiment(EXPERIMENTS / "opponent_memory.py")
-    assert experiment.training is not None and experiment.eval is not None
+
+def test_opponent_memory_declares_trunks_then_both_arms_of_a_finished_trunk(
+    tmp_path: Path,
+) -> None:
+    file = EXPERIMENTS / "opponent_memory.py"
+    empty = ExperimentState(experiment="opponent_memory")
     for wide in (False, True):
-        runs = read_training_jobs(
-            EXPERIMENTS / "opponent_memory.py",
-            ["--revision", "HEAD", *(["--size", "wide"] if wide else [])],
-        )
-        assert [run.seed for run in runs] == [39101, 39102, 39103]
-        for run in runs:
-            assert run.job.name == (
-                "decision-memory-wide-trunk"
+        given = ("--revision", "HEAD", *(("--size", "wide") if wide else ()))
+        trunks = read_training_jobs(file, given, state=empty)
+        assert [(request.job.name, request.seed) for request in trunks] == [
+            (f"decision-memory-{name}", seed)
+            for seed, name in (
+                dict.fromkeys(opponent_memory.SEEDS, "wide-trunk")
                 if wide
-                else (
-                    "decision-memory-trunk-4"
-                    if run.seed == 39103
-                    else "decision-memory-trunk-2"
-                )
-            )
-            spec = TrainingJob.model_validate_json(run.job.config or "")
-            assert (
-                spec.regime.agent.hidden_dim,
-                spec.regime.agent.attention_layers,
-                spec.regime.agent.num_attention_heads,
-            ) == ((128, 3, 4) if wide else (64, 2, 4))
-            assert run.job.max_attempts == 3
-            stage = spec.regime.stages[0]
-            assert isinstance(stage, TrainSelfPlay)
-            assert stage.target_learner_transitions == 3_300_000
-            assert stage.updates == 90
-            assert stage.execution.wall_seconds == run.job.max_hours * 3600 - 1200
-            assert stage.learning.decision_schedule.transitions == 3_300_000
-            assert stage.execution.collection_rows == 128
-            assert spec.regime.agent.decision_memory == "none"
-            assert spec.regime.observation.max_decision_records == 1024
-    assert experiment.eval(ExperimentState(experiment="opponent_memory")) == []
+                else opponent_memory.TRUNK_NAMES
+            ).items()
+        ]
+        assert all(request.job.max_attempts == 3 for request in trunks)
+    recipe = opponent_memory.settings(opponent_memory.PilotConfig(size="wide"))
+    assert (recipe.model.hidden_dim, recipe.model.attention_layers) == (128, 3)
+    assert recipe.model.decision_memory == "none"
+    assert recipe.observation.max_decision_records == 1024
+    assert recipe.learner_transitions == 3_300_000
+    assert recipe.learning.decision_schedule.transitions == 3_300_000
+    assert (recipe.collection_rows, recipe.learner_rows) == (128, 128)
+    for request in trunks:
+        # The declared CPU smoke must be a valid recipe of its own.
+        smoke = opponent_memory.PilotConfig.model_validate_json(
+            request.job.smoke.config
+        )
+        assert opponent_memory.settings(smoke).learner_transitions == 64
+    arm = opponent_memory.settings(opponent_memory.PilotConfig(stage="gru-k1"))
+    assert arm.model.decision_memory == "gru"
+    assert arm.learner_transitions == 8_800_000
+
+    seed = opponent_memory.SEEDS[0]
+    trunk = replace(
+        _finished_run(
+            tmp_path, range(0, 81, 40), name="trunk", job="decision-memory-trunk-2"
+        ),
+        seed=seed,
+    )
+    both = read_training_jobs(
+        file, ("--revision", "HEAD"), state=replace(empty, runs=(trunk,))
+    )
+    arms = [request for request in both if request.job.inputs]
+    assert [(request.job.name, request.seed) for request in arms] == [
+        (f"decision-memory-control-{seed}", seed),
+        (f"decision-memory-gru-k1-{seed}", seed),
+    ]
+    final = trunk.checkpoints[-1]
+    assert {request.job.inputs[0].sha256 for request in arms} == {final.artifact.sha256}
+    assert opponent_memory.eval_jobs(empty) == []
 
 
 def test_opponent_memory_evaluation_draws_every_declared_seating(
@@ -308,7 +366,9 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
 
     runs = tuple(
         replace(
-            _finished_run(tmp_path, range(0, final + 1, 40), f"{prefix}{arm}-{seed}"),
+            _finished_run(
+                tmp_path, range(0, final + 1, 40), name=f"{prefix}{arm}-{seed}"
+            ),
             experiment="opponent_memory",
             seed=seed,
             job=f"decision-memory-{prefix}{arm}",
@@ -385,8 +445,8 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
         if "reliance" in seating.tags:
             first, blanked = seating.players
             assert first.checkpoint == blanked.checkpoint
-            assert first.key != blanked.key
-            assert blanked.inference.config == {"blank_decision_memory": True}
+            assert first.key != blanked.key and not first.config
+            assert blanked.config == {"blank_decision_memory": True}
     # Stored milestones remain playable while final checkpoints are unavailable.
     running = tuple(replace(run, state="running") for run in runs)
     interiors = opponent_memory.evaluation_matchups(

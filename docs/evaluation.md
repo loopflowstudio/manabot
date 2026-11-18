@@ -15,7 +15,7 @@ Training-time monitoring that calls this machinery is in
 - [Beyond win rate](#beyond-win-rate)
 - [What we know](#what-we-know)
 - [Quick local evaluation](#quick-local-evaluation)
-- [Shared inference](#shared-inference)
+- [Etude agents](#etude-agents)
 - [Continuing an evaluation](#continuing-an-evaluation)
 - [Performance evidence and calibration](#performance-evidence-and-calibration)
 - [Card data](#card-data)
@@ -88,8 +88,8 @@ for _ in range(replicates):
 - A replay that doesn't finish within the deadline is unavailable, not a
   mismatch. Replay verifies Commands, not that two devices compute the same
   policy.
-- An infrastructure failure, such as a dead inference service, fails the
-  allocation. It is never recorded as a player's forfeit.
+- An infrastructure failure requests an Etude retry. It is never a player's
+  forfeit; invalid native games keep null scores and their failure evidence.
 - Game-level intervals describe one checkpoint's evaluation noise. A claim
   about a training method needs independent training seeds
   ([experiments](experiments.md#how-a-claim-gets-made)).
@@ -111,7 +111,7 @@ The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
 and diagnostics, not as working anchors; `fit_population` still places
 `random-v1` at the origin by default. Head-to-head
-[tournaments](../experiments/head-to-head.md) play chosen checkpoints
+[tournaments](../experiments/reports/head-to-head.md) play chosen checkpoints
 against each other on shared deals.
 
 Ratings are a seat-aware Bradley-Terry fit expressed on the Elo scale
@@ -142,13 +142,13 @@ sit beside it:
   raised it from 18.3% to 62.0% as UR against MTG-183's update-1,750 GW over
   300 held-out games, and from 10.8% to 34.3% across all ten Elemental decks
   over 400 games, without slower decisions
-  ([heuristic strength](../experiments/heuristic-strength.md)). Ratings are
+  ([heuristic strength](../experiments/reports/heuristic-strength.md)). Ratings are
   pinned to an anchor version.
 - **Matchup tables measure the pilot and the cards.** A four-card swap moved a
-  matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)).
+  matchup by 55 points ([exp-08b](../experiments/reports/exp-08b-ancestral-dose.md)).
 - **A matched-budget exploiter reached 23.5–26.0%** against the distilled
   student in an earlier world, so it was not farmable at that budget; stronger
-  attackers were untested ([exp-11](../experiments/exp-11-curriculum-exploitability.md)).
+  attackers were untested ([exp-11](../experiments/reports/exp-11-curriculum-exploitability.md)).
 - **An N-game evaluation once played one deal.** A seed bug made every game
   replay the same shuffle, and the seat-advantage claims built on it were
   retracted ([F1 and F3](../paper/understanding.md)). Derived seeds and replay
@@ -156,23 +156,27 @@ sit beside it:
 
 ## Quick local evaluation
 
-Score a current-world flat checkpoint against the heuristic on the selected
-Allies/Lessons setup:
+Train the two-update local recipe, then score its final EMA policy against the
+heuristic on the selected Allies/Lessons setup. With the default Etude home:
 
 ```sh
+uv run etude train manabot/recipes/local.py
 uv run python -m manabot.eval.local \
-  --checkpoint .runs/small/policy.safetensors --opponent heuristic \
-  --deal-seed 101 --out .runs/local-check --seconds 300 --workers 2
+  --checkpoint ~/.etude/track/local/out/policies/00000002-ema.safetensors --opponent heuristic \
+  --deal-seed 101 --out .runs/local-check --seconds 300
 ```
+
+The local recipe writes under `$ETUDE_HOME/track/local` when `ETUDE_HOME` is
+set. If `local` already exists, use `--experiment NAME` to train another run
+and replace `local` in the checkpoint path with that name.
 
 - `--opponent` also accepts another local policy file, `scripted_greedy` or
   `random`. Policy files are `.safetensors`, or `.pt` from an earlier revision.
 - Repeat `--deal-seed` for more blocks; `--include-mirrors` plays all eight legs;
   `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster. The
   checkpoint must already admit that setup; nothing is converted.
-- `--workers`, `--batch-rows`, `--resident-mib`, `--game-seconds` and
-  `--max-commands` set limits. `--seconds` bounds the whole lifetime:
-  checkpoint preparation (in a killable child), serving startup, play and replay.
+- `--game-seconds` and `--max-commands` bound each game. `--seconds` bounds
+  checkpoint preparation, scalar play and replay, including child startup.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated
   seeds are not new samples.
 
@@ -185,14 +189,14 @@ a quick check, not promotion or held-out evidence.
 
 Typed callers pass a `Backend` to
 `manabot.eval.local.checkpoint_request(..., backend=backend)` and use
-`manabot.eval.evaluation.evaluate_local(request, limits=..., out_dir=...)`.
+`manabot.eval.evaluation.evaluate_local(request, deadline=..., out_dir=...)`.
 An unknown training seed stays `None`, never inferred from deals.
 
-`evaluate(request, out_dir=..., inference=...)` is the single execution entry
+`evaluate(request, out_dir=..., agents=...)` is the single execution entry
 point shared by the local CLI, training monitoring and Etude benchmark/Duel
 callbacks. Both public evaluators reject an existing output directory, empty or
-not, before writing anything. `evaluation.json` retains the request, effective
-execution, rows, status, elapsed time and paired-deal intervals; incomplete
+not, before writing anything. `evaluation.json` retains the request, retained
+execution when present, rows, status, elapsed time and paired-deal intervals; incomplete
 cohorts emit no interval. Journals, Commands, replay and performance records
 use arena formats under `<out>/panel`. Lower down, `eval.match.play_cell` plays
 explicit leg subsets.
@@ -201,114 +205,52 @@ Etude entry points are `manabot.eval.benchmark` (one Etude match is one deal
 with all eight legs; Etude owns match records, resume and uncertainty) and
 `manabot.eval.duel`.
 
-## Shared inference
+## Etude agents
 
-`manabot.sim.execution` declares a local allocation in three layers:
+Managed evaluations declare the same `manabot.eval.agents.AGENTS` on every
+`EvalJob`, and pass those agents to `active.play`. Etude owns game processes,
+checkpoint grouping, batching, model residency, retries and performance records.
+The callback is `play(match, agents)`, with objects in seat order; it runs the
+native game and Command replay in that Etude process.
 
-- `EvalCompute` (`shared-eval-v2`): device and dtype, i.e. how a served
-  policy's numbers are computed. This is part of registration identity.
-- `EvalAllocation`: active games, batch rows, batching delay, resident-model
-  bytes, request timeout, catalog cache, residency and forward layout
-  (`bucketed_shapes`, `live_tokens`).
-- `EvalExecution`: absolute Unix deadline plus instrumentation switches.
+`manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path`, chooses
+Torch and CPU or CUDA, and returns a deterministic forward:
+`list[Prepared] -> list[masked logits]`, preserving length and order. Host
+preparation and admission happen once in the game-side sampler. The loader
+merges admitted rows, rebasing their object, frame, fact and effect routes;
+it never selects an action. `build(player, leaves)` creates the heuristic or
+checkpoint sampler without importing Torch. Each decision's recorded seed
+controls NumPy PCG64 sampling in the game process.
 
-Allocation and attempt settings live in receipts, not registration hashes:
-batch composition already varies with arrival order and every row samples from
-its own decision seed, so more games or larger batches keep Etude model,
-benchmark and match identities. Changing device, dtype or contract version
-creates new identities. `seed_compute_envelope_id` preserves the original seed
-authority across serving changes. `shared-eval-v1` (through PR #389) also
-hashed allocation settings; its records stay readable as `EvalComputeV1` /
-`EvalExecutionV1` but are not reused or continued under v2.
+A checkpoint with a decision-memory encoder has its log prepared by the same
+sampler, and the loader forwards each such row as its own batch. A seat whose
+player config holds `blank_decision_memory: True` plays the same bytes with
+the log zeroed at every decision, registered as a distinct player
+([reliance comparison](observation-and-model.md#whole-game-decision-memory));
+`manabot.eval.pairing.play_pairing` plays an authored paired deal with either.
 
-**Forward layout.** An allocation can serve policies with
-[bucketed padding](observation-and-model.md#bucketed-padding) and
-[live-token attention](observation-and-model.md#live-token-attention):
-`EvalAllocation.bucketed_shapes` and `live_tokens`, both off by default.
+Managed checkpoint registrations name `etude-policy-f32-auto-v1` and
+`numpy-pcg64-v1`. New tournaments have fresh `agents-v1` names and one native
+game group per Etude match. Frozen tournament keys, compute contracts and
+receipts are unchanged. `manabot.sim.execution` reads retained
+`shared-eval-v1` and `shared-eval-v2` records; it no longer allocates execution.
+Standalone local evaluation and training monitoring retain scalar checkpoint
+play through bounded local children.
 
-```python
-from manabot.sim.execution import EvalAllocation
+**Failure.** The game loop checks `game_seconds` between decisions and enforces
+`max_commands`. Before native execution it fsyncs the pending Command. Native
+`AgentError` and PyO3 `PanicException` produce invalid, score-null rows and retain
+the journal; later games in the group still run. Replay verifies Commands,
+not cross-device policy equivalence. Invalid rows never become forfeits.
+Other Python exceptions fail the match. Elemental also fails a match with no
+valid replayed games, preserving its evidence, so an all-invalid smoke cannot
+report success.
 
-allocation = EvalAllocation(device="cuda", bucketed_shapes=True, live_tokens=True)
-```
-
-`live_tokens=True` requires `device="cuda"` (`live tokens require CUDA`). They
-are off because served batches are small: in one w384l8 pass on an L4, at about
-nine rows per forward, the padded forward took 23.7 ms against 27.3 ms with
-both on, and the pass took 118 s either way
-([measurement](../experiments/eval_forward_layout.md)). The layout changes only
-the order of floating-point sums, as batch composition already does, so it is
-an allocation setting: the values are retained in the attempt receipt and
-leave `EvalCompute`, player, benchmark and match identities unchanged. Search
-players and range likelihoods load their policies padded.
-
-With an execution, flat stateless checkpoints are served; without one,
-`play_cell`, `evaluate` and the monitor play them scalar in the game child
-under their original registrations. Served and scalar players of one checkpoint
-therefore have distinct identities. Retiring scalar checkpoint play awaits a
-CPU measurement of served play after direct game connections. Code and search players always play in their game child.
-
-```python
-from pathlib import Path
-import time
-
-from manabot.eval.evaluation import EvaluationRequest, evaluate
-from manabot.sim.execution import EvalExecution
-from manabot.sim.serving_protocol import InferenceRuntime
-
-execution = EvalExecution(device="cpu", max_active_games=4, max_batch_rows=16,
-                          max_delay_seconds=0.005, resident_model_bytes=1 << 30,
-                          deadline_unix=time.time() + 300)
-with InferenceRuntime(execution, Path(".runs/eval/allocation")) as inference:
-    result = evaluate(EvaluationRequest(...), out_dir=Path(".runs/eval/panel"),
-                      inference=inference)
-```
-
-Each allocation needs a new directory; concurrent local callers may share one
-runtime and its game slots. `evaluate_checkpoint(..., execution=...)` runs a
-monitor panel this way; `benchmark.evaluate` and `duel.evaluate` connect Etude's
-spawned callbacks to one authenticated Unix-socket endpoint, so Etude worker
-count cannot multiply the allocation's limits. Each invocation retains its
-receipts under a fresh `allocation/<attempt>/`.
-
-**Processes.** One allocation runs one serving child (`manabot.sim.serving`),
-the only process that loads served weights. `PolicyKey` groups requests by
-checkpoint, observation/action ABI, world, device, dtype, determinism and
-implementation; matchup is not a model input, so games seating one checkpoint
-share its batches across matchups (setups are still validated at admission).
-Batches flush on row cap or delay. Each game child talks to the service over
-its own socket (`InferenceClient`); the supervisor keeps lifecycle, deadlines,
-failure classification and the Command journal, retaining each Command before
-native execution. CPU and CUDA share one serial service with one Torch thread;
-CPU-specific engine work waits for a calibration showing it saturated.
-
-**Checkpoint identity.** A checkpoint registration's observation and action
-ABI hashes describe the checkpoint's own `ObservationSpace`, not the fresh
-defaults for its matchup. Build registrations with
-`manabot.eval.admission.register_checkpoint(..., backend=backend)`, which loads
-the bytes once through the supplied backend and
-takes the world and both hashes from that space. Scalar play never compares
-these hashes; the serving child does when it first loads a checkpoint, and
-refuses a disagreeing registration's matches before play with an
-`InferenceFailure` naming `checkpoint observation ABI drift` (or
-`action/world ABI drift`). A passing CPU run therefore does not show a
-registration is right. `blank_decision_memory=True` registers the same bytes as
-a separate player whose opponent-decision memory is zeroed at every decision
-([reliance comparison](observation-and-model.md#whole-game-decision-memory)).
-
-Children start through `manabot.sim.child`, never `multiprocessing` spawn.
-Only search players (flat-MC, PUCT, local update) load Torch in a game child;
-replay children never do. `manabot.sim.threads` starts children single-threaded
-and enforces thread budgets (4 game/replay, 16 serving) as infrastructure
-failures; `effective_cpus()` honors affinity and cgroup quotas.
-
-**Failure.** Every inference call is capped by the request timeout, the game's
-remaining wall time and the allocation deadline. An unanswered request, dead
-service or failed handoff is an infrastructure failure that fails the
-allocation, never a player forfeit; unstarted identities go to
-`unattempted.json`. The deadline also bounds replay: incomplete replay is
-unavailable, not a mismatch. Replay verifies Commands, not cross-device policy
-equivalence.
+Cooperative clock checks cannot interrupt a stuck native call. At the pinned
+Etude revision, a true hang or process exit retries the grouped evaluation job;
+Etude Task 2d1933 owns per-match hard deadlines and isolated dead-process
+failure. The callback does not create nested game processes to replace that
+upstream behavior.
 
 ## Continuing an evaluation
 
@@ -320,8 +262,8 @@ uv run python -m manabot.eval.local --continue .runs/local-check/panel --seconds
 Continuation plays only the missing deals, rerunning any partial deal whole;
 only the deadline may change locally. Typed callers use
 `evaluation_status(directory)` and `continue_evaluation(directory,
-execution=...)`, or pass an existing runtime. Device, dtype, batching and
-residency must match; a changed request needs a fresh evaluation. Relocated
+deadline=...)`. A changed request needs a fresh evaluation. Retained served
+attempts name the original revision to run them from. Relocated
 checkpoints may be passed explicitly and are rechecked by digest and size.
 
 The first `evaluation.json` freezes identity and request; later attempts write
@@ -330,29 +272,26 @@ blocks are immutable. Filesystem claims admit one writer (not distributed
 leases), so move an evaluation with its whole directory. Re-entering an Etude
 benchmark or Duel continues a failed match; a cached success adds no sample.
 
-## Performance evidence and calibration
+## Performance evidence
 
-Cells write `performance.json`, `rows.json`, journals and traces; allocations
-write `execution.json`, `allocation.json` and `serving.json`.
-`diagnostic_batches` adds profiler traces, never mixed with ordinary
-throughput. Cell, allocation and evaluator elapsed times are separate
-intervals; none includes CLI checkpoint preparation or billing, and receipts
-carry no cost. Etude cache reuse adds no measurement.
+Cells write `performance.json`, `rows.json`, journals and traces. Etude records
+managed execution performance. Old allocation and serving receipts remain
+readable by the report viewer; they are historical evidence, not live settings.
+Elapsed intervals are kept separate and carry no bill; Etude cache reuse adds
+no measurement.
+
+Elemental keeps each match invocation in its own `arena/<match-key>/attempt-*`
+directory under `ETUDE_OUTPUT_DIR`, or `.runs/elemental` for local evaluation
+and smoke runs. Retrying a match preserves earlier failure journals and traces.
 
 ```sh
 uv run python -m experiments.report_prototype.build \
   --eval-receipt .runs/eval/panel --out .runs/eval/report
-uv run --extra evaluation python -m manabot.eval.serving_benchmark \
-  --plan .runs/eval-serving/plan.json --out .runs/eval-serving/result
 ```
 
-The report viewer never sums overlapping clocks;
+The report viewer never sums overlapping clocks.
 `./scripts/verify-eval-performance-report` is its headless proof (needs locked
-`academy/ui` dependencies and Playwright Chromium). The serving benchmark's `BenchmarkPlan` requires the variants
-`cold_scalar`, `resident_only`, `resident_catalog` and `batched`, three
-interleaved repetitions, tolerances, thresholds, a memory cap and a deadline. It
-reports whether declared thresholds were met, not an adoption decision; CPU
-fixture tests establish correctness only.
+`academy/ui` dependencies and Playwright Chromium).
 
 ## Card data
 
@@ -399,10 +338,12 @@ blob per game read with Etude's `read_blobs`; `etude convert-eval` makes older
 per-file runs readable.
 
 **Arena logs.** `cards export-log --experiment EXP --source .runs/cards --run RUN
---game GAME --viewer 0|1 --mapping mapping.json --out game.log` writes `arena-card-log-v1` (`eval.arena_log`).
-`CardMapping` binds content keys to retained Scryfall responses with verified
-`arena_id`; export refuses missing mappings and never joins by name. Logs omit
-opponent private cards and library order, are synthetic, and must never be
+--game GAME --viewer 0|1 --out game.log` writes the game's
+[Arena-style log](engine-python.md#export-an-arena-style-log) through managym's
+exporter, which any recorded game can use without manabot. Arena ids come from
+the table shipped with managym, joined by Scryfall id and never by name; cards
+without one are written with id `0` and counted in the coverage report. Logs
+omit opponent private cards and library order, are synthetic, and must never be
 submitted to 17Lands; `tests/fixtures/seventeenlands` pins the upstream client.
 
 **Scale.** MTG-206 (2026-10-27): 5,000 player-games and 90 cards rendered 363
@@ -440,27 +381,22 @@ weights. Tests: `tests/verify/test_checkpoint_scenarios.py`.
 
 ## Frozen-policy attacks
 
-Bounded adversarial evaluation, not exact exploitability. An `AttackPlan`
-(`manabot/experiment/attacks.py`) fixes target checkpoint bytes and SHA-256,
-producer seeds, at least two independent attacker seeds, a strictly increasing
-`cumulative_updates` ladder, shared `final_deal_seeds`, a one-stage self-play
-`template` regime and time budgets (`total_seconds`, `evaluation_seconds`,
-`game_seconds`, `max_commands`) plus a predeclared `prediction`. Each
-target/attacker pair becomes an ordinary TrainingRegime against the frozen
-target; rungs continue one attacker.
+Bounded adversarial evaluation, not exact exploitability: train fresh
+attackers against one frozen target checkpoint and measure how far they get.
+An attack plan fixed the target's bytes and SHA-256, producer seeds, at least
+two independent attacker seeds, a strictly increasing ladder of cumulative
+updates, shared final deal seeds, time budgets and a prediction; each
+target/attacker pair trained as a one-stage self-play regime against the
+frozen target, and rungs continued one attacker.
 
-```sh
-uv run python -m manabot.experiment.attack_execution --plan attack.json --out .runs/attack-001
-```
-
-Requires a fresh output directory, the selected matchup and a POSIX main
-thread (it owns a SIGALRM deadline and refuses an active timer). Literal seed
-reuse across producers and attackers is rejected. Every attacker faces its
-target before training and at every rung on all four legs; only terminal,
-replay-verified games count. A failed cell stops the cohort, and results keep
-`plan.json`, `result.json`, `report.md`, `training.sqlite`, run directories and
-arena evidence. Final paired improvement bootstraps over attacker seeds and is
-exploratory. A failed bounded attacker never certifies equilibrium. The
+Main cannot run or read a plan: the current loop has no frozen opponent, and
+the plan schema went with the [saved regimes](training.md#saved-regimes) it
+produced. Revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` has both. In an
+executed plan every attacker faced its target before training and at every
+rung on all four legs; only terminal, replay-verified games counted. A failed
+cell stopped the cohort, and results kept `plan.json`, `result.json`,
+`report.md`, `training.sqlite`, run directories and arena evidence. Final paired improvement bootstraps over
+attacker seeds and is exploratory. A failed bounded attacker never certifies equilibrium. The
 real-PPO positive control raised score against a deliberately passive toy
 target from .59375 to 1.0 in 64 updates. History:
 [frozen-policy-attacks.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/frozen-policy-attacks.md).
@@ -494,7 +430,7 @@ uv run --extra openrouter python -m manabot.verify.llm_game \
 `GameConfig.opponent_checkpoint` substitutes a frozen policy for the random
 opponent, which is how Haiku 5.5 played MTG-183's final checkpoint to 51–49
 over 100 games at $0.37 a game
-([Haiku versus MTG-183](../experiments/haiku-mtg183.md)). Qwen3.5-9B on an L4
+([Haiku versus MTG-183](../experiments/reports/haiku-mtg183.md)). Qwen3.5-9B on an L4
 won one functional game in 308 decisions with every selection valid first time
 (2026-10-25). `manabot/reports/inference.py` reads receipts offline without the
 model runtime. Full operating detail, including vLLM serving and the campaign
@@ -515,14 +451,82 @@ remain unselected designs; see
 
 ## Ownership
 
-Simulation (`manabot.sim`) owns serving, native games and bounded replay.
+Simulation (`manabot.sim`) owns native games, Commands and bounded local replay.
 Evaluation (`manabot.eval`) owns admission (`eval.admission`), requests and
 results (`eval.evaluation`, `eval.results`), paired cells (`eval.match`),
 ratings (`eval.rating`, seat-aware Bradley-Terry with paired-block bootstrap)
-and callback transport (`eval.endpoint`). Training monitoring is an adapter in
-`manabot.experiment.checkpoint_evaluation`; local execution imports neither it
-nor callback transport. `manabot.eval.models` holds only the identities
+and Etude player loading/building (`eval.agent_loader`, `eval.agents`). Training monitoring (`manabot.eval.monitor`) holds
+the request and result of one measured checkpoint; local execution does not
+import the managed player loader. `manabot.eval.models` holds only the identities
 `EvaluationKey` (the arena a game was played in) and `MatchRow` (one played
 leg); wire field names keep their recorded meanings because frozen evidence
 carries them. Tests load the INT-6 fixture's key and anchors through
 `tests/eval/arena_fixture.py`.
+
+Ordinary evaluation games are retained as canonical managym records in
+`games/<cell-id>.jsonl`, with finalized per-deal shards in `games/deals/`. Evaluation
+setup, participant and runtime identities stay in private record context;
+viewer-frame hashes, player ordinals, policy seeds, latencies, inference ids and
+local-update receipts stay in decision annotations. Card eligibility and Etude
+admission still require the separate successful replay audit. Its `trace_sha256`
+identifies the canonical record, including that metadata. Existing rollup names
+and `gih-copies-v1` counting rules are unchanged.
+
+### Custom statistics for every evaluation game
+
+Pass named managym reducers to `play_cell`:
+
+```python
+from managym.statistics import Behaviour, CardPerformance
+
+rows, trace, replay = play_cell(
+    # Supply the usual key, player_a, player_b, deal_seeds and out_dir.
+    **cell_arguments,
+    reducers={"cards": CardPerformance(), "behaviour": Behaviour()},
+)
+print(trace["statistics_path"])
+```
+
+The private `statistics.json` contains `tables` under those names, the number
+of games, `complete_verified_games`, and replay status/errors. Custom reducers
+use the same interface as [record analysis](engine-python.md#ask-questions-of-recorded-games).
+They receive decisions and card facts from the existing verification replay;
+there is no additional replay or policy inference for statistics. When
+`card_evidence_dir` is also set, its audited card evidence comes from that
+same traversal. Each reducer's `finish` runs once across all deal blocks, not
+once per worker. The card table uses native seats; participant mapping,
+eligibility and bootstrap intervals remain evaluation responsibilities.
+
+Only complete, successfully audited games contribute reducer rows. Rejected
+games remain in the evaluation's original records and outcome diagnostics.
+A catchable reducer exception stops custom analysis and publishes no custom
+tables. Its separate `analysis_error` does not invalidate successfully completed
+verification, audited card evidence or game scores. Callback, aggregation and
+question/result transport failures are analysis failures. An experiment that
+requires the table must check this status and can reject the evaluation without
+relabeling verified games. It never retries or rewrites the played game.
+A worker death or deadline still leaves unfinished verification unavailable;
+a hung callback shares that supervised deadline. Tables are mode 0600 and are not attached to Academy viewer records.
+Ordinary canonical game records support these hooks; legacy traces and
+constructed scenario roots retain their existing verification reader.
+
+Per-game callbacks run in the bounded replay child, so expensive Python analysis
+counts toward its replay deadline. Final `finish` aggregation runs once in the
+coordinator. Script-local reducer classes and dataclass rows
+are supported. Imported reducer modules must be available to that child, just
+as they are to the evaluation runner. Keeping all questions in this one call
+shares the replay; calling `reduce()` later is a deliberate new analysis.
+
+A failed game's `failures/*.jsonl` file is a settled capture snapshot. A pending
+call is retained as unknown and is never attempted while viewing it. Diagnose
+it with `uv run --no-project python -m managym.replay <file>` on the recorded
+runtime (or explicitly allow a changed runtime for diagnostic replay). Old
+Command traces and event journals remain readable; constructed scenario roots
+continue to use Command traces.
+
+An audit-view dictionary has the retained Command-trace shape and carries its
+canonical `record`; it is a derived view for reports, not another stored
+trajectory. Completion and winner come from the record ending. Runner failures
+stay in private evaluation context; only a captured native exception marks the
+record as failed. Interrupted endings carry a reason token such as `command_cap`,
+`truncated` or `crash`, without exposing exception text in Academy.

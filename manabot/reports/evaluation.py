@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from manabot.reports.inference import BaselineAllocation, EvidenceReader, ObservedStatus
+from manabot.sim.evaluation_records import audit_view
 from manabot.sim.performance import allocation_cost
 
 
@@ -70,7 +71,7 @@ def _project_allocation(
     if serving is not None:
         # Historical writers retained paths relative to their working
         # directory. Resolve once for verification and portable links.
-        traces = [Path(trace).resolve() for trace in serving["traces"]]
+        traces = [Path(trace).resolve() for trace in serving.get("traces", [])]
         serving["traces"] = [str(path) for path in traces]
         dependencies.extend(traces)
     if declaration is not None:
@@ -135,10 +136,12 @@ def project_evaluations(
             {directory / row["trace_path"] for row in rows if "trace_path" in row}
         )
         games = [
-            json.loads(line)
+            audit_view(json.loads(line))
             for path in trace_paths
             if (data := evidence.read(path)) is not None
-            for line in gzip.decompress(data).splitlines()
+            for line in (
+                gzip.decompress(data) if path.suffix == ".gz" else data
+            ).splitlines()
         ]
         elapsed = receipt["elapsed_seconds"]
         counters = receipt["counters"]
@@ -350,7 +353,7 @@ def project_evaluations(
                     "status": "hypothesis; no critical path inferred from overlapping totals",
                     "observation": "Compare native/encoding, durable acknowledgement, serving and IPC intervals using the timeline.",
                     "mechanism": "Amortize repeated preparation with residency/batching; profile engine or transfers only if they delay completion.",
-                    "validation": "Interleaved equal-work serving_benchmark plan with declared tolerances and diagnostic traces.",
+                    "validation": "Compare equal-work Etude execution records with declared tolerances.",
                     "coverage": "bounded host timeline; pure FFI, device execution and exact synchronization cost unavailable",
                     "evidence": str(receipt_path),
                 },

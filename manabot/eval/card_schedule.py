@@ -38,7 +38,7 @@ class CardConditions(StrictModel):
 
 def card_match_players(match: Match) -> tuple[PlayerRegistration, PlayerRegistration]:
     """Resolve the same registered participant pair for execution and admission."""
-    if len(match.players) != 2 or match.games != 8:
+    if len(match.players) != 2 or match.games not in (1, 8):
         raise ValueError("card evaluation schedules eight legs per deal")
     first, second = (
         PlayerRegistration.model_validate(player.config["registration"])
@@ -55,7 +55,7 @@ def admit_card_game(game: GameEvidence, match: Match) -> tuple[str, str]:
     Returns participant names in Etude row order. Each game is admitted on its
     own; the other legs of its deal need not exist.
     """
-    conditions = CardConditions.model_validate(match.conditions)
+    conditions = CardConditions.model_validate(match.config)
     players = card_match_players(match)
     names = (players[0].player_id, players[1].player_id)
     if game.deal != conditions.deal:
@@ -70,7 +70,7 @@ def admit_card_game(game: GameEvidence, match: Match) -> tuple[str, str]:
     ).model_copy(update={"hero": seats[0], "villain": seats[1]})
     if game.seat_players != seats or game.seat_decks != decks or game.setup != setup:
         raise ValueError("card evidence differs from scheduled seat/deck assignment")
-    runtime = game.trace.data.get("runtime_identities")
+    runtime = game.trace.audit.get("runtime_identities")
     setup_data = setup.model_dump()
     if (
         not isinstance(runtime, dict)
@@ -96,7 +96,7 @@ def admit_card_runtime(game: GameEvidence, environment: Environment) -> None:
         or environment.config.get("metric_version") != METRIC_VERSION
     ):
         raise ValueError("incompatible card environment")
-    runtime = game.trace.data.get("runtime_identities")
+    runtime = game.trace.audit.get("runtime_identities")
     if not isinstance(runtime, dict) or any(
         runtime.get(field) != value for field, value in identity.items()
     ):

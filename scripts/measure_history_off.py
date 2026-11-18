@@ -47,8 +47,12 @@ def case(args: argparse.Namespace) -> None:
         RewardConfig,
     )
     from manabot.training.decks import UniformDecks
-    from manabot.training.regime import DampedPolicyLearning
-    from manabot.training.rollout.collection import SeatRoutedCollector
+    from manabot.training.learning import DampedPolicyLearning
+    from manabot.training.rollout.collection import (
+        close_collector,
+        collect,
+        open_collector,
+    )
     from manabot.training.updates.damped_policy import update_damped_iteration
     import managym
 
@@ -75,7 +79,7 @@ def case(args: argparse.Namespace) -> None:
         sampling="uniform-independent-v1",
         decklists="mixed",
     )
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(MatchConfig(world=managym.WORLD_SETUP)),
         Reward(RewardConfig()),
@@ -100,9 +104,7 @@ def case(args: argparse.Namespace) -> None:
         )
         for iteration in range(1, args.iterations + 1):
             started = time.perf_counter()
-            batch = collector.collect(
-                model, 64, deadline_monotonic=time.monotonic() + 1200
-            )
+            batch = collect(collector, model, 64)
             collected = time.perf_counter()
             update_damped_iteration(backend, learner, batch, learning, iteration)
             if args.device.startswith("cuda"):
@@ -117,7 +119,7 @@ def case(args: argparse.Namespace) -> None:
             )
             print(json.dumps(iterations[-1]), flush=True)
     finally:
-        collector.close()
+        close_collector(collector)
     extension = next(Path(managym.__file__).parent.glob("_managym*.so"))
     args.out.write_text(
         json.dumps(

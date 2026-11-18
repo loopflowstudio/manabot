@@ -11,7 +11,6 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import (
     BACKEND as TORCH_BACKEND,
     load_checkpoint,
@@ -34,15 +33,13 @@ from manabot.model.world import (
     validate_checkpoint_world,
 )
 from manabot.semantic.learning import BoundSemanticPack
-from manabot.training.execution import execute_regime
-from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
-from manabot.verify.store import VerifyStore
 import managym
 from managym.academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from managym.academy.server import GameSession, _parse_game_config
 from managym.experience import LegacyPermanentView
 from managym.experience_projection import describe_actions, serialize_observation
 from tests.model.prepared_routes import device_input
+from tests.retained_decision import source_payment_tape
 
 PACK = "elemental-world-v2"
 
@@ -182,49 +179,6 @@ def test_elemental_names_cannot_fall_back_to_an_uncompiled_mixed_world() -> None
         )
 
 
-def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
-    tmp_path: Path,
-) -> None:
-
-    recipe = TrainingRegime(
-        id="elemental-ppo-smoke",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"),
-        agent=ModelConfig(hidden_dim=16, world=PACK, policy_film=True),
-        stages=[
-            TrainSelfPlay(
-                id="self-play",
-                operation="train_self_play",
-                updates=2,
-                streams=2,
-                transitions=8,
-                learning_seats="one",
-                batch_closure="exact-quota",
-                learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
-            )
-        ],
-    )
-    with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execute_regime(
-            recipe, 164, tmp_path / "run", store, backend=resolve("torch")
-        )
-    assert run.status == "completed", run.error
-    stage = run.stages[0]
-    assert stage.learner_transitions == 32
-    initial, _ = load_checkpoint(stage.artifacts["initial_raw"]["path"])
-    restored, _ = load_checkpoint(stage.artifacts["raw"]["path"])
-    assert any(
-        not torch.equal(a, b)
-        for a, b in zip(initial.parameters(), restored.parameters())
-    )
-    assert all(torch.isfinite(value).all() for value in restored.parameters())
-    assert len(restored.world_binding["setups"]) == 10
-    validate_agent_setup(
-        restored,
-        Match(MatchConfig.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
-    )
-
-
 def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
 
     engine = managym.Env(seed=164, skip_trivial=False)
@@ -357,7 +311,7 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
 
 
 def test_retained_professor_offer_completes_payment_and_replays_exactly() -> None:
-    # Apply the retained w10 action prefix to the current w11 WB/UG setup.
+    # Replay the old choices with explicit automatic payment at new source decisions.
     # This preserves the regression; it does not relabel the frozen w10 root.
     prefix = [
         2,
@@ -404,13 +358,14 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
                 for key in ("elemental_wb", "elemental_ug")
             ]
         )
-        for action in prefix:
+        for action in source_payment_tape(env, prefix):
             obs, _, _, _, _ = env.step(action)
         assert len(obs.action_space.actions) == 8
         assert "Gnarled Professor" in describe_actions(obs)[4]["description"]
         root = env.state_digest()
         branch = env.clone_env()
-        obs, _, _, _, _ = branch.step(4)
+        for action in source_payment_tape(branch, [4]):
+            obs, _, _, _, _ = branch.step(action)
         # The production wrapper skips forced payment and priority steps,
         # reaching the resolved Professor's player-visible Learn decision.
         # Directed native regressions exercise each explicit payment step.

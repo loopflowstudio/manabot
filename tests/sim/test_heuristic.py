@@ -1,9 +1,9 @@
 """Installed native selector, Python adapter, and retained pre-port decisions.
 
 Rule-group fixtures live alongside the native selector in heuristic/tests.rs.
-Golden decisions come from the Python owner at 757bb6257 on the fixture's
-engine world. A world change needs a new comparison with that reference,
-never relabeled actions.
+Golden decisions come from the unchanged Python owner at 757bb6257, recorded
+by scripts/record_heuristic_parity.py on the current engine. The original
+pre-port receipt remains separate; new source payments explicitly use PayCost.
 """
 
 from __future__ import annotations
@@ -29,7 +29,9 @@ from manabot.sim.heuristic import HeuristicPlayer, heuristic_source_paths
 from manabot.sim.players import build_code_player
 from tests.eval.arena_fixture import arena_fixture
 
-PARITY = Path(__file__).parents[1] / "fixtures/native_heuristic_parity.json"
+PARITY = (
+    Path(__file__).parents[1] / "fixtures/native_heuristic_smart_payment_parity.json"
+)
 
 
 def _players(decks: list[str]) -> list[managym.PlayerConfig]:
@@ -52,13 +54,32 @@ def test_native_heuristic_matches_retained_python_decisions() -> None:
         env = managym.Env(seed=case["seed"])
         raw, _ = env.reset(_players(case["decks"]))
         players = [HeuristicPlayer(max_actions=case["max_actions"]) for _ in range(2)]
-        for decision, expected in enumerate(case["actions"]):
+        tape = iter(case["actions"])
+        for decision, expected in enumerate(tape):
             view = cast(Env, SimpleNamespace(last_raw_obs=raw))
-            chosen = players[raw.agent.player_index].act(view, {})
+            # These new payment decisions were implicit in the reference.
+            # Complete them automatically; compare the original decisions only.
+            sources_only = (
+                raw.action_space.action_space_type == managym.ActionSpaceEnum.PAY_OR_NOT
+                and any(
+                    a.action_type == managym.ActionEnum.TAP_FOR_COST
+                    for a in raw.action_space.actions
+                )
+                and all(
+                    a.action_type
+                    in (managym.ActionEnum.TAP_FOR_COST, managym.ActionEnum.PAY_COST)
+                    for a in raw.action_space.actions
+                )
+            )
+            chosen = (
+                expected
+                if sources_only
+                else players[raw.agent.player_index].act(view, {})
+            )
             assert chosen == expected, (case["seed"], case["decks"], decision)
             raw, _, done, truncated, _ = env.step(chosen)
             if done or truncated:
-                assert decision == len(case["actions"]) - 1
+                assert next(tape, None) is None
                 break
         assert (done, truncated) == (case["terminated"], case["truncated"])
 

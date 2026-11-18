@@ -25,7 +25,7 @@ import numpy as np
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.policy.prepare import reference_distribution
-from manabot.training.regime import DampedPolicyLearning
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.backend import (
     RL,
@@ -383,18 +383,18 @@ def update_damped_iteration(
                             obs=admitted.evidence(obs),
                         )
 
-                    with failure_tensors(_failure, rl.NumericalError):
-                        observer.check(loss)
-                        if split:
-                            learner.accumulate(loss, first=offset == 0)
-                        # Clip and Adam stay at the logical boundary, after all contributions.
-                        if offset + execution_rows >= len(logical_rows):
-                            norm = learner.step(
-                                loss,
-                                learning.max_grad_norm,
-                                recorder=observer,
-                                accumulated=split,
-                            )
+                with failure_tensors(_failure, rl.NumericalError):
+                    observer.check(loss)
+                    if split:
+                        learner.accumulate(loss, first=offset == 0)
+                    # Clip and Adam stay at the logical boundary, after all contributions.
+                    if offset + execution_rows >= len(logical_rows):
+                        norm = learner.step(
+                            loss,
+                            learning.max_grad_norm,
+                            recorder=observer,
+                            accumulated=split,
+                        )
                 with track("Minibatch diagnostics"), backend.learner.no_grad():
                     logs = rl.policy_logs(logits, valid)
                     totals["entropy"] += (

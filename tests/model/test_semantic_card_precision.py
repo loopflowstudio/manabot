@@ -8,6 +8,7 @@ from copy import deepcopy
 import io
 import json
 import os
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -15,7 +16,6 @@ import pytest
 import torch
 from torch import nn
 
-from experiments.elemental_variants import elemental_recipe
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
@@ -24,10 +24,21 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.policy.prepare import CatalogPrograms
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout import collection
+from manabot.training.rollout.collection import (
+    close_collector,
+    open_collector,
+)
 from tests.model.prepared_routes import device_input, program_input
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
@@ -79,11 +90,15 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         pytest.fail("CUDA device does not support BF16")
     torch.set_num_threads(1)
     torch.manual_seed(26400)
-    regime = elemental_recipe("precision-admission-fixture", 2)
-    regime.agent.hidden_dim = 16
-    regime.agent.num_attention_heads = 2
-    space = ObservationSpace(regime.observation)
-    agent = ActorCritic(space, regime.agent).cuda().train()
+    # The MTG-183 run's model, inputs and match, read from its saved record.
+    record = json.loads(
+        (ROOT / "experiments/regimes/elemental-long-183-v1.json").read_bytes()
+    )
+    model = ModelConfig.model_validate(
+        {**record["agent"], "hidden_dim": 16, "num_attention_heads": 2}
+    )
+    space = ObservationSpace(ObservationConfig.model_validate(record["observation"]))
+    agent = ActorCritic(space, model).cuda().train()
     cards = agent.semantic_cards
     assert cards is not None
     dtypes: set[str] = set()
@@ -95,18 +110,17 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         dtypes.add(str(result[1].dtype))
 
     hook = cards.encoder.register_forward_hook(record_dtype)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
-        Match(regime.match),
+        Match(MatchConfig.model_validate(record["match"])),
         Reward(RewardConfig()),
         num_envs=2,
         seed=26400,
         opponent_mode="self",
-        recovery_max_microsteps=10000,
         numerics=TorchCollectionSession(device="cpu", seed=26400, precision="float32"),
     )
     try:
-        host = collector._retain_obs_rows(np.arange(2))
+        host = collection._retain_obs_rows(collector, np.arange(2))
         with forward_precision(declared, torch.device("cuda")):
             full = cards.definitions(program_input(cards))
             selected = cards.definitions(
@@ -153,7 +167,7 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         checkpoint = io.BytesIO()
         torch.save(agent.state_dict(), checkpoint)
         checkpoint.seek(0)
-        restored = ActorCritic(space, regime.agent).cuda().train()
+        restored = ActorCritic(space, model).cuda().train()
         restored.load_state_dict(torch.load(checkpoint, weights_only=True))
         with torch.no_grad(), forward_precision(declared, torch.device("cuda")):
             for a, b in zip(
@@ -178,4 +192,4 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         )
     finally:
         hook.remove()
-        collector.close()
+        close_collector(collector)

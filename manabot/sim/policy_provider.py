@@ -296,13 +296,19 @@ class BaselineProvider:
 
         ambient = config is None
         if config is None:
+            from etude.storage import default_root
+
             config = {
+                # Explicit sources, then the policies `etude train` wrote here.
                 "paths": [
-                    p
-                    for p in os.environ.get("ACADEMY_PLAY_CHECKPOINTS", "").split(
-                        os.pathsep
-                    )
-                    if p
+                    *(
+                        p
+                        for p in os.environ.get("ACADEMY_PLAY_CHECKPOINTS", "").split(
+                            os.pathsep
+                        )
+                        if p
+                    ),
+                    str(default_root()),
                 ],
                 "runs_dir": os.environ.get("MANABOT_RUNS_DIR")
                 or str(Path.cwd() / ".runs"),

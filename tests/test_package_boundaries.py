@@ -249,9 +249,9 @@ _TORCH_FREE_MODULES = (
     "manabot.sim.replay",
     "manabot.sim.table_bots",
     "managym.academy.launch",
-    "manabot.sim.serving_protocol",
     "manabot.sim.supervision",
     "manabot.sim.threads",
+    "manabot.eval.game",
     "manabot.verify.games",
     "manabot.verify.scenarios",
 )
@@ -266,6 +266,11 @@ def test_evaluation_child_modules_import_without_torch() -> None:
             importlib.import_module(name)
         heavy = sorted(m for m in ("torch", "etude.train") if m in sys.modules)
         assert not heavy, heavy
+        # Etude's Agents declaration imports its own training record package;
+        # game-side builders must still load no array framework or Manabot trainer.
+        import manabot.eval.agents
+        assert "torch" not in sys.modules
+        assert "manabot.training" not in sys.modules
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
@@ -373,6 +378,12 @@ def test_only_the_mlx_backend_imports_mlx() -> None:
     assert violations == []
 
 
+# The Etude self-play loops are still written against Torch; they choose it
+# themselves until they take an injected backend.
+_TORCH_LOOPS = frozenset(
+    ("manabot/training/loops/minimal.py", "manabot/training/loops/self_play.py")
+)
+
 # Modules outside the torch backend that still import torch. Training,
 # evaluation, search and the model's components move behind a backend in later
 # changes; the list only shrinks, and a module that stops importing torch
@@ -384,15 +395,14 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/env/vector_env.py",
         "manabot/eval/evaluate.py",
         "manabot/eval/local.py",
-        "manabot/eval/serving_benchmark.py",
+        "manabot/eval/agent_loader.py",
         "manabot/experiment/numerics.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
         "manabot/sim/qwen_provider.py",
-        "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/sim/native_game.py",
-        "manabot/sim/serving.py",
+        *_TORCH_LOOPS,
         "manabot/training/mps.py",
         "manabot/verify/action_cases.py",
         "manabot/verify/choice_corpus.py",
@@ -442,7 +452,7 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
     assert violations == [
         "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
         "manabot/backends/torch/learner.py: manabot.policy.checkpoint",
-        "manabot/backends/torch/learner.py: manabot.training.regime",
+        "manabot/backends/torch/learner.py: manabot.training.learning",
         "manabot/backends/torch/arrays.py: manabot.policy.prepare",
     ]
 
@@ -539,25 +549,18 @@ _BACKEND_ROOTS = frozenset(
         "manabot/sim/policy_provider.py",
         "manabot/cli.py",
         "manabot/eval/cards.py",
+        "manabot/eval/agent_loader.py",
         "manabot/eval/evaluate.py",
         "manabot/eval/local.py",
-        "manabot/eval/serving_benchmark.py",
         "manabot/sim/native_game.py",
-        "manabot/sim/serving.py",
         "manabot/sim/sim.py",
     )
 )
 # Only these actual CLI/child entry-point scopes choose a backend in mixed modules.
 _BACKEND_ENTRYPOINTS = {
     "manabot/belief/demo.py": {"main"},
-    "manabot/recipes/local.py": {"run_local"},
-    "manabot/recipes/baseline.py": {"run_baseline"},
-    "manabot/experiment/runner.py": {"main"},
-    "manabot/experiment/job.py": {"run_worker", "train"},
-    "manabot/experiment/study.py": {"main"},
-    "manabot/experiment/attack_execution.py": {"main"},
-    "manabot/experiment/evaluation_queue.py": {"main"},
-    "manabot/experiment/monitor_worker.py": {"main"},
+    "manabot/recipes/baseline.py": {"evaluate"},
+    "manabot/recipes/belief_sampler.py": {"train"},
     "manabot/reports/belief.py": {"main"},
     "manabot/verify/checkpoint_scenarios.py": {"main"},
     "manabot/verify/competency.py": {"_scenario_worker", "_micro_worker", "main"},
@@ -582,7 +585,7 @@ def _backend_violations(path: str, source: str) -> list[int]:
                     "manabot.backends."
                 ):
                     if (
-                        path not in _BACKEND_ROOTS
+                        path not in _BACKEND_ROOTS | _TORCH_LOOPS
                         and scope not in _BACKEND_ENTRYPOINTS.get(path, set())
                     ):
                         violations.append(line)

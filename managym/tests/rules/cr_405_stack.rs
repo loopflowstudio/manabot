@@ -31,6 +31,7 @@ fn cr_405_1_lifo_resolution() {
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     assert_eq!(s.zone_size(0, ZoneType::Stack), 2);

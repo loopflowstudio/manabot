@@ -60,11 +60,6 @@ impl Game {
         self.state.priority_mut().sba_done = false;
 
         let game_over = self.tick();
-        if game_over {
-            if let Some(winner) = self.winner_index() {
-                self.trackers[winner].on_game_won();
-            }
-        }
         self.assert_stack_consistent();
 
         game_over

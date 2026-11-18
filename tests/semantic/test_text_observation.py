@@ -1676,20 +1676,20 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ).read_text()
     )
     matchup = manifest["matchup"]
-    env = managym.Env(seed=166, decision_memory=True)
+    env = managym.Env(seed=167, decision_memory=True)
     env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
             for role in ("hero", "villain")
         ]
     )
-    rng = random.Random(166)
+    rng = random.Random(167)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 484
+    assert len(memory) == 366
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250
@@ -1708,3 +1708,28 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         > 50
     )
     assert len(decision.text.encode()) < 180_000
+
+
+def test_manual_mana_sources_reach_text_commands_and_both_encoders() -> None:
+    env = priority_root(("Gray Ogre",), ("Mountain", "Mountain", "Mountain", "Forest"))
+    priority = capture_text_decision(env)
+    cast = next(action for action in priority.actions if "Cast" in action.description)
+    submit_response(env, priority, cast.reference)
+    payment = capture_text_decision(env)
+    source = next(
+        action
+        for action in payment.actions
+        if "Tap for mana" in action.description and "Forest" in action.description
+    )
+    assert any(
+        "Pay the offered cost" in action.description for action in payment.actions
+    )
+    assert len(payment.actions) == 5
+    _assert_native_observation_parity(env, payment)
+    submit_response(env, payment, source.reference)
+    following = capture_text_decision(env)
+    assert "Tap for mana" in following.text
+    before = env.state_digest()
+    with pytest.raises(SemanticContractError):
+        submit_response(env, payment, source.reference)
+    assert env.state_digest() == before

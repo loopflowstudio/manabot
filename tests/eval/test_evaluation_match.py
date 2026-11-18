@@ -2,14 +2,16 @@ import json
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
+from typing import Any
 
 import pytest
 
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.match import derive_seed, play_cell
 from manabot.eval.models import MatchRow
+from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_trace, replay_games
-from managym import WORLD_VERSION
+from managym import WORLD_VERSION, AgentError
 from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -68,9 +70,36 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
         for game in games
         for decision in game["decisions"]
     )
-    counters = json.loads((tmp_path / "performance.json").read_text())["counters"]
-    assert counters["threads/group_worker"] >= 1
-    assert counters["threads_budget/group_worker"] == 8
+    from copy import deepcopy
+
+    from manabot.eval.card_metrics import normalize, reduce_cards
+    from manabot.infra.identity import canonical_sha256
+    from manabot.sim.card_evidence import GameTrace, capture_verified_game
+    from manabot.sim.evaluation_records import stored_game
+    from managym.recording import read_records
+
+    records = list(read_records(Path(trace["path"])))
+    assert len(records) == 2
+    persisted = [
+        json.loads(line) for line in Path(trace["path"]).read_text().splitlines()
+    ]
+    assert all(
+        row["schema"] == "managym-game-v1" and "decisions" not in row
+        for row in persisted
+    )
+    assert not list((tmp_path / "traces").glob("*"))
+    for game, record in zip(games, records, strict=True):
+        assert game["game_trace_sha256"] == record.sha256
+        legacy = deepcopy(game)
+        legacy.pop("record")
+        legacy.pop("game_trace_sha256")
+        legacy["game_trace_sha256"] = canonical_sha256(legacy)
+        captured = capture_verified_game(GameTrace(data=stored_game(game)))
+        retained = capture_verified_game(GameTrace(data=legacy))
+        participants = tuple(game["seat_players"])
+        assert normalize(reduce_cards(captured, participants)) == normalize(
+            reduce_cards(retained, participants)
+        )
 
 
 def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) -> None:
@@ -246,7 +275,19 @@ def test_native_worker_crash_and_timeout_are_retained(
             return ready
 
         monkeypatch.setattr(Connection, "poll", poll_before_worker_exit)
-    crashed = match.play_game(deepcopy(game), players, {}, 10000, 20)
+    # A frozen supervisor clock: the crash, not child startup, ends the game.
+    frozen = time.monotonic()
+
+    class _Clock:
+        time = staticmethod(time.time)
+
+        @staticmethod
+        def monotonic() -> float:
+            return frozen
+
+    with monkeypatch.context() as clock:
+        clock.setattr("manabot.sim.supervision.time", _Clock)
+        crashed = match.play_game(deepcopy(game), players, {}, 10000, 20)
     assert crashed["termination_reason"] == "crash", crashed
     assert crashed["failed_player_id"] == players[0].player_id, crashed
     assert crashed["winner"] is None
@@ -256,21 +297,43 @@ def test_native_worker_crash_and_timeout_are_retained(
     assert timed_out["winner"] is None
 
 
-def test_policy_exception_retains_player_failure(monkeypatch):
+def play_with_failing_player_build(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    events: list[tuple[str, dict[str, object]]],
+) -> None:
+    """Run one game whose first player raises `error` while being built."""
     from manabot.sim.native_game import execute_game
 
     _, players = selected_players()
     game = {"player_seeds": {p.player_id: 1 for p in players}}
 
-    def fail(*args, **kwargs):
-        raise RuntimeError("policy failed")
+    def fail(*args: object, **kwargs: object) -> None:
+        raise error
 
     monkeypatch.setattr("manabot.sim.native_game.build_code_player", fail)
-    messages = []
-    execute_game(game, players, {}, 1, messages.append)
-    result = messages[-1][1]
+    execute_game(game, players, {}, 1, events.append)
+
+
+def test_python_policy_error_propagates_without_a_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[tuple[str, dict[str, object]]] = []
+    with pytest.raises(RuntimeError, match="policy failed"):
+        play_with_failing_player_build(
+            monkeypatch, RuntimeError("policy failed"), events
+        )
+    assert all(kind != "result" for kind, _ in events)
+
+
+def test_native_policy_error_retains_the_responsible_player(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[tuple[str, dict[str, object]]] = []
+    play_with_failing_player_build(monkeypatch, AgentError("policy failed"), events)
+    result = events[-1][1]
     assert result["termination_reason"] == "crash"
-    assert result["failed_player_id"] == players[0].player_id
+    assert result["failed_player_id"] == selected_players()[1][0].player_id
     assert "policy failed" in result["failure"]
 
 
@@ -373,3 +436,184 @@ def test_shared_writer_keeps_eval_pending_unknown_and_torn_records_fail_closed(
         output.write(b'["decision",')
     with pytest.raises(json.JSONDecodeError):
         read_game_journal(path)
+
+
+def _capture_loss_worker(
+    connection: Connection,
+    game: dict[str, Any],
+    registrations: list[PlayerRegistration],
+    checkpoint_paths: dict[str, str],
+    max_commands: int,
+    *_endpoint: object,
+) -> None:
+    """Stop inside a captured call, with no resource pressure or polling loop."""
+    import os
+
+    import manabot.sim.native_game as native
+
+    original = native.replay_environment
+
+    class LostNative:
+        def __init__(self, engine: object) -> None:
+            self.engine = engine
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.engine, name)
+
+        def step(self, action: int) -> None:
+            if game.get("block_native"):
+                # Expire the supervisor's injected deadline only once blocked.
+                Path(game["blocked_marker"]).touch()
+                connection.recv()
+            os._exit(7)
+
+    def environment(*args: Any, **kwargs: Any) -> tuple[Any, dict[str, Any]]:
+        env, observation = original(*args, **kwargs)
+        env._engine = LostNative(env._engine)
+        return env, observation
+
+    native.replay_environment = environment
+    native.execute_game(
+        game, registrations, checkpoint_paths, max_commands, connection.send
+    )
+
+
+@pytest.mark.parametrize("block_native", [False, True])
+def test_canonical_journal_retains_worker_loss_at_native_boundary(
+    tmp_path: Path, block_native: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from manabot.infra.identity import canonical_sha256
+    from manabot.sim.matchup import selected_match
+    from manabot.sim.supervision import supervise_game
+    from managym.recording import read_record
+    from managym.replay import walk
+
+    _, players = selected_players()
+    game = dict(
+        match_id="controlled-native-loss",
+        deal_seed=83,
+        leg=0,
+        seat_players=[p.player_id for p in players],
+        player_seeds={p.player_id: 7 for p in players},
+        match_hypers=selected_match().model_dump(),
+        decisions=[],
+        block_native=block_native,
+        blocked_marker=str(tmp_path / "blocked"),
+        integrity=dict(
+            private_exposures=0, root_mutations=0, illegal_actions=0, truncations=0
+        ),
+    )
+    path = tmp_path / "failure.jsonl"
+    marker = tmp_path / "blocked"
+
+    class _Clock:
+        """The game's budget lasts until the worker is blocked in native code."""
+
+        time = staticmethod(time.time)
+
+        @staticmethod
+        def monotonic() -> float:
+            return 1e9 if marker.exists() else 0.0
+
+    monkeypatch.setattr("manabot.sim.supervision.time", _Clock)
+    settled = supervise_game(
+        game,
+        players,
+        {},
+        1,
+        3,
+        path,
+        worker="tests.eval.test_evaluation_match:_capture_loss_worker",
+    )
+    record = read_record(path)
+    assert record.boundary is not None and record.boundary.phase == "executing"
+    assert record.games[0].committed == 0
+    assert len(record.games[0].actions) == 1
+    assert len(settled["decisions"]) == 0
+    assert settled["pending_decision"]["frame_sha256"]
+    assert settled["termination_reason"] == ("timeout" if block_native else "crash")
+    assert settled["game_trace_sha256"] == record.sha256
+    assert canonical_sha256(
+        record.context["evaluation"]["runtime_identities"]
+    ) == canonical_sha256(settled["runtime_identities"])
+    replay = walk(record)
+    assert list(replay) == []
+    assert replay.stop is not None and replay.stop.status == "interrupted"
+
+
+def test_player_crash_is_an_interrupted_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    from manabot.sim.matchup import selected_match
+    from manabot.sim.native_game import execute_game
+    from managym.recording import GameRecord
+    from managym.replay import walk
+
+    _, players = selected_players()
+
+    class BrokenPlayer:
+        def act(self, env: object, obs: object) -> int:
+            raise AgentError("private policy detail")
+
+    monkeypatch.setattr(
+        "manabot.sim.native_game.build_code_player", lambda *a, **kw: BrokenPlayer()
+    )
+    game = dict(
+        match_id="player-crash",
+        deal_seed=83,
+        leg=0,
+        seat_players=[p.player_id for p in players],
+        player_seeds={p.player_id: 7 for p in players},
+        match_hypers=selected_match().model_dump(),
+        decisions=[],
+        integrity=dict(
+            private_exposures=0, root_mutations=0, illegal_actions=0, truncations=0
+        ),
+    )
+    messages: list[tuple[str, Any]] = []
+    execute_game(game, players, {}, 1, messages.append)
+    result = messages[-1][1]
+    record = GameRecord.model_validate(result["record"])
+    assert record.error_class is None and record.error is None
+    assert record.execution_outcome == "last_command_succeeded"
+    assert not record.needs_reproduction
+    assert record.context["evaluation"]["termination_reason"] == "crash"
+    assert "private policy detail" in record.context["evaluation"]["failure"]
+    end = record.games[0].end
+    assert end is not None and end.status == "interrupted" and end.reason == "crash"
+    assert "terminated" not in record.context["evaluation"]
+    assert "winner" not in record.context["evaluation"]
+    replay = walk(record)
+    assert list(replay) == []
+    assert replay.stop is not None and replay.stop.status == "interrupted"
+
+
+def test_runner_failure_after_terminal_step_voids_the_view_result() -> None:
+    from manabot.sim.evaluation_records import audit_view
+    from manabot.sim.matchup import selected_match
+    from manabot.sim.native_game import execute_game
+    from managym.recording import GameRecord
+
+    _, players = selected_players()
+    game = dict(
+        match_id="late-runner-failure",
+        deal_seed=83,
+        leg=0,
+        seat_players=[p.player_id for p in players],
+        player_seeds={p.player_id: 7 for p in players},
+        match_hypers=selected_match().model_dump(),
+        decisions=[],
+        integrity=dict(
+            private_exposures=0, root_mutations=0, illegal_actions=0, truncations=0
+        ),
+    )
+    messages: list[tuple[str, Any]] = []
+    execute_game(game, players, {}, 10_000, messages.append)
+    data = messages[-1][1]["record"]
+    end = GameRecord.model_validate(data).games[0].end
+    assert end is not None and end.status == "complete"
+    assert audit_view(data)["terminated"] is True
+
+    data["context"]["evaluation"]["failure"] = "send failed"
+    data["context"]["evaluation"]["termination_reason"] = "crash"
+    view = audit_view(data)
+    assert view["terminated"] is False and view["winner"] is None
+    assert view["record"]["games"][0]["end"]["status"] == "complete"

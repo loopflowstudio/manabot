@@ -22,12 +22,11 @@ import os
 import subprocess
 from typing import Any
 
-from managym.decision import SEMANTIC_DECISION_VERSION
-from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
-
 from manabot.infra.source import source_commit, source_dirty
 from manabot.semantic.learning import DEFAULT_SCHEMA_PATH, BoundSemanticPack
 import managym
+from managym.decision import SEMANTIC_DECISION_VERSION
+from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
 WORLD = managym.WORLD_VERSION
 # The authored setup whose decks form the Elemental roster (`elemental-world-v1`
@@ -64,13 +63,28 @@ def validate_agent_setup(
     allow_deck_repetition: bool = False,
 ) -> None:
     """Check an admitted policy against the actual match at execution time."""
-    binding = getattr(agent, "world_binding", None)
+    validate_setup_binding(
+        getattr(agent, "world_binding", None),
+        player_configs,
+        allow_deck_repetition=allow_deck_repetition,
+    )
+
+
+def validate_setup_binding(
+    binding: Mapping[str, Any] | None,
+    player_configs: Sequence[managym.PlayerConfig],
+    *,
+    allow_deck_repetition: bool = False,
+) -> None:
+    """Admit a checkpoint's binding without constructing its array framework."""
     if binding is None:
         return
     if _binds_world(binding):
         if len(player_configs) != 2:
             raise ValueError("execution requires two decks")
-        validate_agent_decks(agent, player_configs)
+        if any(p.world != managym.WORLD_SETUP for p in player_configs):
+            raise ValueError("execution deck is not submitted to the world")
+        admit_world_decks(player_configs)
         return
     actual = _setups(player_configs)
     roster_world = len(binding["setups"]) > 2

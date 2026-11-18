@@ -28,6 +28,8 @@ ORIGINS = {
     "bot_evaluation",
     "training",
 }
+# Endings of a record import that stopped before game over (`watch.import_record`).
+CLOSED_RECORD_ENDINGS = frozenset({"record_interrupted", "record_diverged"})
 
 
 def participant_id(token: str) -> str:
@@ -531,7 +533,7 @@ class AttemptStore:
                 """SELECT p.attempt_id FROM attempt_players AS p
                 JOIN attempts AS a ON a.id=p.attempt_id
                 WHERE json_extract(p.inference_json, '$.source_sha256')=?
-                AND a.status='completed' LIMIT 1""",
+                AND a.status IN ('completed', 'stopped') LIMIT 1""",
                 (source_sha256,),
             ).fetchone()
         return None if row is None else str(row[0])
@@ -604,16 +606,22 @@ class AttemptStore:
         mine, args = self._mine(owners, token)
         with self.connect() as db:
             row = db.execute(
-                f"SELECT {mine} AS mine, visibility,status FROM attempts a WHERE id=?",
+                f"SELECT {mine} AS mine, visibility,status,ending_reason FROM attempts a WHERE id=?",
                 [*args, attempt],
             ).fetchone()
+        # A shared game is public once it can no longer change: a completed game,
+        # or an imported record closed at its last verified decision.
+        closed = row is not None and (
+            row["status"] == "completed"
+            or row["ending_reason"] in CLOSED_RECORD_ENDINGS
+        )
         return (
             None
             if row is None
             else {
                 "mine": bool(row["mine"]),
                 "replay": bool(row["mine"])
-                or (row["visibility"] == "shared" and row["status"] == "completed"),
+                or (row["visibility"] == "shared" and closed),
             }
         )
 

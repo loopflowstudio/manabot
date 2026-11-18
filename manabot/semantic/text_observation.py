@@ -556,8 +556,17 @@ class _Renderer:
             return self.definition(reference.definition) + " (no current object link)"
         return "unavailable or expired object"
 
+    def action_verb(self, action: managym.Action) -> str:
+        if (
+            action.action_type == managym.ActionEnum.TAP_FOR_COST
+            and self.state.action_space.action_space_type
+            == managym.ActionSpaceEnum.PAY_OR_NOT
+        ):
+            return "tap_for_mana"
+        return _enum(_VERBS, int(action.action_type))
+
     def action(self, action: managym.Action) -> str:
-        kind = _enum(_VERBS, int(action.action_type))
+        kind = self.action_verb(action)
         focus = [self.name(identity) for identity in action.focus]
         first = focus[0] if focus else ""
         if (
@@ -571,6 +580,7 @@ class _Renderer:
                 "scry_bottom",
                 "select_card",
                 "waterbend_tap",
+                "tap_for_mana",
                 "learn_take_lesson",
                 "learn_discard",
             )
@@ -606,6 +616,7 @@ class _Renderer:
                 "choose_mode": "Choose mode",
                 "choose_trigger": "Put the triggered ability on the stack next",
                 "waterbend_tap": "Tap for cost",
+                "tap_for_mana": "Tap for mana",
                 "learn_take_lesson": "Take Lesson",
                 "learn_discard": "Discard for Learn",
             }[kind]
@@ -1252,7 +1263,7 @@ class _Renderer:
                 or offer["choices"]
                 or offer["source"] is not None
                 or offer["help"] is not None
-                or offer["verb"] != _enum(_VERBS, int(descriptor.action_type))
+                or offer["verb"] != self.action_verb(descriptor)
             ):
                 raise TextEncodingError("unsupported or inconsistent native offer")
             description = self.action(descriptor)

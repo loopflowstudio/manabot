@@ -11,7 +11,6 @@ import manabot.backends.torch as backend
 from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.rollout import AdmittedRollout
-from manabot.env.match import Match, Reward
 import manabot.env.memory_store as storage
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
@@ -22,31 +21,20 @@ from manabot.env.memory_store import (
 )
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
-    MatchConfig,
     ModelConfig,
-    ObservationConfig,
-    RewardConfig,
 )
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.sim.rollout import BatchedSampler
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    Learning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import (
     RecordedObservations,
     RolloutBatch,
-    SeatRoutedCollector,
 )
 from manabot.training.updates.bootstrap import bootstrap_predictions
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
-import managym
 from tests.model.test_decision_memory import memory_input, policy
 
 
@@ -83,7 +71,7 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
         rng = session.snapshot_rng()
         expected = scope.sample(rows, Profiler())
         expected_rng = session.snapshot_rng()
-        session.restore_rng(rng)
+        session.rng.set_state(rng)
         sizes: list[int] = []
         forward = model.forward_distribution
 
@@ -221,81 +209,3 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
 
 def replace_config(config: ModelConfig) -> ModelConfig:
     return config.model_copy(update={"value_kind": "categorical_wdl"})
-
-
-@pytest.mark.parametrize("include_own", [False, True])
-def test_memory_chunked_collector_restore_keeps_sampling(include_own: bool) -> None:
-
-    space = ObservationSpace(
-        ObservationConfig(
-            max_decision_records=64,
-            decision_memory_include_own=include_own,
-            max_decision_reference_details=65536,
-            max_decision_references=1024,
-            max_decision_members=16384,
-        )
-    )
-    model = policy(space, "gru", 4)
-
-    def collector() -> SeatRoutedCollector:
-        return SeatRoutedCollector(
-            space,
-            Match(),
-            Reward(RewardConfig()),
-            num_envs=3,
-            execution_rows=2,
-            opponent_mode="self",
-            learning_seats="one",
-            batch_closure="exact-quota",
-            recovery_max_game_microsteps=1000,
-            numerics=CollectionSession(device="cpu", seed=111),
-        )
-
-    original, resumed = collector(), collector()
-    try:
-        original.collect(model, 3)
-        snapshot = original.snapshot()
-        resumed.restore(snapshot, lambda: None)
-        rng = torch.get_rng_state()
-        expected = original.collect(model, 3)
-        torch.set_rng_state(rng)
-        actual = resumed.collect(model, 3)
-        np.testing.assert_array_equal(actual.actions, expected.actions)
-        np.testing.assert_allclose(actual.logprobs, expected.logprobs, atol=1e-6)
-        for key in MEMORY_FIELDS:
-            np.testing.assert_array_equal(
-                actual.next_obs.materialize()[key], expected.next_obs.materialize()[key]
-            )
-    finally:
-        original.close()
-        resumed.close()
-
-
-def test_memory_regime_requires_all_execution_limits_and_retains_them() -> None:
-    space, _ = memory_input()
-    model = policy(space, "gru", 4)
-    stage = TrainSelfPlay(
-        id="train", operation="train_self_play", streams=3, updates=1, transitions=3
-    )
-    fields = dict(
-        id="memory-limits",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig(),
-        agent=model.config,
-        observation=space.encoder.config,
-    )
-    with pytest.raises(ValueError, match="explicit collection_rows"):
-        TrainingRegime(**fields, stages=[stage])
-    limits = Execution(collection_rows=2, bootstrap_rows=2, learner_rows=2)
-    regime = TrainingRegime(
-        **fields, stages=[stage.model_copy(update={"execution": limits})]
-    )
-    restored = TrainingRegime.model_validate_json(regime.model_dump_json())
-    assert restored.stages[0].execution.collection_rows == 2
-    assert restored.stages[0].execution.bootstrap_rows == 2
-    assert restored.stages[0].execution.learner_rows == 2
-    assert not {"collection_rows", "bootstrap_rows", "learner_rows"}.intersection(
-        Execution().model_dump()
-    )
-    with pytest.raises(ValueError):
-        Execution(learner_rows=0)

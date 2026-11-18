@@ -12,6 +12,16 @@ from manabot.sim.execution import EvalCompute, EvalComputeV1
 from manabot.sim.search.branch import branch_backend
 from managym.disclosure import DecklistDisclosure
 
+# How a checkpoint served by Etude is registered: Etude chooses the device, and
+# the game process samples float32 logits with a seeded NumPy generator.
+ETUDE_COMPUTE_CLASS = "etude-policy-f32-auto-v1"
+ETUDE_SAMPLER_SPEC: dict[str, Any] = {
+    "kind": "etude_checkpoint",
+    "deterministic": False,
+    "sampling": "numpy-pcg64-v1",
+    "allow_deck_repetition": True,
+}
+
 type WorldVersion = Literal[
     "w2",
     "w3",
@@ -137,6 +147,19 @@ class PlayerRegistration(StrictModel):
                     or (self.world == "w2" and not self.player_spec["deterministic"])
                 ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
+            elif kind == "etude_checkpoint":
+                expected_sampler = dict(ETUDE_SAMPLER_SPEC)
+                if "blank_decision_memory" in self.player_spec:
+                    if self.player_spec["blank_decision_memory"] is not True:
+                        raise ValueError("memory blanking must be explicitly enabled")
+                    expected_sampler["blank_decision_memory"] = True
+                if (
+                    self.player_spec != expected_sampler
+                    or self.compute_class_id != ETUDE_COMPUTE_CLASS
+                ):
+                    raise ValueError(
+                        "Etude checkpoint requires its explicit sampling contract"
+                    )
             elif kind == "local_update":
                 from manabot.sim.search.local_update_receipt import (
                     LocalSearchConfig,
@@ -355,7 +378,7 @@ class PlayerRegistration(StrictModel):
 # samples the opponent's hidden cards from their decklist (determinized,
 # PUCT, local-update and demo search) and needs an open decklist.
 OBSERVATION_ONLY_KINDS = frozenset(
-    {"checkpoint", "heuristic", "random", "scripted_greedy"}
+    {"checkpoint", "etude_checkpoint", "heuristic", "random", "scripted_greedy"}
 )
 
 

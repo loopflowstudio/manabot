@@ -4,19 +4,22 @@ from pathlib import Path
 from typing import Literal
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.records import CheckpointPlayer, Code, Inference, Match
+from etude.eval.records import CheckpointPlayer, Code, Match, checkpoint_player
 from etude.records import ArtifactRef
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import BACKEND, save_checkpoint
+from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval import pairing
+from manabot.eval.agent_loader import load
+from manabot.eval.agents import blank_decision_memory, build
 from manabot.eval.evaluation import EvaluationRequest, EvaluationResult
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
+from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 import managym
@@ -90,19 +93,24 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
                 size_bytes=path.stat().st_size,
             ),
         )
-        players.append(
-            Inference(
-                config={"blank_decision_memory": True} if blank and seed == 20 else {}
-            ).player(ref)
-        )
+        players.append(checkpoint_player(ref))
     if blank:
-        players[1] = Inference(config={"blank_decision_memory": True}).player(
-            players[0].checkpoint
+        players[1] = players[0].model_copy(
+            update={"config": {"blank_decision_memory": True}}
         )
         assert players[0].key != players[1].key
+    # As Etude seats them: a bare forward without config, a built player with one.
+    agents = [
+        build(player, {player.checkpoint.key: load(player.checkpoint)})
+        if player.config
+        else load(player.checkpoint)
+        for player in players
+    ]
     original = pairing.evaluate
 
-    def evaluate(request: EvaluationRequest, *, out_dir: Path) -> EvaluationResult:
+    def evaluate(
+        request: EvaluationRequest, *, out_dir: Path, agents: dict[str, GamePlayer]
+    ) -> EvaluationResult:
         assert request.authored_matchup is not None
         env = managym.Env(seed=123)
         env.reset(EnvMatch(request.authored_matchup.match()).to_rust())
@@ -116,19 +124,20 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
                 == request.opponent.checkpoint_sha256
             )
             assert request.candidate.identity_sha256 != request.opponent.identity_sha256
-        return original(request, out_dir=out_dir)
+        assert agents["opponent"].blank_decision_memory == blank
+        return original(request, out_dir=out_dir, agents=agents)
 
     monkeypatch.setattr(pairing, "evaluate", evaluate)
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
     match = Match(players=tuple(players), games=4)
     tables = pairing.play_pairing(
         match,
+        agents,
         matchup=matchup,
         deal=123,
         matchup_mode="cross",
         game_seconds=60,
         arena="fixture-pairing",
-        backend=BACKEND,
     )
     rows = tables["plays"]
     assert len(rows) == 8
@@ -180,17 +189,25 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     )
     heuristic = Code(name="heuristic", source=heuristic_source_paths())
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
-    match = Match(players=(Inference().player(ref), heuristic), games=4)
+    match = Match(players=(checkpoint_player(ref), heuristic), games=4)
     tables = pairing.play_pairing(
         match,
+        [load(ref), build(heuristic, {})],
         matchup=matchup,
         deal=123,
         matchup_mode="cross",
         game_seconds=60,
         arena="fixture-pairing",
-        backend=BACKEND,
     )
     rows = tables["plays"]
     assert len(rows) == 8 and all(row["valid"] for row in rows)
     for game in range(4):
         assert sum(float(row["score"]) for row in rows if row["game"] == game) == 1.0
+
+
+def test_blanking_refuses_ambiguous_values() -> None:
+    player = CheckpointPlayer.model_construct(
+        name="fixture", config={"blank_decision_memory": "yes"}
+    )
+    with pytest.raises(ValueError, match="must be a boolean"):
+        blank_decision_memory(player)

@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends import resolve
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
     SelectionPredictor,
@@ -24,19 +23,15 @@ from manabot.env.replay import require_replay_runtime
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim import rollout
-from manabot.training import execution
-from manabot.training.regime import (
-    Learning,
-    SelectionGameSpec,
-    TrainingRegime,
-    TrainSelfPlay,
-)
 from manabot.training.rollout import selection_data
-from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.verify.store import VerifyStore
+from manabot.training.rollout.collection import (
+    close_collector,
+    open_collector,
+)
+from manabot.training.rollout.selection_data import SelectionGameSpec
 import managym
 from managym.decision import Command
-from managym.recording import read_failure
+from managym.recording import ScalarCapture, read_record
 
 
 def _model() -> ActorCritic:
@@ -116,7 +111,7 @@ def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
         with pytest.raises(managym.AgentError) as failure, env._capture.guard():
             env.step(-1)
     assert len(scope.paths) == 1
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.games[0].actions == [0, -1]
     assert evidence.context["update"] == 7
     assert evidence.context["allocation_deadline"] == 123.0
@@ -128,7 +123,7 @@ def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
 
     with capture_scope(scope), pytest.raises(BaseException):
         env._capture.reset(env._engine, [])
-    assert read_failure(scope.paths[-1]).operation == "reset"
+    assert read_record(scope.paths[-1]).operation == "reset"
     assert _bounded(scope.paths[-1])["results"][0]["matches_error"]
 
 
@@ -160,7 +155,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
                 with pytest.raises(managym.AgentError):
                     env.step(-1)
     original = scope.paths[0].read_bytes()
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     if variant == "wrong_frame":
         evidence.games[0].frame = "{}"
     elif variant == "different_error":
@@ -212,7 +207,7 @@ def test_ordinary_vector_replays_current_game_after_autoreset(
         seeds = env._rust_env.current_game_seeds()
         with pytest.raises(managym.AgentError):
             env.step(torch.tensor([-1, 0]))
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert [game.seed for game in evidence.games] == seeds
     assert evidence.seed_stride == 2
     assert all(game.frame for game in evidence.games)
@@ -231,7 +226,7 @@ def test_strict_collector_preserves_masked_prefixes(
 ) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             ObservationSpace(),
             Match(),
             Reward(RewardConfig()),
@@ -245,86 +240,13 @@ def test_strict_collector_preserves_masked_prefixes(
             with pytest.raises(managym.AgentError):
                 collector._env.step_into_buffers([-1, -999], [True, False])
         finally:
-            collector.close()
-    evidence = read_failure(scope.paths[0])
+            close_collector(collector)
+    evidence = read_record(scope.paths[0])
     assert len(evidence.games) == 1
     assert evidence.games[0].actions == [0, -1]
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
     assert collector.game_errors is None
     assert collector.game_error_state.attempted == 0
-
-
-@pytest.mark.parametrize("stages", [1, 2])
-def test_strict_regime_captures_before_original_error_without_recipe_changes(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    stages: int,
-) -> None:
-    model = _model()
-    recipe = TrainingRegime(
-        id="strict-capture",
-        world=managym.WORLD_VERSION,
-        match=Match().config,
-        agent=model.config,
-        wall_seconds=120,
-        stages=[
-            TrainSelfPlay(
-                id=f"stage-{i}",
-                operation="train_self_play",
-                updates=1,
-                streams=2,
-                transitions=1,
-                learning=Learning(epochs=1, minibatches=1),
-            )
-            for i in range(stages)
-        ],
-    )
-    frozen = recipe.model_dump_json()
-    original = SeatRoutedCollector._sample_learning_rows
-    creations = 0
-    original_init = SeatRoutedCollector.__init__
-
-    def initialize(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> None:
-        nonlocal creations
-        creations += 1
-        original_init(self, *args, **kwargs)
-
-    def actions(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> np.ndarray:
-        result = original(self, *args, **kwargs)
-        if creations == stages:
-            result[:] = -1
-        return result
-
-    monkeypatch.setattr(SeatRoutedCollector, "__init__", initialize)
-    monkeypatch.setattr(SeatRoutedCollector, "_sample_learning_rows", actions)
-    with VerifyStore(tmp_path / "runs.sqlite") as store:
-        with pytest.raises(managym.AgentError) as failed:
-            execution.execute_regime(
-                recipe, 197, tmp_path / "run", store, backend=resolve("torch")
-            )
-        run_id = store.con.execute("SELECT id FROM training_runs").fetchone()[0]
-        run = store.training_run(run_id)
-    paths = list((tmp_path / "run" / "failures").glob("*.jsonl"))
-    assert len(paths) == 1
-    evidence = read_failure(paths[0])
-    assert evidence.error == str(failed.value)
-    assert evidence.context["stage"] == f"stage-{stages - 1}"
-    assert evidence.context["coordinates"]["updates"] == stages - 1
-    assert evidence.context["coordinates"]["learner_transitions"] == sum(
-        stage.learner_transitions for stage in run.stages[:-1]
-    )
-    assert run.stages[-1].learner_transitions == 0
-    assert evidence.context["run"] == run.id
-    assert any(
-        item["path"] == str(paths[0])
-        for item in run.stages[-1].rejected_artifacts.values()
-    )
-    assert run.game_errors is None and not run.game_error_ledgers
-    assert run.recovery_artifact is None
-    assert all(stage.status == "completed" for stage in run.stages[:-1])
-    assert run.stages[-1].status == "failed"
-    assert recipe.model_dump_json() == frozen
-    assert _bounded(paths[0])["results"][0]["matches_error"]
 
 
 def test_semantic_training_retains_rejected_command_and_offer_frame(
@@ -349,18 +271,21 @@ def test_semantic_training_retains_rejected_command_and_offer_frame(
             reference="uniform",
             predictor=SelectionPredictor(_model(), seed=1),
             max_steps=100,
-            check=lambda: None,
         )
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.games[0].frame
     assert json.loads(evidence.games[0].frame)["offers"]
     assert len(evidence.games[0].actions) == 1
-    rows = [json.loads(line) for line in scope.paths[0].read_text().splitlines()]
-    assert "pending" in rows[1] and "error" in rows[2]
+    assert evidence.boundary is not None
+    assert evidence.boundary.phase == "executing"
+    assert evidence.boundary.pending_actions == evidence.games[0].actions
+    assert evidence.games[0].committed == 0
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
     interrupted = tmp_path / "interrupted.jsonl"
     interrupted.touch(mode=0o600)
-    interrupted.write_text("\n".join(json.dumps(row) for row in rows[:2]) + "\n")
+    evidence.error_class = evidence.error = evidence.traceback = None
+    evidence.execution_outcome = "execution_outcome_unknown"
+    interrupted.write_text(evidence.model_dump_json(by_alias=True) + "\n")
     replay = _bounded(interrupted)
     assert replay["original_outcome"] == "execution_outcome_unknown"
     result = replay["results"][0]
@@ -391,9 +316,9 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
             pool.step_active([-1] * pool.num_slots)
         with pytest.raises(managym.AgentError):
             env.step(-1)
-    assert read_failure(scope.paths[0]).mode == "search"
+    assert read_record(scope.paths[0]).mode == "search"
     for path in scope.paths:
-        assert read_failure(path).context["game_index"] == 11
+        assert read_record(path).context["game_index"] == 11
         result = _bounded(path)["results"][0]
         assert result["matches_error"] and result["at_retained_failure"]
 
@@ -452,7 +377,7 @@ def test_value_search_failure_keeps_sampled_pool_actions(
         scorer = value._ValueLeafScorer(Scorer(), worlds=1, depth=1)
         with pytest.raises(managym.AgentError):
             scorer.score_actions(env)
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.search and evidence.search.operations
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
 
@@ -477,7 +402,7 @@ def test_rollout_evaluation_propagates_without_completed_denominator(
 def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             ObservationSpace(),
             Match(),
             Reward(RewardConfig()),
@@ -490,17 +415,24 @@ def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
             with pytest.raises(managym.AgentError):
                 collector._env.step_into_buffers([0, -1], [False, True])
         finally:
-            collector.close()
-    evidence = read_failure(scope.paths[0])
+            close_collector(collector)
+    evidence = read_record(scope.paths[0])
     assert evidence.games[0].stream == 1
     assert evidence.games[0].seed == 1
     assert _bounded(scope.paths[0])["results"][0]["stream"] == 1
 
 
-def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
+@pytest.mark.parametrize("standalone", [False, True])
+def test_command_is_durable_before_native_execution(
+    tmp_path: Path, standalone: bool
+) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
         env = _env()
+        if standalone:
+            env._capture = ScalarCapture(
+                seed=24, failure_directory=tmp_path, on_retained=scope.paths.append
+            )
         env.reset()
         frame = json.loads(env._engine.semantic_decision_frame_json())
         command = Command("pending", frame["revision"], frame["offers"][0]["id"])
@@ -515,8 +447,9 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
 
             def execute_semantic_command_json(self, value: str) -> str:
                 # Read independently while the failing native call is entered.
-                evidence = read_failure(scope.paths[0])
+                evidence = read_record(scope.paths[0])
                 assert evidence.games[0].actions == [value]
+                assert not evidence.games[0].digests
                 assert evidence.execution_outcome == "execution_outcome_unknown"
                 assert scope.paths[0].stat().st_mode & 0o777 == 0o600
                 raise original
@@ -524,7 +457,12 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
         with pytest.raises(managym.AgentError) as failure:
             env._capture.command(NativeFailure(), command.to_json())
         assert failure.value is original
-    assert read_failure(scope.paths[0]).execution_outcome == "failed"
+    assert read_record(scope.paths[0]).execution_outcome == "failed"
+    before = scope.paths[0].read_bytes()
+    env.reset()
+    env.close()
+    assert scope.paths[0].read_bytes() == before
+    assert len(scope.paths) == 1
 
 
 def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> None:
@@ -533,7 +471,7 @@ def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> N
         MatchConfig.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
     )
     with capture_scope(scope):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             ObservationSpace(),
             match,
             Reward(RewardConfig()),
@@ -554,8 +492,8 @@ def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> N
             with pytest.raises(managym.AgentError):
                 collector._env.step_into_buffers([-1, 0], [True, False])
         finally:
-            collector.close()
-    evidence = read_failure(scope.paths[0])
+            close_collector(collector)
+    evidence = read_record(scope.paths[0])
     assert len(evidence.games) == 1
     assert evidence.games[0].seed == 17502
     assert evidence.games[0].actions == [0, -1]
@@ -584,11 +522,11 @@ def test_search_construction_failure_retains_original_error(tmp_path: Path) -> N
                 env._capture, BrokenSearch(), "rollout_pool", [1, 1, 197, 100]
             )
     assert failed.value is original
-    evidence = read_failure(scope.paths[0])
+    evidence = read_record(scope.paths[0])
     assert evidence.mode == "search" and evidence.error == str(original)
 
 
-@pytest.mark.parametrize("name", ["FailureEvidence", "GameInputs", "PlayerSetup"])
+@pytest.mark.parametrize("name", ["GameRecord", "GameInputs", "PlayerSetup"])
 def test_portable_record_names_warn_before_removal(name: str) -> None:
     from manabot.env import failures
     from managym import recording

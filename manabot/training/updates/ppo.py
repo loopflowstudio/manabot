@@ -15,7 +15,7 @@ import numpy as np
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.policy.prepare import reference_distribution
-from manabot.training.regime import Learning
+from manabot.training.learning import Learning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.backend import (
     Array,
@@ -130,9 +130,6 @@ def update_iteration(
         }
         types = batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)
         chosen_types = types.reshape(-1)
-        diagnostics["action_types"] = np.bincount(
-            chosen_types, minlength=ACTION_TYPE_DIM
-        ).tolist()
         diagnostics["selected_action_types"] = np.bincount(
             chosen_types[retained], minlength=ACTION_TYPE_DIM
         ).tolist()

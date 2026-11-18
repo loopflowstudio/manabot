@@ -31,7 +31,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from starlette.websockets import WebSocketState
 
 import managym
@@ -39,6 +39,7 @@ from managym.academy.card_art import card_art
 from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
+    DecisionFrame as SemanticDecisionFrame,
     SemanticTransition,
     TransitionReceipt,
 )
@@ -66,6 +67,7 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+from managym.payment import preview_payment
 from managym.policy import PolicyRunner
 from managym.search import (
     SearchConfig,
@@ -82,6 +84,7 @@ from .advice import (
     request_versioned_fixture_advice,
 )
 from .attempts import (
+    CLOSED_RECORD_ENDINGS,
     AttemptStore,
     RecordedPlayer,
     decode_cursor,
@@ -1501,6 +1504,7 @@ class GameSession:
         raw_command: dict[str, Any],
         *,
         source: str,
+        native_command: str | None = None,
     ) -> None:
         """Validate, capture, and lower one deliberate authority command."""
         command = Command.model_validate(raw_command)
@@ -1524,6 +1528,7 @@ class GameSession:
             context=context,
             command=command.model_dump(mode="json"),
             source=source,
+            native_command=native_command,
         )
 
     def _step_and_record(
@@ -1535,6 +1540,7 @@ class GameSession:
         context: DecisionContext | None = None,
         command: dict[str, Any] | None = None,
         source: str | None = None,
+        native_command: str | None = None,
     ) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
@@ -1600,6 +1606,7 @@ class GameSession:
                     "frame": context.frame,
                     "offer": selected_offer,
                     "command": command,
+                    "native_command": native_command,
                 }
             )
             retained_root = self.env.clone_env()
@@ -1638,10 +1645,15 @@ class GameSession:
             != int(command["offer_id"])
         ):
             raise RuntimeError("Academy decision drifted from semantic authority.")
-        semantic_command = SemanticCommand(
-            command_id=str(command["command_id"]),
-            expected_revision=int(semantic_frame["revision"]),
-            offer_id=int(command["offer_id"]),
+        semantic_command = (
+            SemanticCommand(**json.loads(native_command))
+            if native_command is not None
+            else SemanticCommand(
+                command_id=str(command["command_id"]),
+                expected_revision=int(semantic_frame["revision"]),
+                offer_id=int(command["offer_id"]),
+                answers=tuple(command["answers"]),
+            )
         )
         transition_json, next_obs, reward, _, _, _ = self.env.step_semantic_command(
             semantic_command.to_json()
@@ -3900,12 +3912,12 @@ def _live_record_for_attempt(attempt_id: str) -> SessionRecord:
     return record
 
 
-def _rest_study_owner(
+def _rest_participant(
     record: SessionRecord,
     participant_token: str | None,
-) -> str | None:
+) -> ParticipantLease:
     """Authorize one exact participant, including single-player tables."""
-    if participant_token is None:
+    if not participant_token or not participant_token.isascii():
         raise HTTPException(status_code=403, detail="participant_credential_required")
     matches = [
         participant
@@ -3914,9 +3926,14 @@ def _rest_study_owner(
     ]
     if len(matches) != 1:
         raise HTTPException(status_code=403, detail="participant_credential_invalid")
-    if TableCapability.EXPLORE_STUDY not in ROLE_CAPABILITIES[matches[0].role]:
+    return matches[0]
+
+
+def _rest_study_owner(record: SessionRecord, participant_token: str | None) -> str:
+    participant = _rest_participant(record, participant_token)
+    if TableCapability.EXPLORE_STUDY not in ROLE_CAPABILITIES[participant.role]:
         raise HTTPException(status_code=403, detail="participant_forbidden")
-    return matches[0].viewer_id
+    return participant.viewer_id
 
 
 def _recording_read(trace_id: str) -> tuple["Recording", dict[str, Any]]:
@@ -4026,6 +4043,7 @@ def get_recording_index(
         "can_study": study_available,
         "winner": payload.get("winner") if finished else None,
         "players": players,
+        "record_stop": (payload.get("recording_import") or {}).get("stop"),
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),
@@ -4088,9 +4106,13 @@ async def get_trace_decision(
     replay = _load_trace_replay(trace_id)
     payload = trace_store.load_trace(trace_id)
     watch_mode = bool(payload["config"].get("watch_players"))
-    if watch_mode and not (
-        payload["end_reason"] == "game_over"
-        and payload["final_observation"]["game_over"]
+    if (
+        watch_mode
+        and payload["end_reason"] not in CLOSED_RECORD_ENDINGS
+        and not (
+            payload["end_reason"] == "game_over"
+            and payload["final_observation"]["game_over"]
+        )
     ):
         _rest_study_owner(_live_record_for_trace(trace_id), x_etude_participant_token)
     try:
@@ -4338,11 +4360,11 @@ def inspect_bot_watch(
 
 
 @app.post("/api/watch/import")
-def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
-    from .watch import import_arena
+def import_game_watch(payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import import_game
 
     try:
-        return import_arena(payload)
+        return import_game(payload)
     except ValueError as exc:
         raise HTTPException(400, f"Game file rejected: {exc}") from exc
     except (KeyError, TypeError) as exc:
@@ -4369,3 +4391,68 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
         "world_version": world["world_version"],
         "card_digest": world["card_digest"],
     }
+
+
+class PaymentPreviewRequest(BaseModel):
+    """One current offer, with every Academy authority coordinate."""
+
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    revision: int
+    prompt_id: int
+    frame_hash: str
+    offer_id: int
+
+
+@app.post("/api/sessions/{session_id}/payment-preview")
+async def get_payment_preview(
+    session_id: str,
+    payload: PaymentPreviewRequest,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    record = SESSION_REGISTRY.get(session_id)
+    if record is None:
+        raise HTTPException(404, "session_not_found")
+    async with record.lock:
+        participant = _rest_participant(record, x_etude_participant_token)
+        if (
+            TableCapability.SUBMIT_LIVE_COMMAND
+            not in ROLE_CAPABILITIES[participant.role]
+        ):
+            raise HTTPException(403, "payment_preview_forbidden")
+        game = record.game
+        context = game.published_prompt
+        pending = game._pending_decision
+        if context is None or pending is None or game.env is None:
+            raise HTTPException(409, "payment_preview_stale")
+        frame = pending.frame
+        if context.viewer != game.human_seat:
+            raise HTTPException(403, "payment_preview_forbidden")
+        if (
+            game.match_id != payload.match_id
+            or frame.revision != payload.revision
+            or frame.prompt is None
+            or frame.prompt.id != payload.prompt_id
+            or frame.frame_hash != payload.frame_hash
+            or frame.frame_hash != context.frame["frame_hash"]
+            or payload.offer_id not in context.action_by_offer
+        ):
+            raise HTTPException(409, "payment_preview_stale")
+        native = SemanticDecisionFrame.from_json(
+            pending.root.semantic_decision_frame_json()
+        )
+        try:
+            preview = preview_payment(
+                game.env,
+                viewer=context.viewer,
+                revision=native.revision,
+                fingerprint=native.fingerprint,
+                action_index=context.action_by_offer[payload.offer_id],
+            )
+        except managym.AgentError as exc:
+            raise HTTPException(409, "payment_preview_stale") from exc
+        return {
+            **payload.model_dump(),
+            "viewer": context.viewer,
+            "preview": preview.model_dump(mode="json"),
+        }

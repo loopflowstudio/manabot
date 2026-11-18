@@ -307,18 +307,17 @@ COMPOUND_DECISIONS_REMOVED = (
 # The pooled token stream (`token_stream="pooled"`) was removed the same way.
 POOLED_TOKEN_STREAM_REMOVED = (
     "token_stream='pooled' was removed after its pilot closed negative "
-    "(experiments/token_stream.md); live-token attention replaces it. "
+    "(experiments/reports/token_stream.md); live-token attention replaces it. "
     "Reproduce it at commit 439379869541cf29e781d7215b088e828041889e"
 )
 
 
-# The narrowest `ModelConfig.hidden_dim` whose training forwards default to
-# bfloat16 on a GPU backend: CUDA and MPS through
-# `manabot.training.regime.ladder_precision`, MLX through
-# `manabot.backends.mlx.arrays.default_precision`. BF16 learner updates were
+# The narrowest `ModelConfig.hidden_dim` whose MLX forwards default to
+# bfloat16 (`manabot.backends.mlx.arrays.default_precision`); torch settings
+# state their precision. BF16 learner updates were
 # first faster than float32 at this width on an L4 with bucketed shapes
-# (experiments/cuda_precision.md); learning evidence at w384l8 is in
-# experiments/bf16_behavior_logs.md. Narrower models and CPU stay float32.
+# (experiments/reports/cuda_precision.md); learning evidence at w384l8 is in
+# experiments/reports/bf16_behavior_logs.md. Narrower models and CPU stay float32.
 BF16_MIN_HIDDEN_DIM = 256
 
 

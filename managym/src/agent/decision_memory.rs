@@ -932,7 +932,7 @@ pub(crate) fn capture(
             choice.ability = Some(*ability_index as u32);
             true
         }
-        Action::WaterbendTap { .. } => true,
+        Action::WaterbendTap { .. } | Action::TapForMana { .. } => true,
         Action::ChooseMode { mode, .. } => {
             use crate::flow::decision::Decision;
             match game

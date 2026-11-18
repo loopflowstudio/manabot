@@ -16,6 +16,7 @@ from managym.decision import (
     SemanticContractError,
     SemanticTransition,
 )
+from managym.recording import DecisionAnnotation
 
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
@@ -57,6 +58,8 @@ class Env(gym.Env):
         seed: int = 0,
         enable_profiler: bool = False,
         enable_behavior_tracking: bool = False,
+        *,
+        capture: ScalarCapture | None = None,
     ) -> None:
         """Gymnasium-compatible wrapper around one native game.
 
@@ -65,10 +68,14 @@ class Env(gym.Env):
         """
         super().__init__()
         self.seed = seed
-        self._capture = ScalarCapture(
-            seed,
-            decision_memory=obs_space.encoder.config.max_decision_records > 0,
-            decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
+        self._capture = (
+            capture
+            if capture is not None
+            else ScalarCapture(
+                seed,
+                decision_memory=obs_space.encoder.config.max_decision_records > 0,
+                decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
+            )
         )
         self.skip_trivial = True
         self.enable_profiler = enable_profiler
@@ -120,7 +127,7 @@ class Env(gym.Env):
         # reset(seed=...) silently replays the identical deal (same
         # shuffles/opening hands) for every value of seed — which is what the
         # evaluation harness had been doing historically (see
-        # experiments/exp-06-newworld-training.md). The native set_seed
+        # experiments/reports/exp-06-newworld-training.md). The native set_seed
         # binding supersedes the engine-rebuild workaround exp-06 landed.
         if seed is not None and seed != self.seed:
             self.seed = seed
@@ -138,7 +145,12 @@ class Env(gym.Env):
 
         return py_obs, raw_info
 
-    def step(self, action: int) -> tuple[dict, float, bool, bool, dict]:
+    def step(
+        self,
+        action: int,
+        *,
+        annotation: DecisionAnnotation | dict[str, object] | None = None,
+    ) -> tuple[dict, float, bool, bool, dict]:
         """
         Step the environment by applying `action` (int). A terminal step returns
         the terminal observation; the caller resets.
@@ -156,7 +168,7 @@ class Env(gym.Env):
         log = getLogger(__name__).getChild("step")
         self._record_policy_actions()
         raw_obs, raw_reward, terminated, truncated, info = self._capture.step(
-            self._engine, action
+            self._engine, action, annotation=annotation
         )
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
         add_truncation_flags(raw_obs, info, self.obs_space.encoder)
@@ -172,7 +184,10 @@ class Env(gym.Env):
         return py_obs, reward, terminated, truncated, info
 
     def step_semantic(
-        self, command: Command
+        self,
+        command: Command,
+        *,
+        annotation: DecisionAnnotation | dict[str, object] | None = None,
     ) -> tuple[dict, float, bool, bool, dict, SemanticTransition]:
         """Execute one authoritative semantic Command.
 
@@ -185,7 +200,10 @@ class Env(gym.Env):
         try:
             transition_json, raw_obs, raw_reward, terminated, truncated, info = (
                 self._capture.command(
-                    self._engine, command.to_json(), transition_only=False
+                    self._engine,
+                    command.to_json(),
+                    transition_only=False,
+                    annotation=annotation,
                 )
             )
         except Exception as error:  # managym.AgentError
@@ -274,7 +292,8 @@ class Env(gym.Env):
                 self._capture.inputs,
             )
 
-    def close(self) -> None:
+    def close(self, *, reason: str = "capture closed") -> None:
+        self._capture.close(reason=reason)
         self._capture.flush_policy_actions()
 
     @property

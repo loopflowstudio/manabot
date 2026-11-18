@@ -19,10 +19,10 @@ import time
 from typing import Any
 
 from manabot.infra.config import MatchConfig
-from manabot.policy.protocol import Backend
 from manabot.sim import native_game
 from manabot.sim.registration import PlayerRegistration
 import managym
+from managym.recording import read_record
 
 _NATIVE_ENV = managym.Env
 
@@ -90,7 +90,6 @@ def _payment_game_worker(
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
-    inference: int | None,
     deadline_unix: float,
 ) -> None:
     managym.Env = PaymentMismatchEnv
@@ -100,7 +99,6 @@ def _payment_game_worker(
         registrations,
         checkpoint_paths,
         max_commands,
-        inference,
         deadline_unix,
     )
 
@@ -111,31 +109,32 @@ def _lost_payment_worker(
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
-    inference: int | None,
     deadline_unix: float,
 ) -> None:
-    """Die or hang only after the parent acknowledges retained native inputs."""
+    """Die or block inside a call whose canonical pending inputs are durable."""
 
-    def send(event: tuple[str, Any]) -> None:
-        connection.send(event)
-        if event[0] == "pending":
-            assert connection.recv() == "retained"
+    class LostEnv(PaymentMismatchEnv):
+        def step(self, action: int) -> tuple[Any, float, bool, bool, dict[str, Any]]:
+            path = Path(game["capture_path"])
+            evidence = read_record(path)
+            assert evidence.boundary is not None
+            assert evidence.boundary.phase == "executing"
+            assert evidence.games[0].committed == 0
+            assert evidence.games[0].actions == [action]
+            # Preserve the unsupervised boundary before the parent settles it.
+            path.with_suffix(".pending.jsonl").write_bytes(path.read_bytes())
             if game.get("test_hang"):
                 time.sleep(60)
             os._exit(7)
 
-    def backend_factory() -> Backend:
-        from manabot.backends.torch.checkpoint import BACKEND
-
-        return BACKEND
-
-    native_game.execute_game(
+    managym.Env = LostEnv
+    native_game.game_worker(
+        connection,
         game,
         registrations,
         checkpoint_paths,
         max_commands,
-        send,
-        backend_factory=backend_factory,
+        deadline_unix,
     )
 
 

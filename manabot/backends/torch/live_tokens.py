@@ -73,10 +73,8 @@ class LiveTokens:
             torch.nested.nested_tensor_from_jagged(
                 part.contiguous(),
                 self.offsets,
-                # Players guarantee nonempty sequences. Bounds are host
-                # metadata. A short execution chunk may
-                # contain fewer packed tokens in total than padded slots;
-                # CUDA backward also requires max_seqlen <= that packed total.
+                # Player rows keep sequences nonempty. CUDA backward also
+                # requires the upper bound to fit in the entire packed batch.
                 min_seqlen=1,
                 max_seqlen=min(self.slots, length),
             ).transpose(1, 2)

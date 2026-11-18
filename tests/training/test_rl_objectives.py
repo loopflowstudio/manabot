@@ -14,7 +14,7 @@ from manabot.backends.torch.learner import Learner, update_ema
 from manabot.backends.torch.rl import selected_rows, transition_gae
 import manabot.backends.torch.rollout as torch_rollout
 from manabot.policy.prepare import reference_distribution
-from manabot.training.regime import Learning, Schedule
+from manabot.training.learning import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.updates.ppo import update_iteration
@@ -33,8 +33,8 @@ class TinyPolicy(torch.nn.Module):
             ~valid, -torch.inf
         ), self.value.expand(len(valid), 1)
 
-    def get_value(self, obs):
-        return self(obs)[1]
+    def forward_distribution(self, obs):
+        return self(obs)
 
 
 class TinyRollout:
@@ -51,6 +51,11 @@ class TinyRollout:
             key: torch.as_tensor(value, device=device)
             for key, value in self.batch.next_obs.items()
         }
+
+    def next_observations(
+        self, device: torch.device, size: int
+    ) -> Iterator[dict[str, torch.Tensor]]:
+        yield self.next_observation(device)
 
     def rows(
         self, indexes: np.ndarray, device: torch.device
@@ -200,7 +205,6 @@ def test_independent_treatments_execute_optimizer(changes):
         not torch.equal(before[k], v) for k, v in trainer.agent.state_dict().items()
     )
     assert sum(diagnostic["selected_action_types"]) == diagnostic["retained"]
-    assert sum(diagnostic["action_types"]) == diagnostic["rows"]
     assert diagnostic["schedule_progress"] == 0.5
 
 

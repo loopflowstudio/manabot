@@ -32,8 +32,8 @@ def precision_dtype(precision: Precision) -> mx.Dtype:
 
 def default_precision(hidden_dim: int) -> Precision:
     """The compute precision a policy of this width runs in when none is given:
-    bfloat16 from `BF16_MIN_HIDDEN_DIM`, the width rule torch's GPU devices
-    share, and float32 below it. An explicit precision always wins."""
+    bfloat16 from `BF16_MIN_HIDDEN_DIM` and float32 below it. An explicit
+    precision always wins."""
     return "bfloat16" if hidden_dim >= BF16_MIN_HIDDEN_DIM else "float32"
 
 

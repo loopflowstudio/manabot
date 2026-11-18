@@ -4048,6 +4048,7 @@ impl PyEnv {
     #[new]
     #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
     fn new(
+        py: Python<'_>,
         seed: u64,
         skip_trivial: bool,
         enable_profiler: bool,
@@ -4056,6 +4057,12 @@ impl PyEnv {
         decision_memory_include_own: bool,
         decision_memory: bool,
     ) -> PyResult<Self> {
+        if enable_behavior_tracking {
+            py.import_bound("warnings")?.call_method1("warn", (
+                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.4.0",
+                py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
+            ))?;
+        }
         let policies =
             crate::python::vector_env_bindings::parse_player_policies(player_policies, None)?;
         Ok(Self {
@@ -4118,6 +4125,27 @@ impl PyEnv {
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
             .take_statistics();
         statistics_object(py, &summaries, "summaries")
+    }
+
+    fn enable_profiler(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_profiler")?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if !env.profiler.is_enabled() {
+            env.profiler = crate::infra::profiler::Profiler::new(true, 64);
+        }
+        Ok(())
+    }
+
+    fn enable_exposure_capture(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_exposure_capture")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_exposure_capture()
+            .map_err(map_agent_err)
     }
 
     fn enable_card_capture(&self) -> PyResult<()> {
@@ -4427,6 +4455,24 @@ impl PyEnv {
             env.observation_for_player(player_index)
                 .map_err(map_agent_err)?,
         ))
+    }
+
+    /// Read-only automatic payment plan for one offer; see `managym.payment`.
+    fn payment_preview_json(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        action_index: usize,
+    ) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let preview = env
+            .payment_preview(viewer, revision, fingerprint, action_index)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     /// Shared semantic DecisionFrame for the current revision, as canonical

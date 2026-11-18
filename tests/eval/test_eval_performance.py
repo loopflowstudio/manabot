@@ -15,11 +15,9 @@ def test_bounded_instrumentation_keeps_full_counters_and_no_zero_missing() -> No
     for _ in range(10):
         perf.count("decisions")
         perf.record("forward_host", time.monotonic())
-        perf.latency(0.01)
     receipt = perf.snapshot()
     assert receipt["counters"]["decisions"] == 10
     assert len(receipt["spans"]) == 2
-    assert receipt["latency_sample_count"] == 2
     assert receipt["measurements"]["forward_host"]["population"] == 10
     assert "native_step" not in receipt["measurements"]
     assert "bounded" in receipt["sample_coverage"]
@@ -40,31 +38,6 @@ def test_allocation_cost_is_charged_once_and_estimate_is_not_a_bill() -> None:
     assert cost["estimated_usd"] == 2
     assert cost["unallocated_fraction"] == 1
     assert "unallocated" in cost["allocation_method"]
-
-
-def test_latency_populations_retain_failures_maxima_and_first_observation() -> None:
-    perf = EvalPerformance("requests", sample_limit=2)
-    perf.latency(4, outcome="failed")
-    for duration in (1, 2, 9):
-        perf.latency(duration)
-    receipt = perf.snapshot()
-    assert receipt["counters"]["requests"] == 4
-    assert receipt["counters"]["completed_requests"] == 3
-    assert receipt["counters"]["failed_requests"] == 1
-    assert receipt["first_request_seconds"] == 4
-    assert receipt["first_request_outcome"] == "failed"
-    assert receipt["request_p95_seconds"] == 1  # floor index of the bounded prefix
-    assert receipt["failed_request_p95_seconds"] == 4
-    assert receipt["measurements"]["completed_request_latency"]["maximum_seconds"] == 9
-    assert not receipt["measurements"]["completed_request_latency"][
-        "partitions_elapsed"
-    ]
-    disabled = EvalPerformance("off", enabled=False)
-    disabled.latency(3, outcome="failed")
-    unmeasured = disabled.snapshot()
-    assert unmeasured["counters"]["failed_requests"] == 1
-    assert unmeasured["failed_request_p95_seconds"] is None
-    assert unmeasured["first_request_seconds"] is None
 
 
 def test_real_report_projection_retains_incomplete_population(tmp_path: Path) -> None:
@@ -116,7 +89,6 @@ def test_report_keeps_queue_and_request_latency_out_of_serving_partition(
             end=serving.started + 8,
             partitions_elapsed=False,
         )
-        serving.latency(9)
     serving.write(allocation / "serving.json")
     lifecycle = EvalPerformance("shared")
     lifecycle.record(

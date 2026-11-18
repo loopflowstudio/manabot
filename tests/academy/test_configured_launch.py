@@ -377,7 +377,7 @@ def test_cli_selects_decimal_digest(
     monkeypatch.setattr("managym.academy.cli.serve", lambda **kwargs: academy)
     monkeypatch.setattr(Academy, "wait", lambda self: None)
     monkeypatch.setattr(
-        "managym.academy.watch.import_arena",
+        "managym.academy.watch.import_game",
         lambda record: {"id": str(record["deal_seed"])},
     )
     assert launch_cli(["replay", str(path), "--game", "111111111111", "--no-open"]) == 0
@@ -428,7 +428,7 @@ def test_evaluation_replay_reuses_recording_and_rejects_tampering(
     records = read_games(source)
     launched = academy.replay(source, game=0)
     assert source.read_bytes() == original
-    assert academy.replay(source, game=records[0].game_trace_sha256[:12]) == launched
+    assert academy.replay(source, game=records[0].digest[:12]) == launched
     trace_id = parse_qs(urlparse(launched.url).query)["trace"][0]
     inspected = inspect_watch(trace_id, 0, None)
     assert inspected["count"] == len(read_trace(source)[0]["decisions"])
@@ -545,22 +545,6 @@ def test_exported_game_source_label_and_import_rejection_messages(
         assert rejected.status_code == 400
         assert "foreign-world" in rejected.json()["detail"]
         assert "differs from running" in rejected.json()["detail"]
-
-
-def test_a_training_receipt_offered_as_a_game_names_the_export_step(
-    academy: Academy, tmp_path: Path
-) -> None:
-    receipt = {"schema": 1, "stream": 0, "game": {}, "context": {}}
-    path = tmp_path / "receipt.jsonl"
-    path.write_text(json.dumps(receipt) + "\n")
-    with pytest.raises(AcademyLaunchError) as raised:
-        academy.replay(path)
-    assert raised.value.code == "replay.unreadable"
-    assert "manabot export-game" in raised.value.message
-    with TestClient(server.app) as client:
-        rejected = client.post("/api/watch/import", json=receipt)
-        assert rejected.status_code == 400
-        assert "manabot export-game" in rejected.json()["detail"]
 
 
 def test_watch_launch_registers_policy_spec_without_starting(

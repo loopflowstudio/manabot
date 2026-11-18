@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
+from starlette.testclient import WebSocketTestSession
 
 from conformance.authored_match_receipt import DEFAULT_RECEIPT_PATH
 import managym
@@ -32,10 +33,10 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "39ec3796e6b09bc4775aa29894274e82e88b96aaed3f440b252ca54d7b34b1dc"
-TERMINAL_STATE = "a1bb10c197286cc2b08138b63a9321328b3d5ff62caaa0f828cf001e1177b2ac"
+AUTHORITY_SHA256 = "1738c611b086d8d8d88ac899a3be726037b78300d6e972bb1d0108686f6e8192"
+TERMINAL_STATE = "1fd1fedb3ac0f737c83c9097e63f49d17cdea8668fbd8e074b38e92ce7c82421"
 
-COMMAND_COUNT = 135
+COMMAND_COUNT = 191
 
 
 def _json_bytes(value: object) -> bytes:
@@ -322,7 +323,7 @@ def _run_engine(
                     surface, 15, "current_object_binding", "committed", "unchanged"
                 )
 
-        if prove_stale and revision == 30:
+        if prove_stale and revision == 31:
             assert (
                 captured_address is not None
                 and rendered_ref is not None
@@ -393,8 +394,8 @@ def _run_engine(
                 "captured_revision": 15,
                 "captured_render_ref": rendered_ref,
                 "candidate_address": captured_address,
-                "departure_transition": "29->30",
-                "current_revision": 30,
+                "departure_transition": "30->31",
+                "current_revision": 31,
                 "current_rejection": {
                     "code": "stale_object",
                     "state_witness_unchanged": True,
@@ -462,6 +463,21 @@ class _FrozenVillainPolicy:
         return int(row["command"]["offer_id"])
 
 
+def _receive_outcome(websocket: WebSocketTestSession) -> dict[str, Any]:
+    """Progress messages do not advance the retained Command tape."""
+    while True:
+        message = websocket.receive_json()
+        if message["type"] == "work_status":
+            continue
+        if (
+            message["type"] == "command_outcome"
+            and message.get("status") == "accepted"
+            and (message.get("work") or {}).get("state") == "running"
+        ):
+            continue
+        return message
+
+
 def _run_live(
     decisions: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], CanonicalReplayV1]:
@@ -492,7 +508,7 @@ def _run_live(
                             },
                         }
                     )
-                    payload = websocket.receive_json()
+                    payload = _receive_outcome(websocket)
                     hero_rows = iter(row for row in decisions if int(row["actor"]) == 0)
                     while payload["frame"]["status"] != "game_over":
                         row = next(hero_rows)
@@ -507,7 +523,7 @@ def _run_live(
                         websocket.send_json(
                             {"type": "command", "command": deepcopy(row["command"])}
                         )
-                        payload = websocket.receive_json()
+                        payload = _receive_outcome(websocket)
                         _equal(
                             "live",
                             int(row["from_revision"]),

@@ -17,8 +17,12 @@ from manabot.env.decision_memory import blank_memory, encode_records
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
-from manabot.training.regime import DampedPolicyLearning
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.learning import DampedPolicyLearning
+from manabot.training.rollout.collection import (
+    close_collector,
+    collect,
+    open_collector,
+)
 from manabot.training.updates.damped_policy import update_damped_iteration
 import managym
 from managym.decision_memory import (
@@ -263,7 +267,7 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
         for layer in (model.attention, *model.extra_attention):
             assert layer.memory_gate is not None
             layer.memory_gate.zero_()
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(),
         Reward(RewardConfig()),
@@ -273,7 +277,7 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
         numerics=CollectionSession(device="cpu", seed=111, precision="float32"),
     )
     try:
-        batch = collector.collect(model, 16)
+        batch = collect(collector, model, 16)
         assert batch.actions.size == 16
         assert (
             batch.observations(np.arange(batch.actions.size))
@@ -322,7 +326,7 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
         )
         assert all(torch.isfinite(parameter).all() for parameter in model.parameters())
     finally:
-        collector.close()
+        close_collector(collector)
 
 
 def test_control_retains_logs_without_using_them(tmp_path: Path) -> None:

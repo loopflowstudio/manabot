@@ -831,7 +831,7 @@ def audit(
                     game = read_evidence(body, _reference(digest, size, game_id))
                     check(run, match_key, game_id, game, named)
                     if replay:
-                        if not replay_games([game.trace.data]).passed:
+                        if not replay_games([game.trace.audit]).passed:
                             raise ValueError("retained trace no longer replays")
                         replayed += 1
                 except (ValueError, KeyError) as problem:
@@ -865,7 +865,7 @@ def _card_schedule(
 
 def _is_card_match(match: Match) -> bool:
     try:
-        CardConditions.model_validate(match.conditions)
+        CardConditions.model_validate(match.config)
     except ValueError:
         return False
     return True

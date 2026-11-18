@@ -626,7 +626,7 @@ def render_report(result: Mapping[str, Any]) -> str:
         "uv run scripts/bench_structured_policy.py \\",
         "  --workload experiments/workloads/structured-policy-v1.json \\",
         "  --out experiments/data/structured-policy-v1.json \\",
-        "  --report experiments/structured-policy-decoder.md",
+        "  --report experiments/reports/structured-policy-decoder.md",
         "```",
         "",
         "## Correctness",

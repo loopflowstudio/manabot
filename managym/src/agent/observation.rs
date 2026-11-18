@@ -2058,7 +2058,8 @@ impl Observation {
                 .unwrap_or_default(),
             Action::ActivateAbility { permanent, .. }
             | Action::DeclareAttacker { permanent, .. }
-            | Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
+            | Action::WaterbendTap { permanent, .. }
+            | Action::TapForMana { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
                 .unwrap_or_default(),

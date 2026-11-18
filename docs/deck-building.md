@@ -220,9 +220,9 @@ list, or `decklists="mixed"` for a seeded 50/50 per-game draw; the default is op
 
 TLA Limited games outgrow the default observation capacities; a run on
 these decks stops with a typed capacity error within its first few dozen
-games. Copy the `observation` block and the `game_errors` policy (with
-`recover_capacity: true`) of
-`experiments/regimes/tla-frontier-c5fba4-w64.json`.
+games. Copy `OBSERVATION` and the `game_errors` policy (with
+`recover_capacity=True`) of
+[`experiments/tla_frontier.py`](../experiments/tla_frontier.py).
 
 ### Deriving and publishing
 

@@ -71,6 +71,8 @@ fn cr_602_activation_uses_stack_and_resolves_after_passes() {
 fn cr_602_multiple_activations_stack_and_accumulate() {
     let mut s = setup_shivan_with_mountains(60204, 2);
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    // Choose automatic completion while either Mountain could pay the first activation.
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
 
     let observation = Observation::new(s.game(), &[]);

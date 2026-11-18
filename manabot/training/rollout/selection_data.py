@@ -1,17 +1,17 @@
 """Frozen complete-game trajectories for descriptive advantage-filter analysis.
 
-The regime executor owns attempts, budgets and artifacts. This module records
+The calling recipe owns its output paths. This module records
 viewer-only policy predictions before executing semantic Commands; terminal
 outcomes enter only after the game ends. No gradients or policy updates occur.
 Rows are ordered by game, seat, then decision for same-viewer estimators.
 """
 
-from collections.abc import Callable
 from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-from typing import Literal, Protocol
+import tempfile
+from typing import TYPE_CHECKING, Literal, Protocol
 
 import numpy as np
 from pydantic import ConfigDict, Field, model_validator
@@ -20,12 +20,26 @@ from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
-from manabot.training.regime import SelectionGameSpec, Strict
 import managym
 from managym.decision import Command, DecisionFrame, Observation
+
+if TYPE_CHECKING:
+    from manabot.training.state.backend import TrainingBackend
+
+
+class SelectionGameSpec(Strict):
+    """Population and split membership frozen before observing any outcome."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+    seed: int = Field(ge=0, le=2**32 - 1)
+    action_seed: int = Field(ge=0, le=2**32 - 1)
+    assignment: Literal[0, 1]
+    split: Literal["development", "held_out"]
 
 
 @dataclass(frozen=True)
@@ -86,6 +100,8 @@ class SelectionDataset(FrozenRecord):
     weights: Literal["raw", "ema"]
     world_binding_sha256: str
     population_sha256: str
+    # Historical datasets predate reusable collection; only new outputs are cached.
+    collection_sha256: str | None = None
     games: tuple[SelectionGame, ...] = Field(min_length=4)
 
     @model_validator(mode="after")
@@ -108,7 +124,6 @@ def collect_selection_game(
     reference: Literal["uniform", "action_type_uniform"],
     predictor: SelectionPredictor,
     max_steps: int,
-    check: Callable[[], None],
 ) -> SelectionGame:
     """Retain a replayable journal, including partial evidence on cap/failure.
 
@@ -164,7 +179,6 @@ def collect_selection_game(
             + "\n"
         )
         while not env.is_game_over():
-            check()
             if len(rows) >= max_steps:
                 raise RuntimeError(
                     "selection game exceeded step cap; no terminal label"
@@ -265,3 +279,92 @@ def replay_selection_game(path: Path) -> int:
         if not complete:
             raise ValueError("selection attempt is incomplete")
     return count
+
+
+def collect_selection(
+    policy: Path,
+    out: Path,
+    population: tuple[SelectionGameSpec, ...],
+    *,
+    match: MatchConfig,
+    reference: Literal["uniform", "action_type_uniform"] = "action_type_uniform",
+    max_steps: int = 2000,
+    backend: "TrainingBackend",
+) -> Path:
+    """Freeze a policy's complete-game diagnostics, retaining partial replay journals.
+
+    Population seeds and both assignments in each whole-game split are checked
+    before play. Existing output must bind the same policy, population and inputs.
+    Retained dataset keys `stage_id` and `policy_stage_id` name the output files.
+    `backend` loads the policy and makes each game's seeded predictor.
+    """
+    if len(population) < 4 or len({game.seed for game in population}) != len(
+        population
+    ):
+        raise ValueError(
+            "selection population requires at least four unique deal seeds"
+        )
+    for split in ("development", "held_out"):
+        if {game.assignment for game in population if game.split == split} != {0, 1}:
+            raise ValueError("each whole-game split requires both deck assignments")
+    digest = file_sha256(policy)
+    population_digest = canonical_sha256(
+        [game.model_dump(mode="json") for game in population]
+    )
+    collection_digest = canonical_sha256(
+        {
+            "match": match.model_dump(mode="json"),
+            "reference": reference,
+            "max_steps": max_steps,
+        }
+    )
+    if out.exists():
+        saved = SelectionDataset.model_validate_json(out.read_bytes())
+        if (
+            saved.policy_sha256 != digest
+            or saved.population_sha256 != population_digest
+        ):
+            raise ValueError("selection output belongs to another policy or population")
+        if saved.collection_sha256 != collection_digest:
+            raise ValueError("selection output belongs to other collection inputs")
+        return out
+    agent, space = backend.load_policy(str(policy))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    journals = Path(tempfile.mkdtemp(prefix=f"{out.stem}-games-", dir=out.parent))
+    base_match = Match(match)
+    payload = backend.metadata(str(policy))
+    weights = payload.get("bc", {}).get("weights")
+    if weights not in {"raw", "ema"}:
+        raise ValueError("selection checkpoint must identify raw or EMA weights")
+    if file_sha256(policy) != digest:
+        raise ValueError("selection policy changed while loading")
+    games: list[SelectionGame] = []
+    for index, spec in enumerate(population):
+        journal = journals / f"{index:04d}.jsonl"
+        game = collect_selection_game(
+            agent,
+            space,
+            base_match if spec.assignment == 0 else base_match.swapped(),
+            spec,
+            journal,
+            reference=reference,
+            predictor=backend.collection.SelectionPredictor(agent, spec.action_seed),
+            max_steps=max_steps,
+        )
+        if replay_selection_game(journal) != len(game.rows):
+            raise ValueError("selection replay decision count mismatch")
+        games.append(game)
+    dataset = SelectionDataset(
+        run_id=out.parent.name,
+        stage_id=out.stem,
+        policy_run_id=policy.parent.parent.name,
+        policy_stage_id=policy.stem,
+        policy_sha256=digest,
+        weights=weights,
+        world_binding_sha256=canonical_sha256(agent.world_binding),
+        population_sha256=population_digest,
+        collection_sha256=collection_digest,
+        games=tuple(games),
+    )
+    atomic_json(out, dataset.model_dump(mode="json"))
+    return out

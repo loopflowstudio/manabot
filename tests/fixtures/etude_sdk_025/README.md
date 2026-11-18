@@ -20,7 +20,12 @@ For an intentional new fixture, run the script in a fresh output directory:
 uv run --script tests/fixtures/etude_sdk_025/write_fixture.py
 ```
 
-The test recreates matches through current Manabot adapters and checks the
-retained filename keys, zero newly played matches, unchanged match/table bytes,
-participant scores, native-seat grouping and the real report/collector readers.
-This is schema compatibility evidence, not a claim about policy strength.
+Only the `benchmark` records are retained here. The Elemental and MTG-186
+records, and the experiment adapters that read them, were removed from main;
+the last commit with them is `b49df79b49`. `input.json` and the producer still
+describe all three cases.
+
+The test recreates the benchmark's matches through `manabot.eval.benchmark` and
+checks the retained filename keys, zero newly played matches, unchanged
+match/table bytes, participant scores and native-seat grouping. This is schema
+compatibility evidence, not a claim about policy strength.

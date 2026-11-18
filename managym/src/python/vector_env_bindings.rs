@@ -365,6 +365,21 @@ impl PyVectorEnv {
         self.inner.current_matchup_indices()
     }
 
+    fn enable_profiler(&mut self) {
+        self.inner.enable_profiler();
+    }
+
+    fn record_games(&mut self, active: Vec<bool>) -> PyResult<()> {
+        self.inner.record_games(&active).map_err(map_agent_err)
+    }
+
+    #[pyo3(signature = (active=None))]
+    fn state_digests(&self, active: Option<Vec<bool>>) -> PyResult<Vec<Option<String>>> {
+        self.inner
+            .state_digests(active.as_deref())
+            .map_err(map_agent_err)
+    }
+
     fn current_game_seeds(&self) -> Vec<u64> {
         self.inner.current_game_seeds()
     }
@@ -485,6 +500,17 @@ impl PyVectorEnv {
 
     fn take_exposure(&mut self) -> Vec<Vec<String>> {
         self.inner.take_exposure()
+    }
+
+    fn decision_observations(&self, active: Vec<bool>) -> PyResult<Vec<Option<PyObservation>>> {
+        self.inner
+            .decision_observations(&active)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| row.map(PyObservation::from))
+                    .collect()
+            })
+            .map_err(map_agent_err)
     }
 
     fn current_exposure(&self) -> PyResult<Vec<String>> {

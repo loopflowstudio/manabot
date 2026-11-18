@@ -1,68 +1,49 @@
 """Exploratory whole-game opponent-memory pilot (Task 3dca91).
 
 The report (`opponent_memory.md`) owns the design, evidence and open decisions.
-`training_jobs` declares one model size at a time: three trunks, or six EMA branches with `trunks`;
-each `PilotStage` owns its stage's horizon and caps.
-Frozen calibration runs retain their original source commits and receipts.
-`size="history-off"` declares the same-host cost comparison with main instead.
+`training_jobs(state)` declares one model size: its three trunks, then both
+arms of every seed whose trunk has finished, each started from that trunk's
+published EMA policy. Each `PilotStage` owns its stage's horizon and caps.
+Runs recorded in the report keep their original source commits and receipts.
 `census` and `probe` are the USD0 commands. Nothing runs on import.
 """
 
-from __future__ import annotations
-
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from itertools import combinations
-import os
 from pathlib import Path
 import random
-import subprocess
-import sys
+from typing import Literal
 
-from etude.eval.match import Tables
+from etude.checkpoints import CheckpointRecord
+from etude.eval.match import environment
 from etude.eval.records import (
     Benchmark,
     Code,
-    Environment,
-    Inference,
     Match,
+    Player,
     Seating,
+    checkpoint_player,
 )
-from etude.experiment import observe
-from etude.jobs import (
-    EvalJob,
-    ExperimentState,
-    TrainingJob as PythonJob,
-    TrainingRunSummary,
-)
-from etude.launch.records import Job
+from etude.eval.result import Tables
+from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
-from etude.spec import RunRequest
-from etude.storage import Storage, run_prefix, storage_from_uri
+from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import DECKS, PACK
-from experiments.learning_signal import Design, Pairing
-from manabot.experiment.job import (
-    TOOLCHAIN_ENV,
-    PretrainedInitialization,
-    TrainingJob,
-    machine_setup,
-)
+from manabot.eval.agents import AGENTS
+from manabot.eval.pairing import play_pairing
+from manabot.experiment.setup import machine_setup
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.infra.identity import canonical_sha256
-from manabot.recipes.builders import sampled_self_play
+from manabot.infra.run_settings import RunSettings
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.training.decks import UniformDecks
+from manabot.training.learning import DampedPolicyLearning, LearnerDecisionSchedule
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import ML, PERF
-from manabot.training.records import TrainingRun
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    LearnerDecisionSchedule,
-    TrainingRegime,
-    TrainSelfPlay,
-)
 import managym
 from managym.disclosure import DecklistDisclosure
 
@@ -84,7 +65,6 @@ class PilotStage:
 
 
 TRUNK = PilotStage(3_300_000, 90, 3.5, Decimal("2.40"))
-MILESTONES = (40, 80, 120)
 # Paired deals per final checkpoint against the heuristic, each disclosure.
 HEURISTIC_DEALS = 50
 HEURISTIC_CURVE_DEALS = 25
@@ -123,157 +103,183 @@ TRUNK_NAME = "trunk-2"
 TRUNK_NAMES = {39101: TRUNK_NAME, 39102: TRUNK_NAME, 39103: "trunk-4"}
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
-# The commit of main this work is based on: the incumbent for history-off cost.
-INCUMBENT = "3afd92d8f3bf48b87d873693580f0d5f8ccf3612"
+type Size = Literal["small", "wide"]
+type Stage = Literal["trunk", "control", "gru-k1"]
+# Checkpoints fall on this update grid; the report reads the first three.
+CHECKPOINT_EVERY = 40
+MILESTONES = (40, 80, 120)
 
 
-class HistoryOff(BaseModel):
-    """Same-host training cost with history off, against a reference revision."""
-
-    model_config = ConfigDict(extra="forbid")
-    reference: str = INCUMBENT
+# ---------------------------------------------------------------------------
+# Training
 
 
-def measure_history_off(config: HistoryOff) -> None:
-    """Build the reference engine beside this source and time both on the GPU."""
-    subprocess.run(
-        [sys.executable, str(ROOT / "scripts/measure_history_off.py"), "compare"]
-        + ["--out", str(Path(os.environ["ETUDE_OUTPUT_DIR"]) / "history-off")]
-        + ["--reference", config.reference],
-        cwd=ROOT,
-        check=True,
+class PilotConfig(RunSettings):
+    """One pilot run: a trunk, or an arm started from its seed's trunk."""
+
+    size: Size = "small"
+    stage: Stage = "trunk"
+    device: Literal["cpu", "cuda"] = "cuda"
+    streams: int = 256
+    # Smoke runs shrink the horizon; a launched run keeps its stage's.
+    decisions: int | None = None
+
+
+def limits(config: PilotConfig) -> PilotStage:
+    model = SIZES[config.size]
+    return {"trunk": model.trunk, "control": model.control, "gru-k1": model.gru}[
+        config.stage
+    ]
+
+
+def settings(config: PilotConfig, start: Path | None = None) -> SelfPlay:
+    """The shared control recipe; the GRU arm alone reads the decision log."""
+    stage, model = limits(config), SIZES[config.size]
+    decisions = config.decisions or stage.decisions
+    return SelfPlay(
+        model=ModelConfig(
+            world=managym.WORLD_SETUP,
+            hidden_dim=model.hidden_dim,
+            attention_layers=model.layers,
+            num_attention_heads=4,
+            value_aggregation="masked_mean",
+            policy_film=True,
+            decision_memory=ARMS.get(config.stage, "none"),
+            # Twice the default gate slope, so a zero-initialized gate opens sooner.
+            **({"decision_memory_gate_scale": 2.0} if config.stage == "gru-k1" else {}),
+        ),
+        # Every stage captures the log, so a control's bytes can seed the GRU arm.
+        observation=ObservationConfig(
+            max_decision_records=1024,
+            max_decision_reference_details=65536,
+            max_decision_references=512,
+            max_decision_members=32768,
+        ),
+        # A sampled deck source owns mixed disclosure and independent mirrors.
+        deck_source=UniformDecks(
+            decks=tuple(
+                managym.Deck(player.decklist, player.sideboard)
+                for key in managym.authored_deck_keys("elemental-world-v2")
+                for player in [managym.authored_deck_setup("elemental-world-v2", key)]
+            ),
+            sampling="uniform-independent-v1",
+            decklists="mixed",
+        ),
+        learning=DampedPolicyLearning(
+            gradient="damped_policy",
+            decision_schedule=LearnerDecisionSchedule(transitions=decisions),
+        ),
+        learner_transitions=decisions,
+        streams=config.streams,
+        transitions=64,
+        # Capacity overflow fails the run: no truncation and no abort-and-continue.
+        game_errors=None,
+        collection_rows=128,
+        bootstrap_rows=128,
+        learner_rows=128,
+        device=config.device,
+        workers=4 if config.device == "cuda" else 1,
+        # The packed CUDA layout; a CPU smoke keeps the padded one.
+        bucketed_shapes=config.device == "cuda",
+        live_tokens=config.device == "cuda",
+        checkpoint_every=CHECKPOINT_EVERY,
+        pretrained=start,
+        run_settings=config.run_settings,
     )
 
 
-def _history_off_job(revision: str) -> Job:
-    job = PythonJob(
-        name="cuda-history-off",
-        train=measure_history_off,
-        config=HistoryOff(),
-        repo=str(ROOT),
-        revision=revision,
-        setup=machine_setup(" --extra play"),
-        extras=("play",),
-        max_hours=1.25,
-        max_usd=Decimal("1.00"),
-        max_attempts=1,
-    ).plain()
-    return job.model_copy(update={"command": f"{TOOLCHAIN_ENV}\n{job.command}"})
+def train(config: PilotConfig) -> None:
+    with track(clocks=CLOCKS, config=config) as run:
+        start = None if config.stage == "trunk" else Path(run.input("start").path)
+        # `updates` is a safety ceiling; the learner-decision target ends the run.
+        self_play(settings(config, start), run, updates=limits(config).updates)
+
+
+def stored_runs(
+    state: ExperimentState, name: str, seed: int
+) -> list[TrainingRunSummary]:
+    """A stage's runs for one seed; an arm's job is named for its seed's trunk."""
+    names = {f"decision-memory-{name}", f"decision-memory-{name}-{seed}"}
+    return [run for run in state.runs if run.launch in names and run.seed == seed]
 
 
 def training_jobs(
-    revision: str, trunks: str = "", size: str = "small", seeds: str = ""
-) -> list[RunRequest]:
-    """Declare trunks, or branch both arms from every completed published trunk.
+    state: ExperimentState, revision: str, size: str = "small"
+) -> list[TrainingJob]:
+    """Every seed's trunk, and both arms of each seed whose trunk has finished.
 
-    Each seed's two arms share one producer receipt and EMA export. Their
-    optimizer and learner-decision schedule start fresh at the branch point.
-    `seeds` (comma-separated) branches only those seed labels, so finished
-    trunks need not wait for one still looking for a machine.
+    A seed's two arms share one published EMA trunk. Their optimizer and
+    learner-decision schedule start fresh at the branch point.
     """
-    if size == "history-off":
-        return _history_off_job(revision).runs(39100)
-    chosen = tuple(int(seed) for seed in seeds.split(",")) if seeds else SEEDS
-    if not set(chosen) <= set(SEEDS):
-        raise ValueError(f"unknown seeds {seeds!r}; expected a subset of {SEEDS}")
     if size not in SIZES:
         raise ValueError(f"unknown size {size!r}; expected small or wide")
     model = SIZES[size]
     names = TRUNK_NAMES if size == "small" else dict.fromkeys(SEEDS, "wide-trunk")
-    if not trunks:
-        return [
-            request
-            for seed, name in names.items()
-            if seed in chosen
-            for request in _job(revision, model, model.trunk, name).runs(seed)
-        ]
-    storage = storage_from_uri(trunks)
-    state = observe(storage, EXPERIMENT)
-    parents: dict[int, PretrainedInitialization] = {}
-    for seed in chosen:
-        runs = _runs(state, names[seed], seed)
-        if len(runs) != 1:
-            raise ValueError(
-                f"seed {seed}: expected one decision-memory-{names[seed]} run in {trunks}, "
-                f"found {len(runs)}; launch and finish the trunks first"
-            )
-        if runs[0].state != "finished":
-            raise ValueError(f"seed {seed}: trunk is unfinished ({runs[0].state})")
-        parents[seed] = _published_trunk(storage, runs[0].name, seed)
-    return [
-        request
-        for seed, trunk in parents.items()
-        for arm, limits in (("control", model.control), ("gru-k1", model.gru))
-        for request in _job(revision, model, limits, arm, trunk).runs(seed)
-    ]
 
-
-def _job(
-    revision: str,
-    model: PilotSize,
-    limits: PilotStage,
-    name: str,
-    trunk: PretrainedInitialization | None = None,
-) -> Job:
-    """One capped Etude job: a trunk, or an arm started from a trunk's EMA."""
-    recipe = pilot_recipe(limits, model)
-    recipe.id = f"decision-memory-{model.prefix if trunk is not None else ''}{name}"
-    if trunk is not None:
-        recipe.agent.decision_memory = ARMS[name]
-        if ARMS[name] != "none":
-            recipe.agent.decision_memory_gate_scale = 2.0
-    return (
-        TrainingJob(
-            regime=recipe,
-            experiment=EXPERIMENT,
-            pretrained=trunk,
-            milestones=MILESTONES if trunk is not None else (),
-        )
-        .job(
-            repo=ROOT,
+    def job(
+        name: str, stage: Stage, seeds: tuple[int, ...], start: CheckpointRecord | None
+    ) -> TrainingJob:
+        config = PilotConfig(size=size, stage=stage)
+        cap = limits(config)
+        return TrainingJob(
+            name=f"decision-memory-{name}",
+            train=train,
+            config=config,
+            smoke=PilotConfig(
+                size=size, stage=stage, device="cpu", streams=2, decisions=64
+            ),
+            start=start,
+            seeds=seeds,
+            repo=str(ROOT),
             revision=revision,
-            max_hours=limits.max_hours,
-            max_usd=limits.max_usd,
+            setup=machine_setup(" --extra artifacts"),
+            max_hours=cap.max_hours,
+            max_usd=cap.max_usd,
             # A provider capacity refusal consumes an attempt at no cost.
+            max_attempts=3,
         )
-        .model_copy(update={"max_attempts": 3})
-    )
 
-
-def _runs(state: ExperimentState, name: str, seed: int) -> list[TrainingRunSummary]:
-    return [
-        run
-        for run in state.runs
-        if run.launch == f"decision-memory-{name}" and run.seed == seed
+    jobs = [
+        job(name, "trunk", tuple(s for s, n in names.items() if n == name), None)
+        for name in dict.fromkeys(names.values())
     ]
+    for seed, name in names.items():
+        finished = [run.final for run in stored_runs(state, name, seed) if run.final]
+        if len(finished) > 1:
+            raise ValueError(f"seed {seed}: {len(finished)} finished {name} trunks")
+        for trunk in finished:
+            jobs += [
+                # Each arm job holds one start checkpoint, so it names its seed.
+                job(f"{model.prefix}{arm}-{seed}", arm, (seed,), trunk)  # type: ignore[arg-type]
+                for arm in ARMS
+            ]
+    return jobs
 
 
-def _published_trunk(storage: Storage, run: str, seed: int) -> PretrainedInitialization:
-    """Resolve the sole completed attempt; failed retries cannot supply weights."""
-    folder = run_prefix(run)
-    try:
-        completed = [
-            key
-            for key in storage.keys(folder)
-            if key.startswith(f"{folder}attempts/")
-            and key.endswith("/training/run.json")
-            and TrainingRun.model_validate_json(storage.get(key)).status == "completed"
-        ]
-        if len(completed) != 1:
-            raise ValueError(
-                f"trunk has {len(completed)} completed attempt records, expected one"
-            )
-        trunk = PretrainedInitialization.from_storage(
-            storage,
-            completed[0],
-            source_stage="self-play",
-            weights="ema",
-        )
-    except ValueError as error:
-        raise ValueError(f"seed {seed}: {error}") from error
-    if trunk.source_seed != seed:
-        raise ValueError(f"seed {seed}: trunk receipt names seed {trunk.source_seed}")
-    return trunk
+# ---------------------------------------------------------------------------
+# Evaluation
+
+
+class Pairing(BaseModel):
+    """One scored item: the two authored decks and their deal."""
+
+    model_config = ConfigDict(extra="forbid")
+    role_a: str
+    role_b: str
+    deal: int
+
+
+@dataclass(frozen=True)
+class Design:
+    """Held-out pairings, fixed before scoring and shared by every arm."""
+
+    # The arena version and the benchmark environment's name.
+    name: str
+    pack: str
+    pairings: tuple[Pairing, ...]
+    game_seconds: float
+    # A pairing's four cross deck/seat legs.
+    legs: int = 4
 
 
 # Two hundred held-out deals; shorter readouts use the same first fifty.
@@ -286,7 +292,6 @@ DESIGN = Design(
             random.Random(39100).choices(tuple(combinations(DECKS, 2)), k=200)
         )
     ),
-    matchup_mode="cross",
     game_seconds=600,
 )
 
@@ -308,50 +313,50 @@ def seating_name(
     return f"{size}-seed-{seed}-{disclosure}-{tag}-{point}"
 
 
+def opponent(checkpoint: CheckpointRecord, blank: bool) -> Player:
+    """The opposing seat; a blanked seat plays the same bytes with an empty log."""
+    player = checkpoint_player(checkpoint.ref)
+    if not blank:
+        return player
+    return player.model_copy(update={"config": {"blank_decision_memory": True}})
+
+
 def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
     """Equal-update interiors and each completed branch's own final checkpoint."""
-    source = [*sorted((ROOT / "manabot").rglob("*.py")), Path(__file__)]
-    intact = Inference(source=source)
-    blanked = Inference(source=source, config={"blank_decision_memory": True})
     heuristic = Code(name="heuristic", source=heuristic_source_paths())
     found: list[Seating] = []
     for size, model in SIZES.items():
         for seed in SEEDS:
             branches: list[TrainingRunSummary] = []
             for arm in ARMS:
-                runs = _runs(state, model.prefix + arm, seed)
-                if len(runs) > 1:
+                found_runs = stored_runs(state, model.prefix + arm, seed)
+                if len(found_runs) > 1:
                     raise ValueError(f"seed {seed}: multiple {arm} branches")
-                branches += runs
+                branches += found_runs
             if len(branches) != len(ARMS):
                 continue
-            control, gru = branches
-            # (point, tag, checkpoint, opposing checkpoint, opposing inference, deals)
+            control, gru = (
+                {int(each.at["updates"]): each for each in branch.checkpoints}
+                for branch in branches
+            )
+            control_final, gru_final = (branch.final for branch in branches)
+            # (point, tag, checkpoint, opposing checkpoint, opponent blanked, deals)
             lines = [
-                (
-                    update,
-                    "control",
-                    gru.checkpoints.at("updates", update).last,
-                    control.checkpoints.at("updates", update).last,
-                    intact,
-                    50,
-                )
+                (update, "control", gru.get(update), control.get(update), False, 50)
                 for update in MILESTONES
             ]
             lines += [
-                ("final", "control", gru.final, control.final, intact, 200),
-                ("final", "reliance", gru.final, gru.final, blanked, 50),
+                ("final", "control", gru_final, control_final, False, 200),
+                ("final", "reliance", gru_final, gru_final, True, 50),
             ]
             # Each arm against the fixed native heuristic: its final checkpoint,
             # and a shorter curve over the milestones. Update 0 is the shared
             # trunk export, played once through control.
-            for arm, branch in zip(("control", "gru"), branches, strict=True):
+            for arm, branch, saved in zip(
+                ("control", "gru"), branches, (control, gru), strict=True
+            ):
                 points = [("final", branch.final, HEURISTIC_DEALS)] + [
-                    (
-                        update,
-                        branch.checkpoints.at("updates", update).last,
-                        HEURISTIC_CURVE_DEALS,
-                    )
+                    (update, saved.get(update), HEURISTIC_CURVE_DEALS)
                     for update in ((0,) if arm == "control" else ()) + MILESTONES
                 ]
                 for point, checkpoint, deals in points:
@@ -363,7 +368,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
                                 name=seating_name(
                                     size, seed, disclosure, f"{arm}-heuristic", point
                                 ),
-                                players=(checkpoint.player(intact), heuristic),
+                                players=(checkpoint_player(checkpoint.ref), heuristic),
                                 configs=tuple(
                                     Conditions(
                                         design=DESIGN.name,
@@ -377,14 +382,17 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
                                 seeds="one",
                             )
                         )
-            for point, tag, first, second, inference, deals in lines:
+            for point, tag, first, second, blank, deals in lines:
                 if first is None or second is None:
                     continue
                 for disclosure in DISCLOSURES:
                     found.append(
                         Seating(
                             name=seating_name(size, seed, disclosure, tag, point),
-                            players=(first.player(intact), second.player(inference)),
+                            players=(
+                                checkpoint_player(first.ref),
+                                opponent(second, blank),
+                            ),
                             configs=tuple(
                                 Conditions(
                                     design=DESIGN.name,
@@ -412,24 +420,21 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         EvalJob(
             tournament=Benchmark(
                 name=DESIGN.name,
-                environment=Environment(
-                    name=DESIGN.name,
-                    files=canonical_sha256(
-                        {
-                            "world": managym.world_identity(),
-                            "design": DESIGN.record(),
-                            "disclosures": DISCLOSURES,
-                        }
-                    ),
-                    config={"purpose": "held-out-paired-deals"},
+                environment=environment(
+                    DESIGN.name,
+                    files=[Path(__file__), ROOT / "manabot/eval/pairing.py"],
+                    config={
+                        "world": managym.WORLD_VERSION,
+                        "pack": DESIGN.pack,
+                        "game_seconds": DESIGN.game_seconds,
+                        "disclosures": list(DISCLOSURES),
+                    },
                 ),
                 seatings=seatings,
             ),
             play=play,
+            agents=AGENTS,
             extras=("evaluation",),
-            # One single-threaded game per vCPU of a 32-vCPU CPU machine; more
-            # workers than cores stretched games past the 600 s wall budget.
-            workers=30,
             max_hours=3.0,
             max_usd=Decimal("4.00"),
             setup=machine_setup(" --extra evaluation"),
@@ -437,14 +442,8 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     ]
 
 
-def play(match: Match) -> Tables:
+def play(match: Match, agents: Sequence[object]) -> Tables:
     """Validate pilot conditions and delegate the paired deal to the shared arena."""
-    import torch
-
-    from manabot.backends.torch.checkpoint import BACKEND
-    from manabot.eval.pairing import play_pairing
-
-    torch.set_num_threads(1)
     conditions = Conditions.model_validate(match.config)
     pairing = Pairing(
         role_a=conditions.role_a, role_b=conditions.role_b, deal=conditions.deal
@@ -453,6 +452,7 @@ def play(match: Match) -> Tables:
         raise ValueError("evaluation conditions differ from the frozen schedule")
     return play_pairing(
         match,
+        agents,
         matchup=AuthoredMatchup(
             pack_key=DESIGN.pack,
             role_a=pairing.role_a,
@@ -461,11 +461,14 @@ def play(match: Match) -> Tables:
             world=managym.WORLD_SETUP,
         ),
         deal=pairing.deal,
-        matchup_mode=DESIGN.matchup_mode,
+        matchup_mode="cross",
         game_seconds=DESIGN.game_seconds,
         arena=DESIGN.name,
-        backend=BACKEND,
     )
+
+
+# ---------------------------------------------------------------------------
+# Report
 
 
 def report() -> Report:
@@ -527,63 +530,6 @@ def report() -> Report:
         perf=PERF,
         ml=ML,
     )
-
-
-def pilot_recipe(limits: PilotStage, model: PilotSize) -> TrainingRegime:
-    """Shared control recipe, bounded by the stage's horizon and job wall."""
-    # Reserve twenty minutes of the job for setup and publishing artifacts.
-    wall_seconds = limits.max_hours * 3600 - 1200
-    observation = ObservationConfig(
-        max_decision_records=1024,
-        max_decision_reference_details=65536,
-        max_decision_references=512,
-        max_decision_members=32768,
-    )
-    recipe = sampled_self_play(
-        id="decision-memory-control",
-        world=managym.WORLD_VERSION,
-        agent=ModelConfig(
-            world=managym.WORLD_SETUP,
-            hidden_dim=model.hidden_dim,
-            attention_layers=model.layers,
-            num_attention_heads=4,
-            value_aggregation="masked_mean",
-            policy_film=True,
-        ),
-        # Bind the explicit execution limits before enabling memory capture.
-        observation=ObservationConfig(),
-        deck_source=UniformDecks(
-            decks=tuple(
-                managym.Deck(player.decklist, player.sideboard)
-                for key in managym.authored_deck_keys("elemental-world-v2")
-                for player in [managym.authored_deck_setup("elemental-world-v2", key)]
-            ),
-            sampling="uniform-independent-v1",
-            decklists="mixed",
-        ),
-        # A sampled deck source owns mixed disclosure and independent mirrors;
-        # TrainingRegime forbids combining it with the older curriculum flag.
-        wall_seconds=wall_seconds,
-        seconds_per_update=60,
-        workers=4,
-    )
-    stage = recipe.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = limits.updates
-    stage.target_learner_transitions = limits.decisions
-    assert isinstance(stage.learning, DampedPolicyLearning)
-    stage.learning.iteration_schedule = None
-    stage.learning.decision_schedule = LearnerDecisionSchedule(
-        transitions=limits.decisions
-    )
-    # Capacity overflow fails the run: no truncation and no abort-and-continue.
-    stage.game_errors = None
-    stage.execution.collection_rows = 128
-    stage.execution.bootstrap_rows = 128
-    stage.execution.learner_rows = 128
-    stage.execution.precision = "float32"
-    recipe.observation = observation
-    return TrainingRegime.model_validate(recipe.authored_dump())
 
 
 def main() -> None:

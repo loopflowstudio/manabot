@@ -11,21 +11,36 @@ each native seat can use an external agent, random play or the built-in
 heuristic, without installing `manabot`. See
 [per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
 
-## Statistics and private recording
+## Recording, statistics and diagnostics
 
-Call `game.enable_statistics()` before `game.reset(players)`, play normally,
-then read `game.statistics()` for per-game card counts and completion state.
-Drain completed/replaced summaries with `game.take_statistics()`. Statistics
-need no detailed logs, replay or disk writes; both statistics and recording
-default off.
+```python
+capture = ScalarCapture(seed=7, games_path=Path("games.jsonl"))
+capture.reset(game, players)
+while not game.is_game_over():
+    capture.step(game, choose(game), annotation={"value": 0.31})
+capture.close()
+```
 
-For durable diagnostic inputs, use `managym.recording.ScalarCapture` or
-`CapturedVector` with an explicit journal path before reset. These retain
-pending native calls even if the engine never returns. They work without
-manabot, Torch or Etude. Private journals contain hidden information and must
-not be used as Academy viewer exports. See the
-[standalone examples and recovery guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#collect-in-game-statistics)
-for independent options, costs, partial counts and replay.
+`managym.recording` writes one small row per finished game: seed, setups,
+actions and state digests. That one record is what `managym academy replay
+games.jsonl` steps through, what `managym.statistics.reduce` computes card
+performance, behaviour rates and your own reducers from, and what
+`managym.export_arena` turns into an Arena-style log that outlives the engine
+version. `record_fraction` samples games; a `journal_path` writes the same
+record durably around every native call, for a call that may never return.
+`managym.diagnostics` marks the phases of your loop and leaves the phase,
+stacks and games in progress when one stalls.
+
+Give the capture `statistics_path=Path("statistics/worker.jsonl")` for native
+per-game card counts on every game, independent of record sampling. Read them
+with `read_statistics` and `CardPerformance.from_statistics`. Low-level callers
+can enable/read/drain counters directly on the Env.
+
+All of it works without manabot, Torch or Etude. Records and statistics hold
+hidden information: keep them private; Academy shows each viewer only what
+that seat could see. See the
+[engine guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#record-games)
+for options, costs, interrupted games and replay.
 
 Decision memory is also opt-in: construct `Env` or `VectorEnv` with
 `decision_memory=True` to retain viewer-safe past decisions. The training
@@ -94,53 +109,39 @@ Global **New game** opens a separate session setup; **Cancel** discards edits.
 Changing both controllers to bots in the session editor offers **Start new
 watched game**, preserving the Play session.
 
-### Watch a replay from an evaluation
-
-Evaluation trace import needs the optional manabot integration, installed in
-the same environment and at the same release version as managym:
+### Watch a recorded game
 
 ```bash
-uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
+uv run --no-project managym academy replay games.jsonl
+uv run --no-project managym academy replay .runs/demo/games --game 3
 ```
 
-With any earlier Academy server stopped, open one game of the evaluation's
-retained command trace, usually
-`traces/<cell-id>.commands.jsonl.gz` in its output directory (download the
-artifact first if the evaluation ran remotely):
+Any game managym recorded opens with only `managym` installed: one your own
+loop wrote through `managym.recording`, a training run's `games/` directory
+(a recipe config's `record_games`) or an evaluation's. The browser opens in
+**Replay** at the first recorded choice or this tab's saved position; use
+**Next**, **Previous** or **Play** to follow choices, consequences and the
+result. Each choice shows the probabilities, value and update the chooser
+recorded, and **not retained** for what it did not. `--game` is the game's
+position, counted from 0, or the start of its digest; run the command without
+it to list the games. In the browser, the same is **Open a game file** under
+**Watch** (`/replay?watch=1`).
 
-```bash
-uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
-```
+Academy plays the recorded actions through the engine again and checks the
+recorded state digest before every decision, without running the original
+players or loading their checkpoints. A game cut off part-way, or one this
+build does not reproduce, opens up to its last verified decision and says
+where and why it stops. A game from another world is refused with the managym
+version that recorded it. `managym academy replay <recording-id>` reopens a
+game from **Games** in the same browser and address (including port), or when
+it is shared and finished.
 
-The browser opens in **Replay** at the first recorded choice or this tab's saved
-position; use **Next**, **Previous** or **Play** to follow choices, consequences
-and the result. `--game` is the game's
-position in the file, counted from 0, or the start of its trace digest; run
-the command without it to list the file's games. `managym academy replay
-<recording-id>` reopens a game from **Games**, with or without manabot, in the
-same browser and address (including port), or when it is shared and finished. In
-the browser, the same import is **Open a game file** under
-**Watch** (`/replay?watch=1`). Import verifies the
-recorded actions and state digests without running the original players or
-loading their checkpoints. Incompatible historical worlds need their original
-revision. The [evaluation replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-an-evaluation)
-covers supported files and troubleshooting.
-
-### Watch a game from your training loop
-
-A game the training loop itself played opens the same way, once manabot has
-exported it:
-
-```bash
-uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
-uv run --no-project managym academy replay jace.game.jsonl.gz
-```
-
-**Replay** opens headed **Training game** with both players' names, on the
-first of the decisions the loop actually made; an evaluation's game is headed
-**Evaluation game**. Recording the games is one `with record_games(...)` block
-around the loop:
-[Watch a game from your training loop](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-your-training-loop).
+Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and games
+exported by `manabot export-game`, both written by earlier releases, still
+open; those two are verified by manabot, installed at the same release
+version. The
+[replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#open-a-replay-directly)
+covers selection, privacy and troubleshooting.
 
 ### Launch from Python
 
@@ -435,8 +436,10 @@ witnesses from `flow/mana.rs`. A mana source is reserved while its printed
 upfront cost is pending; `Decision::ManaUpfront` retains the parent decision
 and frame. Only after that obligation finishes do its tap/life/sacrifice costs
 commit and its output become a visible color decision. Mana abilities do not
-create stack objects. Fixed production keeps source order; a nested automatic
-prefix considers concrete pool remainders and the parent's completion.
+create stack objects. The initial fixed-source witness keeps source order;
+[automatic source preference](#automatic-source-preference) selects the taps.
+A nested automatic prefix considers concrete pool remainders and the parent's
+completion.
 The announced activation's own tap, sacrifice and unpaid life fee remain
 reserved throughout waterbend and nested mana decisions, including a saved
 spending caller. A nested mana ability cannot consume those resources and
@@ -467,8 +470,8 @@ The direct answer is exact or it is not used. Modal lands, filters, mana
 abilities with other costs, counted taps, nested activations and the automatic
 prefix of a nested activation go to the search described below, which stays
 the one definition of a legal payment: debug builds run it beside every direct
-answer and assert the same affordability and the same first witness, so
-automatic tapping order cannot differ between the two. Adding a kind of mana
+answer and assert the same affordability and the same first witness. Automatic
+source preference starts from that shared witness. Adding a kind of mana
 source needs no change here unless it should join the direct class, which
 requires a test comparing both paths on that source.
 
@@ -642,3 +645,85 @@ retired codes 5, 6 and 7 keep their historical meanings.
 `SuspendedResolution::continuation` walks retained frames and decisions root first;
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
+
+### Automatic source preference
+
+Pay `{1}{G}` with an empty mana pool and two untapped Mountains and a Forest:
+automatic payment taps one Mountain and the Forest. With equal follow-up
+scores, it uses a basic Forest before a green mana creature to pay `{G}`.
+
+Automatic payment removes unnecessary fixed-source taps and uses a bounded
+mana-cost heuristic to prefer the remaining sources (`flow/mana/autotapper.rs`).
+It prefers, in order: more affordable follow-up costs, more hand costs, then
+more instant-timing hand costs. It considers at most 64 distinct hand-cost and
+ability records. Targets and other costs are only partially checked, and
+different follow-ups may need incompatible spending remainders: the score is
+not a count of playable cards or a global optimum. Single-use abilities with
+the paid cost are excluded, including another source's equal-cost ability.
+
+Further ties prefer basic lands, other lands, lands with activated abilities,
+other permanents, then creatures; within those tiers, colorless output is
+preferred. The class search stops after 1024 arithmetic checks and keeps a
+payable candidate. Payments with saved obligations only receive surplus
+pruning. Activated mana abilities remain deliberate actions; native spending
+choices determine the exact mana receipt. Source preference has no setting.
+
+### Manual mana sources
+
+A pending cast or activation payment offers useful fixed-source taps beside
+`PayCost`, which completes payment automatically from the resources left.
+A tap must make progress and preserve the announced costs and every saved
+payment; funded payments and payments needing every available source retain
+native trivial-decision skipping. These ordinary choices are on by default
+for every consumer. Source taps use the existing `TapForCost` policy action
+with the source as focus; the native Command verb is `tap_for_mana`, distinct
+from waterbend. They do not expose free-form production at priority or undo.
+
+### Inspecting automatic payment
+
+Ask what automatic payment would tap for one legal action, without taking it:
+
+```python
+from managym.decision import DecisionFrame
+from managym.payment import preview_payment
+
+frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+preview = preview_payment(
+    env,
+    viewer=frame.actor,
+    revision=frame.revision,
+    fingerprint=frame.fingerprint,
+    action_index=pay_cost_index,  # position in the current action space
+)
+preview.state                       # "exact"
+[s.label for s in preview.sources]  # ["Mountain", "Forest"]
+preview.pool_after_spending         # the pool once {1}{G} is paid
+```
+
+Stepping that action next taps exactly those permanents in that order. The
+preview is the first half of the payment itself (`Game::automatic_taps`, which
+`produce_mana` calls and then taps), so it cannot propose a plan execution
+does not use. The call is read-only: the state digest, RNG, revision, trace
+and pending decision are the same before and after it.
+
+`viewer`, `revision` and `fingerprint` bind the question to one decision. A
+viewer who is not the chooser, a revision that has moved on or a fingerprint
+from another offer set raises `managym.AgentError` and returns no plan.
+
+| `state` | Meaning |
+| --- | --- |
+| `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
+| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost. `explanation` names the choice; there are no sources. |
+| `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
+| `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability with its own fee. |
+
+A cast offer, or the target that completes it, previews the spell's cost; a
+non-mana activated ability previews its fee; `PayCost` previews the pending
+payment. A source-tap offer previews tapping that source and then paying automatically,
+with the chosen source first. Each source carries its object reference, name
+and output; pools carry the six amounts and the restriction, spend-effect and
+combat-expiry classes of the mana in them.
+
+This is an inspection API for Academy and tools. It adds no action,
+observation field or encoder column, and nothing in `Env.step`, `VectorEnv`,
+search or training calls it.

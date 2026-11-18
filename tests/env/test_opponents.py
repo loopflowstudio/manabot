@@ -10,7 +10,7 @@ from manabot.env.opponents import RandomPolicy, build_opponent_policy
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import RewardConfig
 import managym
-from managym.recording import FailureEvidence, GameInputs
+from managym.recording import GameInputs, GameRecord
 from managym.replay import replay_failure_inputs
 
 
@@ -49,7 +49,7 @@ def test_unsupported_opponent_policy(name: str, api: str) -> None:
 
 @pytest.mark.filterwarnings("error::DeprecationWarning")
 def test_retained_passive_evidence_is_readable_but_cannot_replay() -> None:
-    evidence = FailureEvidence(
+    evidence = GameRecord(
         mode="vector",
         operation="reset",
         games=[GameInputs(seed=42, players=[])],
@@ -59,7 +59,7 @@ def test_retained_passive_evidence_is_readable_but_cannot_replay() -> None:
         seconds=0,
     )
     retained = evidence.model_dump_json(by_alias=True)
-    restored = FailureEvidence.model_validate_json(retained)
+    restored = GameRecord.model_validate_json(retained)
     assert restored.opponent_policy == "passive"
     with pytest.raises(ValueError, match="[Uu]nsupported player policy:.*passive"):
         replay_failure_inputs(restored)

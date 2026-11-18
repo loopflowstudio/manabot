@@ -54,7 +54,7 @@ observation dictionary and does no validation or lookups of its own
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
    [Live-token attention](#live-token-attention) attends over valid
    objects only; it replaced the pooled token stream
-   ([token-stream report](../experiments/token_stream.md)).
+   ([token-stream report](../experiments/reports/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
@@ -63,7 +63,7 @@ observation dictionary and does no validation or lookups of its own
    objects (`masked_mean`, as in the TLA pilot; the historical default averages
    every slot) and read by the value head. The output is a scalar or loss/draw/win logits.
    `value_token` and `attention_readout` replace the mean with a learned summary
-   ([readout comparison](../experiments/value-readout-252.md)).
+   ([readout comparison](../experiments/reports/value-readout-252.md)).
 
 The card GRU encodes a card's rules program. Optional recent events are off by
 default. [Whole-game decision memory](#whole-game-decision-memory) adds a
@@ -163,33 +163,30 @@ tokens. On CPU, where the recurrent catalog encoder dominates learning, a
 learner forward and backward is therefore slower than on the padded path,
 most of all for small decks.
 
-A training stage's execution settings choose it, with
-[live-token attention](#live-token-attention), from the device. Both default to
-`auto`, which the regime resolves when it is built: on for a CUDA
-`train_self_play` stage, off on CPU and MPS and for every other operation:
+A loop's settings choose it, with
+[live-token attention](#live-token-attention). Both are plain `SelfPlay`
+fields that default to off, and a recipe turns them on for the device it runs
+on:
 
 ```python
-from experiments.batched_baseline import batched_baseline
+from manabot.recipes.builders import gray_ogre_self_play
 
-regime = batched_baseline()  # one CUDA train_self_play stage, fields unset
-execution = regime.stages[0].execution
-execution.bucketed_shapes, execution.live_tokens  # (True, True)
+settings = gray_ogre_self_play(horizon=100).model_copy(
+    update={"device": "cuda", "bucketed_shapes": True, "live_tokens": True}
+)
+settings.bucketed_shapes, settings.live_tokens  # (True, True)
 ```
 
-The regime keeps the resolved value: a stage that resolves on records both
-fields as `true` in `run.json`; one that resolves off omits them, so CPU and
-MPS regimes keep their hashes, and a saved regime that omits them reads as off
-([stage operations](training.md#stage-operations)). Builders that rebuild a
-regime (`with_capacity`, `with_agent`) resolve `auto` again and keep explicit
-values. To compare the paths on CUDA, write
-`Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
-`--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
-Bucketed shapes may still be written explicitly on CPU or MPS, where they are
-slower to learn, as described above.
+The baseline recipe does this when its `device` is `cuda` and
+`padded_shapes` is false; to compare the paths on CUDA, run it with
+`--config '{"device": "cuda", "padded_shapes": true}'`
+([run training](training.md#run-training)). Nothing resolves the switches
+from the device: `live_tokens=True` off CUDA fails validation, and bucketed
+shapes may be written explicitly on CPU or MPS, where they are slower to
+learn, as described above.
 
-The stage's collection and learner policies, including a frozen opponent,
-use the resolved layout. Code that builds a policy outside a regime chooses it
-itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
+The loop's collection and learner policies use the settings' layout. Code
+that builds a policy outside a loop chooses it itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
 off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
 [Served evaluation](evaluation.md#shared-inference) accepts both switches and
 leaves them off: its batches are small, and the padded forward was the faster
@@ -198,7 +195,7 @@ one there. Search players load their policies padded.
 Bucketed shapes are 2.4× faster per learner step than padding to capacity at
 w160l8 and 2.6× at w384l8 on an L4. Collection over full tables was faster at
 w160l8, 2.4 s against 2.9 s per pass with both settings on
-([live-token attention](../experiments/live_token_attention.md)). That is the
+([live-token attention](../experiments/reports/live_token_attention.md)). That is the
 known cost of the default at small widths; it stays on at every width.
 
 The setting changes how a forward is computed, not the model. It changes no
@@ -239,7 +236,7 @@ jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
 CPU it falls back to one attention call per observation, which is correct but
 slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
 padded on a laptop CPU
-([measurement](../experiments/eval_forward_layout.md)). A stage therefore uses
+([measurement](../experiments/reports/eval_forward_layout.md)). A stage therefore uses
 live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
 `live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
 as a reduced precision does.
@@ -259,7 +256,7 @@ probabilities, values, losses and gradients agree with the padded path to
 within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
 shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster than bucketed shapes
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
-([live-token attention](../experiments/live_token_attention.md)).
+([live-token attention](../experiments/reports/live_token_attention.md)).
 
 ## Policy inputs
 
@@ -356,16 +353,16 @@ explicitly before constructing the collector and model:
 ```python
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
-from manabot.recipes.local import local_smoke
+from manabot.recipes.builders import gray_ogre_self_play
 
-regime = local_smoke(steps=1).model_copy(
+settings = gray_ogre_self_play(horizon=1).model_copy(
     update={"observation": ObservationConfig(policy_input_version=10)}
 )
-space = ObservationSpace(regime.observation)
+space = ObservationSpace(settings.observation)
 ```
 
-Use that `space` for `SeatRoutedCollector` and `ActorCritic(space, regime.agent)`;
-the serialized `TrainingRegime` keeps the selection. V10 is v9 plus this state,
+Use that `space` for `open_collector` and `ActorCritic(space, settings.model)`;
+the run's saved settings keep the selection. V10 is v9 plus this state,
 in the same native scalar, vector and Python encoders, the LLM text observation
 and the learning tokens.
 
@@ -565,9 +562,9 @@ retained single-place fact ([engine knowledge](engine.md#remembered-library-posi
 
 ### Optional recent public events
 
-`ModelConfig(recent_events=True)` (or `with_recent_events` / `ModelOverride`)
-adds shared policy/value context from a bounded suffix of public events; the
-regime derives `observation.policy_history_version=1`. `Game::emit` maintains
+`ModelConfig(recent_events=True)` adds shared policy/value context from a
+bounded suffix of public events; `SelfPlay` derives
+`observation.policy_history_version=1` from it. `Game::emit` maintains
 the projection at the same append as the rules ledger, keeping at most 32
 rows; private arrivals produce no row, and owner (not controller) is recorded.
 History-on uses an `[E,12]` tensor (`1 <= E <= 32`) with a validity mask:
@@ -627,9 +624,9 @@ model = ModelConfig(
 )
 ```
 
-Use this model configuration in your training regime. The regime must also
-declare the log's capacities and bounded execution rows, or validation names
-the missing fields:
+Use this model configuration in a recipe's `SelfPlay` settings. The settings
+must also declare the log's capacities and bounded execution rows, or
+validation names the missing fields:
 
 ```python
 from manabot.infra.config import ObservationConfig
@@ -641,10 +638,10 @@ observation = ObservationConfig(
     max_decision_members=8192,
     decision_memory_include_own=False,
 )
-# On each self-play stage:
-stage.execution.collection_rows = 2
-stage.execution.bootstrap_rows = 2
-stage.execution.learner_rows = 2
+settings = SelfPlay(
+    match=match, model=model, observation=observation, learning=learning,
+    collection_rows=2, bootstrap_rows=2, learner_rows=2,
+)
 ```
 
 These are bounds selected from the seeded census; a game that exceeds them stops with a
@@ -779,12 +776,11 @@ same causal fold with detached record roots, recomputing only each current last 
 Bootstrap without an inference scope folds without cached roots. Dense inputs
 and the transformer retain the stateless full-prefix encoder.
 
-A memory-enabled training stage (including a control retaining the
-same logs) requires explicit positive `Execution.collection_rows`,
-`Execution.bootstrap_rows` and `Execution.learner_rows` limits. For example,
-`Execution(collection_rows=2, bootstrap_rows=2, learner_rows=2)` exercises the
-controlled CPU proof size; calibrate these resource limits for the target
-device. These Torch execution settings do not change native stream count,
+Memory-enabled self-play (including a control retaining the same logs)
+requires explicit positive `SelfPlay.collection_rows`, `bootstrap_rows` and
+`learner_rows` limits. For example, two rows each exercises the controlled CPU
+proof size; calibrate these resource limits for the target device. These Torch
+execution settings do not change native stream count,
 history capacities, learner selection, shuffled order or logical optimizer
 minibatches. Learner chunks accumulate gradients with the logical minibatch's
 separate actor and critic denominators, then clip and step once. PPO prepares
@@ -838,7 +834,7 @@ its input is admitted Prepared data, and it evaluates no action or value head.
 
 ### Starting from a control trunk
 
-All three arms start a fresh `TrainSelfPlay` stage through `pretrained`.
+Each arm is a fresh self-play run started through `SelfPlay.pretrained`.
 Collection retains record-aligned immutable chunks. Native transport counts and
 process-local game generations let each stream extend its previous viewer prefix:
 one bulk comparison of native generations and cursors reuses issued prefixes
@@ -867,30 +863,25 @@ validates the log and reserves its vocabulary without encoding it. An incumbent
 has history disabled. The true history-disabled incumbent remains the throughput
 reference.
 
-Set the stage's `pretrained` to a `PretrainedPolicy` with the producer's exported
-`source_run`, `source_stage`, `checkpoint` and `weights` (`raw` or `ema`). Each
-artifact reference pins its path, SHA256 and byte count; the checkpoint must be
-the corresponding artifact of a completed producer self-play stage. Choose the
-memory encoder, summary count and gate scale in the new regime's `agent`.
-The control branch uses the producer's identical model settings. Remote jobs
-bind the same inputs through `TrainingJob.pretrained`; see
-[training](training.md#reuse-a-published-policy).
+Set `SelfPlay.pretrained` to the trunk's published checkpoint; a launched job
+receives it as `TrainingJob(start=...)` and reads `run.input("start")`
+([training](training.md#reuse-a-published-policy)). Choose the memory encoder,
+summary count and gate scale in the branch's `model`. The control branch uses
+the trunk's identical model settings.
 
-Admission verifies the producer receipt, artifact bytes, world and observation
-configuration. It permits a model change only from a control to a memory encoder,
-with only `decision_memory`, `decision_memory_summaries` and
-`decision_memory_gate_scale` differing. The trunk must declare the same positive
-decision capacities as the branch. Executor restoration copies every shared
-tensor with strict shape checks and initializes only `decision_memory.*` and
-the per-layer memory projections and gates; missing shared or unexpected keys fail. Identical models
-and learning-state recovery still use ordinary strict restoration. A trunk from
-an older world or a different observation layout cannot be branched.
+Loading verifies the world and observation configuration. It permits a model
+change only from a control to a memory encoder, with only `decision_memory`,
+`decision_memory_summaries` and `decision_memory_gate_scale` differing. The
+trunk must declare the same positive decision capacities as the branch. The
+loop copies every shared tensor with strict shape checks and initializes only
+`decision_memory.*` and the per-layer memory projections and gates; missing
+shared or unexpected keys fail. A trunk from an older world or a different
+observation layout cannot be branched.
 
 At initialization, including long and empty histories, a branch gives the
 trunk's action probabilities and value bit for bit. Adam, EMA, streams and the
-schedule start fresh at branch iteration one. The run record's
-`pretrained/source_run`, `pretrained/checkpoint` and `producer_cost` retain
-lineage and ancestor cost; checkpoints retain their own source identity.
+schedule start fresh at branch iteration one. Etude records the starting
+checkpoint as the run's input; checkpoints retain their own source identity.
 
 Each board attention layer adds a gated projection of the mean memory summary
 (K=1 in the pilot; K=4 remains supported) to every real board token before its
@@ -1024,7 +1015,7 @@ this proof first.
 | --- | --- |
 | Larger fixed fact and relation tables | Admission control only. Removes neither duplication nor source-identity loss. |
 | Typed shared records pooled into objects and frames | Shipped with pre-attention routing. Cheapest; a learned sum can still compress away a distinction that transport preserved. |
-| Per-record token GRU with sparse joins | Tested against pooling on the earlier v7 input and not separated from it ([GPU report](../experiments/state-representation-gpu.md)). The current input requires it for ordered programs, so that comparison does not cover the current effect path. |
+| Per-record token GRU with sparse joins | Tested against pooling on the earlier v7 input and not separated from it ([GPU report](../experiments/reports/state-representation-gpu.md)). The current input requires it for ordered programs, so that comparison does not cover the current effect path. |
 | Variable-length game-state tokens | Unbuilt. Variable length alone does not reduce memory: the card encoder allocates padded tokens before packing. Ordered payloads suit token sequences, while unordered objects and effects need equivariant joins with explicit order features. |
 | Split the relation table into typed stack, execution and trigger structures | Unbuilt. The table is a flattened typed structure, not wrong in itself. Its costs are repeated headers, capacity shared across unrelated structures, overloaded index and order features, and uniform pooling. A split must keep public stack rank, parent links, retained target eligibility and action continuation joins. |
 | All objects, effects and frames as global attention tokens | Unmeasured. Moves attention from N² to (N + E + F)². Memberships need not become tokens. Compact transport alone does not justify it. |
@@ -1056,14 +1047,14 @@ this proof first.
 
 - **The encoding hides no decision.** The learnability search found 0 clean
   input collisions, and the fixed suite runs on relevant PR updates
-  ([learnability](../experiments/learnability-search.md)).
+  ([learnability](../experiments/reports/learnability-search.md)).
 - **The smallest model learned as well as larger ones at this scale.** Two
   seeds were not enough to rank sizes
-  ([longer learning](../experiments/longer-learning-017.md)).
+  ([longer learning](../experiments/reports/longer-learning-017.md)).
 - **Value-token and pooling variants are unresolved**
-  ([value token](../experiments/value-token-screen.md),
-  [pooling follow-up](../experiments/pooling-filter-followup.md),
-  [three-seed depth/readout results](../experiments/value-readout-252-results.md)).
+  ([value token](../experiments/reports/value-token-screen.md),
+  [pooling follow-up](../experiments/reports/pooling-filter-followup.md),
+  [three-seed depth/readout results](../experiments/reports/value-readout-252-results.md)).
 - **No history input has shown a training benefit**, and the shared-effect
   transport is an engineering proof, not a learning result.
 

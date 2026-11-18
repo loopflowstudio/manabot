@@ -14,6 +14,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
+- [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
 - [Playing a series against a model](#playing-a-series-against-a-model)
@@ -48,8 +49,8 @@ admission checks for played and watched games.
 
 Inspect a card through hover, focus or its **Inspect card** action without
 changing how you play. The Play/Inspect click preference controls gestures;
-it never gates reading. **Open a recorded game file** in Games imports a training game or evaluation
-trace without changing its original evidence. Games links back to recorded positions, their legal
+it never gates reading. **Open a recorded game file** in Games opens any recorded game, from your own
+loop, training or evaluation, without changing its original evidence. Games links back to recorded positions, their legal
 choices and available recorded policy/search evidence. Trying another line
 creates a separate Study branch with an explicit return to the source decision.
 There is no live example Advice panel or example-scenario read selector.
@@ -86,11 +87,11 @@ To skip the setup screens, name the game or the replay on the command line:
 
 ```bash
 uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt --seed 7
-uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
+uv run --no-project managym academy replay .runs/demo/games --game 3
 ```
 
-The first opens the table already in that game; the second opens game 3 of an
-evaluation's command trace at its first decision. See
+The first opens the table already in that game; the second opens game 3 of the
+games a training run recorded, at its first decision. See
 [Start in a chosen game](#start-in-a-chosen-game),
 [Open a replay directly](#open-a-replay-directly) and
 [Launch from Python](#launch-from-python). To play against a model you
@@ -215,58 +216,80 @@ setup; run the command again to create a new launch.
 ### Open a replay directly
 
 ```bash
-uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
-uv run --no-project managym academy replay jace.game.jsonl.gz
+uv run --no-project managym academy replay games.jsonl
+uv run --no-project managym academy replay .runs/demo/games --game 3
 uv run --no-project managym academy replay <recording-id>
 ```
 
-The first command opens one game of an evaluation's command trace; the second
-opens one exported training game
-([Watch a game from your training loop](#watch-a-game-from-your-training-loop));
-the third reopens a game already in **Games**, by the id shown there. All land
-in **Replay**, ready to step from the first recorded choice or resume a saved
-position ([replay controls](#inspect-a-replay)). The heading names both players and
-says which kind of game it is: **Training game**, one the training loop itself
-played, or **Evaluation game**, one played afterwards to measure policies.
+The first command opens a file of recorded games; the second opens one game
+from a directory of them, here a training run's; the third reopens a game
+already in **Games**, by the id shown there. All land in **Replay**, ready to
+step from the first recorded choice or resume a saved position
+([replay controls](#inspect-a-replay)). The heading says which kind of game
+it is: **Training game**, one the training loop itself
+played, **Evaluation game**, one played afterwards to measure policies, or
+**Recorded game** for a record that says neither.
+
+Any game managym recorded opens this way with only `managym` installed: your
+own loop's ([Record games](engine-python.md#record-games)), a training run's
+or an evaluation's. A record holds the seed, both setups and the actions, so
+Academy plays the game again through the engine, checks the recorded state
+digest before every decision, and saves what it verified to this traces
+directory as a finished recording. It runs no policy and loads no checkpoint,
+and it never changes the file. Opening the same game again returns to the
+recording made the first time. At each choice the panel shows what the chooser
+recorded about it (the probability of each legal action, the value and the
+update number) and **not retained** for whatever it did not record.
+
+A game does not have to be whole to open:
+
+| Heading | What you can step through |
+|---|---|
+| **Interrupted · saved recording only** | The run stopped during the game. Every decision up to the last recorded one, then the reason it stopped. No winner is shown. |
+| **Stopped at decision N · saved recording only** | This engine did not reproduce the game from decision N: the digest differed, the recorded action was not offered, or the engine raised. Decisions before N are shown with the message; nothing after N is. |
+
+Neither can be continued, and no later board is invented. An opened recording
+is closed: it only plays saved data, even when its game never finished.
 
 A recording id keeps the recording's existing access rules: open it in the
 same browser and at the same address (including port) where **Games** lists
 it, or open a shared, finished recording. Another browser or address cannot
 open a private or unfinished game without its participant credential. The
 launcher checks that the id exists; access is checked when the browser opens
-it. Imported game files (evaluation traces and exported training games) are
-shared, finished recordings and can open in any browser that can reach the server.
+it. Opened game files are shared recordings and can open in any browser that
+can reach the server. A file holds the deal seed and so both players' hidden
+cards; share it as you would share both hands. The viewer still shows each
+seat only what it could see, and the file's run labels and build identities
+stay on the server.
 
-An evaluation trace or an exported training game needs manabot installed
-beside Academy, at the same release version
-([Watch a game from an evaluation](#watch-a-game-from-an-evaluation) has the
-install command and where traces are written). Opening one verifies its
-recorded Commands and state digests and saves the game to this traces
-directory as a finished recording. It runs no policy and loads no checkpoint,
-and it never changes the trace file. Opening the same game again returns to
-the recording made the first time. `.json`, `.jsonl` and gzipped files are
-accepted, `.game.jsonl.gz` among them. Recordings in **Games** open without
-manabot.
-
-A trace file usually holds many games. `--game` takes either the game's
-zero-based position in the file (the order **Recorded game** lists in the
-browser) or the first characters of its `game_trace_sha256`. A position in
-the file takes precedence when both fit. A file with one game needs no
-`--game`. Leave it off a larger file to see what the file holds:
+`.json`, `.jsonl` and gzipped files are accepted, and a directory stands for
+the games in all its files. `--game` takes either the game's zero-based
+position (the order **Recorded game** lists in the browser) or the first
+characters of its digest. A position takes precedence when both fit. A file
+with one game needs no `--game`. Leave it off to see what is there:
 
 ```text
-ACADEMY_PLAY_ERROR {"code": "replay.ambiguous", "message": "out/traces/c41.commands.jsonl.gz holds 40 games; select one by index or trace digest."}
+ACADEMY_PLAY_ERROR {"code": "replay.ambiguous", "message": ".runs/demo/games holds 40 games; select one by index or digest."}
   Select a game with --game <index-or-digest>.
-  game  deal seed   leg  players                 trace
-     0  9120443     0    w17-final vs heuristic  5be01c9a2f31
-     1  9120443     1    heuristic vs w17-final  e07a44d1c8b2
+  game  seed     stream  players       decisions  ended        digest
+     0  9120443  0       jace vs jace  41         complete     5be01c9a2f31
+     1  9120443  1       jace vs jace  57         interrupted  e07a44d1c8b2
      …
   20 of 40 shown
 ```
 
-A trace recorded in another world is refused with `replay.rejected`, naming
-the mismatch; open it with the revision that produced it. An exported training
-game states its world, so the message names both worlds.
+A game recorded in another world, or with other card content, is refused with
+`replay.rejected`. The message names the managym version, world and engine
+digest that recorded it and the ones running, so you know which build opens
+it. The same world on another engine build opens and says the build differs.
+A record whose two players had different decklist disclosure, or that was
+played without skipping forced decisions, is refused with the reason.
+
+Files written before this record still open: an evaluation's command trace
+(`traces/<cell-id>.commands.jsonl.gz`), a game exported by
+`manabot export-game`, and a training exposure receipt. Command traces and
+exported games are verified by manabot and need it installed beside Academy at
+the same release version; everything else does not.
 
 ### Launch from Python
 
@@ -286,7 +309,7 @@ with serve(port=0) as academy:
         sims=64,
         seed=7,
     )
-    replay = academy.replay(Path("out/traces/c41.commands.jsonl.gz"), game=3)
+    replay = academy.replay(Path(".runs/demo/games"), game=3)
     print(game.url)      # http://127.0.0.1:52114/?launch=3f9c2a7be1d04c58
     print(replay.url)    # http://127.0.0.1:52114/replay?watch=1&trace=8b1e…
     academy.open(game.url)
@@ -313,12 +336,15 @@ with serve(port=0) as academy:
   that provider discover a run root. Sources belong to this server; no environment
   variables are rewritten. Each installed provider also discovers its ambient
   configuration once at server start, even when explicit sources are supplied.
-- `academy.replay(source, game=None)` takes a trace `Path` with the same
-  `game` selection as the command line, or a recording id as `str`. An integer
-  `game` selects only a position; strings can also select a digest prefix.
-- `launch.read_games(path)` lists a trace file's games as `RecordedGame`
-  values (`index`, `deal_seed`, `leg`, `players`, `decks`,
-  `game_trace_sha256`), for choosing one in code.
+- `academy.replay(source, game=None)` takes a `Path` to a game file or a
+  directory of them with the same `game` selection as the command line, or a
+  recording id as `str`. An integer `game` selects only a position; strings
+  can also select a digest prefix.
+- `launch.read_games(path)` lists the games of a file or directory as
+  `RecordedGame` values (`index`, `seed`, `stream`, `players`,
+  `decisions`, `ended`, `digest`), for choosing one in code. The former
+  `deal_seed`, `leg`, `decks` and `game_trace_sha256` properties warn and are
+  removed in 0.4.0.
 - `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
   game, setup or replay, subject to the recording access rules above. `academy.open(url)`
   opens it in the default browser; `academy.open()` opens the bare table.
@@ -335,99 +361,61 @@ when one is raised.
 
 ### Watch a game from your training loop
 
-Wrap the loop in `record_games`, pick one of the games it played, export it and
-open it:
-
-```python
-from pathlib import Path
-
-from manabot.sim.recording import record_games
-from manabot.training.loops.minimal import train
-from managym.academy.launch import serve
-
-with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
-    train(8)                                  # the loop's own self-play games
-game = games.sample(seed=0)                   # one complete game it played
-path = game.export(Path("jace.game.jsonl.gz"))
-
-with serve(port=0) as academy:
-    academy.open(academy.replay(path).url)
-    academy.wait()
-```
-
-The browser opens in **Replay**, headed **Training game** with `jace vs jace`.
-A first opening starts at the first recorded choice. Every decision the two
-seats made is there to step through, with the board and the legal actions each
-was offered. The original policy is never rerun and no checkpoint is loaded,
-so the file opens on a machine that has never seen the model.
-
-The same two steps from the command line, on a directory recorded earlier:
+Ask the run to record games, then open its output:
 
 ```bash
-uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
-uv run --no-project managym academy replay jace.game.jsonl.gz
+uv run etude train manabot/recipes/local.py --experiment demo --config '{"record_games": 0.25}'
+uv run --no-project managym academy replay ~/.etude/track/demo/out/games --game 0
 ```
 
-The file also opens in the browser through **Open a game file**
-under **Watch**. All three routes need manabot beside Academy, as an
-evaluation trace does.
+The browser opens in **Replay**, headed **Training game**. Every decision the
+two seats made is there to step through, with the board, the legal actions each
+was offered, the probability the policy gave each one, its value estimate and
+the update it was playing at. The policy is never rerun and no checkpoint is
+loaded, so the directory opens on a machine that has never seen the model and
+has no manabot. There is no export step.
 
-**Recording.** `record_games(directory, players=None)` records every game
-played by collectors built inside the `with` block: the deal seed, both decks
-and each decision's chosen action, one receipt file per game in `directory`.
-It adds no decisions and changes none; the loop trains as it would without
-it. The receipts can be read again later with `TrainingGames(source)`, where
-`source` is a directory or a single receipt file. A `TrainingJob` run with `training_exposure` writes the same receipts under its
-`training/exposure`; download that directory and open it the same way.
+`record_games` takes 0 (the default), 1 for every game, or a fraction between
+them. A fraction selects games by their seed and stream, so it does not disturb
+the run and the same run records the same games. All shipped self-play recipe
+configs accept it alongside `statistics`, `diagnostics` and `stall_seconds`,
+locally and in a launched job. The learner digest excludes these options.
+Etude compares them with the rest of the recipe config on resume. The rows are written under the run's
+`out/games/`, one file per producer; download that directory to open a remote
+run's games. A game the run stopped
+in the middle of is kept and opens as **Interrupted**.
 
-**Choosing a game.** `games.games()` lists the complete games as
-`TrainingGame` values (`receipt_sha256`, `seed`, `stream`, `decks`,
-`decisions`); `games.sample(seed=None)` picks one uniformly, the same one for
-the same seed. A game the loop stopped in the middle of is counted and never
-offered: a replay needs a finished game. `sample` raises when the directory
-holds no complete game, saying how many were cut off.
+A loop of your own records the same way by passing the capture options to its
+collector:
 
-**Exporting.** `game.export(path, players=None)` replays the recorded actions
-through the engine, checks at every decision that the engine offers the number
-of options the loop saw, and writes one `.game.jsonl.gz` holding the game, its
-world and where it came from. The receipt is not changed. Export needs
-manabot but loads no Torch and no policy. `manabot export-game <directory>
---out <path>` does the same; on a directory with several games, leave off
-`--game` to list them:
-
-```text
-runs/jace/games holds 6 complete games (2 cut off); select one with --game <index-or-digest>.
-  game  seed  stream  decisions  receipt
-     0  3     0       41         9c1f07ab52e0
-     1  3     1       57         03be77d1a94c
-     …
+```python
+collector = open_collector(..., games_path=Path("runs/jace/games/0.jsonl"))
 ```
 
-`--game` takes the position in that list or the first characters of the
-receipt digest, and `--players A B` names the seats.
+or, with no manabot at all, by stepping through a
+[`ScalarCapture` or `CapturedVector`](engine-python.md#record-games).
 
-**Who played.** The two names are labels you supply, first seat first,
-because only your code knows which policy sat where. In one-model self-play
-both seats are the learner, so both carry its name. When a loop seats a frozen
-opponent or a league member, pass that game's names to `export(players=...)`.
-Without names the heading shows the deck seats' own names.
+**Who played.** The heading takes the players' names from the record: the
+recipe's learner and opponents, first seat first. In one-model self-play both
+seats are the learner, so both carry its name.
 
-**A training game is not an evaluation game.** An exported training game is a
-game the collector played, with its exploration and whatever the policy was
-at that update. To see how the current policy plays, run an evaluation and
-open one of its games
-([Watch a game from an evaluation](#watch-a-game-from-an-evaluation)); those
-are labelled **Evaluation game**. Neither is ever relabelled as the other.
+**A training game is not an evaluation game.** A training game is one the
+collector played, with its exploration and whatever the policy was at that
+update. To see how the current policy plays, run an evaluation and open one of
+its games ([Watch a game from an evaluation](#watch-a-game-from-an-evaluation));
+those are labelled **Evaluation game**. Neither is ever relabelled as the
+other. Statistics over a recorded fraction describe that fraction
+([Ask questions of recorded games](engine-python.md#ask-questions-of-recorded-games)).
 
 | What you see | Cause and fix |
 |---|---|
-| Export stops with "action not offered" or a different option count at a decision | The engine no longer plays this game as recorded: the receipt was edited, or it was recorded in another world or revision. Export from the revision that recorded it. |
-| Export or `sample` reports only cut-off games | The loop stopped before any game ended. Let it collect at least one complete game. |
-| `replay.rejected` when opening | The file's world is not the running one, or the file was edited after export; the message says which. Open it with the revision that exported it. |
-| `replay.needs_manabot` | Install manabot beside Academy at the same version. |
+| `replay.missing` for `<out>/games` | The run recorded nothing: `record_games` was 0, or no selected game had started. Run with 1 or a larger fraction. |
+| **Stopped at decision N** | This build does not play the game as the run did. The message names both builds; open it with the one that recorded it. |
+| `replay.rejected` | The games were recorded in another world or with other card content; the message names the build to use. |
 
-The exported file holds the deal seed and so both players' hidden cards. Share
-it as you would share both hands.
+`record_games(...)`, `TrainingGames` and `manabot export-game` still work,
+warn, and are removed in 0.4.0. Receipts and
+exported games they already wrote keep opening.
 
 ### Play a game
 
@@ -647,7 +635,8 @@ for the creature named by the current prompt: attack or decline, or select one
 of its legal blocks or decline. Each choice commits separately before the next
 creature's prompt; there is no draft of a whole attack or block to edit and
 confirm. Mana-source choices likewise follow the offered decisions;
-dragging a spell does not configure manual tapping.
+dragging a spell does not configure manual tapping. See
+[Previewing payments](#previewing-payments).
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
 offer. Card selection narrows navigation; **Show all** restores the full list.
@@ -662,6 +651,86 @@ unavailable while disconnected, awaiting a submitted action or changing settings
 These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
 use their own decision controls. Cancellation only discards local selection:
 after commitment, costs and revealed information remain committed.
+
+### Previewing payments
+
+You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
+(`{1}{G}`). Hover its cast action in **Your choices**, or move keyboard
+focus to it. On a laptop, the **Payment preview** opens between the board and
+the choices. On smaller screens it appears below the choices:
+
+```text
+Payment preview
+Cast Badgermole Cub · Cost {1}{G}
+Would tap
+  1. Mountain · your battlefield · copy 1 of 2 → 1 {R}
+  2. Forest · your battlefield → 1 {G}
+Left over · nothing floating
+```
+
+The same Mountain and Forest carry a proposal mark on the board. Nothing has
+happened yet. Hovering and focusing send no action. Cast the spell and
+choose **Pay the cost** to tap the proposed lands.
+
+The preview is the automatic payer's own plan for the position in front of
+you. Academy asks the game for it; the browser never works one out. What it
+shows is what **Pay the cost** does, including the lands it keeps back for other
+cards in your hand and any mana it would produce beyond the cost.
+
+**Choosing sources yourself.** When a cost leaves a real choice of sources,
+the payment prompt lists **Pay the cost** first, then each source you may tap.
+Focus arrives on **Pay the cost** and shows its proposal without paying.
+
+1. To accept the proposal, activate **Pay the cost**.
+2. To choose a source, activate its tap. Tab moves through the sources and
+   Shift+Tab moves back; each source is a separate choice even when several
+   produce the same color. Focusing a source previews "tap this one, then pay
+   the rest automatically", with your source listed first.
+3. After each tap the source shows as tapped, its mana appears in your
+   floating pool, and the proposal for the rest is requested again. Tap
+   another source or activate **Pay the cost** to finish. When your tap
+   leaves no choice for the rest, the game finishes the payment at once,
+   tapping what the focused preview listed.
+
+A cost that every available source is needed for has no source choice. The
+game pays it as soon as you cast, with no payment prompt, so the preview on
+the cast action is where you see those taps beforehand.
+
+**Reading the preview.**
+
+| The preview says | Meaning |
+| --- | --- |
+| Sources and their output | The automatic plan for this cost, in tapping order. **Left over** is the pool after the cost when the spending is forced. When several spends are legal it shows the pool after production and says which choices you will be prompted for. |
+| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. The preview names the missing choice and marks no sources. The preview returns at the completing target or at the payment prompt when there is one; when the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
+| No sources needed | The cost is zero or your floating mana already covers it. |
+| No automatic payment | The automatic payer cannot fund this cost from fixed sources. Use an offered mana ability and make its choices first. |
+| Nothing | There is no automatic payment to preview. When choosing which floating mana to spend, choose the unit directly. Mana abilities with their own fee also have no preview. |
+
+Mana with a spending restriction, an effect when spent or an end-of-combat
+expiry is labeled as such in the preview, as it is in the floating-mana
+readout. Restricted amounts are part of the pool totals, not extra mana.
+
+**Proposal and commitment.** A proposal mark means "would tap". A tapped
+source means "has tapped". The floating-mana readout beside the board is the
+only statement of mana you actually have. Clearing the preview, moving focus or
+clearing a selection dismisses a proposal and changes nothing in the game.
+A tapped source stays tapped and its mana stays in your pool until it is spent
+or empties; there is no undo and no refund for a tap you regret.
+
+Source taps are offered only while a cost is being paid. Academy has no action
+for tapping lands at priority to float mana before choosing a spell.
+
+**When a preview goes away.** A preview belongs to one decision. Submitting
+an action, a new decision, a change of viewed player or a lost connection
+clears it, and an answer that arrives late for an earlier decision is
+discarded. If the request fails, the panel says so and offers **Retry**; every
+legal choice stays usable without it. After a reload or reconnect in the same
+tab the pending payment is restored and its proposal is requested again.
+Nothing about a preview is saved in the recording or the browser.
+
+Replay, Watch history and Study show the taps and spending that were recorded.
+They show no proposal: a preview was never part of the recording, and a live
+game is never consulted to decorate a recorded position.
 
 ### Pending input, waits and recovery
 
@@ -678,7 +747,8 @@ The player choosing can differ from the player whose turn it is. Target and
 cost prompts identify their source and required input. Finish a pending target
 or cost choice before trying another spell. Inspection and **Show all** keep
 the complete legal choices accessible. A pending cost can require a deliberate
-mana activation before **Pay cost** becomes available. Mana you have produced
+mana activation before **Pay the cost** becomes available;
+[Previewing payments](#previewing-payments) covers what **Pay the cost** would tap. Mana you have produced
 and not yet spent appears as a floating-mana readout beside the board, by
 color, until it is spent or empties. The list is the complete
 set of legal actions at this decision. Academy does not say why an action is
@@ -880,8 +950,8 @@ games and imported training or evaluation games use these same controls.
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
 newest first, with filters for player, deck, status, result and date. **My games**
 narrows the list to this browser. A trained bot appears under its
-[short name and digest](#how-a-trained-opponent-is-named). Open an evaluation
-trace or exported training game through **Watch → Open a game file**, or
+[short name and digest](#how-a-trained-opponent-is-named). Open any recorded
+game file through **Watch → Open a game file**, or
 [launch a replay directly](#open-a-replay-directly).
 
 #### Follow the timeline
@@ -890,7 +960,7 @@ trace or exported training game through **Watch → Open a game file**, or
 |---|---|
 | Choice | The permitted recorded board, legal offers and action taken, with the chooser identified and policy/search evidence if recorded. History stops before the choice. |
 | Consequences | The recorded post-action board and ordered event groups. Narration emphasizes events on that board; it does not reconstruct an intermediate board for each beat. An action with no recorded events still has a post-action position. |
-| Result or latest state | The saved final board and outcome, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner. |
+| Result or latest state | The saved final board and outcome, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
 
 **Previous** and **Next** move through positions. Select a score line, use the
 labeled scrubber, or jump to a recorded turn and phase to seek; seeking pauses
@@ -981,40 +1051,38 @@ holds private deal seeds; keep it private.
 
 ### Watch a game from an evaluation
 
-Evaluation trace import currently needs the optional manabot integration.
-Stop any running Academy server and install it into the same environment:
+1. Find the evaluation's recorded games, `games/<cell-id>.jsonl` under its
+   output directory. Copy or download that artifact locally if the evaluation
+   ran remotely. Use the games file rather than the evaluation's metrics or
+   summary file.
+2. Open one from the command line with
+   `uv run --no-project managym academy replay <file> --game <n>`
+   ([Open a replay directly](#open-a-replay-directly)) and skip to step 4, or
+   launch `uv run --no-project managym academy`, open **Watch** at
+   `http://127.0.0.1:8000/replay?watch=1` and use **Open a game file**.
+3. If it contains several games, select a **Recorded game** and click
+   **Open selected game**. A single game opens automatically.
+4. Use **Next**, **Previous**, or **Play** to follow choices, consequences and
+   the result ([replay controls](#inspect-a-replay)). Academy re-executes the
+   game and checks its state digests without running the original players
+   again. Search outputs the evaluation recorded appear at each choice; what
+   it did not record is marked **not retained**.
+
+This needs only `managym`. Replaying does not require the original checkpoint.
+A game bound to an incompatible world must be opened with the build that
+recorded it, which the refusal names; opening never upgrades frozen evaluation
+evidence.
+
+Two kinds of evaluation game are command traces
+(`traces/<cell-id>.commands.jsonl.gz`) instead: every game of an evaluation
+run before this record, and games that start from a constructed scenario
+position, which no seed and decklist can reproduce. They open through the same
+command and file picker, verified by manabot. Stop any running Academy server
+and install it into the same environment, at the matching release version:
 
 ```bash
 uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
 ```
-
-Use matching `managym` and `manabot` release versions. For an unpublished
-candidate, install both wheels from the same release build instead.
-
-1. Find the evaluation's retained command trace, typically
-   `traces/<cell-id>.commands.jsonl.gz` under its output directory. Copy or
-   download that artifact locally if the evaluation ran remotely. Use the
-   command trace rather than the evaluation's metrics or summary file; see
-   [automatic capture and replay](training.md#automatic-capture-and-replay)
-   for the evaluation workflow.
-2. Open the game from the command line with
-   `uv run --no-project managym academy replay <trace> --game <n>`
-   ([Open a replay directly](#open-a-replay-directly)) and skip to step 4, or
-   launch `uv run --no-project managym academy`, open **Watch** at
-   `http://127.0.0.1:8000/replay?watch=1` and use
-   **Open a game file** to select the trace. Individual game JSON
-   and uncompressed JSONL are also accepted.
-3. If it contains several games, select a **Recorded game** and click
-   **Open selected game**. A single game opens automatically.
-4. Use **Next**, **Previous**, or **Play** to follow choices, consequences and
-   the result ([replay controls](#inspect-a-replay)). The importer verifies the
-   retained Commands and state digests without running the original players again. Historical policy
-   outputs that were not recorded are marked unavailable.
-
-If the file picker is absent, check that manabot is installed in the server's
-environment and restart Academy. A trace bound to an incompatible world must
-be opened with the revision that produced it; import does not upgrade frozen
-evaluation evidence. Replaying does not require the original checkpoint.
 
 ### Trained opponents and other bots
 
@@ -1035,8 +1103,8 @@ It adds:
 - **Registered policy** in Play's Opponent menu and in both Watch seats
   ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
 - **Greedy** and **Heuristic** registered policies.
-- **Open a game file**: exported training games and evaluation traces open as
-  verified replays.
+- Verification of earlier evaluation command traces and exported training
+  games in **Open a game file**. Games recorded by managym open without it.
 
 Independent Python policies work without manabot. A saved game that was played
 against a checkpoint still replays without its provider; continuing it needs
@@ -1084,8 +1152,9 @@ unavailable selection rather than substituting a newer model. Keyboard navigatio
 uses the browser's select controls.
 
 With manabot installed, its provider discovers `.pt` and portable `.safetensors`
-checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`) and explicit
-`ACADEMY_PLAY_CHECKPOINTS` sources. Python can supply provider-owned discovery
+checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`), explicit
+`ACADEMY_PLAY_CHECKPOINTS` sources and the runs `etude train` keeps on this
+computer (`~/.etude/track`, moved by `ETUDE_HOME`). Python can supply provider-owned discovery
 without changing the environment:
 
 ```python
@@ -1283,11 +1352,11 @@ and a message, and exits with status 2. From Python the same `code` and
 | `policy.unavailable`, `opponent.unavailable`, `player.unavailable` | The policy or provider is missing, its specification is invalid, or its artifacts cannot run in this engine. The message says which. See [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint). |
 | `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path (use `pathlib.Path` for files in Python), or pass the `--traces-dir` the game was recorded in. |
 | `participant_credential_required` in the browser after READY | The recording is private or unfinished and this browser at this address has no participant credential. Use the same browser and address (including port) where **Games** lists it, or open a shared, finished recording. |
-| `replay.unreadable` | The file is not a game file: not JSON, JSONL or gzip of either, or it holds no game records. Use an evaluation's `traces/<cell-id>.commands.jsonl.gz` (not its metrics or summary file) or an exported training game. |
-| `replay.ambiguous` | The trace holds several games and none was selected. Select one by index or trace digest: `--game` in the CLI, or `game=` in Python. |
-| `replay.game_unknown` | The selection is past the end of the file, or matches no digest or more than one. A recording id already names one game; omit `--game` (Python `game=`) when opening it. Selection applies only within a trace file. |
-| `replay.needs_manabot` | Game files are verified by manabot. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. |
-| `replay.rejected` | Verification failed: the trace was recorded in another world, or its Commands or digests do not replay. Open it with the revision that produced it. |
+| `replay.unreadable` | The file is not a game file: not JSON, JSONL or gzip of either, or it holds no game records. Use a run's `games/` directory or one of its files, not a metrics or summary file. |
+| `replay.ambiguous` | The file or directory holds several games and none was selected. Select one by index or digest: `--game` in the CLI, or `game=` in Python. |
+| `replay.game_unknown` | The selection is past the end of the file, or matches no digest or more than one. A recording id already names one game; omit `--game` (Python `game=`) when opening it. Selection applies only within a file or directory. |
+| `replay.needs_manabot` | The file is an evaluation command trace or a game exported by `manabot export-game`, which manabot verifies. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. Games recorded by managym need no manabot. |
+| `replay.rejected` | The game was recorded in another world or with other card content, mixes decklist disclosure, or was played without skipping forced decisions. The message says which and names the recording and running builds. |
 | `server.running` | (Python) `serve` was called while an Academy from this process is still open. Close it first. |
 | `server.closed` | (Python) This Academy has already closed. Call `serve` again. |
 | `server.startup` / `server.shutdown` | The server could not start or finish stopping. The message names the failure. |

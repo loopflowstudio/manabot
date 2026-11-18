@@ -4,7 +4,7 @@
 use std::{collections::BTreeSet, path::Path};
 
 use managym::conformance::{
-    generate_case, replay_case, replay_receipt, validate_contract_root, validate_phase_matrix,
+    generate_case, replay_receipt, validate_contract_root, validate_phase_matrix,
     verify_metamorphic, verify_properties, CaseSpec, Evidence, Manifest, Orientation, PhaseMatrix,
     CONTRACT_ID, PHASE_REVISION,
 };
@@ -14,8 +14,10 @@ const ROOT: &str = concat!(
     "/../conformance/semantic-kernel-w17-v4"
 );
 
-// Each frozen game owns its regeneration, replay and 300-second timeout.
-// Its digest pins every checkpoint and command in the generated trace.
+// Each frozen game regenerates the reference/optimized lockstep once. Its
+// digest pins every checkpoint and command. The public-handoff test below
+// checks serialized replay separately, avoiding a duplicate full traversal
+// of the largest boards within one 300-second test.
 macro_rules! frozen_cases {
     ($($test:ident => $id:literal),+ $(,)?) => {
         const FROZEN_CASE_IDS: &[&str] = &[$($id),+];
@@ -79,7 +81,6 @@ fn check_frozen_case(id: &str) {
         case.final_checkpoint.state_hash, expected.final_state_hash,
         "{id}"
     );
-    replay_case(&case).expect("frozen case replay");
 }
 
 #[test]

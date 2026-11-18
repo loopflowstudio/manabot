@@ -5,7 +5,6 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    agent::behavior_tracker::BehaviorTracker,
     cards::{content_pack::default_content_pack, deck_admission::admit_submitted},
     flow::{
         game::{Game, GameState, TrackedState},
@@ -167,15 +166,11 @@ impl Game {
             semantic_object_candidates: Default::default(),
             pending_choice: None,
             skip_trivial_count: 0,
-            trackers: [BehaviorTracker::new(false), BehaviorTracker::new(false)],
             card_capture: None,
             statistics: None,
             capture_drawing: None,
             capture_originals: Default::default(),
         };
-
-        game.trackers[0].on_game_start();
-        game.trackers[1].on_game_start();
 
         if capture {
             game.card_capture = Some(crate::flow::card_capture::CardCapture::new(&game));

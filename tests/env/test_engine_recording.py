@@ -7,7 +7,7 @@ import sys
 import pytest
 
 import managym
-from managym.recording import CapturedVector, ScalarCapture, read_failure
+from managym.recording import CapturedVector, ScalarCapture, read_failure, read_record
 from managym.replay import replay_failure_inputs, require_replay_runtime
 
 
@@ -59,7 +59,7 @@ capture.step(ExitNative(game), 0)
         timeout=30,
     )
     assert result.returncode == 73, result.stderr
-    evidence = read_failure(path)
+    evidence = read_record(path)
     assert evidence.boundary is not None
     assert evidence.boundary.phase == phase
     assert not evidence.boundary.returned
@@ -101,7 +101,7 @@ def test_standalone_vector_records_global_streams(tmp_path: Path) -> None:
     capture.enable_statistics()
     capture.reset_all([managym.PlayerConfig(n, {"Mountain": 20}) for n in ("a", "b")])
     capture.step([0, 0])
-    evidence = read_failure(tmp_path / "vector.jsonl")
+    evidence = read_record(tmp_path / "vector.jsonl")
     assert [game.stream for game in evidence.games] == [8, 9]
     assert [game.actions for game in evidence.games] == [[0], [0]]
     assert [row.stream for row in capture.statistics()] == [8, 9]
@@ -128,7 +128,7 @@ def test_standalone_command_journal_and_statistics(tmp_path: Path) -> None:
     capture.command(game, command)
     indexed.step(0)
     assert game.statistics().cards == indexed.statistics().cards
-    evidence = read_failure(tmp_path / "command.jsonl")
+    evidence = read_record(tmp_path / "command.jsonl")
     assert evidence.boundary.returned and evidence.boundary.phase == "ready"
     assert evidence.games[0].actions == [command]
     assert replay_failure_inputs(evidence)[0]["status"] == "advanced"
