@@ -19,12 +19,12 @@ def forests() -> list[managym.PlayerConfig]:
 
 
 def test_priority_tap_encodes_and_replays(tmp_path: Path) -> None:
-    setup = managym.GameSetup(forests(), mana_taps=(True, False))
-    assert managym.GameSetup(setup).mana_taps == (True, False)
-    assert setup[::-1].mana_taps == (False, True)
+    setup = managym.GameSetup(forests(), mana_taps=("always", "off"))
+    assert managym.GameSetup(setup).mana_taps == ("always", "off")
+    assert setup[::-1].mana_taps == ("off", "always")
     vector = managym.VectorEnv(num_envs=1, seed=3)
     vector.reset_all(setup)
-    assert vector.current_player_configs()[0].mana_taps == (True, False)
+    assert vector.current_player_configs()[0].mana_taps == ("always", "off")
 
     env = managym.Env(seed=3)
     capture = ScalarCapture(3, games_path=tmp_path / "games.jsonl")
@@ -69,7 +69,7 @@ def test_default_and_explicit_off_play_and_record_identically(
     games = []
     for setup in (
         managym.GameSetup(seats),
-        managym.GameSetup(seats, mana_taps=(False, False)),
+        managym.GameSetup(seats, mana_taps=("off", "off")),
     ):
         env = managym.Env(seed=3)
         path = tmp_path / f"game-{len(games)}.jsonl"
@@ -89,7 +89,17 @@ def test_default_and_explicit_off_play_and_record_identically(
     assert b"mana_taps" not in games[0][1]
 
 
-@pytest.mark.parametrize("invalid", [(True,), (True, False, True), (1, False), "no"])
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        ("off",),
+        ("off", "off", "off"),
+        (True, "off"),
+        ("off", False),
+        ("everywhere", "off"),
+        "no",
+    ],
+)
 def test_mana_taps_requires_two_modes(invalid: object) -> None:
     with pytest.raises(ValueError, match="two seat modes"):
         managym.GameSetup(forests(), mana_taps=invalid)  # type: ignore[arg-type]
@@ -99,8 +109,8 @@ def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
     off = managym.Env(seed=3)
     on = managym.Env(seed=3)
     seats = forests()
-    for env, taps in ((off, False), (on, True)):
-        obs, _ = env.reset(managym.GameSetup(seats, mana_taps=(taps, False)))
+    for env, taps in ((off, "off"), (on, "always")):
+        obs, _ = env.reset(managym.GameSetup(seats, mana_taps=(taps, "off")))
         before = env.skip_trivial_count()
         land = next(
             i
@@ -108,7 +118,7 @@ def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
             if action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
         )
         env.step(land)
-        if taps:
+        if taps == "always":
             assert env.skip_trivial_count() == before
         else:
             # With only lands, the next surfaced decision is the opponent's land.
@@ -118,16 +128,16 @@ def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
 
 def test_priority_taps_preserve_default_config_identity_and_follow_seats() -> None:
     for config in (
-        ObservationConfig(mana_taps=False),
-        MatchConfig(mana_taps=(False, False)),
+        ObservationConfig(mana_taps="off"),
+        MatchConfig(mana_taps=("off", "off")),
     ):
         stored = config.model_dump(mode="json")
         assert "mana_taps" not in stored
         assert type(config).model_validate(stored) == config
         assert canonical_sha256(stored) == canonical_sha256(type(config)().model_dump())
-    match = Match(MatchConfig(mana_taps=(True, False)))
-    assert match.to_rust().mana_taps == (True, False)
-    assert match.swapped().to_rust().mana_taps == (False, True)
+    match = Match(MatchConfig(mana_taps=("always", "off")))
+    assert match.to_rust().mana_taps == ("always", "off")
+    assert match.swapped().to_rust().mana_taps == ("off", "always")
 
 
 def test_capture_counts_a_priority_float_expiring_through_skipped_steps(
@@ -136,7 +146,9 @@ def test_capture_counts_a_priority_float_expiring_through_skipped_steps(
     env = managym.Env(seed=3)
     path = tmp_path / "game.jsonl"
     capture = ScalarCapture(3, games_path=path)
-    obs, _ = capture.reset(env, managym.GameSetup(forests(), mana_taps=(True, False)))
+    obs, _ = capture.reset(
+        env, managym.GameSetup(forests(), mana_taps=("always", "off"))
+    )
     floated = False
     while not env.is_game_over():
         actions = [a.action_type for a in obs.action_space.actions]
@@ -173,7 +185,7 @@ def test_usable_floats_follow_paid_activations(land: str, has_spend: bool) -> No
     # Vista pays life and sacrifices itself. Canyon can also spend {1} to draw.
     seat = managym.PlayerConfig("a", {"Forest": 16, land: 4})
     env = managym.Env(seed=385)
-    env.reset(managym.GameSetup([seat, forests()[1]], mana_taps=("usable", False)))
+    env.reset(managym.GameSetup([seat, forests()[1]], mana_taps=("usable", "off")))
     env.scenario_clear_hand(0)
     env.scenario_force_battlefield(0, land)
     env.scenario_force_battlefield(0, "Forest")

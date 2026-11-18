@@ -195,7 +195,11 @@ impl Game {
                     .unwrap();
                 if let Decision::Payment(payment) = suspended.decision {
                     if let Action::TapForMana { permanent, .. } = action {
-                        sources.push(position.to_mut().preview_tap(player, *permanent));
+                        sources.push(
+                            position
+                                .to_mut()
+                                .preview_tap(player, AutomaticTap::fixed(*permanent)),
+                        );
                     }
                     let cost = payment.remaining.mana_cost();
                     resolution = Some((payment, suspended.frame));
@@ -211,7 +215,11 @@ impl Game {
                     ..
                 }) => {
                     if let Action::TapForMana { permanent, .. } = action {
-                        sources.push(position.to_mut().preview_tap(player, *permanent));
+                        sources.push(
+                            position
+                                .to_mut()
+                                .preview_tap(player, AutomaticTap::fixed(*permanent)),
+                        );
                     }
                     Some(position.payment_mana_cost(player, payment, alternative.as_ref()))
                 }
@@ -222,7 +230,11 @@ impl Game {
                     ..
                 }) => {
                     if let Action::TapForMana { permanent, .. } = action {
-                        sources.push(position.to_mut().preview_tap(player, *permanent));
+                        sources.push(
+                            position
+                                .to_mut()
+                                .preview_tap(player, AutomaticTap::fixed(*permanent)),
+                        );
                     }
                     position.to_mut().pending_choice = None;
                     Some(
@@ -293,7 +305,10 @@ impl Game {
             return Ok(preview);
         };
         let position = position.to_mut();
-        sources.extend(taps.map(|id| position.preview_tap(player, id)));
+        sources.extend(
+            taps.into_iter()
+                .map(|tap| position.preview_tap(player, tap)),
+        );
         let pool = position.pooled_mana(player);
         if let Some((payment, frame)) = resolution {
             *position.state.suspended_decision_mut() = Some(SuspendedResolution {
@@ -336,7 +351,8 @@ impl Game {
     }
     /// Run only the selected production on the isolated preview position. Its
     /// pool delta includes triggered production, spend riders and expiry.
-    fn preview_tap(&mut self, player: PlayerId, permanent: PermanentId) -> PaymentSourcePreview {
+    fn preview_tap(&mut self, player: PlayerId, tap: AutomaticTap) -> PaymentSourcePreview {
+        let permanent = tap.permanent;
         let card = self.state.permanents[permanent]
             .as_ref()
             .expect("planned source");
@@ -348,7 +364,7 @@ impl Game {
         };
         let label = self.characteristics(permanent).name.clone();
         let before = self.pooled_mana(player);
-        self.tap_fixed_mana_source(player, permanent);
+        self.perform_automatic_tap(player, tap);
         let after = self.pooled_mana(player);
         let mut output = Mana {
             mana: std::array::from_fn(|i| after.mana[i] - before.mana[i]),

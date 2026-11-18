@@ -61,7 +61,7 @@ class PlayerSetup(BaseModel):
     decklist: dict[str, int]
     sideboard: dict[str, int]
     mana_taps: managym.ManaTaps = Field(
-        default=False, exclude_if=lambda value: not value
+        default="off", exclude_if=lambda value: value == "off"
     )
     # Earlier evidence names the selector `content_pack`.
     world: str | None = Field(
@@ -76,7 +76,7 @@ class PlayerSetup(BaseModel):
         cls,
         player: managym.PlayerConfig,
         decklists: DecklistDisclosure,
-        mana_taps: managym.ManaTaps = False,
+        mana_taps: managym.ManaTaps = "off",
     ) -> "PlayerSetup":
         return cls(
             name=player.name,

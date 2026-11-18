@@ -696,11 +696,11 @@ With the default setup, a cost that needs every available fixed source
 can be paid as soon as you cast. The cast preview shows the taps before
 you commit.
 
-Under **Mana tap offers**, choose **At usable priority windows and during
-payment** to float when a legal action can spend mana or tapping the source
-can trigger an ability. Choose **Whenever legal** to tap a
-fixed-output source at priority or during payment, even when the pool
-already covers the cost. The setting follows you when you swap sides.
+Under **Mana tap offers**, **Off** is the default. Choose **Only when the mana could be used** to float when a legal action can spend mana or tapping the source
+can trigger an ability. Usable also offers an activation that pays life,
+sacrifices a permanent or has another effect. **Always** offers every legal
+mana activation at priority. **Off** keeps these abilities available during
+payment, including a land’s choice of color. The setting follows you when you swap sides.
 Your priority stops still determine which windows pause for a decision.
 
 **Reading the preview.**
@@ -710,7 +710,7 @@ Your priority stops still determine which windows pause for a decision.
 | Sources and their output | The automatic plan for this cost, in tapping order. **Left over** is the pool after the cost when the spending is forced. When several spends are legal it shows the pool after production and says which choices you will be prompted for. |
 | A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. The preview names the missing choice and marks no sources. The preview returns at the completing target or at the payment prompt when there is one; when the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
 | No sources needed | The cost is zero or your floating mana already covers it. |
-| No automatic payment | The automatic payer cannot fund this cost from fixed sources. Use an offered mana ability and make its choices first. |
+| No automatic payment | The automatic payer cannot fund this cost with its available taps. Use an offered mana ability and make its choices first. |
 | Nothing | There is no automatic payment to preview. When choosing which floating mana to spend, choose the unit directly. Mana abilities with their own fee also have no preview. |
 
 Mana with a spending restriction, an effect when spent or an end-of-combat

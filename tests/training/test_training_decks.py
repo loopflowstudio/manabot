@@ -91,7 +91,7 @@ def _agent() -> ActorCritic:
 
 
 def _collector(
-    decks: UniformDecks, *, mana_taps: managym.ManaTaps = False
+    decks: UniformDecks, *, mana_taps: managym.ManaTaps = "off"
 ) -> Collector:
     return open_collector(
         ObservationSpace(ObservationConfig(mana_taps=mana_taps)),
@@ -582,7 +582,7 @@ def test_mixed_training_games_export_the_resolved_disclosure(
     assert settings == {"open", "closed"}
 
 
-@pytest.mark.parametrize("mode", [True, "usable"])
+@pytest.mark.parametrize("mode", ["always", "usable"])
 def test_priority_taps_follow_sampled_self_play_roots(
     decks: UniformDecks, mode: managym.ManaTaps
 ) -> None:

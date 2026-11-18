@@ -583,7 +583,7 @@ and its evaluation limits are specified in the
 
 ## Mana taps at priority and during payment
 
-A policy can be trained with its lands and other fixed-output sources offered
+A policy can be trained with fixed- and choice-output mana abilities offered
 as actions at priority and during cast, activation and resolution payments
 ([what the seat is offered](../managym/README.md#mana-taps-at-priority-and-during-payment)). The
 option belongs to the policy's observation configuration, beside its action
@@ -593,34 +593,34 @@ capacity:
 from manabot.infra.config import ObservationConfig
 
 off = ObservationConfig(max_actions=64, action_overflow="first-legal")
-on = off.model_copy(update={"mana_taps": True})
+always = off.model_copy(update={"mana_taps": "always"})
 
 "mana_taps" in off.model_dump()   # False
-on.model_dump()["mana_taps"]      # True
+always.model_dump()["mana_taps"]  # "always"
 ```
 
 Set `mana_taps="usable"` to limit priority floats to windows with a mana spend
-or sources with a tap trigger. Payment choices are the same as with `True`.
+or to activations with side effects, such as sacrificing a Treasure or firing a tap trigger. Payment choices are the same as with `"always"`.
 
-It is false by default and left out of the dump when false, so existing
+The default, `"off"`, is omitted from the dump, so existing
 configurations, checkpoints and digests keep their identity. It changes no
 buffer shape: a checkpoint trained with it and one trained without it are
 admitted to the same game.
 
-Self-play with `SelfPlay.observation = on` offers the taps to both learning
+Self-play with `SelfPlay.observation = always` offers the taps to both learning
 seats. The checkpoint saves the configuration, and evaluation seats each
 player in the space it trained in:
 
 | Seat holds | Receives the additional tap offers |
 | --- | --- |
-| a checkpoint saved with `mana_taps=True` or `"usable"` | in its saved mode |
+| a checkpoint saved with `mana_taps="always"` or `"usable"` | in its saved mode |
 | any other checkpoint | no |
 | heuristic, random, search or LLM player | no |
 
 Nothing on an evaluation request chooses this, so a checkpoint cannot be
 played in a space it did not train in, and two arms that differ only in this
 option meet the same heuristic. Each game's record holds the resolved pair
-(`MatchConfig.mana_taps`, omitted when both are false and exchanged
+(`MatchConfig.mana_taps`, omitted when both are `"off"` and exchanged
 with the seats by `swapped()`), which is what replay reads.
 
 An update is a fixed number of decisions. Enabling taps can change both the

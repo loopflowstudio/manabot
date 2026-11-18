@@ -2205,8 +2205,14 @@ impl Game {
                 Action::ChooseMode { mode, .. },
             ) => {
                 let mana = &choices[*mode];
-                self.state.mana_pool_mut(*player).add(mana);
                 let player = *player;
+                // A priority activation has no enclosing payment or suspended
+                // caller. Each output choice also owns the fixed bonuses it adds.
+                let before = (resume.is_none()
+                    && self.pending_choice.is_none()
+                    && self.mana_capture(player).is_some())
+                .then(|| self.state.players[player.0].mana_pool.total());
+                self.state.mana_pool_mut(player).add(mana);
                 // The output is produced: its triggered mana abilities
                 // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
                 let next = match production {
@@ -2231,6 +2237,10 @@ impl Game {
                         resume.take(),
                     ),
                 };
+                if let Some(before) = before {
+                    let produced = self.state.players[player.0].mana_pool.total() - before;
+                    self.mana_capture(player).unwrap().float(produced);
+                }
                 if let Some(next) = next {
                     suspended.decision = *next;
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -4277,7 +4287,7 @@ mod payment_tests {
             .scenario_force_battlefield(player, "Island", true)
             .unwrap();
         let ordinary = game.suspended_decision_action_space().unwrap().actions;
-        game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
+        game.mana_taps = [ManaTaps::Always, ManaTaps::Off];
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let actions = &game.action_space().unwrap().actions;
         assert_eq!(&actions[..ordinary.len()], ordinary);
@@ -4312,7 +4322,7 @@ mod payment_tests {
             game.scenario_force_battlefield(player, "Island", true)
                 .unwrap();
         }
-        game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
+        game.mana_taps = [ManaTaps::Always, ManaTaps::Off];
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         apply_payment_action(
             &mut game,

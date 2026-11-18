@@ -75,9 +75,9 @@
             <label class="flex items-center gap-2">
               Mana tap offers
               <select bind:value={setup.manaTaps} class="rounded border border-line bg-panel p-2">
-                <option value={false}>Default payments</option>
-                <option value="usable">At usable priority windows and during payment</option>
-                <option value={true}>Whenever legal</option>
+                <option value="off">Off</option>
+                <option value="usable">Only when the mana could be used</option>
+                <option value="always">Always</option>
               </select>
             </label>
           {/if}

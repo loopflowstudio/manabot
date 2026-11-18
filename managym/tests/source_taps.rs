@@ -149,11 +149,11 @@ fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
     let lands = ["Mountain", "Forest", "Forest"];
     let mut game = game(&lands);
     let ordinary = game.action_space().unwrap().actions.clone();
-    game.mana_taps = [ManaTaps::Off, ManaTaps::Everywhere];
+    game.mana_taps = [ManaTaps::Off, ManaTaps::Always];
     game.scenario_refresh_priority().unwrap();
     assert_eq!(game.action_space().unwrap().actions, ordinary);
 
-    game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
+    game.mana_taps = [ManaTaps::Always, ManaTaps::Off];
     game.scenario_refresh_priority().unwrap();
     assert_eq!(
         &game.action_space().unwrap().actions[..ordinary.len()],
@@ -183,7 +183,7 @@ fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
 fn funded_cast_can_tap_a_surplus_forest_before_paying() {
     let mut game = game(&["Forest", "Mountain"]);
     game.state.players[0].mana_pool = Mana::parse("2R");
-    game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
+    game.mana_taps = [ManaTaps::Always, ManaTaps::Off];
     game.scenario_refresh_priority().unwrap();
     cast(&mut game);
     assert!(matches!(
@@ -229,7 +229,7 @@ fn surplus_sources_follow_the_existing_payment_actions() {
     let mut off = game(&["Mountain", "Mountain", "Forest"]);
     off.state.players[0].mana_pool = Mana::parse("2");
     let mut on = off.clone();
-    on.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
+    on.mana_taps = [ManaTaps::Always, ManaTaps::Off];
     let mut usable = off.clone();
     usable.mana_taps = [ManaTaps::Usable, ManaTaps::Off];
     cast(&mut off);

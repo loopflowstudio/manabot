@@ -1,4 +1,4 @@
-"""Do fixed-source taps at priority and during payments change w64 TLA learning or throughput?
+"""Do mana abilities at priority and during payments change w64 TLA learning or throughput?
 
 Three training seeds each train with taps off and usable. Etude plays each policy
 against the first-64 heuristic and compares usable against off at matched updates. Every
@@ -124,8 +124,7 @@ class Arm(StrictModel):
 
     @property
     def name(self) -> str:
-        label = {False: "off", True: "on", "usable": "usable"}[self.taps]
-        return f"mana-taps-w64-{label}"
+        return f"mana-taps-w64-{self.taps}"
 
 
 def settings(arm: Arm) -> SelfPlay:
@@ -171,7 +170,7 @@ def training_jobs(
     updates: int = 50,
     max_attempts: int = 1,
 ) -> list[TrainingJob]:
-    arms = [Arm(taps=taps, updates=updates) for taps in (False, "usable")]
+    arms = [Arm(taps=taps, updates=updates) for taps in ("off", "usable")]
     given = corpus_input()
     return [
         TrainingJob(
@@ -210,7 +209,7 @@ def deals() -> Deals:
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     """Compare complete seed pairs. Etude smoke supplies one seed per distinct job."""
-    names = {Arm(taps=taps).name: taps for taps in (False, "usable")}
+    names = {Arm(taps=taps).name: taps for taps in ("off", "usable")}
     runs: dict[tuple[int, managym.ManaTaps], TrainingRunSummary] = {}
     for run in state.runs:
         if run.launch not in names or run.seed not in SEEDS or run.seed is None:
@@ -287,7 +286,7 @@ def paired_evaluation(
         )
 
     for seed in sorted({seed for seed, _ in runs}):
-        off, usable = checkpoints[seed, False], checkpoints[seed, "usable"]
+        off, usable = checkpoints[seed, "off"], checkpoints[seed, "usable"]
         for update in sorted(off.keys() & usable.keys()):
             for label, player in (("off", off[update]), ("usable", usable[update])):
                 compare(
@@ -340,12 +339,11 @@ def spot_check(record: GameRecord, leg: int, replay_sha256: str) -> list[Row]:
         actions = space.actions[: OBSERVATION.max_actions]
         row = counts[int(decision.observation.agent.player_index)]
         row.surfaced += 1
-        if any(
-            a.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY for a in actions
-        ):
-            tap = managym.ActionEnum.TAP_FOR_COST
-            row.float_offered += any(a.action_type == tap for a in actions)
-            row.float_chosen += actions[decision.chosen].action_type == tap
+        for index, action in enumerate(actions):
+            if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY:
+                row.float_offered += index + 1 < len(actions)
+                row.float_chosen += decision.chosen > index
+                break
     if replay.stop is None or replay.stop.status != "complete":
         raise ValueError(f"mana spot check replay failed: {replay.stop}")
     exposure = replay.cards().capture.exposure
@@ -524,11 +522,11 @@ def random_deals() -> None:
     rng = random.Random(385)
     decks = rng.sample(corpus().decks, 24)
     deals: list[tuple[list[managym.PlayerConfig], object]] = []
-    for mode in (False, True, "usable"):
+    for mode in ("off", "always", "usable"):
         steps = skipped = offered = chosen = 0
         start = perf_counter()
         for game in range(40):
-            if mode is False:
+            if mode == "off":
                 players = [deck.player() for deck in rng.sample(decks, 2)]
                 deals.append((players, rng.getstate()))
             else:
@@ -541,9 +539,14 @@ def random_deals() -> None:
                 actions = space.actions
                 index = rng.randrange(len(actions))
                 if space.action_space_type == managym.ActionSpaceEnum.PRIORITY:
-                    tap = managym.ActionEnum.TAP_FOR_COST
-                    offered += any(action.action_type == tap for action in actions)
-                    chosen += actions[index].action_type == tap
+                    passed = next(
+                        i
+                        for i, action in enumerate(actions)
+                        if action.action_type
+                        == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+                    )
+                    offered += passed + 1 < len(actions)
+                    chosen += index > passed
                 obs, _, done, truncated, _ = env.step(index)
                 steps += 1
                 if truncated:
@@ -570,7 +573,7 @@ def priority_check_timing() -> None:
         differences = []
         for seed in range(40):
             times = {}
-            for mode in (True, "usable") if seed % 2 else ("usable", True):
+            for mode in ("always", "usable") if seed % 2 else ("usable", "always"):
                 env = managym.Env(seed=1000 + seed)
                 env.reset(managym.GameSetup(decks, mana_taps=(mode, mode)))
                 env.scenario_clear_hand(0)
@@ -587,8 +590,8 @@ def priority_check_timing() -> None:
                 assert sum(
                     a.action_type == managym.ActionEnum.TAP_FOR_COST
                     for a in obs.action_space.actions
-                ) == (3 if spend or mode is True else 0)
-            differences.append((times["usable"] - times[True]) * 1e6)
+                ) == (3 if spend or mode == "always" else 0)
+            differences.append((times["usable"] - times["always"]) * 1e6)
         print(
             f"{spend=} paired median usable minus everywhere {median(differences):.2f} us"
         )

@@ -72,15 +72,23 @@ class GameConfig:
     hero_source: dict[str, Any] | None = None
     villain_source: dict[str, Any] | None = None
 
-    # Offer fixed-source mana taps wherever legal for the human controller.
-    mana_taps: managym.ManaTaps = False
+    # The human controller owns this mode, independent of the chosen seat.
+    mana_taps: managym.ManaTaps = "off"
 
     def __post_init__(self) -> None:
         if type(self.human_seat) is not int or self.human_seat not in (0, 1):
             raise ValueError("human_seat must be 0 or 1.")
+        self.mana_taps = TypeAdapter(managym.ManaTaps).validate_python(self.mana_taps)
         self.mirror = TypeAdapter(SearchConfig | None).validate_python(self.mirror)
         if self.decklists == "closed" and self.mirror is not None:
             raise ValueError("Search requires open decklists.")
+
+    def to_record(self) -> dict[str, Any]:
+        """Omit default-off mana offers from retained game configuration."""
+        config = asdict(self)
+        if self.mana_taps == "off":
+            del config["mana_taps"]
+        return config
 
     def to_rust(self) -> managym.GameSetup:
         """Order human/opponent setup roles by their recorded native seats."""
@@ -89,8 +97,8 @@ class GameConfig:
             configs if self.human_seat == 0 else list(reversed(configs)),
             decklists=self.decklists,
             mana_taps=(
-                self.mana_taps if self.human_seat == 0 else False,
-                self.mana_taps if self.human_seat == 1 else False,
+                self.mana_taps if self.human_seat == 0 else "off",
+                self.mana_taps if self.human_seat == 1 else "off",
             ),
         )
 
@@ -218,7 +226,7 @@ class Trace:
             record.pop("recording_import")
         else:
             record["recording_import"] = asdict(self.recording_import)
-        record["config"] = asdict(self.config)
+        record["config"] = self.config.to_record()
         record["events"] = [
             {
                 **{item.name: getattr(event, item.name) for item in fields(event)},

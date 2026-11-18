@@ -657,8 +657,11 @@ Further ties prefer basic lands, other lands, lands with activated abilities,
 other permanents, then creatures; within those tiers, colorless output is
 preferred. The class search stops after 1024 arithmetic checks and keeps a
 payable candidate. Payments with saved obligations only receive surplus
-pruning. Activated mana abilities remain deliberate actions; native spending
-choices determine the exact mana receipt. Source preference has no setting.
+pruning. If fixed sources cannot pay, the planner may also select the color
+of a simple tap activation such as Kyoshi Village. The preview shows that
+source and its output. Sacrifices, life payments and abilities with other
+effects remain explicit payment choices. Native spending choices determine
+the exact mana receipt. Source preference has no setting.
 
 ### Manual mana sources
 
@@ -674,18 +677,20 @@ seat [asks for it](#mana-taps-at-priority-and-during-payment).
 
 ### Mana taps at priority and during payment
 
-A seat can also choose fixed-output sources at priority and during a mana payment,
-including when its pool already covers the cost.
+The seat chooses when to offer mana abilities at priority, including sources
+with a choice of colors. With `off`, Kyoshi Village can pay for a green or
+white spell during payment and can activate its draw ability at priority.
 The option is per seat and off by default:
 
 ```python
 import managym
 
-setup = managym.GameSetup([first, second], mana_taps=(True, False))
+setup = managym.GameSetup([first, second], mana_taps=("always", "off"))
 ```
 
-Use `mana_taps=("usable", False)` to offer fixed taps at priority only when
-a legal action can spend mana or tapping that source can trigger an ability.
+Use `mana_taps=("usable", "off")` to offer priority floats when a listed action can
+spend mana, the activation has additional costs or effects, or tapping that
+source can trigger an ability.
 The engine inspects the listed actions without checking individual mana colors.
 Both enabled modes give the same choices during payments.
 

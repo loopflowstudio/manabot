@@ -163,7 +163,6 @@ def execute_game(
             if (
                 registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
                 and player_space is not None
-                and player_space.encoder.config.mana_taps
             ):
                 tap_players[responsible] = player_space.encoder.config.mana_taps
         responsible = None
@@ -177,8 +176,8 @@ def execute_game(
             match = match.model_copy(
                 update={
                     "mana_taps": (
-                        tap_players.get(first, False),
-                        tap_players.get(second, False),
+                        tap_players.get(first, "off"),
+                        tap_players.get(second, "off"),
                     )
                 }
             )

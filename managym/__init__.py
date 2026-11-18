@@ -57,7 +57,7 @@ learning_record_names = _deprecated_alias(
 )
 
 
-ManaTaps = bool | Literal["usable"]
+ManaTaps = Literal["off", "usable", "always"]
 
 
 @dataclass(frozen=True, init=False)
@@ -85,17 +85,15 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
             raise ValueError("decklists must be open, closed or mixed")
         if mana_taps is None:
             mana_taps = (
-                players.mana_taps if isinstance(players, GameSetup) else (False, False)
+                players.mana_taps if isinstance(players, GameSetup) else ("off", "off")
             )
         if (
             not isinstance(mana_taps, (tuple, list))
             or len(mana_taps) != 2
-            or not all(
-                isinstance(value, bool) or value == "usable" for value in mana_taps
-            )
+            or not all(value in ("off", "usable", "always") for value in mana_taps)
         ):
             raise ValueError(
-                "mana_taps must contain two seat modes (false, true, or usable)"
+                "mana_taps must contain two seat modes (off, usable, or always)"
             )
         object.__setattr__(self, "mana_taps", tuple(mana_taps))
         object.__setattr__(self, "players", tuple(players))
@@ -116,6 +114,6 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
             return GameSetup(
                 self.players[index],
                 decklists=self.decklists,
-                mana_taps=(seats + (False, False))[:2],
+                mana_taps=(seats + ("off", "off"))[:2],
             )
         return self.players[index]

@@ -585,6 +585,19 @@ impl ActivatedAbilityDefinition {
         }
     }
 
+    /// For a known mana ability, does activation change anything besides
+    /// paying mana, tapping its own source and producing its output?
+    pub fn mana_activation_has_side_effects(&self) -> bool {
+        self.life_cost > 0
+            || self.sacrifice_source
+            || self.sacrifice.is_some()
+            || self.discard_source
+            || self.discard_card
+            || self.tap_cost.is_some()
+            || self.crew.is_some()
+            || self.effects.len() > 1
+    }
+
     /// What a mana ability does besides adding mana ("You gain 2 life"),
     /// resolving with it, off the stack, once per activation (CR 605.3b).
     /// Empty for an ability that is not a mana ability.

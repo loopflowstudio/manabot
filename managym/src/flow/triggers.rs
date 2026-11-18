@@ -1572,28 +1572,45 @@ impl Game {
         }
     }
 
-    /// In a priority window without a spend, a fixed tap can still cause
-    /// a triggered ability. Use the same effective abilities and subject
-    /// matching as the event, without mutating the position.
-    pub(crate) fn append_triggering_mana_taps(&self, player: PlayerId, actions: &mut Vec<Action>) {
+    /// Without a listed spend, a float still matters if it has an additional
+    /// cost or effect, or its tap fires a battlefield trigger. Inspect only
+    /// already legal activations and use the live event's trigger matching.
+    pub(crate) fn usable_floats_without_spend(&self, player: PlayerId, floats: &mut Vec<Action>) {
         let listeners = self.indexed_sources(EventKinds::of(EventKind::PermanentTapped));
-        if listeners.is_empty() {
-            return;
+        if !listeners.is_empty() {
+            self.append_mana_taps(player, floats);
         }
-        let mut taps = Vec::new();
-        self.append_mana_taps(player, &mut taps);
-        actions.extend(taps.into_iter().filter(|action| {
-            let Action::TapForMana { permanent, .. } = *action else {
-                return false;
+        floats.retain(|action| {
+            let permanent = match *action {
+                Action::TapForMana { permanent, .. } => permanent,
+                Action::ActivateAbility {
+                    permanent,
+                    ability_index,
+                    ..
+                } => {
+                    let view = self.characteristics(permanent);
+                    let ability = &view.activated_abilities[ability_index];
+                    if ability.mana_activation_has_side_effects() {
+                        return true;
+                    }
+                    if !ability.tap_source {
+                        return false;
+                    }
+                    permanent
+                }
+                _ => unreachable!("only mana production is appended after passing priority"),
             };
-            let event = GameEvent::PermanentTapped {
-                permanent,
-                for_mana: true,
-            };
-            !self
-                .firing_battlefield_triggers(&event, &listeners)
-                .is_empty()
-        }));
+            !listeners.is_empty()
+                && !self
+                    .firing_battlefield_triggers(
+                        &GameEvent::PermanentTapped {
+                            permanent,
+                            for_mana: true,
+                        },
+                        &listeners,
+                    )
+                    .is_empty()
+        });
     }
 
     /// The sources whose abilities can see a battlefield departure or a

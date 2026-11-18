@@ -5531,22 +5531,16 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         (
             decklists,
             {
-                let pair = value.getattr("mana_taps")?;
-                let mode = |i: usize| -> PyResult<ManaTaps> {
-                    let value = pair.get_item(i)?;
-                    if let Ok(enabled) = value.extract::<bool>() {
-                        Ok(if enabled {
-                            ManaTaps::Everywhere
-                        } else {
-                            ManaTaps::Off
-                        })
-                    } else if value.extract::<String>()? == "usable" {
-                        Ok(ManaTaps::Usable)
-                    } else {
-                        Err(PyValueError::new_err("invalid mana tap mode"))
-                    }
+                let (first, second): (String, String) = value.getattr("mana_taps")?.extract()?;
+                let mode = |name: &str| match name {
+                    "off" => Ok(ManaTaps::Off),
+                    "usable" => Ok(ManaTaps::Usable),
+                    "always" => Ok(ManaTaps::Always),
+                    _ => Err(PyValueError::new_err(
+                        "mana_taps must be off, usable or always",
+                    )),
                 };
-                [mode(0)?, mode(1)?]
+                [mode(&first)?, mode(&second)?]
             },
             "deprecated per-seat disclosure conflicts with GameSetup.decklists",
         )
@@ -5578,9 +5572,10 @@ pub(crate) fn python_game_setup(
     let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
     let kwargs = pyo3::types::PyDict::new_bound(py);
     kwargs.set_item("decklists", disclosure_name(disclosure))?;
-    let [first, second]: [PyObject; 2] = mana_taps.map(|mode| match mode {
-        ManaTaps::Usable => "usable".into_py(py),
-        enabled => (!enabled.is_off()).into_py(py),
+    let [first, second] = mana_taps.map(|mode| match mode {
+        ManaTaps::Off => "off",
+        ManaTaps::Usable => "usable",
+        ManaTaps::Always => "always",
     });
     kwargs.set_item("mana_taps", (first, second))?;
     Ok(py

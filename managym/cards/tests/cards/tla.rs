@@ -419,6 +419,54 @@ fn airbend_permission_ends_when_the_card_leaves_exile() {
 }
 
 #[test]
+fn kyoshi_village_priority_levels_preserve_both_payment_routes() {
+    use managym::state::player::ManaTaps;
+    for manual in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Kyoshi Village", "Healer's Hawk"]);
+        let land = s.force_permanent_on_battlefield(0, "Kyoshi Village");
+        for (mode, offered) in [(ManaTaps::Always, true), (ManaTaps::Usable, false)] {
+            s.game_mut().mana_taps[0] = mode;
+            assert_eq!(offers_ability(&mut s, land, 1), offered);
+        }
+        let hawk = move_to_hand(&mut s, "Healer's Hawk");
+        assert!(offers_ability(&mut s, land, 1));
+        s.game_mut().mana_taps[0] = ManaTaps::Off;
+        assert!(!offers_ability(&mut s, land, 1));
+        choose(
+            &mut s,
+            |a| matches!(a, Action::CastSpell { object, .. } if *object == hawk),
+        );
+        if manual {
+            activate(&mut s, land, 1);
+        } else {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        }
+        settle(&mut s);
+        assert!(tapped(&s, land));
+        assert_eq!(s.battlefield_permanents_named(0, "Healer's Hawk").len(), 1);
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    }
+}
+
+#[test]
+fn treasure_float_is_a_usable_sacrifice_even_without_a_mana_spend() {
+    use managym::state::player::ManaTaps;
+    let mut s = five_color_unfunded_setup(&[]);
+    let token = s
+        .game_mut()
+        .create_token("token.treasure", PlayerId(0), false)
+        .unwrap();
+    for (mode, offered) in [
+        (ManaTaps::Off, false),
+        (ManaTaps::Usable, true),
+        (ManaTaps::Always, true),
+    ] {
+        s.game_mut().mana_taps[0] = mode;
+        assert_eq!(offers_ability(&mut s, token, 0), offered);
+    }
+}
+
+#[test]
 fn draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card() {
     let lands = [
         ("Airship Engine Room", "UR"),

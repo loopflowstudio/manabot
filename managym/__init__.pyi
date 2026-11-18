@@ -23,7 +23,7 @@ from managym.disclosure import DecklistDisclosure, DecklistSampling
 from . import format as format
 from .statistics import GameStatistics
 
-ManaTaps = bool | Literal["usable"]
+ManaTaps = Literal["off", "usable", "always"]
 
 class ObservationValueLayout(TypedDict):
     kind: Literal[

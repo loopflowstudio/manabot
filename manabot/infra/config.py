@@ -106,7 +106,7 @@ class ObservationConfig(BaseConfig):
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
     )
-    mana_taps: ManaTaps = Field(default=False, exclude_if=lambda value: not value)
+    mana_taps: ManaTaps = Field(default="off", exclude_if=lambda value: value == "off")
     max_focus_objects: int = 2
     max_events: int = 32
     policy_history_version: Literal[0, 1] = Field(
@@ -171,7 +171,7 @@ class MatchConfig(BaseConfig):
     )
 
     mana_taps: tuple[ManaTaps, ManaTaps] = Field(
-        default=(False, False), exclude_if=lambda value: not any(value)
+        default=("off", "off"), exclude_if=lambda value: value == ("off", "off")
     )
 
     @field_validator("world")
@@ -204,7 +204,7 @@ class MatchConfig(BaseConfig):
         second: PlayerConfig,
         *,
         decklists: DecklistDisclosure,
-        mana_taps: tuple[ManaTaps, ManaTaps] = (False, False),
+        mana_taps: tuple[ManaTaps, ManaTaps] = ("off", "off"),
     ) -> "MatchConfig":
         """Record a native root in seat order, rejecting asymmetric match settings."""
         if first.world != second.world:

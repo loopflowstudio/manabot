@@ -283,7 +283,8 @@ impl Game {
                 actions.push(action);
             }
         }
-        actions.extend(self.priority_activate_ability_actions(player));
+        let mut floats = Vec::new();
+        actions.extend(self.priority_activate_ability_actions(player, mode, &mut floats));
         actions.push(Action::PassPriority { player });
         match mode {
             ManaTaps::Off => {}
@@ -291,14 +292,14 @@ impl Game {
                 if !spell_spends
                     && !actions
                         .iter()
+                        .chain(&floats)
                         .any(|action| self.activation_spends_mana(action)) =>
             {
-                // Explicit activations (including sacrifices and life costs) are
-                // already offered. Only additional fixed-source taps need filtering.
-                self.append_triggering_mana_taps(player, &mut actions);
+                self.usable_floats_without_spend(player, &mut floats);
             }
-            _ => self.append_mana_taps(player, &mut actions),
+            _ => self.append_mana_taps(player, &mut floats),
         }
+        actions.extend(floats);
         actions
     }
 
@@ -331,7 +332,12 @@ impl Game {
         })
     }
 
-    fn priority_activate_ability_actions(&self, player: PlayerId) -> Vec<Action> {
+    fn priority_activate_ability_actions(
+        &self,
+        player: PlayerId,
+        mode: ManaTaps,
+        floats: &mut Vec<Action>,
+    ) -> Vec<Action> {
         let mut actions = Vec::new();
         for permanent_id in self.iter_battlefield_permanents(player) {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
@@ -364,8 +370,10 @@ impl Game {
                     continue;
                 }
                 if ability.mana_choices().is_some() {
-                    if self.can_activate_mana_ability(player, permanent_id, ability_index) {
-                        actions.push(Action::ActivateAbility {
+                    if !mode.is_off()
+                        && self.can_activate_mana_ability(player, permanent_id, ability_index)
+                    {
+                        floats.push(Action::ActivateAbility {
                             player,
                             permanent: permanent_id,
                             ability_index,
