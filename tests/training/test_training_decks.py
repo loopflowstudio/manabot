@@ -585,6 +585,8 @@ def test_priority_taps_follow_sampled_self_play_roots(decks: UniformDecks) -> No
     try:
         collect(collector, _agent(), 1)
         assert collector.stats.games > 0
+        assert collector.stats.skipped_decisions > 0
+        assert 0 < collector.stats.priority_taps < collector.stats.micro_steps
         for match, setup in zip(
             collector.stream_matches,
             collector._env.current_player_configs(),

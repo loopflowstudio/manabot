@@ -319,6 +319,8 @@ class CollectorStats:
     learner_transitions: int = 0
     opponent_decisions: int = 0
     games: int = 0
+    skipped_decisions: int = 0  # Completed native games, including initial skips.
+    priority_taps: int = 0  # Selected taps in spaces that also offer PassPriority.
     learner_wins: int = 0
     self_play: SelfPlayCounter = field(default_factory=SelfPlayCounter)
     truncations: int = 0
@@ -766,6 +768,12 @@ def _count_action_types(
 ) -> None:
     chosen = collector._buffers["actions"][rows, actions, :ACTION_TYPE_DIM]
     type_indices = chosen.argmax(axis=1)
+    # Payment taps have the same type. At priority PassPriority precedes all
+    # fixed taps, including in a first-legal projection of the action space.
+    taps = rows[chosen[:, ActionEnum.TAP_FOR_COST] > 0]
+    if taps.size:
+        passes = collector._buffers["actions"][taps, :, ActionEnum.PRIORITY_PASS_PRIORITY]
+        collector.stats.priority_taps += int(np.any(passes, axis=1).sum())
     typed = chosen.max(axis=1) > 0
     for idx, has_type in zip(type_indices, typed):
         name = _ACTION_TYPE_NAMES.get(int(idx), "unknown") if has_type else "unknown"
@@ -1249,6 +1257,7 @@ def _settle_step(
                         0.5 if winner is None else float(winner == seat),
                     )
                 )
+        collector.stats.skipped_decisions += infos[row].get("skipped_decisions", 0)
         collector.stats.games += 1
         collector.stats.games_by_stream[int(row)] = (
             collector.stats.games_by_stream.get(int(row), 0) + 1

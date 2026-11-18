@@ -964,6 +964,12 @@ impl VectorEnv {
                 env.vector_failure_context(action)
             ))
         })?;
+        if terminated || truncated {
+            info.insert(
+                "skipped_decisions".into(),
+                InfoValue::Int(env.skip_trivial_count() as i64),
+            );
+        }
         if env.record_terminal && (terminated || truncated) {
             info.insert(
                 "record_terminal_digest".into(),
