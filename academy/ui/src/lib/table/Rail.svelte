@@ -298,7 +298,7 @@
   .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: 3px; text-decoration: underline dotted; }
   .more:hover { color: var(--text); }
   .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-  .docked { flex: 0 1 auto; max-height: 42%; min-height: 0; overflow-y: auto; }
+  .docked { flex: none; max-height: 36%; overflow-y: auto; }
   .card-name { text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
   .card-name:hover, .card-name:focus-visible { color: var(--accent-text); }
   .times { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
