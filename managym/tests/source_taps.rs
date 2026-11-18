@@ -1,5 +1,6 @@
 //! Source choices and automatic completion share the pending payment.
 
+use managym::state::player::ManaTaps;
 use std::collections::BTreeMap;
 
 use managym::{
@@ -148,11 +149,11 @@ fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
     let lands = ["Mountain", "Forest", "Forest"];
     let mut game = game(&lands);
     let ordinary = game.action_space().unwrap().actions.clone();
-    game.mana_taps = [false, true];
+    game.mana_taps = [ManaTaps::Off, ManaTaps::Everywhere];
     game.scenario_refresh_priority().unwrap();
     assert_eq!(game.action_space().unwrap().actions, ordinary);
 
-    game.mana_taps = [true, false];
+    game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
     game.scenario_refresh_priority().unwrap();
     assert_eq!(
         &game.action_space().unwrap().actions[..ordinary.len()],
@@ -182,7 +183,7 @@ fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
 fn funded_cast_can_tap_a_surplus_forest_before_paying() {
     let mut game = game(&["Forest", "Mountain"]);
     game.state.players[0].mana_pool = Mana::parse("2R");
-    game.mana_taps = [true, false];
+    game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
     game.scenario_refresh_priority().unwrap();
     cast(&mut game);
     assert!(matches!(
@@ -228,9 +229,16 @@ fn surplus_sources_follow_the_existing_payment_actions() {
     let mut off = game(&["Mountain", "Mountain", "Forest"]);
     off.state.players[0].mana_pool = Mana::parse("2");
     let mut on = off.clone();
-    on.mana_taps = [true, false];
+    on.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
+    let mut usable = off.clone();
+    usable.mana_taps = [ManaTaps::Usable, ManaTaps::Off];
     cast(&mut off);
     cast(&mut on);
+    cast(&mut usable);
+    assert_eq!(
+        on.action_space().unwrap().actions,
+        usable.action_space().unwrap().actions
+    );
     let ordinary = &off.action_space().unwrap().actions;
     assert_eq!(taps(&off).len(), 2);
     assert_eq!(
@@ -239,4 +247,38 @@ fn surplus_sources_follow_the_existing_payment_actions() {
     );
     assert_eq!(taps(&on).last(), Some(&(ordinary.len(), "Forest".into())));
     assert_eq!(on.action_space().unwrap().actions.len(), ordinary.len() + 1);
+}
+
+#[test]
+fn usable_priority_requires_a_spend_or_a_trigger_on_that_source() {
+    use managym::state::ability::{Ability, Effect, TriggerCondition, TriggerSubject};
+    let mut game = game(&["Mountain", "Forest", "Forest"]);
+    game.mana_taps = [ManaTaps::Usable, ManaTaps::Off];
+    game.scenario_refresh_priority().unwrap();
+    assert_eq!(taps(&game).len(), 3); // Ogre costs {2}{R}.
+    game.scenario_clear_hand(PlayerId(0));
+    game.scenario_refresh_priority().unwrap();
+    assert!(taps(&game).is_empty());
+
+    let mountain = game
+        .state
+        .permanents
+        .iter()
+        .flatten()
+        .map(|permanent| permanent.object)
+        .find(|object| game.state[*object].name == "Mountain")
+        .unwrap();
+    game.state[mountain].abilities.push(Ability::Triggered {
+        condition: TriggerCondition::TappedForMana {
+            subject: TriggerSubject::This,
+        },
+        intervening_if: None,
+        effects: vec![Effect::gain_life(1)],
+    });
+    game.scenario_refresh_priority().unwrap();
+    let offers = taps(&game);
+    assert_eq!(offers.len(), 1);
+    assert_eq!(offers[0].1, "Mountain");
+    game.step(offers[0].0).unwrap();
+    assert_eq!(game.state.players[0].life, 21);
 }

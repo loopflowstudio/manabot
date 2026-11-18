@@ -90,8 +90,8 @@ def test_default_and_explicit_off_play_and_record_identically(
 
 
 @pytest.mark.parametrize("invalid", [(True,), (True, False, True), (1, False), "no"])
-def test_mana_taps_requires_two_booleans(invalid: object) -> None:
-    with pytest.raises(ValueError, match="two booleans"):
+def test_mana_taps_requires_two_modes(invalid: object) -> None:
+    with pytest.raises(ValueError, match="two seat modes"):
         managym.GameSetup(forests(), mana_taps=invalid)  # type: ignore[arg-type]
 
 

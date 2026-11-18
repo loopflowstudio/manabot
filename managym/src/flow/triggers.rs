@@ -920,13 +920,12 @@ impl Game {
         }
     }
 
-    fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
-        #[cfg(feature = "benchmark")]
-        crate::benchmark_layers::record(|m| m.trigger_sources += sources.len() as u64);
-        self.granted_firebending_triggers(event);
-        self.graveyard_triggers(event);
-        self.cast_triggers(event);
-        self.delayed_triggers_for_event(event);
+    /// Resolve printed and granted trigger matches before committing the event.
+    fn firing_battlefield_triggers(
+        &self,
+        event: &GameEvent,
+        sources: &[TriggerSourceSnapshot],
+    ) -> Vec<FiredTrigger> {
         let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources {
             for (ability_index, ability) in self
@@ -1010,6 +1009,18 @@ impl Game {
                 ));
             }
         }
+
+        fired
+    }
+
+    fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_layers::record(|m| m.trigger_sources += sources.len() as u64);
+        self.granted_firebending_triggers(event);
+        self.graveyard_triggers(event);
+        self.cast_triggers(event);
+        self.delayed_triggers_for_event(event);
+        let fired = self.firing_battlefield_triggers(event, sources);
 
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
@@ -1559,6 +1570,30 @@ impl Game {
                 inline_effects: None,
             });
         }
+    }
+
+    /// In a priority window without a spend, a fixed tap can still cause
+    /// a triggered ability. Use the same effective abilities and subject
+    /// matching as the event, without mutating the position.
+    pub(crate) fn append_triggering_mana_taps(&self, player: PlayerId, actions: &mut Vec<Action>) {
+        let listeners = self.indexed_sources(EventKinds::of(EventKind::PermanentTapped));
+        if listeners.is_empty() {
+            return;
+        }
+        let mut taps = Vec::new();
+        self.append_mana_taps(player, &mut taps);
+        actions.extend(taps.into_iter().filter(|action| {
+            let Action::TapForMana { permanent, .. } = *action else {
+                return false;
+            };
+            let event = GameEvent::PermanentTapped {
+                permanent,
+                for_mana: true,
+            };
+            !self
+                .firing_battlefield_triggers(&event, &listeners)
+                .is_empty()
+        }));
     }
 
     /// The sources whose abilities can see a battlefield departure or a

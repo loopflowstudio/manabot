@@ -43,6 +43,7 @@ from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration, require_open_decklists
 from manabot.sim.replay import replay_environment
 from manabot.sim.supervision import failure_record, is_game_error
+from managym import ManaTaps
 from managym.bots import BeliefSummary
 from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
@@ -134,7 +135,7 @@ def execute_game(
     )
     try:
         built = {}
-        tap_players: set[str] = set()
+        tap_players: dict[str, ManaTaps] = {}
         in_child = _InChildPlayers(backend_factory)
         match = (
             MatchConfig.model_validate(game["match_hypers"])
@@ -164,7 +165,7 @@ def execute_game(
                 and player_space is not None
                 and player_space.encoder.config.mana_taps
             ):
-                tap_players.add(responsible)
+                tap_players[responsible] = player_space.encoder.config.mana_taps
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -174,7 +175,12 @@ def execute_game(
         if match is not None:
             first, second = game["seat_players"]
             match = match.model_copy(
-                update={"mana_taps": (first in tap_players, second in tap_players)}
+                update={
+                    "mana_taps": (
+                        tap_players.get(first, False),
+                        tap_players.get(second, False),
+                    )
+                }
             )
             resolved = match.model_dump(mode="json")
             if resolved != game["match_hypers"]:

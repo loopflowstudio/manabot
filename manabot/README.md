@@ -599,6 +599,9 @@ on = off.model_copy(update={"mana_taps": True})
 on.model_dump()["mana_taps"]      # True
 ```
 
+Set `mana_taps="usable"` to limit priority floats to windows with a mana spend
+or sources with a tap trigger. Payment choices are the same as with `True`.
+
 It is false by default and left out of the dump when false, so existing
 configurations, checkpoints and digests keep their identity. It changes no
 buffer shape: a checkpoint trained with it and one trained without it are
@@ -610,7 +613,7 @@ player in the space it trained in:
 
 | Seat holds | Receives the additional tap offers |
 | --- | --- |
-| a checkpoint saved with `mana_taps=True` | yes |
+| a checkpoint saved with `mana_taps=True` or `"usable"` | in its saved mode |
 | any other checkpoint | no |
 | heuristic, random, search or LLM player | no |
 

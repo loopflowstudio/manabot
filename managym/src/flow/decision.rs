@@ -4,6 +4,8 @@
 // action arrives. The suspended state (remaining effects + the pending
 // decision) lives on GameState so clones/forks carry it.
 
+#[cfg(test)]
+use crate::state::player::ManaTaps;
 use std::collections::VecDeque;
 
 use rand::seq::SliceRandom;
@@ -3129,7 +3131,7 @@ impl Game {
                 .into_iter()
                 .collect(),
         };
-        cards.retain(|card| self.can_cast_with(*player, *card, free));
+        cards.retain(|card| self.castable_mana_value(*player, *card, free).is_some());
         cards.sort_unstable_by_key(|card| {
             (self.state[self.state.object_of(*card)].definition_id, *card)
         });
@@ -4275,7 +4277,7 @@ mod payment_tests {
             .scenario_force_battlefield(player, "Island", true)
             .unwrap();
         let ordinary = game.suspended_decision_action_space().unwrap().actions;
-        game.mana_taps = [true, false];
+        game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let actions = &game.action_space().unwrap().actions;
         assert_eq!(&actions[..ordinary.len()], ordinary);
@@ -4310,7 +4312,7 @@ mod payment_tests {
             game.scenario_force_battlefield(player, "Island", true)
                 .unwrap();
         }
-        game.mana_taps = [true, false];
+        game.mana_taps = [ManaTaps::Everywhere, ManaTaps::Off];
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         apply_payment_action(
             &mut game,

@@ -16,7 +16,7 @@ from pydantic import (
 )
 
 from manabot.env.legacy_input import warn_deprecated_input
-from managym import WORLD_SETUP, Deck, DeckImport, Decklist, PlayerConfig
+from managym import WORLD_SETUP, Deck, DeckImport, Decklist, ManaTaps, PlayerConfig
 from managym.disclosure import DecklistDisclosure
 
 # The policy input a fresh configuration selects. Input v11 gives each game
@@ -106,7 +106,7 @@ class ObservationConfig(BaseConfig):
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
     )
-    mana_taps: bool = Field(default=False, exclude_if=lambda value: not value)
+    mana_taps: ManaTaps = Field(default=False, exclude_if=lambda value: not value)
     max_focus_objects: int = 2
     max_events: int = 32
     policy_history_version: Literal[0, 1] = Field(
@@ -170,7 +170,7 @@ class MatchConfig(BaseConfig):
         default="open", exclude_if=lambda value: value == "open"
     )
 
-    mana_taps: tuple[bool, bool] = Field(
+    mana_taps: tuple[ManaTaps, ManaTaps] = Field(
         default=(False, False), exclude_if=lambda value: not any(value)
     )
 
@@ -204,7 +204,7 @@ class MatchConfig(BaseConfig):
         second: PlayerConfig,
         *,
         decklists: DecklistDisclosure,
-        mana_taps: tuple[bool, bool] = (False, False),
+        mana_taps: tuple[ManaTaps, ManaTaps] = (False, False),
     ) -> "MatchConfig":
         """Record a native root in seat order, rejecting asymmetric match settings."""
         if first.world != second.world:

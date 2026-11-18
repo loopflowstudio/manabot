@@ -1,6 +1,7 @@
 // game.rs
 // Core game structs: GameState and Game.
 
+use crate::state::player::ManaTaps;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -747,7 +748,7 @@ pub struct Game {
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
     pub skip_trivial: bool,
-    pub mana_taps: [bool; 2],
+    pub mana_taps: [ManaTaps; 2],
     pub current_action_space: Option<ActionSpace>,
     /// Monotonic identity for the currently published external decision.
     ///

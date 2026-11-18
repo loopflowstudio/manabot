@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 import sys
-from typing import ParamSpec, TypeVar, overload
+from typing import Literal, ParamSpec, TypeVar, overload
 import warnings
 
 from managym.disclosure import DecklistSampling
@@ -57,6 +57,9 @@ learning_record_names = _deprecated_alias(
 )
 
 
+ManaTaps = bool | Literal["usable"]
+
+
 @dataclass(frozen=True, init=False)
 class GameSetup(Sequence[_managym.PlayerConfig]):
     """Read-only seats, decklist disclosure and per-seat mana tap offers.
@@ -67,14 +70,14 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
 
     players: tuple[_managym.PlayerConfig, ...]
     decklists: DecklistSampling
-    mana_taps: tuple[bool, bool]
+    mana_taps: tuple[ManaTaps, ManaTaps]
 
     def __init__(
         self,
         players: Sequence[_managym.PlayerConfig],
         *,
         decklists: DecklistSampling | None = None,
-        mana_taps: tuple[bool, bool] | None = None,
+        mana_taps: tuple[ManaTaps, ManaTaps] | None = None,
     ) -> None:
         if decklists is None:
             decklists = players.decklists if isinstance(players, GameSetup) else "open"
@@ -87,9 +90,13 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
         if (
             not isinstance(mana_taps, (tuple, list))
             or len(mana_taps) != 2
-            or not all(isinstance(value, bool) for value in mana_taps)
+            or not all(
+                isinstance(value, bool) or value == "usable" for value in mana_taps
+            )
         ):
-            raise ValueError("mana_taps must contain two booleans")
+            raise ValueError(
+                "mana_taps must contain two seat modes (false, true, or usable)"
+            )
         object.__setattr__(self, "mana_taps", tuple(mana_taps))
         object.__setattr__(self, "players", tuple(players))
         object.__setattr__(self, "decklists", decklists)

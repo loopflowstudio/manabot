@@ -82,7 +82,7 @@ export class GameStore {
   playSession = $state<PlaySession | null>(null);
   storageWarning = $state('');
   tableUnavailable = $state(false);
-  manaTaps = $state(false);
+  manaTaps = $state<boolean | 'usable'>(false);
   humanSeat = $state<0 | 1>(0);
   watchMode = $state(false);
   watchPlayerChoice = $state<PlayerChoice>('random');
@@ -100,7 +100,7 @@ export class GameStore {
   }
 
   applySetupDraft(draft: Record<string, unknown>): void {
-    this.manaTaps = draft.mana_taps === true;
+    this.manaTaps = draft.mana_taps === 'usable' ? 'usable' : draft.mana_taps === true;
     this.humanSeat = draft.human_seat === 1 ? 1 : 0;
     this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
     this.seed = String(draft.seed ?? '0');

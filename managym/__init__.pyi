@@ -23,6 +23,8 @@ from managym.disclosure import DecklistDisclosure, DecklistSampling
 from . import format as format
 from .statistics import GameStatistics
 
+ManaTaps = bool | Literal["usable"]
+
 class ObservationValueLayout(TypedDict):
     kind: Literal[
         "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
@@ -1139,13 +1141,13 @@ class GameSetup(Sequence[PlayerConfig]):
     @property
     def decklists(self) -> DecklistSampling: ...
     @property
-    def mana_taps(self) -> tuple[bool, bool]: ...
+    def mana_taps(self) -> tuple[ManaTaps, ManaTaps]: ...
     def __init__(
         self,
         players: Sequence[PlayerConfig],
         *,
         decklists: DecklistSampling | None = None,
-        mana_taps: tuple[bool, bool] | None = None,
+        mana_taps: tuple[ManaTaps, ManaTaps] | None = None,
     ) -> None: ...
     def __len__(self) -> int: ...
     @overload

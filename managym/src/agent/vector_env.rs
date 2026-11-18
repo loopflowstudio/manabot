@@ -1,5 +1,6 @@
 //! Batched games with native reset-seed ownership and admitted per-game roster sampling.
 
+use crate::state::player::ManaTaps;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -322,7 +323,7 @@ impl VectorEnv {
         self.envs.iter().map(Env::decklists).collect()
     }
 
-    pub fn current_mana_taps(&self) -> Vec<[bool; 2]> {
+    pub fn current_mana_taps(&self) -> Vec<[ManaTaps; 2]> {
         self.envs.iter().map(Env::mana_taps).collect()
     }
 

@@ -696,7 +696,9 @@ With the default setup, a cost that needs every available fixed source
 can be paid as soon as you cast. The cast preview shows the taps before
 you commit.
 
-Select **Offer mana taps whenever legal** on your seat in game setup to tap a
+Under **Mana tap offers**, choose **At usable priority windows and during
+payment** to float when a legal action can spend mana or tapping the source
+can trigger an ability. Choose **Whenever legal** to tap a
 fixed-output source at priority or during payment, even when the pool
 already covers the cost. The setting follows you when you swap sides.
 Your priority stops still determine which windows pause for a decision.

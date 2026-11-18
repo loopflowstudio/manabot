@@ -4,6 +4,8 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
+use crate::state::player::ManaTaps;
+#[cfg(feature = "python")]
 use std::{
     collections::BTreeMap,
     sync::{
@@ -5528,14 +5530,31 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         };
         (
             decklists,
-            value.getattr("mana_taps")?.extract()?,
+            {
+                let pair = value.getattr("mana_taps")?;
+                let mode = |i: usize| -> PyResult<ManaTaps> {
+                    let value = pair.get_item(i)?;
+                    if let Ok(enabled) = value.extract::<bool>() {
+                        Ok(if enabled {
+                            ManaTaps::Everywhere
+                        } else {
+                            ManaTaps::Off
+                        })
+                    } else if value.extract::<String>()? == "usable" {
+                        Ok(ManaTaps::Usable)
+                    } else {
+                        Err(PyValueError::new_err("invalid mana tap mode"))
+                    }
+                };
+                [mode(0)?, mode(1)?]
+            },
             "deprecated per-seat disclosure conflicts with GameSetup.decklists",
         )
     } else {
         // A bare seat list takes its game value from the first hint, if any.
         (
             hints.clone().next().unwrap_or_default(),
-            [false; 2],
+            [ManaTaps::Off; 2],
             "deprecated per-seat disclosure values disagree",
         )
     };
@@ -5554,12 +5573,16 @@ pub(crate) fn python_game_setup(
     py: Python<'_>,
     players: Vec<PlayerConfig>,
     disclosure: DecklistDisclosure,
-    mana_taps: [bool; 2],
+    mana_taps: [ManaTaps; 2],
 ) -> PyResult<PyObject> {
     let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
     let kwargs = pyo3::types::PyDict::new_bound(py);
     kwargs.set_item("decklists", disclosure_name(disclosure))?;
-    kwargs.set_item("mana_taps", (mana_taps[0], mana_taps[1]))?;
+    let [first, second]: [PyObject; 2] = mana_taps.map(|mode| match mode {
+        ManaTaps::Usable => "usable".into_py(py),
+        enabled => (!enabled.is_off()).into_py(py),
+    });
+    kwargs.set_item("mana_taps", (first, second))?;
     Ok(py
         .import_bound("managym")?
         .getattr("GameSetup")?

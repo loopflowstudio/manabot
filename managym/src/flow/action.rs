@@ -16,6 +16,7 @@ use crate::{
         card::ActivationZone,
         game_object::{CardId, ObjectId, PlayerId, PublicId},
         mana::Mana,
+        player::ManaTaps,
         zone::ZoneType,
     },
 };
@@ -257,14 +258,77 @@ impl Game {
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
         let _scan = self.board_scan();
         let _payments = self.payment_scan();
-        let mut actions: Vec<Action> = self
-            .priority_candidate_cards(player)
-            .filter_map(|card| self.priority_action_for_card(player, card))
-            .collect();
+        let mode = self.mana_tap_mode(player);
+        let mut spell_spends = false;
+        let mut actions = Vec::new();
+        for card in self.priority_candidate_cards(player) {
+            if let Some((action, mana_value)) = self.priority_action_for_card(player, card) {
+                if mode == ManaTaps::Usable && !spell_spends {
+                    if let Action::CastSpell { object, .. } = action {
+                        spell_spends = mana_value > 0
+                            || self.cast_needs_x_announcement(
+                                player,
+                                object,
+                                CastChoices::default(),
+                            )
+                            || self.state[object]
+                                .optional_cost()
+                                .is_some_and(|cost| cost.mana_value > 0)
+                            || self.state[object]
+                                .sacrifice_cost()
+                                .and_then(|sac| sac.or_mana.as_ref())
+                                .is_some_and(|cost| cost.mana_value > 0);
+                    }
+                }
+                actions.push(action);
+            }
+        }
         actions.extend(self.priority_activate_ability_actions(player));
         actions.push(Action::PassPriority { player });
-        self.append_mana_taps(player, &mut actions);
+        match mode {
+            ManaTaps::Off => {}
+            ManaTaps::Usable
+                if !spell_spends
+                    && !actions
+                        .iter()
+                        .any(|action| self.activation_spends_mana(action)) =>
+            {
+                // Explicit activations (including sacrifices and life costs) are
+                // already offered. Only additional fixed-source taps need filtering.
+                self.append_triggering_mana_taps(player, &mut actions);
+            }
+            _ => self.append_mana_taps(player, &mut actions),
+        }
         actions
+    }
+
+    /// Inspect costs only for actions already admitted in this priority window.
+    fn activation_spends_mana(&self, action: &Action) -> bool {
+        let ability = match *action {
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => self.activation_ability(ActivationSource::Permanent(permanent), ability_index),
+            Action::ActivateCardAbility {
+                object,
+                ability_index,
+                ..
+            } => self.state.card_id(object).and_then(|card| {
+                self.activation_ability(ActivationSource::Card(card), ability_index)
+            }),
+            Action::Foretell { .. } => return true,
+            _ => return false,
+        };
+        ability.is_some_and(|ability| {
+            ability.mana_cost.mana_value > 0
+                || ability.mana_cost.x > 0
+                || ability
+                    .sacrifice
+                    .as_ref()
+                    .and_then(|sac| sac.or_mana.as_ref())
+                    .is_some_and(|cost| cost.mana_value > 0)
+        })
     }
 
     fn priority_activate_ability_actions(&self, player: PlayerId) -> Vec<Action> {
@@ -417,16 +481,19 @@ impl Game {
         actions
     }
 
-    fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<Action> {
+    fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<(Action, u8)> {
         let object = &self.state[self.state.object_of(card)];
         if !self.may_play_from_zone(player, self.state.object_of(card)) {
             return None;
         }
         if object.types.is_land() {
-            return self.can_play_land(player).then_some(Action::PlayLand {
-                player,
-                object: self.state.object_of(card),
-            });
+            return self.can_play_land(player).then_some((
+                Action::PlayLand {
+                    player,
+                    object: self.state.object_of(card),
+                },
+                0,
+            ));
         }
         if !object.types.is_castable() {
             return None;
@@ -440,24 +507,33 @@ impl Game {
         if !can_cast_now {
             return None;
         }
-        self.can_cast_with(player, card, Default::default())
-            .then_some(Action::CastSpell {
-                player,
-                object: self.state.object_of(card),
+        self.castable_mana_value(player, card, Default::default())
+            .map(|value| {
+                (
+                    Action::CastSpell {
+                        player,
+                        object: self.state.object_of(card),
+                    },
+                    value,
+                )
             })
     }
 
-    /// Whether `card_id`'s modes and mandatory targets admit casting it and
-    /// `player` can pay its total cost with `cast`'s choices. Timing and zone
-    /// permission are the caller's.
-    pub(crate) fn can_cast_with(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
+    /// Mana charged by a legal cast at the given choices, or None when modes,
+    /// targets or resources prevent it. Timing and zone permission are the caller's.
+    pub(crate) fn castable_mana_value(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+    ) -> Option<u8> {
         let object = &self.state[self.state.object_of(card)];
         if object.spell_modes().is_some()
             && self
                 .legal_spell_modes(player, self.state.object_of(card))
                 .is_empty()
         {
-            return false;
+            return None;
         }
         // Every mandatory targeting requirement needs a legal target.
         for requirement in object.target_requirements() {
@@ -466,27 +542,30 @@ impl Game {
                     .legal_targets_for_requirement(player, self.state.object_of(card), &requirement)
                     .is_empty()
             {
-                return false;
+                return None;
             }
         }
 
         let Some(cost) = self.effective_spell_cost(player, self.state.object_of(card), cast, None)
         else {
-            return true;
+            return Some(0);
         };
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = object.sacrifice_cost() else {
-            return self.can_pay_cast(player, self.state.object_of(card), cast)
-                || (object.exile_alternative().is_some()
-                    && self.can_pay_cast(
-                        player,
-                        self.state.object_of(card),
-                        CastChoices {
-                            kicked: true,
-                            ..cast
-                        },
-                    ));
+            if self.can_pay_cast(player, self.state.object_of(card), cast) {
+                return Some(cost.mana_value);
+            }
+            return (object.exile_alternative().is_some()
+                && self.can_pay_cast(
+                    player,
+                    self.state.object_of(card),
+                    CastChoices {
+                        kicked: true,
+                        ..cast
+                    },
+                ))
+            .then_some(0);
         };
         let payment = Payment::Spell {
             object: self.state.object_of(card),
@@ -495,12 +574,14 @@ impl Game {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
         };
-        self.payment_candidates(player, &payment, additional)
+        (self
+            .payment_candidates(player, &payment, additional)
             .into_iter()
             .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)))
             || additional.or_mana.as_ref().is_some_and(|extra| {
                 self.can_pay_with_mana_abilities(player, &cost.plus(extra), None)
-            })
+            }))
+        .then_some(cost.mana_value)
     }
 
     pub(crate) fn pending_choice_action_space(&self) -> Option<ActionSpace> {

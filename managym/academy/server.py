@@ -802,7 +802,9 @@ def _parse_game_config(config: Any) -> GameConfig:
         asset_pack=selected_pack.reference if selected_pack is not None else None,
         villain_type=villain_type,
         human_seat=data.get("human_seat", 0),
-        mana_taps=_parse_flag(data, "mana_taps", False),
+        mana_taps="usable"
+        if data.get("mana_taps") == "usable"
+        else _parse_flag(data, "mana_taps", False),
         seed=seed,
         seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,

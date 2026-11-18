@@ -6,6 +6,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 import pytest
 
+import managym
 from managym.academy import server, trace
 from managym.academy.attempts import AttemptStore
 from managym.academy.opponent import set_policy_registry
@@ -101,22 +102,25 @@ def test_native_seats_complete_record_reconstruct_and_study(
 
 
 @pytest.mark.parametrize("seat", [0, 1])
+@pytest.mark.parametrize("mode", [True, "usable"])
 def test_mana_tap_survives_reconnect_and_records_source(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seat: int
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seat: int, mode: managym.ManaTaps
 ) -> None:
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
     config = {
         **CONFIG,
         "human_seat": seat,
-        "mana_taps": True,
-        "hero_deck": {"Island": 16},
+        "mana_taps": mode,
+        "hero_deck": {"Island": 8, "Consider": 4}
+        if mode == "usable"
+        else {"Island": 16},
         "villain_deck": {"Mountain": 16},
     }
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as ws:
             ws.send_json({"type": "new_game", "config": config})
             start = settled_message(ws)
-            assert start["play_session"]["draft"]["mana_taps"] is True
+            assert start["play_session"]["draft"]["mana_taps"] == mode
             frame = start["recovery"]["frame"]
             land = _offer(frame, action_type="PRIORITY_PLAY_LAND")
             ws.send_json({"type": "command", "command": _command(frame, land, "land")})
@@ -153,7 +157,10 @@ def test_mana_tap_survives_reconnect_and_records_source(
             payload = game.attempt_store.load(game.match_id)
             assert payload is not None
             recorded = trace.GameConfig(**payload["config"])
-            assert recorded.to_rust().mana_taps == (seat == 0, seat == 1)
+            assert recorded.to_rust().mana_taps == (
+                mode if seat == 0 else False,
+                mode if seat == 1 else False,
+            )
             recording = Recording(game.match_id, payload)
             position = next(
                 p

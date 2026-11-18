@@ -206,7 +206,10 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
         np.testing.assert_allclose(joined, single, atol=1e-6, rtol=1e-5)
 
 
-def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mode", [True, "usable"])
+def test_checkpoint_priority_taps_follow_seats_through_replay(
+    tmp_path: Path, mode: managym.ManaTaps
+) -> None:
     torch.manual_seed(385)
     matchup = DeckMatchup(
         population_sha256="a" * 64,
@@ -222,7 +225,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) ->
     )
     registrations = {}
     agents = {}
-    for name, taps in (("tap-on", True), ("tap-off", False)):
+    for name, taps in (("tap-on", mode), ("tap-off", False)):
         space = ObservationSpace(ObservationConfig(mana_taps=taps))
         model = ActorCritic(
             space, ModelConfig(world="world", hidden_dim=8, num_attention_heads=2)
@@ -266,7 +269,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) ->
         for record in read_records(Path(trace["path"])):
             metadata = record.context["evaluation"]
             seat = metadata["seat_players"].index("tap-on")
-            pair = (seat == 0, seat == 1)
+            pair = (mode if seat == 0 else False, mode if seat == 1 else False)
             assert tuple(metadata["match_hypers"]["mana_taps"]) == pair
             assert record.games[0].setup().mana_taps == pair
             replay = walk(record)
@@ -279,7 +282,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) ->
                 )
             }
             # Basic-land decks have no payments; every offered tap is at priority.
-            assert offered == {seat}
+            assert offered == ({seat} if mode is True else set())
             assert replay.stop is not None and replay.stop.status == "complete"
 
             # The native commitments still replay if only the outer match metadata

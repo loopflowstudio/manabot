@@ -73,8 +73,12 @@
               onSearchChange={value => {if (hero) setup.watchSearchConfig = value; else setup.searchConfig = value;}} />
           {:else}
             <label class="flex items-center gap-2">
-              <input type="checkbox" bind:checked={setup.manaTaps} />
-              Offer mana taps whenever legal
+              Mana tap offers
+              <select bind:value={setup.manaTaps} class="rounded border border-line bg-panel p-2">
+                <option value={false}>Default payments</option>
+                <option value="usable">At usable priority windows and during payment</option>
+                <option value={true}>Whenever legal</option>
+              </select>
             </label>
           {/if}
         </fieldset>

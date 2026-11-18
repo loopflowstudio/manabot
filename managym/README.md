@@ -684,6 +684,11 @@ import managym
 setup = managym.GameSetup([first, second], mana_taps=(True, False))
 ```
 
+Use `mana_taps=("usable", False)` to offer fixed taps at priority only when
+a legal action can spend mana or tapping that source can trigger an ability.
+The engine inspects the listed actions without checking individual mana colors.
+Both enabled modes give the same choices during payments.
+
 With two untapped Forests and a creature spell in hand, the first seat's
 priority space is what it was, followed by one tap per source:
 
@@ -711,8 +716,9 @@ or phase, as any floating mana does. There is no undo.
   them. A tap cannot consume a reserved resource or strand a committed cost.
   The payer can finish from the remaining pool and sources.
 - **More decisions.** A priority window whose only action was `PassPriority`
-  is skipped as forced; with an untapped source and the option on it is a
-  decision. `Env.skip_trivial_count()` counts forced priority passes and other
+  is skipped as forced. With `True`, every available fixed source opens that
+  window. With `"usable"`, a source opens a pass-only window when tapping it
+  can trigger an ability. `Env.skip_trivial_count()` counts forced priority passes and other
   single-action decisions skipped since reset.
 - **Each seat has its own value.** The chooser's option determines the offers.
   Each tap uses the existing `TapForCost` policy action with the source as
@@ -720,7 +726,8 @@ or phase, as any floating mana does. There is no undo.
   The pair is part of the game's setup: recordings carry it and replay
   rebuilds the same action spaces from it. Omitting it, or passing
   `(False, False)`, gives the same games, digests and recording bytes as
-  before. A pair that is not two booleans raises `ValueError`.
+  before. Each seat accepts `False`, `True` or `"usable"`. Invalid setup
+  values raise `ValueError`.
 
 Tapping a source at priority for a seat without the option raises
 `managym.AgentError`, as any action that is not offered does. Manabot evaluation seats

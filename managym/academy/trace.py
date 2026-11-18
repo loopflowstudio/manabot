@@ -73,7 +73,7 @@ class GameConfig:
     villain_source: dict[str, Any] | None = None
 
     # Offer fixed-source mana taps wherever legal for the human controller.
-    mana_taps: bool = False
+    mana_taps: managym.ManaTaps = False
 
     def __post_init__(self) -> None:
         if type(self.human_seat) is not int or self.human_seat not in (0, 1):
@@ -89,8 +89,8 @@ class GameConfig:
             configs if self.human_seat == 0 else list(reversed(configs)),
             decklists=self.decklists,
             mana_taps=(
-                self.mana_taps and self.human_seat == 0,
-                self.mana_taps and self.human_seat == 1,
+                self.mana_taps if self.human_seat == 0 else False,
+                self.mana_taps if self.human_seat == 1 else False,
             ),
         )
 

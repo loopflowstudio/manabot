@@ -20,6 +20,7 @@ mod autotapper;
 mod preview;
 pub use preview::PaymentPreview;
 
+use crate::state::player::ManaTaps;
 use std::{cell::RefCell, collections::VecDeque, num::NonZeroUsize, sync::Arc};
 
 use crate::{
@@ -1995,8 +1996,14 @@ impl Game {
 
     /// Whether the seat deciding for `player` was set up with mana tap offers.
     pub(crate) fn offers_mana_taps(&self, player: PlayerId) -> bool {
-        // Skip the control lookup in the common game with no offers.
-        self.mana_taps.contains(&true) && self.mana_taps[self.decision_controller(player).0]
+        !self.mana_tap_mode(player).is_off()
+    }
+
+    pub(crate) fn mana_tap_mode(&self, player: PlayerId) -> ManaTaps {
+        if self.mana_taps == [ManaTaps::Off; 2] {
+            return ManaTaps::Off;
+        }
+        self.mana_taps[self.decision_controller(player).0]
     }
 
     fn has_mana_taps(&self, player: PlayerId) -> bool {

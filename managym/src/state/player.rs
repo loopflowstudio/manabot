@@ -157,12 +157,37 @@ impl DecklistMode {
     }
 }
 
+/// Per-chooser fixed-source offers. Historical boolean values retain their wire identity.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ManaTaps {
+    #[default]
+    Off,
+    Everywhere,
+    Usable,
+}
+
+impl ManaTaps {
+    pub fn is_off(&self) -> bool {
+        *self == Self::Off
+    }
+}
+
+impl serde::Serialize for ManaTaps {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Off => serializer.serialize_bool(false),
+            Self::Everywhere => serializer.serialize_bool(true),
+            Self::Usable => serializer.serialize_str("usable"),
+        }
+    }
+}
+
 /// Complete root setup; disclosure belongs to the game, never a seat.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameSetup {
     pub players: Vec<PlayerConfig>,
     pub decklists: DecklistMode,
-    pub mana_taps: [bool; 2],
+    pub mana_taps: [ManaTaps; 2],
 }
 
 impl From<Vec<PlayerConfig>> for GameSetup {
@@ -170,7 +195,7 @@ impl From<Vec<PlayerConfig>> for GameSetup {
         Self {
             players,
             decklists: DecklistMode::Open,
-            mana_taps: [false; 2],
+            mana_taps: [ManaTaps::Off; 2],
         }
     }
 }

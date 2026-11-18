@@ -1,5 +1,6 @@
 #[cfg(feature = "python")]
 use crate::search_state::{identity, SearchStateIdentity};
+use crate::state::player::ManaTaps;
 use crate::{
     agent::{
         action::AgentError,
@@ -127,7 +128,7 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
-    mana_taps: [bool; 2],
+    mana_taps: [ManaTaps; 2],
     disclosure: DecklistDisclosure,
     actions: Vec<usize>,
 }
@@ -141,8 +142,8 @@ impl serde::Serialize for NativeActionTrace {
         struct RetainedSeat<'a> {
             #[serde(flatten)]
             player: &'a PlayerConfig,
-            #[serde(skip_serializing_if = "std::ops::Not::not")]
-            mana_taps: bool,
+            #[serde(skip_serializing_if = "ManaTaps::is_off")]
+            mana_taps: ManaTaps,
             #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
             disclosure: DecklistDisclosure,
         }
@@ -496,8 +497,10 @@ impl Env {
             .map_or(Default::default(), |game| game.state.disclosure)
     }
 
-    pub fn mana_taps(&self) -> [bool; 2] {
-        self.game.as_ref().map_or([false; 2], |game| game.mana_taps)
+    pub fn mana_taps(&self) -> [ManaTaps; 2] {
+        self.game
+            .as_ref()
+            .map_or([ManaTaps::Off; 2], |game| game.mana_taps)
     }
 
     /// Setups this game was reset with; empty before the first reset.
