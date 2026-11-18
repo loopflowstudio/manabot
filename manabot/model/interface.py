@@ -55,15 +55,19 @@ def world_fields(
 
 @dataclass(frozen=True)
 class ModelInterface:
-    writer: WriterCatalog | None
-    current: WriterCatalog | None
+    """A world pilot's writer vocabulary, the running one, and its saved column
+    prefixes (only the arrays narrower than the runtime's)."""
+
+    writer: WriterCatalog
+    current: WriterCatalog
     widths: dict[str, int]
 
 
 def model_interface(
     checkpoint: Mapping[str, Any], space: ObservationSpace
-) -> ModelInterface:
-    """Validate setup identity or resolve the world pilot's writer vocabulary."""
+) -> ModelInterface | None:
+    """Resolve the world pilot's writer vocabulary, or return None once a
+    setup-bound checkpoint has passed its whole binding comparison."""
     saved = checkpoint.get("world_binding")
     if not isinstance(saved, dict):
         raise ValueError(f"trained without a world binding; engine is {WORLD}")
@@ -71,7 +75,7 @@ def model_interface(
         raise ValueError("checkpoint binding mixes a world and a fixed setup")
     if "world_digest" not in saved:
         validate_checkpoint_world(checkpoint, space)
-        return ModelInterface(None, None, {})
+        return None
     model = ModelConfig.from_checkpoint(checkpoint["hypers"]["agent_hypers"])
     if model.world != managym.WORLD_SETUP:
         raise ValueError(

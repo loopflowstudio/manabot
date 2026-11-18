@@ -374,7 +374,7 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     interface = model_interface(record, checkpoint.space)
     if record.get("architecture") is not None:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
-    if interface.writer is None or interface.current is None:
+    if interface is None:
         return checkpoint
     width = interface.widths.get("agent_player", checkpoint.space.encoder.player_dim)
     projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]

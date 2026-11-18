@@ -250,12 +250,12 @@ def validate_checkpoint_world(
     checkpoint: Mapping[str, Any], observation_space: Any, player_configs=None
 ) -> dict:
     binding = checkpoint.get("world_binding")
-    if isinstance(binding, dict) and binding.get("world") != WORLD:
-        raise ValueError(f"trained in {binding.get('world')}, engine is {WORLD}")
     if not isinstance(binding, dict):
         raise ValueError(
             f"checkpoint requires an explicit compatible {WORLD} world binding"
         )
+    if binding.get("world") != WORLD:
+        raise ValueError(f"trained in {binding.get('world')}, engine is {WORLD}")
     try:
         expected = expected_world(binding, observation_space, player_configs)
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:

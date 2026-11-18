@@ -148,9 +148,7 @@ def _inspect_cached(
         stage=_text(checkpoint.get("bc"), "stage_id"),
         weights=_text(checkpoint.get("bc"), "weights"),
         setups=_setups(binding),
-        incompatibility=checkpoint_incompatibility(
-            checkpoint, read_policy=lambda: backend.read_policy(path)
-        ),
+        incompatibility=refusal(lambda: backend.read_policy(path)),
         policy_input_version=config.get("observation_hypers", {}).get(
             "policy_input_version", 1
         ),
@@ -178,18 +176,22 @@ def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str |
     return None
 
 
-def checkpoint_incompatibility(
-    checkpoint: Mapping[str, Any], *, read_policy: Callable[[], object] | None = None
-) -> str | None:
-    """Explain file admission, or metadata admission when only a record is available."""
-    try:
-        if read_policy is not None:
-            read_policy()
-            return None
+def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
+    """Explain metadata admission when only a checkpoint record is available."""
+
+    def admit() -> None:
         observation = ObservationConfig.from_checkpoint(
             checkpoint["hypers"]["observation_hypers"]
         )
         model_interface(checkpoint, ObservationSpace(observation))
+
+    return refusal(admit)
+
+
+def refusal(admit: Callable[[], object]) -> str | None:
+    """Run an admission and return its refusal as a sentence instead of raising."""
+    try:
+        admit()
     except (
         ValueError,
         TypeError,

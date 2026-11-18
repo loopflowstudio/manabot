@@ -98,9 +98,9 @@ def measure_pairs(
 
 
 def recheck(path: Path, *, out: Path | None, seconds: float) -> int:
-    deadline = time.time() + seconds
     if not np.isfinite(seconds) or seconds <= 0:
         raise ValueError("seconds must be finite and positive")
+    deadline = time.time() + seconds
     reference = StrengthReference.model_validate_json(path.read_bytes())
     pairs = TypeAdapter(list[ReferencePair]).validate_json(
         (path.parent / reference.matchups).read_bytes()
