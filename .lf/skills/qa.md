@@ -463,6 +463,11 @@ publish, land or choose the next Graph step from here.
   evidence folders can exceed 1 GB. Redraw twice and compare digests, because a
   figure that changes bytes on every redraw also changes its manifest entry.
   Render SVGs with `rsvg-convert -z 2 -b white` and look at them.
+  `fetch` skips files that already exist in the checkout ("already present"),
+  whatever the cache holds. In the authoring checkout, fetch in a `git worktree
+  add --detach /private/tmp/<x> HEAD` instead, running `uv run --project
+  <checkout>` there, then `cmp` its files with the checkout's. Recompute the
+  report's table cells from the fetched CSVs.
 
 - Payment previews (`[data-testid=payment-preview]`, `POST
   /api/sessions/<id>/payment-preview`): the panel exists only once a payment
