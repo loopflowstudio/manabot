@@ -406,7 +406,8 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
             )
         ),
         len(report.changed_programs),
-        ", ".join(report.changed_programs) or "none",
+        # Keyless back faces use registry names, which can contain commas.
+        "; ".join(report.changed_programs) or "none",
         report.renamed_keys,
         report.retired_keys,
         report.new_tokens,

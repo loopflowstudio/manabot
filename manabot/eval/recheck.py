@@ -1,5 +1,6 @@
 """Remeasure a strength reference, resampling the same units as its writer."""
 
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
@@ -86,8 +87,15 @@ def measure_pairs(
         directory = out / f"pair-{index:02d}"
         result = evaluate_local(request, deadline=deadline, out_dir=directory)
         if result.status != "completed" or result.score is None:
+            replay = directory / "replay.json"
+            reason = result.error or (
+                json.loads(replay.read_bytes()).get("error")
+                if replay.exists()
+                else None
+            )
             raise ValueError(
-                f"pair {index} incomplete ({len(result.rows)}/{request.expected_games} rows): {result.error or directory}"
+                f"pair {index} incomplete ({len(result.rows)}/{request.expected_games} rows"
+                f"{f', {reason}' if reason else ''}): {directory}"
             )
         scores.append(result.score.mean)
     # Deals and crossed legs from a deck pair stay together, as in the frontier report.

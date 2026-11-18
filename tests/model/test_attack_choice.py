@@ -106,5 +106,5 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
         },
         path,
     )
-    with pytest.raises(ValueError, match=f"compatible {WORLD} world binding"):
+    with pytest.raises(ValueError, match=f"trained in {old_world}, engine is {WORLD}"):
         load_checkpoint(str(path))

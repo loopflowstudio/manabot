@@ -246,7 +246,7 @@ def assemble(
     arrays = {**checkpoint.parameters, **checkpoint.buffers}
     unknown = sorted(set(arrays) - set(torch_names))
     if unknown:
-        raise KeyError(f"container tensors with no policy parameter: {unknown}")
+        raise ValueError(f"container tensors with no policy parameter: {unknown}")
     agent.load_state_dict(
         {
             torch_names[name]: torch.from_numpy(np.array(value))
