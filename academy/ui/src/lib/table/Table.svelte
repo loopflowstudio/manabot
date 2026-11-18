@@ -24,7 +24,7 @@
   import Inspect from './Inspect.svelte';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
-  import { BEAT_MS, beatsFor, type Beat } from './beats';
+  import { BEAT_MS, beatsFor, type Beat, type BeatPace } from './beats';
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence } from './replay';
   import { paymentPlan, previewable } from './payment';
@@ -84,12 +84,15 @@
     notices?: Snippet;
     result?: Snippet;
     menu?: Snippet;
+    /** How fast the opponent's moves are read out in live play; "off" reads none. */
+    beatPace?: BeatPace;
   }
 
   let {
     frame, live, status, you, opponent, stops, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
     since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, notices, result, menu,
+    beatPace = 'quick',
   }: Props = $props();
 
   // Cards read the recorded policy for their own offers.
@@ -103,9 +106,10 @@
     return () => { root.style.overflow = previous; };
   });
 
-  const view = $derived(tableView(frame));
   // Sentences name the opponent shortly; the plate and top bar keep its kind.
   const said = $derived(shortName(opponent.name));
+  const players = $derived({ you: shortName(you.name), opponent: said });
+  const view = $derived(tableView(frame, players));
   const projection = $derived(frame.projection);
   const yourTurn = $derived(projection.turn.active_player_id === projection.agent.id);
   const track = $derived(phaseTrack(projection.turn, stops, yourTurn));
@@ -152,7 +156,6 @@
 
   // The revision your last move was made at; events after it are "since your last move".
   let since = $state.raw<{ revision: number; frame: ExperienceFrame; logLength: number } | null>(null);
-  const players = $derived({ you: shortName(you.name), opponent: said });
   const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since?.revision ?? null);
   const book = $derived(nameBook(since && sinceGiven === undefined ? [since.frame, frame] : [frame], since && sinceGiven === undefined ? log.slice(since.logLength) : []));
   const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players, book));
@@ -171,14 +174,15 @@
     const facts = recent.facts;
     if (connection == null) return;
     untrack(() => {
-      const fresh = prefersReducedMotion() ? [] : beatsFor(facts, shownSeq);
+      const fresh = prefersReducedMotion() || beatPace === 'off' ? [] : beatsFor(facts, shownSeq, players);
       shownSeq = Math.max(shownSeq, facts.at(-1)?.seq ?? -1, presentation.events.at(-1)?.seq ?? -1);
       if (fresh.length) { beats = fresh; beatAt = 0; }
     });
   });
   $effect(() => {
     if (!beat) return;
-    const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS);
+    if (beatPace === 'off') { skipBeats(); return; }
+    const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS[beatPace]);
     return () => clearTimeout(timer);
   });
   function skipBeats(): void { beats = []; beatAt = 0; }

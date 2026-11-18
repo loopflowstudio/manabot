@@ -6,6 +6,8 @@ import type { ExperienceFrame } from '$lib/types';
 import { primaryLabel, promptLine } from './prompt';
 import { tableView } from './view';
 
+const PLAYERS = { you: 'You', opponent: 'Heuristic' };
+
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 
 function framesIn(value: unknown, found: ExperienceFrame[] = []): ExperienceFrame[] {
@@ -23,7 +25,7 @@ const frames = readdirSync(FIXTURES).filter(name => name.endsWith('.json'))
 
 describe('promptLine', () => {
   it.each(frames.map(frame => [frame.action_space, frame] as const))('%s: one short line in plain words', (_, frame) => {
-    const line = promptLine(frame, tableView(frame));
+    const line = promptLine(frame, tableView(frame, PLAYERS));
     expect(line.length).toBeGreaterThan(5);
     expect(line.length).toBeLessThan(110);
     expect(line).not.toMatch(/offer|commit|clause|nonparticipation/i);
@@ -32,7 +34,7 @@ describe('promptLine', () => {
   it('names the cost and how Space pays it', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost);
     expect(pay).toBeDefined();
-    expect(promptLine(pay!, tableView(pay!))).toMatch(/^Pay \{.*Space pays automatically/);
+    expect(promptLine(pay!, tableView(pay!, PLAYERS))).toMatch(/^Pay \{.*Space pays automatically/);
   });
 
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {
@@ -40,7 +42,7 @@ describe('promptLine', () => {
     frame.action_space = 'PRIORITY';
     frame.projection.stack_objects = [];
     frame.projection.turn.active_player_id = frame.projection.opponent.id;
-    expect(promptLine(frame, tableView(frame))).not.toMatch(/Play a land/);
+    expect(promptLine(frame, tableView(frame, PLAYERS))).not.toMatch(/Play a land/);
   });
 });
 
@@ -50,7 +52,7 @@ describe('stack names in the prompt', () => {
     frame.action_space = 'PRIORITY';
     frame.projection.stack_objects = [{ id: 9, kind: 'triggered_ability', controller: 0,
       label: 'Fire Nation Cadets — Whenever this attacks (while your graveyard has at least 1 Lesson): Add {R}{R}.' }];
-    expect(promptLine(frame, tableView(frame))).toBe("Fire Nation Cadets' trigger is on the stack. Respond, or Space to let it resolve");
+    expect(promptLine(frame, tableView(frame, PLAYERS))).toBe("Fire Nation Cadets' trigger is on the stack. Respond, or Space to let it resolve");
   });
 });
 
@@ -63,9 +65,9 @@ describe('primaryLabel', () => {
   it('has priority frames to check', () => expect(priority.length).toBeGreaterThan(0));
 
   it.each(priority.map(frame => [frame.projection.turn.step, frame] as const))('%s: says what passing does next', (_, frame) => {
-    const view = tableView(frame);
+    const view = tableView(frame, PLAYERS);
     const label = primaryLabel(frame, view)!;
-    if (view.stack.length) expect(label.text).toMatch(/^Resolve /);
+    if (view.stack.length) expect(label.text).toMatch(/^Resolve\b/);
     else expect(label.text).toMatch(/^To /);
     expect(label.description).toContain('Pass priority');
   });
@@ -81,19 +83,29 @@ describe('primaryLabel', () => {
   it('names the stack top while something waits to resolve', () => {
     const frame = emptyStack();
     frame.projection.stack_objects = [{ id: 9001, kind: 'spell', controller: 0, label: 'Lightning Bolt' }];
-    expect(primaryLabel(frame, tableView(frame))?.text).toBe('Resolve Lightning Bolt');
+    expect(primaryLabel(frame, tableView(frame, PLAYERS))?.text).toBe('Resolve Lightning Bolt');
+  });
+
+  it('never cuts a long name: the button says the verb and the prompt line names it', () => {
+    const frame = emptyStack();
+    frame.projection.stack_objects = [{ id: 9001, kind: 'triggered_ability', controller: 0, label: 'Invasion Reinforcements — create a token' }];
+    const view = tableView(frame, PLAYERS);
+    const label = primaryLabel(frame, view)!;
+    expect(label.text).toBe('Resolve');
+    expect(label.description).toContain("Invasion Reinforcements' trigger");
+    expect(promptLine(frame, view)).toContain("Invasion Reinforcements' trigger is on the stack");
   });
 
   it('skips blockers when nothing attacks', () => {
     const frame = emptyStack();
     frame.projection.turn.step = 'COMBAT_DECLARE_ATTACKERS';
     [frame.projection.agent, frame.projection.opponent].forEach(player => player.battlefield.forEach(permanent => { permanent.attacking = false; }));
-    expect(primaryLabel(frame, tableView(frame))?.text).toBe('To end of combat');
+    expect(primaryLabel(frame, tableView(frame, PLAYERS))?.text).toBe('To end of combat');
   });
 
   it('shows the cost a payment pays', () => {
     const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
-    expect(primaryLabel(pay, tableView(pay))?.text).toBe(`Pay ${pay.projection.decision_context!.mana_cost}`);
+    expect(primaryLabel(pay, tableView(pay, PLAYERS))?.text).toBe(`Pay ${pay.projection.decision_context!.mana_cost}`);
   });
 
   it('says the cost on the button and the lands it taps in its accessible name', () => {
@@ -107,11 +119,11 @@ describe('primaryLabel', () => {
     const cost = pay.projection.decision_context!.mana_cost;
     const names = lands.map(land => land.name);
     const listed = names[0] === names[1] ? `${names[0]} ×2` : names.join(', ');
-    const label = primaryLabel(pay, tableView(pay), preview);
+    const label = primaryLabel(pay, tableView(pay, PLAYERS), preview);
     expect(label?.text).toBe(`Pay ${cost}`);
     expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
-    expect(promptLine(pay, tableView(pay), true)).toMatch(/Space taps the dashed lands/);
+    expect(promptLine(pay, tableView(pay, PLAYERS), true)).toMatch(/Space taps the dashed lands/);
     // A preview that is not exact draws nothing; the button keeps the cost.
-    expect(primaryLabel(pay, tableView(pay), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
+    expect(primaryLabel(pay, tableView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
   });
 });

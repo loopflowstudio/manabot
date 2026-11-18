@@ -78,6 +78,9 @@ const NEXT_STEP: Record<string, string> = {
   POSTCOMBAT_MAIN_STEP: 'To end step', ENDING_END: 'To cleanup', END_STEP: 'To cleanup', ENDING_CLEANUP: 'To next turn',
 };
 
+/** The most characters the primary button shows on its one line, beside its key. */
+export const PRIMARY_CHARS = 24;
+
 export interface PrimaryLabel {
   /** What pressing it does next, shortly: "Resolve Lightning Bolt", "To combat", "Pay {1}{U}". */
   text: string;
@@ -103,7 +106,9 @@ export function primaryLabel(frame: ExperienceFrame, view: TableView, preview: P
     return full ? { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Pay '.length)}` } : { text: offer, description: offer };
   }
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
-  if (top) return { text: `Resolve ${top}`, description: `${offer}: let ${top} resolve` };
+  // A card name is never cut: when it does not fit beside the verb, the
+  // button says the verb and the prompt line above names what resolves.
+  if (top) return { text: `Resolve ${top}`.length <= PRIMARY_CHARS ? `Resolve ${top}` : 'Resolve', description: `${offer}: let ${top} resolve` };
   const { turn } = frame.projection;
   const attackers = [frame.projection.agent, frame.projection.opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
   const declaring = turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP';

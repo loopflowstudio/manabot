@@ -8,6 +8,8 @@ import { moveList } from './moves';
 import { bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
 import { tableView } from './view';
 
+const PLAYERS = { you: 'You', opponent: 'Heuristic' };
+
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 const navigation = (JSON.parse(readFileSync(new URL('choice-navigation-w17-smart-payment.json', FIXTURES), 'utf8')) as {
   positions: Record<string, { frame: ExperienceFrame }>;
@@ -38,7 +40,7 @@ describe('recordedFrame', () => {
     const drawn = recordedFrame(recorded(position('choice', { actor: seat }), frame), { id: 'r', revision: 9, winner: null }, seat);
     expect(drawn.offers.map(offer => offer.id)).toEqual(frame.offers.map(offer => offer.id));
     expect(drawn.prompt).toEqual(frame.prompt);
-    expect(tableView(drawn).list).toHaveLength(frame.offers.length);
+    expect(tableView(drawn, PLAYERS).list).toHaveLength(frame.offers.length);
   });
 
   it('draws a transition as the board alone, one revision on, with the other seat at the bottom when asked', () => {
@@ -102,6 +104,14 @@ describe('the move list and strip read the index', () => {
     ]);
     const turns = moveList(entries, { you: 'Seat 1', opponent: 'Seat 2' }, new Map(), []);
     expect(turns.flatMap(turn => turn.moves.map(move => move.id))).toEqual(['c1', 'a2', 'a3', 'c2']);
+  });
+
+  it('names players a recorded target choice calls Hero and Villain', () => {
+    const targets = replayLog([
+      position('choice', { key: 't1', actor: 0, label: 'Target Villain', revision: 3 }),
+      position('choice', { key: 't2', actor: 0, label: 'Target Hero', revision: 4 }),
+    ], 0, seat => (seat === 0 ? 'You' : 'Heuristic'));
+    expect(targets.map(entry => entry.text)).toEqual(['Target Heuristic', 'Target yourself']);
   });
 
   it('finds the move a consequence belongs to', () => {

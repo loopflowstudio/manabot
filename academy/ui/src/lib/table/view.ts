@@ -275,9 +275,38 @@ export function stackName(entry: StackEntryView): string {
 
 // ———————————————————————————————————————— The view
 
-export function tableView(frame: ExperienceFrame): TableView {
+/** How the table's sentences name its two players: "You" and "Heuristic". */
+export interface PlayerNames {
+  you: string;
+  opponent: string;
+}
+
+/**
+ * An offer as the table labels it, with players named as everywhere else on
+ * the table. The rules engine names players by setup role ("Target Hero")
+ * or by seat ("event: Seat 2"); a person sees "Target yourself", "Target
+ * Heuristic", "event: Heuristic". Only the label changes; the offer is the
+ * same command.
+ */
+export function namedOffer(offer: InteractionOffer, frame: ExperienceFrame, players: PlayerNames): InteractionOffer {
+  const { agent } = frame.projection;
+  const name = (index: number): string => index === agent.player_index
+    ? (players.you === 'You' ? 'yourself' : players.you) : players.opponent;
+  const seatName = (index: number): string => (index === agent.player_index && players.you === 'You' ? 'you' : name(index));
+  let label = offer.label.replace(/\bSeat ([12])\b/g, (_, seat: string) => seatName(Number(seat) - 1));
+  if (/^Target (Hero|Villain)$/.test(label)) {
+    // Historical frames carry only the focus bridge, by player id.
+    const subject = offer.subjects?.map(candidate => candidate.object.subject).find(candidate => candidate.kind === 'player');
+    const index = subject?.kind === 'player' ? subject.id : [agent, frame.projection.opponent].find(player => player.id === offer.focus[0])?.player_index;
+    if (index !== undefined) label = `Target ${name(index)}`;
+  }
+  return label === offer.label ? offer : { ...offer, label, confirm_label: label };
+}
+
+export function tableView(frame: ExperienceFrame, players: PlayerNames): TableView {
   const drawn = drawnObjects(frame);
-  const list: PlacedOffer[] = frame.offers.map((offer, index) => ({ offer, number: index + 1, anchor: anchorOf(offer, frame, drawn) }));
+  const list: PlacedOffer[] = frame.offers.map((offer, index) =>
+    ({ offer: namedOffer(offer, frame, players), number: index + 1, anchor: anchorOf(offer, frame, drawn) }));
   const at = new Map<string, PlacedOffer[]>();
   const anchorKey = (anchor: Anchor): string =>
     anchor.kind === 'player' ? `player:${anchor.index}` : 'id' in anchor ? `${anchor.kind}:${anchor.id}` : anchor.kind;

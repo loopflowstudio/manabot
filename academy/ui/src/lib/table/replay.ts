@@ -167,7 +167,16 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
     if (position.kind === 'consequences' && position.label === null) return;
     const auto = position.kind === 'consequences' && position.automatic;
     let text = (position.label ?? 'Choice').replace(/^Auto: /, '');
-    if (seatName) text = nameSeats(text, seatName);
+    if (seatName) {
+      text = nameSeats(text, seatName);
+      // A recorded choice names players by setup role: Hero is the seat named "you".
+      const chooser = position.actor === heroSeat ? 'hero' : 'villain';
+      text = text.replace(/^Target (Hero|Villain)$/, (_, role: string) => {
+        const seat = (role === 'Hero' ? heroSeat : 1 - heroSeat) as 0 | 1;
+        const name = seatName(seat);
+        return `Target ${name !== 'You' ? name : chooser === 'hero' ? 'yourself' : 'you'}`;
+      });
+    }
     entries.push({
       id: position.key,
       actor: auto ? 'auto' : position.actor === null ? 'villain' : position.actor === heroSeat ? 'hero' : 'villain',

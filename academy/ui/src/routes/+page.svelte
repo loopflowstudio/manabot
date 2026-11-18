@@ -26,6 +26,7 @@
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/table/result';
   import Strip from '$lib/table/Strip.svelte';
+  import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/table/beats';
   import { logMarks } from '$lib/table/replay';
   import {
     connect,
@@ -302,6 +303,10 @@
   let stripOpen = $state(false);
   const liveMarks = $derived(logMarks(gameStore.actionLog));
   const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
+
+  // How the opponent's moves are read out, remembered per browser.
+  let beatPace = $state<BeatPace>(loadBeatPace());
+  const BEAT_PACE_LABELS: Record<BeatPace, string> = { off: 'Off', quick: 'Quick', slow: 'Slow' };
 </script>
 
 {#snippet notices()}
@@ -362,6 +367,13 @@
     <summary class="btn btn-ghost btn-sm" data-testid="table-menu">Menu</summary>
     <div class="menu-panel" role="region" aria-label="Session, stops and tools">
       <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+      <fieldset class="beat-pace" data-testid="beat-pace">
+        <legend class="type-caption text-ink-2">Opponent's moves</legend>
+        {#each BEAT_PACES as pace (pace)}
+          <label class="type-caption"><input type="radio" name="beat-pace" value={pace} checked={beatPace === pace}
+            onchange={() => { beatPace = pace; saveBeatPace(pace); }} />{BEAT_PACE_LABELS[pace]}</label>
+        {/each}
+      </fieldset>
       {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
       <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
       <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
@@ -416,6 +428,7 @@
       bottom={liveStrip}
       result={gameStore.gameOver ? result : undefined}
       {menu}
+      {beatPace}
     />
   {:else if atHome}
     {@render notices()}
@@ -519,4 +532,7 @@
   }
   .menu-panel > :global(*) { width: 100%; }
   .menu-panel > a { width: auto; }
+  .beat-pace { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; border: 0; padding: 0; margin: 0; }
+  .beat-pace legend { float: left; margin-right: 4px; padding: 0; }
+  .beat-pace label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 </style>

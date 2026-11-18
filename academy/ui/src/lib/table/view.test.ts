@@ -6,6 +6,8 @@ import type { ExperienceFrame } from '$lib/types';
 import { FRAME_RATIO, fitRow, handStrip, offerPlacements, possessive, splitHalf, tableView, unpilePlanned, type PermanentItem, type TableView } from './view';
 import { shortName } from '$lib/opponent-name';
 
+const PLAYERS = { you: 'You', opponent: 'Heuristic' };
+
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 const PROTOCOL = new URL('../../../../../protocol/fixtures/', import.meta.url);
 
@@ -44,7 +46,7 @@ describe('tableView over every retained frame', () => {
   it.each(retained.map(({ name, frame }) => [`${name} r${frame.revision} ${frame.action_space}`, frame] as const))(
     '%s: every offer is listed once and drawn at least once',
     (_, frame) => {
-      const view = tableView(frame);
+      const view = tableView(frame, PLAYERS);
       expect(view.list.map(placed => placed.offer.id)).toEqual(frame.offers.map(offer => offer.id));
       expect(view.list.map(placed => placed.number)).toEqual(frame.offers.map((_, index) => index + 1));
       const placements = offerPlacements(view);
@@ -55,7 +57,7 @@ describe('tableView over every retained frame', () => {
   it.each(retained.map(({ name, frame }) => [`${name} r${frame.revision}`, frame] as const))(
     '%s: every permanent is drawn exactly once',
     (_, frame) => {
-      const drawn = permanents(tableView(frame)).map(item => item.permanent.id).sort((a, b) => a - b);
+      const drawn = permanents(tableView(frame, PLAYERS)).map(item => item.permanent.id).sort((a, b) => a - b);
       const expected = [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield]
         .map(permanent => permanent.id).sort((a, b) => a - b);
       expect(drawn).toEqual(expected);
@@ -64,8 +66,20 @@ describe('tableView over every retained frame', () => {
 });
 
 describe('where decisions land', () => {
+  it('names players in target choices as the table names them', () => {
+    const bolt = (load(new URL('bolt-target.json', PROTOCOL)) as { recovery: { frame: ExperienceFrame } }).recovery.frame;
+    const view = tableView(bolt, PLAYERS);
+    expect(view.list.map(placed => placed.offer.label)).toEqual(['Target yourself', 'Target Heuristic']);
+    expect(view.you.offers.map(placed => placed.offer.label)).toEqual(['Target yourself']);
+    expect(view.opponent.offers.map(placed => placed.offer.label)).toEqual(['Target Heuristic']);
+    // Watching a bot's seat names it, not "yourself"; seats in trigger labels are named too.
+    const watched = tableView({ ...bolt, offers: [...bolt.offers, { ...bolt.offers[0], id: 2, label: 'Put on stack next — X — event: Seat 2' }] },
+      { you: 'Search 64', opponent: 'Heuristic' });
+    expect(watched.list.map(placed => placed.offer.label)).toEqual(['Target Search 64', 'Target Heuristic', 'Put on stack next — X — event: Heuristic']);
+  });
+
   it('puts targets on the permanents they target', () => {
-    const view = tableView(navigation.CHOOSE_TARGET.frame);
+    const view = tableView(navigation.CHOOSE_TARGET.frame, PLAYERS);
     const targeted = permanents(view).filter(item => item.offers.length);
     expect(targeted.map(item => item.permanent.id).sort()).toEqual(
       navigation.CHOOSE_TARGET.frame.offers.map(offer => offer.focus[0]).sort());
@@ -73,7 +87,7 @@ describe('where decisions land', () => {
   });
 
   it('puts payment taps on lands and the payment on the primary button', () => {
-    const view = tableView(navigation.PAY_OR_NOT.frame);
+    const view = tableView(navigation.PAY_OR_NOT.frame, PLAYERS);
     const lands = view.you.support.flatMap(pile => pile.items).filter(item => item.offers.length);
     expect(lands.flatMap(item => item.offers.map(placed => placed.offer.label)))
       .toEqual(expect.arrayContaining(['Tap Mountain to help pay', 'Tap Island to help pay']));
@@ -81,7 +95,7 @@ describe('where decisions land', () => {
   });
 
   it('draws Learn: discards on hand cards, Lessons in the tray by name, declining as a button', () => {
-    const view = tableView(navigation.LEARN.frame);
+    const view = tableView(navigation.LEARN.frame, PLAYERS);
     expect(view.hand.filter(item => item.offers.length).length).toBe(6);
     expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Decline Learn']);
@@ -90,7 +104,7 @@ describe('where decisions land', () => {
   });
 
   it('asks about one blocker: blocks on attackers, not blocking as a button', () => {
-    const view = tableView(navigation.DECLARE_BLOCKER.frame);
+    const view = tableView(navigation.DECLARE_BLOCKER.frame, PLAYERS);
     const blocker = navigation.DECLARE_BLOCKER.frame.offers[0].focus[0];
     expect(view.asked).toEqual(new Set([blocker]));
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Otter-Penguin: do not block']);
@@ -107,7 +121,7 @@ describe('where decisions land', () => {
     // As the authority names them: the attacker is the declaration's source; its decline names it as a choice.
     frame.offers[0].subjects = [{ role: 'source', object: subject }];
     frame.offers[1].subjects = [{ role: 'choice', object: subject }];
-    const view = tableView(frame);
+    const view = tableView(frame, PLAYERS);
     const attacker = permanents(view).find(item => item.permanent.id === creature)!;
     expect(attacker.offers.map(placed => placed.offer.label)).toEqual([frame.offers[0].label]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual([frame.offers[1].label]);
@@ -115,7 +129,7 @@ describe('where decisions land', () => {
   });
 
   it('takes each land the payer would tap out of its pile', () => {
-    const view = tableView(navigation.CHOOSE_TARGET.frame);
+    const view = tableView(navigation.CHOOSE_TARGET.frame, PLAYERS);
     const pile = [...view.you.support].find(candidate => candidate.items.length > 2)!;
     const planned = new Map([[pile.items[0].permanent.id, 1]]);
     const split = unpilePlanned([pile], planned);
@@ -125,7 +139,7 @@ describe('where decisions land', () => {
   });
 
   it('fans identical lands into one pile, keeping each copy', () => {
-    const view = tableView(navigation.CHOOSE_TARGET.frame);
+    const view = tableView(navigation.CHOOSE_TARGET.frame, PLAYERS);
     const piles = [...view.you.support, ...view.you.creatures];
     expect(piles.some(pile => pile.items.length > 1)).toBe(true);
     expect(piles.flatMap(pile => pile.items).length).toBe(navigation.CHOOSE_TARGET.frame.projection.agent.battlefield.length);
@@ -187,7 +201,7 @@ describe('the spell being cast', () => {
     const frame = navigation.PAY_OR_NOT.frame;
     const source = frame.projection.decision_context!.source!;
     expect(frame.projection.decision_context!.announcing).toBe('spell');
-    const view = tableView(frame);
+    const view = tableView(frame, PLAYERS);
     expect(view.stack[0].announcing).toBe('spell');
     expect(view.stack[0].card?.id).toBe(source.display_id);
     expect(view.stack[0].entry.label).toBe(source.label);
@@ -201,7 +215,7 @@ describe('the spell being cast', () => {
     const context = frame.projection.decision_context!;
     context.announcing = 'activated_ability';
     context.source = { entity_id: land.id, subject: { kind: 'object', id: { entity: land.id, incarnation: 0 } }, display_id: land.id, label: land.name ?? "Land" };
-    const view = tableView(frame);
+    const view = tableView(frame, PLAYERS);
     expect(view.stack[0]).toMatchObject({ announcing: 'activated_ability', card: null, entry: { source_permanent: land.id } });
     expect(permanents(view).map(item => item.permanent.id)).toContain(land.id);
   });
