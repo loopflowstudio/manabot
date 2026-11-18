@@ -686,6 +686,10 @@ snapshots still raise `RepresentationOverflow` with the complete size, without
 trimming history. A byte fit does not establish a model's token fit; the LLM
 harness must check its tokenizer and chat-template budget.
 
+LLM games record and show this history only when `GameConfig.decision_memory`
+is set (`manabot.verify.llm_game`); it is off by default, like the policy's
+encoder.
+
 Run the headless software proof with:
 
 ```bash
