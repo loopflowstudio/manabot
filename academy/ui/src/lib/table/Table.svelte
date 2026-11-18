@@ -222,7 +222,8 @@
   /** Identical creatures drawn as one pile take a count: "4 of 9 Allies". */
   const counts = $derived.by(() => {
     if (!drafting || !preview || preview.kind !== 'attackers') return [];
-    const base = tableView(frame, players);
+    // Piles as drawn without offers: the creature asked about now is still one of its pile.
+    const base = tableView({ ...frame, offers: [] }, players);
     const pileOf = new Map(base.you.creatures.flatMap(pile => pile.items.map(item => [item.permanent.id, pile.key] as const)));
     return draftPiles(preview.declarable, draft, id => pileOf.get(id) ?? null);
   });

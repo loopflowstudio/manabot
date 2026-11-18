@@ -64,10 +64,11 @@ type Stage = 'otter' | 'tiger' | 'block' | 'priority';
 const REVISION: Record<Stage, number> = { otter: 10, tiger: 11, block: 12, priority: 13 };
 
 /** The engine asks one creature at a time: Otter-Penguin, then Tiger-Seal; then the Cub attacks and Otter-Penguin may block. */
-function frameAt(stage: Stage): ExperienceFrame {
+function frameAt(stage: Stage, moreTigers = 0): ExperienceFrame {
   const base = structuredClone(boltFixture.recovery.frame);
   const revision = REVISION[stage];
   const observation = combatObservation();
+  for (let i = 0; i < moreTigers; i++) observation.agent.battlefield.push(permanent(86 + i, 'Tiger-Seal', 0, 3, 3));
   const actionSpace = stage === 'block' ? 'DECLARE_BLOCKER' : stage === 'priority' ? 'PRIORITY' : 'DECLARE_ATTACKER';
   if (stage === 'tiger') observation.agent.battlefield[0] = { ...observation.agent.battlefield[0], attacking: true, tapped: true };
   if (stage === 'block') {
@@ -141,9 +142,9 @@ const id = (entity: number) => ({ entity, incarnation: 0 });
  * engine would ask for. `after` replaces the frame that follows a revision,
  * to stand for a decision the preview did not predict.
  */
-async function installCombatAuthority(page: Page, after: Partial<Record<number, Stage>> = {}): Promise<Authority> {
+async function installCombatAuthority(page: Page, after: Partial<Record<number, Stage>> = {}, moreTigers = 0): Promise<Authority> {
   const authority: Authority = { commands: [], previews: [] };
-  let current = frameAt('otter');
+  let current = frameAt('otter', moreTigers);
   await page.route('**/api/sessions/*/combat-preview', async route => {
     const request = route.request().postDataJSON() as { match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: Authority['previews'][number]['plan'] };
     authority.previews.push({ revision: request.revision, plan: request.plan });
@@ -159,7 +160,8 @@ async function installCombatAuthority(page: Page, after: Partial<Record<number, 
       : {
           kind: 'attackers',
           declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [], must_block: false },
-            { creature: id(85), label: 'Tiger-Seal', can_block: [], must_block: false }].filter(creature => request.revision === 10 || creature.creature.entity === 85),
+            { creature: id(85), label: 'Tiger-Seal', can_block: [], must_block: false },
+            ...Array.from({ length: moreTigers }, (_, i) => ({ creature: id(86 + i), label: 'Tiger-Seal', can_block: [], must_block: false }))].filter(creature => request.revision === 10 || creature.creature.entity === 85),
           steps: [
             ...(request.revision === 10 ? [step(10, 83, attacks.has(83) ? 101 : 102, attacks.has(83))] : []),
             step(11, 85, attacks.has(85) ? 103 : 104, attacks.has(85)),
@@ -197,8 +199,8 @@ async function installCombatAuthority(page: Page, after: Partial<Record<number, 
   return authority;
 }
 
-async function startCombat(page: Page, after: Partial<Record<number, Stage>> = {}): Promise<Authority> {
-  const authority = await installCombatAuthority(page, after);
+async function startCombat(page: Page, after: Partial<Record<number, Stage>> = {}, moreTigers = 0): Promise<Authority> {
+  const authority = await installCombatAuthority(page, after, moreTigers);
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
@@ -278,6 +280,18 @@ test('a frame the preview did not predict stops the sequence and redraws the boa
   await expect(page.getByTestId('combat-draft')).toHaveCount(0);
   await expect(card(page, 85)).not.toHaveClass(/attacking/);
   await expect(card(page, 85)).not.toHaveAttribute('data-draft');
+});
+
+test('a pile of identical creatures takes a count', async ({ page }) => {
+  const authority = await startCombat(page, {}, 2);
+  const pile = page.getByTestId('pile-count');
+  await expect(pile).toHaveAccessibleName('Tiger-Seal: 0 of 3 attacking');
+  await pile.getByRole('button', { name: 'One more Tiger-Seal' }).click();
+  await pile.getByRole('button', { name: 'One more Tiger-Seal' }).click();
+  await expect(pile).toHaveAccessibleName('Tiger-Seal: 2 of 3 attacking');
+  await expect(page.locator('.board [data-testid=table-card][data-draft=in]')).toHaveCount(2);
+  await expect(page.getByTestId('decision-prompt')).toHaveText('Attack with 2 · not with Otter-Penguin and Tiger-Seal');
+  expect(authority.commands).toEqual([]);
 });
 
 test('a reload mid-draft keeps the draft and commits nothing', async ({ page }) => {
