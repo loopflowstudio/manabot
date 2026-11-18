@@ -333,15 +333,22 @@ def play(
         if opponent is not None:
             summary.opponent_sha256 = opponent.sha256
             opponent.admit(players, config.opponent_seed)
-        with observe("native_reset"):
-            env = managym.Env(
+
+        def root() -> managym.Env:
+            started_env = managym.Env(
                 seed=config.seed,
                 skip_trivial=config.skip_trivial,
                 decision_memory=True,
             )
-            env.reset(players)
+            started_env.reset(players)
+            return started_env
+
+        with observe("native_reset"):
+            env = root()
         with observe("clone_replay"):
-            replay = env.clone_env()
+            # A second game from the same seed, not a clone: a clone is a search
+            # fork and records no decisions, so its viewer history would differ.
+            replay = root()
         while not env.is_game_over():
             if summary.decisions >= config.max_decisions:
                 raise TimeoutError("game decision limit reached")
