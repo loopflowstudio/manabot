@@ -34,7 +34,7 @@ from experiments import (
     belief,
     elemental,
     llm_claude,
-    priority_taps,
+    mana_taps,
     seat_comparison,
     tla_frontier,
 )
@@ -59,13 +59,9 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
     (
-        priority_taps,
+        mana_taps,
         (),
-        {
-            f"priority-taps-{size}-{taps}": 1
-            for size in ("w64", "w160l8")
-            for taps in ("off", "on")
-        },
+        {"mana-taps-w64-off": 3, "mana-taps-w64-on": 3},
     ),
 ]
 
@@ -89,7 +85,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "belief",
         "elemental",
         "etude_execution",
-        "priority_taps",
+        "mana_taps",
         "seat_comparison",
         "tla_frontier",
     }
@@ -134,11 +130,12 @@ def test_training_jobs_read_as_addressed_runs(
     assert all(request.job.smoke is not None for request in requests)
 
 
-def test_priority_taps_rental_limits_apply_to_all_four_runs() -> None:
+def test_mana_taps_rental_limits_apply_to_all_six_runs() -> None:
     requests = read_training_jobs(
-        EXPERIMENTS / "priority_taps.py", ("--hours", "0.875", "--usd-per-run", "0.79")
+        EXPERIMENTS / "mana_taps.py", ("--hours", "0.875", "--usd-per-run", "0.79")
     )
-    assert len(requests) == 4
+    assert len(requests) == 6
+    assert {request.seed for request in requests} == set(mana_taps.SEEDS)
     assert all(request.job.max_hours == 0.875 for request in requests)
     assert all(str(request.job.max_usd) == "0.79" for request in requests)
 

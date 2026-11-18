@@ -1,9 +1,9 @@
-"""Do fixed-source taps at priority change TLA self-play at either frontier size?
+"""Do fixed-source taps at priority and during payments change w64 TLA learning or throughput?
 
-Each size trains with taps off and on. Etude plays the four policies against
+Three training seeds each train with taps off and on. Etude plays each policy against
 the first-64 heuristic and compares on against off at matched updates. Every
 point uses the same 16 trophy pairs, crossing seats and decks within each deal.
-Run locally with `uv run etude smoke experiments/priority_taps.py`.
+Run locally with `uv run etude smoke experiments/mana_taps.py`.
 """
 
 from __future__ import annotations
@@ -32,9 +32,9 @@ from etude.report import Curve, Matches, Report, Score, Series
 from etude.spec import Input
 from etude.train.tracking import track
 
-from experiments import priority_taps
+from experiments import mana_taps
 from experiments.tla_corpus import Corpus
-from experiments.tla_frontier import HEURISTIC, SIZES, SizeLabel, learning, model
+from experiments.tla_frontier import HEURISTIC, learning, model
 from manabot.data import load_manifest
 from manabot.eval.admission import register_anchor
 from manabot.eval.agents import AGENTS, game_players, registration
@@ -57,7 +57,8 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "experiments/data/mtg213/corpus-v1/corpus.json"
 POPULATION = "a5062cc5130a6fdbc4531f4269c610ee18f922fe81c2639b01c8bf8d1488c5ed"
-MILESTONES = {0, 25, 50, 100, 150, 200, 300}
+SEEDS = (21501, 21502, 21503)
+MILESTONES = {0, 25, 50, 100, 150, 200, 250}
 OBSERVATION = ObservationConfig(
     policy_input_version=11,
     max_facts=512,
@@ -109,14 +110,13 @@ def corpus() -> UniformDecks:
 
 
 class Arm(StrictModel):
-    size: SizeLabel
     taps: bool
     device: Literal["cpu", "cuda"] = "cuda"
-    updates: int = 10_000
+    updates: int = 250
 
     @property
     def name(self) -> str:
-        return f"priority-taps-{self.size}-{'on' if self.taps else 'off'}"
+        return f"mana-taps-w64-{'on' if self.taps else 'off'}"
 
 
 def settings(arm: Arm) -> SelfPlay:
@@ -125,11 +125,11 @@ def settings(arm: Arm) -> SelfPlay:
     local = arm.device == "cpu"
     return SelfPlay(
         deck_source=corpus(),
-        observation=OBSERVATION.model_copy(update={"priority_mana_taps": True})
+        observation=OBSERVATION.model_copy(update={"mana_taps": True})
         if arm.taps
         else OBSERVATION,
-        model=model(arm.size),
-        learning=learning(arm.size),
+        model=model("w64"),
+        learning=learning("w64"),
         behavior="current-self",
         streams=2 if local else 256,
         transitions=1 if local else 64,
@@ -158,9 +158,12 @@ def train(config: Arm) -> None:
 
 
 def training_jobs(
-    revision: str | None = None, hours: float = 3, usd_per_run: float = 1.95
+    revision: str | None = None,
+    hours: float = 7,
+    usd_per_run: float = 4.50,
+    updates: int = 250,
 ) -> list[TrainingJob]:
-    arms = [Arm(size=size, taps=taps) for size in SIZES for taps in (False, True)]
+    arms = [Arm(taps=taps, updates=updates) for taps in (False, True)]
     given = corpus_input()
     return [
         TrainingJob(
@@ -168,7 +171,7 @@ def training_jobs(
             train=train,
             config=arm,
             smoke=arm.model_copy(update={"device": "cpu", "updates": 1}),
-            seeds=(21501,),
+            seeds=SEEDS,
             repo=str(ROOT),
             revision=revision,
             setup=machine_setup(" --extra artifacts"),
@@ -198,20 +201,27 @@ def deals() -> Deals:
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    """One pass once all four arms stop. The last shared export is the paired endpoint."""
-    checkpoints: dict[str, dict[int, CheckpointPlayer]] = {}
-    for size in SIZES:
+    """Compare complete seed pairs. Etude smoke supplies one seed per distinct job."""
+    checkpoints: dict[tuple[int, bool], dict[int, CheckpointPlayer]] = {}
+    names = {Arm(taps=t).name for t in (False, True)}
+    seeds = sorted(
+        {
+            r.seed
+            for r in state.runs
+            if r.launch in names and r.seed in SEEDS and r.seed is not None
+        }
+    )
+    for seed in seeds:
         for taps in (False, True):
-            name = Arm(size=size, taps=taps).name
-            runs = [run for run in state.runs if run.launch == name]
+            name = Arm(taps=taps).name
+            runs = [r for r in state.runs if r.launch == name and r.seed == seed]
             if len(runs) > 1:
-                raise ValueError(f"multiple training runs for {name}")
-            # ExperimentState already joins lost rentals to their last stored export.
+                raise ValueError(f"multiple training runs for {name} seed {seed}")
             if not runs or not runs[0].ended:
                 return []
-            run = runs[0]
-            checkpoints[name] = {
-                int(c.at["updates"]): checkpoint_player(c.ref) for c in run.checkpoints
+            checkpoints[seed, taps] = {
+                int(c.at["updates"]): checkpoint_player(c.ref)
+                for c in runs[0].checkpoints
             }
     conditions = deals()
     heuristic = Code(
@@ -235,13 +245,13 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             )
         )
 
-    for size in SIZES:
-        off, on = (checkpoints[Arm(size=size, taps=t).name] for t in (False, True))
+    for seed in seeds:
+        off, on = (checkpoints[seed, t] for t in (False, True))
         for label, saved in (("off", off), ("on", on)):
             if saved:
                 for u in sorted(saved.keys() & MILESTONES | {max(saved)}):
                     compare(
-                        f"{size}-{label} u{u} vs heuristic",
+                        f"seed {seed} {label} u{u} vs heuristic",
                         "heuristic",
                         saved[u],
                         heuristic,
@@ -249,17 +259,17 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         shared = off.keys() & on.keys()
         if shared:
             for u in sorted(shared & MILESTONES | {max(shared)}):
-                compare(f"{size} on vs off u{u}", "on-vs-off", on[u], off[u])
+                compare(f"seed {seed} on vs off u{u}", "on-vs-off", on[u], off[u])
     if not seatings:
         return []
     return [
         EvalJob(
-            play=priority_taps.play,
+            play=mana_taps.play,
             agents=AGENTS,
             tournament=Benchmark(
-                name="priority-taps-paired",
+                name="mana-taps-paired",
                 environment=environment(
-                    name="priority-taps",
+                    name="mana-taps",
                     files=[Path(__file__)],
                     config=conditions.model_dump(mode="json"),
                 ),
@@ -316,14 +326,14 @@ def play(match: Match[Deals], agents: Sequence[object]) -> Tables:
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version="priority-taps-paired",
+        arena_version="mana-taps-paired",
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=opponent.identity_sha256,
         evaluation_compute_envelope_id=ETUDE_COMPUTE_CLASS,
     )
     root = (
-        Path(os.environ.get("ETUDE_OUTPUT_DIR") or ROOT / ".runs/priority-taps")
+        Path(os.environ.get("ETUDE_OUTPUT_DIR") or ROOT / ".runs/mana-taps")
         / "arena"
         / match.key
     )
@@ -337,7 +347,7 @@ def play(match: Match[Deals], agents: Sequence[object]) -> Tables:
             deal_seeds=(deal,),
             authored_matchup=matchup,
             game_seconds=600,
-            purpose="priority-taps-tla",
+            purpose="mana-taps-tla",
         ),
         out_dir=Path(mkdtemp(dir=root)) / "evaluation",
         agents=dict(
@@ -380,9 +390,7 @@ def report() -> Report:
             Curve(
                 title="Score against the heuristic", matches=Matches(tag="heuristic")
             ),
-            Curve(
-                title="Priority taps on against off", matches=Matches(tag="on-vs-off")
-            ),
+            Curve(title="Mana taps on against off", matches=Matches(tag="on-vs-off")),
         ),
         perf=tuple(
             Series(title=title, keys=(key,), unit=unit)
