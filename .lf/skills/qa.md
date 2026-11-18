@@ -116,6 +116,17 @@ publish, land or choose the next Graph step from here.
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
   SIGINT is ignored and the server looks hung.
+- Checkpoints as Academy opponents: launch `managym academy play` with
+  `MANABOT_RUNS_DIR=<folder of .pt/.safetensors>` and `ETUDE_HOME=<home of an
+  etude train run>`; `GET /api/opponents` lists what the picker shows (an
+  unreadable file is omitted, not listed). The launch opens inside a game, so
+  **Start game** on the New game page and **Start next game** raise a browser
+  confirm ("Stop the current game and start a new session?"). Playwright
+  dismisses it by default and the click then does nothing: register
+  `page.on('dialog', d => d.accept())` first. Check the header names the
+  chosen policy before reading the opponent's plays. When this checkout has no
+  `academy/ui/node_modules`, keep the script under `.runs/` and load Playwright
+  from a sibling checkout with `createRequire('<sibling>/academy/ui/')('playwright')`.
 - Game records in Academy (`managym.recording`, `managym academy replay
   <file|dir> --game N`): write records with the `docs/engine-python.md` Record
   games example (a complete game, and one closed after a few steps for
