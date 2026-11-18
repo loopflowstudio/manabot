@@ -197,7 +197,7 @@ w160l8, 2.4 s against 2.9 s per pass with both settings on
 known cost of the default at small widths; it stays on at every width.
 
 The setting changes how a forward is computed, not the model. It changes no
-`ModelConfig` field, checkpoint, world binding or policy input, so a checkpoint
+`ModelConfig` field, checkpoint, binding or policy input, so a checkpoint
 trained with either setting loads and runs with the other. On CPU,
 action probabilities, values, losses and gradients agree with the padded path
 up to the order of floating-point sums. A batch that references no card
@@ -367,7 +367,7 @@ Add an entry in the change that renames the type. The
 
 A checkpoint now records its column names, definition keys and naming names in
 row order, and the revision and Etude run that wrote it. The container carries these in `input_columns`, `writer_catalog` and
-`source`. A saved world pilot can load on another revision using its
+`source`. A saved pilot can load on another revision using its
 embedded catalog. Earlier checkpoints can lack any of these fields. Their columns are the first N of their input version's layout
 at the recorded width, which holds because columns are only appended. Their
 keys and names come from a writer catalog found by the card digest the file

@@ -268,7 +268,7 @@ distinct learning token, card names among them, which is the 8,000 between the
 two-deck and ten-deck runs. The fact encoder and the shared-effect encoder
 each hold about 0.8M parameters in hash-bucket embedding tables, so
 the current TLA recipe has 1,883,650 with the same 64×2 attention core.
-The first two rows predate the current world and
+The first two rows predate the current card pool and
 encoding, so they record scale only. The one-seat ladder's $10 checkpoint
 (151.6M decisions) scored 0.69 against the `heuristic` anchor and 0.70 as
 Lessons against Allies; it was closed before its $50 tier once self-play
@@ -331,7 +331,7 @@ Earlier findings are tabulated in the
   capacity and recovers from oversized games, but hasn't run
   ([pilot evidence](experiments/reports/tla-trophy-pilot.md)).
 - **The full trophy population.** The pilot corpus was frozen when 134 of
-  1,000 sampled lists admitted; the current world admits all 1,000, and no
+  1,000 sampled lists admitted; the current pool admits all 1,000, and no
   protocol or run uses the larger population yet.
 - **Limited.** The long-term target is sealed and draft play: building decks
   from a pool, then piloting them. Piloting random trophy decks is the first
