@@ -29,6 +29,23 @@ from managym.experience import LegacyHeroObservation
 
 # The protocol-v1 projection labels seat 0 "Hero" and seat 1 "Villain".
 HERO_PLAYER_INDEX = 0
+# Native `Keywords` attributes in `KeywordData` declaration order.
+KEYWORD_NAMES = (
+    "flying",
+    "reach",
+    "haste",
+    "flash",
+    "vigilance",
+    "trample",
+    "first_strike",
+    "double_strike",
+    "deathtouch",
+    "lifelink",
+    "defender",
+    "menace",
+    "hexproof",
+    "indestructible",
+)
 
 ACTION_LABELS = {
     "PRIORITY_PLAY_LAND": "Play land",
@@ -192,12 +209,18 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
+        "keywords": _keywords(permanent.characteristics.keywords) or None,
         "used_abilities": list(permanent.used_abilities) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
         "copy_of": _copy(permanent.copy),
     }
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _keywords(keywords: managym.Keywords) -> list[str]:
+    """Effective keyword names after continuous effects, in declaration order."""
+    return [name for name in KEYWORD_NAMES if getattr(keywords, name)]
 
 
 def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:

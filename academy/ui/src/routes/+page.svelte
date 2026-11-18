@@ -10,6 +10,7 @@
   import { onMount, untrack } from 'svelte';
 
   import Table from '$lib/table/Table.svelte';
+  import { PaymentPreviewController, type PreviewState } from '$lib/payment-preview';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
   import { recordFetch } from '$lib/records';
   import type { PlaySession } from '$lib/play-session';
@@ -35,6 +36,7 @@
     sendReturnToLive,
     sendSetStops,
     sendTransferPilot,
+    fetchPaymentPreview,
   } from '$lib/socket.svelte';
   import type { ExperienceFrame, InteractionOffer, StopSide } from '$lib/types';
 
@@ -72,6 +74,19 @@
   });
 
   const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
+
+  // The automatic payer's plan for the offer the table asks about: a
+  // read-only query bound to this exact decision, dropped on every update.
+  let paymentState = $state<PreviewState | null>(null);
+  const payments = new PaymentPreviewController(fetchPaymentPreview, state => { paymentState = state; });
+  $effect(() => {
+    void gameStore.updateSeq;
+    untrack(() => payments.invalidate());
+  });
+  function previewPayment(offer: InteractionOffer | null): void {
+    if (offer && tableFrame && canSubmitLive) void payments.select(tableFrame, offer.id, offer.label);
+    else payments.clear();
+  }
 
   function openEditor(kind: 'new' | 'next', opponentOnly = false): void {
     const draft = kind === 'next' ? gameStore.playSession?.draft : undefined;
@@ -343,6 +358,8 @@
       {opponentChoosing}
       workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
       interrupted={gameStore.resumeFailed}
+      payment={paymentState}
+      onpreview={previewPayment}
       onact={handleActionSelect}
       onpassturn={handlePassTurn}
       {notices}

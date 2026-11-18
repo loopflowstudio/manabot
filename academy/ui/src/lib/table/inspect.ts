@@ -2,12 +2,13 @@
  * What inspecting a permanent explains beyond its printed face: where its
  * power and toughness come from, and which keywords it has and why.
  *
- * Both read only the frame's projection (effective P/T, counters, the
- * continuous-effect records) and the printed face. The projection carries no
- * layered keyword list, so `keywordsOf` reports printed keywords and the grants
- * and losses its effect records name; a grant from another permanent's static
- * ability is not among them. Nothing here is inferred beyond that arithmetic:
- * what the named parts do not explain is reported as "other effects".
+ * Both read only the frame's projection (effective P/T, effective keywords,
+ * counters, the continuous-effect records) and the printed face. The
+ * projection's keyword list is the authority on which keywords a permanent
+ * has; the effect records and the printed face only say why. Nothing here is
+ * inferred beyond that: what the named parts do not explain is reported as
+ * "other effects", and a keyword neither printed nor recorded as "another
+ * ability" (a static grant from another permanent).
  */
 import type { CardFace } from '$lib/card-faces.svelte';
 import type { ContinuousEffect, PermanentState } from '$lib/types';
@@ -65,22 +66,28 @@ export function ptProvenance(permanent: PermanentState, face: CardFace | null): 
 
 export interface KeywordFact {
   keyword: string;
-  /** The effect that granted it; null when printed. */
+  /** Why it has it: null when printed, else the granting effect or "Another ability". */
   source: string | null;
 }
 
-/** Printed keywords and those its effect records grant, less what they remove. */
-export function keywordsOf(permanent: PermanentState | null, face: CardFace | null): KeywordFact[] {
-  const out = new Map<string, KeywordFact>();
-  if (!permanent?.abilities_lost) for (const keyword of face?.keywords ?? []) out.set(keyword, { keyword, source: null });
-  const effects = [...(permanent?.effects ?? [])].sort((a, b) => a.timestamp - b.timestamp);
-  for (const effect of effects) {
-    if (effect.modification === 'AddKeywords') {
-      for (const keyword of effect.keywords ?? []) if (!out.has(keyword)) out.set(keyword, { keyword, source: effectLabel(effect) });
-    }
-    if (effect.modification === 'LoseKeywords') for (const keyword of effect.keywords ?? []) out.delete(keyword);
+export const OTHER_GRANT = 'Another ability';
+
+/**
+ * The keywords a permanent has, from the projection's effective list, each
+ * with its reason: printed, the effect record that granted it, or another
+ * ability. A permanent the projection lists no keywords for has none.
+ */
+export function keywordsOf(permanent: PermanentState, face: CardFace | null): KeywordFact[] {
+  const printed = new Set(permanent.abilities_lost ? [] : face?.keywords ?? []);
+  const granted = new Map<string, string>();
+  for (const effect of [...(permanent.effects ?? [])].sort((a, b) => a.timestamp - b.timestamp)) {
+    if (effect.modification !== 'AddKeywords') continue;
+    for (const keyword of effect.keywords ?? []) if (!granted.has(keyword)) granted.set(keyword, effectLabel(effect));
   }
-  return [...out.values()];
+  return (permanent.keywords ?? []).map(keyword => ({
+    keyword,
+    source: printed.has(keyword) ? null : granted.get(keyword) ?? OTHER_GRANT,
+  }));
 }
 
 /** "+2/+0", "−1/−1": a P/T change as printed in rules text. */

@@ -134,7 +134,10 @@ impl Game {
                             | Action::CastSpell { .. }
                             | Action::ActivateAbility { .. }
                             | Action::ActivateCardAbility { .. }
-                            | Action::Foretell { .. } => "source",
+                            | Action::Foretell { .. }
+                            // The creature an attack declaration sends in acts;
+                            // its decline names the same creature as a choice.
+                            | Action::DeclareAttacker { attack: true, .. } => "source",
                             Action::DeclareBlocker { .. } if index > 0 => "target",
                             Action::ChooseTarget { .. } => "target",
                             _ => "choice",

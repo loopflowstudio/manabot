@@ -12,6 +12,7 @@
    * authority's presentation events; motion only shows it.
    */
   import { onMount, type Snippet } from 'svelte';
+  import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig } from '$lib/types';
   import Field from './Field.svelte';
@@ -19,6 +20,7 @@
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
   import { moveList } from './moves';
+  import { paymentPlan, previewable } from './payment';
   import { primaryLabel, promptLine } from './prompt';
   import { nameBook, recentView, tableLines, turnOwners, visibleNames } from './recent';
   import Plate from './Plate.svelte';
@@ -48,6 +50,10 @@
     workStarted: number | null;
     /** The live session is gone; offers are the last recorded decision's. */
     interrupted: boolean;
+    /** The automatic payer's answer for the offer last asked about, if any. */
+    payment: PreviewState | null;
+    /** Ask for the payment preview of this offer, or of none. Asking sends no action. */
+    onpreview: (offer: InteractionOffer | null) => void;
     onact: (offer: InteractionOffer) => void;
     onpassturn: () => void;
     notices?: Snippet;
@@ -57,7 +63,7 @@
 
   let {
     frame, live, status, you, opponent, stops, connection, connectionLabel, log, canPassTurn,
-    presentation, thinking, opponentChoosing, workStarted, interrupted, onact, onpassturn, notices, result, menu,
+    presentation, thinking, opponentChoosing, workStarted, interrupted, payment, onpreview, onact, onpassturn, notices, result, menu,
   }: Props = $props();
 
   // The table is the whole screen; the page behind it must not scroll.
@@ -77,8 +83,26 @@
   const whose = $derived(frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index ? (live ? 'Your decision' : 'Your decision · waiting') : `${opponent.name}'s decision`);
-  const line = $derived(promptLine(frame, view));
-  const primaryText = $derived(primaryLabel(frame, view));
+  // ———————————————— Payment preview
+
+  // The offer the board previews: the one a person points at or focuses, when
+  // the authority can preview it (a cast, a target, a tap), else the pending
+  // payment itself. Previewing is a read-only query; it commits nothing.
+  let pointed = $state<PlacedOffer | null>(null);
+  const payOffer = $derived(view.primary?.offer.verb === 'pay' ? view.primary : null);
+  const previewing = $derived(!live ? null : pointed && previewable(pointed.offer) ? pointed : payOffer);
+  $effect(() => { onpreview(previewing?.offer ?? null); });
+  const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
+  const plan = $derived(paymentPlan(answered, frame));
+  const primaryText = $derived(primaryLabel(frame, view, payOffer && previewing === payOffer ? answered : null));
+  const line = $derived(promptLine(frame, view, plan !== null && previewing === payOffer && plan.sources.size > 0));
+  const paymentNote = $derived(payOffer && previewing === payOffer
+    ? payment?.error ? 'The payment preview is unavailable; Pay still pays automatically.'
+      : answered && answered.state !== 'exact' && answered.state !== 'not_applicable' ? answered.explanation : null
+    : null);
+  function point(offers: PlacedOffer[] | null): void {
+    pointed = offers?.length === 1 ? offers[0] : null;
+  }
 
   // ———————————————— What happened since your last move
 
@@ -87,7 +111,7 @@
   const players = $derived({ you: you.name, opponent: opponent.name });
   const book = $derived(nameBook(since ? [since.frame, frame] : [frame], since ? log.slice(since.logLength) : []));
   const recent = $derived(recentView(frame, since?.revision ?? null, presentation.events, index => presentation.labelsAt(index), players, book));
-  const lines = $derived(tableLines(frame, presentation.events, recent.resolved));
+  const lines = $derived(tableLines(frame, presentation.events, recent.resolved, since?.revision ?? null));
   const moves = $derived(moveList(log, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion
@@ -151,6 +175,7 @@
     void frame.revision;
     menuAt = null;
     hovered = null;
+    pointed = null;
   });
   $effect(() => {
     if (menuAt) menuElement?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
@@ -198,9 +223,11 @@
     activate(item.permanent.name ?? 'Permanent', item.offers, element);
   }
   function previewPermanent(item: PermanentItem | null, element: HTMLElement | null): void {
+    point(item?.offers ?? null);
     show(item ? { name: item.permanent.name ?? 'Permanent', text: item.permanent.text_box ?? null, permanent: item.permanent.id, card: null } : null, element);
   }
   function previewCard(card: CardState | null, element: HTMLElement | null): void {
+    point(card ? view.hand.find(item => item.card.id === card.id)?.offers ?? null : null);
     show(card ? { name: card.name, text: card.text_box ?? null, permanent: null, card: card.id } : null, element);
   }
   function previewName(name: string | null, element: HTMLElement | null): void {
@@ -304,19 +331,19 @@
 
   <div class="board" id="table-board" aria-label="Board" style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
     <section class="half opponent" aria-label={`${opponent.name}'s battlefield`}>
-      <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live}
+      <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="half you" aria-label="Your battlefield">
-      <Plate player={projection.agent} name={you.name} deck={you.deck} offers={view.you.offers} {live}
+      <Plate player={projection.agent} name={you.name} deck={you.deck} offers={view.you.offers} {live} damage={recent.damage.players.get(projection.agent.player_index) ?? 0}
         active={yourTurn} side="you" onactivate={element => activate(you.name, view.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} touched={recent.touched} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
@@ -357,7 +384,7 @@
 
   <div class="rail-slot" id="table-choices">
     <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
-      opponentName={opponent.name} onact={act} onpassturn={passTurn}
+      opponentName={opponent.name} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} {result} dock={inspectMode === 'dock' ? dock : undefined} />
   </div>
 </div>

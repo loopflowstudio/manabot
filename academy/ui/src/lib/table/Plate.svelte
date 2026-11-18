@@ -4,6 +4,8 @@
    * is the player as a target, so offers on the player outline it.
    */
   import { manaText } from '$lib/mana';
+  import { poolSymbols } from './payment';
+  import Pips from './Pips.svelte';
   import type { CardState, PlayerState } from '$lib/types';
   import type { PlacedOffer } from './view';
 
@@ -14,6 +16,8 @@
     offers: PlacedOffer[];
     live: boolean;
     active: boolean;
+    /** Damage this player was dealt since your last move. */
+    damage?: number;
     /** Set while this player is choosing: "choosing…". */
     choosing?: boolean;
     side: 'you' | 'opponent';
@@ -21,7 +25,7 @@
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
   }
 
-  let { player, name, deck, offers, live, active, choosing = false, side, onactivate, onzone }: Props = $props();
+  let { player, name, deck, offers, live, active, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
   const hand = $derived(player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length);
   const zones = $derived([
@@ -47,7 +51,8 @@
     <span class="type-title text-display block truncate">{name}</span>
     {#if deck}<span class="type-caption block truncate text-ink-2">{deck}</span>{/if}
     {#if choosing}<span class="type-rubric choosing" data-testid="plate-choosing"><i aria-hidden="true"></i>choosing…</span>{/if}
-    <span class="life"><span class="numeral">{player.life}</span><span class="type-rubric text-ink-3">life</span></span>
+    <span class="life"><span class="numeral">{player.life}</span><span class="type-rubric text-ink-3">life</span>
+      {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{/if}</span>
   </button>
   <ul class="zones">
     {#each zones as zone (zone.key)}
@@ -63,7 +68,9 @@
       </li>
     {/each}
   </ul>
-  <p class="type-caption pool" class:empty={!pool} data-testid="mana-pool">{pool ? `Floating: ${pool}` : 'No floating mana'}</p>
+  <p class="type-caption pool" class:empty={!pool} data-testid="mana-pool">
+    {#if pool}<span class="text-ink-3" aria-hidden="true">Floating</span><span aria-hidden="true"><Pips cost={poolSymbols(player.mana ?? [])} size={15} /></span><span class="sr-only">Floating: {pool}</span>{:else}No floating mana{/if}
+  </p>
 </section>
 
 <style>
@@ -88,6 +95,13 @@
   .zone-open:hover { border-color: var(--accent); }
   .zones span { overflow: hidden; text-overflow: ellipsis; }
   .zones b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-  .pool { color: var(--text-secondary); }
+  .pool { color: var(--text-secondary); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  .dealt {
+    align-self: center; margin-left: auto; padding: 0 5px; border-radius: 4px;
+    font: 800 15px/20px var(--font-sans); color: #fff; background: #9b2f22;
+    animation: land calc(var(--motion-move) * 1.6) var(--motion-move-ease);
+  }
+  @keyframes land { from { transform: translateY(-40%) scale(1.2); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .dealt { animation: none; } }
   .pool.empty { color: var(--text-secondary); }
 </style>

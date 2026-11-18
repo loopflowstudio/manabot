@@ -51,14 +51,19 @@ describe('ptProvenance', () => {
 });
 
 describe('keywordsOf', () => {
-  it('lists printed keywords and recorded grants, without what was lost', () => {
-    const granted = permanent({ effects: [
-      { modification: 'AddKeywords', keywords: ['flying', 'trample'], duration: 'EndOfTurn', source: 'Yip Yip!', timestamp: 2 },
+  it("takes which keywords it has from the projection, and says why", () => {
+    const granted = permanent({ keywords: ['flying', 'trample', 'vigilance'], effects: [
+      { modification: 'AddKeywords', keywords: ['flying'], duration: 'EndOfTurn', source: 'Yip Yip!', timestamp: 2 },
     ] });
+    // Field order from the projection; vigilance is granted by an ability the effect records do not name.
     expect(keywordsOf(granted, face)).toEqual([
-      { keyword: 'trample', source: null },
       { keyword: 'flying', source: 'Yip Yip!, until end of turn' },
+      { keyword: 'trample', source: null },
+      { keyword: 'vigilance', source: 'Another ability' },
     ]);
+  });
+
+  it('shows no printed keyword the projection says it lost', () => {
     expect(keywordsOf(permanent({ abilities_lost: true }), face)).toEqual([]);
     expect(keywordsOf(permanent({ effects: [{ modification: 'LoseKeywords', keywords: ['trample'], duration: 'EndOfTurn', timestamp: 3 }] }), face)).toEqual([]);
   });

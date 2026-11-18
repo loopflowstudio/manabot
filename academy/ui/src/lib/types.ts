@@ -118,6 +118,8 @@ export interface PermanentState {
   blocking?: number;
   /** It has lost all abilities. */
   abilities_lost?: boolean;
+  /** Keywords it has after continuous effects; absent when it has none. */
+  keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
   /** It was dealt damage this turn. */

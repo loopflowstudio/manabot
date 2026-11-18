@@ -5,6 +5,7 @@
    * spilling under its neighbours.
    */
   import TableCard from './TableCard.svelte';
+  import type { PlannedSource } from './payment';
   import { fitRow, pileCounts, type PermanentItem, type Pile, type RowLimits } from './view';
 
   interface Props {
@@ -15,6 +16,10 @@
     asked: Set<number>;
     /** Permanents that acted or were acted on since your last move. */
     touched: Set<number>;
+    /** Damage dealt to each permanent since your last move. */
+    damage: Map<number, number>;
+    /** Sources the automatic payer would tap, by permanent id. */
+    planned: Map<number, PlannedSource> | null;
     toward: 'up' | 'down';
     align?: 'start' | 'end';
     names: Map<number, string>;
@@ -22,7 +27,7 @@
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
+  let { piles, label, limits, live, asked, touched, damage, planned, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
 
   let width = $state(0);
   let height = $state(0);
@@ -64,6 +69,8 @@
               {live}
               asked={asked.has(item.permanent.id)}
               touched={touched.has(item.permanent.id)}
+              dealt={damage.get(item.permanent.id) ?? 0}
+              planned={planned?.get(item.permanent.id) ?? null}
               side={toward === 'up' ? 'you' : 'opponent'}
               {toward}
               count={index === 0 && pile.items.length > 1 ? pile.items.length : null}

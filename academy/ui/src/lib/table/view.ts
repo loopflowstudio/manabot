@@ -112,9 +112,11 @@ function drawnObjects(frame: ExperienceFrame): Set<number> {
 
 function isButton(offer: InteractionOffer): boolean {
   if (PRIMARY_VERBS.has(offer.verb) || DECLINE_TYPES.has(offer.action_type)) return true;
-  // A combat prompt asks about one creature; answers without a target are
-  // about that creature, so they sit beside the prompt as explicit buttons.
-  return COMBAT_VERBS.has(offer.verb) && !offer.subjects?.some(subject => subject.role === 'target');
+  // A combat prompt asks about one creature. Attacking with it is a click on
+  // it (the declaration names it as its source), and blocking is a click on
+  // the attacker (the target); every other combat answer, declining
+  // included, sits beside the prompt as an explicit button.
+  return COMBAT_VERBS.has(offer.verb) && !offer.subjects?.some(subject => subject.role === 'target' || subject.role === 'source');
 }
 
 function anchorOf(offer: InteractionOffer, frame: ExperienceFrame, drawn: Set<number>): Anchor {

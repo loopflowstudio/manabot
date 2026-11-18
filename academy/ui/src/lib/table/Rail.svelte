@@ -36,6 +36,10 @@
     onpassturn: () => void;
     onstack: (item: StackItem, element: HTMLElement) => void;
     onpreviewname: (name: string | null, element: HTMLElement | null) => void;
+    /** A row under the pointer or focus, whose payment the board may preview. */
+    onpointoffer: (placed: PlacedOffer | null) => void;
+    /** Why the board shows no planned taps for the payment, when the preview says. */
+    paymentNote: string | null;
     notices?: Snippet;
     result?: Snippet;
     /** The docked inspect pane, when inspecting docks to the rail. */
@@ -44,7 +48,7 @@
 
   let {
     view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
-    onact, onpassturn, onstack, onpreviewname, notices, result, dock,
+    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, result, dock,
   }: Props = $props();
 
   const context = $derived(frame.projection.decision_context);
@@ -169,6 +173,7 @@
           disabled={!live} onclick={() => onact(view.primary!)}>
           <span>{primaryText?.text ?? view.primary.offer.label}</span><kbd>Space</kbd>
         </button>
+        {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" data-testid="prompt-action" data-offer-id={placed.offer.id}
@@ -195,7 +200,9 @@
         <li>
           <button type="button" class="row" data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label}
-            aria-label={placed.offer.label} disabled={!live} onclick={() => onact(placed)}>
+            aria-label={placed.offer.label} disabled={!live} onclick={() => onact(placed)}
+            onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
+            onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
             <span class="label">{placed.offer.label}</span>
             {#if anchorText(placed)}<span class="type-caption text-ink-3">{anchorText(placed)}</span>{/if}
@@ -262,7 +269,8 @@
   .line { font-size: 15px; line-height: 20px; }
   .detail summary { cursor: pointer; width: max-content; }
   .detail p { margin-top: 2px; max-height: 6em; overflow-y: auto; }
-  .primary { height: 40px; width: 100%; font-size: 14px; justify-content: center; }
+  .primary { height: auto; min-height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: normal; text-align: center; }
+  .payment-note { margin-top: -4px; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   .secondary { width: 100%; height: auto; min-height: 32px; padding-block: 5px; justify-content: flex-start; text-align: left; white-space: normal; }
   kbd {

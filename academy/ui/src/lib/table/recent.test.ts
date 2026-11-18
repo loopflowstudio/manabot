@@ -33,6 +33,11 @@ describe('recentView', () => {
     expect(view.resolved).toEqual([{ id: 4001, name: 'Lightning Bolt', by: 'you', targets: ['Search 64'] }]);
   });
 
+  it('adds up the damage each player and object was dealt', () => {
+    const view = recentView(bolt.recovery.frame, 1, bolt.recovery.presentation_tail, () => labels, names);
+    expect([...view.damage.players]).toEqual([[1, 3]]);
+  });
+
   it('shows nothing that happened before the decision it follows', () => {
     const view = recentView(bolt.recovery.frame, 2, bolt.recovery.presentation_tail, () => labels, names);
     expect(view.facts).toEqual([]);
@@ -77,6 +82,21 @@ describe('tableLines', () => {
       projection.agent.battlefield = [permanent(60, 'Blocker', { blocking: 50, controller_id: 0 })];
     });
     expect(tableLines(blocked, [])).toEqual([{ from: { kind: 'object', id: 60 }, to: { kind: 'object', id: 50 }, kind: 'block' }]);
+  });
+
+  it('keeps a block drawn after combat from the block events since your last move', () => {
+    const after = withBoard(bolt.recovery.frame, projection => {
+      projection.opponent.battlefield = [permanent(50, 'Attacker')];
+      projection.agent.battlefield = [permanent(60, 'Blocker', { controller_id: 0 })];
+    });
+    const block: PresentationEvent = { ...bolt.recovery.presentation_tail[0], seq: 9, from_revision: 5, to_revision: 6,
+      kind: { kind: 'blocked', attacker: { entity: 50, incarnation: 1 }, blockers: [{ entity: 60, incarnation: 1 }] } };
+    const line = { from: { kind: 'object', id: 60 }, to: { kind: 'object', id: 50 }, kind: 'block' };
+    expect(tableLines(after, [block], [], 5)).toEqual([line]);
+    // Before your move, or with a creature gone, there is no line.
+    expect(tableLines(after, [block], [], 6)).toEqual([]);
+    const gone = withBoard(after, projection => { projection.opponent.battlefield = []; });
+    expect(tableLines(gone, [block], [], 5)).toEqual([]);
   });
 });
 

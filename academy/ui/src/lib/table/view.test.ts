@@ -98,6 +98,21 @@ describe('where decisions land', () => {
     expect(view.primary).toBeNull();
   });
 
+  it('attacks by clicking the creature asked about; declining stays a button', () => {
+    const canonical = retained.find(({ frame }) => frame.action_space === 'DECLARE_ATTACKER')!.frame;
+    const frame = structuredClone(canonical);
+    const creature = frame.offers[0].focus[0];
+    const subject = { entity_id: 1, subject: { kind: 'object' as const, id: { entity: creature, incarnation: 0 } }, display_id: creature, label: 'Flyer' };
+    // As the authority names them: the attacker is the declaration's source; its decline names it as a choice.
+    frame.offers[0].subjects = [{ role: 'source', object: subject }];
+    frame.offers[1].subjects = [{ role: 'choice', object: subject }];
+    const view = tableView(frame);
+    const attacker = permanents(view).find(item => item.permanent.id === creature)!;
+    expect(attacker.offers.map(placed => placed.offer.label)).toEqual([frame.offers[0].label]);
+    expect(view.buttons.map(placed => placed.offer.label)).toEqual([frame.offers[1].label]);
+    expect(view.asked.has(creature)).toBe(true);
+  });
+
   it('fans identical lands into one pile, keeping each copy', () => {
     const view = tableView(navigation.CHOOSE_TARGET.frame);
     const piles = [...view.you.support, ...view.you.creatures];

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { PAYMENT_PREVIEW_CONTEXT } from '$lib/payment-preview';
   import { getContext } from 'svelte';
   import { PRESENTATION_CONTEXT, presentationSubjects, type PresentationEvent } from '$lib/presentation';
   import CardImage from './CardImage.svelte';
@@ -50,9 +49,6 @@
     onHoverEnd = undefined,
   }: Props = $props();
 
-  const paymentMarks = getContext<(() => { id: number; order: number }[]) | undefined>(PAYMENT_PREVIEW_CONTEXT);
-  const paymentOrder = $derived(paymentMarks?.().find(source => source.id === objectId)?.order);
-
   const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
   const narrated = $derived.by(() => {
     const event = narratedEvent?.();
@@ -74,7 +70,6 @@
   // Visual states are also stated in the accessible name.
   const stateNotes = $derived(
     [
-      paymentOrder ? `automatic payment proposal, source ${paymentOrder}` : null,
       copyDescription || null,
       ...temporarySubtypes.map((subtype) => `${subtype} until end of turn`),
       tapped ? 'tapped' : null,
@@ -93,7 +88,6 @@
 
 <button
   data-object-id={objectId}
-  data-payment-source={paymentOrder}
   data-narrated-seq={narrated}
   type="button"
   aria-label={accessibleName}
@@ -110,9 +104,6 @@
   onfocus={() => onHoverStart?.()}
   onblur={() => onHoverEnd?.()}
 >
-  {#if paymentOrder}
-    <span aria-hidden="true" class="pointer-events-none absolute -inset-[3px] rounded-lg border-2 border-dotted border-plains-ink"></span>
-  {/if}
   <div
     class={`absolute inset-0 overflow-hidden rounded-lg border border-black/50 shadow ${tapped ? 'shadow-none' : ''} ${clickable ? 'group-hover:border-action' : ''}`}
   >

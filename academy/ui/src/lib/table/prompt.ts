@@ -7,6 +7,8 @@
  * no rules and chooses nothing.
  */
 import type { ExperienceFrame } from '$lib/types';
+import type { PaymentPreview } from '$lib/payment-preview';
+import { payLabel, paymentPlan } from './payment';
 import { stackName, type TableView } from './view';
 
 function anyCards(view: TableView): boolean {
@@ -27,7 +29,8 @@ function askedCreature(frame: ExperienceFrame, view: TableView): string | null {
   return asked.length === 1 ? asked[0].name ?? null : null;
 }
 
-export function promptLine(frame: ExperienceFrame, view: TableView): string {
+/** `planned`: the board shows the automatic payer's taps for the primary payment. */
+export function promptLine(frame: ExperienceFrame, view: TableView, planned = false): string {
   const context = frame.projection.decision_context;
   const creature = askedCreature(frame, view);
   const source = context?.source?.label ?? null;
@@ -39,7 +42,7 @@ export function promptLine(frame: ExperienceFrame, view: TableView): string {
       return yourMain(frame) ? 'Play a land or cast a spell, or Space to pass' : 'Cast or activate now, or Space to pass';
     case 'PAY_OR_NOT':
       return context?.mana_cost
-        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}. ${view.primary ? 'Space pays automatically, or click' : 'Click'} lands to tap them`
+        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}. ${!view.primary ? 'Click' : planned ? 'Space taps the dashed lands, or click' : 'Space pays automatically, or click'} lands to tap them yourself`
         : `Pay the cost${source ? ` of ${source}` : ''}, or decline`;
     case 'CHOOSE_TARGET':
       return `Choose a target${source ? ` for ${source}` : ''}`;
@@ -88,13 +91,14 @@ export interface PrimaryLabel {
  * other player passes too); on an empty stack it moves to the next step. The
  * offer committed is unchanged and named in the description.
  */
-export function primaryLabel(frame: ExperienceFrame, view: TableView): PrimaryLabel | null {
+export function primaryLabel(frame: ExperienceFrame, view: TableView, preview: PaymentPreview | null = null): PrimaryLabel | null {
   const primary = view.primary;
   if (!primary) return null;
   const offer = primary.offer.label;
   if (primary.offer.verb === 'pay') {
-    const cost = frame.projection.decision_context?.mana_cost;
-    return cost ? { text: `Pay ${cost}`, description: `${offer}: ${cost}` } : { text: offer, description: offer };
+    // The plan is the automatic payer's, read for this offer; without one the button keeps the cost.
+    const text = payLabel(frame.projection.decision_context?.mana_cost ?? null, paymentPlan(preview, frame), preview);
+    return text ? { text, description: `${offer}: ${text.slice('Pay '.length)}` } : { text: offer, description: offer };
   }
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   if (top) return { text: `Resolve ${top}`, description: `${offer}: let ${top} resolve` };

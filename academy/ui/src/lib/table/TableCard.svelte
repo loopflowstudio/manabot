@@ -17,6 +17,7 @@
   import { cardFace } from '$lib/card-faces.svelte';
   import type { CardState, PermanentState } from '$lib/types';
   import { keywordsOf } from './inspect';
+  import type { PlannedSource } from './payment';
   import Pips from './Pips.svelte';
   import { CARD_RATIO, FRAME_RATIO, type PlacedOffer } from './view';
 
@@ -38,6 +39,10 @@
     side?: 'you' | 'opponent';
     /** It attacked, blocked, was dealt damage or was targeted since your last move. */
     touched?: boolean;
+    /** Damage it was dealt since your last move, shown as it lands. */
+    dealt?: number;
+    /** Its place in the automatic payer's plan: "would tap, for {U}". */
+    planned?: PlannedSource | null;
     /** Copies in this card's pile, shown on the top copy. */
     count?: number | null;
     onactivate?: (element: HTMLElement) => void;
@@ -46,7 +51,7 @@
 
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, count = null, onactivate, onpreview,
+    toward = null, blocks = null, side = 'you', touched = false, dealt = 0, planned = null, count = null, onactivate, onpreview,
   }: Props = $props();
 
   const landscape = $derived(shape === 'landscape');
@@ -68,7 +73,7 @@
   const nameSize = $derived(landscape ? clamp(bar - 4.5, 9.5, 14) : clamp(height * 0.078, 9, 15));
   const typeSize = $derived(clamp(height * 0.05, 8.5, 11));
   const showType = $derived(!landscape && height >= 110);
-  const pip = $derived(landscape ? clamp(bar - 7, 8, 13) : clamp(height * 0.068, 8, 13));
+  const pip = $derived(landscape ? clamp(bar - 5, 10, 14) : clamp(height * 0.07, 10, 14));
   const showCost = $derived(landscape ? width >= 96 : width >= 58);
   const plate = $derived(clamp(height * (landscape ? 0.17 : 0.085), 10, 14));
   const showKeywords = $derived(landscape && height >= 62 && keywords.length > 0);
@@ -91,6 +96,8 @@
     permanent?.damage ? `${permanent.damage} damage` : '',
     ...counters.map(([kind, amount]) => `${amount} ${kind} counter${amount === 1 ? '' : 's'}`),
     permanent?.is_token ? 'token' : '',
+    dealt ? `dealt ${dealt} since your last move` : '',
+    planned ? `would tap for ${planned.output || 'mana'} (payment plan, source ${planned.order})` : '',
   ].filter(Boolean).join(', '));
   const label = $derived([
     `${name}${creature && power !== null ? ` ${power}/${toughness}` : ''}`,
@@ -117,12 +124,14 @@
     class:attacking={permanent?.attacking}
     class:touched
     class:token={permanent?.is_token}
+    class:planned={planned !== null}
     data-testid="table-card"
     data-travel-id={permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
     data-travel-name={name}
     data-travel-side={side}
     data-object-id={permanent?.id ?? card?.id}
     data-offer-count={offers.length}
+    data-payment-source={planned?.order}
     data-card-name={name}
     aria-label={label}
     style:width={`${width}px`}
@@ -160,6 +169,10 @@
         style:font-size={`${plate}px`} aria-hidden="true">{power}/{toughness}{#if permanent?.damage}<small>−{permanent.damage}</small>{/if}</span>
     {/if}
     {#if offers.length > 1 && live}<span class="many" aria-hidden="true">{offers.length}</span>{/if}
+    {#if planned}
+      <span class="plan" aria-hidden="true"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
+    {/if}
+    {#if dealt}{#key dealt}<span class="dealt" aria-hidden="true" data-testid="damage-dealt">−{dealt}</span>{/key}{/if}
   </button>
 </div>
 
@@ -216,6 +229,22 @@
   .tcard.legal:hover { box-shadow: 0 0 0 3px var(--legal), 0 0 16px color-mix(in srgb, var(--legal) 60%, transparent); transform: translateY(-2px); }
   .tcard.asked { box-shadow: 0 0 0 2px var(--accent), 0 8px 18px rgb(20 14 8 / 0.35); transform: translateY(-8px); }
 
+  /* Planned payment: dashed, and what tapping it adds. Distinct from the solid "legal" outline. */
+  .tcard.planned { outline: 2px dashed var(--planned); outline-offset: 2px; }
+  .plan {
+    position: absolute; left: 50%; top: calc(var(--bar) + 3px); transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 3px; border-radius: 9px;
+    background: var(--bg-surface); border: 1px dashed var(--planned); box-shadow: 0 1px 3px rgb(20 14 8 / 0.3);
+  }
+  .tcard:not(.landscape) .plan { top: 3px; }
+  .plan b { font: 700 10px/14px var(--font-sans); color: var(--planned-text); min-width: 9px; text-align: center; }
+  .dealt {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -30%);
+    font: 800 clamp(13px, 30%, 22px)/1 var(--font-sans); font-size: max(13px, calc(var(--bar) * 1.05)); color: #fff;
+    padding: 2px 6px; border-radius: 5px; background: #9b2f22; box-shadow: 0 2px 6px rgb(20 14 8 / 0.4);
+    animation: land calc(var(--motion-move) * 1.6) var(--motion-move-ease);
+  }
+  @keyframes land { from { transform: translate(-50%, -90%) scale(1.25); opacity: 0; } }
   .pt {
     position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: 4px;
     font-family: var(--font-sans); font-weight: 700; line-height: 1.35; font-variant-numeric: tabular-nums;
@@ -250,5 +279,6 @@
   .landscape .counters { top: calc(var(--bar) + 3px); }
   @media (prefers-reduced-motion: reduce) {
     .slot, .tcard, .art { transition: none; }
+    .dealt { animation: none; }
   }
 </style>

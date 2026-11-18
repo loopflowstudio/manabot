@@ -95,4 +95,19 @@ describe('primaryLabel', () => {
     const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
     expect(primaryLabel(pay, tableView(pay))?.text).toBe(`Pay ${pay.projection.decision_context!.mana_cost}`);
   });
+
+  it('reads the previewed plan: the cost, then the lands it taps', () => {
+    const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
+    const lands = pay.projection.agent.battlefield.filter(permanent => permanent.types?.is_land).slice(0, 2);
+    const preview = {
+      state: 'exact' as const, explanation: '', cost: pay.projection.decision_context!.mana_cost!,
+      sources: lands.map(land => ({ source: { kind: 'object' as const, id: { entity: land.id, incarnation: 0 } }, label: 'x', output: { amounts: [0, 1, 0, 0, 0, 0], classes: [] } })),
+      pool_after_production: null, pool_after_spending: null,
+    };
+    const cost = pay.projection.decision_context!.mana_cost;
+    expect(primaryLabel(pay, tableView(pay), preview)?.text).toBe(`Pay ${cost} · ${lands.map(land => land.name).join(', ')}`);
+    expect(promptLine(pay, tableView(pay), true)).toMatch(/Space taps the dashed lands/);
+    // A preview that is not exact draws nothing; the button keeps the cost.
+    expect(primaryLabel(pay, tableView(pay), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
+  });
 });

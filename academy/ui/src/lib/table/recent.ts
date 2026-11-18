@@ -5,8 +5,11 @@
  * `recentView(frame, since, events, labels)` reads the authority's presentation
  * events (never a diff of snapshots) for what happened after revision `since`:
  * spells cast and whether they are still on the stack, attacks, blocks, damage
- * and deaths. `tableLines(frame, events)` draws standing facts only: a spell on
- * the stack to each of its targets, and each blocker to the attacker it blocks.
+ * and deaths, and how much damage each object and player was dealt.
+ * `tableLines(frame, events)` draws standing facts: a spell on the stack to
+ * each of its targets, and each blocker to the attacker it blocks, from the
+ * projection while combat lasts and from this combat's block events after it,
+ * as long as both creatures are still on the table.
  * Both are pure, so the table's motion is a rendering of facts that remain
  * readable when motion is reduced.
  *
@@ -66,6 +69,8 @@ export interface RecentView {
   touched: Set<number>;
   /** One line per fact since `since`, in authority order. */
   facts: RecentFact[];
+  /** Damage dealt since `since`, by object id and by player index. */
+  damage: { objects: Map<number, number>; players: Map<number, number> };
 }
 
 function playerSide(frame: ExperienceFrame, id: number): Side | null {
@@ -140,7 +145,12 @@ function endpoint(subject: SubjectRef, frame: ExperienceFrame, onBoard: Set<numb
 }
 
 /** Standing lines: spells on the stack to their targets, blockers to attackers. */
-export function tableLines(frame: ExperienceFrame, events: readonly PresentationEvent[], resolved: readonly ResolvedSpell[] = []): TableLine[] {
+export function tableLines(
+  frame: ExperienceFrame,
+  events: readonly PresentationEvent[],
+  resolved: readonly ResolvedSpell[] = [],
+  since: number | null = null,
+): TableLine[] {
   const onStack = stackCardIds(frame);
   const onBoard = battlefieldIds(frame);
   const lines: TableLine[] = [];
@@ -170,6 +180,20 @@ export function tableLines(frame: ExperienceFrame, events: readonly Presentation
       add({ from: { kind: 'object', id: permanent.id }, to: { kind: 'object', id: permanent.blocking }, kind: 'block' });
     }
   }
+  // Combat usually ends before the person's next decision, so a frame rarely
+  // holds a block; this turn's block events since their last move keep it drawn.
+  const turn = frame.projection.turn.turn_number;
+  let eventTurn: number | null = null;
+  for (const event of events) {
+    if (event.kind.kind === 'turn_started') eventTurn = event.kind.turn_number;
+    if (event.kind.kind !== 'blocked' || since === null || event.from_revision < since || (eventTurn !== null && eventTurn !== turn)) continue;
+    const attacker = event.kind.attacker.entity;
+    for (const blocker of event.kind.blockers) {
+      if (onBoard.has(blocker.entity) && onBoard.has(attacker)) {
+        add({ from: { kind: 'object', id: blocker.entity }, to: { kind: 'object', id: attacker }, kind: 'block' });
+      }
+    }
+  }
   return lines;
 }
 
@@ -189,7 +213,7 @@ export function recentView(
   names: { you: string; opponent: string },
   book: NameBook = { ids: new Map(), casts: { you: [], opponent: [] } },
 ): RecentView {
-  const view: RecentView = { resolved: [], touched: new Set(), facts: [] };
+  const view: RecentView = { resolved: [], touched: new Set(), facts: [], damage: { objects: new Map(), players: new Map() } };
   if (since === null) return view;
   const narrated = { you: [...book.casts.you], opponent: [...book.casts.opponent] };
   const onStack = stackCardIds(frame);
@@ -224,7 +248,13 @@ export function recentView(
       case 'damage': {
         const source = kind.source ? nameOf(kind.source, labels, frame, names, book) : 'An effect';
         fact(null, `${source} dealt ${kind.amount} to ${nameOf(kind.target, labels, frame, names, book)}`);
-        if (kind.target.kind === 'object') view.touched.add(kind.target.id.entity);
+        if (kind.target.kind === 'object') {
+          view.touched.add(kind.target.id.entity);
+          view.damage.objects.set(kind.target.id.entity, (view.damage.objects.get(kind.target.id.entity) ?? 0) + kind.amount);
+        } else if (kind.target.kind === 'player') {
+          const index = playerIndex(frame, kind.target.id);
+          if (index !== null) view.damage.players.set(index, (view.damage.players.get(index) ?? 0) + kind.amount);
+        }
         break;
       }
       case 'destroyed':

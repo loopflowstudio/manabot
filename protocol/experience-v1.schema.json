@@ -1371,6 +1371,13 @@
             "null"
           ]
         },
+        "keywords": {
+          "description": "Keywords it has after continuous effects, in keyword declaration order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "name": {
           "$ref": "#/$defs/RequiredNullable3"
         },

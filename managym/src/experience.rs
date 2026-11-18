@@ -454,6 +454,9 @@ pub struct LegacyPermanentView {
     /// It has lost all abilities.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    /// Keywords it has after continuous effects, in keyword declaration order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
     /// Activated abilities (indices in its ability list) whose limit is spent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<u32>,

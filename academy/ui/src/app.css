@@ -102,6 +102,9 @@
   --neutral-text: #554b6e;
   /* The table's one interaction colour: an outline on anything a legal offer acts on. */
   --legal: #2b68b0;
+  /* The automatic payer's planned taps: dashed, never mistaken for a legal outline. */
+  --planned: #a36f0c;
+  --planned-text: #6f4b07;
   /* Mana symbols on card frames, the printed pip colours: constants in both modes, like card art. */
   --pip-w: #f4ecd2;
   --pip-u: #a8cdea;
@@ -179,6 +182,8 @@
     --info-text: #8ab8e8;
     --neutral-text: #b4a9d1;
     --legal: #6aa4e6;
+    --planned: #e0b04e;
+    --planned-text: #ecc779;
     /* Washes lift by lamplight: 10% reads on parchment but vanishes on umber. */
     --wash-strength: 26%;
     --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.22), 0 16px 40px rgb(0 0 0 / 0.16);
