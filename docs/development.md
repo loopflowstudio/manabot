@@ -373,7 +373,8 @@ seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regressio
 
 Two small trained players are committed under `tests/fixtures/pinned_pilot/`,
 each with one recorded game: its seed and decks, the action taken at every
-decision and the player's action probabilities there. `v11` was saved on main.
+decision and the player's action probabilities there. Each pilot received one
+SGD update on an opening decision. `v11` was saved on main at `44f76fe987`.
 `v9` was saved at `ab2b757d9`, the way the frontier checkpoints were: 73 player
 columns and no recorded column names, definition keys or source.
 `tests/model/test_pinned_pilot.py` (Integration) loads each through
@@ -383,22 +384,26 @@ the failure names the layer:
 
 ```text
 FAILED test_pinned_pilot.py::test_recorded_game[v9]
-  the loader refused the pilot: it learned 1 token row this revision cannot name:
-    Variant 0x51c2e9a4
-  Add it to managym/src/cards/token_renames.rs.
+  the loader refused pilot.pt: unexplained record_name key 5779523629;
+  classify it in managym/src/cards/token_renames.rs; it records no source revision
 ```
 
 ```text
 FAILED test_pinned_pilot.py::test_recorded_game[v11]
-  the game replays; probabilities differ from decision 14 (max difference 0.031).
-  The encoder, vocabulary or loader changed what this pilot reads.
+  the game replays; policy changed at decision 14
+  (maximum probability difference 0.031, chosen-action rank 1 -> 2).
 ```
 
 ```text
 FAILED test_pinned_pilot.py::test_recorded_game[v11]
-  decision 22: recorded action 3 of 5, the engine now offers 4.
-  The rules changed this game.
+  decision 22: the legal actions changed.
 ```
+
+The replay checks the acting seat, the ordered offers and their focus before
+using a recorded index. It also checks the winner and the player-column
+prefix the model reads, including columns that were zero throughout this game.
+Set `MANABOT_U1952_CHECKPOINT` to the local frontier Small update-1952
+file to include its recording in the same test and in `record`.
 
 Probabilities agree within 1e-5 and the chosen action keeps its rank; bit
 equality across Linux and macOS is not claimed.

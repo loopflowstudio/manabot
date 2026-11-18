@@ -341,17 +341,24 @@ requirement, the legacy encoder.
    Original PyTorch → safetensors → MLX also served a v9 decision on this
    checkout. Re-exporting the bound container preserved every Torch tensor.
    Strength and the unseen-card arm remain unmeasured.
-   **Next:** slice 2, the two pinned pilots and their CI replay. General
-   appended-column projection beyond the two player buffers and catalog
+   General appended-column projection beyond the two player buffers and catalog
    display of tensor-level refusals still need reconciliation at slice 4.
 
    Still open from slice 1's risk: fact and effect records the runtime emits
    under retired names start unseen; slice 3 measures what that costs.
-2. **Pinned pilots.** The two fixtures (the v9 one saved from `ab2b757d9`),
-   the test, `scripts/pinned_pilot.py record --reason`. Shows: renaming a Rust
-   variant a fact record uses without a table entry fails the test with the
-   key named, and adding the entry passes; inserting a player column before
-   the last fails the v9 pilot.
+2. **Pinned pilots (complete).** Width-eight v9 and v11 pilots were saved
+   by the ab2b757d9 and 44f76fe987 writers. Padded catalog buffers put the
+   originals at 2.1 and 3.0 MiB (172 and 202 KiB as compressed Git objects).
+   Both replay 71 decisions. The optional original u1952 file replays 53.
+   All 360 bound v9 vectors matched the historical writer at zero maximum
+   absolute difference. Removing the first retired record alias refused key
+   5779523629; the historical name dump identifies it as
+   `execution/6/land choices remaining`. Renaming the running fact name
+   `flying` to `flight` refused key 6371843220; adding that successor restored
+   the full v9 replay. Inserting a named column at index
+   72 failed v9's recorded player prefix. Three replay cases passed locally.
+   The existing Integration model job collects the test. Cross-platform
+   agreement awaits CI. **Next:** slice 3.
 3. **recheck and the proof run** (under USD 3; the mini costs nothing). The
    strength reference records, the command, and one report,
    `experiments/reports/best-player-on-main.md`: recorded against measured on

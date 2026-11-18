@@ -348,11 +348,16 @@ A learned key that is neither in the running vocabulary nor in this table
 refuses the load:
 
 ```text
-ValueError: final.pt learned 2 token rows this revision cannot name:
-  Variant 0x51c2e9a4, Field 0x0be771f3
-Add each to managym/src/cards/token_renames.rs. The file was written at
-ab2b757d9; `uv run python scripts/pinned_pilot.py names --at ab2b757d9`
-prints the names behind those keys.
+ValueError: unexplained record_name key 5779523629; classify it in
+managym/src/cards/token_renames.rs; it records no source revision
+```
+
+Run `uv run python scripts/pinned_pilot.py names --at ab2b757d9` with the
+writer revision. It traces the names hashed by that revision's Rust engine
+in a temporary Git archive. Look up the family and packed key together:
+
+```text
+record_name 5779523629 execution/6/land choices remaining
 ```
 
 Add an entry in the change that renames the type. The

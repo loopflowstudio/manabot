@@ -76,3 +76,9 @@ say so if they should carry a note.
     ManaUse were also restructured. Their rows remain available to stored
     programs. Validate each architecture receipt on its writer's arrays
     before growing the runtime tables.
+
+22. Keep both checkpoint files byte-for-byte as saved. The native catalog
+    buffers dominate the file size even at hidden width eight. Use one SGD
+    update on a real opening decision for each fixture. Main's Python writer
+    ran with this branch's native extension (main's catalog plus rename export).
+    Record u1952 separately and select its optional local bytes by environment.
