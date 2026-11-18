@@ -89,25 +89,74 @@ prints its deck-entry and card counts from `deck_cards` (`0a772149d7`). QA at
 262, the local run 2 and 29, from the checkout and from installed wheels
 (`scratch/qa.html`).
 
-To build in this PR, from the corpus settings direction below (received
-during QA, not started): today `settings` is one row per run with a
-`mana_taps` column read by `getattr(observation, "mana_taps", False)`, no
-`skip_trivial` and no per-seat or per-update values.
+To build in this PR, from the corpus settings direction below (not
+started): today `settings` is one row per run whose `decklists` can only
+say `mixed`, with a `mana_taps` column read by
+`getattr(observation, "mana_taps", False)`, no `skip_trivial` and no
+per-seat or per-update values.
 
-0. Corpus settings, in this order:
-   - Remove the `mana_taps` column (writer, reader, guide query).
-   - Record `skip_trivial`, and shape per-seat values so #559's
-     `mana_payment` and `mana_floats` fit without reshaping; say which shape
-     in `scratch/questions.md`. If #559 is on main at sync, write its two
-     fields explicitly, defaults included (#559 was open at 11:37 PST).
-   - Record settings that can differ between games as game counts per
-     update (update, seat, setting, value, games), written each update by
-     the shared function in both loops from the settings each game was
-     created with; build it for decklists and `skip_trivial`, with a test
-     for each of "always", "share of games" and "changed at update N", and
-     document it. Fixed model or run properties stay in the per-run row.
-   - Not in this PR: naming the difference when a checkpoint is seated under
-     other levels; no admission gate.
+0. Corpus settings (shape chosen in the seventh concept review, nobody
+   present, reversible until merge; `scratch/concept-review.html`, questions
+   47-51). A person asks one thing of a setting: was it always this value,
+   in what share of games, or did it change at update N. The corpus answers
+   from two relations, split by one rule: could the value differ between two
+   games of the same run?
+
+   - `runs` (today's `settings`, renamed): one row per run in the ancestry.
+     Columns: experiment, run, policy_input_version, max_actions,
+     action_overflow, behavior, opponent_mode, learning_seats,
+     matchup_curriculum, parent_run, parent_update, parent_sha256.
+     `decklists` and `mana_taps` leave it. Rename `SETTINGS_TABLE` to
+     `RUN_TABLE = "training_run"`; no published run wrote the old name.
+     `log_corpus_setup` loses its `disclosure` parameter, and both loops
+     lose the expression that computed it.
+   - `game_settings` (new): experiment, run, update_number, seat, setting,
+     value, games. One row per value a setting took among the games
+     completed at that update. `seat` is NULL for a setting of the whole
+     game (`decklists`, `skip_trivial`) and the native seat (0 is on the
+     play, as in `card_statistics`) for a per-seat one; #559's
+     `mana_payment` and `mana_floats` arrive as rows with seat 0 and 1, no
+     reshape. `value` is text, spelled as the native setup spells it
+     (`open`, `closed`; booleans `true`/`false`).
+
+   Writer. A game's settings are counted where its outcome is counted, so
+   the two can never disagree on which games an update holds:
+   `_refresh_roots` keeps each stream's settings beside
+   `_self_play_decks` (decklists from the actual native setup,
+   `setups[row].decklists` or the match config; `skip_trivial` read from
+   the environment that plays the games, not a literal in the writer);
+   `SelfPlayCounter.record` takes them with the decks and winner and counts
+   the game once; `drain` returns outcomes and setting counts together;
+   `log_corpus_outcomes` logs both tables (`OUTCOME_TABLE` and
+   `GAME_SETTINGS_TABLE = "training_game_settings"`) at the same update.
+   Pending counts then survive collector snapshots and resume supersession
+   exactly as outcomes do. Both loops already call that one function.
+
+   Reader. For each update, seat and setting, the games must sum to that
+   update's completed games in `matchups`; otherwise `UnknownCoverage`. A
+   run that predates the table gets derived rows only where the answer is
+   certain: declared `decklists` of `open` or `closed` gives one row per
+   update with that update's games. Declared `mixed`, an absent
+   declaration, and `skip_trivial` on older runs give no rows; absence
+   means unrecorded, and the guide says so. `declared_settings` drops
+   `decklists` and `mana_taps`.
+
+   Tests, in `tests/eval/test_training_corpus.py`, each asserting the SQL
+   the guide prints: always (a fixed-disclosure run: one value per update
+   covering all its games); share of games (a `mixed` deck source: open
+   and closed counts that sum to the update's games); changed at update N
+   (a child run started from a parent's checkpoint with the other
+   disclosure: the value changes at the parent/child boundary). One writer
+   test that a game whose setting counts are dropped makes the reader
+   raise. Guide: replace the settings query in `docs/evaluation.md` with a
+   `runs` query and the three `game_settings` queries, and state the rule
+   that splits them and that seat 0 is on the play.
+
+   If #559 is on main at sync (open at this review), write `mana_payment`
+   and `mana_floats` per seat from the native setup, defaults included.
+   Not in this PR: naming the difference when a checkpoint is seated under
+   other levels; no admission gate; counts of a setting within one matchup
+   (the counter would be keyed by matchup and settings together).
 
 1. Etude follow-up, not blocking: its evaluation query database indexes
    `training_checkpoints` only (question 34). Once Etude ingests selected

@@ -224,3 +224,30 @@ say so if they should carry a note.
     for one fact, and a published function needs a warning period to remove
     later), and documenting the `decks` table in its place (it drops
     duplicate entries).
+
+
+## Concept review, seventh pass, 2026-11-18 (nobody present; reversible until merge)
+
+47. Corpus settings are two relations split by one rule, whether the value
+    can differ between two games of one run: `runs` (one row per run) and
+    `game_settings` (update, seat, setting, value, games). Passed over:
+    every setting in the long relation (model facts repeated each update
+    and typed columns lost), and a column per setting on the outcome rows
+    (a reshape for each new setting, #559 included).
+48. `decklists` leaves the per-run row. Its only run-wide spelling for a
+    varying run was the word `mixed`; the counts replace it. Passed over:
+    keeping both (one fact with two owners that can disagree).
+49. The per-run relation is named `runs`, not `settings`: it holds the
+    parent checkpoint and model facts, and the name `settings` would
+    otherwise cover two tables. The logged table becomes `training_run`.
+    Unpublished, so no alias.
+50. Whole-game settings carry a NULL seat; per-seat settings carry the
+    native seat. Passed over: writing a whole-game value once per seat
+    (sums to twice the games) and seat-suffixed setting names (a query per
+    seat). `seat` follows `card_statistics`; outcome rows keep `position`.
+51. Setting counts live in the outcome counter and are logged with the
+    outcomes, and the reader refuses an update whose setting counts do not
+    sum to its games. Passed over: a second counter drained separately
+    (nothing ties its games to the outcome rows across snapshots and
+    resumes). Older runs get derived rows only for declared `open` or
+    `closed`; `mixed` and `skip_trivial` stay unrecorded.

@@ -1,116 +1,158 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>What a Checkpoint Trained On: Concept Review</title><style>
-:root{color-scheme:light dark;--bg:#f5f1e9;--ink:#252b27;--muted:#5f6860;--line:#cdd2c6;--paper:#fffcf6;--accent:#356349;--code:#e9ece2;--warn:#8a4b1c;--no:#9b2f2f}
-@media (prefers-color-scheme:dark){:root{--bg:#191c1a;--ink:#e4e6df;--muted:#9ba39a;--line:#39403a;--paper:#212521;--accent:#8fc4a0;--code:#252a26;--warn:#e0a46d;--no:#ec8a8a}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}
-main{max-width:860px;margin:auto;padding:44px 16px 90px}
-.meta{font:12px/1.7 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
-h1,h2,h3{font-family:Georgia,serif;font-weight:400;line-height:1.15}
-h1{font-size:clamp(30px,6vw,44px);margin:20px 0 16px}h2{font-size:26px;margin:46px 0 12px;padding-top:24px;border-top:1px solid var(--line)}h3{font-size:19px;margin:22px 0 6px}
-.lead{font-size:19px;line-height:1.5}.muted{color:var(--muted)}
-pre{background:var(--code);padding:14px;border-radius:3px;font:12.5px/1.65 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0}
-code{font-family:ui-monospace,monospace;font-size:.86em;overflow-wrap:anywhere}
-table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}td,th{text-align:left;vertical-align:top;padding:9px 8px;border-bottom:1px solid var(--line)}th{font-size:13px;color:var(--muted);font-weight:600}
-.yes{color:var(--accent);font-weight:600}.no{color:var(--no);font-weight:600}
-.tag{font:11px ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase}.built{color:var(--accent)}.prop{color:var(--warn)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media (max-width:640px){.two{grid-template-columns:1fr}}
-.box{border-left:3px solid var(--warn);padding-left:16px;margin:14px 0}
-ol.q>li{margin:14px 0}ol.q ol{list-style:lower-alpha;margin-top:4px}
-.scroll{overflow-x:auto}
-</style></head><body><main>
-<p class="meta">MTG-353 · concept review of the built change, sixth pass, nobody present · 2026-11-18 · branch at 7273d2fd9c against main<br>Read: scratch/plan.md, scratch/questions.md (43–45), scratch/qa.html, manabot/eval/training_corpus.py, manabot/training/corpus.py, docs/evaluation.md (corpus section), every caller of <code>roster</code>. One DuckDB check run (the replacement count); no tests or training runs in this pass.</p>
-<h1>What a checkpoint trained on</h1>
-<p class="lead">Area taken: the training corpus query as a person meets it in the evaluation guide, with the last pass's change (the connection is returned) and the compress pass's change (older runs supply <code>deck_cards</code>) in it. The compatibility half (loading, seating, the participant record) has not changed since it was reviewed and QA replayed it after the merge of main.</p>
-<p><strong>Outcome: the plan changed, by one deletion.</strong> The last pass asked for the corpus to be returned as its database. That is built, and QA ran every guide query on the local run and on frontier Small. The compress pass then gave every run <code>deck_cards</code> rows, which leaves the Python <code>roster</code> function reading the same rows a second way. The plan now says: delete it.</p>
-<p class="muted"><span class="tag built">built</span> is in the PR. <span class="tag prop">proposed</span> is written into the plan for the next build pass.</p>
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>MTG-353 concept review 7: how a model was trained</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1c1b19; --bg:#faf8f3; --mute:#6b655b; --line:#d9d3c6;
+          --yes:#2f6b3a; --no:#a23b2a; --new:#1f5f8b; --newbg:#e6f0f7; --card:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#ece8df; --bg:#191816; --mute:#a39c8f; --line:#3a3731; --yes:#7fc48b; --no:#ef8f7c;
+            --new:#8cc4ea; --newbg:#1d2b36; --card:#22201d; } }
+  body { font: 16px/1.5 Georgia, serif; color:var(--fg); background:var(--bg); max-width: 60rem;
+         margin: 2rem auto; padding: 0 1.2rem; }
+  h1 { font-size: 1.6rem; } h2 { font-size: 1.2rem; margin-top: 2.2rem; border-bottom:1px solid var(--line); }
+  code, pre { font: 13px/1.45 ui-monospace, Menlo, monospace; }
+  pre { background:var(--card); border:1px solid var(--line); padding:.7rem .9rem; overflow-x:auto; }
+  table { border-collapse: collapse; width:100%; margin:.8rem 0; }
+  th, td { text-align:left; vertical-align:top; padding:.45rem .6rem; border-bottom:1px solid var(--line); }
+  th { font-weight:600; color:var(--mute); font-size:.85rem; }
+  .yes { color:var(--yes); font-weight:700; } .no { color:var(--no); font-weight:700; }
+  .new { background:var(--newbg); border-left:3px solid var(--new); padding:.1rem .8rem; margin:.8rem 0; }
+  .tag { font: 11px ui-monospace, monospace; color:var(--new); border:1px solid var(--new); padding:0 .3rem; border-radius:3px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:1rem; } @media (max-width:44rem){ .cols{grid-template-columns:1fr;} }
+  .mute { color:var(--mute); }
+</style>
 
-<h2>What the last pass intended, and what is there</h2>
-<div class="scroll"><table>
-<tr><th>Intended</th><th>Observed</th><th></th></tr>
-<tr><td><code>training_corpus</code> returns the DuckDB connection, <code>corpus</code> a view on it</td><td>Built (<code>e73e530ae3</code>). Guide and tests use <code>corpus.sql(...)</code>; the helper is gone. QA: the old <code>relation.query</code> form fails with DuckDB's own TypeError.</td><td class="yes">done</td></tr>
-<tr><td>Every table, column, cutoff and refusal survives</td><td>QA repeated all guide queries: local 4 games, Island 4 / 11 / 46; frontier 259 games, 132 decks, 218 with Island. Eight wrong inputs each gave the expected refusal.</td><td class="yes">done</td></tr>
-<tr><td class="muted">Not in the last page</td><td>Compress: a run that predates the update-zero deck table derives <code>deck_cards</code> from its declared deck source (4,899 rows for frontier Small). <code>decks</code> is built from <code>deck_cards</code> alone.</td><td class="yes">added</td></tr>
-</table></div>
+<h1>How a model was trained: do the corpus settings match the question?</h1>
+<p class="mute">MTG-353, seventh concept review, 2026-11-18, nobody present. Reviewed before the
+settings rework is built. <span class="tag">proposed</span> marks what does not exist yet.</p>
 
-<h2>One interaction, walked</h2>
-<p>"How many decks could this run deal, how many did it actually play, and which cards in my list are new to it?"</p>
-<div class="two"><div><h3>Today <span class="tag built">built</span></h3>
-<pre>from manabot.eval.training_corpus import (
-    roster, training_corpus)
+<p><b>Area taken:</b> the training corpus as a whole (matchups, deck cards, card statistics, settings,
+parent runs), because the open work reshapes its settings and the settings only make sense beside the
+games they describe. Checkpoint loading and admission were reviewed in earlier passes and are unchanged.</p>
 
-corpus = training_corpus(run, through=1)
-decks = roster(run)
-len(decks)
-len({k for d in decks for k in d["cards"]})
+<h2>The interaction</h2>
+<p>A person holds a checkpoint and asks of one training condition:</p>
+<ol>
+  <li>Was it <b>always</b> this value?</li>
+  <li>In what <b>share of games</b> was it this value?</li>
+  <li>Did it <b>change at update N</b>?</li>
+</ol>
+<p>Today they open the corpus and read <code>settings</code>: one row per run. A run that drew
+disclosure per game answers all three questions with the single word <code>mixed</code>.
+<code>skip_trivial</code> is not there. <code>mana_taps</code> is there, read with
+<code>getattr(observation, "mana_taps", False)</code> from a field this branch does not have, so it
+reports <code>false</code> for every run whatever happened.</p>
 
-corpus.sql("select … from corpus")</pre>
-<p>Two calls answer one question about one run. <code>roster(run)</code> reads the deck table again, outside the connection, and has no cutoff or parent chain: for a continued run it lists the child's decks only, while <code>deck_cards</code> on the connection lists both runs'.</p></div>
-<div><h3>One place to ask <span class="tag prop">proposed</span></h3>
-<pre>from manabot.eval.training_corpus import (
-    training_corpus)
+<h2>Product concepts against code concepts</h2>
+<table>
+  <tr><th>What the person knows</th><th>What the code has</th><th>Match</th><th>What is wrong</th></tr>
+  <tr><td>Games the model trained on, by matchup</td><td><code>corpus</code> view over <code>matchups</code> and <code>deck_cards</code></td><td class="yes">yes</td><td></td></tr>
+  <tr><td>Cards in those decks</td><td><code>deck_cards</code> (one reader since pass 6)</td><td class="yes">yes</td><td></td></tr>
+  <tr><td>The run it continued from</td><td><code>parent_*</code> columns in <code>settings</code></td><td class="no">no</td><td>A parent checkpoint is not a setting. The table is really "one row per run".</td></tr>
+  <tr><td>A condition each game was played under</td><td>One per-run value: <code>decklists</code></td><td class="no">no</td><td>A per-game fact stored per run. Its varying case can only say <code>mixed</code>.</td></tr>
+  <tr><td>A condition one seat was played under (#559 mana payment)</td><td>Nothing</td><td class="no">no</td><td>No place for a per-seat value.</td></tr>
+  <tr><td>Forced decisions skipped</td><td>Literal <code>skip_trivial=True</code> in four constructors; not recorded</td><td class="no">no</td><td>Absent from the corpus.</td></tr>
+  <tr><td class="mute">(nothing)</td><td><code>mana_taps</code> column</td><td class="no">no</td><td>A concept the code has and no game ever had.</td></tr>
+  <tr><td>Which games an update holds</td><td>Outcome counter, drained per update</td><td class="yes">yes</td><td>The one owner. Settings should be counted here too.</td></tr>
+</table>
 
-corpus = training_corpus(run, through=1)
-corpus.sql("""
-  select count(distinct entry),
-         count(distinct card)
-  from deck_cards""")
+<h2>Biggest mismatch</h2>
+<p>A condition of a <em>game</em> is recorded as a property of a <em>run</em>. That is why the three
+questions have no answer, and why #559's per-seat levels have nowhere to go.</p>
 
-corpus.sql("select … from corpus")</pre>
-<p>The roster is <code>deck_cards</code> grouped by entry. Checked on DuckDB here: the count keeps duplicate entries of one deck apart, as <code>roster</code> did. Frontier Small must still answer 134 and 262.</p></div></div>
-<h3>Failure and recovery <span class="tag built">built</span></h3>
-<pre>UnknownCoverage: 59718fe34945: coverage unknown at update 13
-UnknownCoverage: local: resolved training decks are unknown
-UnknownCoverage: cannot resolve parent checkpoint local at 1 with SHA-256 …
-UnknownCoverage: …/statistics: update 1 has 2 terminal statistics games for 259 corpus games</pre>
-<p>Recovery for the first three is fetching the missing block, declaration or parent run into the same storage. All are raised by <code>training_corpus</code> before anything is returned, so removing <code>roster</code> removes a second place where "decks unknown" could surface and changes none of them.</p>
+<div class="cols">
+<div>
+<h3>Before (built)</h3>
+<pre>settings   -- one row per run
+  decklists            'mixed'
+  mana_taps            false   (guessed)
+  max_actions, action_overflow,
+  policy_input_version, behavior,
+  opponent_mode, learning_seats,
+  matchup_curriculum,
+  parent_run, parent_update, parent_sha256</pre>
+</div>
+<div class="new">
+<h3>After <span class="tag">proposed</span></h3>
+<pre>runs       -- one row per run
+  policy_input_version, max_actions,
+  action_overflow, behavior,
+  opponent_mode, learning_seats,
+  matchup_curriculum,
+  parent_run, parent_update, parent_sha256
 
-<h2>Do the product's concepts and the code's concepts line up?</h2>
-<div class="scroll"><table>
-<tr><th>What a person knows about</th><th>What the code has</th><th></th><th>What is wrong, if anything</th></tr>
-<tr><td>The training corpus of a checkpoint</td><td><code>training_corpus()</code> returns a DuckDB connection</td><td class="yes">yes</td><td>Fixed since the last pass.</td></tr>
-<tr><td>Games completed, by update and ordered matchup</td><td>view <code>corpus</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>The decks training could deal</td><td><code>deck_cards</code> (entry, deck, board, card, copies) for every run; also <code>roster(run)</code> in Python; also the undocumented <code>decks</code> table</td><td class="no">no</td><td>One idea under three names. <code>roster</code> was needed while older runs had no per-board rows; they have them now. Its only caller is the guide. See below.</td></tr>
-<tr><td>How decisions were set up in each run</td><td><code>settings</code>, one row per contributing run</td><td class="yes">yes</td><td></td></tr>
-<tr><td>The checkpoint it started from</td><td><code>parent_run, parent_update, parent_sha256</code> in <code>settings</code>; followed in the same storage</td><td class="yes">yes</td><td></td></tr>
-<tr><td>What it drew, was offered and chose, per card</td><td><code>card_statistics</code> when <code>statistics=path</code> is given</td><td class="yes">yes</td><td>Still refused across a parent chain (question 38).</td></tr>
-<tr><td>Unknown is not zero</td><td><code>UnknownCoverage</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>What a loop must record</td><td><code>log_corpus_setup</code>, <code>log_corpus_outcomes</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>Whether an older checkpoint can play here</td><td>loader binding by name, stored programs, writer catalogs, pinned pilots</td><td class="yes">yes</td><td>Unchanged; QA replayed frontier Small u1952 after the merge with 829 decisions, as before it.</td></tr>
-</table></div>
+game_settings  -- completed games per update
+  update_number, seat, setting, value, games
+  3   NULL  decklists     open     130
+  3   NULL  decklists     closed   129
+  3   NULL  skip_trivial  true     259
+  3   0     mana_payment  manual   259   (#559)
+  3   1     mana_payment  manual   259   (#559)</pre>
+</div>
+</div>
 
-<h2>The biggest mismatch: the roster has a second reader</h2>
-<div class="two"><div><h3>Before <span class="tag built">built</span></h3>
-<pre>roster(run) → list[CorpusDeck]     Python, one run
-deck_cards                          SQL, every run in the chain
-decks                               SQL, undocumented input</pre></div>
-<div><h3>After <span class="tag prop">proposed</span></h3>
-<pre>deck_cards                          SQL, every run in the chain
-decks                               SQL, undocumented input
+<p><b>The one rule a person learns:</b> could the value differ between two games of the same run? If
+yes it is in <code>game_settings</code>; if no it is in <code>runs</code>.</p>
 
-roster, CorpusDeck                  deleted</pre></div></div>
-<div class="box"><p><strong>Choice made for review.</strong> Delete <code>roster</code> and <code>CorpusDeck</code>; the guide prints its two roster numbers from <code>deck_cards</code>. Passed over: keeping it as a convenience (a second name for one fact, and once released it needs a warning period to remove), and documenting <code>decks</code> in its place (it merges duplicate entries of one deck). Reversible until this merges.</p>
-<p>What changes: about twelve lines leave <code>training_corpus.py</code>, two lines of the guide's example become one query, and two later sentences say "roster" for the run's deck entries. What survives: <code>deck_rows</code>, every table, column and refusal. No test calls <code>roster</code>.</p></div>
+<div class="new">
+<p><span class="tag">proposed</span> The three questions become three queries over one relation:</p>
+<pre>-- always?
+select setting, seat, count(distinct value) = 1 as always, min(value)
+from game_settings group by all;
 
-<h3>Counterexamples kept</h3>
-<div class="scroll"><table>
-<tr><th>Case</th><th>What happens</th></tr>
-<tr><td>A deck declared and never played</td><td>Present in <code>deck_cards</code>, absent from <code>corpus</code>. Same as <code>roster</code> gave.</td></tr>
-<tr><td>Two roster entries with one deck identity</td><td>Two <code>entry</code> values; <code>count(distinct entry)</code> counts both.</td></tr>
-<tr><td>A caller wants the roster without loading outcomes</td><td>Lost: <code>training_corpus(run, through=0)</code> is the nearest, and it answers at update zero with the deck entries (QA saw 34). With Etude 0.4.1 the table reader loads every table artifact either way.</td></tr>
-<tr><td>A continued run</td><td><code>deck_cards</code> carries <code>experiment, run</code>, so the count is per run or across the chain as the query says. <code>roster</code> could only give the child.</td></tr>
-</table></div>
+-- share of games
+select setting, seat, value, sum(games) / sum(sum(games)) over (partition by setting, seat) as share
+from game_settings group by all;
+
+-- changed at update N (parent runs keep their own update numbers)
+select experiment, run, update_number, value, games
+from game_settings where setting = 'decklists' order by all;</pre>
+</div>
+
+<h2>Traced through the layers</h2>
+<table>
+  <tr><th>Layer</th><th>Built</th><th>Proposed</th></tr>
+  <tr><td>Collector</td><td>Keeps each stream's deck pair at reset; counts the game with its winner when it ends.</td>
+      <td>Keeps the stream's settings beside the deck pair, read from the native setup actually dealt. The same <code>record</code> call counts them.</td></tr>
+  <tr><td>Per-update log</td><td><code>self_play_outcomes</code></td><td>Same call also logs <code>training_game_settings</code>.</td></tr>
+  <tr><td>Update-zero log</td><td>Decks and a settings row; loops compute <code>disclosure</code> to pass in.</td><td>Decks and the run row. The <code>disclosure</code> parameter and both loops' expression for it are deleted.</td></tr>
+  <tr><td>Reader</td><td>Missing outcomes at an update raise <code>UnknownCoverage</code>.</td><td>Also raises when a setting's counts do not sum to that update's games.</td></tr>
+  <tr><td>Older runs</td><td>Declared values; NULL when stages disagree.</td><td>Derived <code>decklists</code> rows only for declared <code>open</code> or <code>closed</code>. <code>mixed</code> and <code>skip_trivial</code> have no rows: unrecorded.</td></tr>
+</table>
+
+<h2>Tested against three paths</h2>
+<ul>
+  <li><b>Normal.</b> A mixed-disclosure run: open and closed counts per update sum to the update's games. Share reads directly.</li>
+  <li><b>Failure.</b> A process dies mid-update. Pending setting counts sit in the same counter as pending outcomes, so the snapshot and the resumed attempt's supersession treat them identically. A separate counter could drift by the games in flight; that counterexample is why they share one.</li>
+  <li><b>Recovery.</b> A child run starts from a parent checkpoint with different levels. Each run's rows carry its own run and update numbers, so the change shows at the boundary. This is also the shape of a mana-payment schedule raised across runs.</li>
+</ul>
+<p><b>Kept:</b> historical runs still open; every earlier query on <code>corpus</code>, <code>deck_cards</code> and
+<code>card_statistics</code> is untouched. <b>Changes on purpose:</b> the <code>settings</code> relation and its
+<code>decklists</code> and <code>mana_taps</code> columns go; nothing published read them.</p>
+
+<h2>Choices made for review</h2>
+<table>
+  <tr><th></th><th>Chosen</th><th>Passed over, and why</th></tr>
+  <tr><td>47</td><td>Two relations split by "can it differ between games".</td><td>Everything in the long relation: model facts repeated every update, typed columns lost. A column per setting on outcome rows: a reshape for each new setting.</td></tr>
+  <tr><td>48</td><td><code>decklists</code> leaves the per-run row.</td><td>Keeping both: one fact, two owners.</td></tr>
+  <tr><td>49</td><td>Per-run relation named <code>runs</code>.</td><td>Keeping <code>settings</code> beside <code>game_settings</code>: one word for two tables, and a parent checkpoint is not a setting.</td></tr>
+  <tr><td>50</td><td>NULL seat for whole-game settings; native seat (0 on the play) otherwise.</td><td>Whole-game value once per seat: sums to twice the games.</td></tr>
+  <tr><td>51</td><td>Settings counted in the outcome counter; reader checks the sums.</td><td>A second counter: nothing ties its games to the outcome rows.</td></tr>
+</table>
 
 <h2>Larger than this work</h2>
 <ul>
-<li><strong>Statistics are not in run storage</strong>, so a checkpoint plus storage does not reach them, superseded rows stay and a parent chain cannot carry them (question 38).</li>
-<li><strong>Etude's evaluation query database does not ingest training rows</strong>, and its table reader has no bounded read (questions 34 and 36).</li>
-<li><strong>The update a checkpoint was written at lives under a metadata key named <code>bc</code>.</strong> A serialized key, so it keeps its spelling.</li>
-<li><strong>Fixed-match checkpoints after cards are added</strong> still stop loading on the whole-binding comparison.</li>
+  <li><b>A setting within one matchup</b> ("games with Island under closed decklists") has no answer: counts are per update, not per matchup. It would take keying the counter by matchup and settings together, and widening the outcome rows.</li>
+  <li><b>Seat has three spellings</b> in the corpus: <code>position</code> play/draw on outcome rows, <code>play</code>/<code>draw</code> columns on <code>corpus</code>, integer <code>seat</code> on <code>card_statistics</code> and now <code>game_settings</code>. The guide will say seat 0 is on the play. Unifying means rewriting the outcome row format that historical runs share.</li>
+  <li><b><code>skip_trivial</code> is a literal in four constructors.</b> The corpus will read it from the environment, but nothing varies it; it is recorded because the direction asks for it and so a debugging run cannot pass as an ordinary one.</li>
+  <li><b>Stage-varying settings in older runs</b> (behavior, opponent mode) still read NULL. The stage boundaries are in their declarations and could become rows; nobody has asked.</li>
 </ul>
 
 <h2>Questions</h2>
-<ol class="q">
-<li>The Python <code>roster</code> reader:<ol><li>deleted; the roster is read from <code>deck_cards</code> (chosen)</li><li>kept beside <code>deck_cards</code> (as built)</li><li>replaced by documenting the <code>decks</code> table</li></ol></li>
-<li>What <code>training_corpus</code> returns:<ol><li>the DuckDB connection (as built)</li><li>a small record with one relation per table</li></ol></li>
-<li>Card statistics across a parent chain:<ol><li>refused until statistics are published to run storage (as built)</li><li>accept one path per run in this PR</li></ol></li>
+<ol>
+  <li>The split. (a) <code>runs</code> + <code>game_settings</code> as proposed. (b) Every setting, model facts included, in one long relation. (c) Keep the per-run <code>settings</code> name.</li>
+  <li>Older <code>mixed</code> runs. (a) No <code>decklists</code> rows: unrecorded, as proposed. (b) Raise <code>UnknownCoverage</code> for the whole corpus. (c) Derive half open, half closed from the balanced draw.</li>
+  <li>Setting within a matchup. (a) Leave for a later Task, as proposed. (b) Key the counter by matchup and settings in this PR.</li>
+  <li><code>skip_trivial</code>. (a) Record it per update with the rest, as proposed. (b) Drop it: it never varies.</li>
 </ol>
-</main></body></html>
