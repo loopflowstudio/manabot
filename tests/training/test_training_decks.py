@@ -90,7 +90,9 @@ def _agent() -> ActorCritic:
     )
 
 
-def _collector(decks: UniformDecks, *, mana_taps: bool = False) -> Collector:
+def _collector(
+    decks: UniformDecks, *, mana_taps: managym.ManaTaps = False
+) -> Collector:
     return open_collector(
         ObservationSpace(ObservationConfig(mana_taps=mana_taps)),
         Match(decks.match_config()),
@@ -580,18 +582,25 @@ def test_mixed_training_games_export_the_resolved_disclosure(
     assert settings == {"open", "closed"}
 
 
-def test_priority_taps_follow_sampled_self_play_roots(decks: UniformDecks) -> None:
-    collector = _collector(decks, mana_taps=True)
+@pytest.mark.parametrize("mode", [True, "usable"])
+def test_priority_taps_follow_sampled_self_play_roots(
+    decks: UniformDecks, mode: managym.ManaTaps
+) -> None:
+    collector = _collector(decks, mana_taps=mode)
     try:
         collect(collector, _agent(), 1)
         assert collector.stats.games > 0
         assert collector.stats.skipped_decisions > 0
-        assert 0 < collector.stats.priority_taps < collector.stats.micro_steps
+        if mode == "usable":
+            # No spell, paid activation or tap trigger in these all-basic decks.
+            assert collector.stats.priority_taps == 0
+        else:
+            assert 0 < collector.stats.priority_taps < collector.stats.micro_steps
         for match, setup in zip(
             collector.stream_matches,
             collector._env.current_player_configs(),
             strict=True,
         ):
-            assert setup.mana_taps == match.config.mana_taps == (True, True)
+            assert setup.mana_taps == match.config.mana_taps == (mode, mode)
     finally:
         close_collector(collector)
