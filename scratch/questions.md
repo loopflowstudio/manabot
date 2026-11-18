@@ -214,3 +214,13 @@ say so if they should carry a note.
     That left one deck path in the reader: `decks` is built from `deck_cards`,
     and `corpus_decks` is gone. Reversible; the guide no longer says older
     runs have no per-board rows.
+
+## Concept review, sixth pass, 2026-11-18 (nobody present; reversible)
+
+46. Remove the Python `roster` reader. After choice 45 every run has
+    `deck_cards` rows, so the roster is `deck_cards` grouped by entry; the
+    function re-reads the deck table outside the connection and only the
+    guide calls it. Passed over: keeping it as a convenience (a second name
+    for one fact, and a published function needs a warning period to remove
+    later), and documenting the `decks` table in its place (it drops
+    duplicate entries).
