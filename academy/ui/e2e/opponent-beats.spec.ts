@@ -38,11 +38,13 @@ test('the opponent\'s moves are read out, and Space ends the reading without act
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // The slow pace leaves time to read a beat before skipping it.
+  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
   const beat = page.getByTestId('beat');
   await playUntil(page, async () => await beat.count() > 0, 120);
-  // Read the beat and skip it within its 1.1 s, before it ends by itself.
+  // Read the beat and skip it within its 1.4 s, before it ends by itself.
   const text = await page.evaluate(() => document.querySelector('[data-testid=beat]')?.textContent ?? '');
   const before = sent.count;
   await page.keyboard.press('Space');
@@ -68,4 +70,27 @@ test('reduced motion reads out no beats', async ({ page }) => {
   }, 120);
   expect(opponentFacts).toBeGreaterThan(0);
   await expect(page.getByTestId('beat')).toHaveCount(0);
+});
+
+test('the Menu turns the reading off, and the browser remembers it', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const sent = { count: 0 };
+  await startAgainstRandom(page, sent);
+  await page.getByTestId('table-menu').click();
+  const pace = page.getByTestId('beat-pace');
+  await expect(pace.getByRole('radio', { name: 'Quick' })).toBeChecked();
+  await pace.getByRole('radio', { name: 'Off' }).check();
+  await page.getByTestId('table-menu').click();
+  let opponentFacts = 0;
+  await playUntil(page, async () => {
+    expect(await page.getByTestId('beat').count()).toBe(0);
+    opponentFacts = await page.locator('[data-testid=recent-fact].theirs').count();
+    return opponentFacts > 0;
+  }, 120);
+  expect(opponentFacts).toBeGreaterThan(0);
+  await page.reload();
+  await expect(page.getByTestId('table')).toBeVisible();
+  await page.getByTestId('table-menu').click();
+  await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
 });

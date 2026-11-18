@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { region } from './region';
   /**
    * The rail beside the board: the stack and what happened since your last
    * move, the prompt in one plain line with its buttons, every legal choice by
@@ -125,7 +126,7 @@
 
   {#if dock}<div class="block docked">{@render dock()}</div>{/if}
 
-  <section class="block stack" aria-label="Stack">
+  <section use:region class="block stack" aria-label="Stack">
     <h2><span class="type-rubric text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
     {#if view.stack.length === 0}
       <p class="type-annotation text-ink-3">Empty</p>
@@ -173,7 +174,7 @@
     {/if}
   </section>
 
-  <section class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
+  <section use:region class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
     <p class="type-rubric whose" class:yours={live}>
       {#if thinking}<i class="thinking" aria-hidden="true"></i><span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
     </p>
@@ -237,7 +238,7 @@
     <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
   </section>
 
-  <section class="block choices" aria-label="All legal choices">
+  <section use:region class="block choices" aria-label="All legal choices">
     <h2 class="heading type-rubric text-ink-2">
       <span class="type-rubric">{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
       <span class="type-rubric" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
@@ -263,7 +264,7 @@
     </ol>
   </section>
 
-  <section class="block log" aria-label="Moves">
+  <section use:region class="block log" aria-label="Moves">
     {#if reading}<div class="reading">{@render reading()}</div>{/if}
     <h2><span class="type-rubric text-ink-2">Moves</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>

@@ -24,6 +24,7 @@
   import Inspect from './Inspect.svelte';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
+  import { region } from './region';
   import { BEAT_MS, beatsFor, type Beat, type BeatPace } from './beats';
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence } from './replay';
@@ -99,11 +100,22 @@
   setContext(EVIDENCE, () => evidence);
 
   // The table is the whole screen; the page behind it must not scroll.
+  // What the page draws behind it is out of reach too: Tab and screen readers
+  // stay on the table and the menus and previews it opens.
   onMount(() => {
-    const root = document.documentElement;
-    const previous = root.style.overflow;
-    root.style.overflow = 'hidden';
-    return () => { root.style.overflow = previous; };
+    const page = document.documentElement;
+    const previous = page.style.overflow;
+    page.style.overflow = 'hidden';
+    const hidden: HTMLElement[] = [];
+    for (let node = root?.parentElement; node && node !== document.body; node = node.parentElement) {
+      for (const sibling of node.parentElement?.children ?? []) {
+        if (sibling !== node && sibling instanceof HTMLElement && !sibling.inert) { sibling.inert = true; hidden.push(sibling); }
+      }
+    }
+    return () => {
+      page.style.overflow = previous;
+      hidden.forEach(element => { element.inert = false; });
+    };
   });
 
   // Sentences name the opponent shortly; the plate and top bar keep its kind.
@@ -276,10 +288,19 @@
     onpassturn();
   }
 
+  /** The control a card menu was opened from; closing the menu returns focus to it. */
+  let opener: HTMLElement | null = null;
+  function closeMenu(): void {
+    if (!menuAt) return;
+    menuAt = null;
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+    opener = null;
+  }
   function activate(title: string, offers: PlacedOffer[], element: HTMLElement): void {
     hush();
     if (!live || !offers.length) return;
     if (offers.length === 1) { act(offers[0]); return; }
+    opener = element;
     const rect = element.getBoundingClientRect();
     menuAt = { title, offers, x: Math.min(rect.left, window.innerWidth - 300), y: rect.bottom + 6 > window.innerHeight - 160 ? Math.max(8, rect.top - 8 - 36 * offers.length - 30) : rect.bottom + 6 };
   }
@@ -380,17 +401,16 @@
     return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
   }
 
-  /** Space presses a focused control, except a card with nothing to do: then it is the primary. */
+  /** Space presses a focused control outside the table's regions; in them Enter acts and Space is the primary. */
   function ownsSpace(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
-    const card = target.closest<HTMLElement>('[data-testid=table-card]');
-    if (card) return card.dataset.offerCount !== '0';
+    if (target.closest('[data-region]')) return false;
     return target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement || target.tagName === 'SUMMARY';
   }
 
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
-    if (event.key === 'Escape') { menuAt = null; zoneAt = null; hovered = null; stopDwell(); skipBeats(); return; }
+    if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); skipBeats(); return; }
     // While the opponent's moves are read out, Space ends the reading; the next Space acts.
     if (event.key === ' ' && beat && !ownsSpace(event.target)) { event.preventDefault(); skipBeats(); return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
@@ -399,6 +419,8 @@
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
     }
+    // An open card menu takes Space as a press of its focused item.
+    if (event.key === ' ' && menuAt) return;
     if (event.key === ' ' && !ownsSpace(event.target) && view.primary && live) {
       event.preventDefault();
       act(view.primary);
@@ -443,7 +465,7 @@
   </header>
 
   <div class="board" id="table-board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
-    <section class="half opponent" aria-label={`${possessive(said)} battlefield`}>
+    <section use:region class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
@@ -451,7 +473,7 @@
         <div class="row creatures"><Field piles={view.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
-    <section class="half you" aria-label="Your battlefield">
+    <section use:region class="half you" aria-label="Your battlefield">
       <Plate player={projection.agent} name={you.name} deck={you.deck} offers={view.you.offers} {live} damage={recent.damage.players.get(projection.agent.player_index) ?? 0}
         active={yourTurn} side="you" onactivate={element => activate(you.name, view.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
@@ -459,7 +481,7 @@
         <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
-    <section class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
+    <section use:region class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
       <span class="type-rubric hand-label text-ink-3">Hand · {view.hand.length}</span>
       <div class="hand-cards" style:width={`${handCard + Math.max(0, view.hand.length - 1) * handStep}px`}>
         {#each view.hand as item, index (item.card.id)}
@@ -530,13 +552,13 @@
 <Lines {lines} {root} revision={frame.revision} />
 
 {#if menuAt}
-  <div class="menu" role="menu" tabindex="-1" aria-label={`Choices for ${menuAt.title}`} bind:this={menuElement} data-testid="card-menu"
+  <div class="menu" use:region role="menu" tabindex="-1" aria-label={`Choices for ${menuAt.title}`} bind:this={menuElement} data-testid="card-menu"
     style:left={`${menuAt.x}px`} style:top={`${menuAt.y}px`}>
     <p class="type-rubric text-ink-2">{menuAt.title}</p>
     {#each menuAt.offers as placed (placed.offer.id)}
       <button type="button" role="menuitem" onclick={() => act(placed)} data-offer-id={placed.offer.id}><kbd>{placed.number}</kbd>{placed.offer.label}</button>
     {/each}
-    <button type="button" role="menuitem" class="cancel" onclick={() => (menuAt = null)}><kbd>Esc</kbd>Cancel</button>
+    <button type="button" role="menuitem" class="cancel" onclick={closeMenu}><kbd>Esc</kbd>Cancel</button>
   </div>
 {/if}
 

@@ -50,7 +50,8 @@
     type="button"
     class="who"
     class:legal={live && offers.length > 0}
-    disabled={!offers.length}
+    aria-disabled={!offers.length}
+    data-offer-count={offers.length}
     aria-label={label}
     data-testid="player-target"
     onclick={event => onactivate(event.currentTarget)}
@@ -85,7 +86,7 @@
   .plate { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 10px 8px; }
   .plate.active { box-shadow: inset 3px 0 0 var(--warning); }
   .who { display: block; text-align: left; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; background: none; border: 0; color: inherit; }
-  .who:disabled { cursor: default; }
+  .who[aria-disabled=true] { cursor: default; }
   .who.legal { box-shadow: 0 0 0 2px var(--legal); cursor: pointer; }
   .choosing { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--warning-text, var(--text-secondary)); }
   .choosing i { width: 6px; height: 6px; border-radius: 3px; background: var(--warning); animation: pulse 1.2s ease-in-out infinite; }
