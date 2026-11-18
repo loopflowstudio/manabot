@@ -2650,3 +2650,18 @@ cap before 8.8M decisions. The update-40 and update-80 head-to-heads compare
 unequal training, and seed 39103's final head-to-head compares equal
 decisions with 143 against 114 updates. The gate and blanked-memory readouts
 are within one checkpoint and do not depend on this.
+
+**Update size follows game length.** The recipe closes a batch on complete
+games: each of 256 streams collects at least 64 learner rows and then
+finishes its game. Final decisions per update were 85k, 82k and 71k for the
+control branches against 54k, 59k and 56k for the GRU branches (seeds 39101
+to 39103), and 67k for the trunk. Control games therefore ran longer in
+learner decisions in all three seeds. Whether that is learned behaviour or
+an accounting difference between the arms is not established.
+
+**Blanking barely moves decisions.** On 16 local self-play games per seed
+and disclosure with each final GRU checkpoint (about 3,000 to 3,900
+decisions per cell), blanking the memory changed the action distribution by
+a mean total variation of 0.019 to 0.025 and the most likely action at 1.4%
+to 2.3% of decisions. The same checkpoint differed from its previous stored
+checkpoint by 0.036 to 0.050.
