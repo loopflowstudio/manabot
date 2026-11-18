@@ -109,7 +109,7 @@
   const showType = $derived(!field && upright >= 110);
   const pip = $derived(clamp(upright * 0.07, 10, 14));
   const showCost = $derived(!field && width >= 58);
-  const plate = $derived(upright >= 90 ? 14 : 12);
+  const plate = $derived(upright >= 110 ? 14 : 12);
   const keywordRoom = $derived(boxWidth >= 120 ? 3 : width >= 64 ? 1 : 0);
   const hasPt = $derived(creature && power !== null);
   /**
@@ -220,7 +220,7 @@
     onblur={() => onpreview?.(null)}
   >
     <span class="bar" aria-hidden="true" style={barStyle}>
-      <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}<b class="count" data-testid="pile-count-badge">{' '}×{count}</b>{/if}</span>
+      <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}{' '}<b class="count" data-testid="pile-count-badge">×{count}</b>{/if}</span>
       {#if showType && face}<span class="type">{face.type_line}</span>{/if}
     </span>
     <span class="art" aria-hidden="true">
@@ -232,7 +232,7 @@
         {#if offers.length > 1 && live}<span class="many">{offers.length}</span>{/if}
       </span>
       {#if chips.length}
-        <span class="chips" style:--below={`${hasPt ? LINE[plate] + 8 : 3}px`}>
+        <span class="chips" style:--below={`${hasPt ? LINE[plate] + 4 : 3}px`}>
           {#each chips as chip (chip.key)}<i class={`chip ${chip.kind}`} class:granted={chip.granted}>{chip.text}</i>{/each}
         </span>
       {/if}
@@ -282,7 +282,7 @@
     overflow: hidden; overflow-wrap: break-word; hyphens: auto; text-wrap: balance;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   }
-  /* A pile's count follows the name, in the interface face. */
+  /* A pile's count follows the name, in the interface face; the line breaks before it, never inside the name. */
   .count { font-family: var(--font-sans); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .type { font: 12px/16px var(--font-sans); color: inherit; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
