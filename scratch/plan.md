@@ -141,6 +141,17 @@ commits of this branch read with NULL `runs` columns and no parent; three
 `test_game_errors.py` replay tests fail on main too and CI does not run that
 file.
 
+Eighth concept review at `335eab23d8` (`scratch/concept-review.html`): nothing
+to change. `runs` and `game_settings` are built as chosen in questions 47-53
+and each product concept has one owner in the code. Kept as counterexamples,
+not work: a single run resumed at a revision that adds a setting raises for
+the whole corpus (question 52, strict on purpose); a run whose opponent is not
+self or learning now logs no outcome table and reads as `UnknownCoverage`
+where it used to read as zero games. Run in that pass:
+`tests/eval/test_training_corpus.py`, `tests/training/test_self_play.py`,
+`tests/training/test_outcome_tables.py`, 16 passed. Hosted CI on `335eab23d8`
+was pending; gate owns seeing it green.
+
 Not in this PR: naming the difference when a checkpoint is seated under other
 levels; an admission gate; counts of a setting within one matchup.
 

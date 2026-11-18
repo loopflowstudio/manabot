@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>MTG-353 concept review 7: how a model was trained</title>
+<title>MTG-353 concept review 8: the corpus settings as built</title>
 <style>
   :root { color-scheme: light dark; --fg:#1c1b19; --bg:#faf8f3; --mute:#6b655b; --line:#d9d3c6;
           --yes:#2f6b3a; --no:#a23b2a; --new:#1f5f8b; --newbg:#e6f0f7; --card:#fff; }
@@ -19,140 +19,115 @@
   .yes { color:var(--yes); font-weight:700; } .no { color:var(--no); font-weight:700; }
   .new { background:var(--newbg); border-left:3px solid var(--new); padding:.1rem .8rem; margin:.8rem 0; }
   .tag { font: 11px ui-monospace, monospace; color:var(--new); border:1px solid var(--new); padding:0 .3rem; border-radius:3px; }
-  .cols { display:grid; grid-template-columns:1fr 1fr; gap:1rem; } @media (max-width:44rem){ .cols{grid-template-columns:1fr;} }
   .mute { color:var(--mute); }
 </style>
 
-<h1>How a model was trained: do the corpus settings match the question?</h1>
-<p class="mute">MTG-353, seventh concept review, 2026-11-18, nobody present. Reviewed before the
-settings rework is built. <span class="tag">proposed</span> marks what does not exist yet.</p>
+<h1>How a model was trained: the corpus settings as built</h1>
+<p class="mute">MTG-353, eighth concept review, 2026-11-18, nobody present. Reviewed at
+<code>335eab23d8</code> against the branch base, after the settings rework was built, realigned,
+compressed and put through QA. Everything on this page exists unless marked
+<span class="tag">not built</span>.</p>
 
-<p><b>Area taken:</b> the training corpus as a whole (matchups, deck cards, card statistics, settings,
-parent runs), because the open work reshapes its settings and the settings only make sense beside the
-games they describe. Checkpoint loading and admission were reviewed in earlier passes and are unchanged.</p>
+<p><b>Area taken:</b> the training corpus as a whole (matchups, deck cards, card statistics, run facts,
+per-game settings, parent runs), with the collector and the two loops that write it, because the
+last pass rebuilt its settings. Checkpoint loading and admission were reviewed in earlier passes and
+have not changed since.</p>
 
-<h2>The interaction</h2>
-<p>A person holds a checkpoint and asks of one training condition:</p>
-<ol>
-  <li>Was it <b>always</b> this value?</li>
-  <li>In what <b>share of games</b> was it this value?</li>
-  <li>Did it <b>change at update N</b>?</li>
-</ol>
-<p>Today they open the corpus and read <code>settings</code>: one row per run. A run that drew
-disclosure per game answers all three questions with the single word <code>mixed</code>.
-<code>skip_trivial</code> is not there. <code>mana_taps</code> is there, read with
-<code>getattr(observation, "mana_taps", False)</code> from a field this branch does not have, so it
-reports <code>false</code> for every run whatever happened.</p>
+<p><b>Outcome: nothing to change.</b> The seventh review's proposal is built as proposed and the
+concepts line up. What remains is larger than this work and is listed below.</p>
+
+<h2>The interaction, walked on the built code</h2>
+<p>A person holds a checkpoint and asks of one training condition whether it was always this value, in
+what share of games, and whether it changed at an update.</p>
+<pre>corpus = training_corpus(checkpoint, source=storage)
+
+runs            one row per contributing run
+  policy_input_version, max_actions, action_overflow, behavior,
+  opponent_mode, learning_seats, matchup_curriculum,
+  parent_run, parent_update, parent_sha256
+
+game_settings   completed games per update
+  update_number  seat  setting       value   games
+  1              NULL  decklists     open    1
+  1              NULL  decklists     closed  3
+  1              NULL  skip_trivial  true    4</pre>
+<p>The guide's three queries (<code>docs/evaluation.md</code>, "Querying the training corpus") answer the
+three questions over <code>game_settings</code> alone, and the tests assert the same SQL.</p>
 
 <h2>Product concepts against code concepts</h2>
 <table>
-  <tr><th>What the person knows</th><th>What the code has</th><th>Match</th><th>What is wrong</th></tr>
+  <tr><th>What the person knows</th><th>What the code has</th><th>Match</th><th>Note</th></tr>
   <tr><td>Games the model trained on, by matchup</td><td><code>corpus</code> view over <code>matchups</code> and <code>deck_cards</code></td><td class="yes">yes</td><td></td></tr>
-  <tr><td>Cards in those decks</td><td><code>deck_cards</code> (one reader since pass 6)</td><td class="yes">yes</td><td></td></tr>
-  <tr><td>The run it continued from</td><td><code>parent_*</code> columns in <code>settings</code></td><td class="no">no</td><td>A parent checkpoint is not a setting. The table is really "one row per run".</td></tr>
-  <tr><td>A condition each game was played under</td><td>One per-run value: <code>decklists</code></td><td class="no">no</td><td>A per-game fact stored per run. Its varying case can only say <code>mixed</code>.</td></tr>
-  <tr><td>A condition one seat was played under (#559 mana payment)</td><td>Nothing</td><td class="no">no</td><td>No place for a per-seat value.</td></tr>
-  <tr><td>Forced decisions skipped</td><td>Literal <code>skip_trivial=True</code> in four constructors; not recorded</td><td class="no">no</td><td>Absent from the corpus.</td></tr>
-  <tr><td class="mute">(nothing)</td><td><code>mana_taps</code> column</td><td class="no">no</td><td>A concept the code has and no game ever had.</td></tr>
-  <tr><td>Which games an update holds</td><td>Outcome counter, drained per update</td><td class="yes">yes</td><td>The one owner. Settings should be counted here too.</td></tr>
+  <tr><td>Cards in those decks</td><td><code>deck_cards</code>, one reader (<code>deck_rows</code>)</td><td class="yes">yes</td><td></td></tr>
+  <tr><td>A fact true of every game of a run</td><td><code>runs</code>; written once by <code>log_corpus_setup</code> at update zero</td><td class="yes">yes</td><td>The parent checkpoint lives here, no longer under "settings".</td></tr>
+  <tr><td>A condition each game was played under</td><td><code>GameSetting</code>, counted by <code>SelfPlayCounter.record</code> with the outcome; <code>game_settings</code></td><td class="yes">yes</td><td>One owner for "which games an update holds".</td></tr>
+  <tr><td>A condition one seat was played under</td><td><code>GameSetting.seat</code>, native seat</td><td class="yes">yes</td><td>Empty until #559's <code>mana_payment</code> and <code>mana_floats</code> arrive; the place exists.</td></tr>
+  <tr><td>Forced decisions skipped</td><td><code>env.skip_trivial</code>, read by the collector</td><td class="yes">yes</td><td>The environment that plays the games states it; no literal in the collector's record.</td></tr>
+  <tr><td>"Not recorded" is not "false"</td><td>No rows; partial rows raise <code>UnknownCoverage</code></td><td class="yes">yes</td><td></td></tr>
+  <tr><td>Which seat</td><td><code>position</code> play/draw on outcome rows, <code>play</code>/<code>draw</code> on <code>corpus</code>, integer <code>seat</code> on <code>card_statistics</code> and <code>game_settings</code></td><td class="no">no</td><td>One idea, three spellings. Larger than this work (below).</td></tr>
+  <tr><td>A setting within one matchup</td><td>Nothing: counts are per update</td><td class="no">no</td><td>Known gap, stated in the plan as not in this PR.</td></tr>
 </table>
 
 <h2>Biggest mismatch</h2>
-<p>A condition of a <em>game</em> is recorded as a property of a <em>run</em>. That is why the three
-questions have no answer, and why #559's per-seat levels have nowhere to go.</p>
-
-<div class="cols">
-<div>
-<h3>Before (built)</h3>
-<pre>settings   -- one row per run
-  decklists            'mixed'
-  mana_taps            false   (guessed)
-  max_actions, action_overflow,
-  policy_input_version, behavior,
-  opponent_mode, learning_seats,
-  matchup_curriculum,
-  parent_run, parent_update, parent_sha256</pre>
-</div>
-<div class="new">
-<h3>After <span class="tag">proposed</span></h3>
-<pre>runs       -- one row per run
-  policy_input_version, max_actions,
-  action_overflow, behavior,
-  opponent_mode, learning_seats,
-  matchup_curriculum,
-  parent_run, parent_update, parent_sha256
-
-game_settings  -- completed games per update
-  update_number, seat, setting, value, games
-  3   NULL  decklists     open     130
-  3   NULL  decklists     closed   129
-  3   NULL  skip_trivial  true     259
-  3   0     mana_payment  manual   259   (#559)
-  3   1     mana_payment  manual   259   (#559)</pre>
-</div>
-</div>
-
-<p><b>The one rule a person learns:</b> could the value differ between two games of the same run? If
-yes it is in <code>game_settings</code>; if no it is in <code>runs</code>.</p>
-
-<div class="new">
-<p><span class="tag">proposed</span> The three questions become three queries over one relation:</p>
-<pre>-- always?
-select setting, seat, count(distinct value) = 1 as always, min(value)
-from game_settings group by all;
-
--- share of games
-select setting, seat, value, sum(games) / sum(sum(games)) over (partition by setting, seat) as share
-from game_settings group by all;
-
--- changed at update N (parent runs keep their own update numbers)
-select experiment, run, update_number, value, games
-from game_settings where setting = 'decklists' order by all;</pre>
-</div>
-
-<h2>Traced through the layers</h2>
-<table>
-  <tr><th>Layer</th><th>Built</th><th>Proposed</th></tr>
-  <tr><td>Collector</td><td>Keeps each stream's deck pair at reset; counts the game with its winner when it ends.</td>
-      <td>Keeps the stream's settings beside the deck pair, read from the native setup actually dealt. The same <code>record</code> call counts them.</td></tr>
-  <tr><td>Per-update log</td><td><code>self_play_outcomes</code></td><td>Same call also logs <code>training_game_settings</code>.</td></tr>
-  <tr><td>Update-zero log</td><td>Decks and a settings row; loops compute <code>disclosure</code> to pass in.</td><td>Decks and the run row. The <code>disclosure</code> parameter and both loops' expression for it are deleted.</td></tr>
-  <tr><td>Reader</td><td>Missing outcomes at an update raise <code>UnknownCoverage</code>.</td><td>Also raises when a setting's counts do not sum to that update's games.</td></tr>
-  <tr><td>Older runs</td><td>Declared values; NULL when stages disagree.</td><td>Derived <code>decklists</code> rows only for declared <code>open</code> or <code>closed</code>. <code>mixed</code> and <code>skip_trivial</code> have no rows: unrecorded.</td></tr>
-</table>
+<p>The one the last review named, a game's condition stored as a run's property, is gone. Before, a
+mixed-disclosure run answered every question with the word <code>mixed</code>, and
+<code>mana_taps</code> reported <code>false</code> from a field that did not exist. After, the same run
+reads as counts that sum to its games at every update. The largest remaining mismatch is the seat
+spelling, and fixing it means rewriting the outcome row format that historical runs share.</p>
 
 <h2>Tested against three paths</h2>
 <ul>
-  <li><b>Normal.</b> A mixed-disclosure run: open and closed counts per update sum to the update's games. Share reads directly.</li>
-  <li><b>Failure.</b> A process dies mid-update. Pending setting counts sit in the same counter as pending outcomes, so the snapshot and the resumed attempt's supersession treat them identically. A separate counter could drift by the games in flight; that counterexample is why they share one.</li>
-  <li><b>Recovery.</b> A child run starts from a parent checkpoint with different levels. Each run's rows carry its own run and update numbers, so the change shows at the boundary. This is also the shape of a mana-payment schedule raised across runs.</li>
+  <li><b>Normal.</b> A real mixed collector: open and closed counts sum to the update's games, and only
+  <code>skip_trivial</code> reads as always (<code>test_mixed_disclosure_reads_as_a_share_of_the_games</code>).</li>
+  <li><b>Failure.</b> A game recorded without its settings: the update raises <code>UnknownCoverage</code>
+  naming "1 of 2 games" while the earlier update still reads. Outcomes and settings leave the counter in
+  one <code>drain</code>, so a resumed attempt supersedes both tables at the same coordinate.</li>
+  <li><b>Recovery.</b> A child run from a parent checkpoint under the other disclosure: each run keeps
+  its own rows and update numbers, the check runs per run, and the change shows at the boundary.</li>
 </ul>
-<p><b>Kept:</b> historical runs still open; every earlier query on <code>corpus</code>, <code>deck_cards</code> and
-<code>card_statistics</code> is untouched. <b>Changes on purpose:</b> the <code>settings</code> relation and its
-<code>decklists</code> and <code>mana_taps</code> columns go; nothing published read them.</p>
 
-<h2>Choices made for review</h2>
-<table>
-  <tr><th></th><th>Chosen</th><th>Passed over, and why</th></tr>
-  <tr><td>47</td><td>Two relations split by "can it differ between games".</td><td>Everything in the long relation: model facts repeated every update, typed columns lost. A column per setting on outcome rows: a reshape for each new setting.</td></tr>
-  <tr><td>48</td><td><code>decklists</code> leaves the per-run row.</td><td>Keeping both: one fact, two owners.</td></tr>
-  <tr><td>49</td><td>Per-run relation named <code>runs</code>.</td><td>Keeping <code>settings</code> beside <code>game_settings</code>: one word for two tables, and a parent checkpoint is not a setting.</td></tr>
-  <tr><td>50</td><td>NULL seat for whole-game settings; native seat (0 on the play) otherwise.</td><td>Whole-game value once per seat: sums to twice the games.</td></tr>
-  <tr><td>51</td><td>Settings counted in the outcome counter; reader checks the sums.</td><td>A second counter: nothing ties its games to the outcome rows.</td></tr>
-</table>
+<h2>Counterexamples kept</h2>
+<ul>
+  <li><b>One run resumed at a revision that adds a setting.</b> Its earlier updates have no rows for the
+  new setting, and the reader holds every setting a run ever recorded to every update, so the whole
+  corpus raises. This is choice 52 working as written. It does not arise from #559 merging: a child run
+  is checked on its own, and a launched run resumes at its own commit. Relaxing it to "no rows at an
+  update means unrecorded there" would let the "always" query mislead, so it stays strict.</li>
+  <li><b>An opponent that is not self or learning.</b> The loop used to log an empty outcome table for
+  such a run, which read as zero games; it now logs nothing and the corpus raises
+  <code>UnknownCoverage</code>. That is the truer answer: games were played and not counted.</li>
+  <li><b>Random behavior with a self opponent</b> now logs its games; <code>runs.behavior</code> says
+  <code>random</code>.</li>
+</ul>
 
 <h2>Larger than this work</h2>
 <ul>
-  <li><b>A setting within one matchup</b> ("games with Island under closed decklists") has no answer: counts are per update, not per matchup. It would take keying the counter by matchup and settings together, and widening the outcome rows.</li>
-  <li><b>Seat has three spellings</b> in the corpus: <code>position</code> play/draw on outcome rows, <code>play</code>/<code>draw</code> columns on <code>corpus</code>, integer <code>seat</code> on <code>card_statistics</code> and now <code>game_settings</code>. The guide will say seat 0 is on the play. Unifying means rewriting the outcome row format that historical runs share.</li>
-  <li><b><code>skip_trivial</code> is a literal in four constructors.</b> The corpus will read it from the environment, but nothing varies it; it is recorded because the direction asks for it and so a debugging run cannot pass as an ordinary one.</li>
-  <li><b>Stage-varying settings in older runs</b> (behavior, opponent mode) still read NULL. The stage boundaries are in their declarations and could become rows; nobody has asked.</li>
+  <li><b>Seat has three spellings.</b> Unifying on the native seat means a new outcome row format and a
+  reader for the historical one.</li>
+  <li><b>A setting within one matchup</b> ("games with Island under closed decklists"). It would take
+  keying the counter by matchup and settings together and widening the outcome rows.</li>
+  <li><b>Stage-varying facts in older runs</b> (behavior, opponent mode) read NULL in <code>runs</code>.
+  Their stage boundaries are in the declarations and could become per-update rows.</li>
+  <li><b>Statistics across a parent chain</b> stay refused until statistics rows are published as run
+  artifacts (plan item 2).</li>
+  <li><b>Corpus evidence in Etude's query database</b> (plan item 1).</li>
 </ul>
+
+<h2>Not checked here</h2>
+<p>The hosted CI run on <code>335eab23d8</code> was pending at review time; the previous commit's
+training job failed on three scripted test environments that did not state <code>skip_trivial</code>,
+which that commit fixes. Gate owns seeing it green. Locally,
+<code>tests/eval/test_training_corpus.py</code>, <code>tests/training/test_self_play.py</code> and
+<code>tests/training/test_outcome_tables.py</code> were run in this pass.</p>
 
 <h2>Questions</h2>
 <ol>
-  <li>The split. (a) <code>runs</code> + <code>game_settings</code> as proposed. (b) Every setting, model facts included, in one long relation. (c) Keep the per-run <code>settings</code> name.</li>
-  <li>Older <code>mixed</code> runs. (a) No <code>decklists</code> rows: unrecorded, as proposed. (b) Raise <code>UnknownCoverage</code> for the whole corpus. (c) Derive half open, half closed from the balanced draw.</li>
-  <li>Setting within a matchup. (a) Leave for a later Task, as proposed. (b) Key the counter by matchup and settings in this PR.</li>
-  <li><code>skip_trivial</code>. (a) Record it per update with the rest, as proposed. (b) Drop it: it never varies.</li>
+  <li>A run resumed at a revision that adds a setting. (a) Keep the strict sum over every update, as
+  built. (b) Treat an update with no rows for a setting as unrecorded there, and raise only on a
+  partial count.</li>
+  <li>Seat spelling. (a) Leave <code>position</code> on outcome rows and say "seat 0 is on the play" in
+  the guide, as built. (b) File a Task to write outcome rows by native seat.</li>
+  <li>Setting within a matchup. (a) Leave for a later Task, as built. (b) Build it before this PR
+  merges, while the table format is still unpublished.</li>
+  <li><code>skip_trivial</code>. (a) Keep recording it, as built. (b) Drop it: nothing varies it.</li>
 </ol>
