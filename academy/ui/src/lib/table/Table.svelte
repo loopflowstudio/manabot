@@ -940,6 +940,12 @@
   .result-card .fold:hover { color: var(--text); }
 
   .combat-draft { display: grid; gap: 6px; }
+  /* The draft's buttons are the rail's primary and secondary, drawn by the table. */
+  .combat-draft .primary { height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: nowrap; }
+  .combat-draft .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .combat-draft .primary kbd { flex: none; opacity: 1; }
+  .combat-draft .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
+  .combat-draft .secondary { width: 100%; min-height: 32px; padding-block: 5px; justify-content: flex-start; }
   .pile-count { display: flex; align-items: center; gap: 6px; }
   .pile-count span { flex: 1; }
   .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: 5px; font-weight: 700; }
