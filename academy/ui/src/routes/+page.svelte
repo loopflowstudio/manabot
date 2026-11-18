@@ -19,6 +19,7 @@
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
+  import { presentationPlayer } from '$lib/presentation.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
   import {
     connect,
@@ -243,6 +244,16 @@
 
   const onTable = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);
 
+  // Who is deciding while you wait: the opponent's search or policy, or the table itself.
+  const heroSeat = $derived(gameStore.observation?.agent.player_index ?? null);
+  const opponentChoosing = $derived(gameActive && heroSeat !== null && (
+    (gameStore.work?.state === 'running' && (gameStore.work.kind === 'choose' || gameStore.work.kind === 'search')
+      && gameStore.work.chooser !== null && gameStore.work.chooser !== heroSeat)
+    || (tableFrame?.prompt != null && tableFrame.prompt.actor !== heroSeat)));
+  const thinking = $derived(!gameActive ? null
+    : opponentChoosing ? `${opponentIdentity.compact} is choosing…`
+      : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The table is working…' : null);
+
   function winnerText(winner: number | null): string {
     if (winner === null) return 'Draw';
     const name = winner === gameStore.observation?.agent.player_index ? 'You' : opponentIdentity.text;
@@ -321,12 +332,16 @@
       live={participantStudying ? canStudyRetry : canSubmitLive}
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
-      opponent={{ name: opponentIdentity.text, deck: gameStore.deckNames?.villain ?? null }}
+      opponent={{ name: opponentIdentity.compact, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
       stops={gameStore.stops}
       connection={gameStore.connection}
       connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
       log={gameStore.actionLog}
       {canPassTurn}
+      presentation={presentationPlayer}
+      {thinking}
+      {opponentChoosing}
+      interrupted={gameStore.resumeFailed}
       onact={handleActionSelect}
       onpassturn={handlePassTurn}
       {notices}

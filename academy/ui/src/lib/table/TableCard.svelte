@@ -20,7 +20,12 @@
     asked?: boolean;
     /** The side of the centre line this card sits on; attacks lean toward it. */
     toward?: 'up' | 'down' | null;
-    caption?: string | null;
+    /** The name of the attacker this permanent blocks; the line on the table draws it. */
+    blocks?: string | null;
+    /** Whose plate a card new to the table travels from. */
+    side?: 'you' | 'opponent';
+    /** It attacked, blocked, was dealt damage or was targeted since your last move. */
+    touched?: boolean;
     /** Copies in this card's pile, shown on the top copy. */
     count?: number | null;
     onactivate?: (element: HTMLElement) => void;
@@ -29,7 +34,7 @@
 
   let {
     name, width, permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, caption = null, count = null, onactivate, onpreview,
+    toward = null, blocks = null, side = 'you', touched = false, count = null, onactivate, onpreview,
   }: Props = $props();
 
   const height = $derived(Math.round(width / CARD_RATIO));
@@ -57,7 +62,7 @@
     tapped ? 'tapped' : '',
     permanent?.summoning_sick && creature ? 'summoning sick' : '',
     permanent?.attacking ? 'attacking' : '',
-    permanent?.blocking !== undefined ? 'blocking' : '',
+    permanent?.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
     permanent?.damage ? `${permanent.damage} damage` : '',
     ...counters.map(([kind, count]) => `${count} ${kind} counter${count === 1 ? '' : 's'}`),
     permanent?.is_token ? 'token' : '',
@@ -86,7 +91,11 @@
     class:asked
     class:attacking={permanent?.attacking}
     class:has-art={art !== null}
+    class:touched
     data-testid="table-card"
+    data-travel-id={permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
+    data-travel-name={name}
+    data-travel-side={side}
     data-object-id={permanent?.id ?? card?.id}
     data-offer-count={offers.length}
     data-card-name={name}
@@ -114,13 +123,13 @@
     {#if offers.length > 1 && live}<span class="many" aria-hidden="true">{offers.length}</span>{/if}
   </button>
   {#if count}<span class="count" aria-hidden="true" style:top={`${tapped ? Math.round((height - width) / 2) + 3 : 3}px`}>×{count}</span>{/if}
-  {#if caption}<span class="caption type-label" aria-hidden="true">{caption}</span>{/if}
 </div>
 
 <style>
   .slot { position: relative; flex: none; display: grid; place-items: center; transition: transform var(--motion-move) var(--motion-move-ease); }
-  .slot.lean-up { transform: translateY(-14px); }
-  .slot.lean-down { transform: translateY(14px); }
+  /* An attacker steps toward the player it attacks: a fifth of its height, less when lines are stacked. */
+  .slot.lean-up { transform: translateY(calc(-1 * var(--lean, 20%))); }
+  .slot.lean-down { transform: translateY(var(--lean, 20%)); }
   .tcard {
     position: relative; display: block; overflow: hidden; padding: 0; cursor: pointer;
     border-radius: max(4px, 6%); border: 1px solid rgb(20 14 8 / 0.55);
@@ -132,6 +141,7 @@
   .tapped .tcard.has-art { filter: saturate(0.55) brightness(0.92); }
   .tcard:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
   .tcard.attacking { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 6px 14px rgb(20 14 8 / 0.3); }
+  .tcard.touched { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 1px 2px rgb(20 14 8 / 0.25); }
   .tcard.legal { box-shadow: 0 0 0 2px var(--legal), 0 0 12px color-mix(in srgb, var(--legal) 45%, transparent); }
   .tcard.legal:hover { box-shadow: 0 0 0 3px var(--legal), 0 0 16px color-mix(in srgb, var(--legal) 60%, transparent); }
   .tcard.asked { box-shadow: 0 0 0 2px var(--accent), 0 8px 18px rgb(20 14 8 / 0.35); transform: translateY(-8px); }
@@ -167,10 +177,6 @@
     position: absolute; top: 3px; left: 3px; right: 3px; padding: 0 4px; border-radius: 4px; text-align: left;
     font-family: var(--font-sans); font-size: 9.5px; font-weight: 700; line-height: 14px;
     color: #f8f1e0; background: rgb(12 9 5 / 0.72); white-space: nowrap; overflow: hidden;
-  }
-  .caption {
-    position: absolute; left: 50%; bottom: -2px; transform: translate(-50%, 100%); white-space: nowrap;
-    color: var(--text-secondary); pointer-events: none;
   }
   @media (prefers-reduced-motion: reduce) {
     .slot, .tcard { transition: none; }

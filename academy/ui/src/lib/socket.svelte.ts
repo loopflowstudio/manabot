@@ -22,6 +22,7 @@ import type {
 import type {
   ClientMessage,
   FrameUpdate,
+  LogLine,
   LaunchSetup,
   RecoveryEnvelope,
   ExperienceFrame,
@@ -652,7 +653,6 @@ export class GameSocketController {
           sessionId,
           resumeToken,
           message.log ?? [],
-          message.auto_passed ?? 0,
         );
         this.reconcileCommand(message.recovery);
       } else if (message.type === 'observation') {
@@ -663,7 +663,6 @@ export class GameSocketController {
           message.resume_token,
           message.log ?? [],
           message.stops,
-          message.auto_passed ?? 0,
           message.deck_names,
           message.action_space ?? '',
         );
@@ -673,7 +672,6 @@ export class GameSocketController {
           message.winner,
           message.log ?? [],
           message.stops,
-          message.auto_passed ?? 0,
           message.deck_names,
         );
       }
@@ -831,7 +829,6 @@ export class GameSocketController {
     gameStore.applyFrame({
       ...update.frame,
       ...(update.log ? { log: update.log } : {}),
-      ...(update.auto_passed ? { auto_passed: update.auto_passed } : {}),
     });
     try {
       validatePresentationUpdate(
@@ -861,8 +858,7 @@ export class GameSocketController {
     recovery: RecoveryEnvelope,
     sessionId?: string,
     resumeToken?: string,
-    log: string[] = [],
-    autoPassed = 0,
+    log: LogLine[] = [],
   ): void {
     const current = gameStore.protocolFrame;
     const next = recovery.frame;
@@ -889,7 +885,6 @@ export class GameSocketController {
       {
         ...next,
         ...(log.length > 0 ? { log } : {}),
-        ...(autoPassed > 0 ? { auto_passed: autoPassed } : {}),
       },
       sessionId,
       resumeToken,

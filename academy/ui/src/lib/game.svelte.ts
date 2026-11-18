@@ -26,6 +26,7 @@ import type {
   Decklists,
   ExperienceFrame,
   GameLogEntry,
+  LogLine,
   Observation,
   OpponentConfig,
   StopsConfig,
@@ -329,9 +330,8 @@ export class GameStore {
     actions: ActionOption[],
     sessionId?: string,
     resumeToken?: string,
-    log: string[] = [],
+    log: LogLine[] = [],
     stops?: StopsConfig,
-    autoPassed = 0,
     deckNames?: DeckNames,
     actionSpaceKind = '',
     deriveNotes = true,
@@ -360,10 +360,9 @@ export class GameStore {
       this.resumeToken = resumeToken;
     }
 
-    this.appendLogLines('villain', log);
-    this.appendAutoPassNote(autoPassed);
+    this.appendServerLog(log);
     if (deriveNotes) {
-      this.appendLogLines('system', deriveObservationNotes(previous, observation));
+      this.appendNotes(deriveObservationNotes(previous, observation));
     }
   }
 
@@ -386,7 +385,6 @@ export class GameStore {
         frame.winner,
         frame.log ?? [],
         frame.stops,
-        frame.auto_passed ?? 0,
         frame.deck_names,
         false,
       );
@@ -398,7 +396,6 @@ export class GameStore {
         resumeToken,
         frame.log ?? [],
         frame.stops,
-        frame.auto_passed ?? 0,
         frame.deck_names,
         frame.action_space,
         false,
@@ -409,9 +406,8 @@ export class GameStore {
   applyGameOver(
     observation: Observation,
     winner: number | null,
-    log: string[] = [],
+    log: LogLine[] = [],
     stops?: StopsConfig,
-    autoPassed = 0,
     deckNames?: DeckNames,
     deriveNotes = true,
   ): void {
@@ -431,10 +427,9 @@ export class GameStore {
     this.applyServerStops(stops);
     this.applyDeckNames(deckNames);
 
-    this.appendLogLines('villain', log);
-    this.appendAutoPassNote(autoPassed);
+    this.appendServerLog(log);
     if (deriveNotes) {
-      this.appendLogLines('system', deriveObservationNotes(previous, observation));
+      this.appendNotes(deriveObservationNotes(previous, observation));
     }
   }
 
@@ -464,10 +459,11 @@ export class GameStore {
     this.resumeToken = null;
   }
 
+  /** The person's own move, in the turn of the decision it answered. */
   appendHeroAction(description: string): void {
     this.actionLog = [
       ...this.actionLog,
-      this.createEntry('hero', `Hero: ${description}`),
+      this.createEntry('hero', this.observation?.turn.turn_number ?? null, description),
     ];
   }
 
@@ -503,16 +499,6 @@ export class GameStore {
     }
   }
 
-  private appendAutoPassNote(autoPassed: number): void {
-    if (autoPassed <= 0) {
-      return;
-    }
-    const windows = autoPassed === 1 ? 'window' : 'windows';
-    this.appendLogLines('system', [
-      `Auto-passed ${autoPassed} priority ${windows}.`,
-    ]);
-  }
-
   private resetMatchState(): void {
     this.interruptedIdentity = null;
     this.searchRetry = null;
@@ -536,23 +522,21 @@ export class GameStore {
     this.branchProjection = null;
   }
 
-  private appendLogLines(actor: GameLogEntry['actor'], lines: string[]): void {
-    if (lines.length === 0) {
-      return;
-    }
-
-    this.actionLog = [
-      ...this.actionLog,
-      ...lines.map((line) => this.createEntry(line.startsWith('Auto: ') ? 'system' : actor, line)),
-    ];
+  /** Opponent and automated moves, each in the turn the server says it was taken. */
+  private appendServerLog(lines: LogLine[]): void {
+    if (lines.length === 0) return;
+    this.actionLog = [...this.actionLog, ...lines.map(line => this.createEntry(line.actor, line.turn, line.text))];
   }
 
-  private createEntry(
-    actor: GameLogEntry['actor'],
-    text: string,
-  ): GameLogEntry {
+  private appendNotes(notes: string[]): void {
+    if (notes.length === 0) return;
+    const turn = this.observation?.turn.turn_number ?? null;
+    this.actionLog = [...this.actionLog, ...notes.map(note => this.createEntry('system', turn, note))];
+  }
+
+  private createEntry(actor: GameLogEntry['actor'], turn: number | null, text: string): GameLogEntry {
     this.logSequence += 1;
-    return { id: `log-${this.logSequence}`, actor, text };
+    return { id: `log-${this.logSequence}`, actor, turn, text };
   }
 }
 

@@ -14,11 +14,14 @@
     offers: PlacedOffer[];
     live: boolean;
     active: boolean;
+    /** Set while this player is choosing: "choosing…". */
+    choosing?: boolean;
+    side: 'you' | 'opponent';
     onactivate: (element: HTMLElement) => void;
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
   }
 
-  let { player, name, deck, offers, live, active, onactivate, onzone }: Props = $props();
+  let { player, name, deck, offers, live, active, choosing = false, side, onactivate, onzone }: Props = $props();
 
   const hand = $derived(player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length);
   const zones = $derived([
@@ -31,7 +34,7 @@
   const label = $derived(`${name}, ${player.life} life${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
-<section class="plate" class:active aria-label={`${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index}>
+<section class="plate" class:active aria-label={`${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
   <button
     type="button"
     class="who"
@@ -43,6 +46,7 @@
   >
     <span class="type-title text-display block truncate">{name}</span>
     {#if deck}<span class="type-caption block truncate text-ink-2">{deck}</span>{/if}
+    {#if choosing}<span class="type-rubric choosing" data-testid="plate-choosing"><i aria-hidden="true"></i>choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-rubric text-ink-3">life</span></span>
   </button>
   <ul class="zones">
@@ -68,6 +72,10 @@
   .who { display: block; text-align: left; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; background: none; border: 0; color: inherit; }
   .who:disabled { cursor: default; }
   .who.legal { box-shadow: 0 0 0 2px var(--legal); cursor: pointer; }
+  .choosing { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--warning-text, var(--text-secondary)); }
+  .choosing i { width: 6px; height: 6px; border-radius: 3px; background: var(--warning); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { .choosing i { animation: none; } }
   .life { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
   .numeral { font-family: var(--font-serif); font-size: 34px; font-weight: 600; line-height: 36px; color: var(--text); font-variant-numeric: tabular-nums; }
   .zones { display: grid; grid-template-columns: 1fr; gap: 3px; margin: 0; }

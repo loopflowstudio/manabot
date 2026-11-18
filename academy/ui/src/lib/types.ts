@@ -414,7 +414,7 @@ export interface ExperienceFrame {
   stops: StopsConfig;
   deck_names?: DeckNames;
   asset_pack?: AssetPackReference | null;
-  log?: string[];
+  log?: LogLine[];
   auto_passed?: number;
 }
 
@@ -537,7 +537,7 @@ export interface FrameUpdate {
   presentation: PresentationEvent[];
   receipt: CommandReceipt | null;
   /** Compatibility narration stays outside the immutable canonical frame. */
-  log?: string[];
+  log?: LogLine[];
   auto_passed?: number;
 }
 
@@ -581,9 +581,19 @@ export interface CommandRejection {
   current_prompt: number | null;
 }
 
+/** One line of the server's narration: an opponent or automated action, in the turn it was taken. */
+export interface LogLine {
+  actor: 'villain' | 'auto';
+  turn: number;
+  text: string;
+}
+
+/** One move of the table's log; automation is its own actor, never the person's. */
 export interface GameLogEntry {
   id: string;
-  actor: 'hero' | 'villain' | 'system';
+  actor: 'hero' | 'villain' | 'auto' | 'system';
+  /** The turn the move was made in; null for notes outside any turn. */
+  turn: number | null;
   text: string;
 }
 
@@ -782,7 +792,7 @@ export type ServerMessage = (
       // ActionSpaceEnum name (PRIORITY, SCRY, PAY_OR_NOT, MODAL, ...) — what
       // kind of decision the hero is being asked to make.
       action_space?: string;
-      log?: string[];
+      log?: LogLine[];
       stops?: StopsConfig;
       deck_names?: DeckNames;
       asset_pack?: AssetPackReference | null;
@@ -796,7 +806,7 @@ export type ServerMessage = (
       type: 'game_over';
       data: Observation;
       winner: number | null;
-      log?: string[];
+      log?: LogLine[];
       stops?: StopsConfig;
       deck_names?: DeckNames;
       asset_pack?: AssetPackReference | null;

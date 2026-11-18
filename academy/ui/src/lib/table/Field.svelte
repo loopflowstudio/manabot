@@ -13,6 +13,8 @@
     limits: RowLimits;
     live: boolean;
     asked: Set<number>;
+    /** Permanents that acted or were acted on since your last move. */
+    touched: Set<number>;
     toward: 'up' | 'down';
     align?: 'start' | 'end';
     names: Map<number, string>;
@@ -20,7 +22,7 @@
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
+  let { piles, label, limits, live, asked, touched, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
 
   let width = $state(0);
   let height = $state(0);
@@ -28,9 +30,9 @@
   const fit = $derived(fitRow(pileCounts(piles), width - 2, height, limits));
   const cardHeight = $derived(Math.round(fit.card * 7 / 5));
 
-  function blockCaption(item: PermanentItem): string | null {
-    const blocked = item.permanent.blocking;
-    return blocked === undefined ? null : `blocks ${names.get(blocked) ?? 'attacker'}`;
+  function blocked(item: PermanentItem): string | null {
+    const attacker = item.permanent.blocking;
+    return attacker === undefined ? null : names.get(attacker) ?? null;
   }
 </script>
 
@@ -45,6 +47,7 @@
   data-testid="field-row"
   data-card-width={fit.card}
   data-lines={fit.lines}
+  style:--lean={fit.lines > 1 ? '8%' : '20%'}
 >
   {#if width > 0}
     {#each piles as pile (pile.key)}
@@ -60,9 +63,11 @@
               offers={item.offers}
               {live}
               asked={asked.has(item.permanent.id)}
+              touched={touched.has(item.permanent.id)}
+              side={toward === 'up' ? 'you' : 'opponent'}
               {toward}
               count={index === 0 && pile.items.length > 1 ? pile.items.length : null}
-              caption={blockCaption(item)}
+              blocks={blocked(item)}
               onactivate={element => onactivate(item, element)}
               onpreview={element => onpreview(element ? item : null, element)}
             />

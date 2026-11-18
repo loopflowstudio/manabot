@@ -4,14 +4,23 @@
    * legal offer are outlined and clicking one commits its single offer or
    * opens its several at the card. The rail repeats every offer by number.
    *
-   * The table owns only presentation state (open menus, the preview). It
-   * commits nothing itself: `onact` receives the exact offer a person chose,
-   * and the caller binds it to the frame's revision as one Command.
+   * The table owns only presentation state (open menus, the preview, where
+   * cards were drawn a moment ago, and the revision of the person's last move,
+   * which scopes "since your last move"). It commits nothing itself: `onact`
+   * receives the exact offer a person chose, and the caller binds it to the
+   * frame's revision as one Command. What happened is read from the
+   * authority's presentation events; motion only shows it.
    */
   import { onMount, type Snippet } from 'svelte';
+  import type { PresentationPlayer } from '$lib/presentation.svelte';
   import { artUrl, loadArt } from '$lib/card-art';
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig } from '$lib/types';
   import Field from './Field.svelte';
+  import Lines from './Lines.svelte';
+  import { prefersReducedMotion, Travel } from './motion';
+  import { moveList } from './moves';
+  import { promptLine } from './prompt';
+  import { nameBook, recentView, tableLines, turnOwners, visibleNames } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
   import TableCard from './TableCard.svelte';
@@ -23,12 +32,20 @@
     live: boolean;
     status: string;
     you: { name: string; deck: string | null };
-    opponent: { name: string; deck: string | null };
+    opponent: { name: string; deck: string | null; description?: string };
     stops: StopsConfig;
     connection: ConnectionState;
     connectionLabel: string;
     log: GameLogEntry[];
     canPassTurn: boolean;
+    /** The live presentation track: what happened, as the authority reports it. */
+    presentation: PresentationPlayer;
+    /** Set while the opponent is choosing, or the table is working, in words. */
+    thinking: string | null;
+    /** The opponent is the one choosing now. */
+    opponentChoosing: boolean;
+    /** The live session is gone; offers are the last recorded decision's. */
+    interrupted: boolean;
     onact: (offer: InteractionOffer) => void;
     onpassturn: () => void;
     notices?: Snippet;
@@ -36,7 +53,10 @@
     menu?: Snippet;
   }
 
-  let { frame, live, status, you, opponent, stops, connection, connectionLabel, log, canPassTurn, onact, onpassturn, notices, result, menu }: Props = $props();
+  let {
+    frame, live, status, you, opponent, stops, connection, connectionLabel, log, canPassTurn,
+    presentation, thinking, opponentChoosing, interrupted, onact, onpassturn, notices, result, menu,
+  }: Props = $props();
 
   // The table is the whole screen; the page behind it must not scroll.
   onMount(() => {
@@ -54,7 +74,31 @@
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])));
   const whose = $derived(frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
-      : frame.prompt.actor === projection.agent.player_index ? (live ? 'Your decision' : 'Your decision · waiting') : "Opponent's decision");
+      : frame.prompt.actor === projection.agent.player_index ? (live ? 'Your decision' : 'Your decision · waiting') : `${opponent.name}'s decision`);
+  const line = $derived(promptLine(frame, view));
+
+  // ———————————————— What happened since your last move
+
+  // The revision your last move was made at; events after it are "since your last move".
+  let since = $state.raw<{ revision: number; frame: ExperienceFrame; logLength: number } | null>(null);
+  const players = $derived({ you: you.name, opponent: opponent.name });
+  const book = $derived(nameBook(since ? [since.frame, frame] : [frame], since ? log.slice(since.logLength) : []));
+  const recent = $derived(recentView(frame, since?.revision ?? null, presentation.events, index => presentation.labelsAt(index), players, book));
+  const lines = $derived(tableLines(frame, presentation.events, recent.resolved));
+  const moves = $derived(moveList(log, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
+
+  // ———————————————— Motion
+
+  let root = $state<HTMLElement | null>(null);
+  const travel = new Travel();
+  $effect.pre(() => {
+    void frame.revision;
+    travel.snapshot(root);
+  });
+  $effect(() => {
+    void frame.revision;
+    travel.play(root, prefersReducedMotion());
+  });
 
   const CREATURES: RowLimits = { gap: 8, minCard: 40, maxCard: 132, maxLines: 3 };
   const SUPPORT: RowLimits = { gap: 8, minCard: 36, maxCard: 104, maxLines: 2 };
@@ -99,7 +143,14 @@
   function act(placed: PlacedOffer): void {
     if (!live) return;
     menuAt = null;
+    since = { revision: frame.revision, frame, logLength: log.length };
     onact(placed.offer);
+  }
+
+  function passTurn(): void {
+    if (!canPassTurn) return;
+    since = { revision: frame.revision, frame, logLength: log.length };
+    onpassturn();
   }
 
   function activate(title: string, offers: PlacedOffer[], element: HTMLElement): void {
@@ -135,8 +186,13 @@
   function onStack(item: StackItem, element: HTMLElement): void {
     activate(item.entry.label, item.offers, element);
   }
-  function previewStack(item: StackItem | null, element: HTMLElement | null): void {
-    show(item?.card?.name ?? null, item?.card?.text_box ?? null, element);
+
+  /** Rules text for a name in the log, from any card of that name this viewer can see. */
+  function textOf(name: string): string | null {
+    const players = [projection.agent, projection.opponent];
+    const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).find(candidate => candidate.name === name);
+    const permanent = players.flatMap(player => player.battlefield).find(candidate => candidate.name === name);
+    return card?.text_box ?? permanent?.text_box ?? null;
   }
   function openZone(title: string, cards: CardState[], element: HTMLElement): void {
     const rect = element.getBoundingClientRect();
@@ -145,6 +201,14 @@
 
   // ———————————————— Hand
 
+  // The hand yields height to the board: an empty hand is a label, a short
+  // hand or a crowded board gets a lower strip, and only a full hand on a
+  // sparse board gets the full one.
+  const boardCount = $derived(projection.agent.battlefield.length + projection.opponent.battlefield.length);
+  const handTrack = $derived(view.hand.length === 0 ? '30px'
+    : boardCount >= 24 ? 'clamp(92px, 14vh, 128px)'
+      : boardCount >= 14 || view.hand.length <= 2 ? 'clamp(104px, 17vh, 160px)'
+        : 'clamp(118px, 21vh, 190px)');
   let handWidth = $state(0);
   let handHeight = $state(0);
   const handCard = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
@@ -168,7 +232,7 @@
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
     if (event.key === 'Escape') { menuAt = null; zoneAt = null; preview = null; return; }
-    if (event.key === 'F6') { event.preventDefault(); if (canPassTurn) onpassturn(); return; }
+    if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
@@ -183,13 +247,13 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live}>
+<div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
       <span class="text-ink">You</span>{#if you.deck}<span class="text-ink-3"> · {you.deck}</span>{/if}
       <span class="text-ink-3"> vs </span>
-      <span class="text-ink">{opponent.name}</span>{#if opponent.deck}<span class="text-ink-3"> · {opponent.deck}</span>{/if}
+      <span class="text-ink" title={opponent.description}>{opponent.name}</span>{#if opponent.deck}<span class="text-ink-3"> · {opponent.deck}</span>{/if}
     </p>
     <nav class="track" aria-label={`Turn ${projection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}`}>
       <span class="type-rubric turn" data-testid="turn-number">Turn {projection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</span>
@@ -212,21 +276,21 @@
     </div>
   </header>
 
-  <div class="board" id="table-board" aria-label="Board">
+  <div class="board" id="table-board" aria-label="Board" style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
     <section class="half opponent" aria-label={`${opponent.name}'s battlefield`}>
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live}
-        active={!yourTurn} onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
+        active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="half you" aria-label="Your battlefield">
       <Plate player={projection.agent} name={you.name} deck={you.deck} offers={view.you.offers} {live}
-        active={yourTurn} onactivate={element => activate(you.name, view.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
+        active={yourTurn} side="you" onactivate={element => activate(you.name, view.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} touched={recent.touched} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
@@ -266,10 +330,13 @@
   </div>
 
   <div class="rail-slot" id="table-choices">
-    <Rail {view} {frame} {live} {status} {whose} {canPassTurn} {log} onact={act} {onpassturn}
-      onstack={onStack} onpreviewstack={previewStack} {notices} {result} />
+    <Rail {view} {frame} {live} {line} {status} {whose} {thinking} {interrupted} {canPassTurn} {recent} {moves}
+      opponentName={opponent.name} onact={act} onpassturn={passTurn}
+      onstack={onStack} onpreviewname={(name, element) => show(name, name ? textOf(name) : null, element)} {notices} {result} />
   </div>
 </div>
+
+<Lines {lines} {root} revision={frame.revision} />
 
 {#if menuAt}
   <div class="menu" role="menu" tabindex="-1" aria-label={`Choices for ${menuAt.title}`} bind:this={menuElement} data-testid="card-menu"
@@ -336,7 +403,7 @@
 
   .board {
     position: relative; min-height: 0; min-width: 0; display: grid;
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) clamp(118px, 21vh, 190px);
+    transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
   }
   .half { display: grid; grid-template-columns: 148px minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); }
   .half.opponent { background: color-mix(in srgb, var(--bg-muted) 55%, var(--bg)); }
@@ -369,6 +436,8 @@
     position: fixed; z-index: 300; min-width: 220px; max-width: 320px; padding: 8px; display: grid; gap: 2px;
     border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
+  .menu, .preview { animation: open var(--motion-fast) ease-out; transform-origin: top left; }
+  @keyframes open { from { opacity: 0; transform: scale(0.97); } }
   .menu p { padding: 0 6px 4px; }
   .menu button { display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; border-radius: 5px; font-size: 13.5px; color: var(--text); width: 100%; }
   .menu button:hover, .menu button:focus-visible { background: var(--bg-field); outline: 1px solid var(--border-strong); }
@@ -381,6 +450,7 @@
   .preview-text { padding: 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised); display: grid; gap: 6px; white-space: pre-line; }
 
   @media (prefers-reduced-motion: reduce) {
-    .hand-card { transition: none; }
+    .hand-card, .board { transition: none; }
+    .menu, .preview { animation: none; }
   }
 </style>

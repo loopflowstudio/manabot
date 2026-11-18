@@ -851,6 +851,14 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
                 resources.callback(policy.close)
 
 
+class LogEntry(TypedDict):
+    """One line of compatibility narration: an opponent or automated action."""
+
+    actor: Literal["villain", "auto"]
+    turn: int
+    text: str
+
+
 class PendingBotDecision(TypedDict):
     code: str
     message: str
@@ -906,7 +914,7 @@ class GameSession:
         self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
-        self._pending_action_log: list[str] = []
+        self._pending_action_log: list[LogEntry] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
         self.stops: dict[str, list[str]] = {
             side: list(steps) for side, steps in DEFAULT_STOPS.items()
@@ -1683,11 +1691,16 @@ class GameSession:
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(next_obs, event_subjects=event_subjects)
-        if auto:
-            # Priority-stop automation stays identifiable in the hero's log.
-            self._pending_action_log.append(f"Auto: {action_description}")
-        elif actor == "villain":
-            self._pending_action_log.append(f"Villain: {action_description}")
+        if auto or actor == "villain":
+            # Priority-stop automation stays identifiable in the hero's log; the
+            # turn is the one the action was taken in, before the step.
+            self._pending_action_log.append(
+                {
+                    "actor": "auto" if auto else "villain",
+                    "turn": int(before_observation.turn.turn_number),
+                    "text": action_description,
+                }
+            )
         self.trace.events.append(
             TraceEvent(
                 actor=actor,
@@ -1933,7 +1946,7 @@ class GameSession:
             "auto_pass": self.auto_pass,
         }
 
-    def _drain_pending_action_log(self) -> list[str]:
+    def _drain_pending_action_log(self) -> list[LogEntry]:
         pending = list(self._pending_action_log)
         self._pending_action_log = []
         return pending

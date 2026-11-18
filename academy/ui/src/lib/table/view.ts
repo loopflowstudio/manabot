@@ -236,6 +236,13 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
   return items.reverse();
 }
 
+/** A stack entry's short name: a spell's name, or "X's trigger" / "X's ability" for an ability of X. */
+export function stackName(entry: StackEntryView): string {
+  if (entry.kind === 'spell') return entry.label;
+  const source = entry.label.split(' — ')[0];
+  return `${source}'s ${entry.kind.includes('trigger') ? 'trigger' : 'ability'}`;
+}
+
 // ———————————————————————————————————————— The view
 
 export function tableView(frame: ExperienceFrame): TableView {

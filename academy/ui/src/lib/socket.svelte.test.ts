@@ -311,15 +311,13 @@ describe('GameSocketController presentation seam', () => {
         frame: frameAt(43),
         presentation: LIGHTNING_BOLT_PRESENTATION.events,
         receipt: null,
-        log: ['Villain: Pass priority'],
+        log: [{ actor: 'villain', turn: 4, text: 'Pass priority' }],
         auto_passed: 2,
       },
     });
 
-    expect(gameStore.actionLog.map(({ text }) => text)).toContain('Villain: Pass priority');
-    expect(gameStore.actionLog.map(({ text }) => text).join('\n')).toContain(
-      'Auto-passed 2 priority windows.',
-    );
+    expect(gameStore.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text })))
+      .toContainEqual({ actor: 'villain', turn: 4, text: 'Pass priority' });
   });
 
   it('commits the FrameUpdate before enqueueing its semantic events', () => {

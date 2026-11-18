@@ -129,16 +129,15 @@ describe('GameStore', () => {
     expect(store.gameOver).toBe(false);
   });
 
-  it('accumulates authoritative log entries from hero and villain actions', () => {
+  it('records each move with its actor and the turn it was made in', () => {
     const store = createGameStore();
-    const observation = makeObservation();
-
+    store.applyObservation(makeObservation(), []);
     store.appendHeroAction('Play land: Mountain');
-    store.applyObservation(observation, [], undefined, undefined, ['Villain: Pass priority']);
+    store.applyObservation(makeObservation(), [], undefined, undefined, [{ actor: 'villain', turn: 2, text: 'Pass priority' }]);
 
-    expect(store.actionLog.map((entry) => entry.text)).toEqual([
-      'Hero: Play land: Mountain',
-      'Villain: Pass priority',
+    expect(store.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text }))).toEqual([
+      { actor: 'hero', turn: 1, text: 'Play land: Mountain' },
+      { actor: 'villain', turn: 2, text: 'Pass priority' },
     ]);
   });
 
@@ -296,7 +295,6 @@ describe('GameStore', () => {
       undefined,
       [],
       undefined,
-      0,
       { hero: 'UR Lessons', villain: 'GW Allies' },
     );
 
@@ -306,7 +304,7 @@ describe('GameStore', () => {
     });
   });
 
-  it('narrates auto-passed windows and clears the fast-forward flag', () => {
+  it('logs automated moves as automation and clears the fast-forward flag', () => {
     const store = createGameStore();
     store.beginFastForward();
     expect(store.fastForwarding).toBe(true);
@@ -316,18 +314,14 @@ describe('GameStore', () => {
       [],
       undefined,
       undefined,
-      ['Villain: Cast Grey Ogre', 'Auto: Choose red'],
-      undefined,
-      3,
+      [{ actor: 'villain', turn: 3, text: 'Cast Grey Ogre' }, { actor: 'auto', turn: 3, text: 'Choose red' }],
     );
 
     expect(store.fastForwarding).toBe(false);
-    expect(store.actionLog.map((entry) => entry.text)).toEqual([
-      'Villain: Cast Grey Ogre',
-      'Auto: Choose red',
-      'Auto-passed 3 priority windows.',
+    expect(store.actionLog.map(({ actor, text }) => [actor, text])).toEqual([
+      ['villain', 'Cast Grey Ogre'],
+      ['auto', 'Choose red'],
     ]);
-    expect(store.actionLog[1].actor).toBe('system');
   });
 });
 
