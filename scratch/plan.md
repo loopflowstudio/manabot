@@ -28,6 +28,16 @@ a string path crashed; a storage without the run said "resolved training
 decks are unknown". Hosted CI at that commit: 21 passed, none failed, Academy
 UI, Engine Budget and Integration (evaluation) still pending.
 
+Ninth concept review at `225d2d4212` (`scratch/concept-review.html`): nothing
+to change. "This checkpoint" and "which seat" now each have one owner. Kept as
+counterexamples, not work: the corpus reader trusts a file's header for its
+run and update and never compares bytes with a registered checkpoint (the raw
+policy is not registered); the evaluation card page still filters by
+`position` play/draw, outside this PR. Run in that pass:
+`tests/eval/test_training_corpus.py`, `tests/training/test_outcome_tables.py`,
+`tests/training/test_self_play.py`, 17 passed. Hosted CI at that commit: 2
+passed, 17 pending, none failed when read.
+
 Next: item 5, the gate step: the red Academy UI job, then publish to #558 and
 stop at human review. Nothing else remains to implement.
 

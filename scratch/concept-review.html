@@ -7,88 +7,89 @@
   body { font: 16px/1.5 Georgia, serif; color:var(--fg); background:var(--bg); max-width: 60rem;
          margin: 2rem auto; padding: 0 1.2rem; }
   h1 { font-size: 1.6rem; } h2 { font-size: 1.2rem; margin-top: 2.2rem; border-bottom:1px solid var(--line); }
+  h3 { font-size: 1rem; margin-bottom:.3rem; }
   code, pre { font: 13px/1.45 ui-monospace, Menlo, monospace; }
   pre { background:var(--card); border:1px solid var(--line); padding:.7rem .9rem; overflow-x:auto; }
   table { border-collapse: collapse; width:100%; margin:.8rem 0; }
   th, td { text-align:left; vertical-align:top; padding:.45rem .6rem; border-bottom:1px solid var(--line); }
   th { font-weight:600; color:var(--mute); font-size:.85rem; }
   .yes { color:var(--yes); font-weight:700; } .no { color:var(--no); font-weight:700; }
-  .new { background:var(--newbg); border-left:3px solid var(--new); padding:.1rem .8rem; margin:.8rem 0; }
-  .tag { font: 11px ui-monospace, monospace; color:var(--new); border:1px solid var(--new); padding:0 .3rem; border-radius:3px; }
-  .mute { color:var(--mute); }
+  .box { background:var(--newbg); border-left:3px solid var(--new); padding:.1rem .8rem; margin:.8rem 0; }
+  .tag { font: 11px ui-monospace, monospace; border:1px solid currentColor; padding:0 .3rem; border-radius:3px; }
+  .built { color:var(--yes); } .prop { color:var(--new); }
+  .meta, .mute { color:var(--mute); font-size:.9rem; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; } @media (max-width:40rem){ .two{grid-template-columns:1fr;} }
+  .scroll { overflow-x:auto; }
 </style></head><body><main>
-<p class="meta">MTG-353 · concept review with a person · 2026-11-18 · PR #558 at d7cd488fba against main · 99 files, +10,814 (about 4,000 are stored catalogs and fixtures)<br>Read: the PR diff by file, manabot/eval/training_corpus.py, manabot/training/corpus.py, manabot/model/interface.py, manabot/sim/registration.py, docs/evaluation.md, the eighth graph review (in git at 309ed9febe), CI. No tests run in this pass.</p>
+<p class="meta">MTG-353 · concept review in the graph, nobody present · 2026-11-18 · PR #558 at 225d2d4212 against main<br>
+Read: the changes since d7cd488fba, <code>manabot/eval/training_corpus.py</code>, <code>manabot/reports/update_metrics.py</code>, <code>manabot/training/rollout/self_play.py</code>, the corpus section of <code>docs/evaluation.md</code>, the previous page (in git at d7cd488fba). Run: <code>tests/eval/test_training_corpus.py</code>, <code>tests/training/test_outcome_tables.py</code>, <code>tests/training/test_self_play.py</code>, 17 passed.</p>
 <h1>Can I use this trained player for my next experiment?</h1>
-<p class="lead">Area taken: everything a person does with a player after its run ends, as PR #558 now leaves it. The PR began as "old checkpoints keep loading" and now also records and queries what a player trained on, so the whole of that is the area, not only the last settings change.</p>
-<p><strong>Outcome: the concepts are right, and one join is missing.</strong> Each of the four things a person asks has one owner in the code. What does not line up is the object they hold: a person holds a checkpoint file, and the corpus is reached from an Etude run.</p>
-<p class="muted"><span class="tag built">built</span> is in the PR. <span class="tag prop">proposed</span> is not.</p>
+<p>Area taken: everything a person does with a player after its run ends, as PR #558 leaves it with the third human review's two changes built (the corpus from a checkpoint file, one seat spelling). The whole area, not only those two changes.</p>
+<p><strong>Outcome: nothing to change.</strong> The two mismatches the last page marked "no" and the person chose to fix now line up. The third was deferred by the person and stays as it was.</p>
+<p class="mute"><span class="tag built">built</span> is in the PR. <span class="tag prop">proposed</span> is not; nothing on this page is proposed for this PR.</p>
 
 <h2>One interaction, walked</h2>
-<p>"I want to start a deckbuilding experiment from last month's best player. Can I?"</p>
-<div class="scroll"><table>
-<tr><th>What they ask</th><th>Where the answer is</th><th>How they get it</th></tr>
-<tr><td>Does it load and play here?</td><td>The loader</td><td>Load it. It plays, or it refuses with one sentence naming the cause. <span class="tag built">built</span></td></tr>
-<tr><td>Did it train on these decks and cards?</td><td><code>corpus</code>, <code>deck_cards</code></td><td>SQL on the training corpus. <span class="tag built">built</span></td></tr>
-<tr><td>Did it train under these decision settings?</td><td><code>runs</code>, <code>game_settings</code></td><td>SQL: always, what share, changed at which update. <span class="tag built">built</span></td></tr>
-<tr><td>Can its numbers be lined up with mine?</td><td>A rule in the evaluation guide</td><td>Read it; Etude's reports do the lining up. <span class="tag built">built</span></td></tr>
-</table></div>
-<div class="two"><div><h3>Failure <span class="tag built">built</span></h3>
-<pre>UnknownCoverage: update 7 records
-1 of 2 games' settings</pre>
-<p>Missing evidence is never read as zero or false. An older run with no tables reads its decks and settings from its declaration, and what it cannot establish stays unknown.</p></div>
-<div><h3>Recovery <span class="tag built">built</span></h3>
-<p>A run started from a checkpoint records that parent's run, update and hash. The corpus follows the chain, each run keeping its own update numbers, so a staged schedule reads as a change at the boundary.</p></div></div>
+<p>"I have last month's best player as a file. What did it train on?"</p>
+<div class="two"><div><h3>Normal <span class="tag built">built</span></h3>
+<pre>corpus = training_corpus(
+    "00000002-raw.safetensors",
+    source="~/.etude/track")
+corpus.sql("select ... from corpus")</pre>
+<p>The file's recorded experiment, run and update select the corpus. Only the file's header is read, so no model framework loads.</p></div>
+<div><h3>Failure <span class="tag built">built</span></h3>
+<pre>UnknownCoverage: pilot.safetensors records
+no Etude experiment (pass experiment=)
+
+UnknownCoverage: runs holds no run
+local/local</pre>
+<p>Each names the one thing missing. A file and an <code>experiment=</code> that disagree raise instead of one silently winning.</p></div></div>
+<h3>Recovery <span class="tag built">built</span></h3>
+<p>An older file takes <code>experiment="..."</code>. A file that records no run at all (frontier Small) is reached through its run and update, as before. A child's file follows its parent's checkpoint by run, update and hash; the test runs this on a real parent and child.</p>
 
 <h2>Do the product's concepts and the code's concepts line up?</h2>
 <div class="scroll"><table>
 <tr><th>What a person knows about</th><th>What the code has</th><th></th><th>What is wrong, if anything</th></tr>
-<tr><td>A trained player I can still use</td><td>Name binding: columns, card keys, token names; stored card programs</td><td class="yes">yes</td><td>One answer for loading, evaluation and Academy.</td></tr>
-<tr><td>What it trained on</td><td>Training corpus: games per matchup per update, deck cards</td><td class="yes">yes</td><td>Derived from games played, not authored. Not a kind of checkpoint.</td></tr>
-<tr><td>How it was trained</td><td><code>runs</code> for facts of a whole run; <code>game_settings</code> for anything that can differ between games</td><td class="yes">yes</td><td>One rule decides which table a fact goes in.</td></tr>
+<tr><td>A trained player I can still use</td><td>Name binding: columns, card keys, token names; stored card programs</td><td class="yes">yes</td><td></td></tr>
+<tr><td>"This checkpoint"</td><td>One entry point taking the file, Etude's checkpoint record, or a run and update; all three resolve to a run and an update before anything else happens</td><td class="yes">yes</td><td>Was "no". The file a person holds now works.</td></tr>
+<tr><td>What it trained on</td><td><code>corpus</code>, <code>deck_cards</code></td><td class="yes">yes</td><td></td></tr>
+<tr><td>How it was trained</td><td><code>runs</code> for a whole run; <code>game_settings</code> for what can differ between games</td><td class="yes">yes</td><td></td></tr>
 <tr><td>Where it came from</td><td>Parent checkpoint on <code>runs</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>Cards it actually drew and cast</td><td><code>card_statistics</code>, from the engine's own counters</td><td class="yes">yes</td><td>Opt-in; counted once, by the engine.</td></tr>
+<tr><td>Which seat</td><td><code>seat</code>, the native seat, 0 on the play, on every per-seat row; <code>outcome_rows</code> is the one reader of the three stored forms</td><td class="yes">yes</td><td>Was "no". <code>corpus</code> keeps <code>play</code>/<code>draw</code> because its row is a game and names both seats; the guide says so.</td></tr>
+<tr><td>Cards it drew and cast</td><td><code>card_statistics</code></td><td class="yes">yes</td><td></td></tr>
 <tr><td>When two measurements compare</td><td>A documented rule; no tool</td><td class="yes">yes</td><td></td></tr>
-<tr><td>The world number</td><td>A fixed label on old records</td><td class="yes">yes</td><td>Nothing gates on it.</td></tr>
-<tr><td><strong>"This checkpoint"</strong></td><td>A policy file on disk; an Etude checkpoint record; a run plus an update</td><td class="no">no</td><td>One idea, three objects. The corpus accepts the second and third, never the file a person holds.</td></tr>
-<tr><td>Which seat</td><td><code>position</code> play/draw, <code>play</code>/<code>draw</code> columns, integer <code>seat</code></td><td class="no">no</td><td>One idea, three spellings. Fixing it rewrites the outcome row format old runs share.</td></tr>
-<tr><td>A setting within one matchup</td><td>Nothing; settings are counted per update</td><td class="no">no</td><td>"Games with this deck under closed decklists" has no answer.</td></tr>
+<tr><td>A setting within one matchup</td><td>Nothing; settings are counted per update</td><td class="no">no</td><td>Left for later by the person (answer 3a). Adding it changes the table format.</td></tr>
 </table></div>
 
-<h2>The biggest mismatch</h2>
-<div class="box"><p>You asked for the corpus to be reachable from a checkpoint. What is built is reachable from an Etude run. To query the best player a person must already know its experiment name, its run id and where its records are stored, then pick the update by hand. The policy file knows its own run and update; nothing uses that.</p></div>
+<h2>The biggest remaining mismatch</h2>
+<div class="box"><p>A checkpoint file is trusted for what it says about itself. The corpus reader takes the run and update from the file's header and never checks that the run produced those bytes. Etude registers the averaged policy and not the raw one, so for a raw file there is no registered hash to compare.</p></div>
 <div class="two"><div><h3>Before <span class="tag built">built</span></h3>
-<pre>from etude.train.read import read
-run = read(storage, "tla_frontier",
-           "59718fe34945")
-corpus = training_corpus(run, through=1952)</pre></div>
-<div><h3>After <span class="tag prop">proposed</span></h3>
-<pre>corpus = training_corpus(
-    "00001952-ema.safetensors",
-    source=storage)</pre>
-<p>The file's recorded run and update select the corpus. A file that records neither raises, naming what is missing.</p></div></div>
-<p>Not verified: whether a policy file records its experiment name as well as its run id; Etude's reader needs both. If it does not, new files would record it, which is one more field beside the run id they already write.</p>
+<p>A file copied, renamed or re-saved with another run's header answers with that run's corpus and no warning.</p></div>
+<div><h3>After <span class="tag prop">proposed, not in this PR</span></h3>
+<p>When the run registered a checkpoint at the file's update, compare hashes and raise on a difference; say "unverified" for a raw file. Needs Etude to register the raw policy, or the file to record which registered one it pairs with.</p></div></div>
+<p>Recommendation: leave it. A header is only wrong when someone edits it, and the question the corpus answers ("what did the run that wrote this train on") is still answered truthfully for the header.</p>
+
+<h2>Counterexamples kept</h2>
+<ul>
+<li>A run with outcome tables and no setting table reads as predating the table, not as unknown (question 52).</li>
+<li>A run resumed at a revision that adds a setting raises for the whole corpus; strict on purpose.</li>
+<li>The offline projection still names stored series <code>.../play/...</code> and <code>.../draw/...</code>. Those are stored metric names read by the panels, not a second spelling of a row's column (question 55).</li>
+<li><code>SelfPlayPoint.position</code> warns until 0.4.0.</li>
+</ul>
 
 <h2>Larger than this work</h2>
 <ul>
-<li><strong>The answer is in four places.</strong> Nothing says, for one checkpoint and one planned experiment, "loads; 3 of your 40 cards are new to it; trained with decklists open, you plan closed". That is a report over the pieces built here, and it belongs with Etude's report framework.</li>
-<li><strong>An evaluation does not say whether its matchup was in the corpus.</strong> The participant record carries the writer revision and stored-program count only.</li>
-<li><strong>Card statistics stop at a parent boundary</strong> until the counters are published with the run.</li>
-<li><strong>Cross-run questions</strong> ("which checkpoints trained on this card") wait on Etude taking training tables into its query database.</li>
+<li>The evaluation card page filters by "Position" with <code>play</code>/<code>draw</code>, while evaluation tables say <code>game_seat</code>. Same idea as the seat fix, in a part this PR does not touch.</li>
+<li>The first argument of <code>training_corpus</code> is named <code>run</code> and may be a file. Positional in every use; renaming it is cosmetic.</li>
+<li>One answer for one checkpoint and one planned experiment ("loads; 3 of 40 cards new; trained open, you plan closed") is a report over these pieces and belongs with Etude's reports.</li>
+<li>Card statistics stop at a parent boundary until the counters are published with the run (question 38).</li>
 </ul>
 
-<h2>About the PR itself</h2>
-<ul>
-<li>It is now two changes in one: checkpoints keep loading, and the training corpus. They share no code path and could merge separately; together they are about 6,800 lines of code, tests and docs.</li>
-<li>CI is red at the head commit: the Academy UI job failed, which fails the result gate. The other 23 jobs pass. I have not diagnosed it; the PR changes one Academy file.</li>
-<li>MTG-385 (#559) writes its mana settings into <code>game_settings</code>; whichever merges second adapts.</li>
-</ul>
+<h2>Not seen</h2>
+<p>Hosted CI at 225d2d4212: 2 jobs passed, 17 pending, none failed when read. The Academy UI job, red at an earlier commit, was pending. Gate owns seeing it green (plan item 5).</p>
 
 <h2>Questions</h2>
-<ol class="q">
-<li>Reaching the corpus from a checkpoint file:<ol type="a"><li>build it in this PR</li><li>leave the Etude-run entry point and file a Task</li></ol></li>
-<li>One PR or two:<ol type="a"><li>keep #558 as one</li><li>split the training corpus into its own PR and land loading first</li></ol></li>
-<li>A setting within one matchup:<ol type="a"><li>leave for later; the table format changes when it is added</li><li>build it now, while no published run has written the tables</li></ol></li>
-<li>Seat spelling:<ol type="a"><li>leave as built and say "seat 0 is on the play" in the guide</li><li>file a Task to write outcome rows by native seat</li></ol></li>
-<li>The red Academy UI job:<ol type="a"><li>I diagnose it now</li><li>send the Task back through its gate step</li></ol></li>
+<ol>
+<li>A checkpoint file that claims a run:<ol type="a"><li>leave as built; the header is the record</li><li>file a Task to verify the file against the run's registered checkpoints</li></ol></li>
+<li>The evaluation card page's "Position" filter:<ol type="a"><li>leave</li><li>file a Task to spell it by seat</li></ol></li>
 </ol>
 </main></body></html>
