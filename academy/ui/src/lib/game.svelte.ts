@@ -11,7 +11,8 @@ import {
 import { deriveObservationNotes } from './log';
 import { stepBoards, type StepBoard } from './table/boards';
 export { DECISION_PROMPTS } from './prompt-instructions';
-import { defaultStops, loadStoredStops, saveStoredStops, sanitizeStops } from './stops';
+import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
+import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './table/phases';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
@@ -163,6 +164,9 @@ export class GameStore {
   // Priority stops (MTGO-style auto-pass). Loaded from localStorage, sent
   // with new_game, and overwritten by the server's effective-config echo.
   stops = $state<StopsConfig>(loadStoredStops());
+  // Stops set to hold once: still ordinary stops in `stops`, cleared by the
+  // client when the game stops there (`spendOnce`).
+  onceStops = $state<OnceStops>(loadStoredOnce());
   // True while a pass-turn (F6) request is in flight — the server is
   // fast-forwarding priority windows on our behalf.
   fastForwarding = $state(false);
@@ -295,6 +299,23 @@ export class GameStore {
       ? this.stops[side].filter((existing) => existing !== step)
       : [...this.stops[side], step];
     this.updateStops({ ...this.stops, [side]: steps });
+  }
+
+  /** The stop bar's press: off → every time → once → off. */
+  cycleStop(side: StopSide, step: string): void {
+    const state = !this.stops[side].includes(step) ? 'off' : this.onceStops[side].includes(step) ? 'once' : 'every';
+    const next = withStopState(this.stops, this.onceStops, side, step, nextStopState(state));
+    this.updateOnce(next.once);
+    this.updateStops(next.stops);
+  }
+
+  /** The game stopped at a once stop: clear it, and say so as automation. */
+  spendOnce(side: StopSide, step: string): void {
+    const next = withStopState(this.stops, this.onceStops, side, step, 'off');
+    this.updateOnce(next.once);
+    this.updateStops(next.stops);
+    const whose = side === 'my' ? 'your turn' : "the opponent's turn";
+    this.actionLog = [...this.actionLog, this.createEntry('auto', this.observation?.turn.turn_number ?? null, `Stopped once at ${stopLabel(step)} on ${whose}; that stop is now off`)];
   }
 
   setStopOnStack(value: boolean): void {
@@ -505,6 +526,13 @@ export class GameStore {
   private updateStops(next: StopsConfig): void {
     this.stops = next;
     if (this.persistPreferences) saveStoredStops(next);
+    const once = pruneOnce(this.onceStops, next);
+    if (once.my.length !== this.onceStops.my.length || once.opponent.length !== this.onceStops.opponent.length) this.updateOnce(once);
+  }
+
+  private updateOnce(next: OnceStops): void {
+    this.onceStops = next;
+    if (this.persistPreferences) saveStoredOnce(next);
   }
 
   private updateDecks(next: DeckSelection): void {

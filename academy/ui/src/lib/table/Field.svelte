@@ -31,13 +31,17 @@
     toward: 'up' | 'down';
     align?: 'start' | 'end';
     names: Map<number, string>;
+    /** The person may act now: their permanents nothing acts on step back (lands never do). */
+    acting?: boolean;
+    /** Permanents something on the stack targets. */
+    targeted?: Set<number>;
     /** A combat draft's place for each creature it concerns, and what pressing it does. */
     draft?: { places: Map<number, 'can' | 'in' | 'armed'>; notes: Map<number, string> } | null;
     onactivate: (item: PermanentItem, element: HTMLElement) => void;
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, draft = null, onactivate, onpreview }: Props = $props();
+  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -55,6 +59,12 @@
     Math.round(cardHeight * (fit.lines > 1 ? 0.08 : 0.2)),
     Math.floor((height - fit.lines * cardHeight - (fit.lines - 1) * 8) / 2) + LEAN_SLACK,
   )));
+
+  /** Only the person's own permanents step back, and never a land: lands are tapped for mana, not chosen. */
+  function idle(item: PermanentItem): boolean {
+    if (!acting || toward !== 'up' || item.permanent.types?.is_land) return false;
+    return draft ? !draft.places.has(item.permanent.id) : item.offers.length === 0;
+  }
 
   function blocked(item: PermanentItem): string | null {
     const attacker = item.permanent.blocking;
@@ -101,6 +111,8 @@
               side={toward === 'up' ? 'you' : 'opponent'}
               {toward}
               count={index === 0 && pile.items.length > 1 ? pile.items.length : null}
+              dim={idle(item) ? 'idle' : null}
+              targeted={targeted.has(item.permanent.id)}
               blocks={blocked(item)}
               onactivate={element => onactivate(item, element)}
               onpreview={element => onpreview(element ? item : null, element)}

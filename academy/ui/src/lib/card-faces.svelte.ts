@@ -1,5 +1,5 @@
 /**
- * Printed card faces by name: mana cost, type line, printed keywords and
+ * Printed card faces by name: mana cost, colours, type line, printed keywords and
  * printed power/toughness, from `/api/card-faces`.
  *
  * `cardFace(name)` is reactive: it returns the face once loaded and null until
@@ -13,6 +13,8 @@ import { SvelteMap } from 'svelte/reactivity';
 export interface CardFace {
   /** Mana symbols as printed, `{2}{U/B}{R}`; empty for lands and tokens. */
   cost: string;
+  /** Printed colours as letters in printed order, `['G', 'W']`; empty when colourless. */
+  colors: string[];
   type_line: string;
   keywords: string[];
   power: number | null;
@@ -49,4 +51,19 @@ export function cardFace(name: string | null | undefined): CardFace | null {
 /** Mana symbols of a printed cost, `{2}{U/B}` → `['2', 'U/B']`. */
 export function costSymbols(cost: string): string[] {
   return [...cost.matchAll(/\{([^}]+)\}/g)].map(match => match[1]);
+}
+
+const BASIC_COLORS: Record<string, string> = { Plains: 'W', Island: 'U', Swamp: 'B', Mountain: 'R', Forest: 'G' };
+
+/**
+ * The colours a card's frame is drawn in, in printed order: its printed
+ * colours, or for a land without colour the colours of its basic land types
+ * (a Forest's frame is green, as printed). Empty draws the colourless frame.
+ */
+export function frameColors(face: CardFace | null): string[] {
+  if (!face) return [];
+  if (face.colors.length) return face.colors;
+  if (!/\bLand\b/.test(face.type_line)) return [];
+  const subtypes = face.type_line.split('—')[1]?.trim().split(/\s+/) ?? [];
+  return [...new Set(subtypes.map(subtype => BASIC_COLORS[subtype]).filter((color): color is string => color !== undefined))];
 }

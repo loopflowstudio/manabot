@@ -28,6 +28,7 @@
   import Strip from '$lib/table/Strip.svelte';
   import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/table/beats';
   import { logMarks } from '$lib/table/replay';
+  import { spentOnce } from '$lib/table/phases';
   import {
     connect,
     disconnect,
@@ -252,6 +253,28 @@
     syncStopsToServer();
   }
 
+  function handleCycleStop(side: StopSide, step: string): void {
+    gameStore.cycleStop(side, step);
+    syncStopsToServer();
+  }
+
+  // A stop set to hold once is spent when the game stops there for you: the
+  // client clears it and the move list says so (automation, not your move).
+  let onceChecked = -1;
+  $effect(() => {
+    const frame = gameStore.protocolFrame;
+    if (!frame || frame.revision === onceChecked) return;
+    onceChecked = frame.revision;
+    if (gameStore.watchMode || frame.status === 'game_over' || frame.prompt?.actor !== frame.projection.agent.player_index) return;
+    untrack(() => {
+      const yourTurn = frame.projection.turn.active_player_id === frame.projection.agent.id;
+      const spent = spentOnce(frame.projection.turn, yourTurn, gameStore.stops, gameStore.onceStops);
+      if (!spent) return;
+      gameStore.spendOnce(spent.side, spent.step);
+      syncStopsToServer();
+    });
+  });
+
   function handleStopOnStackChange(value: boolean): void {
     gameStore.setStopOnStack(value);
     syncStopsToServer();
@@ -415,7 +438,8 @@
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
       stops={gameStore.stops}
-      ontogglestop={handleToggleStop}
+      onceStops={gameStore.onceStops}
+      oncyclestop={handleCycleStop}
       connection={gameStore.connection}
       connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
       log={gameStore.actionLog}

@@ -37,8 +37,8 @@
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
   import TableCard from './TableCard.svelte';
-  import { phaseTrack } from './phases';
-  import PhaseTrack from './PhaseTrack.svelte';
+  import { phaseTrack, type OnceStops } from './phases';
+  import StopBar from './StopBar.svelte';
   import { shortName } from '$lib/opponent-name';
   import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
@@ -49,8 +49,10 @@
     you: { name: string; deck: string | null };
     opponent: { name: string; deck: string | null; description?: string };
     stops: StopsConfig;
-    /** Toggle one stop from the phase track; without it the track's stops are read-only. */
-    ontogglestop?: (side: StopSide, step: string) => void;
+    /** Stops set to hold once (live play). */
+    onceStops?: OnceStops;
+    /** Cycle one stop from the stop bar; without it the bar is read-only. */
+    oncyclestop?: (side: StopSide, step: string) => void;
     /** The live connection; a recording has none. */
     connection?: ConnectionState | null;
     connectionLabel?: string;
@@ -100,7 +102,7 @@
   }
 
   let {
-    frame, live, status, you, opponent, stops, ontogglestop, connection = null, connectionLabel = '', log, canPassTurn,
+    frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
     since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
@@ -380,8 +382,12 @@
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])) : names);
   // The turn as the drawn board has it: a beat's board may be an earlier step.
   const yourTurn = $derived(boardProjection.turn.active_player_id === boardProjection.agent.id);
-  const track = $derived(phaseTrack(boardProjection.turn, stops, yourTurn));
+  const track = $derived(phaseTrack(boardProjection.turn, stops, yourTurn, onceStops));
   const lines = $derived(tableLines(drawn, presentation.events, recent.resolved, sinceRevision));
+  /** Permanents something on the stack targets: a dashed edge in the damage colour. */
+  const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
+  /** The person may act on the drawn board now: what they cannot act on steps back. */
+  const acting = $derived(live && !beatBoard && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
   /** The press that skipped to the frame's board acts on nothing: its card had no offer when pressed. */
   let skipPress = false;
   function onBoardPress(): void {
@@ -719,9 +725,7 @@
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
-    <nav class="track-slot" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}`}>
-      <PhaseTrack {track} turn={boardProjection.turn.turn_number} {yourTurn} ontoggle={ontogglestop} />
-    </nav>
+    <p class="turn" data-testid="turn-number">Turn {boardProjection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</p>
     <div class="right">
       {#if connection}
         <span class="connection" data-state={connection}>
@@ -745,16 +749,16 @@
       <Plate player={boardProjection.opponent} name={opponent.name} deck={opponent.deck} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} name={you.name} deck={you.deck} offers={board.you.offers} {live} damage={recent.damage.players.get(boardProjection.agent.player_index) ?? 0}
         active={yourTurn} side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
@@ -763,6 +767,7 @@
         {#each board.hand as item, index (item.card.id)}
           <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * handStep}px`}>
             <TableCard name={item.card.name} width={handCard} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
+              dim={acting && item.offers.length === 0 ? 'hand' : null}
               onactivate={element => activate(item.card.name, item.offers, element)}
               onpreview={element => previewCard(element ? item.card : null, element)} />
           </div>
@@ -851,6 +856,9 @@
   {/snippet}
 
   {#if bottom}<div class="bottom">{@render bottom()}</div>{/if}
+  <nav class="stops-slot" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
+    <StopBar {track} oncycle={oncyclestop} />
+  </nav>
 </div>
 
 <Lines {lines} {root} revision={frame.revision} />
@@ -914,7 +922,7 @@
   .table {
     position: fixed; inset: 0; z-index: 10; display: grid;
     grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px);
-    grid-template-rows: 40px minmax(0, 1fr) auto;
+    grid-template-rows: 40px minmax(0, 1fr) auto auto;
     background: var(--bg); color: var(--text);
   }
   .topbar {
@@ -923,8 +931,9 @@
   }
   .brand { font-family: var(--font-serif); font-weight: 600; font-size: 19px; color: var(--accent-text); }
   .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* The matchup gives way first: the phase track and the controls keep their width. */
-  .track-slot { margin: 0 auto; flex-shrink: 0; align-self: stretch; }
+  /* The matchup gives way first: the turn and the controls keep their width. */
+  .turn { margin: 0 auto; flex-shrink: 0; font-size: 14px; line-height: 20px; font-weight: 700; white-space: nowrap; }
+  .stops-slot { grid-row: 4; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .connection { display: inline-flex; align-items: center; gap: 6px; color: var(--text-tertiary); }
   .connection i { width: 6px; height: 6px; border-radius: 3px; background: var(--neutral); }
@@ -935,8 +944,7 @@
     position: relative; min-height: 0; min-width: 0; display: grid;
     transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
   }
-  .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); }
-  .half.opponent { background: color-mix(in srgb, var(--bg-muted) 55%, var(--bg)); }
+  .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
   .rows { display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
   .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); }

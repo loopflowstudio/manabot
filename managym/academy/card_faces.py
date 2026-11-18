@@ -2,7 +2,8 @@
 
 `card_faces(names)` answers, for each requested name the engine defines, what a
 printed card shows besides its name, art and rules text: the mana cost in
-symbols, the type line, the printed keywords and printed power/toughness. Every
+symbols, its colours, the type line, the printed keywords and printed
+power/toughness. Every
 value comes from the engine's own card definitions
 (`managym.card_definitions_json`); nothing here is game state. A permanent's
 current power, toughness and continuous effects stay in the frame's projection,
@@ -21,12 +22,17 @@ import managym
 COLOR_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 GENERIC = 6
 HYBRID_SYMBOLS = {"White": "W", "Blue": "U", "Black": "B", "Red": "R", "Green": "G"}
+COLOR_NAMES = ("White", "Blue", "Black", "Red", "Green")
 
 
 class CardFace(TypedDict):
     """What a printed face shows besides its name, art and rules text."""
 
     cost: str
+    # Its colours as letters in printed order (`["G", "W"]`): a colour
+    # indicator or token colour when the definition sets one, else the cost's.
+    # Empty for colourless cards and lands.
+    colors: list[str]
     type_line: str
     keywords: list[str]
     power: int | None
@@ -63,6 +69,19 @@ def printed_order(colors: list[int]) -> list[int]:
     return sorted(colors, key=lambda color: (color - start) % 5)
 
 
+def colors(definition: dict[str, Any]) -> list[str]:
+    """The printed colours (CR 105.2, 202.2): an override, else the cost's symbols."""
+    override = definition.get("color_override")
+    if override is not None:
+        found = {COLOR_NAMES.index(name) for name in override}
+    else:
+        mana_cost = definition.get("mana_cost") or {"cost": [0] * 7}
+        found = {index for index in range(5) if mana_cost["cost"][index]}
+        for pair in mana_cost.get("hybrid", []):
+            found |= {COLOR_NAMES.index(name) for name in pair}
+    return [COLOR_SYMBOLS[index] for index in printed_order(sorted(found))]
+
+
 def type_line(definition: dict[str, Any]) -> str:
     front = " ".join(
         [s.capitalize() for s in definition["supertypes"]]
@@ -86,6 +105,7 @@ def faces() -> dict[str, CardFace]:
             definition["name"],
             CardFace(
                 cost=cost_symbols(definition.get("mana_cost")),
+                colors=colors(definition),
                 type_line=type_line(definition),
                 keywords=list(definition["keywords"]),
                 power=definition.get("power"),

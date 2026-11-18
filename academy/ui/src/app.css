@@ -48,16 +48,12 @@
   font-weight: 400 700;
 }
 
+/* Wash (light) and Night (dark): neutral grounds, charcoal or near-white ink,
+   and colour only where Magic puts it, on the cards. Every value a component
+   draws resolves through these tokens. */
 :root {
   color-scheme: light dark;
   accent-color: var(--accent);
-
-  /* Sepia Etude brand: an annotated score in an old library. Everything is
-     sepia ink on aged paper except the active decision, which burns
-     Mountain red. Display text is set in bronze, like a margin annotation. */
-  --mountain-red: #973427;
-  --sepia-bronze: #6d5a35;
-  --ivory: #f8f1e0;
 
   /* The vivid pie: full-saturation Magic colors for the fixed rich worlds
      (banner, player bars). Constants in both modes, like card art. */
@@ -67,56 +63,79 @@
   --vivid-r: #e04a18;
   --vivid-g: #46a230;
 
-  /* Adaptive palette: parchment. Three ground levels — page, panel, and
-     field (the paper-white fill inside bordered controls) — so surfaces
-     separate by value, not just by borders. */
-  --bg: #ebdfc6;
-  --bg-surface: #f7f0e0;
-  --bg-muted: #ded0af;
-  --bg-field: #fcf9ee;
-  --border: #c9b892;
-  --border-strong: #a5926a;
-  --text: #3a3122;
-  --text-secondary: #5f553d;
-  --text-tertiary: #6e6247;
-  --accent: var(--mountain-red);
-  --accent-text: var(--sepia-bronze);
-  --accent-hover: #ab4634;
-  --accent-pressed: #822d21;
-  --accent-soft: #ead6c6;
+  /* Grounds: page, panel (bars and the rail), muted (the board) and field
+     (the fill inside bordered controls). */
+  --bg: #ffffff;
+  --bg-surface: #fafaf9;
+  --bg-muted: #f2f2f0;
+  --bg-field: #ffffff;
+  --border: #dadad6;
+  --border-strong: #b4b4ae;
+  --text: #1c1c1e;
+  --text-secondary: #55555b;
+  --text-tertiary: #67676e;
+  /* The act colour: the primary button and what is selected. Wash's is charcoal. */
+  --accent: #1c1c1e;
+  --accent-text: #1c1c1e;
+  --accent-hover: #3a3a3f;
+  --accent-pressed: #000000;
+  --accent-soft: #ececea;
+  --on-accent: #ffffff;
 
-  /* The color pie: WUBRG at splash volume, syntax-highlighting the sepia
-     ground. Each family owns a semantic register — Plains sun the turn
-     structure, Island the knowledge (prompts, stack, hand), Swamp ink the
-     hidden and the spent, Mountain the actions and errors, Forest the
-     living board — and each ships a contrast-safe text companion. */
-  --success: #4c8040;
-  --success-text: #396230;
+  /* Status families, each with a contrast-safe text companion. */
+  --success: #3d7a3d;
+  --success-text: #2f6230;
   --warning: #9f7a1c;
   --warning-text: #6f5712;
-  --error: var(--mountain-red);
-  --error-text: #7e2a20;
+  --error: #b3261e;
+  --error-text: #9a2019;
   --info: #2e6da8;
   --info-text: #31599a;
   --neutral: #6a5f86;
   --neutral-text: #554b6e;
-  /* The table's one interaction colour: an outline on anything a legal offer acts on. */
-  --legal: #2b68b0;
-  /* The automatic payer's planned taps: dashed, never mistaken for a legal outline. */
+  /* What a legal offer acts on; on the table it lifts rather than outlines. */
+  --legal: var(--accent);
+  /* Damage, and a target's dashed edge. */
+  --damage: #b3261e;
+  /* Power or toughness above printed. */
+  --gain: #3d7a3d;
+  /* The automatic payer's planned taps: dashed, never mistaken for a legal offer. */
   --planned: #a36f0c;
   --planned-text: #6f4b07;
-  /* Mana symbols on card frames, the printed pip colours: constants in both modes, like card art. */
-  --pip-w: #f4ecd2;
-  --pip-u: #a8cdea;
-  --pip-b: #b6a9a2;
-  --pip-r: #eba68c;
-  --pip-g: #a3cf9a;
-  --pip-c: #d6cec4;
-  --pip-generic: #ddd3c0;
+  /* Mana symbols, the printed pip colours: constants in both modes, like card art. */
+  --pip-w: #efe3b6;
+  --pip-u: #a9c7ec;
+  --pip-b: #b9aec3;
+  --pip-r: #eba98c;
+  --pip-g: #a7d29b;
+  --pip-c: #d8d2c4;
+  --pip-generic: #d8d2c4;
+  --pip-ink: #1c160e;
+
+  /* A card's name bar carries its colour: pale tints in Wash, solid jewel
+     bars in Night. White is a neutral ivory-grey and colourless a cool grey,
+     so the two never read alike; several colours blend (TableCard). */
+  --card-w: #f3f2ee;
+  --card-u: #dde9f6;
+  --card-b: #e4e0e6;
+  --card-r: #f7e0d6;
+  --card-g: #dcefdc;
+  --card-c: #e3e5e9;
+  --card-w-ink: #1c1c1e;
+  --card-u-ink: #1c1c1e;
+  --card-b-ink: #1c1c1e;
+  --card-r-ink: #1c1c1e;
+  --card-g-ink: #1c1c1e;
+  --card-c-ink: #1c1c1e;
+
+  /* Lift + Quiet: what you can act on is raised; what you cannot steps back. */
+  --lift: 0 6px 14px rgb(0 0 0 / 0.18), 0 1px 2px rgb(0 0 0 / 0.2);
+  --lift-selected: 0 12px 24px rgb(0 0 0 / 0.25);
+  --dim-hand: saturate(0.35) contrast(0.7) brightness(1.12);
+  --dim-idle: saturate(0.8) brightness(1.02) contrast(0.94);
 
   /* Washes are tokens, not arithmetic: each family's container tint is
-     pre-mixed with the panel ground per mode, so a wash can never silently
-     vanish when the ground changes underneath it. */
+     pre-mixed with the panel ground per mode. */
   --wash-strength: 10%;
   --success-wash: color-mix(in srgb, var(--success) var(--wash-strength), var(--bg-surface));
   --warning-wash: color-mix(in srgb, var(--warning) var(--wash-strength), var(--bg-surface));
@@ -148,43 +167,59 @@
   --z-toast: 300;
   --z-tooltip: 400;
 
-  --shadow-surface: 0 1px 2px rgb(58 49 34 / 0.06), 0 12px 32px rgb(109 90 53 / 0.05);
+  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.06), 0 12px 32px rgb(0 0 0 / 0.05);
 
   /* Elevation law: the sheet rests on the desk (shadow-sheet); only what
-     floats above the sheet casts shadow-raised. Nothing else has a shadow,
-     and shadows are umber, never black, by day. */
-  --shadow-sheet: 0 1px 2px rgb(58 40 20 / 0.1), 0 22px 56px rgb(58 40 20 / 0.14);
-  --shadow-raised: 0 1px 2px rgb(58 40 20 / 0.08), 0 6px 16px rgb(58 40 20 / 0.12);
+     floats above the sheet casts shadow-raised. */
+  --shadow-sheet: 0 1px 2px rgb(0 0 0 / 0.1), 0 22px 56px rgb(0 0 0 / 0.12);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px rgb(0 0 0 / 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* The library after dark: umber ink grounds, lamplight bronze display,
-       and a lifted Mountain red. The dark hover deepens instead of
-       lightening — a lighter red cannot hold ivory button text at AA. */
-    --bg: #191510;
-    --bg-surface: #221c14;
-    --bg-muted: #2b241a;
-    --bg-field: #2f2717;
-    --border: #423a2b;
-    --border-strong: #625741;
-    --text: #ece4d0;
-    --text-secondary: #b3a88e;
-    --text-tertiary: #9a9077;
-    --accent: #b24d38;
-    --accent-text: #c3a568;
-    --accent-hover: #a34531;
-    --accent-pressed: #93402d;
-    --accent-soft: #3f2b20;
-    --success-text: #9ecb8b;
+    --bg: #121213;
+    --bg-surface: #1f1f22;
+    --bg-muted: #18181a;
+    --bg-field: #26262a;
+    --border: #323236;
+    --border-strong: #4b4b52;
+    --text: #ececee;
+    --text-secondary: #a9a9b0;
+    --text-tertiary: #8f8f97;
+    /* Night's act colour is near-white; its hover deepens. */
+    --accent: #ececee;
+    --accent-text: #ececee;
+    --accent-hover: #d6d6da;
+    --accent-pressed: #c0c0c6;
+    --accent-soft: #2a2a2e;
+    --on-accent: #121213;
+    --success-text: #8cc79a;
     --warning-text: #d9bc66;
-    --error-text: #de9181;
+    --error: #f2846c;
+    --error-text: #f2846c;
     --info-text: #8ab8e8;
     --neutral-text: #b4a9d1;
-    --legal: #6aa4e6;
+    --damage: #f2846c;
+    --gain: #8cc79a;
     --planned: #e0b04e;
     --planned-text: #ecc779;
-    /* Washes lift by lamplight: 10% reads on parchment but vanishes on umber. */
+    --card-w: #e4e1d8;
+    --card-u: #2c5f9c;
+    --card-b: #4a4052;
+    --card-r: #a83f28;
+    --card-g: #2e7344;
+    --card-c: #5b6068;
+    --card-w-ink: #1d1b16;
+    --card-u-ink: #ffffff;
+    --card-b-ink: #ffffff;
+    --card-r-ink: #ffffff;
+    --card-g-ink: #ffffff;
+    --card-c-ink: #ffffff;
+    --lift: 0 8px 18px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.18);
+    --lift-selected: 0 12px 24px rgb(0 0 0 / 0.6);
+    --dim-hand: saturate(0.35) brightness(0.72) contrast(0.9);
+    --dim-idle: saturate(0.8) brightness(0.94);
+    /* Washes lift on dark grounds: 10% vanishes there. */
     --wash-strength: 26%;
     --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.22), 0 16px 40px rgb(0 0 0 / 0.16);
     --shadow-sheet: 0 1px 2px rgb(0 0 0 / 0.4), 0 22px 56px rgb(0 0 0 / 0.45);
@@ -228,7 +263,7 @@
   --color-action-hover: var(--accent-hover);
   --color-action-soft: var(--accent-soft);
   --color-display: var(--accent-text);
-  --color-ivory: var(--ivory);
+  --color-on-action: var(--on-accent);
 
   --color-forest: var(--success);
   --color-forest-ink: var(--success-text);
@@ -354,7 +389,7 @@
 }
 @utility btn-primary {
   background: var(--accent);
-  color: var(--ivory);
+  color: var(--on-accent);
   &:hover {
     background: var(--accent-hover);
   }
@@ -403,9 +438,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 8% -18%, color-mix(in srgb, var(--accent-text) 9%, transparent), transparent 32rem),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
