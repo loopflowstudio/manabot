@@ -6,6 +6,21 @@
 
 Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16 and undo disabled. Through update 50 each seed pair used one L4. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Each checkpoint played the same 16 fixed deck pairs against the first-64 heuristic and its paired checkpoint, with seats and decks crossed. Training seeds are the three units of evidence.
 
+## Usable-only w64 training
+
+The usable/off comparison uses revision `51ba07d77a` and the Etude
+experiment `mana-taps-usable-w64`. Each of seeds 21501–21503 shares one L4
+between its fresh off control and usable arm. Each arm targets 50 updates
+with exports at 0, 25 and 50. The evaluator seats the raw learner and EMA
+separately on the same 16 crossed deck pairs.
+
+Etude quoted USD2.24 per pair and recorded three rental ceilings of
+USD2.2425 each. Seeds 21501 and 21503 launched as `5722a7d35e0f` and
+`ee1af2e8687b`. Seed 21502 acquired L4 `mtg385-usable-21502-d4fbcf978f80`
+from the queue after earlier capacity refusals. The three-hour job limits
+and 15-minute startup allowances fit within the remaining USD16.68 after
+reserving the earlier Lium cap. Evaluation runs locally.
+
 ## Usable-only priority floats on CPU
 
 On the same 40 TLA deals, limiting priority floats to a mana spend or a tap
