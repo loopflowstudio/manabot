@@ -170,6 +170,20 @@ impl ManaPayment {
     pub fn is_manual(&self) -> bool {
         *self == Self::Manual
     }
+
+    /// The serialized and Python name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Manual => "manual",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::Auto, Self::Manual]
+            .into_iter()
+            .find(|mode| mode.name() == name)
+    }
 }
 
 /// Priority float offers for the chooser.
@@ -185,6 +199,21 @@ pub enum ManaFloats {
 impl ManaFloats {
     pub fn is_off(&self) -> bool {
         *self == Self::Off
+    }
+
+    /// The serialized and Python name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Usable => "usable",
+            Self::All => "all",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::Off, Self::Usable, Self::All]
+            .into_iter()
+            .find(|mode| mode.name() == name)
     }
 }
 

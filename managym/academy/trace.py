@@ -102,25 +102,15 @@ class GameConfig:
         """Order human/opponent setup roles by their recorded native seats."""
         configs = self._role_configs()
         return managym.GameSetup(
-            configs if self.human_seat == 0 else list(reversed(configs)),
+            list(self.by_seat(*configs)),
             decklists=self.decklists,
-            mana_payment=self.payment_by_seat(),
-            mana_floats=self.floats_by_seat(),
+            mana_payment=self.by_seat(self.mana_payment, "manual"),
+            mana_floats=self.by_seat(self.mana_floats, "off"),
         )
 
-    def payment_by_seat(self) -> tuple[managym.ManaPayment, managym.ManaPayment]:
-        return (
-            (self.mana_payment, "manual")
-            if self.human_seat == 0
-            else ("manual", self.mana_payment)
-        )
-
-    def floats_by_seat(self) -> tuple[managym.ManaFloats, managym.ManaFloats]:
-        return (
-            (self.mana_floats, "off")
-            if self.human_seat == 0
-            else ("off", self.mana_floats)
-        )
+    def by_seat[T](self, human: T, opponent: T) -> tuple[T, T]:
+        """Order a human/opponent pair by native seat."""
+        return (human, opponent) if self.human_seat == 0 else (opponent, human)
 
     def _role_configs(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
@@ -247,8 +237,12 @@ class Trace:
         else:
             record["recording_import"] = asdict(self.recording_import)
         record["config"] = self.config.to_record()
-        record["mana_payment"] = list(self.config.payment_by_seat())
-        record["mana_floats"] = list(self.config.floats_by_seat())
+        record["mana_payment"] = list(
+            self.config.by_seat(self.config.mana_payment, "manual")
+        )
+        record["mana_floats"] = list(
+            self.config.by_seat(self.config.mana_floats, "off")
+        )
         record["events"] = [
             {
                 **{item.name: getattr(event, item.name) for item in fields(event)},
