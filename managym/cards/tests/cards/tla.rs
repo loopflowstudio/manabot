@@ -724,11 +724,13 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 4);
     assert_eq!(pool(&s).restricted_of(&ally), [0, 0, 0, 0, 1, 0]);
-    s.game_mut().state.players[0].mana_pool = Mana {
-        mana: [0, 0, 0, 1, 0, 1],
-        ..Default::default()
-    }
-    .into();
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana {
+            mana: [0, 0, 0, 1, 0, 1],
+            ..Default::default()
+        },
+        None,
+    );
     let captives = library_card(&s, 0, "Rebellious Captives");
     let ogre = library_card(&s, 0, "Gray Ogre");
     let captives = move_card(&mut s, captives, ZoneType::Hand);
@@ -753,11 +755,13 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     s.set_player_mana_pool(0, "");
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 0);
-    s.game_mut().state.players[0].mana_pool = Mana {
-        mana: [0, 0, 0, 0, 0, 5],
-        ..Default::default()
-    }
-    .into();
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana {
+            mana: [0, 0, 0, 0, 0, 5],
+            ..Default::default()
+        },
+        None,
+    );
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(
         !can_activate(&s, scroll),
