@@ -66,13 +66,24 @@ the play and `a3d4b7c3` on the draw occurred twice. For a proposed deck
 containing Island and Lightning Bolt, only Lightning Bolt was new in both
 runs. DuckDB plans used hash joins on the two deck identities.
 
+`training_corpus` returns the DuckDB connection with `corpus` as a view on
+it; callers read every relation with `corpus.sql(...)`
+(`scratch/questions.md`, question 43). `decks` and `matchups` stay on the
+connection undocumented.
+
+## Sync onto main, 2026-11-18
+
+Merged main through #555 (opponent decision memory) at `945899d893`. Fresh
+and rebound decision-memory catalog tables use the same observation capacity
+switch (question 44). After the merge and extension rebuild,
+`tests/eval/test_training_corpus.py`, `tests/model/test_checkpoint_binding.py`,
+`tests/model/test_pinned_pilot.py` and `tests/model/test_writer_catalog.py`
+gave 12 passed, 1 skipped. Nothing wider was run locally; CI owns the suite.
+
 ## Remaining work
 
-0. Built: `training_corpus` returns the DuckDB connection with `corpus` as a
-   view on it; callers read every relation with `corpus.sql(...)`
-   (`scratch/concept-review.html`, question 43). The doc examples and tests
-   use that form and no `.query("corpus"` remains. `decks` and `matchups`
-   stay on the connection undocumented.
+No building remains in this PR.
+
 1. Etude follow-up, not blocking: its evaluation query database indexes
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude
