@@ -1,57 +1,50 @@
-<!doctype html><meta charset="utf-8"><title>MTG-353 QA (fifth round)</title>
-<style>body{font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#222}
-h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #ddd}pre{background:#f6f4ee;padding:.75rem;white-space:pre-wrap;font-size:12.5px}
-.ok{color:#176b2c;font-weight:600}.fix{color:#9a4b00;font-weight:600}.bad{color:#a11;font-weight:600}</style>
-<h1>MTG-353 QA, fifth round: the training-corpus query</h1>
-<p>2026-11-18, branch at cb278b4e33, laptop load average about 40. Outputs are in the ignored <code>.runs/qa5/</code>; scripts in <code>/tmp/qa5/</code>.
-Earlier rounds covered loading, pinned pilots, Academy, local evaluation and returning requests. This round covers <code>manabot.eval.training_corpus</code> and its guide, docs/evaluation.md "Querying the training corpus".</p>
-
-<h2>1. Fresh local run, guide code as written <span class="fix">fixed (docs)</span></h2>
-<pre>ETUDE_HOME=$PWD/.runs/qa5/etude-home uv run etude train manabot/recipes/local.py    # 25 s
-uv run --extra evaluation python /tmp/qa5/guide_local.py   # guide block, storage and ids substituted</pre>
-<p>First try I passed the writer id from the metrics file name (<code>b0b923393ea1</code>) as the run; the query refused with
-<code>UnknownCoverage: b0b923393ea1: resolved training decks are unknown</code>. Correct, but the guide only showed how to open frontier Small.
-The run id is <code>local</code>. Fix: one sentence in the guide giving <code>read(Path(etude_home) / "track", "local", "local")</code>.</p>
-<pre>Roster decks and distinct card keys: 2 29
-Completed games: [(2,)]
-Observed decks: [(2,)]
-[('fc948195…', '7d663f0e…', 2)]
-[('lea.lightning_bolt',)]            # Island is in the corpus, Bolt is new
-[(2,)]                               # games with Island
-[(1, '7d663f0e…', 2), (1, 'fc948195…', 2)]   # mirror-free pair: two seats per deck</pre>
-
-<h2>2. Checkpoint entry point and raw cross-check <span class="ok">works</span></h2>
-<p><code>training_corpus(CheckpointRecord.model_validate_json(checkpoints/updates-N.json), source=root)</code>:</p>
-<pre>ckpt 0 sum(games)=None rows=0
-ckpt 1 sum(games)=2   rows=1
-ckpt 2 sum(games)=4   rows=2
-raw self_play_outcomes update 1: play 2, draw 2;  update 2: play 2, draw 2</pre>
-<p>Counting the play seat once per game matches the raw rows. Misuse gives plain errors: a checkpoint without source or with an explicit update →
-"supply a checkpoint and its source"; -1 or <code>True</code> → "supply a nonnegative update"; update 5 of a 2-update run →
-<code>UnknownCoverage: local: coverage unknown at update 3</code>.</p>
-
-<h2>3. Frontier Small historical run, guide verbatim <span class="ok">works</span></h2>
-<p>Against the local R2 copy at <code>/private/tmp/mtg353-corpus-run</code> (declaration, writer record, sealed block 0–12), 2.3 s:</p>
-<pre>Roster decks and distinct card keys: 134 262
-Completed games: [(259,)]
-Observed decks: [(132,)]
-top matchup 7b246825… on the play vs a3d4b7c3… : 2
-new keys in Island+Bolt deck: lea.lightning_bolt
-games with Island: 218</pre>
-<p>Same numbers as the plan's record. Through update 12: 3,112 games across 3,084 ordered matchup rows, 2.2 s. Update 13 →
-<code>UnknownCoverage: 59718fe34945: coverage unknown at update 13</code>.</p>
-
-<h2>4. Returning user: a local run trained before this change <span class="ok">refuses honestly</span></h2>
-<p>The QA3 run (<code>.runs/qa3/etude-home</code>, trained at d5935065d0) has no update-zero roster and its declaration carries no deck source:
-<code>UnknownCoverage: local: resolved training decks are unknown</code>. That is unknown, not empty, as the plan requires; old runs were called "Not a problem".</p>
-
-<h2>5. Tests</h2>
-<pre>uv run --extra dev --extra evaluation --extra artifacts pytest tests/eval/test_training_corpus.py -q   # 3 passed</pre>
-
-<h2>Summary</h2>
-<ul>
-<li><b>Works:</b> the documented queries on a new run, from a published checkpoint, and on frontier Small; counts match raw rows; missing evidence raises.</li>
-<li><b>Fixed:</b> the guide now says how to open a local recipe run.</li>
-<li><b>Not reached:</b> the plan's remaining item 2 (card statistics relation) is not built yet, so there was nothing to use. No R2 fetch as a new reader (used the existing local copy).</li>
-<li><b>Still rough, minor:</b> a cutoff of 0 returns an empty relation, so <code>sum(games)</code> is <code>None</code> (the guide's Island query wraps it in <code>coalesce</code>; the "Completed games" one doesn't).</li>
-</ul>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTG-353 compatibility QA</title>
+<style>
+body{max-width:56rem;margin:3rem auto;padding:0 1rem;font:16px/1.55 system-ui;color:#20252a}h1,h2{line-height:1.2}h2{margin-top:2rem}pre,code{background:#f2f4f4}pre{padding:1rem;white-space:pre-wrap;overflow-wrap:anywhere}th,td{padding:.4rem .8rem;text-align:left;border-bottom:1px solid #ccd1d3}table{border-collapse:collapse}
+</style></head><body>
+<h1>Checkpoint compatibility and training corpus</h1>
+<p>18 November 2026 · MTG-353 · f6d69f628b plus the historical settings fix. Local CPU runs used a fresh Etude home under <code>.runs/qa6</code>.</p>
+<h2>Historical settings were missing</h2>
+<p>The frontier Small declaration explicitly records input v9, 64 action slots and first-legal overflow. Its sole training stage records current-self behavior and both learning seats. Before the fix, SQL returned NULL for all five fields. The reader now uses recorded historical settings. A stage setting needs one value across all stages to describe the run. An absent or varying value stays NULL. The guide’s completed-game query now returns zero at update zero.</p>
+<p>The retained frontier block covered updates 1–12. SQL counted 3,112 games, including 2,629 with Island. Its 3,084 rows group games by update and ordered matchup. Update 13 raised <code>UnknownCoverage</code>.</p>
+<h2>Start, save and resume</h2>
+<pre>export ETUDE_HOME="$PWD/.runs/qa6"
+uv run --extra evaluation etude train manabot/recipes/local.py --config '{"statistics":true}' --until updates=1 --json
+{"run":"local","experiment":"local","outcome":"finished"}
+uv run --extra evaluation etude train manabot/recipes/local.py --resume --until updates=2 --json
+{"run":"local","experiment":"local","outcome":"finished"}</pre>
+<table><thead><tr><th>Checkpoint update</th><th>Cumulative games</th><th>Island draws at update</th><th>Island choices at update</th></tr></thead>
+<tbody><tr><td>0</td><td>0</td><td>—</td><td>—</td></tr><tr><td>1</td><td>2</td><td>6</td><td>23</td></tr><tr><td>2</td><td>4</td><td>5</td><td>23</td></tr></tbody></table>
+<p>The checkpoint reader counted four games with Island, one ordered matchup and two seats per deck at each update. Only Lightning Bolt was new in the proposed Island/Bolt list. The statistics sums matched independent counts from terminal game records. The update report contained exactly updates 1 and 2 and excluded setup-table keys. Requesting update 3 or a missing statistics directory raised <code>UnknownCoverage</code>.</p>
+<h2>Start a learner from a published checkpoint</h2>
+<p>A one-update Etude recipe started from the local learner’s published update-one EMA file. Querying the child’s update-one checkpoint returned two parent games and two child games. Its update-zero checkpoint already included the two parent games. The parent’s later update stayed outside the child’s corpus.</p>
+<pre>run     input  learning seats  behavior      parent  parent update
+child      11  both            current-self  local               1
+local      11  both            current-self  NULL             NULL</pre>
+<h2>Minimal training loop</h2>
+<pre>uv run --extra evaluation etude train manabot/training/loops/minimal.py --config '{"updates":1,"streams":2,"decisions":16}' --json
+{"run":"minimal","experiment":"minimal","outcome":"finished"}</pre>
+<p>The published checkpoint yielded two completed mirror games, four seats, one distinct deck and both learning seats. Both Island and Lightning Bolt were absent from the decks in this run.</p>
+<h2>Read frontier evidence from an empty storage directory</h2>
+<p>Fetched the declaration, historical training record, metric writer record and sealed block for frontier Small from R2. All four objects matched the retained local copies byte for byte. SHA-256 prefixes from the download:</p>
+<pre>attempts/10d3740cb3a7/training/run.json     57910103734d
+metrics/2-00000000-00000012-f8c35fa5fda5.blk 32d53c688e12
+metrics/f8c35fa5fda5.json                    02d6e0a6b756
+run.json                                    fa5a88cf0bc5</pre>
+<h2>Play a historical checkpoint</h2>
+<p>The local evaluator refused the frontier checkpoint with the default matchup and asked for submitted decks. Using the two submitted TLA lists from the earlier QA request, it completed all four legs against the heuristic on deal seed 101. The first 180-second whole-run allowance expired during replay. Continuing the same panel with 600 seconds replayed the deal successfully.</p>
+<pre>uv run --extra evaluation python -m manabot.eval.local --continue .runs/qa6/frontier-matchup/panel --seconds 600
+completed: 1/1 complete deals; 4/4 games
+replay: 829 decisions; 0 state mismatches; 0 command mismatches</pre>
+<h2>Install and query from outside the checkout</h2>
+<p>Installed the candidate manabot wheel with the evaluation extra into a fresh CPython 3.13 environment. The resolver selected released managym 0.2.3, which lacks <code>managym.disclosure</code>. Built the matching engine wheel from the release staging directory and installed it. Both imports then resolved under the new environment’s site-packages. The repository QA instructions now describe this pairing.</p>
+<pre>Outside checkout, isolated interpreter
+Writer settings [(9, 64, 'first-legal', 'current-self', 'both')]
+Frontier games at update one [(259,)]
+Local Island (list games, draws, choices) [(4, 11, 46)]</pre>
+<h2>Outcome and remaining limits</h2>
+<p>The paired wheels read the downloaded historical run and the resumed local run. Current and minimal recipes produced queryable checkpoints, the child included its parent through the correct update, and the historical player completed a replay-verified deal. Five targeted corpus tests passed, including the regression for historical and varying stage settings. Ruff and <code>git diff --check</code> passed.</p>
+<p>The repository workflow checker still fails its coverage-graph assertion: the installed Loopflow CLI emitted three implement steps with null IDs where the checker expects named IDs. The QA skill text is the only workflow file edited. Remote statistics retrieval and attribution to individual resumed attempts remain outside the local statistics reader. Only one frontier metrics block and one evaluation deal were exercised.</p>
+</body></html>

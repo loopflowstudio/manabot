@@ -365,13 +365,14 @@ publish, land or choose the next Graph step from here.
 - Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.
-- Python-only library changes (no engine change): `uv build --wheel --package
-  manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
-  venv with `uv pip install <wheel> --index-url https://pypi.org/simple
-  --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
-  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
-  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
-  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+- Python library changes: build manabot with `uv build --wheel --package
+  manabot -o .runs/<dir>`. When the checkout has unreleased engine changes,
+  stage the engine with scripts/release/prepare.py as in docs/development.md
+  and build its wheel from the staged managym directory. Install both local
+  wheels in the fresh venv, including the evaluation extra for corpus SQL.
+  The PyPI engine can carry the same version and lack modules used by the
+  checkout. Run the user script from /tmp with
+  `uv run --no-project --python <venv>/bin/python python -I <script>`.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
@@ -584,3 +585,15 @@ publish, land or choose the next Graph step from here.
   repos/loopflowstudio/manabot/actions/jobs/<job-id>/logs` and grep `^FAILED`.
   Check the PR's checks before QA ends; tests elsewhere in the tree can still
   assert the behavior the change replaced.
+- Training corpus and checkpoint ancestry: use a fresh ETUDE_HOME for
+  `uv run --extra evaluation etude train manabot/recipes/local.py --config
+  '{"statistics":true}' --until updates=1`. Resume with the same home and
+  recipe, `--resume --until updates=2`, omitting the config. Use the guide
+  in docs/evaluation.md on the resulting checkpoints and compare Island
+  draws and choices with terminal records from
+  `read_statistics(home / "track/local/out/statistics")` at capture update
+  one less than the outcome update. For ancestry, train a one-update recipe
+  in the same home with SelfPlay.pretrained set to the update-one policy in
+  the parent's Etude checkpoint record. The child corpus should contain the
+  parent's first update and the child's first update. Query historical
+  frontier settings against the sealed run declaration as well as its counts.

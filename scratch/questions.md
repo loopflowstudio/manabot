@@ -189,3 +189,7 @@ say so if they should carry a note.
     unidentifiable parent leaves ancestry unknown. A single local statistics
     path cannot prove statistics coverage across a chain. Attempt-aware
     statistics publication remains question 38.
+
+42. For historical training settings, report a stage setting only when every
+    declared stage records the same value. The settings table has one row per
+    run, so a value that varies by stage has no single run-wide value.

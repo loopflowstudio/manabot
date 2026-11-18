@@ -29,7 +29,12 @@ def test_corpus_queries_use_completed_games_through_update(
             "training": {
                 "identities": {"content_digest": catalog["world_digest"]},
                 "regime": {
-                    "deck_source": {"decks": [deck.to_dict() for deck in decks]}
+                    "deck_source": {"decks": [deck.to_dict() for deck in decks]},
+                    "observation": {"policy_input_version": 9, "max_actions": 64},
+                    "stages": [
+                        {"behavior": "current-self", "learning_seats": "one"},
+                        {"behavior": "current-self", "learning_seats": "both"},
+                    ],
                 },
             }
         }
@@ -62,6 +67,10 @@ def test_corpus_queries_use_completed_games_through_update(
         corpus = training_corpus(read(tmp_path, "corpus", run.name), update)
         return corpus.query("corpus", sql).fetchall()
 
+    assert corpus_sql(
+        1,
+        "select policy_input_version, max_actions, behavior, learning_seats, mana_taps from settings",
+    ) == [(9, 64, "current-self", None, None) if historical else (None,) * 5]
     assert corpus_sql(1, "select play, draw, games from corpus") == [
         (island.identity, island.identity, 1)
     ]

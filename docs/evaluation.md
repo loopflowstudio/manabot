@@ -259,7 +259,7 @@ print("Roster decks and distinct card keys:", len(decks),
 def query(sql: str) -> list[tuple[object, ...]]:
     return corpus.query("corpus", sql).fetchall()
 
-print("Completed games:", query("select sum(games) from corpus"))
+print("Completed games:", query("select coalesce(sum(games), 0) from corpus"))
 print("Observed decks:", query("""
     select count(distinct deck) from (select unnest([play, draw]) as deck from corpus)
 """))
@@ -307,8 +307,9 @@ print(query("select run, entry, deck, board, card, copies from deck_cards order 
 ```
 
 Self-play and the minimal loop write these tables at update zero. A roster
-can contain several entries with the same deck identity. Older runs have
-NULL for unrecorded settings and supply no per-board rows in `deck_cards`.
+can contain several entries with the same deck identity. Older runs use their declared observation
+settings and values shared by every declared stage. They have NULL for
+unrecorded or varying settings and supply no per-board rows in `deck_cards`.
 Card membership includes main decks and sideboards.
 For historical scalar outcomes, the roster comes from the declared deck source
 and card keys come from the writer's catalog. An explicitly logged empty

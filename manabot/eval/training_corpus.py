@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from itertools import batched
 import json
 from pathlib import Path
+from typing import Any
 
 import duckdb
 from etude.checkpoints import CheckpointRecord
@@ -56,13 +57,38 @@ def roster_from_cards(rows: list[DeckCard]) -> list[CorpusDeck]:
     ]
 
 
+def declared_training(data: RunData) -> dict[str, Any]:
+    """Read historical recipe JSON without applying current recipe defaults."""
+    if not data.file or not data.file.config_json:
+        return {}
+    return json.loads(data.file.config_json).get("training", {})
+
+
+def declared_settings(data: RunData) -> dict[str, object]:
+    regime = declared_training(data).get("regime", {})
+    observation = regime.get("observation", {})
+    settings = {
+        key: observation.get(key)
+        for key in (
+            "max_actions",
+            "action_overflow",
+            "mana_taps",
+            "policy_input_version",
+        )
+    }
+    settings["decklists"] = (regime.get("deck_source") or {}).get("decklists")
+    stages = regime.get("stages", [])
+    for key in ("behavior", "learning_seats", "opponent_mode", "matchup_curriculum"):
+        # A run-wide value must hold in every declared stage.
+        values = {stage.get(key) for stage in stages}
+        settings[key] = values.pop() if len(values) == 1 else None
+    return settings
+
+
 def declared_roster(data: RunData) -> list[CorpusDeck]:
     """Read the decks of a run that predates `DECK_TABLE` from its declaration."""
-    config = (
-        json.loads(data.file.config_json) if data.file and data.file.config_json else {}
-    )
+    training = declared_training(data)
     try:
-        training = config["training"]
         decks = training["regime"]["deck_source"]["decks"]
         digest = training["identities"]["content_digest"]
     except (KeyError, TypeError) as error:
@@ -298,16 +324,16 @@ def add_run(
     if statistics is not None:
         add_card_statistics(db, statistics, games, through)
     tables = data.read_table(SETTINGS_TABLE, "updates")
-    if not tables:
-        db.execute("insert into settings(experiment, run) values (?, ?)", identity)
-        return None
-    (table,) = tables
-    (settings,) = table.rows
+    if tables:
+        (table,) = tables
+        (settings,) = table.rows
+    else:
+        settings = declared_settings(data)
     db.execute(
         "insert into settings by name select ? as experiment, ? as run, unnest(?)",
         [*identity, settings],
     )
-    digest = settings["parent_sha256"]
+    digest = settings.get("parent_sha256")
     if digest is None:
         return None
     name, update = settings["parent_run"], settings["parent_update"]
