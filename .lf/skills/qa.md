@@ -560,6 +560,16 @@ publish, land or choose the next Graph step from here.
   --no-open --port <unused>` (bare `academy`; `watch` requires `--player`);
   `GET /api/opponents` lists each entry's `available` and `reason`, and the
   Seat 2 bot select's "Registered policy" shows them as disabled options.
+  An unexplained-key copy: set `semantic_cards.record_token_keys[0]` in a v9
+  `.pt` state dict to `(3 << 32) | 12345`. In the browser, select
+  `[data-testid=opponent-select]` → `policy`, then the
+  `[data-testid=checkpoint-select]` option, and press "Start game" (the setup
+  form has no "New Game" button); the end dialog offers "Rematch".
+  `--out <dir>` leaves `binding.json` (the full load report) even when the
+  run stops early. `python -m manabot.backends.convert` must accept both a
+  PyTorch zip and a container saved under a `.pt` name (`save_checkpoint`
+  always writes a container); convert the pinned pilots and u1952, then load
+  each `.safetensors`.
   `manabot recheck` fetches its checkpoint from R2: `doppler run --project
   manabot --config prd -- uv run --extra artifacts manabot recheck <ref>
   --seconds <s> --out <new dir>`; one deck pair took about a minute on a

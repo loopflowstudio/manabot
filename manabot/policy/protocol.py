@@ -13,6 +13,7 @@ and `Settings` are one captured minibatch's constants and coefficients.
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from pathlib import Path
 from types import ModuleType, TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 
@@ -229,7 +230,7 @@ class Backend(Protocol):
 
     def load_policy(
         self,
-        path: str | PolicyCheckpoint,
+        path: str | Path | PolicyCheckpoint,
         *,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,

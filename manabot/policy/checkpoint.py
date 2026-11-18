@@ -335,6 +335,11 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
     Raises `NotAContainer` for a file that is not safetensors or lacks the
     container metadata; convert its PyTorch checkpoint again.
     """
+    return admit_checkpoint(read_saved_container(path))
+
+
+def read_saved_container(path: str | Path) -> PolicyCheckpoint:
+    """A container's tensors and metadata as written, before admission."""
     path = Path(path)
     remedy = "convert the PyTorch .pt with `uv run python -m manabot.backends.convert`"
     try:
@@ -357,7 +362,7 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
     for name, value in parameters.items():
         if value.dtype != np.float32:
             raise TypeError(f"parameter {name}: expected float32, got {value.dtype}")
-    checkpoint = PolicyCheckpoint(
+    return PolicyCheckpoint(
         model=model,
         space=space,
         parameters=parameters,
@@ -366,7 +371,6 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
         },
         metadata=metadata,
     )
-    return admit_checkpoint(checkpoint)
 
 
 def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:

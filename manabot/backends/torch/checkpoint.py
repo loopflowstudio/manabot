@@ -50,8 +50,8 @@ from manabot.policy.checkpoint import (
     canonical_name,
     checkpoint_metadata,
     from_torch_state,
-    read_container,
     read_metadata,
+    read_saved_container,
     torch_name,
     write_container,
 )
@@ -124,10 +124,8 @@ def load_checkpoint(
 
 def read_policy(path: str) -> PolicyCheckpoint:
     """Read and bind either policy format without constructing a Torch module."""
-    if _is_torch_file(Path(path)):
-        return admit_checkpoint(read_torch_checkpoint(Path(path)))
     try:
-        return read_container(path)
+        return admit_checkpoint(read_written(Path(path)))
     except NotAContainer as error:
         raise NotAContainer(
             f"{path} is neither a PyTorch checkpoint (a zip archive) nor a "
@@ -163,6 +161,13 @@ def restore_policy(
     )
     agent.eval()
     return agent
+
+
+def read_written(path: Path) -> PolicyCheckpoint:
+    """The writer's tensors and metadata from either format, before admission."""
+    if _is_torch_file(path):
+        return read_torch_checkpoint(path)
+    return read_saved_container(path)
 
 
 def read_torch_checkpoint(path: Path) -> PolicyCheckpoint:
@@ -361,12 +366,14 @@ class _Torch:
 
     @staticmethod
     def load_policy(
-        path: str | PolicyCheckpoint,
+        path: str | Path | PolicyCheckpoint,
         *,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> tuple[ActorCritic, ObservationSpace]:
-        checkpoint = read_policy(path) if isinstance(path, str) else path
+        checkpoint = (
+            path if isinstance(path, PolicyCheckpoint) else read_policy(str(path))
+        )
         agent = restore_policy(
             checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
         )
