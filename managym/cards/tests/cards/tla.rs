@@ -14839,6 +14839,8 @@ fn fire_lord_sozin_payment_precedes_targets_and_caps_their_total() {
         // A target leaves during the response window. Only the remaining
         // legal target returns; payment is not refunded or recomputed.
         let first = move_card(&mut s, first, ZoneType::Exile);
+        let view = Observation::for_player(s.game(), PlayerId(0));
+        assert_eq!(view.stack_objects[0].targets.len(), 1);
         settle(&mut s);
         assert_eq!(zone_of(&s, first), Some(ZoneType::Exile));
         assert_eq!(zone_of(&s, second), Some(ZoneType::Battlefield));
