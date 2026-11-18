@@ -1,18 +1,40 @@
 # Do fixed-source mana taps at priority and during payments change TLA learnability?
 
-**Offering mana taps increased median seconds per update by 55%. Its effect on learnability is unresolved through update 50.** The on arm scored 0/64 against the heuristic in each seed at initialization and again at update 50. The off arm started at 4/64 in each seed and reached 5, 5 and 4 wins. Head to head, the on arm scored 39/192 at update 50. The strength gap was already present before training.
+**Offering mana taps slowed training per update. Both raw policies learned.** With taps on, the median seed pair took 55% longer per update and surfaced 89% more decisions per game. Against the heuristic the raw on arm trailed at 25 updates (34/192 vs 70/192) and narrowed the gap at 50 (82/192 vs 88/188). It won 80/188 head-to-head games at update 50. At similar active training time the off arm still led in every seed. These three seeds establish an early time cost. The longer-run strength difference remains open.
 
-The raw learner chose priority taps much less often during self-play. Across seeds the share of surfaced decisions spent tapping fell from 38.0–38.6% in the first collection to 15.1–17.6% at update 25 and 7.7–9.2% at update 50. Each collection drew fresh decks and deals. The recorded EMA spot check on a fixed pair stayed at 39.8% chosen.
+**The learners learned to skip most priority taps.** In raw self-play the share of surfaced decisions spent tapping fell from 38.0–38.6% in the first collection to 15.1–17.6% at update 25 and 7.7–9.2% at update 50. The fixed-deal spot checks below also show a decline against the heuristic. The long-horizon EMA hid most of the change.
+
+Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16 and undo disabled. Through update 50 each seed pair used one L4. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Each checkpoint played the same 16 fixed deck pairs against the first-64 heuristic and its paired checkpoint, with seats and decks crossed. Training seeds are the three units of evidence.
+
+## Raw learners through update 50
+
+Scores below are points out of 64 unless the cell gives another denominator. Initialization uses the original evaluation. The raw and EMA models start with the same weights. At roughly 0.7–0.85 active hours the on arm won 11, 16 and 7 games at update 25. The nearest off checkpoints won 29, 24 and 29 games respectively (updates 50, 25 and 50). On the 188 update-50 heuristic legs scored in both arms, off won 88 and on won 80. The paired win deficits for on were 5, 1 and 2 games across seeds.
+
+| Seed | Off vs heuristic, 0 / 25 / 50 | On vs heuristic, 0 / 25 / 50 | On vs off, 0 / 25 / 50 |
+| --- | --- | --- | --- |
+| 21501 | 4 / 25 / 29 | 0 / 11 / 24 | 13 of 60 / 14 / 26 of 60 |
+| 21502 | 4 / 24 / 30 of 60 | 0 / 16 / 31 | 16 / 20 / 28 |
+| 21503 | 4 / 21 / 29 | 0 / 7 / 27 | 12 / 12 / 26 |
+
+![Raw policy scores by update and active training time](../data/mtg385/raw-audit/strength.png)
+
+On the four crossed legs of deck pair 0 against the heuristic, raw policies increasingly passed up available taps. Counts at initialization were identical for all three seeds and are shown once. Later rows pool the three seeds. Expiry bounds account for mixed pools.
+
+| Update | Float offered / surfaced | Float chosen / surfaced | Floated mana expired / produced |
+| --- | ---: | ---: | ---: |
+| 0 | 234/322 (72.7%) | 128/322 (39.8%) | 118–119/128 (92.2–93.0%) |
+| 25 | 1,376/1,968 (69.9%) | 244/1,968 (12.4%) | 221–224/244 (90.6–91.8%) |
+| 50 | 1,818/2,683 (67.8%) | 239/2,683 (8.9%) | 214–222/239 (89.5–92.9%) |
+
+The local Etude evaluations `raw-u25.2aa8ccac3ce4` and `raw-u50.cc3afed17746` completed 144 matches each using raw exports verified against the training runs' stored digests. All 576 legs scored at update 25. At update 50 two native stale-object panics excluded their entire deals (21502 off vs heuristic, deal 385003, and 21501 head-to-head, deal 385011), leaving 568 scored legs. The game rows, 144 seat-level spot checks and 72 replay blobs are in the raw audit artifacts. [Update 25 games](../data/mtg385/raw-audit/games-u25.csv) · [Update 50 games](../data/mtg385/raw-audit/games-u50.csv) · [Update 25 spot checks](../data/mtg385/raw-audit/mana_spot_checks-u25.csv) · [Update 50 spot checks](../data/mtg385/raw-audit/mana_spot_checks-u50.csv) · [Replays](../data/mtg385/raw-audit/replays.tar)
 
 ### Checkpoint audit, 2026-11-18
 
 The evaluation loader read all 18 recorded EMA checkpoints after verification against their Etude SHA-256 records. All six runs changed their action probabilities between initialization and updates 25 and 50. The probe used the same two legal choices for every forward, pass or tap on decision index 1 of replay `580a82dd5615c5f4a09bd71dc622c86c8895b7010bc401fa1d7b7cc0be18466d` (deal 385000, on vs heuristic, leg 0). For off-arm models this is a diagnostic input outside their training action space.
 
-Across the six runs, the largest absolute change in a legal action's log probability from initialization to update 50 ranged from 0.0048 to 0.0079 for EMA and from 0.067 to 2.90 for the raw learner on that decision. The 0.999 EMA advances once per collection update and still gives initialization 95.1% of its weight at update 50. The small EMA shifts can leave seeded choices identical even when the raw policy has moved. This probe measures policy movement on one decision. Measuring how well the raw learners play requires scored games.
+Across the six runs, the largest absolute change in a legal action's log probability from initialization to update 50 ranged from 0.0048 to 0.0079 for EMA and from 0.067 to 2.90 for the raw learner on that decision. The 0.999 EMA advances once per collection update and still gives initialization 95.1% of its weight at update 50. The small EMA shifts can leave seeded choices identical even when the raw policy has moved.
 
-Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16, and undo disabled. Each seed pair used one L4. The common target was reduced from 250 to 50 updates based on the previous on-arm pace and the USD35 whole-experiment cap. The comparison uses EMA exports at updates 0, 25 and 50. Each checkpoint played the same 16 fixed deck pairs, with seats and decks crossed over four legs. Training seeds are the three units of evidence. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Both choices affect how often a starting policy taps.
-
-## Strength by update and active training time
+## EMA strength by update and active training time
 
 Each cell lists the observations at updates **0 / 25 / 50**. Scores are points out of 64 scored games unless another denominator appears. At roughly 0.7–0.85 active hours, the on arm scored 0/64 for every seed at update 25. The nearest off-arm observations were 5/64 at 0.83 hours, 4/64 at 0.70 hours and 4/64 at 0.85 hours, respectively.
 
@@ -41,7 +63,9 @@ completed games and active seconds, respectively.
 | 21503 | 208.2 → 373.7 | 890 → 1,006 | 61.6 → 95.2 | 0.85 → 1.32 |
 
 The median paired increase was 89% in decisions/game, 13% in decisions/s
-and 55% in seconds/update. The complete-games collector retained more
+and 55% in seconds/update. Expressed as updates per active hour, off → on was
+60.3 → 33.8, 43.6 → 38.8 and 58.5 → 37.8 for seeds 21501–21503.
+The complete-games collector retained more
 decisions in each on-arm batch. Host conditions still varied over time.
 For seed 21502 the off arm's first update alone took 705 seconds.
 
@@ -209,9 +233,15 @@ Etude confirmed deletion of all four machines. Its machine ledger on
 The earlier cancelled RunPod run and unresolved Lium charge are recorded
 above. The final whole-experiment bill remains open.
 
+### Continuation toward update 250
+
+On 2026-11-18 all six original run addresses resumed from their update-50 learner, optimizer and EMA states on revision `5794a91d97`. Etude retains the original config and applies the absolute target `updates=250`. Seed 21501 uses two L4s. Seeds 21502 and 21503 use A40s after L4 capacity ran out. Each run has its own rental. The six rental ceilings total USD18.01. The unresolved USD5.33 Lium allowance remains reserved within the USD35 whole-experiment cap. The raw checkpoint audit ran locally. Continuation costs and scores beyond update 50 are pending.
+
 ## Published results
 
-Fetch the five artifacts with
+Fetch the raw audit with
+`uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg385/raw-audit`.
+Fetch the initial EMA evaluation and training records with
 `uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg385/paired-l4`.
 The interactive report can switch its horizontal axis between updates and hours.
 [Learning curves](../data/mtg385/paired-l4/mana-taps-paired-l4.html) ·
