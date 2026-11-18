@@ -328,8 +328,10 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             ),
             play=play,
             extras=("evaluation",),
-            workers=28,
-            max_hours=2.0,
+            # One single-threaded game per vCPU of a 32-vCPU CPU machine; more
+            # workers than cores stretched games past the 600 s wall budget.
+            workers=30,
+            max_hours=3.0,
             max_usd=Decimal("4.00"),
             setup=machine_setup(" --extra evaluation"),
         )

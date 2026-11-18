@@ -324,7 +324,7 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     assert len(jobs) == 1
     seatings = jobs[0].tournament.seatings
     assert len(seatings) == 60
-    assert jobs[0].max_hours == 2 and jobs[0].max_usd == 4
+    assert jobs[0].max_hours == 3 and jobs[0].max_usd == 4
     curves = [
         panel for panel in opponent_memory.report().evals if isinstance(panel, Curve)
     ]
