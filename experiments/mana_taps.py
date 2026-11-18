@@ -1,7 +1,7 @@
 """Do fixed-source taps at priority and during payments change w64 TLA learning or throughput?
 
-Three training seeds each train with taps off and on. Etude plays each policy against
-the first-64 heuristic and compares on against off at matched updates. Every
+Three training seeds each train with taps off and usable. Etude plays each policy
+against the first-64 heuristic and compares usable against off at matched updates. Every
 point uses the same 16 trophy pairs, crossing seats and decks within each deal.
 Run locally with `uv run etude smoke experiments/mana_taps.py`.
 """
@@ -118,13 +118,14 @@ def corpus() -> UniformDecks:
 
 
 class Arm(StrictModel):
-    taps: bool
+    taps: managym.ManaTaps
     device: Literal["cpu", "cuda"] = "cuda"
-    updates: int = 250
+    updates: int = 50
 
     @property
     def name(self) -> str:
-        return f"mana-taps-w64-{'on' if self.taps else 'off'}"
+        label = {False: "off", True: "on", "usable": "usable"}[self.taps]
+        return f"mana-taps-w64-{label}"
 
 
 def settings(arm: Arm) -> SelfPlay:
@@ -133,9 +134,7 @@ def settings(arm: Arm) -> SelfPlay:
     local = arm.device == "cpu"
     return SelfPlay(
         deck_source=corpus(),
-        observation=OBSERVATION.model_copy(update={"mana_taps": True})
-        if arm.taps
-        else OBSERVATION,
+        observation=OBSERVATION.model_copy(update={"mana_taps": arm.taps}),
         model=model("w64"),
         learning=learning("w64"),
         behavior="current-self",
@@ -167,12 +166,12 @@ def train(config: Arm) -> None:
 
 def training_jobs(
     revision: str | None = None,
-    hours: float = 7,
-    usd_per_run: float = 4.50,
-    updates: int = 250,
+    hours: float = 3,
+    usd_per_run: float = 2.28,
+    updates: int = 50,
     max_attempts: int = 1,
 ) -> list[TrainingJob]:
-    arms = [Arm(taps=taps, updates=updates) for taps in (False, True)]
+    arms = [Arm(taps=taps, updates=updates) for taps in (False, "usable")]
     given = corpus_input()
     return [
         TrainingJob(
@@ -211,8 +210,8 @@ def deals() -> Deals:
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     """Compare complete seed pairs. Etude smoke supplies one seed per distinct job."""
-    names = {Arm(taps=taps).name: taps for taps in (False, True)}
-    runs: dict[tuple[int, bool], TrainingRunSummary] = {}
+    names = {Arm(taps=taps).name: taps for taps in (False, "usable")}
+    runs: dict[tuple[int, managym.ManaTaps], TrainingRunSummary] = {}
     for run in state.runs:
         if run.launch not in names or run.seed not in SEEDS or run.seed is None:
             continue
@@ -222,7 +221,9 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         if not run.ended:
             return []
         runs[key] = run
-    if not runs or any((seed, not taps) not in runs for seed, taps in runs):
+    if not runs or any(
+        (seed, taps) not in runs for seed, _ in runs for taps in names.values()
+    ):
         return []
     if not any(run.checkpoints for run in runs.values()):
         return []
@@ -251,10 +252,10 @@ def raw_export(run: TrainingRunSummary, ema: CheckpointRecord) -> CheckpointReco
 
 
 def paired_evaluation(
-    runs: dict[tuple[int, bool], TrainingRunSummary], *, raw: bool
+    runs: dict[tuple[int, managym.ManaTaps], TrainingRunSummary], *, raw: bool
 ) -> EvalJob:
     exports: list[CheckpointRecord] = []
-    checkpoints: dict[tuple[int, bool], dict[int, CheckpointPlayer]] = {}
+    checkpoints: dict[tuple[int, managym.ManaTaps], dict[int, CheckpointPlayer]] = {}
     for key, run in runs.items():
         records: Sequence[CheckpointRecord] = run.checkpoints
         if raw:
@@ -286,18 +287,20 @@ def paired_evaluation(
         )
 
     for seed in sorted({seed for seed, _ in runs}):
-        off, on = (checkpoints[seed, t] for t in (False, True))
-        for label, saved in (("off", off), ("on", on)):
-            for update, player in sorted(saved.items()):
+        off, usable = checkpoints[seed, False], checkpoints[seed, "usable"]
+        for update in sorted(off.keys() & usable.keys()):
+            for label, player in (("off", off[update]), ("usable", usable[update])):
                 compare(
                     f"seed {seed} {label} u{update} vs heuristic",
                     "heuristic",
                     player,
                     heuristic,
                 )
-        for update in sorted(off.keys() & on.keys()):
             compare(
-                f"seed {seed} on vs off u{update}", "on-vs-off", on[update], off[update]
+                f"seed {seed} usable vs off u{update}",
+                "usable-vs-off",
+                usable[update],
+                off[update],
             )
     return EvalJob(
         play=mana_taps.play,
@@ -485,14 +488,16 @@ def report() -> Report:
         score=Score(table="games", value="score", reference=0.5, unit="games"),
         evals=(
             Curve(title="EMA against the heuristic", matches=Matches(tag="heuristic")),
-            Curve(title="EMA, taps on against off", matches=Matches(tag="on-vs-off")),
+            Curve(
+                title="EMA, usable against off", matches=Matches(tag="usable-vs-off")
+            ),
             Curve(
                 title="Raw learner against the heuristic",
                 matches=Matches(tag="raw-heuristic"),
             ),
             Curve(
-                title="Raw learners, on against off",
-                matches=Matches(tag="raw-on-vs-off"),
+                title="Raw learners, usable against off",
+                matches=Matches(tag="raw-usable-vs-off"),
             ),
         ),
         perf=tuple(
