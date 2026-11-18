@@ -250,7 +250,7 @@
   .move { display: flex; align-items: baseline; gap: 6px; padding-left: 26px; color: var(--text); line-height: 16px; }
   .move .what { flex: 1; min-width: 0; }
   .move .who { flex: none; width: 60px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .move .who.repeat { color: transparent; }
+  .move .who.repeat { visibility: hidden; }
   .move.you .who { color: var(--info-text); }
   .move.auto { color: var(--text-tertiary); font-style: italic; }
   .card-name { text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
