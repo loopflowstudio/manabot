@@ -9,19 +9,39 @@ that every board layer adds through a gate. The comparison is `control` (the log
 is kept and validated, no encoder reads it) against `gru-k1`, on mixed-disclosure
 Elemental 10v10. The history-disabled incumbent is the throughput reference only.
 
-## Answer so far
+## Answer
 
-On 2026-11-17 the Task session reported two small trunks running at about
-780 learner decisions/s on an A40, or roughly USD0.70 of compute per trunk.
-Seed 39103 was waiting for A40 supply. Branch learning and strength are unmeasured.
+**No, at this scale. The work is paused with memory off by default.**
 
-What is measured is cost. On one A40 (`cuda-calibration-suffix@39100`, two
-updates per worker, 32 execution rows) the incumbent trained at 346 learner
-decisions/s, the control at 313–318 and the GRU at 288: 1.105× and 1.201× the
-incumbent's time. With history off, this source matches main on CPU (1.0044×
-total time, identical decisions, gradients and weights). The supervised probe
-chose K=1 over K=4 by its tie-break rule; it is a scripted proxy and says
-nothing about playing strength. Each of these has a dated entry in the appendix.
+- **The policy did not use its memory.** Across three seeds the gates ended
+  at 0.06 to 0.08 of full strength, and a final GRU checkpoint scored 0.48 to
+  0.53 against the same checkpoint with its memory blanked.
+- **The GRU arm still ended somewhat stronger.** Final GRU against control
+  scored 0.54 to 0.62, and against the heuristic 0.42 to 0.44 where control
+  scored 0.31 to 0.42. Its games held fewer decisions, so the same number of
+  decisions gave it more updates (136 to 150 against 86 to 114). The cause of
+  the shorter games is open; shared gradient clipping is ruled out as the
+  main one.
+- **Neither arm had finished learning.** Both rose from about 0.10 against
+  the heuristic at the branch point and were still below it at 7 to 8M
+  decisions.
+- **The memory holds little hand information here.** Fitted to predict the
+  opponent's hand on 7,634 heuristic-game decisions, it improved closed-list
+  log loss by 0.002 to 0.005 over the public state and did not help with
+  open lists. Scripted and weak play may be why: history is informative when
+  choices depend on the hand in ways the board does not show.
+- **Cost.** With history off this source costs the same as main: 0.998× on
+  an A40 and 1.0044× on CPU. With memory on, the A40 measured 1.105× for
+  control and 1.201× for the GRU arm.
+
+The wide model was not run. Total rental was about USD 24.
+
+**To pick up later:** rerun when policies beat the heuristic, since stronger
+play is where history should carry information; compare arms at matched
+decisions and matched updates; and decide whether hidden-hand labels may
+enter the training loop before building an auxiliary loss.
+
+Each result has a dated entry in the appendix.
 
 ## Method
 
