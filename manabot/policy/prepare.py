@@ -21,6 +21,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from functools import cached_property
+from hashlib import sha256
 
 import numpy as np
 
@@ -54,6 +55,7 @@ from manabot.env.observation import (
 )
 from manabot.env.shared_effects import EFFECT_ROWS
 from manabot.policy.buckets import has_history_events
+from manabot.policy.decision_memory import MemoryRows, prepare_memory
 
 Array = np.ndarray
 
@@ -122,6 +124,42 @@ class Tables:
     record_buckets: int = 4096
     # Preserve a backend's existing tie order while sorting only host lengths.
     order_lengths: Callable[[Array], Array] | None = None
+
+    def __post_init__(self) -> None:
+        # Memory certificates bind exact immutable lookup bytes, never weights
+        # or a mutable backend buffer's Python identity.
+        for name in self._MEMORY_LOOKUPS:
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(
+                    self,
+                    name,
+                    np.frombuffer(value.tobytes(), value.dtype).reshape(value.shape),
+                )
+
+    _MEMORY_LOOKUPS = (
+        "definition_rows",
+        "record_name_keys",
+        "record_name_rows",
+        "record_token_keys",
+        "record_token_rows",
+        "record_number_rows",
+        "name_definitions",
+    )
+
+    @cached_property
+    def memory_binding(self) -> str:
+        from managym.decision_memory import definition_programs
+
+        digest = sha256(str(self.record_buckets).encode())
+        digest.update(repr(definition_programs()).encode())
+        for name in self._MEMORY_LOOKUPS:
+            value = getattr(self, name)
+            digest.update(name.encode())
+            if value is not None:
+                digest.update(str((value.dtype, value.shape)).encode())
+                digest.update(value.tobytes())
+        return digest.hexdigest()
 
     @cached_property
     def full_programs(self) -> "CatalogPrograms[Array]":
@@ -456,7 +494,8 @@ class Prepared[A]:
     programs: CatalogPrograms[A] | None = None
     belief: BeliefRows[A] | None = None
     events: EventRows[A] | None = None
-    live_index: A | None = None  # flat valid object slots, including value token
+    memory: MemoryRows[A] | None = None
+    live_index: A | None = None  # flat valid slots, including memory/value tokens
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
@@ -477,6 +516,9 @@ def prepare(
     bucketed: bool = False,
     live_tokens: bool = False,
     value_token: bool = False,
+    memory_summaries: int = 0,
+    memory_fold: bool = False,
+    memory_roots: Mapping[str, int] | None = None,
     binding: str = "",
     action_capacity: int | None = None,
     select_programs: bool = False,
@@ -489,6 +531,11 @@ def prepare(
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
+    memory = (
+        prepare_memory(obs, tables, fold=memory_fold, roots=memory_roots)
+        if memory_summaries
+        else None
+    )
     obs = {key: np.asarray(value) for key, value in obs.items()}
     history = has_history_events(obs)
     for key, width in (tables.layout.column_widths or {}).items():
@@ -680,7 +727,9 @@ def prepare(
         is_agent=ownership,
         # Full-catalog preparation skips the scan for referenced definitions.
         programs=tables.programs(
-            _referenced_definitions(obs, tables, candidates, history)
+            _referenced_definitions(
+                obs, tables, candidates, history=history, memory=memory
+            )
             if select_programs
             else None
         )
@@ -688,6 +737,7 @@ def prepare(
         else None,
         belief=belief,
         events=_events(obs, tables, objects) if history else None,
+        memory=memory,
         live_index=np.flatnonzero(present) if live_tokens else None,
         live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
         if live_tokens
@@ -696,7 +746,12 @@ def prepare(
 
 
 def _referenced_definitions(
-    obs: ObservationBuffers, tables: Tables, candidates: Array, history: bool
+    obs: ObservationBuffers,
+    tables: Tables,
+    candidates: Array,
+    *,
+    history: bool,
+    memory: MemoryRows[Array] | None,
 ) -> Array:
     """Catalog subset read by learning, in sorted row order (zero is padding)."""
     references = [
@@ -727,6 +782,8 @@ def _referenced_definitions(
     referenced = np.unique(
         tables.rows(np.concatenate([ids.reshape(-1) for ids in references]))
     )
+    if memory is not None:
+        referenced = np.union1d(referenced, memory.reference_definitions)
     return referenced[referenced > 0]
 
 

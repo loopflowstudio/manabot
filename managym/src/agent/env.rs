@@ -127,6 +127,8 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
+    decision_memory_enabled: bool,
+    decision_memory_include_own: bool,
     disclosure: DecklistDisclosure,
     actions: Vec<usize>,
 }
@@ -151,8 +153,18 @@ impl serde::Serialize for NativeActionTrace {
                 disclosure: self.disclosure,
             })
             .collect();
-        let mut record = serializer.serialize_struct("NativeActionTrace", 2)?;
+        let mut record = serializer.serialize_struct(
+            "NativeActionTrace",
+            2 + usize::from(self.decision_memory_include_own)
+                + usize::from(!self.decision_memory_enabled),
+        )?;
         record.serialize_field("player_configs", &players)?;
+        if !self.decision_memory_enabled {
+            record.serialize_field("decision_memory", &false)?;
+        }
+        if self.decision_memory_include_own {
+            record.serialize_field("decision_memory_include_own", &true)?;
+        }
         record.serialize_field("actions", &self.actions)?;
         record.end()
     }
@@ -175,6 +187,8 @@ pub struct Env {
     capture_exposure: bool,
     retained_exposure: Vec<String>,
     skip_trivial: bool,
+    decision_memory_enabled: bool,
+    decision_memory_include_own: bool,
     /// Configured seed for the next reset.
     seed: u64,
     /// Originating reset seed, independent of pending resets and branch RNG seeds.
@@ -270,6 +284,8 @@ impl Env {
             capture_exposure: false,
             retained_exposure: Vec::new(),
             skip_trivial,
+            decision_memory_enabled: false,
+            decision_memory_include_own: false,
             seed,
             reset_seed: seed,
             profiler: Profiler::new(enable_profiler, 64),
@@ -297,6 +313,8 @@ impl Env {
             heuristic_events: self.heuristic_events.clone(),
             player_policies: self.player_policies,
             reset_seed: self.reset_seed,
+            decision_memory_enabled: self.decision_memory_enabled,
+            decision_memory_include_own: self.decision_memory_include_own,
             capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
             ..Self::new(self.seed, self.skip_trivial, false, false)
         }
@@ -329,6 +347,9 @@ impl Env {
             seed: self.seed,
             disclosure: player_configs.decklists.resolve(self.seed),
             player_configs: Arc::from(player_configs.players.clone()),
+            decision_memory_enabled: self.decision_memory_enabled
+                || self.decision_memory_include_own,
+            decision_memory_include_own: self.decision_memory_include_own,
             actions: Vec::new(),
         });
         let mut game = Game::construct(
@@ -338,6 +359,9 @@ impl Env {
             self.capture_cards,
             self.collect_statistics,
         );
+        game.decision_memory_enabled =
+            self.decision_memory_enabled || self.decision_memory_include_own;
+        game.decision_memory_include_own = self.decision_memory_include_own;
         if self.capture_exposure {
             game.card_capture
                 .as_mut()
@@ -361,7 +385,9 @@ impl Env {
     /// Unlike a search branch, this continues the producer's retained evidence.
     pub(crate) fn replacement_root(&self) -> Result<Self, AgentError> {
         let mut replacement = Self::new(self.seed(), self.skip_trivial, false, false)
-            .with_player_policies(self.player_policies);
+            .with_player_policies(self.player_policies)
+            .with_decision_memory(self.decision_memory_enabled)
+            .with_decision_memory_include_own(self.decision_memory_include_own);
         replacement.collect_statistics = self.collect_statistics;
         replacement.capture_cards = self.capture_cards;
         replacement.capture_exposure = self.capture_exposure;
@@ -519,6 +545,25 @@ impl Env {
             "post_error_pending_choice": self.game.as_ref().map(|game| &game.pending_choice),
             "post_error_offers": self.game.as_ref().and_then(|game| game.action_space()),
         }).to_string()
+    }
+
+    /// Opt in to viewer-safe decision capture before constructing a game.
+    pub fn with_decision_memory(mut self, enabled: bool) -> Self {
+        assert!(
+            self.game.is_none(),
+            "decision history must be configured before reset"
+        );
+        self.decision_memory_enabled = enabled;
+        self
+    }
+
+    pub fn with_decision_memory_include_own(mut self, enabled: bool) -> Self {
+        assert!(
+            self.game.is_none(),
+            "decision history must be configured before reset"
+        );
+        self.decision_memory_include_own = enabled;
+        self
     }
 
     /// Set chooser policies without changing game configuration or world identity.
@@ -1121,6 +1166,41 @@ impl Env {
             false,
             empty_info_dict(),
         ))
+    }
+
+    /// Transport-only counts for both viewer logs. Pair with capture_generation;
+    /// neither seeds nor policy observations authorize append-only reuse.
+    pub fn decision_memory_cursors(&self) -> Result<[[u64; 5]; 2], AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.decision_memory_cursors called before reset".into()))?;
+        Ok(std::array::from_fn(|viewer| {
+            let log = &game.decision_memory[viewer];
+            [
+                log.len() as u64,
+                log.detail_count() as u64,
+                log.reference_count() as u64,
+                log.member_count() as u64,
+                log.tail_version(),
+            ]
+        }))
+    }
+
+    pub fn decision_memory_counts(&self) -> Result<[[usize; 4]; 2], AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.decision_memory_counts called before reset".into()))?;
+        Ok(std::array::from_fn(|viewer| {
+            let log = &game.decision_memory[viewer];
+            [
+                log.len(),
+                log.detail_count(),
+                log.reference_count(),
+                log.member_count(),
+            ]
+        }))
     }
 
     pub fn semantic_event_cursor(&self) -> Result<u64, AgentError> {

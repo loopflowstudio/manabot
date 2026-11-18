@@ -127,7 +127,10 @@ def coverage_sweep(
     for game, seats in enumerate(players):
         first, second = [sorted(set(seat.decklist) - set(_BASICS)) for seat in seats]
         played.update(first, second)
-        env = managym.Env(seed=seed * 100_003 + game)
+        env = managym.Env(
+            seed=seed * 100_003 + game,
+            decision_memory=space.encoder.config.max_decision_records > 0,
+        )
         env.reset(seats)
         pending: list[dict[str, np.ndarray]] = []
         for _ in range(_MAX_DECISIONS):

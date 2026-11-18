@@ -86,7 +86,11 @@ def bind_catalog(
     """Return the policy with current public joins and unchanged trained programs.
 
     `model_interface` has admitted the checkpoint’s catalog records."""
-    catalog = catalog_tables(managym.WORLD_SETUP, records=True)
+    catalog = catalog_tables(
+        managym.WORLD_SETUP,
+        records=True,
+        decision_memory=bool(checkpoint.space.encoder.config.max_decision_records),
+    )
     buffers = catalog.buffers.copy()
     prefix = "semantic_cards."
     old = {

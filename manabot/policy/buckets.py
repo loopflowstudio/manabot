@@ -33,6 +33,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from manabot.env.decision_memory import MEMORY_FIELDS
+from manabot.env.memory_store import PrefixObservation
 from manabot.env.observation import ObservationBuffers, ObservationEncoder
 from managym import observation_layout
 
@@ -301,6 +303,11 @@ def row_needs(
         or obs[key].ndim != len(shape) + 1
         or tuple(obs[key].shape[1:]) != tuple(shape)
         for key, shape in shapes.items()
+        if not (
+            isinstance(obs, PrefixObservation)
+            and key in MEMORY_FIELDS
+            and key not in obs
+        )
     ):
         return None
     capacities = _capacities(encoder)
@@ -380,7 +387,12 @@ def trim_observation(
     obs: ObservationBuffers, buckets: BucketSizes
 ) -> dict[str, np.ndarray]:
     """Trim admitted host rows and remap every object join to the new table."""
-    trimmed = dict(obs)
+    trimmed = (
+        PrefixObservation(obs, obs.prefixes, obs.memory_capacities)
+        if isinstance(obs, PrefixObservation)
+        and not any(key in obs for key in MEMORY_FIELDS)
+        else dict(obs)
+    )
     for axis, keys in ROW_KEYS.items():
         for key in keys:
             if key in obs:

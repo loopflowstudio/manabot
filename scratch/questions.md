@@ -203,3 +203,7 @@ say so if they should carry a note.
     tables, and leaving it until after release. `decks` and `matchups` stay
     on the connection undocumented. Statistics across a parent chain stay
     refused until question 38.
+
+44. In the sync onto main, use the same observation capacity switch for
+    fresh and rebound decision-memory catalog tables. This keeps the
+    log-enabled control and its memory branch on the same learned rows.

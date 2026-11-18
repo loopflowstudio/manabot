@@ -72,7 +72,12 @@ class Learner:
         *,
         minibatch_rows: int,
         precision: Precision | None = None,
+        execution_rows: int | None = None,
+        bootstrap_rows: int | None = None,
     ) -> None:
+        if execution_rows is not None or bootstrap_rows is not None:
+            raise NotImplementedError("execution row limits currently require Torch")
+        self.execution_rows = self.bootstrap_rows = None
         if minibatch_rows < 1:
             raise ValueError("minibatch_rows must be positive")
         if precision is not None:
@@ -128,6 +133,9 @@ class Learner:
         self._pending = (outputs[0], gradients)
         return outputs
 
+    def accumulate(self, loss: mx.array, *, first: bool) -> None:
+        raise NotImplementedError("gradient accumulation currently requires Torch")
+
     def _gradients(self, loss: mx.array) -> dict[str, object]:
         if self._pending is None or self._pending[0] is not loss:
             raise ValueError("step and gradients take the loss `loss` last returned")
@@ -139,6 +147,7 @@ class Learner:
         max_grad_norm: float,
         *,
         recorder: StepRecorder | None = None,
+        accumulated: bool = False,
     ) -> mx.array:
         """Clip the global gradient norm to `max_grad_norm` and apply Adam;
         return the pre-clip norm.
@@ -147,6 +156,8 @@ class Learner:
         and optimizer are then unchanged. Raises after stepping if a parameter
         became nonfinite.
         """
+        if accumulated:
+            raise NotImplementedError("gradient accumulation currently requires Torch")
         self._require_masters("close the inference precision scope before stepping")
         gradients = self._gradients(loss)
         self._pending = None

@@ -423,6 +423,24 @@ class MLXActorCritic(nn.Module):
             mx.eval(actions)
         return to_numpy(actions).astype(np.int64)
 
+    def sample_logits(
+        self,
+        logits: np.ndarray,
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray:
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            values = mx.array(logits)
+            actions = (
+                mx.argmax(values, axis=-1)
+                if deterministic
+                else mx.random.categorical(values / temperature)
+            )
+            mx.eval(actions)
+        return to_numpy(actions).astype(np.int64)
+
     def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
         with mx.stream(getattr(self, "_inference_device", mx.default_device())):
             _, values = self(batch)
@@ -467,6 +485,10 @@ class MLXActorCritic(nn.Module):
             yield
         finally:
             self.update(masters)
+
+    def memory_gates(self) -> dict[str, float]:
+        """MLX does not implement decision memory."""
+        return {}
 
     def prepare(
         self, obs: ObservationBuffers, *, inference: bool = False

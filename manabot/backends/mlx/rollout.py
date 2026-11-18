@@ -9,6 +9,7 @@ Admission is recorded per row, so later epochs do not repeat the checks.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import fields
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,10 @@ class AdmittedRollout:
     def next_observation(self, device: object) -> Prepared:
         """Bootstrap observations [trajectory, ...]."""
         return self._next
+
+    def next_observations(self, device: object, size: int) -> Iterator[Prepared]:
+        # Explicit limits are refused by the MLX learner before this path.
+        yield self._next
 
     def rows(
         self, indexes: NDArray[np.int64], device: object

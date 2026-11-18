@@ -130,6 +130,10 @@ class PlayerRegistration(StrictModel):
                     if self.player_spec["allow_deck_repetition"] is not True:
                         raise ValueError("deck repetition must be explicitly enabled")
                     expected_checkpoint_spec["allow_deck_repetition"] = True
+                if "blank_decision_memory" in self.player_spec:
+                    if self.player_spec["blank_decision_memory"] is not True:
+                        raise ValueError("memory blanking must be explicitly enabled")
+                    expected_checkpoint_spec["blank_decision_memory"] = True
                 if (
                     self.player_spec != expected_checkpoint_spec
                     or type(self.player_spec.get("deterministic")) is not bool
@@ -140,8 +144,13 @@ class PlayerRegistration(StrictModel):
                 ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
             elif kind == "etude_checkpoint":
+                expected_sampler = dict(ETUDE_SAMPLER_SPEC)
+                if "blank_decision_memory" in self.player_spec:
+                    if self.player_spec["blank_decision_memory"] is not True:
+                        raise ValueError("memory blanking must be explicitly enabled")
+                    expected_sampler["blank_decision_memory"] = True
                 if (
-                    self.player_spec != ETUDE_SAMPLER_SPEC
+                    self.player_spec != expected_sampler
                     or self.compute_class_id != ETUDE_COMPUTE_CLASS
                 ):
                     raise ValueError(

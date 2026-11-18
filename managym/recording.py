@@ -120,6 +120,11 @@ class GameEnd(BaseModel):
 
 class GameInputs(BaseModel):
     stream: int = 0
+    # Older evidence always captured; new disabled captures serialize False.
+    decision_memory: bool = Field(default=True, exclude_if=lambda value: value)
+    decision_memory_include_own: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     seed: int
     players: list[PlayerSetup]
     actions: list[int | str] = []
@@ -845,6 +850,8 @@ class ScalarCapture(_Capture):
         seed: int,
         skip_trivial: bool = True,
         *,
+        decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         reducers: list[Reducer[Any]] | None = None,
         **recording: Unpack[RecordingOptions],
     ) -> None:
@@ -855,7 +862,12 @@ class ScalarCapture(_Capture):
         self._env: managym.Env | None = None
         self.seed = seed
         self.skip_trivial = skip_trivial
-        self.inputs = GameInputs(seed=seed, players=[])
+        self.inputs = GameInputs(
+            seed=seed,
+            players=[],
+            decision_memory=decision_memory or decision_memory_include_own,
+            decision_memory_include_own=decision_memory_include_own,
+        )
         self._start_cursor("scalar")
 
     def reset(self, env: managym.Env, players: managym.GameSetup) -> Any:
@@ -884,6 +896,8 @@ class ScalarCapture(_Capture):
             seed=self.seed,
             committed=0,
             players=_retain_players(players, self.seed),
+            decision_memory=self.inputs.decision_memory,
+            decision_memory_include_own=self.inputs.decision_memory_include_own,
         )
         with self._guard(lambda: self._snapshot("reset")):
             self._executing()
@@ -1098,6 +1112,8 @@ _VECTOR_READS = frozenset(
         "current_agent_indices",
         "current_exposure",
         "current_game_generations",
+        "decision_memory_counts",
+        "decision_memory_cursors",
         "current_game_seeds",
         "current_matchup_indices",
         "current_player_configs",
@@ -1166,6 +1182,8 @@ class CapturedVector(_Capture):
         player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
+        decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         reducers: list[Reducer[Any]] | None = None,
         **recording: Unpack[RecordingOptions],
     ) -> None:
@@ -1183,6 +1201,8 @@ class CapturedVector(_Capture):
         self.player_policies = resolve_player_policies(opponent_policy, player_policies)
         self.native = managym.VectorEnv(
             num_envs=num_envs,
+            decision_memory=decision_memory or decision_memory_include_own,
+            decision_memory_include_own=decision_memory_include_own,
             seed=seed,
             skip_trivial=skip_trivial,
             player_policies=self.player_policies,
@@ -1195,7 +1215,11 @@ class CapturedVector(_Capture):
         self._closed = False
         self.games = [
             GameInputs(
-                stream=stream_offset + i, seed=min(seed + i, 2**64 - 1), players=[]
+                stream=stream_offset + i,
+                seed=min(seed + i, 2**64 - 1),
+                players=[],
+                decision_memory=decision_memory or decision_memory_include_own,
+                decision_memory_include_own=decision_memory_include_own,
             )
             for i in range(num_envs)
         ]

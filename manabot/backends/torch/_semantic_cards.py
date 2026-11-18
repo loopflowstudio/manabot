@@ -42,6 +42,7 @@ class SemanticCardEncoder(nn.Module):
         decklists: bool = False,
         *,
         records: bool = False,
+        decision_memory: bool = False,
         library: bool = False,
     ) -> None:
         """`decklists` adds a projection of the pooled
@@ -49,7 +50,9 @@ class SemanticCardEncoder(nn.Module):
         fact and shared-effect id vocabulary (see the module docstring).
         `library` projects positional knowledge separately from hand minima."""
         super().__init__()
-        catalog = catalog_tables(pack_key, records=records)
+        catalog = catalog_tables(
+            pack_key, records=records, decision_memory=decision_memory
+        )
         self.token_vocabulary = catalog.vocabulary
         self.token_embedding = nn.Embedding(catalog.embedding_rows, hidden_dim)
         self.encoder = nn.GRU(hidden_dim, hidden_dim, batch_first=True)

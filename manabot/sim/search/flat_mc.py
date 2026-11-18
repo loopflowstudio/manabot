@@ -25,6 +25,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from manabot.env.decision_memory import blank_memory
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
@@ -145,10 +146,12 @@ class AgentMatchupPlayer:
         deterministic: bool = False,
         *,
         allow_deck_repetition: bool = False,
+        blank_decision_memory: bool = False,
     ) -> None:
         self.agent = agent
         self.allow_deck_repetition = allow_deck_repetition
         self.deterministic = deterministic
+        self.blank_decision_memory = blank_decision_memory
         agent.eval()
 
     def act(self, env: Env, obs: ObservationBuffers) -> int:
@@ -159,11 +162,11 @@ class AgentMatchupPlayer:
             env.match.to_rust(),
             allow_deck_repetition=self.allow_deck_repetition,
         )
+        buffers = {
+            key: np.asarray(value, dtype=np.float32)[None] for key, value in obs.items()
+        }
         batch = self.agent.prepare(
-            {
-                key: np.asarray(value, dtype=np.float32)[None]
-                for key, value in obs.items()
-            },
+            blank_memory(buffers) if self.blank_decision_memory else buffers,
             inference=True,
         )
         return int(self.agent.sample(batch, deterministic=self.deterministic)[0])
@@ -383,6 +386,8 @@ def make_player(
         agent, obs_space = backend.load_policy(spec["path"])
         binding = getattr(agent, "belief_binding", None)
         if agent.belief_count_buckets > 0:
+            if spec.get("blank_decision_memory"):
+                raise ValueError("memory blanking requires an ordinary checkpoint")
             if spec.get("allow_deck_repetition"):
                 raise ValueError(
                     "mirror evaluation does not support belief checkpoints"
@@ -395,6 +400,7 @@ def make_player(
                 agent,
                 deterministic=bool(spec.get("deterministic", False)),
                 allow_deck_repetition=bool(spec.get("allow_deck_repetition", False)),
+                blank_decision_memory=bool(spec.get("blank_decision_memory", False)),
             ),
             obs_space,
         )

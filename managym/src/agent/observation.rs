@@ -930,6 +930,8 @@ pub struct Observation {
     pub opponent_permanents: Vec<PermanentData>,
     pub stack_objects: Vec<StackObjectData>,
     pub recent_events: Vec<EventData>,
+    #[serde(default)]
+    pub decision_memory: crate::agent::decision_memory::DecisionLog,
     #[serde(skip)]
     pub policy_history: crate::agent::policy_history::HistoryWindow,
 }
@@ -1086,6 +1088,7 @@ impl Observation {
             opponent_permanents: Vec::new(),
             stack_objects: Vec::new(),
             policy_history: game.policy_history.clone(),
+            decision_memory: game.decision_memory[agent_player.0].clone(),
             recent_events: recent_events
                 .into_iter()
                 .flat_map(Self::event_data)

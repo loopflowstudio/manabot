@@ -21,7 +21,9 @@ class _RecordTables:
     size: int
 
 
-def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
+def _record_tables(
+    vocabulary: dict[tuple[int, int], int], *, decision_memory: bool
+) -> _RecordTables:
     """A name whose card token exists reads that token's row, so a granted
     keyword and the printed keyword share one embedding; every other name,
     token and numeric kind gets a row appended after the card tokens."""
@@ -35,6 +37,8 @@ def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
         return size - 1
 
     for space, name, value, kind, token in managym.record_vocabulary():
+        if name.startswith("DecisionMemory::") and not decision_memory:
+            continue
         key = (int(RecordNamespace[space.upper()]), value)
         if key in names:
             raise ValueError(f"record name {name!r} shares an id with another")
@@ -64,7 +68,9 @@ class CatalogTables:
     embedding_rows: int
 
 
-def catalog_tables(pack_key: str, *, records: bool) -> CatalogTables:
+def catalog_tables(
+    pack_key: str, *, records: bool, decision_memory: bool
+) -> CatalogTables:
     pack = bind_policy_catalog(pack_key)
     catalog = pack.catalog
     pairs = list(
@@ -102,7 +108,9 @@ def catalog_tables(pack_key: str, *, records: bool) -> CatalogTables:
     rows = [definition_tokens(row) for row in range(pack.definition_count)]
     width = max(map(len, rows))
 
-    tables = _record_tables(vocabulary) if records else None
+    tables = (
+        _record_tables(vocabulary, decision_memory=decision_memory) if records else None
+    )
     # Appended record rows follow the card tokens, whose rows are unchanged.
     buffers = {
         "tokens": np.asarray(
