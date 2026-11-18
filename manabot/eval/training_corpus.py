@@ -2,6 +2,8 @@
 
 from collections import Counter
 import json
+from itertools import batched
+from collections.abc import Iterator
 from pathlib import Path
 
 import duckdb
@@ -10,16 +12,25 @@ from etude.storage import Storage
 from etude.train.read import RunData, read
 from pydantic import TypeAdapter
 
-from manabot.model.writer_catalog import archived_catalog, writer_catalog
+from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
 from manabot.reports.update_metrics import scalar_updates
 from manabot.training.decks import CorpusDeck, corpus_decks
 from manabot.training.rollout.self_play import SelfPlayOutcome
 from manabot.training.update_metrics import OUTCOME_TABLE, ROSTER_TABLE
 from managym import Deck
+from managym.statistics import read_statistics
 
 
 class UnknownCoverage(ValueError):
     """The retained evidence cannot establish the corpus through this update."""
+
+
+def bound_catalog(digest: str, location: str, current: WriterCatalog) -> WriterCatalog:
+    return (
+        current
+        if current["world_digest"] == digest
+        else archived_catalog(digest, location)
+    )
 
 
 def roster(data: RunData) -> list[CorpusDeck]:
@@ -38,9 +49,7 @@ def roster(data: RunData) -> list[CorpusDeck]:
         raise UnknownCoverage(
             f"{data.name}: resolved training decks are unknown"
         ) from error
-    catalog = writer_catalog()
-    if catalog["world_digest"] != digest:
-        catalog = archived_catalog(digest, data.name)
+    catalog = bound_catalog(digest, data.name, writer_catalog())
     return corpus_decks((Deck.from_dict(deck) for deck in decks), catalog)
 
 
@@ -79,11 +88,83 @@ def games_by_update(data: RunData, through: int) -> dict[int, Counter[tuple[str,
     return games
 
 
+def add_card_statistics(
+    db: duckdb.DuckDBPyConnection,
+    path: Path,
+    games: dict[int, Counter[tuple[str, str]]],
+    through: int,
+) -> None:
+    current = writer_catalog()
+    catalogs: dict[str, WriterCatalog] = {}
+    terminal: Counter[int] = Counter()
+
+    def rows() -> Iterator[dict[str, object]]:
+        seen = False
+        for game in read_statistics(path) if path.exists() else ():
+            seen = True
+            if not game.terminal:
+                continue
+            finished = (game.context or {}).get("update")
+            if type(finished) is not int or finished < 0:
+                raise UnknownCoverage(
+                    f"{path}: terminal statistics lack a collection update"
+                )
+            # Capture runs during collection, before the learner advances its clock.
+            update = finished + 1
+            if update > through:
+                continue
+            terminal[update] += 1
+            digest = game.card_digest
+            assert digest is not None  # read_statistics validates the digest
+            if digest not in catalogs:
+                catalogs[digest] = bound_catalog(digest, str(path), current)
+            keys = catalogs[digest]["definition_keys"]
+            for count in game.cards:
+                if not 0 <= count.definition < len(keys):
+                    raise UnknownCoverage(
+                        f"{path}: missing definition {count.definition} in {digest}"
+                    )
+                yield {
+                    "update_number": update,
+                    "card": keys[count.definition],
+                    "games": int(count.deck_copies > 0),
+                    "wins": int(count.deck_copies > 0 and game.winner == count.seat),
+                    **count.model_dump(exclude={"definition", "name"}),
+                }
+        if not seen:
+            raise UnknownCoverage(f"{path}: no statistics rows")
+        for update, pairs in games.items():
+            if terminal[update] < pairs.total():
+                raise UnknownCoverage(
+                    f"{path}: update {update} has {terminal[update]} terminal statistics games "
+                    f"for {pairs.total()} corpus games"
+                )
+
+    db.execute("""create table card_counts(update_number bigint, card varchar, games bigint,
+        wins bigint, seat integer, deck_copies bigint, opening_copies bigint, drawn_copies bigint,
+        opportunities bigint, selections bigint, resolutions bigint)""")
+    for batch in batched(rows(), 2048):
+        db.execute(
+            "insert into card_counts by name select unnest(?, recursive := true)",
+            [list(batch)],
+        )
+    db.execute("""create table card_statistics as
+        select update_number, seat, card, sum(games) games, sum(wins) wins,
+        sum(deck_copies) deck_copies, sum(opening_copies) opening_copies,
+        sum(drawn_copies) drawn_copies,
+        case when count(opportunities) = count(*) then sum(opportunities) end opportunities,
+        case when count(selections) = count(*) then sum(selections) end selections,
+        case when count(resolutions) = count(*) then sum(resolutions) end resolutions
+        from card_counts group by all""")
+    db.execute("drop table card_counts")
+
+
 def training_corpus(
     run: RunData | CheckpointRecord,
     through: int | None = None,
     *,
     source: Storage | Path | str | None = None,
+    statistics: Path | None = None,
 ) -> duckdb.DuckDBPyRelation:
     """Return one row per update and ordered matchup, inclusive of the cutoff.
 
@@ -105,9 +186,10 @@ def training_corpus(
         raise ValueError("supply a nonnegative update")
 
     cards = {row["deck"]: row["cards"] for row in roster(data)}
+    games = games_by_update(data, through)
     matchups = [
         (update, play, draw, count)
-        for update, pairs in games_by_update(data, through).items()
+        for update, pairs in games.items()
         for (play, draw), count in pairs.items()
         if count
     ]
@@ -128,6 +210,8 @@ def training_corpus(
         "insert into matchups select unnest(?::bigint[]), unnest(?::varchar[]), unnest(?::varchar[]), unnest(?::bigint[])",
         columns,
     )
+    if statistics is not None:
+        add_card_statistics(db, statistics, games, through)
     return db.sql("""
         select m.*, p.cards as play_cards, d.cards as draw_cards
         from matchups m join decks p on p.deck = m.play join decks d on d.deck = m.draw

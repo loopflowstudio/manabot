@@ -72,14 +72,22 @@ runs. DuckDB plans used hash joins on the two deck identities.
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude
    Task; this PR does not wait for it.
-2. Card statistics relation, not built (steer, Jack Heart, 2026-11-18:
+2. Card statistics relation, built (steer, Jack Heart, 2026-11-18:
    "didnt this land?", "i do think we should play well with it"). Old runs:
    "Not a problem"; value-estimate trustworthiness: "agreed, leave this
    out". Design below.
-3. Gate and publish for human review after the query is built. No landing,
+3. Record the resolved deck identifier, definition key, copies and board, plus
+   settings derived from the training configuration (disclosure, mana taps, action
+   slots and overflow, input version, behavior/opponents, learning seats and
+   curriculum). Expose settings to SQL. Read older runs as before.
+4. Record pretrained checkpoint run, update and SHA-256 in settings and follow
+   the parent in corpus queries.
+5. Share deck, settings and outcome logging with the minimal loop. Verify a
+   settings query and the existing membership queries against both writers.
+6. Gate and publish for human review after the query is built. No landing,
    paid run, corpus label in the checkpoint or change to exact-deck refusal.
 
-## Card statistics in the corpus (next build)
+## Card statistics in the corpus (built)
 
 Shape chosen in the concept review of 2026-11-18 with nobody present;
 reversible. Page: `scratch/concept-review.html`.
@@ -99,9 +107,9 @@ Build in `manabot/eval/training_corpus.py`:
   opening_copies, drawn_copies, opportunities, selections, resolutions`,
   summed over terminal games per update, native seat (0 is on the play) and
   definition key, for updates 1 through the cutoff. `corpus` is unchanged.
-- Names become definition keys through the catalog each row's `card_digest`
-  names (`writer_catalog` or `archived_catalog`), with the mapping
-  `corpus_decks` already uses; share it, do not copy it.
+- Use the same digest-selected writer catalog as the roster. The local run
+  showed that Clue and Ally have no printed-name join. Their recorded native
+  indices 72 and 21 resolve to token.clue and token.ally in definition_keys.
 - Without the keyword there is no `card_statistics` relation. A supplied
   path with no rows raises `UnknownCoverage`. An update through the cutoff
   where statistics hold fewer terminal games than the corpus raises
@@ -109,7 +117,7 @@ Build in `manabot/eval/training_corpus.py`:
 - No deck column, no new counter, no game record, no read of `run.out`
   from library code, no change to what training writes.
 
-First slice, because it shows soonest whether the design holds: run the
+Original verification plan: run the
 local two-update recipe with `statistics: true`, and compare terminal
 statistics games per context update with corpus games per update. The
 writer labels a row with the finished-update count when the game ended
@@ -123,6 +131,11 @@ run or its retained rows (join works; missing directory raises; fewer games
 raises), and a paragraph plus one query in the corpus section of
 `docs/evaluation.md`. State there that a resumed run's statistics keep rows
 from superseded attempts, so card counts can exceed the corpus.
+
+The two-update local run with statistics recorded two terminal games at
+capture coordinate 0 and two at 1, plus two nonterminal rows on close.
+The outcome table held two games each at updates 1 and 2. The combined
+query found four list games with Island, nine draws and 72 choices.
 
 Not this PR, to file: publish statistics rows as run artifacts with the
 attempt in their context, so a checkpoint plus storage reaches them and

@@ -300,6 +300,25 @@ raises `UnknownCoverage`, as does a missing roster. With Etude SDK 0.4.1 the
 table reader loads all selected table artifacts in the supplied history, even
 when the requested update is early.
 
+For a run recorded with `statistics: true`, pass its local statistics directory
+to query card draws and choices alongside list membership. Statistics count
+terminal games by update, native seat and definition key. Games and wins count
+main-deck inclusion. Choice counts also include generated cards. A missing
+directory, empty capture or update with fewer terminal games than the corpus
+raises `UnknownCoverage`. A resumed run keeps rows from superseded attempts,
+so its statistics can exceed the selected corpus. Aggregate each table before
+joining because several matchups and seats can contribute to the same update.
+
+```python
+corpus = training_corpus(run, through=1, statistics=Path("out/statistics"))
+print(corpus.query("corpus", """
+    select (select sum(games) from corpus
+            where list_contains(play_cards || draw_cards, 'lea.island')) as list_games,
+           sum(drawn_copies) as draws, sum(selections) as choices
+    from card_statistics where card = 'lea.island'
+""").fetchall())
+```
+
 ## Etude agents
 
 Managed evaluations declare the same `manabot.eval.agents.AGENTS` on every

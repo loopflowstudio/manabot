@@ -175,3 +175,8 @@ say so if they should carry a note.
     raises; more is allowed, since superseded attempts leave rows behind.
 38. To file after this PR: publish statistics rows as run artifacts with the
     attempt in their context.
+
+39. The local statistics run includes Ally and Clue exposure without deck copies.
+    Use the native definition index in the digest-selected catalog for every
+    row. Games and wins follow CardPerformance's main-deck denominator, while
+    generated cards retain their draws and exposure.

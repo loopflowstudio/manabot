@@ -11,6 +11,7 @@ from manabot.training.decks import corpus_decks
 from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.update_metrics import OUTCOME_TABLE, ROSTER_TABLE, metric_row
 from managym import Deck
+from managym.statistics import CardCounts, GameStatistics
 from tests.fixtures.training_records import recording
 
 
@@ -109,3 +110,64 @@ def test_logged_empty_outcomes_are_distinct_from_missing_evidence(
     assert training_corpus(data, 1).fetchall() == []
     with pytest.raises(UnknownCoverage, match="coverage unknown at update 2"):
         training_corpus(data, 2)
+
+
+def test_card_statistics_count_terminal_games_at_the_outcome_update(
+    tmp_path: Path,
+) -> None:
+    island = Deck({"Island": 10})
+    catalog = writer_catalog()
+    with recording(experiment="cards", directory=tmp_path, clocks=["updates"]) as run:
+        run.log_table(ROSTER_TABLE, corpus_decks([island], catalog), updates=0)
+        counter = SelfPlayCounter()
+        for update in (1, 2):
+            counter.record((island.identity, island.identity), 0)
+            run.log_table(OUTCOME_TABLE, counter.drain(), updates=update)
+    data = read(tmp_path, "cards", run.name)
+    path = tmp_path / "statistics"
+    with pytest.raises(UnknownCoverage, match="no statistics rows"):
+        training_corpus(data, 1, statistics=path)
+
+    path.mkdir()
+
+    def game(update: int, terminal: bool) -> str:
+        return (
+            GameStatistics(
+                seed=1,
+                generation=0,
+                stream=0,
+                terminal=terminal,
+                winner=0,
+                context={"update": update},
+                card_digest=catalog["world_digest"],
+                cards=(
+                    CardCounts(
+                        seat=0,
+                        definition=catalog["definition_keys"].index("lea.island"),
+                        name="Island",
+                        deck_copies=10,
+                        opening_copies=2,
+                        drawn_copies=3,
+                        opportunities=7,
+                        selections=5,
+                        resolutions=None,
+                    ),
+                ),
+            ).model_dump_json()
+            + "\n"
+        )
+
+    (path / "games.jsonl").write_text(game(0, True) * 2 + game(1, False))
+    corpus = training_corpus(data, 1, statistics=path)
+    assert corpus.query(
+        "corpus",
+        """
+        select c.games, s.games, s.wins, s.drawn_copies, s.selections, s.resolutions
+        from corpus c join card_statistics s using (update_number)
+        where s.seat = 0 and list_contains(c.play_cards, s.card)
+    """,
+    ).fetchall() == [(1, 2, 2, 6, 10, None)]
+    with pytest.raises(
+        UnknownCoverage, match="update 2 has 0 terminal statistics games for 1 corpus"
+    ):
+        training_corpus(data, 2, statistics=path)
