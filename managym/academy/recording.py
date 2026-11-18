@@ -654,6 +654,8 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
         ]
         return "Ordered triggers: " + ", then ".join(_trigger_source(p) for p in placed)
     if stage == "learn":
+        if last.chosen == "Decline Learn":
+            return "Declined to learn"
         return f"Learn: {last.chosen[:1].lower()}{last.chosen[1:]}"
     if last.stage in RESOLVING_STAGES:
         return _resolution(own)
@@ -697,7 +699,7 @@ def _resolution(own: Sequence[OwnStep]) -> str:
             ]
             cards = [_ORDERED.sub(r"\1", offer) for offer in placed]
             end = "on the bottom" if step.stage == "order_library_bottom" else "on top"
-            phrases.append(f"put {', then '.join(cards)} {end}")
+            phrases.append(f"put {_in_order(cards)} {end}")
         else:
             kept = _KEPT.fullmatch(step.chosen)
             phrases.append(
@@ -715,6 +717,20 @@ def _resolution(own: Sequence[OwnStep]) -> str:
 # Offer labels of library choices (`managym/src/flow/action.rs`).
 _ORDERED = re.compile(r"^Put (.+) next on the (?:bottom|top)$")
 _KEPT = re.compile(r"Put (.+) into your hand")
+
+
+def _in_order(names: list[str]) -> str:
+    """ "Island ×2, then Pop Quiz": names in order, a repeated name once with
+    its count when the copies are next to each other."""
+    runs: list[tuple[str, int]] = []
+    for name in names:
+        if runs and runs[-1][0] == name:
+            runs[-1] = (name, runs[-1][1] + 1)
+        else:
+            runs.append((name, 1))
+    return ", then ".join(
+        f"{name} ×{count}" if count > 1 else name for name, count in runs
+    )
 
 
 def _trigger_source(offer: str) -> str:

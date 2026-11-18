@@ -226,6 +226,16 @@ def test_your_own_unseen_moves_are_named_as_you_made_them() -> None:
         )
         == "Learn: take Accumulate Wisdom"
     )
+    # Declining reads once, not as "Learn: decline Learn".
+    assert (
+        narrate_move(
+            board("learn"),
+            board("priority"),
+            [],
+            [own("learn", 1, "Take Accumulate Wisdom", "Decline Learn")],
+        )
+        == "Declined to learn"
+    )
     paid = board(
         "payment",
         announcing="activated_ability",
@@ -280,4 +290,27 @@ def test_a_resolution_s_choices_are_one_line_for_its_source() -> None:
         )
         == "Accumulate Wisdom: kept Island, put Pop Quiz, then Igneous Inspiration"
         " on the bottom"
+    )
+
+
+def test_repeated_cards_placed_together_read_once_with_their_count() -> None:
+    offers = (
+        "Put Island next on the bottom",
+        "Put Island next on the bottom",
+        "Put Pop Quiz next on the bottom",
+    )
+    first = OwnStep(
+        "order_library_bottom", offers[0], "SELECT_CARD", offers, 0, "Wisdom"
+    )
+    second = OwnStep(
+        "order_library_bottom", offers[1], "SELECT_CARD", offers[1:], 0, "Wisdom"
+    )
+    assert (
+        narrate_move(
+            board("order_library_bottom", source={"label": "Wisdom"}),
+            board("priority"),
+            [],
+            [first, second],
+        )
+        == "Wisdom: put Island ×2, then Pop Quiz on the bottom"
     )
