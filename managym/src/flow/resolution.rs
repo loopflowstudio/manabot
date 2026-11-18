@@ -1406,7 +1406,7 @@ impl Game {
             } => {
                 let count = self.effect_value(amount, frame).max(0);
                 self.invalidate_mana_cache(frame.controller);
-                let origin = frame.source().and_then(|source| self.mana_origin(source));
+                let origin = frame.source().map(|source| self.mana_origin(source));
                 let pool = if *until_end_of_combat {
                     self.state.combat_mana_pool_mut(frame.controller)
                 } else {

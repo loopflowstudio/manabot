@@ -326,8 +326,8 @@ fn paid_by(game: &Game, receipt: &PaymentReceipt) -> Vec<(String, u8)> {
     paid
 }
 
-const RED: u8 = 3;
-const GREEN: u8 = 4;
+const RED: u8 = Color::Red as u8;
+const GREEN: u8 = Color::Green as u8;
 
 /// CR 601.2h: the receipt names the object that produced each unit spent,
 /// however the payment was made: taps chosen by hand, the automatic payer,

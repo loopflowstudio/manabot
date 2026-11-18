@@ -2645,7 +2645,9 @@ impl Game {
             .expect("a tapped fixed source is on the battlefield");
         self.tap_permanent(permanent, true);
         let origin = self.mana_origin(source);
-        self.state.mana_pool_mut(player).add(&produced, origin);
+        self.state
+            .mana_pool_mut(player)
+            .add(&produced, Some(origin));
         let tapped = self.tapped_for_mana(permanent);
         let bonuses = self.production_bonuses(player, &tapped);
         let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None);
@@ -2783,7 +2785,7 @@ impl Game {
             }
             if let Some(mana) = choices.pop() {
                 let origin = self.mana_origin(bonus.source);
-                self.state.mana_pool_mut(player).add(&mana, origin);
+                self.state.mana_pool_mut(player).add(&mana, Some(origin));
             }
         }
         resume
@@ -2823,11 +2825,11 @@ impl Game {
     }
 
     /// `object` as the producer of mana it is adding to a pool.
-    pub(crate) fn mana_origin(&self, object: ObjectId) -> Option<ManaOrigin> {
-        Some(ManaOrigin {
+    pub(crate) fn mana_origin(&self, object: ObjectId) -> ManaOrigin {
+        ManaOrigin {
             object,
             definition: self.state.source_base(object).0,
-        })
+        }
     }
 
     pub(crate) fn produce_mana(

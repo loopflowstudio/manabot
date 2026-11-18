@@ -2245,7 +2245,7 @@ impl Game {
                     ManaProduction::Output { source, .. } => *source,
                     ManaProduction::Bonus { source, .. } => Some(*source),
                 }
-                .and_then(|source| self.mana_origin(source));
+                .map(|source| self.mana_origin(source));
                 self.state.mana_pool_mut(player).add(mana, origin);
                 // The output is produced: its triggered mana abilities
                 // trigger now (CR 106.12a) and resolve at once (CR 605.4a).

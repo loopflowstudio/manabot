@@ -984,21 +984,16 @@ impl ManaPool {
         let before = self.mana.clone();
         self.mana.add(mana);
         // Amounts saturate, so count what the pool actually gained.
-        for (color, amount) in self.mana.mana.iter().enumerate() {
-            for _ in before.mana[color]..*amount {
-                self.units.push(PooledUnit {
-                    class: None,
-                    color: color as u8,
-                    origin,
-                });
-            }
-        }
-        for (class, _) in mana.classes() {
-            let had = before.class_of(class);
-            for (color, amount) in self.mana.class_of(class).iter().enumerate() {
-                for _ in had[color]..*amount {
+        let ordinary = std::iter::once((None, before.mana, self.mana.mana));
+        let classed = mana.classes().iter().map(|(class, _)| {
+            let now = self.mana.class_of(class);
+            (Some(class), before.class_of(class), now)
+        });
+        for (class, had, now) in ordinary.chain(classed) {
+            for color in 0..had.len() {
+                for _ in had[color]..now[color] {
                     self.units.push(PooledUnit {
-                        class: Some(class.clone()),
+                        class: class.cloned(),
                         color: color as u8,
                         origin,
                     });
