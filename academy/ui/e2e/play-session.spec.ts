@@ -260,3 +260,22 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
     expect(new URL(page.url()).searchParams.get('trace')).toBe(watchURL.searchParams.get('trace'));
   });
 }
+
+test('a human can float mana from the chosen land at priority', async ({page}) => {
+  await page.goto('/?setup=1');
+  const taps = page.getByRole('checkbox', {name: 'Offer mana taps whenever legal'});
+  await expect(taps).not.toBeChecked();
+  await taps.check();
+  await page.getByText('Import decklist files', {exact: true}).click();
+  await page.getByLabel('Use imported decks for the next game').check();
+  await page.getByLabel('Your deck source', {exact: true}).fill('16 Island');
+  await page.getByLabel('Opponent deck source', {exact: true}).fill('16 Mountain');
+  await page.getByRole('button', {name: 'Start game', exact: true}).click();
+  const actions = page.getByTestId('action-option');
+  await actions.filter({hasText: 'Play Island'}).first().click();
+  const tap = actions.filter({hasText: 'Tap Island for mana'});
+  await expect(tap).toBeEnabled();
+  await page.reload();
+  await tap.click();
+  await expect(tap).toHaveCount(0);
+});

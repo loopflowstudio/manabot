@@ -616,6 +616,8 @@ def format_action(
     if action_name == "CHOOSE_MODE":
         return f"Choose a mode ({first})" if first else "Choose a mode"
     if action_name == "TAP_FOR_COST" and first:
+        if space_kind == "PRIORITY":
+            return f"Tap {first} for mana"
         return f"Tap {first} to help pay"
 
     label = ACTION_LABELS.get(action_name, action_name)

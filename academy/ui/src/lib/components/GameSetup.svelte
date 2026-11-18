@@ -71,7 +71,12 @@
               onChange={value => {if (hero) setup.watchPlayerChoice = value; else setup.setOpponentChoice(value);}}
               search={hero ? setup.watchSearchConfig : setup.searchConfig}
               onSearchChange={value => {if (hero) setup.watchSearchConfig = value; else setup.searchConfig = value;}} />
-          {:else}<p class="type-caption text-ink-2">Play your complete legal choices. Inspect cards at any time.</p>{/if}
+          {:else}
+            <label class="flex items-center gap-2">
+              <input type="checkbox" bind:checked={setup.manaTaps} />
+              Offer mana taps whenever legal
+            </label>
+          {/if}
         </fieldset>
       {/if}
     {/each}

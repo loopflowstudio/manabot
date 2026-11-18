@@ -61,6 +61,7 @@ def setup_draft(config: GameConfig) -> dict[str, Any]:
         "villain_type": config.villain_type,
         "villain_sims": config.villain_sims,
         "human_seat": config.human_seat,
+        "mana_taps": config.mana_taps,
         "decklists": config.decklists,
         "stops": config.stops,
         "auto_pass": config.auto_pass,

@@ -36,7 +36,8 @@ describe('repeated play setup', () => {
   it('isolates editor choices from live setup and restores the full retained Search draft', () => {
     const store = new GameStore();
     const mirror = {algorithm:'local_update', belief:'physical_deal', worlds:4, depth:2, decision_seconds:1, alpha:0, beta:1};
-    const draft = {human_seat:1, seed:'18446744073709551615', villain_type:'policy', opponent_sha256:'a'.repeat(64),
+    expect(store.setupConfig().mana_taps).toBe(false);
+    const draft = {human_seat:1, mana_taps:true, seed:'18446744073709551615', villain_type:'policy', opponent_sha256:'a'.repeat(64),
       mirror, decklists:'closed', stops:{my:['main1'], opponent:['end_step']}, auto_pass:false, stop_on_stack:true,
       deck_import:{hero:{source:'8 Island',filename:'a.txt'},villain:{source:'8 Mountain',filename:'b.txt'}}};
     const editor = store.editableSetup(draft);

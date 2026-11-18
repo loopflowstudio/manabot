@@ -15,6 +15,7 @@ from managym.academy.watch import WatchRequest, create_watch
 from managym.policy import PolicyRegistry
 from tests.academy.socket_messages import settled_message
 from tests.academy.test_policy_runtime import IndependentFactory
+from tests.academy.test_server import _command, _offer
 
 CONFIG: dict[str, Any] = {
     "hero_deck": {"Island": 8},
@@ -75,6 +76,7 @@ def test_native_seats_complete_record_reconstruct_and_study(
     assert frame["prompt"]["actor"] == seat
     assert game.trace is not None
     configs = game.trace.config.to_rust()
+    assert configs.mana_taps == (False, False)
     assert configs[seat].decklist == CONFIG["hero_deck"]
     finish(game)
     payload = game.attempt_store.load(game.match_id)
@@ -96,6 +98,74 @@ def test_native_seats_complete_record_reconstruct_and_study(
     assert restored is not None
     prepared = trace.prepare_trace_payload(payload)
     assert prepared["events"][0]["observation"]["agent"]["player_index"] == seat
+
+
+@pytest.mark.parametrize("seat", [0, 1])
+def test_mana_tap_survives_reconnect_and_records_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seat: int
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
+    config = {
+        **CONFIG,
+        "human_seat": seat,
+        "mana_taps": True,
+        "hero_deck": {"Island": 16},
+        "villain_deck": {"Mountain": 16},
+    }
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as ws:
+            ws.send_json({"type": "new_game", "config": config})
+            start = settled_message(ws)
+            assert start["play_session"]["draft"]["mana_taps"] is True
+            frame = start["recovery"]["frame"]
+            land = _offer(frame, action_type="PRIORITY_PLAY_LAND")
+            ws.send_json({"type": "command", "command": _command(frame, land, "land")})
+            pending = settled_message(ws)["update"]["frame"]
+            source = pending["projection"]["agent"]["battlefield"][0]
+            tap = _offer(
+                pending, action_type="TAP_FOR_COST", label="Tap Island for mana"
+            )
+            assert tap["actor"] == seat
+            assert tap["focus"] == [source["id"]]
+            assert tap["subjects"][0]["object"]["display_id"] == source["id"]
+            command = _command(pending, tap, "float")
+
+        with client.websocket_connect("/ws/play") as ws:
+            ws.send_json(
+                {
+                    "type": "resume",
+                    "session_id": start["session_id"],
+                    "resume_token": start["resume_token"],
+                }
+            )
+            assert settled_message(ws)["recovery"]["frame"] == pending
+            ws.send_json({"type": "command", "command": command})
+            accepted = settled_message(ws)
+            assert accepted["status"] == "accepted"
+            ws.send_json(
+                {"type": "command", "command": {**command, "command_id": "stale"}}
+            )
+            rejected = settled_message(ws)
+            assert rejected["rejection"]["code"] == "stale_revision"
+            assert rejected["recovery"]["frame"] == accepted["update"]["frame"]
+
+            game = server.SESSION_REGISTRY[start["session_id"]].game
+            payload = game.attempt_store.load(game.match_id)
+            assert payload is not None
+            recorded = trace.GameConfig(**payload["config"])
+            assert recorded.to_rust().mana_taps == (seat == 0, seat == 1)
+            recording = Recording(game.match_id, payload)
+            position = next(
+                p
+                for p in recording.positions
+                if p.decision
+                and p.decision.command_id == "float"
+                and p.kind == "choice"
+            )
+            decision = recording.read(position.key)["decision"]
+            assert decision["frame"] == pending
+            assert decision["offer"] == tap
+            assert decision["command"] == command
 
 
 def test_swap_repeat_receipts_refusal_and_stop_draft(tmp_path: Path) -> None:

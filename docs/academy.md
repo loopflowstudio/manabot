@@ -692,9 +692,14 @@ Focus arrives on **Pay the cost** and shows its proposal without paying.
    leaves no choice for the rest, the game finishes the payment at once,
    tapping what the focused preview listed.
 
-A cost that every available source is needed for has no source choice. The
-game pays it as soon as you cast, with no payment prompt, so the preview on
-the cast action is where you see those taps beforehand.
+With the default setup, a cost that needs every available fixed source
+can be paid as soon as you cast. The cast preview shows the taps before
+you commit.
+
+Select **Offer mana taps whenever legal** on your seat in game setup to tap a
+fixed-output source at priority or during payment, even when the pool
+already covers the cost. The setting follows you when you swap sides.
+Your priority stops still determine which windows pause for a decision.
 
 **Reading the preview.**
 
@@ -716,9 +721,6 @@ only statement of mana you actually have. Clearing the preview, moving focus or
 clearing a selection dismisses a proposal and changes nothing in the game.
 A tapped source stays tapped and its mana stays in your pool until it is spent
 or empties; there is no undo and no refund for a tap you regret.
-
-Source taps are offered only while a cost is being paid. Academy has no action
-for tapping lands at priority to float mana before choosing a spell.
 
 **When a preview goes away.** A preview belongs to one decision. Submitting
 an action, a new decision, a change of viewed player or a lost connection
