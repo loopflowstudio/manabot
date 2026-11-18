@@ -28,6 +28,13 @@ BEST_PLAYER = "MANABOT_U1952_CHECKPOINT"
 RECORD = 'uv run python scripts/pinned_pilot.py record --reason "<why>"'
 
 
+def pilot_path(name: str) -> Path | None:
+    """A committed pilot, or the optional local best player when its variable is set."""
+    if name in PILOTS:
+        return FIXTURES / name / PILOTS[name]
+    return Path(os.environ[BEST_PLAYER]) if BEST_PLAYER in os.environ else None
+
+
 class Decision(BaseModel):
     offers: str
     action: int
@@ -146,11 +153,11 @@ def record(reason: str) -> None:
     revision = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
-    pilots = {name: FIXTURES / name / filename for name, filename in PILOTS.items()}
-    if BEST_PLAYER in os.environ:
-        pilots["u1952"] = Path(os.environ[BEST_PLAYER])
     updates: dict[Path, Recording] = {}
-    for name, path in pilots.items():
+    for name in (*PILOTS, "u1952"):
+        path = pilot_path(name)
+        if path is None:
+            continue
         target = FIXTURES / name / "game.json"
         previous = Recording.model_validate_json(target.read_bytes())
         digest = file_sha256(path)

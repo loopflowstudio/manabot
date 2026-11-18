@@ -78,15 +78,7 @@ def measure_pairs(
         report = comparison.report
         if index == 0 and report is not None:
             atomic_json(out / "binding.json", asdict(report))
-            if any(
-                (
-                    report.changed_programs,
-                    report.new_names,
-                    report.new_tokens,
-                    report.renamed_keys,
-                    report.retired_keys,
-                )
-            ):
+            if report.changed:
                 print(f"  binding   {report.summary()}", flush=True)
         if (
             index == 0

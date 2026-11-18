@@ -106,3 +106,9 @@ say so if they should carry a note.
     under `--out` and leaves the console quiet. Registration constructs the
     backend policy from the same admitted tensors that supplied the report,
     avoiding a second file read.
+
+## Compress, 2026-11-18 (nobody present; reversible)
+
+28. `checkpoint_request` stays a wrapper over `local_comparison` with the same
+    keywords. Returning the report from it would change
+    `experiments/etude_execution.py`, whose source Etude fingerprints.

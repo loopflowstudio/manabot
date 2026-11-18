@@ -12,7 +12,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
+from manabot.model.catalog import inspect_checkpoint
 from manabot.policy import buckets
 from manabot.policy.binding import packed
 from manabot.policy.checkpoint import read_container, write_container
@@ -86,11 +86,11 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     player = "player_embedding.projection.0.weight"
     state[player] = state[player][:, :-1].contiguous()
     del record["architecture"]
-    assert checkpoint_incompatibility(record) is None
     if legacy_file:
         torch.save(record, path)
     else:
         write_checkpoint(record, path)
+    assert inspect_checkpoint(path, backend=BACKEND).compatible
     loaded, _ = load_checkpoint(str(path))
     cards = loaded.semantic_cards
     assert cards is not None

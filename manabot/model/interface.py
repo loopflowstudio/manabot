@@ -101,7 +101,48 @@ def model_interface(
                 f"incompatible checkpoint rules binding for {key}; {location}"
             )
 
-    schema = saved.get("input_schema")
+    widths = saved_widths(checkpoint, expected, space, location)
+    current = writer_catalog()
+    writer = checkpoint.get("writer_catalog")
+    if writer is None:
+        writer = recorded_writer(saved, expected, current, location)
+    if (
+        not isinstance(writer, dict)
+        or not isinstance(writer.get("definition_keys"), list)
+        or not all(isinstance(key, str) for key in writer["definition_keys"])
+    ):
+        raise ValueError(f"writer catalog requires ordered definition keys; {location}")
+    if writer.get("world_digest") != saved["world_digest"] or canonical_sha256(
+        writer.get("naming_catalog")
+    ) != saved.get("naming_vocabulary"):
+        raise ValueError(
+            f"writer catalog does not match checkpoint binding for naming vocabulary or world digest; {location}"
+        )
+    if not model.catalog_records() and writer != current:
+        raise ValueError(
+            f"rebinding card programs requires the catalog record vocabulary; {location}"
+        )
+    if (
+        model.belief_count_buckets
+        and writer["definition_keys"] != current["definition_keys"]
+    ):
+        raise ValueError(
+            f"belief card embedding requires a bound belief vocabulary; {location}"
+        )
+    return ModelInterface(writer, current, widths)
+
+
+def saved_widths(
+    checkpoint: Mapping[str, Any],
+    expected: Mapping[str, Any],
+    space: ObservationSpace,
+    location: str,
+) -> dict[str, int]:
+    """The saved width of each named array narrower than the runtime's.
+
+    Columns are only appended, so a checkpoint reads the runtime's first N
+    columns; recorded names, when present, must equal that prefix."""
+    schema = checkpoint["world_binding"].get("input_schema")
     if not isinstance(schema, dict) or schema.keys() != expected["input_schema"].keys():
         raise ValueError(f"checkpoint input buffers differ; {location}")
     columns = input_columns(space)
@@ -139,49 +180,33 @@ def model_interface(
     for group in ("player", "cards", "permanents"):
         if widths.get(f"agent_{group}") != widths.get(f"opponent_{group}"):
             raise ValueError(f"{group} column counts differ between seats; {location}")
-    current = writer_catalog()
+    return widths
+
+
+def recorded_writer(
+    saved: Mapping[str, Any],
+    expected: Mapping[str, Any],
+    current: WriterCatalog,
+    location: str,
+) -> Any:
+    """The writer catalog of a checkpoint saved before it recorded one: the
+    running catalog when the card and naming digests agree, otherwise the
+    committed file for its card digest. The caller validates the contents."""
     digest = saved["world_digest"]
-    writer = checkpoint.get("writer_catalog")
     if (
-        writer is None
-        and digest == current["world_digest"]
+        digest == current["world_digest"]
         and saved.get("naming_vocabulary") == expected["naming_vocabulary"]
     ):
-        writer = current
-    if writer is None:
-        path = Path(__file__).with_name("writer_catalogs") / f"{digest}.json"
-        if (
-            not isinstance(digest, str)
-            or not re.fullmatch("[0-9a-f]{64}", digest)
-            or not path.is_file()
-        ):
-            raise ValueError(
-                f"missing writer catalog for {digest}; at the writing revision run "
-                f"uv run python -m manabot.model.writer_catalog and save its output as "
-                f"manabot/model/writer_catalogs/{digest}.json; {location}"
-            )
-        writer = json.loads(path.read_bytes())
+        return current
+    path = Path(__file__).with_name("writer_catalogs") / f"{digest}.json"
     if (
-        not isinstance(writer, dict)
-        or not isinstance(writer.get("definition_keys"), list)
-        or not all(isinstance(key, str) for key in writer["definition_keys"])
-    ):
-        raise ValueError(f"writer catalog requires ordered definition keys; {location}")
-    if writer.get("world_digest") != digest or canonical_sha256(
-        writer.get("naming_catalog")
-    ) != saved.get("naming_vocabulary"):
-        raise ValueError(
-            f"writer catalog does not match checkpoint binding for naming vocabulary or world digest; {location}"
-        )
-    if not model.catalog_records() and writer != current:
-        raise ValueError(
-            f"rebinding card programs requires the catalog record vocabulary; {location}"
-        )
-    if (
-        model.belief_count_buckets
-        and writer["definition_keys"] != current["definition_keys"]
+        not isinstance(digest, str)
+        or not re.fullmatch("[0-9a-f]{64}", digest)
+        or not path.is_file()
     ):
         raise ValueError(
-            f"belief card embedding requires a bound belief vocabulary; {location}"
+            f"missing writer catalog for {digest}; at the writing revision run "
+            f"uv run python -m manabot.model.writer_catalog and save its output as "
+            f"manabot/model/writer_catalogs/{digest}.json; {location}"
         )
-    return ModelInterface(writer, current, widths)
+    return json.loads(path.read_bytes())

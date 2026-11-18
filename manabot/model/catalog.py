@@ -20,13 +20,8 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import (
-    ModelConfig,
-    ObservationConfig,
-)
+from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
-from manabot.model.interface import model_interface
 from manabot.policy.protocol import Backend
 import managym
 
@@ -174,18 +169,6 @@ def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str |
     if agent.get("belief_count_buckets"):
         return "Search requires evaluation without belief-model inputs."
     return None
-
-
-def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
-    """Explain metadata admission when only a checkpoint record is available."""
-
-    def admit() -> None:
-        observation = ObservationConfig.from_checkpoint(
-            checkpoint["hypers"]["observation_hypers"]
-        )
-        model_interface(checkpoint, ObservationSpace(observation))
-
-    return refusal(admit)
 
 
 def refusal(admit: Callable[[], object]) -> str | None:

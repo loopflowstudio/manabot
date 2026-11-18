@@ -30,6 +30,17 @@ class BindingReport:
     retired_keys: int
     renamed_keys: int
 
+    @property
+    def changed(self) -> bool:
+        """Whether binding moved anything the pilot reads."""
+        return bool(
+            self.changed_programs
+            or self.new_tokens
+            or self.new_names
+            or self.retired_keys
+            or self.renamed_keys
+        )
+
     def summary(self) -> str:
         return (
             f"{self.stored_programs} stored programs, {len(self.changed_programs)} changed; "
@@ -80,13 +91,10 @@ def named_rows(
 def bind_catalog(
     checkpoint: PolicyCheckpoint, writer: WriterCatalog, current: WriterCatalog
 ) -> tuple[PolicyCheckpoint, BindingReport]:
-    """Return the policy with current public joins and unchanged trained programs."""
-    model = checkpoint.model
-    if model.world is None or not model.catalog_records():
-        raise ValueError(
-            "rebinding card programs requires the catalog record vocabulary"
-        )
-    catalog = catalog_tables(model.world, records=True)
+    """Return the policy with current public joins and unchanged trained programs.
+
+    `model_interface` has admitted a world pilot with catalog records."""
+    catalog = catalog_tables(managym.WORLD_SETUP, records=True)
     buffers = catalog.buffers.copy()
     prefix = "semantic_cards."
     old = {

@@ -28,7 +28,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.run_settings import RunSettings
-from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
+from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_decks,
@@ -280,9 +280,9 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             changed["world_binding"][key] = change
         else:
             changed["world_binding"][key] = {**binding[key], **change}
-        assert checkpoint_incompatibility(changed) is not None
         path = tmp_path / f"changed-{key}.pt"
         write_checkpoint(changed, path)
+        assert not inspect_checkpoint(path, backend=TORCH_BACKEND).compatible
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
 

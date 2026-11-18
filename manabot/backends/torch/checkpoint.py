@@ -146,7 +146,21 @@ def restore_policy(
         checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
     )
     record = checkpoint.record()
-    _restore_metadata(agent, record, record["world_binding"])
+    value_semantic = record.get("bc", {}).get("value_semantic")
+    if value_semantic is not None:
+        if value_semantic not in ("signed_outcome", "win_logit"):
+            raise ValueError("unsupported checkpoint value semantic")
+        if agent.value_semantic is not None and value_semantic != agent.value_semantic:
+            raise ValueError("checkpoint value semantic conflicts with its critic")
+        agent.value_semantic = value_semantic
+    world_binding = record["world_binding"]
+    validate_policy_input(agent, world_binding)
+    agent.world_binding = world_binding
+    agent.belief_binding = (
+        BeliefCheckpointBinding.from_checkpoint(record)
+        if agent.belief_count_buckets > 0
+        else None
+    )
     agent.eval()
     return agent
 
@@ -186,27 +200,6 @@ def load_metadata(path: str | Path) -> dict[str, Any]:
     # for the learning-state importer to filter against actual parameter names.
     record["parameter_names"] = list(state)
     return record
-
-
-def _restore_metadata(
-    agent: ActorCritic,
-    checkpoint: Mapping[str, Any],
-    world_binding: dict[str, Any],
-) -> BeliefCheckpointBinding | None:
-    value_semantic = checkpoint.get("bc", {}).get("value_semantic")
-    if value_semantic is not None:
-        if value_semantic not in ("signed_outcome", "win_logit"):
-            raise ValueError("unsupported checkpoint value semantic")
-        if agent.value_semantic is not None and value_semantic != agent.value_semantic:
-            raise ValueError("checkpoint value semantic conflicts with its critic")
-        agent.value_semantic = value_semantic
-    validate_policy_input(agent, world_binding)
-    agent.world_binding = world_binding
-    binding = None
-    if agent.belief_count_buckets > 0:
-        binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
-    agent.belief_binding = binding
-    return binding
 
 
 def _is_torch_file(path: Path) -> bool:
