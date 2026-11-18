@@ -1,35 +1,35 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "657deddd8f20b2b47ab15742c56acba65d3e5cc6",
-    "date": "2026-11-17",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44140856590",
-    "runner": "GitHub-hosted ubuntu-24.04, INTEL(R) XEON(R) PLATINUM 8573C (4 vCPU), release",
-    "reason": "Smarter automatic source selection combined with default manual payments changes all search and step digests (124687 vs 127974 steps). This PR head passes every same-runner timing limit; retain the 10% tolerance."
+    "commit": "ec46eec958e5506d9bddf8593bc1a0eb1a63f903",
+    "date": "2026-11-18",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44374786181",
+    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
+    "reason": "Off suppresses choice-output mana floats at priority. Adopt the PR recording because the earlier reference lacks the seat mode needed to compile the benchmark. The curated step and search digests reproduce."
   },
   "bench_search": {
-    "worst_s": 4.7568773905,
-    "total_s": 164.071,
+    "worst_s": 3.650117826,
+    "total_s": 125.753,
     "seeds": {
       "1": {
-        "worst_s": 4.3592151470000005,
-        "total_s": 65.81617575550001,
+        "worst_s": 3.348244038,
+        "total_s": 50.442685984,
         "digest": 12973536517339955137
       },
       "2": {
-        "worst_s": 4.7568773905,
-        "total_s": 52.577839800999996,
+        "worst_s": 3.650117826,
+        "total_s": 40.141768569,
         "digest": 15798565271346578031
       },
       "3": {
-        "worst_s": 2.5637301470000002,
-        "total_s": 45.6773221415,
+        "worst_s": 1.961173363,
+        "total_s": 35.16856671199999,
         "digest": 5569117671639805731
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 16214.137997983244,
+    "steps_per_s": 21198.2,
     "steps": 124687,
     "games": 512,
     "digest": 3471185654390571689
