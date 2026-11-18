@@ -85,7 +85,9 @@ gave 12 passed, 1 skipped. Nothing wider was run locally; CI owns the suite.
 Nothing remains to build in this PR. The sixth concept review's leftover
 (question 46) is done: `roster` and `CorpusDeck` are deleted, `deck_rows` is
 the one deck reader, and the guide prints its deck-entry and card counts from
-`deck_cards`.
+`deck_cards` (`0a772149d7`). After it, `tests/eval/test_training_corpus.py`
+gave 5 passed. The guide's new count query was not re-run against frontier
+Small (expected 134 and 262) or the local run (2 and 29); QA owns that.
 
 1. Etude follow-up, not blocking: its evaluation query database indexes
    `training_checkpoints` only (question 34). Once Etude ingests selected
