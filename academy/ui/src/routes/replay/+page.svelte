@@ -501,7 +501,7 @@
   <Table
     {frame}
     live={studying && canRetry}
-    {status}
+    status={replayStore.busy || atLiveEdge || studying ? status : ''}
     you={{ name: nameOf(tableSeat), deck: deckOf(tableSeat) }}
     opponent={{ name: nameOf(1 - tableSeat), deck: deckOf(1 - tableSeat), description: identity(1 - tableSeat).description }}
     stops={frame.stops}
