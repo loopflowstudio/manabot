@@ -48,19 +48,27 @@ in that roster resolve through the writer naming catalog to definition keys.
 
 ## Remaining work
 
-1. **Upstream dependency.** A local Etude run with an outcome table returned
-   its row through the training reader. Opening the same experiment with
-   `statsdb` exposed `training_checkpoints` as its only training relation.
-   The non-evaluation branch of Etude's query ingest indexes checkpoints
-   alone. The requested change to Etude is in `scratch/questions.md`.
-2. After Etude exposes the training rows for queries, add the manabot entry
-   point alongside the evaluation queries. Accept a checkpoint or run and
-   update, select recorded matchups through that update, and join their
-   decks to card keys. Keep the per-update counts for deck-mix questions.
-3. Test and demonstrate the four queries against local and frontier records:
-   matchup membership, new cards in a deck, games including a card by an
-   update (count a game once), and deck mix over time. The guide currently
-   gives the verified update-1 counts, not an executable query.
+1. **Corpus query in manabot, on Etude's public training reader.** The
+   installed SDK already selects the rows: `RunData.read_table(
+   "self_play_outcomes", "updates")` for current runs and
+   `manabot/reports/update_metrics.py::updates_from_run` for historical
+   scalars, both honouring resume supersession. Add the entry point beside
+   the evaluation queries: accept a checkpoint or run and update, select
+   recorded matchups through that update, join their decks to card keys
+   through the run's declared deck source and the writer naming catalog, and
+   expose the result as a DuckDB relation so specific questions are SQL on
+   top. Keep per-update counts for deck-mix questions. Absent outcome
+   evidence reports coverage unknown, never empty.
+2. Test and demonstrate the four queries against a local run and frontier
+   Small (`tla_frontier/59718fe34945`, R2): matchup membership, new cards in
+   a deck, games including a card by an update (count a game once, not per
+   seat), and deck mix over time. Replace the guide's quoted update-1 counts
+   with the executable query. Expected update-1 result: 259 games, 132 of
+   134 roster decks observed, 262 card names resolved.
+3. Etude follow-up, not blocking: its evaluation query database indexes
+   `training_checkpoints` only (question 34). Once Etude ingests selected
+   training rows, the manabot relation can read them there. File as an Etude
+   Task; this PR does not wait for it.
 4. Gate and publish for human review after the query is built. No landing,
    paid run, corpus label in the checkpoint or change to exact-deck refusal.
 

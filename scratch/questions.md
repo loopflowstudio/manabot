@@ -146,3 +146,11 @@ say so if they should carry a note.
     The corpus query stops here for upstream review, per the revised plan.
     Historical reports, serialized identifiers and UI control IDs retain
     their spelling.
+
+## Realign, 2026-11-18 (nobody present; reversible)
+
+35. The corpus query is built in manabot on `RunData.read_table` and
+    `updates_from_run` rather than waiting for Etude's query database to
+    ingest training rows. Both already select winning attempts. Passed over:
+    holding this PR for an Etude release. Moving the relation upstream later
+    changes only where the rows are read.
