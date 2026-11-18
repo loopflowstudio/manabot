@@ -97,16 +97,11 @@ class SelfPlayCounter:
             for (deck, opponent, position), c in sorted(self.counts.items())
         ]
         settings = [
-            GameSettingCount(
-                seat=key.seat, setting=key.setting, value=key.value, games=games
-            )
+            GameSettingCount(**key._asdict(), games=games)
+            # Whole-game settings first: a None seat cannot be ordered against a seat.
             for key, games in sorted(
                 self.settings.items(),
-                key=lambda item: (
-                    item[0].setting,
-                    -1 if item[0].seat is None else item[0].seat,
-                    item[0].value,
-                ),
+                key=lambda item: (item[0].seat is not None, item[0]),
             )
         ]
         self.counts.clear()

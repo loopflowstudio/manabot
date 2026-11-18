@@ -329,6 +329,22 @@ def training_corpus(
     return db
 
 
+def insert_rows(
+    db: duckdb.DuckDBPyConnection,
+    table: str,
+    identity: list[str],
+    rows: list[tuple[Any, ...]],
+    types: str,
+) -> None:
+    """Insert one run's rows as columns: frontier runs hold hundreds per update."""
+    if rows:
+        columns = ", ".join(f"unnest(?::{kind}[])" for kind in types.split())
+        db.execute(
+            f"insert into {table} select ?, ?, {columns}",
+            [*identity, *(list(column) for column in zip(*rows))],
+        )
+
+
 def add_run(
     db: duckdb.DuckDBPyConnection, data: RunData, through: int, statistics: Path | None
 ) -> tuple[str, int, str] | None:
@@ -351,18 +367,14 @@ def add_run(
         deck not in declared for _, play, draw, _ in matchups for deck in (play, draw)
     ):
         raise UnknownCoverage(f"{data.name}: an outcome names an undeclared deck")
-    # One columnar insert: frontier runs hold hundreds of matchups per update.
-    columns = [list(column) for column in zip(*matchups)] or [[], [], [], []]
-    db.execute(
-        "insert into matchups select ?, ?, unnest(?::bigint[]), unnest(?::varchar[]), unnest(?::varchar[]), unnest(?::bigint[])",
-        [*identity, *columns],
+    insert_rows(db, "matchups", identity, matchups, "bigint varchar varchar bigint")
+    insert_rows(
+        db,
+        "game_settings",
+        identity,
+        game_settings(data, games, through),
+        "bigint integer varchar varchar bigint",
     )
-    settings_columns = [list(c) for c in zip(*game_settings(data, games, through))]
-    if settings_columns:
-        db.execute(
-            "insert into game_settings select ?, ?, unnest(?::bigint[]), unnest(?::integer[]), unnest(?::varchar[]), unnest(?::varchar[]), unnest(?::bigint[])",
-            [*identity, *settings_columns],
-        )
     if statistics is not None:
         add_card_statistics(db, statistics, games, through)
     tables = data.read_table(RUN_TABLE, "updates")

@@ -34,7 +34,7 @@ def test_mirror_and_recovery_keep_seat_counts() -> None:
     counter = SelfPlayCounter()
     counter.record(("allies", "allies"), 0)
     snapshot = deepcopy(counter)
-    counter.drain().outcomes
+    counter.drain()
     rows = snapshot.drain().outcomes
     assert len(rows) == 2
     assert sum(r["wins"] for r in rows) == 1
