@@ -389,13 +389,15 @@
     { creatures: pileCounts(view.you.creatures), support: pileCounts(view.you.support), width: yourRows.width },
   ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
   { min: boardCount >= 24 ? 96 : 112, max: Math.max(112, Math.min(236, Math.round(boardHeight * 0.32))), step: 8 })}px`);
-  /** The players' plates' column: the hand's cards centre under the rows beside it, its label in it. */
+  /** The players' plates' column. */
   const PLATE_WIDTH = 148;
+  /** The hand's cards keep clear of its label at the left edge. */
+  const HAND_LABEL_WIDTH = 80;
   let handWidth = $state(0);
   let handHeight = $state(0);
   const handCard = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
   const handStep = $derived(view.hand.length <= 1 ? handCard + 10
-    : Math.min(handCard + 10, Math.max(24, (handWidth - PLATE_WIDTH - 24 - handCard) / (view.hand.length - 1))));
+    : Math.min(handCard + 10, Math.max(24, (handWidth - HAND_LABEL_WIDTH - 24 - handCard) / (view.hand.length - 1))));
 
   // ———————————————— Keyboard
 
@@ -433,7 +435,7 @@
 <svelte:window onkeydown={onKeydown} onpointermove={onPointerMove} />
 
 <div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
-  data-turn={projection.turn.turn_number} data-step={projection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} bind:this={root}>
+  data-turn={projection.turn.turn_number} data-step={projection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
@@ -467,7 +469,7 @@
   </header>
 
   <div class="board" id="table-board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
-    <section use:region class="half opponent" aria-label={`${possessive(said)} battlefield`}>
+    <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
@@ -475,7 +477,7 @@
         <div class="row creatures"><Field piles={view.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
-    <section use:region class="half you" aria-label="Your battlefield">
+    <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={projection.agent} name={you.name} deck={you.deck} offers={view.you.offers} {live} damage={recent.damage.players.get(projection.agent.player_index) ?? 0}
         active={yourTurn} side="you" onactivate={element => activate(you.name, view.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
@@ -483,7 +485,7 @@
         <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
-    <section use:region class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
+    <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
       <span class="type-rubric hand-label text-ink-3">Hand · {view.hand.length}</span>
       <div class="hand-cards" style:width={`${handCard + Math.max(0, view.hand.length - 1) * handStep}px`}>
         {#each view.hand as item, index (item.card.id)}
@@ -637,7 +639,7 @@
   .row.support { border-top: 1px dashed transparent; }
   .opponent .row.creatures, .you .row.support { padding-top: 4px; }
 
-  .hand { position: relative; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--plate); overflow: hidden; }
+  .hand { position: relative; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--hand-label); overflow: hidden; }
   .hand-label { position: absolute; left: 14px; bottom: 10px; }
   .hand-cards { position: relative; height: 100%; }
   .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }

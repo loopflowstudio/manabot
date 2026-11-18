@@ -8,8 +8,9 @@
  * one last focused there, else the first. Arrow keys move focus to the
  * nearest control in that direction on screen, so a field's two rows and a
  * fanned hand read as they look; where nothing lies that way (a list's
- * left/right), they step through the region in document order. Home and End
- * go to its first and last control.
+ * left/right), they step through the region in document order. On a
+ * recording (`across: false`) Left and Right are the transport's, stepping
+ * positions; Up and Down still move within the region.
  *
  * A move replaces the controls it was made from. When the focused control
  * leaves the page during keyboard play, focus returns to the control now at
@@ -52,7 +53,13 @@ export function nearest(from: DOMRect, candidates: readonly DOMRect[], direction
   return (best as { index: number } | null)?.index ?? null;
 }
 
-export function region(node: HTMLElement): { destroy: () => void } {
+export interface RegionOptions {
+  /** Left and Right move within the region; false leaves them to the page (a recording's stepping). */
+  across?: boolean;
+}
+
+export function region(node: HTMLElement, options: RegionOptions = {}): { update: (next: RegionOptions) => void; destroy: () => void } {
+  let across = options.across ?? true;
   node.dataset.region = '';
   let current: HTMLElement | null = null;
   /** The focused control and its place in the region while focus is here; a removed control fires no focusout. */
@@ -83,10 +90,9 @@ export function region(node: HTMLElement): { destroy: () => void } {
     const at = items.indexOf(event.target as HTMLElement);
     if (at < 0) return;
     let next: number | null = null;
-    if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = items.length - 1;
-    else if (event.key in DIRECTIONS) {
+    if (event.key in DIRECTIONS) {
       const direction = DIRECTIONS[event.key];
+      if (!across && (direction === 'left' || direction === 'right')) return;
       const rects = items.map(item => item.getBoundingClientRect());
       const others = rects.map((rect, i) => (i === at ? new DOMRect(-1e6, -1e6, 0, 0) : rect));
       next = nearest(rects[at], others, direction);
@@ -134,6 +140,7 @@ export function region(node: HTMLElement): { destroy: () => void } {
   node.addEventListener('focusout', onFocusout);
   rove();
   return {
+    update(next: RegionOptions) { across = next.across ?? true; },
     destroy() {
       observer.disconnect();
       node.removeEventListener('keydown', onKeydown);
