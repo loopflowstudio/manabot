@@ -163,3 +163,15 @@ say so if they should carry a note.
     SDK 0.4.1 selects table artifacts across the supplied history before the
     caller can filter on update. Include a bounded table read in the Etude
     follow-up alongside database ingestion.
+
+## Concept review of the corpus query, 2026-11-18 (nobody present; reversible)
+
+37. Card statistics join the corpus as a `card_statistics` relation on the
+    same DuckDB connection, switched on by `statistics=path`, keyed by
+    update, seat and definition key. Passed over: a separate function (its
+    relation could not be joined), a deck column (rows hold main-deck copies
+    only) and locating `out/statistics` from the run (Etude storage does not
+    hold it). Fewer terminal statistics games than corpus games at an update
+    raises; more is allowed, since superseded attempts leave rows behind.
+38. To file after this PR: publish statistics rows as run artifacts with the
+    attempt in their context.

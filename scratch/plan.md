@@ -72,16 +72,61 @@ runs. DuckDB plans used hash joins on the two deck identities.
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude
    Task; this PR does not wait for it.
-2. Card statistics relation (steer, Jack Heart, 2026-11-18: "didnt this
-   land?", "i do think we should play well with it"). When a run recorded
-   `managym.statistics` (RunSettings.statistics, under out/statistics/, read
-   with `managym.statistics.read_statistics`), the corpus reader exposes it
-   as one more relation keyed by run, update, deck or seat and definition
-   key; absent statistics make the relation absent and say so, never zero.
-   No new counter or game record. Old runs: "Not a problem"; value-estimate
-   trustworthiness: "agreed, leave this out".
+2. Card statistics relation, not built (steer, Jack Heart, 2026-11-18:
+   "didnt this land?", "i do think we should play well with it"). Old runs:
+   "Not a problem"; value-estimate trustworthiness: "agreed, leave this
+   out". Design below.
 3. Gate and publish for human review after the query is built. No landing,
    paid run, corpus label in the checkpoint or change to exact-deck refusal.
+
+## Card statistics in the corpus (next build)
+
+Shape chosen in the concept review of 2026-11-18 with nobody present;
+reversible. Page: `scratch/concept-review.html`.
+
+A run declared with `statistics: true` writes one `GameStatistics` row per
+game to `out/statistics/*.jsonl` (`managym.statistics.read_statistics`).
+Each row carries the seed, terminal flag, winner, per-seat card counts by
+printed name and native definition index, the `card_digest` binding those
+indices, and a context holding the update. Rows hold main-deck copies only,
+so they cannot name a deck. Etude run storage does not carry the directory.
+
+Build in `manabot/eval/training_corpus.py`:
+
+- `training_corpus(run, through, *, source=None, statistics: Path | None =
+  None)`. With a path, the relation's connection also holds
+  `card_statistics`: `update_number, seat, card, games, wins, deck_copies,
+  opening_copies, drawn_copies, opportunities, selections, resolutions`,
+  summed over terminal games per update, native seat (0 is on the play) and
+  definition key, for updates 1 through the cutoff. `corpus` is unchanged.
+- Names become definition keys through the catalog each row's `card_digest`
+  names (`writer_catalog` or `archived_catalog`), with the mapping
+  `corpus_decks` already uses; share it, do not copy it.
+- Without the keyword there is no `card_statistics` relation. A supplied
+  path with no rows raises `UnknownCoverage`. An update through the cutoff
+  where statistics hold fewer terminal games than the corpus raises
+  `UnknownCoverage` naming both counts. More is allowed.
+- No deck column, no new counter, no game record, no read of `run.out`
+  from library code, no change to what training writes.
+
+First slice, because it shows soonest whether the design holds: run the
+local two-update recipe with `statistics: true`, and compare terminal
+statistics games per context update with corpus games per update. The
+writer labels a row with the finished-update count when the game ended
+(`CaptureScope` context in `manabot/training/loops/self_play.py`); if that
+is one behind the outcome table's update, map it in the reader and state
+the rule in a comment. If the two cannot be aligned, stop and record what
+was seen in `scratch/questions.md` instead of guessing.
+
+Then: one test in `tests/eval/test_training_corpus.py` over a real short
+run or its retained rows (join works; missing directory raises; fewer games
+raises), and a paragraph plus one query in the corpus section of
+`docs/evaluation.md`. State there that a resumed run's statistics keep rows
+from superseded attempts, so card counts can exceed the corpus.
+
+Not this PR, to file: publish statistics rows as run artifacts with the
+attempt in their context, so a checkpoint plus storage reaches them and
+supersession applies.
 
 ## Review direction
 
