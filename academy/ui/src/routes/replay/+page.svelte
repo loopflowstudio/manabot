@@ -106,14 +106,14 @@
   const evidence = $derived(!studying && current?.decision && recorded ? offerEvidence(recorded, current.outputs, current.decision.offer_id) : null);
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
 
-  const entries = $derived(replayLog(positions, heroSeat));
+  const entries = $derived(replayLog(positions, heroSeat, nameOf));
   const moves = $derived(moveList(entries, { you: nameOf(heroSeat), opponent: nameOf(1 - heroSeat) }, new Map(), []));
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
   const marks = $derived(stripMarks(positions, heroSeat));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
 
   const ending = $derived(frame && !studying && frame.projection.game_over && index
-    ? gameResult(frame, replayLog(positions, tableSeat), { you: nameOf(tableSeat), opponent: nameOf(1 - tableSeat) }, index.winner)
+    ? gameResult(frame, replayLog(positions, tableSeat, nameOf), { you: nameOf(tableSeat), opponent: nameOf(1 - tableSeat) }, index.winner)
     : null);
 
   const status = $derived(!index ? ''

@@ -26,6 +26,11 @@ from managym.academy.trace import load_trace, prepare_trace_payload
 from managym.experience import PresentationEvent
 
 
+# Native decision-context stages that continue announcing a spell or ability
+# (`managym/src/decision_context.rs`): the move is named once it is on the stack.
+ANNOUNCING_STAGES = frozenset({"payment", "additional_cost", "targets", "mode", "announcement"})
+
+
 @dataclass(frozen=True)
 class Position:
     key: str
@@ -121,17 +126,24 @@ class Recording:
                 self.revisions[i] = event["presentation"][0]["from_revision"]
 
         self.event_by_revision = {revision: i for i, revision in self.revisions.items()}
+        self._narrations: dict[int, str | None] = {}
+        self._boards: dict[int, dict[str, Any]] = {}
+        self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
 
     def _board(self, position: Position) -> dict[str, Any]:
+        """The recorded person's redacted board at `position`. Callers must not mutate it."""
         # Reuse the established redaction boundary on only the selected board.
-        return prepare_trace_payload(
-            {
-                "config": self.payload["config"],
-                "events": [],
-                "final_observation": self._raw_board(position),
-                "end_reason": self.payload.get("end_reason"),
-            }
-        )["final_observation"]
+        index = position.event_index + (position.kind == "consequences")
+        if index not in self._boards:
+            self._boards[index] = prepare_trace_payload(
+                {
+                    "config": self.payload["config"],
+                    "events": [],
+                    "final_observation": self._raw_board(position),
+                    "end_reason": self.payload.get("end_reason"),
+                }
+            )["final_observation"]
+        return self._boards[index]
 
     def _cursor(self, position: Position, viewer: int) -> int:
         if position.kind == "choice" and position.decision:
@@ -194,16 +206,122 @@ class Recording:
         }
 
     def _description(self, position: Position) -> str | None:
-        """What a consequences position narrates; another seat's choice stays unnamed."""
+        """What a consequences position narrates.
+
+        The recorded person's own choice is its action. Another seat's choice is
+        narrated from what the recorded person saw (`_narration`), never from
+        that seat's private action; a step of it nobody could see apart is None.
+        """
         if position.kind != "consequences":
             return None
         source = self.payload["events"][position.event_index]
-        description = (
-            source.get("action_description")
-            if source.get("actor") == "hero"
-            else "Opponent decision"
-        )
+        if source.get("actor") != "hero":
+            return self._narration(position.event_index)
+        description = source.get("action_description")
         return f"Auto: {description}" if source.get("auto") else description
+
+    # ———————————————— Narrating another seat's move
+
+    def _narration(self, index: int) -> str | None:
+        """Another seat's move at event `index`, as the recorded person saw it.
+
+        Reads only the recorded person's presentation track for this transition
+        and the redacted boards on either side of it (the established viewer
+        boundary), so a hidden choice is never named. What was visible becomes
+        the move ("Cast Yip Yip!, targeting Earth Kingdom Jailer", "Play
+        Forest", "Attack with Ally, Otter-Penguin"); a priority pass is "Pass
+        priority". A step that completes later (announcing a spell before it
+        reaches the stack, one attacker of several) is None: its move is named
+        where it becomes visible.
+        """
+        if index in self._narrations:
+            return self._narrations[index]
+        before = self._board(Position("", "choice", index))
+        after = self._board(Position("", "consequences", index))
+        revision = self.revisions.get(index)
+        events = self._transition_events(revision) if revision is not None else []
+        context = before.get("decision_context") or {}
+        actor = context.get("actor")
+        # Names of what either redacted board shows, by object; a spell on the
+        # stack is named by its card.
+        names = {
+            card["id"]: card["name"]
+            for board in (before, after)
+            for side_name in ("agent", "opponent")
+            for zone in ("battlefield", "graveyard", "exile", "stack", "hand")
+            for card in board.get(side_name, {}).get(zone, [])
+            if isinstance(card, dict) and card.get("name") and "id" in card
+        }
+        side = _side_of(after, actor)
+        arrived = _new_cards(before, after, side)
+
+        def name(subject: dict[str, Any]) -> str | None:
+            if subject.get("kind") == "player":
+                return f"Seat {int(subject['id']) + 1}"
+            if subject.get("kind") == "stack":
+                return names.get(int(subject["id"]))
+            identity = subject.get("id", subject)
+            return names.get(int(identity["entity"]))
+
+        phrases: list[str] = []
+        spells: list[str] = []
+        for event in events:
+            kind = event.kind.model_dump(mode="json")
+            if kind["kind"] == "cast" and kind["controller"] == actor:
+                spell = (
+                    name({"kind": "stack", "id": kind["stack"]})
+                    or name({"kind": "object", "id": kind["object"]})
+                    or next((card for card in arrived["spells"] if card not in spells), None)
+                )
+                targets = [
+                    target
+                    for other in events
+                    if (other_kind := other.kind.model_dump(mode="json"))["kind"] == "targeted"
+                    and other_kind["source"] in (
+                        {"kind": "stack", "id": kind["stack"]},
+                        {"kind": "object", "id": kind["object"]},
+                    )
+                    and (target := name(other_kind["target"]))
+                ]
+                spells.append(spell or "a spell")
+                phrases.append(
+                    f"Cast {spell or 'a spell'}"
+                    + (f", targeting {_listed(targets)}" if targets else "")
+                )
+            elif kind["kind"] == "attack_group":
+                attackers = [n for a in kind["attackers"] if (n := name({"id": a}))]
+                phrases.append(f"Attack with {_listed(attackers) or 'creatures'}")
+            elif kind["kind"] == "blocked":
+                blockers = [n for b in kind["blockers"] if (n := name({"id": b}))]
+                attacker = name({"id": kind["attacker"]}) or "an attacker"
+                phrases.append(f"Block {attacker} with {_listed(blockers) or 'creatures'}")
+        if not spells:
+            phrases[:0] = [f"Play {land}" for land in arrived["lands"]]
+            if arrived["discarded"]:
+                phrases.append(f"Discard {_listed(arrived['discarded'])}")
+        if phrases:
+            text: str | None = "; ".join(phrases)
+        elif context.get("stage") != "priority":
+            text = None
+        else:
+            # Nothing visible at priority is a pass, unless the same seat goes
+            # straight on to announce what it began (targets, costs, modes).
+            following = after.get("decision_context") or {}
+            text = (
+                None
+                if following.get("actor") == actor
+                and following.get("stage") in ANNOUNCING_STAGES
+                else "Pass priority"
+            )
+        self._narrations[index] = text
+        return text
+
+    def _transition_events(self, revision: int) -> list[PresentationEvent]:
+        if self._events_by_revision is None:
+            self._events_by_revision = {}
+            for event in self.tracks.get(self.human_seat, []):
+                self._events_by_revision.setdefault(event.from_revision, []).append(event)
+        return self._events_by_revision.get(revision, [])
 
     def _value(self, position: Position) -> float | None:
         """The chooser's recorded value at a choice, as `read` returns it in `outputs`."""
@@ -231,12 +349,13 @@ class Recording:
         if index is None:
             return labels
         row = self.decisions.get(index)
+        # Another seat's recorded board is read through the redaction boundary.
         before = (
             row.frame.projection.model_dump(mode="json")
             if row and row.viewer == viewer
-            else self.payload["events"][index]["observation"]
+            else self._board(Position("", "choice", index))
         )
-        after = self._raw_board(Position("", "consequences", index))
+        after = self._board(Position("", "consequences", index))
         names: dict[str, str] = {}
         stacks: dict[str, str] = {}
         for observation, private in (
@@ -257,7 +376,9 @@ class Recording:
                 for zone in zones:
                     for card in player.get(zone, []):
                         if card.get("name"):
-                            names[f"{card['id']}:0"] = card["name"]
+                            # A board names an object by entity; every
+                            # incarnation the event cites is that same object.
+                            names[str(card["id"])] = card["name"]
                             if zone == "stack":
                                 stacks[str(card["id"])] = card["name"]
 
@@ -265,8 +386,8 @@ class Recording:
             if isinstance(value, dict):
                 if "entity" in value and "incarnation" in value:
                     key = f"{value['entity']}:{value['incarnation']}"
-                    if key in names:
-                        labels["objects"][key] = names[key]
+                    if str(value["entity"]) in names:
+                        labels["objects"][key] = names[str(value["entity"])]
                 if value.get("kind") == "stack" and str(value.get("id")) in stacks:
                     labels["stacks"][str(value["id"])] = stacks[str(value["id"])]
                 for child in value.values():
@@ -317,7 +438,7 @@ class Recording:
         observation = (
             row.frame.projection.model_dump(mode="json")
             if row
-            else self._board(position)
+            else deepcopy(self._board(position))
         )
         event = self.payload["events"][position.event_index] if row else {}
         analysis = event.get("analysis_observation") if self.watch else None
@@ -382,3 +503,59 @@ class ReadCache:
 
 
 read_cache = ReadCache()
+
+
+def _side_of(observation: dict[str, Any], seat: object) -> str | None:
+    for side in ("agent", "opponent"):
+        if observation.get(side, {}).get("player_index") == seat:
+            return side
+    return None
+
+
+def _new_cards(
+    before: dict[str, Any], after: dict[str, Any], side: str | None
+) -> dict[str, list[str]]:
+    """Public cards that reached `side`'s zones in a transition, by what they are.
+
+    Lands new to the battlefield, other new public cards (a spell reaching the
+    stack or becoming a permanent, by name), and cards that left the hand for
+    the graveyard while nothing was cast: a discard.
+    """
+    found: dict[str, list[str]] = {"lands": [], "spells": [], "discarded": []}
+    if side is None:
+        return found
+    old, new = before.get(side, {}), after.get(side, {})
+    seen = {
+        card.get("id")
+        for zone in ("battlefield", "graveyard", "exile", "stack")
+        for card in old.get(zone, [])
+    }
+    for zone in ("stack", "battlefield", "graveyard", "exile"):
+        for card in new.get(zone, []):
+            if card.get("id") in seen or not card.get("name"):
+                continue
+            seen.add(card.get("id"))
+            if zone == "battlefield" and (card.get("types") or {}).get("is_land"):
+                found["lands"].append(card["name"])
+            else:
+                found["spells"].append(card["name"])
+    hand_before = len(old.get("hand", [])) + int(old.get("hand_hidden_count") or 0)
+    hand_after = len(new.get("hand", [])) + int(new.get("hand_hidden_count") or 0)
+    new_graveyard = [
+        card["name"]
+        for card in new.get("graveyard", [])
+        if card.get("id") not in {c.get("id") for c in old.get("graveyard", [])}
+        and card.get("name")
+    ]
+    if hand_after < hand_before:
+        found["discarded"] = new_graveyard[: hand_before - hand_after]
+    return found
+
+
+def _listed(names: list[str]) -> str:
+    """"Ally", "Ally and Forest", "Badgermole Cub ×2, Forest and Ally"."""
+    counts: dict[str, int] = {}
+    for name in names:
+        counts[name] = counts.get(name, 0) + 1
+    parts = [f"{name} ×{count}" if count > 1 else name for name, count in counts.items()]
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1] if parts else ""

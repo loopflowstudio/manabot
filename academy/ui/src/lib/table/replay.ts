@@ -152,15 +152,23 @@ export function offerEvidence(frame: ExperienceFrame, outputs: BotDecision | nul
  * with the position key as the entry id so a move jumps to its position. A
  * choice names its chosen offer; a transition with no choice position of its
  * own (an opponent's decision in a Play game, automation) names what the
- * recording narrates. `heroSeat` is the seat named as "you" in the list.
+ * recording narrates from the recorded person's view. A step of an opponent's
+ * move that nobody could see apart (choosing a target before the spell is on
+ * the stack) has no narration and is no move of its own. `heroSeat` is the seat
+ * named as "you"; `seatName` names the players the narration calls "Seat N".
  */
-export function replayLog(positions: readonly Position[], heroSeat: 0 | 1): GameLogEntry[] {
+export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatName?: (seat: 0 | 1) => string): GameLogEntry[] {
   const entries: GameLogEntry[] = [];
   positions.forEach((position, i) => {
     if (position.kind === 'state') return;
     if (position.kind === 'consequences' && positions[i - 1]?.kind === 'choice') return;
+    if (position.kind === 'consequences' && position.label === null) return;
     const auto = position.kind === 'consequences' && position.automatic;
-    const text = (position.label ?? (position.kind === 'choice' ? 'Choice' : 'Decision')).replace(/^Auto: /, '');
+    let text = (position.label ?? 'Choice').replace(/^Auto: /, '');
+    if (seatName) text = text.replace(/\bSeat ([12])\b/g, (_, seat: string) => {
+      const name = seatName(seat === '1' ? 0 : 1);
+      return name === 'You' ? 'you' : name;
+    });
     entries.push({
       id: position.key,
       actor: auto ? 'auto' : position.actor === null ? 'villain' : position.actor === heroSeat ? 'hero' : 'villain',

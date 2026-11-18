@@ -87,16 +87,18 @@ describe('the move list and strip read the index', () => {
   const positions: Position[] = [
     position('choice', { key: 'c1', actor: 0, label: 'Play Island', revision: 3 }),
     position('consequences', { key: 'a1', actor: 0, label: 'Play Island', revision: 3 }),
-    position('consequences', { key: 'a2', actor: 1, label: 'Opponent decision', revision: 4 }),
+    position('consequences', { key: 'a2', actor: 1, label: 'Cast Shock, targeting Seat 1', revision: 4 }),
     position('consequences', { key: 'a3', actor: 0, automatic: true, label: 'Auto: Pass priority', revision: 5, turn: 2 }),
     position('choice', { key: 'c2', actor: 0, label: 'Cast Shock', revision: 7, turn: 2, value: 0.4 }),
+    position('consequences', { key: 'a4', actor: 1, label: null, revision: 8, turn: 2 }),
     position('state', { key: 'latest', turn: 2 }),
   ];
-  const entries = replayLog(positions, 0);
+  const entries = replayLog(positions, 0, seat => (seat === 0 ? 'You' : 'Heuristic'));
 
   it('lists each move once, keyed by the position it jumps to', () => {
+    // An opponent's step without narration is part of the move that follows it.
     expect(entries.map(entry => [entry.id, entry.actor, entry.text])).toEqual([
-      ['c1', 'hero', 'Play Island'], ['a2', 'villain', 'Opponent decision'], ['a3', 'auto', 'Pass priority'], ['c2', 'hero', 'Cast Shock'],
+      ['c1', 'hero', 'Play Island'], ['a2', 'villain', 'Cast Shock, targeting you'], ['a3', 'auto', 'Pass priority'], ['c2', 'hero', 'Cast Shock'],
     ]);
     const turns = moveList(entries, { you: 'Seat 1', opponent: 'Seat 2' }, new Map(), []);
     expect(turns.flatMap(turn => turn.moves.map(move => move.id))).toEqual(['c1', 'a2', 'a3', 'c2']);
@@ -105,6 +107,7 @@ describe('the move list and strip read the index', () => {
   it('finds the move a consequence belongs to', () => {
     expect(moveAt(entries, positions, 1)).toBe('c1');
     expect(moveAt(entries, positions, 5)).toBe('c2');
+    expect(moveAt(entries, positions, 6)).toBe('c2');
   });
 
   it('marks turns, decisions and recorded values', () => {
