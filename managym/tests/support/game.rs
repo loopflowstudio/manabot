@@ -56,6 +56,12 @@ pub struct Scenario {
 }
 
 impl Scenario {
+    /// Exercise a printed mana activation directly at priority in a rules fixture.
+    pub fn allow_priority_floats(&mut self) {
+        self.game.mana_taps = [managym::state::player::ManaTaps::Always; 2];
+        self.game.scenario_refresh_priority().unwrap();
+    }
+
     pub fn new(
         player0_deck: BTreeMap<String, usize>,
         player1_deck: BTreeMap<String, usize>,

@@ -67,6 +67,7 @@ fn standstill_sacrifices_and_the_casters_opponent_draws_three() {
 #[test]
 fn tarnished_citadel_deals_three_damage_only_with_colored_mana() {
     let mut s = five_color_unfunded_setup(&["Tarnished Citadel", "Sol Ring"]);
+    s.allow_priority_floats();
     s.force_permanent_on_battlefield(0, "Tarnished Citadel");
     let ring = move_to_hand(&mut s, "Sol Ring");
     cast_card(&mut s, ring);
@@ -81,6 +82,7 @@ fn tarnished_citadel_deals_three_damage_only_with_colored_mana() {
 
     for protected in [false, true] {
         let mut s = five_color_unfunded_setup(&["Tarnished Citadel"]);
+        s.allow_priority_floats();
         let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
         if protected {
             s.game_mut().apply_continuous(
@@ -109,6 +111,7 @@ fn tarnished_citadel_deals_three_damage_only_with_colored_mana() {
 fn tarnished_citadel_damage_is_prevented_under_teferis_protection() {
     let mut s =
         five_color_unfunded_setup(&["Tarnished Citadel", "Teferi's Protection", "Sol Ring"]);
+    s.allow_priority_floats();
     s.set_player_mana_pool(0, "2W");
     cast(&mut s, "Teferi's Protection");
     settle(&mut s);

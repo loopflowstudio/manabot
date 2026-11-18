@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 #[test]
 fn prism_consumes_generic_before_adding_chosen_color() {
     let mut s = five_color_setup(&["Prophetic Prism"]);
+    s.allow_priority_floats();
     enter_and_settle(&mut s, "Prophetic Prism");
     s.set_player_mana_pool(0, "1");
     activate_named(&mut s, "Prophetic Prism", 0);
@@ -97,6 +98,7 @@ fn audit_prism_treasure_empty_pool_activation() {
         ("Prophetic Prism".to_string(), 1),
     ]);
     let mut s = Scenario::new(deck.clone(), deck, 177_605);
+    s.allow_priority_floats();
     s.advance_to_active_step(0, managym::flow::turn::StepKind::Main);
     // Only the activation is under test; do not introduce Prism's ETB draw.
     s.force_permanent_on_battlefield(0, "Prophetic Prism");
@@ -127,6 +129,7 @@ fn audit_prism_treasure_empty_pool_activation() {
 #[test]
 fn priority_prism_activation_can_use_a_treasure_for_its_upfront_cost() {
     let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
+    s.allow_priority_floats();
     enter_and_settle(&mut s, "Prophetic Prism");
     s.game_mut()
         .create_token("token.treasure", PlayerId(0), false);
@@ -350,6 +353,7 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
 
     for spell in [false, true] {
         let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner", "Raging Goblin"]);
+        s.allow_priority_floats();
         enter_and_settle(&mut s, "Prophetic Prism");
         s.game_mut()
             .create_token("token.treasure", PlayerId(0), false);
@@ -391,6 +395,7 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
 fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
     for seed in [false, true] {
         let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
+        s.allow_priority_floats();
         // Use two distinct printed copies; identical output does not make
         // their tap and sacrifice identities interchangeable.
         enter_and_settle(&mut s, "Prophetic Prism");
@@ -472,6 +477,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
 fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
     for unrestricted in [false, true] {
         let mut s = five_color_setup(&["Prophetic Prism"]);
+        s.allow_priority_floats();
         enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, if unrestricted { "U" } else { "0" });
         let lesson = ManaRestriction::spell(["Lesson"]);
@@ -503,6 +509,7 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
 fn nested_mana_nonmana_life_cost_is_reserved_and_paid_once() {
     for life in [1, 3] {
         let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
+        s.allow_priority_floats();
         enter_and_settle(&mut s, "Prophetic Prism");
         s.game_mut()
             .create_token("token.treasure", PlayerId(0), false);
@@ -563,6 +570,7 @@ fn training_grounds_reduces_creature_activations_to_no_less_than_one_mana() {
 #[test]
 fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
     let mut s = five_color_setup(&["Prophetic Prism"]);
+    s.allow_priority_floats();
     enter_and_settle(&mut s, "Prophetic Prism");
     enter_and_settle(&mut s, "Forest");
     let prism = permanent_named(&s, "Prophetic Prism");
@@ -573,6 +581,7 @@ fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
         managym::state::mana::ManaCost::parse("2");
     s.set_player_mana_pool(0, "U");
     activate_named(&mut s, "Prophetic Prism", 0);
+    choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     choose(&mut s, |action| {
         matches!(action, Action::ChooseMode { mode: 4, .. })

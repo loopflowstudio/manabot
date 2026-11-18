@@ -677,6 +677,7 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
         "Rebellious Captives",
         "Gray Ogre",
     ]);
+    s.allow_priority_floats();
     let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
     s.set_player_mana_pool(0, "");
     activate(&mut s, shop, 0);
@@ -700,6 +701,7 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
         "Rebellious Captives",
         "Waterbending Scroll",
     ]);
+    s.allow_priority_floats();
     let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
     let captives = s.force_permanent_on_battlefield(0, "Rebellious Captives");
     let scroll = s.force_permanent_on_battlefield(0, "Waterbending Scroll");
@@ -900,6 +902,7 @@ fn badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana() {
     let herbalist = s.force_permanent_on_battlefield(0, "Hermitic Herbalist");
     clear_summoning_sickness(&mut s, herbalist);
     s.set_player_mana_pool(0, "0");
+    s.allow_priority_floats();
     activate(&mut s, herbalist, 0);
     choose_mode(&mut s, 1);
     settle(&mut s);
@@ -915,6 +918,7 @@ fn pool(s: &Scenario) -> &managym::state::mana::Mana {
 #[test]
 fn barrels_of_blasting_jelly_filters_one_mana_once_each_turn() {
     let mut s = five_color_setup(&["Barrels of Blasting Jelly"]);
+    s.allow_priority_floats();
     let barrels = s.force_permanent_on_battlefield(0, "Barrels of Blasting Jelly");
     s.set_player_mana_pool(0, "CC");
     activate(&mut s, barrels, 0);
@@ -1502,6 +1506,7 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
 #[test]
 fn hama_casts_an_opponents_artifact_under_your_control() {
     let mut s = five_color_setup(&["Hama, the Bloodbender", "Prophetic Prism", "Gray Ogre"]);
+    s.allow_priority_floats();
     let prism = library_card(&s, 1, "Prophetic Prism");
     put_on_top(&mut s, prism);
     let helpers: Vec<PermanentId> = (0..2)
@@ -1603,6 +1608,7 @@ fn haru_earthbends_per_other_ally_and_a_doubly_bent_land_returns_once() {
 #[test]
 fn hermitic_herbalist_offers_each_two_color_combination_once() {
     let mut s = five_color_setup(&["Hermitic Herbalist"]);
+    s.allow_priority_floats();
     let herbalist = s.force_permanent_on_battlefield(0, "Hermitic Herbalist");
     clear_summoning_sickness(&mut s, herbalist);
     s.set_player_mana_pool(0, "0");
@@ -4280,6 +4286,7 @@ fn legend_choice_and_lethal_damage_share_one_sba_batch() {
 #[test]
 fn guide_grants_tap_mana_with_sickness_and_removes_it_on_departure() {
     let mut s = five_color_setup(&["Great Divide Guide", "Hermitic Herbalist"]);
+    s.allow_priority_floats();
     let guide = enter_and_settle(&mut s, "Great Divide Guide");
     s.set_player_mana_pool(0, "0");
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -5486,6 +5493,7 @@ fn untap(s: &mut Scenario, id: PermanentId) {
 #[test]
 fn great_divide_guide_grants_lands_and_allies_any_color() {
     let mut s = five_color_unfunded_setup(&["Great Divide Guide", "Healer's Hawk"]);
+    s.allow_priority_floats();
     let guide = s.force_permanent_on_battlefield(0, "Great Divide Guide");
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     assert!(!offers_ability(&mut s, guide, 0), "summoning sick");
@@ -5509,6 +5517,7 @@ fn great_divide_guide_grants_lands_and_allies_any_color() {
     );
 
     let mut s = five_color_unfunded_setup(&["Great Divide Guide"]);
+    s.allow_priority_floats();
     s.force_permanent_on_battlefield(0, "Great Divide Guide");
     let theirs = s.force_permanent_on_battlefield(1, "Forest");
     s.advance_to_active_step(1, StepKind::Main);
@@ -5540,6 +5549,7 @@ fn great_divide_guide_grants_nothing_once_it_loses_its_abilities() {
 #[test]
 fn raucous_audience_adds_more_with_a_four_power_creature() {
     let mut s = five_color_unfunded_setup(&["Raucous Audience", "Gray Ogre"]);
+    s.allow_priority_floats();
     let audience = s.force_permanent_on_battlefield(0, "Raucous Audience");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
@@ -5584,6 +5594,7 @@ fn raucous_audience_adds_more_with_a_four_power_creature() {
 #[test]
 fn white_lotus_tile_adds_one_color_for_the_largest_shared_type() {
     let mut s = five_color_unfunded_setup(&["White Lotus Tile", "Gray Ogre", "Llanowar Elves"]);
+    s.allow_priority_floats();
     s.set_player_mana_pool(0, "4");
     let tile = cast(&mut s, "White Lotus Tile");
     settle(&mut s);
@@ -5623,6 +5634,7 @@ fn white_lotus_tile_adds_one_color_for_the_largest_shared_type() {
 #[test]
 fn the_lion_turtle_waits_for_three_lessons_to_fight() {
     let mut s = five_color_unfunded_setup(&["The Lion-Turtle", "Waterbending Lesson", "Gray Ogre"]);
+    s.allow_priority_floats();
     let attacker = s.force_permanent_on_battlefield(1, "Gray Ogre");
     clear_summoning_sickness(&mut s, attacker);
     s.set_player_mana_pool(0, "1GU");
@@ -5893,6 +5905,7 @@ fn the_mechanist_makes_clues_and_flies_them_until_end_of_turn() {
 #[test]
 fn energybending_lets_your_lands_tap_for_any_color_this_turn() {
     let mut s = five_color_unfunded_setup(&["Energybending", "Typhoid Rats"]);
+    s.allow_priority_floats();
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let theirs = s.force_permanent_on_battlefield(1, "Forest");
     assert!(
@@ -6417,6 +6430,7 @@ fn trusty_boomerang_that_left_the_battlefield_does_not_return() {
 #[test]
 fn honest_work_turns_the_creature_into_a_humble_merchant() {
     let mut s = five_color_unfunded_setup(&["Honest Work", "Wind Drake", "Trusty Boomerang"]);
+    s.allow_priority_floats();
     let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
     let boomerang = s.force_permanent_on_battlefield(1, "Trusty Boomerang");
     let attached = s.game().permanent_object(drake);
@@ -6504,6 +6518,7 @@ fn set_sick(s: &mut Scenario, id: PermanentId, sick: bool) {
 #[test]
 fn honest_work_takes_haste_from_a_summoning_sick_merchant() {
     let mut s = five_color_unfunded_setup(&["Honest Work", "Raging Goblin"]);
+    s.allow_priority_floats();
     let goblin = s.force_permanent_on_battlefield(1, "Raging Goblin");
     enchant(&mut s, "Honest Work", "U", goblin);
     s.advance_to_active_step(1, StepKind::Main);
@@ -7078,6 +7093,7 @@ fn herbalist_restriction_survives_color_selection_and_cannot_pay_abilities() {
         "Lightning Strike",
         "Prophetic Prism",
     ]);
+    s.allow_priority_floats();
     enter_and_settle(&mut s, "Hermitic Herbalist");
     enter_and_settle(&mut s, "Prophetic Prism");
     ready(&mut s, "Hermitic Herbalist");
@@ -8556,6 +8572,7 @@ fn ran_and_shaw_firebend_and_pump_only_the_dragons_present_until_end_of_turn() {
 #[test]
 fn rumble_arena_scries_then_filters_one_paid_mana_without_using_the_stack() {
     let mut s = five_color_setup(&["Rumble Arena", "Crossroads of Destiny"]);
+    s.allow_priority_floats();
     let arena = enter_battlefield(&mut s, "Rumble Arena");
     pass_until(&mut s, ActionSpaceKind::Scry);
     let top = *s
@@ -9975,6 +9992,7 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
         "Lightning Strike",
         "Gray Ogre",
     ]);
+    s.allow_priority_floats();
     let hideout = s.force_permanent_on_battlefield(0, "White Lotus Hideout");
     s.force_permanent_on_battlefield(1, "Gray Ogre");
     assert_eq!(
@@ -10002,6 +10020,7 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
     assert!(!can_cast(&s, strike));
 
     let mut s = five_color_setup(&["White Lotus Hideout"]);
+    s.allow_priority_floats();
     let hideout = s.force_permanent_on_battlefield(0, "White Lotus Hideout");
     s.set_player_mana_pool(0, "C");
     activate(&mut s, hideout, 1);
@@ -13411,16 +13430,7 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
         choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     }
     assert!(s.choose_target(Target::Permanent(zhao)));
-    assert_eq!(
-        s.action_space().actions,
-        vec![Action::ActivateAbility {
-            player: PlayerId(0),
-            permanent: temple,
-            ability_index: 0,
-        }],
-        "only the Mountain's {{T}}: Add {{R}} pays"
-    );
-    s.step_action(0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert!(tapped(&s, temple), "paid with the Mountain");
     assert!(
         !s.game().characteristics(forest).abilities_lost,
@@ -13830,6 +13840,7 @@ fn avatar_kuruk_makes_spirits_and_takes_an_extra_turn() {
 #[test]
 fn the_legend_of_kyoshi_draws_by_power_earthbends_by_hand_size_and_returns_as_avatar_kyoshi() {
     let mut s = five_color_setup(&["The Legend of Kyoshi", "Craw Wurm"]);
+    s.allow_priority_floats();
     s.force_permanent_on_battlefield(0, "Craw Wurm"); // 6/4
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let hand_before = s.zone_size(0, ZoneType::Hand);
@@ -13926,6 +13937,7 @@ fn the_legend_of_roku_lets_its_exiled_cards_be_played_through_your_next_turn() {
 #[test]
 fn benders_waterskin_untaps_during_the_other_players_untap_step() {
     let mut s = five_color_setup(&["Bender's Waterskin"]);
+    s.allow_priority_floats();
     let skin = s.force_permanent_on_battlefield(0, "Bender's Waterskin");
     s.game_mut().scenario_refresh_priority().unwrap();
     activate(&mut s, skin, 0);

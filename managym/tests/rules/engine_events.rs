@@ -31,6 +31,7 @@ use managym::{
 #[test]
 fn mana_activation_keeps_the_nonactive_players_priority() {
     let mut s = five_color_setup(&[]);
+    s.allow_priority_floats();
     s.game_mut()
         .create_token("token.treasure", PlayerId(1), false);
     s.game_mut().scenario_refresh_priority().unwrap();
