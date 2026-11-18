@@ -1197,8 +1197,9 @@ human-only payment flow.
 
 A world names rules meaning plus observation and action shape, and the running
 engine always knows its own: `managym.WORLD_VERSION`
-([`world.rs`](../managym/src/world.rs)). Checkpoints bind the world, the deck
-setup and the input schema, and load only where the digest matches. Main
+([`world.rs`](../managym/src/world.rs)). The number says which measurements
+are comparable; it does not decide which checkpoints load
+([compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision)). Main
 carries at most one open world; a rules or shape change extends it, and
 freezing it is a deliberate step with re-run baselines ([WORLDS.md](../WORLDS.md)).
 
@@ -1245,8 +1246,9 @@ seats; the TLA pilot's source is the frozen trophy corpus
 admitted when the settings validate, and again natively at each game root.
 `UniformDecks(decklists="closed")` closes every game the source deals; each
 game has one setting shared by both seats. Use `decklists="mixed"` for a
-seeded, balanced per-game open/closed draw. A checkpoint from such a run binds the world and nothing about the decks, so it
-plays any deck the world admits, including ones it never saw. Checkpoints bound
+seeded, balanced per-game open/closed draw. A checkpoint from such a run binds nothing about the decks, so it
+plays any deck the pool admits, including ones it never saw and cards added
+after it was trained. Checkpoints bound
 to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through
 **Import decklist files**; the CLI takes `--hero-deck-file` and

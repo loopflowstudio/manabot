@@ -131,7 +131,7 @@ shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
 attempts and replays record the resolved setting. Both seats see the public
 `decklists_closed` observation flag, stated in the text observation. Its inverse
 (1 open, 0 closed) accompanies the other game facts on the player tokens.
-Older checkpoints with a different player-buffer shape fail normal world binding.
+A checkpoint trained before that column does not read it.
 
 An open source serializes without a `decklists` key, so earlier source
 digests are unchanged; closed and mixed sources have their own digests, so a run
@@ -385,8 +385,12 @@ Ordinary checkpoints require `world_binding` from
 This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
 content manifest and input schema. Deck-source runs bind the world itself
 (`deck_world`: version, card digest, rules and input contract), so the model
-plays any deck the world admits. Missing or mismatched bindings fail before
-weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
+plays any deck the world admits. For these the version and card digest are
+recorded facts, not gates: loading compares input columns, token names and
+action kinds by name
+([compatibility](../docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+A setup-bound checkpoint still compares its whole binding. A missing binding
+or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 

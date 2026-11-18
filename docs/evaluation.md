@@ -205,6 +205,60 @@ Etude entry points are `manabot.eval.benchmark` (one Etude match is one deal
 with all eight legs; Etude owns match records, resume and uncertainty) and
 `manabot.eval.duel`.
 
+## Rechecking a recorded strength
+
+A strength measured at one revision is a claim about that revision. `recheck`
+plays the same measurement on the current tree and prints the two side by
+side:
+
+```sh
+uv run manabot recheck experiments/references/tla-frontier-small-u1952.json
+```
+
+```text
+tla-frontier-small-u1952: Small u1952 against heuristic, 16 deck pairs
+  recorded  0.72 (0.61–0.81), 64 games, at ab2b757d9
+  measured  0.69 (0.62–0.75), 256 games, at 44f76fe987
+  inside the recorded interval
+  opponent  heuristic changed since the record (452d7b5357, 86ad8e9c6a)
+```
+
+The numbers above show the form; the measurement for this player on main is in
+[best player on main](../experiments/reports/best-player-on-main.md). Exit
+status is 0 when the measured score is inside the recorded interval and 1 when
+it is outside or the cohort is incomplete. `--out DIR` keeps the evaluation's
+journals and replays; `--seconds` bounds the run.
+
+A reference is a small committed record under `experiments/references/`:
+
+```json
+{
+  "name": "tla-frontier-small-u1952",
+  "checkpoint": {"uri": "s3://…/policies/00001952-raw.pt", "sha256": "c95c61aa…bbaf8"},
+  "opponent": "heuristic",
+  "matchups": "experiments/references/tla-frontier-pairs.json",
+  "deal_seeds": [101, 102, 103, 104],
+  "recorded": {"score": 0.72, "low": 0.61, "high": 0.81, "games": 64,
+               "revision": "ab2b757d9",
+               "report": "experiments/reports/tla-frontier-c5fba4-results.md"}
+}
+```
+
+Recheck loads the checkpoint through the ordinary loader, so it also prints
+the [load report](observation-and-model.md#running-a-checkpoint-on-a-later-revision),
+and plays through [local evaluation](#quick-local-evaluation): paired deals,
+both seats, CPU, no rental. Run it on a quiet machine; it measures strength
+only and says nothing about speed.
+
+A gap has two possible causes that one run cannot separate: the pilot plays
+differently here (rules, encoder or bound rows changed), or the opponent
+does. When the opponent's source changed since the record, the output says so.
+A frozen checkpoint as opponent removes that confound.
+
+Run it when a change declares a [pinned-pilot break](development.md#pinned-pilots),
+moves the Engine Budget decision digest or changes the heuristic. A reference
+outside its interval is what moves the [world number](../WORLDS.md).
+
 ## Etude agents
 
 Managed evaluations declare the same `manabot.eval.agents.AGENTS` on every

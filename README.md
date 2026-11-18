@@ -72,9 +72,10 @@ imports manabot or Torch; and `manabot.sim` imports none of `eval`,
 `training`, `experiment` or `reports` (`tests/test_package_boundaries.py`
 enforces all of it). Academy's trained opponents come from manabot through an
 installed entry point, so they appear when manabot is installed and Academy
-runs without it. The observation and action encoding is versioned as a
-*world* ([WORLDS.md](WORLDS.md)); checkpoints load only in the world they were
-trained in.
+runs without it. A *world* number ([WORLDS.md](WORLDS.md)) names a span of
+revisions whose measurements are comparable. A checkpoint keeps loading as
+cards are added, bound by name to what it reads
+([compatibility](docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
 
 ## What it trains on now
 

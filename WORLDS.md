@@ -1,11 +1,16 @@
 # Worlds
 
-A world number names a frozen world. Main carries at most one open world, and
-merged rules or shape changes extend it in place, updating its receipts.
-Freezing is deliberate: re-run the headline baselines, record the receipts, mark
-the row frozen, and open the next number. Checkpoints are protected by their
-world binding, which rejects any content or shape difference, not by the
-number. A run on an open world makes no comparability claim.
+A world number names a span of revisions over which stored measurements are
+comparable. Main carries at most one open world, and merged rules or shape
+changes extend it in place, updating its receipts. Freezing is deliberate:
+re-run the headline baselines, record the receipts, mark the row frozen, and
+open the next number. The number moves when
+[`manabot recheck`](docs/evaluation.md#rechecking-a-recorded-strength) shows a
+strength reference outside its recorded interval. It never decides whether a
+checkpoint loads: a checkpoint is bound by name to the columns, tokens and
+actions it reads
+([compatibility](docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+A run on an open world makes no comparability claim.
 
 | world | frozen at | shape (player / card / permanent / action-types) | live artifacts | headline baselines |
 |---|---|---|---|---|
@@ -28,13 +33,13 @@ number. A run on an open world makes no comparability claim.
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
 | **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 512 × 12 fact rows (policy input v9, the only input on main); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, name/group joins | `world` (the default pack): every defined card (340 supported); `semantic-kernel-w17-v2`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
-**Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
-from earlier worlds are **not comparable** to w17; do not reuse their
-win rates or load them as current-world policies. Shape alone is insufficient
-identity. Exp-11 historically ported opponent components with
+**Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Win rates
+from earlier worlds are **not comparable** to w17; do not reuse them. A
+checkpoint that still loads is measured again here before its strength is
+cited. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
-Current loaders require current-ABI checkpoints. Cross-world *measurements*
-are regenerated, never ported (exp-10's precedent).
+Cross-world *measurements* are regenerated, never ported (exp-10's
+precedent).
 
 Update the open world's row, section and receipts in the same PR as any
 rules-meaning or shape change.

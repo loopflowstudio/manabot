@@ -645,8 +645,11 @@ histories = collect_belief(Path("inputs/producer-ema.safetensors"), run.out / "h
                            backend=resolve("torch"))
 ```
 
-`load_checkpoint` refuses a checkpoint from another world or with other model
-or observation configs, and an EMA policy never loads as raw.
+`load_checkpoint` reads a checkpoint's own model and observation
+configuration and binds its learned rows to the running card catalog, so a
+policy published before cards were added still loads
+([what refuses one](observation-and-model.md#what-a-checkpoint-is-bound-to)).
+An EMA policy never loads as raw.
 
 `SelfPlay.pretrained` (a checkpoint path) starts self-play from a published
 policy instead of random weights. Only the policy is inherited: Adam, EMA,
@@ -1101,8 +1104,9 @@ Etude compares the config and the seed between attempts and nothing else.
 Keeping the code compatible is the recipe author's: an attempt may run a later
 commit, which it records, but settings built in the recipe's body, the model's
 shape and the world are not compared, and changing them within a run is
-undefined. A changed model shape fails when the saved weights load; published
-policies stay world-bound, so `load_checkpoint` refuses one from another world.
+undefined. A changed model shape fails when the saved weights load. Published
+policies load on later revisions by name
+([what refuses one](observation-and-model.md#what-a-checkpoint-is-bound-to)).
 
 ### What resume does not promise
 

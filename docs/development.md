@@ -115,10 +115,10 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   world file and retain prior evidence.
 - A world or manifest change also needs `tests/academy/test_learn_setup.py`
   (its Learn fixture pins manifest and state digests) and
-  `uv run --extra dev pytest tests/model/ -q` (checkpoint loading and
-  historical-world rejection). Tests constructing a current checkpoint use the
-  runtime world version; incompatible checkpoints keep explicit historical
-  versions. AGENTS.md lists the arena-admission and monitoring suite for world
+  `uv run --extra dev pytest tests/model/ -q` (checkpoint loading, the
+  [pinned pilots](#pinned-pilots) and refusals by column, key and input
+  version). Tests constructing a current checkpoint use the runtime world
+  version. AGENTS.md lists the arena-admission and monitoring suite for world
   or observation-shape changes.
 - Trigger-order browser cases need the test-only ASGI root in
   `academy/ui/playwright.release.config.ts`. After building the frontend, run
@@ -368,6 +368,58 @@ seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regressio
 `card-evaluation.yml` (manual) verifies 1024 native games with
 `manabot.eval.cards verify` (see [evaluation](evaluation.md)).
 `release.yml` is described next.
+
+## Pinned pilots
+
+Two small trained players are committed under `tests/fixtures/pinned_pilot/`,
+each with one recorded game: its seed and decks, the action taken at every
+decision and the player's action probabilities there. `v11` was saved on main.
+`v9` was saved at `ab2b757d9`, the way the frontier checkpoints were: 73 player
+columns and no recorded column names, definition keys or source.
+`tests/model/test_pinned_pilot.py` (Integration) loads each through
+`load_checkpoint`, replays the recorded actions on the current tree and
+compares. A change that would alter what a stored player computes fails, and
+the failure names the layer:
+
+```text
+FAILED test_pinned_pilot.py::test_recorded_game[v9]
+  the loader refused the pilot: it learned 1 token row this revision cannot name:
+    Variant 0x51c2e9a4
+  Add it to managym/src/cards/token_renames.rs.
+```
+
+```text
+FAILED test_pinned_pilot.py::test_recorded_game[v11]
+  the game replays; probabilities differ from decision 14 (max difference 0.031).
+  The encoder, vocabulary or loader changed what this pilot reads.
+```
+
+```text
+FAILED test_pinned_pilot.py::test_recorded_game[v11]
+  decision 22: recorded action 3 of 5, the engine now offers 4.
+  The rules changed this game.
+```
+
+Probabilities agree within 1e-5 and the chosen action keeps its rank; bit
+equality across Linux and macOS is not claimed.
+
+There are two ways to pass. If the change forgot something, add it: the
+[rename table](observation-and-model.md#the-rename-table) entry, or append the
+new column instead of inserting it. If the change means to alter what stored
+players compute (a rules fix reaching the recorded game, a corrected encoder
+column), declare it:
+
+```bash
+uv run python scripts/pinned_pilot.py record --reason "<what changed and why>"
+```
+
+This rewrites the recordings on the current tree with the reason and commit in
+their headers, as `managym/perf/baseline.json` carries its reference's reason.
+The pilots' weights never change. The recordings' git history is the list of
+declared breaks, and a changed reason in a pull request is the prompt to
+[recheck](evaluation.md#rechecking-a-recorded-strength) the strength
+references. `record` cannot rescue a pilot the loader refuses; that needs the
+rename or the column.
 
 ## Engine performance budget
 
@@ -744,8 +796,9 @@ neither package has an independent release cadence. The Python projects and
 Rust workspace crates share that version, checked before building. The first
 public release, before this split, is
 [0.2.0](https://pypi.org/project/manabot/0.2.0/). Package versions do not replace
-world, content, observation or checkpoint identities, and an upgrade does not
-make old checkpoints compatible. Releases are research releases, not
+world, content, observation or checkpoint identities; which checkpoints a
+release loads is decided [by name](observation-and-model.md#running-a-checkpoint-on-a-later-revision),
+not by its version. Releases are research releases, not
 certification of playing strength or rules coverage.
 
 ### Install

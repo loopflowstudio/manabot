@@ -250,10 +250,21 @@ change already touches it; do not rewrite a module only for style. Rust in
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - A checkpoint records the revision and Etude run that wrote it
-  (`checkpoint_source`). The world binding compares every input buffer's shape,
-  so a layout change refuses older checkpoints, naming that revision and the
-  buffers that differ. Do not bump the input version for a layout change or add
-  a loading path for an older layout.
+  (`checkpoint_source`), its column names, definition keys and naming names.
+  `manabot.model.interface.model_interface` alone decides whether it loads,
+  comparing input columns, token and record names and action kinds by name;
+  the world number, card digest and naming digest are recorded facts, never
+  gates (setup-bound checkpoints still compare their whole binding). Append
+  input columns, never insert, remove or reorder them. Renaming a Rust type,
+  field or record name the token serializer hashes needs an entry in
+  `managym/src/cards/token_renames.rs`; a name is never reused with a new
+  meaning. Never learn a `CardDefId`: tables indexed by card or name bind by
+  definition key or name. A change that alters what a stored pilot computes
+  fails `tests/model/test_pinned_pilot.py` until it adds the rename or column
+  or declares the break with `scripts/pinned_pilot.py record --reason`. Do not
+  bump the input version for a layout change. A world number moves when
+  `manabot recheck` shows a strength reference outside its interval
+  ([compatibility](docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
 - Main carries policy input v11, the fresh default
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;
@@ -267,8 +278,8 @@ change already touches it; do not rewrite a module only for style. Rust in
   turn-state-free encoder refuses an observation that needs them
   (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
   deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
-  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed in 0.4.0,
-  MTG-353 owns portability across worlds); never extend it. A checkpoint,
+  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed once a v11 pilot is at least as strong as
+  the best v9 one, not before 0.4.0); never extend it. A checkpoint,
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
   (`ac601834d` is the last revision supporting v1-v8). Add no other version
