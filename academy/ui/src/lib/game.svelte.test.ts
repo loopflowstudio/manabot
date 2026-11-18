@@ -358,3 +358,25 @@ describe('current decision status', () => {
     expect(store.decisionStatus).toBe('Study position — return to live to play.');
   });
 });
+
+describe('stop changes in flight', () => {
+  it('drops the echo of an older config, so fast presses keep their last state', () => {
+    const store = createGameStore();
+    const before = { ...store.stops, my: [...store.stops.my] };
+    store.cycleStop('my', 'upkeep');
+    store.noteStopsSent();
+    const every = { ...store.stops, my: [...store.stops.my] };
+    store.cycleStop('my', 'upkeep');
+    store.noteStopsSent();
+    expect(store.onceStops.my).toEqual(['upkeep']);
+    // The frame that answers an earlier change, or one sent before any, still carries the old config.
+    store.applyServerStops(before);
+    expect(store.stops.my).toContain('upkeep');
+    expect(store.onceStops.my).toEqual(['upkeep']);
+    store.applyServerStops(every);
+    expect(store.onceStops.my).toEqual(['upkeep']);
+    // After the last echo the server's config holds again.
+    store.applyServerStops({ ...before, my: ['main1'] });
+    expect(store.stops.my).toEqual(['main1']);
+  });
+});

@@ -209,8 +209,14 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await expect(stop('my', 'upkeep')).toBeFocused();
   await page.keyboard.press('Space');
   await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');
+  // Fast presses keep their last state: the server's echoes of earlier ones are not applied over it.
   await page.keyboard.press('Space');
-  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'once');
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');
+  await page.waitForTimeout(500);
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');
+  await page.keyboard.press('Space');
   await page.keyboard.press('Space');
   await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'off');
 

@@ -330,10 +330,27 @@ export class GameStore {
     this.updateStops(defaultStops());
   }
 
+  /**
+   * The server echoes its stop config on every frame, and answers each
+   * `set_stops` with one frame, in order. While stop changes are in flight,
+   * an echo that is not the last config sent predates it and is dropped;
+   * after as many echoes as sends the server's config holds again.
+   */
+  private stopsInFlight: { config: string; echoes: number } | null = null;
+
+  noteStopsSent(): void {
+    this.stopsInFlight = { config: stopsKey(this.stops), echoes: (this.stopsInFlight?.echoes ?? 0) + 1 };
+  }
+
   applyServerStops(stops: StopsConfig | undefined): void {
-    if (stops) {
-      this.updateStops(stops);
+    if (!stops) return;
+    const flight = this.stopsInFlight;
+    if (flight) {
+      const settled = stopsKey(stops) === flight.config || flight.echoes <= 1;
+      this.stopsInFlight = settled ? null : { ...flight, echoes: flight.echoes - 1 };
+      if (!settled) return;
     }
+    this.updateStops(stops);
   }
 
   beginFastForward(): void {
@@ -586,6 +603,10 @@ export class GameStore {
     this.logSequence += 1;
     return { id: `log-${this.logSequence}`, actor, turn, text };
   }
+}
+
+function stopsKey(stops: StopsConfig): string {
+  return JSON.stringify([[...stops.my].sort(), [...stops.opponent].sort(), stops.stop_on_stack, stops.auto_pass]);
 }
 
 export function createGameStore(): GameStore {

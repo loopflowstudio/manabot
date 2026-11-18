@@ -412,6 +412,7 @@ export class GameSocketController {
 
   sendSetStops(): void {
     const stops = gameStore.stops;
+    gameStore.noteStopsSent();
     this.send({
       type: 'set_stops',
       ...(gameStore.table

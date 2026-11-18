@@ -86,7 +86,8 @@ for (const family of FAMILIES) {
     const number = Number((await card.getAttribute('aria-label'))!.match(/\((\d+)\)$/)![1]);
     const target = frame.offers[number - 1];
     const box = (await card.boundingBox())!;
-    await card.click({ position: { x: box.width - 6, y: box.height / 2 } });
+    // Inside the card's own edge: an attacker's tilt puts its box's corners outside it.
+    await card.click({ position: { x: box.width - 16, y: box.height / 2 } });
     await expect.poll(() => commands.length).toBe(1);
     expect(commands[0]).toMatchObject({ offer_id: target.id, expected_revision: frame.revision, prompt_id: frame.prompt!.id, answers: [] });
     await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
@@ -182,7 +183,8 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     const intended = position.frame.offers[0];
     const card = drawn(page, intended, 1).first();
     const box = (await card.boundingBox())!;
-    await card.click({ position: { x: box.width - 6, y: box.height / 2 } });
+    // Inside the card's own edge: an attacker's tilt puts its box's corners outside it.
+    await card.click({ position: { x: box.width - 16, y: box.height / 2 } });
     await expect.poll(() => page.evaluate(() =>
       window.__choiceNavigation.frame!.revision,
     )).toBeGreaterThan(actual.revision);

@@ -61,14 +61,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await expect(page.locator('[data-testid=table][data-live=true]')).toBeVisible({ timeout: 30_000 });
 
   // Tab visits the regions in reading order, each once, one stop per region,
-  // and leaves them only for the top bar's controls, never the page or browser.
+  // and leaves them only for the top bar's controls and the stop bar (one
+  // stop), never the page or browser.
   const stops: string[] = [];
   for (let tabs = 0; tabs < 24 && stops.length < 12; tabs += 1) {
     await page.keyboard.press('Tab');
     const { region } = await focused(page);
     if (region) stops.push(region);
-    const inTopBar = await page.evaluate(() => document.activeElement?.closest('.topbar') !== null);
-    expect(region !== null || inTopBar, `Tab stop ${tabs} is a region or the top bar`).toBe(true);
+    const inBars = await page.evaluate(() => document.activeElement?.closest('.topbar, [data-testid=stop-bar]') !== null);
+    expect(region !== null || inBars, `Tab stop ${tabs} is a region, the top bar or the stop bar`).toBe(true);
   }
   const regions = stops.slice(0, stops.indexOf(stops[0], 1) > 0 ? stops.indexOf(stops[0], 1) : stops.length);
   expect(new Set(regions).size).toBe(regions.length);
