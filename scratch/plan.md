@@ -379,7 +379,8 @@ requirement, the legacy encoder.
    formats expose the same unexplained-key refusal in Academy. The two small
    pilots and the original u1952 replayed locally. Linux verification is at CI.
 
-Then publish the PR and stop for review. Nothing lands.
+PR #558 is published at c3f8865d67; CI was pending at realign. Stop for
+review. Nothing lands.
 
 ## Done when
 
