@@ -552,3 +552,21 @@ publish, land or choose the next Graph step from here.
   have no resumed game. Initial automatic history may precede a launch's received
   tail; compare that tail exactly to the saved source and the full saved prefix
   to Replay, retaining explicit unavailable-prefix labels.
+- Checkpoint compatibility (loader, Academy listing, recheck): put the
+  checkpoints in one directory, plus broken copies made with `torch.load` /
+  `torch.save` after editing one `world_binding` field (`world_digest`,
+  `learning_schema_sha256`, `naming_branching`). Start
+  `MANABOT_RUNS_DIR=<dir> ACADEMY_FRONTEND_BUILD=… uv run managym academy
+  --no-open --port <unused>` (bare `academy`; `watch` requires `--player`);
+  `GET /api/opponents` lists each entry's `available` and `reason`, and the
+  Seat 2 bot select's "Registered policy" shows them as disabled options.
+  `manabot recheck` fetches its checkpoint from R2: `doppler run --project
+  manabot --config prd -- uv run --extra artifacts manabot recheck <ref>
+  --seconds <s> --out <new dir>`; one deck pair took about a minute on a
+  loaded laptop, so a short `--seconds` exercises the incomplete path only.
+  `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
+- PR CI failures while the run is still in progress: `gh run view --log-failed`
+  refuses; read `gh api --allow-escape-sequences
+  repos/loopflowstudio/manabot/actions/jobs/<job-id>/logs` and grep `^FAILED`.
+  Check the PR's checks before QA ends; tests elsewhere in the tree can still
+  assert the behavior the change replaced.
