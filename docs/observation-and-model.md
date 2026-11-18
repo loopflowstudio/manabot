@@ -372,8 +372,10 @@ none of these. Their columns are the first N of their input version's layout
 at the recorded width, which holds because columns are only appended. Their
 keys and names come from a writer catalog found by the card digest the file
 records, `manabot/model/writer_catalogs/<world_digest>.json`. The loader
-checks that the catalog's names reproduce the file's naming digest and that
-its key count equals the file's definition rows.
+checks that the ordered naming candidates (name and optional definition row)
+reproduce the file's naming digest and that its key count equals the file's
+definition rows. Back faces and rules fixtures without keys use their registry
+names.
 
 A file from a card set with no writer catalog is refused with the command that
 writes one:
@@ -384,6 +386,12 @@ No writer catalog exists for that digest. At the revision that wrote it, run
   uv run python -m manabot.model.writer_catalog > 7c41…e09a.json
 and commit the file under manabot/model/writer_catalogs/.
 ```
+
+For revisions that predate the exporter, run the current
+`manabot/model/writer_catalog.py` file with the writing revision’s interpreter
+and engine. At `ab2b757d9` the engine package lives under `manabot/`. From
+that historical checkout, with its native extension built, run
+`PYTHONPATH="$PWD/manabot" uv run python /path/to/current/manabot/model/writer_catalog.py`.
 
 ## Policy inputs
 

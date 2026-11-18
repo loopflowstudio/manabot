@@ -23,6 +23,7 @@ import subprocess
 from typing import Any
 
 from manabot.infra.source import source_commit, source_dirty
+from manabot.model.writer_catalog import naming_entries
 from manabot.semantic.learning import DEFAULT_SCHEMA_PATH, BoundSemanticPack
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
@@ -143,12 +144,7 @@ def _input_binding(observation_space: Any) -> dict:
         # bound; changing it reinterprets every group route.
         "naming_representation": "public-groups-v1",
         "naming_branching": managym.NAME_BRANCHING,
-        "naming_vocabulary": _digest(
-            [
-                {"name": candidate.name, "definition": candidate.definition}
-                for candidate in managym.naming_catalog()
-            ]
-        ),
+        "naming_vocabulary": _digest(naming_entries()),
         "rules": {
             "decision_version": SEMANTIC_DECISION_VERSION,
             "possible_world_version": POSSIBLE_WORLD_SPACE_VERSION,
