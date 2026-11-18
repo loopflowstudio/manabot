@@ -107,9 +107,14 @@ def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
             and earlier.source == last.source
         )
 
+    # A legacy trace event retains neither the offered actions nor the choice.
+    if "actions" not in events[index] or "action" not in events[index]:
+        return []
     last = step(events[index])
     run = [last]
     for event in reversed(events[:index]):
+        if "actions" not in event or "action" not in event:
+            break
         earlier = step(event)
         if event["actor"] != events[index]["actor"] or not same_move(earlier, last):
             break
