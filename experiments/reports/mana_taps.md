@@ -14,7 +14,9 @@ On the original 40 TLA deals, usable added **59% more surfaced decisions per gam
 
 The skipped share divides skipped decisions by skipped plus surfaced decisions. Steps/s includes observation construction and choice inspection on the M4 Max. Across 40 paired refreshes on identical positions, usable minus always had a median difference of −0.37 µs without a spend and 0.00 µs with a spend.
 
-The corrected paired w64 experiment is `mana-taps-levels-w64`, frozen at `ec46eec958`. Etude quoted USD2.24 per seed pair on one two-slot L4. The common target is 50 updates with raw and EMA panels at initialization, 25 and 50.
+The corrected paired w64 experiment is `mana-taps-levels-w64`, frozen at `ec46eec958`. Etude quoted USD2.24 per seed pair on one two-slot L4. All six jobs were queued for seeds 21501–21503. The common target is 50 updates with raw and EMA panels at initialization, 25 and 50. **The corrected training and playing-strength results follow in a separate PR.**
+
+Engine Budget reproduced the 512-game step digest (124,687 steps) and all three search digests. The candidate ran at 21,198 steps/s with 125.75 s total search time. The previous reference could not build the seat-mode benchmarks, so this recording supplies the reference for subsequent paired timing comparisons. [CI measurement](https://github.com/loopflowstudio/manabot/actions/runs/44374786181)
 
 ## Historical everywhere comparison
 
