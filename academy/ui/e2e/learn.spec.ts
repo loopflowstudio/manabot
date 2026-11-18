@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import prefix from '../../../managym/academy/fixtures/learn-demo-w17-token-cards.json' with { type: 'json' };
 
-test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async ({ page }) => {
+for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) test(`Learn on the table: every answer a row, lessons in the tray, reconnect, ${outcome}`, async ({ page }) => {
   await page.addInitScript((config) => {
     const state = { commands: [] as unknown[], sockets: [] as WebSocket[], frame: null as any };
     const Native = window.WebSocket;
@@ -33,57 +33,43 @@ test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async
   await page.goto('/?demo=learn');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
 
-  for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) {
-    await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
-    await expect.poll(() => page.evaluate(() => (window as any).__learn.frame?.revision)).toBe(0);
-    for (const step of prefix.prefix) {
-      const button = page.locator(`[data-testid="action-option"][data-offer-id="${step.offer_id}"]`);
-      await expect(button).toHaveAttribute('aria-label', step.label);
-      const revision = await page.evaluate(() => (window as any).__learn.frame.revision);
-      await button.click();
-      await expect.poll(() => page.evaluate(() => (window as any).__learn.frame.revision)).toBeGreaterThan(revision);
-    }
-    await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'LEARN');
-    const before = await page.evaluate(() => ({ frame: (window as any).__learn.frame, count: (window as any).__learn.commands.length }));
-    await page.getByRole('button', { name: 'Take a Lesson', exact: true }).click();
-    await expect(page.getByTestId('learn-card-preview')).toHaveCount(3);
-    await expect(page.getByTestId('learn-card-preview').first().getByTestId('card-treatment')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Take Accumulate Wisdom', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
-    await page.getByRole('button', { name: 'Discard and draw', exact: true }).focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByTestId('learn-card-preview').first()).toBeVisible();
-    await expect(page.getByTestId('learn-card-preview').first().getByTestId('card-treatment')).toBeVisible();
-    expect(await page.evaluate(() => (window as any).__learn.commands.length)).toBe(before.count);
-    expect(await page.evaluate(() => (window as any).__learn.frame.frame_hash)).toBe(before.frame.frame_hash);
-    await page.evaluate(() => (window as any).__learn.sockets.at(-1).close());
-    await expect(page.getByRole('button', { name: 'Take a Lesson', exact: true })).toBeVisible({ timeout: 15_000 });
-    expect(await page.evaluate(() => (window as any).__learn.frame.revision)).toBe(before.frame.revision);
-    if (outcome !== 'DECLINE_CHOICE') {
-      await page.getByRole('button', { name: outcome === 'LEARN_TAKE_LESSON' ? 'Take a Lesson' : 'Discard and draw', exact: true }).click();
-    }
-    await page.locator(`[data-testid="action-option"][data-action-type="${outcome}"]`).first().click();
-    await expect.poll(() => page.evaluate(() => (window as any).__learn.commands.length)).toBe(before.count + 1);
-    await expect.poll(() => page.evaluate(() => (window as any).__learn.frame.revision)).toBeGreaterThan(before.frame.revision);
-    const after = await page.evaluate(() => (window as any).__learn.frame.projection);
-    expect(after.opponent.hand).toEqual([]);
-    expect(after.opponent.sideboard ?? []).toEqual([]);
-    if (outcome === 'LEARN_TAKE_LESSON') {
-      expect(after.agent.sideboard).toHaveLength(2);
-      expect(after.agent.hand.some((card: any) => card.name === 'Accumulate Wisdom')).toBe(true);
-      await expect(page.getByTestId('known-hand')).toContainText('Accumulate Wisdom');
-    } else {
-      expect(after.agent.sideboard).toHaveLength(3);
-    }
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
+  await expect.poll(() => page.evaluate(() => (window as any).__learn.frame?.revision)).toBe(0);
+  for (const step of prefix.prefix) {
+    const button = page.locator(`[data-testid="action-option"][data-offer-id="${step.offer_id}"]`);
+    await expect(button).toHaveAttribute('aria-label', step.label);
+    const revision = await page.evaluate(() => (window as any).__learn.frame.revision);
+    await button.click();
+    await expect.poll(() => page.evaluate(() => (window as any).__learn.frame.revision)).toBeGreaterThan(revision);
+  }
+  await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'LEARN');
+  const before = await page.evaluate(() => ({ frame: (window as any).__learn.frame, count: (window as any).__learn.commands.length }));
+  // Every Learn answer is a rail row; the lessons outside the game sit in the tray.
+  await expect(page.getByTestId('action-option')).toHaveCount(before.frame.offers.length);
+  await expect(page.getByTestId('tray')).toContainText('Accumulate Wisdom');
+  for (const kind of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) {
+    await expect(page.locator(`[data-testid="action-option"][data-action-type="${kind}"]`).first()).toBeVisible();
+  }
+  // Pointing commits nothing; a reconnect returns the same decision.
+  await page.getByTestId('tray').getByTestId('table-card').first().hover();
+  expect(await page.evaluate(() => (window as any).__learn.commands.length)).toBe(before.count);
+  await page.evaluate(() => (window as any).__learn.sockets.at(-1).close());
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
+  await expect(page.getByTestId('action-option')).toHaveCount(before.frame.offers.length);
+  expect(await page.evaluate(() => (window as any).__learn.frame.revision)).toBe(before.frame.revision);
+  expect(await page.evaluate(() => (window as any).__learn.frame.frame_hash)).toBe(before.frame.frame_hash);
+  await page.locator(`[data-testid="action-option"][data-action-type="${outcome}"]`).first().click();
+  await expect.poll(() => page.evaluate(() => (window as any).__learn.commands.length)).toBe(before.count + 1);
+  await expect.poll(() => page.evaluate(() => (window as any).__learn.frame.revision)).toBeGreaterThan(before.frame.revision);
+  const after = await page.evaluate(() => (window as any).__learn.frame.projection);
+  expect(after.opponent.hand).toEqual([]);
+  expect(after.opponent.sideboard ?? []).toEqual([]);
+  if (outcome === 'LEARN_TAKE_LESSON') {
+    expect(after.agent.sideboard).toHaveLength(2);
+    expect(after.agent.hand.some((card: any) => card.name === 'Accumulate Wisdom')).toBe(true);
+    await expect(page.locator('.hand [data-testid=table-card][data-card-name="Accumulate Wisdom"]')).toBeVisible();
+  } else {
+    expect(after.agent.sideboard).toHaveLength(3);
   }
   expect(errors).toEqual([]);
-});
-
-test('checked Learn demo opens directly into normal browser controls', async ({ page }) => {
-  await page.goto('/?demo=learn');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: 'Take a Lesson', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Take a Lesson', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Take Accumulate Wisdom', exact: true })).toBeVisible();
 });

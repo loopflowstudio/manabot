@@ -436,6 +436,7 @@
       <p class="type-rubric text-ink-2" data-testid="recording-heading">{sourceLabel}</p>
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
       <p class="type-caption text-ink-3" data-testid="replay-perspective">{perspectiveText}</p>
+      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
       {#each [0, 1] as seat (seat)}
         {@const who = identity(seat)}
         {@const runtime = who.runtime ?? who.provenance?.policy}
@@ -570,6 +571,7 @@
     display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px;
     background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
+  .menu-panel > a.btn { justify-self: start; }
   .note { display: block; width: 100%; margin-top: 4px; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 4px 6px; }
   .recordings { display: grid; gap: 4px; }
   .player-status summary { cursor: pointer; }

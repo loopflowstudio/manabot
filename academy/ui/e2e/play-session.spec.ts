@@ -21,11 +21,12 @@ async function expectSession(page: Page, text: string): Promise<void> {
   }).toPass({timeout: 30_000});
 }
 
-/** New game: on the table it is in the Menu; a setup sheet uses the site header's link. */
+/** New game: on the table (Play or Replay) it is in the Menu; a setup sheet uses the site header's link. */
 async function newGame(page: Page): Promise<void> {
   if (await page.getByTestId('table').count()) {
-    await session(page);
-    await page.locator('details.table-menu').getByRole('link', {name:'New game', exact:true}).click();
+    const menu = page.locator('details.table-menu');
+    if (!await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('table-menu').click();
+    await menu.getByRole('link', {name:'New game', exact:true}).click();
   } else {
     await page.getByRole('link', {name:'New game', exact:true}).first().click();
   }
