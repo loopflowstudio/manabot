@@ -17,7 +17,6 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.model.world import validate_agent_setup
-from manabot.policy.binding import BindingReport
 from manabot.policy.protocol import Backend
 from manabot.sim import anchors
 from manabot.sim.heuristic import heuristic_source_paths
@@ -37,7 +36,6 @@ class CheckpointAdmission:
     identities: dict[str, JsonValue]
     # The checkpoint's own space, which both registered ABI hashes describe.
     space: ObservationSpace
-    report: BindingReport | None
 
 
 def register_checkpoint(
@@ -102,7 +100,7 @@ def register_checkpoint(
         training_seed=training_seed,
         artifact_id=f"{artifact_prefix}/{digest}",
     )
-    return CheckpointAdmission(registration, runtime, space, checkpoint.report)
+    return CheckpointAdmission(registration, runtime, space)
 
 
 def register_anchor(

@@ -36,8 +36,8 @@ combines possible drift in rules, policy inputs and opponent play.
 
 The measured score is inside the recorded interval. The original deal seeds
 yielded 42 wins in 64 games and the additional deals yielded 45 in 64. Every
-game terminated and all 23,831 decisions passed replay. The loader kept all
-360 writer definitions, used their stored programs for the 136 that changed,
+game terminated and all 23,831 decisions passed replay. The loader used the stored programs for all
+360 writer definitions, including the 136 whose serialization changed,
 and initialized 396 token rows and 103 naming rows. No key was unexplained.
 [Recorded comparison](tla-frontier-c5fba4-results.md) ·
 [Evaluation rows, Commands and replay receipts](../data/best-player-on-main/frontier.tar.gz)
@@ -56,15 +56,14 @@ new-card lists. [New-card lists, evaluation rows, Commands and replay receipts](
 
 ## Reproduce
 
-Both arms load the original 3,945,456-byte policy from the
-[u1952 reference](../references/tla-frontier-small-u1952.json). With access to
-the artifact bucket, run from the repository root and choose fresh output
-directories.
+Both arms load the original 3,945,456-byte policy from run `59718fe34945`
+by its recorded digest and play through local evaluation. With access to the
+artifact bucket, run from the repository root and choose fresh output directories.
 
 ```sh
-uv run --extra artifacts manabot recheck experiments/references/tla-frontier-small-u1952.json --out .runs/u1952-frontier
+uv run --extra artifacts python -m experiments.best_player_on_main --arm historical --out .runs/u1952-frontier
 uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg213/corpus-v1/corpus.json
-uv run --extra artifacts python -m experiments.best_player_on_main --out .runs/u1952-new-cards
+uv run --extra artifacts python -m experiments.best_player_on_main --arm new-cards --out .runs/u1952-new-cards
 ```
 
 Deck lists derive from [17Lands public data](https://www.17lands.com/public_datasets),

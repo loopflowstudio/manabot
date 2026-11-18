@@ -11,6 +11,7 @@ Training-time monitoring that calls this machinery is in
 
 - [One deal](#one-deal)
 - [What counts](#what-counts)
+- [Comparing measurements across revisions](#comparing-measurements-across-revisions)
 - [Anchors and ratings](#anchors-and-ratings)
 - [Beyond win rate](#beyond-win-rate)
 - [What we know](#what-we-know)
@@ -205,64 +206,22 @@ Etude entry points are `manabot.eval.benchmark` (one Etude match is one deal
 with all eight legs; Etude owns match records, resume and uncertainty) and
 `manabot.eval.duel`.
 
-## Rechecking a recorded strength
+## Comparing measurements across revisions
 
-A strength measured at one revision is a claim about that revision. `recheck`
-plays the same measurement on the current tree and prints the two side by
-side:
+Seat an older checkpoint alongside its comparator in the same evaluation on
+one revision to compare them directly. Etude reports can also line up existing
+measurements across revisions when the opponent identity, decks, deals,
+decision settings and choice of raw or averaged policy match. Throughput
+comparisons also require the same machine.
 
-```sh
-uv run manabot recheck experiments/references/tla-frontier-small-u1952.json
-```
+Check the revisions between the measurements for a declared change that
+affects the metric. Pinned-pilot recordings give the reason for a change in
+what a stored policy computes. Engine Budget records the reason its reference
+moved, and the heuristic registration records its source hash. When a relevant
+change intervenes, measure both participants on the same revision.
 
-```text
-tla-frontier-small-u1952 against heuristic, 16 deck pairs
-  recorded  0.72 (0.61–0.81), 64 games, at ab2b757d9
-  binding   360 stored programs, 136 changed; keys renamed 1, retired 45; 396 new token rows, 103 new name rows
-  opponent  heuristic changed since the record (452d7b5357, 86ad8e9c6a)
-  measured  0.68 (0.59–0.76), 128 games, at 5f12080d81
-  inside the recorded interval
-```
-
-The [proof run](../experiments/reports/best-player-on-main.md) retains the
-games and the new-card comparison. Exit
-status is 0 when the measured score is inside the recorded interval and 1 when
-it is outside or the cohort is incomplete. `--out DIR` keeps the evaluation's
-journals and replays; `--seconds` bounds the run.
-
-A reference names the checkpoint by bucket URI, byte count and SHA-256. The
-first fetch needs bucket access and the artifacts extra (`uv run --extra artifacts
-manabot recheck …`). Subsequent runs verify the bytes in
-`MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`).
-
-The [u1952 reference](../experiments/references/tla-frontier-small-u1952.json)
-pins the heuristic's action cap, source identity, score, interval and writing
-revision. Its matchup file is relative to the reference. Each pair supplies
-both full lists and its original deal seed. Offsets `[0, 16]` replay the
-original deals and add 16 more. The interval resamples the 16 deck pairs,
-keeping both deals and all four legs of each deal together. The earlier
-references are [u25](../experiments/references/tla-frontier-small-u25.json)
-and [u800](../experiments/references/tla-frontier-small-u800.json). Both
-passed checkpoint admission. The proof run measured u1952 only.
-
-When catalog binding changes programs, keys or rows, recheck prints one line
-of counts. With `--out DIR`, a catalog-bound checkpoint also leaves
-`DIR/binding.json` beside the measurement. Its `changed_programs` array names
-each card whose stored program differs from the running catalog. See the
-[checkpoint load report](observation-and-model.md#running-a-checkpoint-on-a-later-revision).
-
-Recheck plays through [local evaluation](#quick-local-evaluation): paired deals,
-both seats, CPU, no rental. Run it on a quiet machine; it measures strength
-only and says nothing about speed.
-
-A gap has two possible causes that one run cannot separate: the pilot plays
-differently here (rules, encoder or bound rows changed), or the opponent
-does. When the opponent's source changed since the record, the output says so.
-A frozen checkpoint as opponent removes that confound.
-
-Run it when a change declares a [pinned-pilot break](development.md#pinned-pilots),
-moves the Engine Budget decision digest or changes the heuristic. A reference
-outside its interval is what moves the [world number](../WORLDS.md).
+Score early learning on the raw learner. An averaged export can still be
+close to initialization while the raw policy is improving.
 
 ## Etude agents
 

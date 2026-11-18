@@ -1,16 +1,9 @@
-# Worlds
+# Historical world numbers
 
-A world number names a span of revisions over which stored measurements are
-comparable. Main carries at most one open world, and merged rules or shape
-changes extend it in place, updating its receipts. Freezing is deliberate:
-re-run the headline baselines, record the receipts, mark the row frozen, and
-open the next number. The number moves when
-[`manabot recheck`](docs/evaluation.md#rechecking-a-recorded-strength) shows a
-strength reference outside its recorded interval. It never decides whether a
-checkpoint loads: a checkpoint is bound by name to the columns, tokens and
-actions it reads
-([compatibility](docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
-A run on an open world makes no comparability claim.
+These entries describe the revisions and evidence that carried each number.
+`WORLD_VERSION` stays fixed for existing records and bindings. Use the
+[evaluation comparison criteria](docs/evaluation.md#comparing-measurements-across-revisions)
+when reading measurements from different revisions.
 
 | world | frozen at | shape (player / card / permanent / action-types) | live artifacts | headline baselines |
 |---|---|---|---|---|

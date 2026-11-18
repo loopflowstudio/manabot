@@ -424,10 +424,8 @@ uv run python scripts/pinned_pilot.py record --reason "<what changed and why>"
 This rewrites the recordings on the current tree with the reason and commit in
 their headers, as `managym/perf/baseline.json` carries its reference's reason.
 The pilots' weights never change. The recordings' git history is the list of
-declared breaks, and a changed reason in a pull request is the prompt to
-[recheck](evaluation.md#rechecking-a-recorded-strength) the strength
-references. `record` cannot rescue a pilot the loader refuses; that needs the
-rename or the column.
+declared breaks for [cross-revision comparisons](evaluation.md#comparing-measurements-across-revisions).
+For a pilot the loader refuses, fix the named incompatibility before recording.
 
 ## Engine performance budget
 

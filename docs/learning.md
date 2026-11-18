@@ -366,9 +366,7 @@ are added and as the engine changes; `model_interface` in
 [`manabot/model/interface.py`](../manabot/model/interface.py) decides, and a
 refusal names the column, key or field that no longer means what the model
 learned ([running a checkpoint on a later revision](observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
-Its strength was measured at the revision that wrote it, and
-[recheck](evaluation.md#rechecking-a-recorded-strength) measures it again
-here. Evaluation runs outside
+Evaluation runs outside
 the training clock and plays on held-out deals with both decks and seats
 ([evaluation.md](evaluation.md)). Its scores don't affect the loss. A run's
 selection rule is `last-complete-raw`, never the best seed or best evaluation,

@@ -272,9 +272,7 @@ model, observation_space = load_checkpoint("final.pt")
 ```
 
 The bound `PolicyCheckpoint.report` holds the catalog binding counts and
-changed card keys. The loader logs the counts at INFO level. To retain the
-full report with a strength measurement, run `recheck` with `--out DIR`
-and read `DIR/binding.json`. On the unmodified u1952 file,
+changed card keys. The loader logs the counts at INFO level. On the unmodified u1952 file,
 both player rows read 73 of the running engine's 74 columns. The model uses
 360 stored card programs. The report names the 136 that serialize differently
 in this engine. All 348 learned names still resolve. The loader initializes
@@ -286,18 +284,18 @@ Academy checks the same tensor binding when it lists a checkpoint. A missing
 learned key appears on the bot’s catalog row with the loader’s reason.
 
 Nothing in the file is rewritten. `model` then plays any deck the pool admits,
-including cards it never saw. How well it plays them is a measurement, not a
-promise ([recheck](evaluation.md#rechecking-a-recorded-strength)).
+including cards it never saw. Evaluate its strength on those decks through
+[local evaluation](evaluation.md#quick-local-evaluation).
 
 ### What a checkpoint is bound to
 
 A checkpoint is bound to the meaning of what it reads and chooses, by name. It
-is not bound to the card set, the world number or the revision.
+can use an expanded card set on a later revision.
 
 | Since the checkpoint was written | Loading it |
 | --- | --- |
 | Cards, tokens or names were added | Loads. Learned rows move to their keys' new positions. A row for a key the checkpoint never saw starts at the mean of its table's learned rows. |
-| A card it trained on is serialized differently (a renamed Rust type, a variant folded into another) | Loads. That card keeps the token program stored in the checkpoint, so its vector is the one the model learned. The report names the card. |
+| A card it trained on is serialized differently (a renamed Rust type, a variant folded into another) | Loads. The model treats every serialization change as a respelling, including a change in the card’s rules. It reads the program stored in the checkpoint for every trained card. |
 | A token or record name the runtime emits was renamed | Loads when the [rename table](#the-rename-table) has the entry. Otherwise refused, naming the key. |
 | A column was appended to an input array | Loads. The model reads the columns it was trained on; the rest are dropped before it sees the array. |
 | A column it reads was removed, renamed or moved | Refused, naming the column. |
@@ -306,7 +304,7 @@ is not bound to the card set, the world number or the revision.
 | The model architecture differs from the saved configuration | Refused, as before. |
 | The policy input version is v1–v8 | `UnsupportedPolicyInput`, naming the revision to run it from. |
 | The possible-world version changed | Refused only for a model with belief inputs; no other model reads it. |
-| Engine rules changed | Loads. The pilot is then playing a game it was not trained on, and [recheck](evaluation.md#rechecking-a-recorded-strength) measures what that cost. |
+| Engine rules changed | Loads. Play uses the current rules. An evaluation measures the effect on strength. |
 
 A checkpoint bound to an authored setup (`setups` and `content_manifest`, from
 a fixed-match run) is the exception: it still compares its whole binding and
@@ -315,10 +313,6 @@ self-play recipes publish, follow the table.
 
 The terms:
 
-- A **world** number names a span of revisions over which stored measurements
-  are comparable. It never decides whether a checkpoint loads. It moves when
-  a recheck shows a strength reference outside its recorded interval
-  ([WORLDS.md](../WORLDS.md)).
 - A **format** (TLA Limited, Standard) is a named card pool plus deck rules.
 - The **model interface** is what the table above compares: input columns,
   token and record names, and action kinds. It has no version number. A name

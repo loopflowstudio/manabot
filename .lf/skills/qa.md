@@ -552,7 +552,7 @@ publish, land or choose the next Graph step from here.
   have no resumed game. Initial automatic history may precede a launch's received
   tail; compare that tail exactly to the saved source and the full saved prefix
   to Replay, retaining explicit unavailable-prefix labels.
-- Checkpoint compatibility (loader, Academy listing, recheck): put the
+- Checkpoint compatibility (loader and Academy listing): put the
   checkpoints in one directory, plus broken copies made with `torch.load` /
   `torch.save` after editing one `world_binding` field (`world_digest`,
   `learning_schema_sha256`, `naming_branching`). Start
@@ -565,15 +565,10 @@ publish, land or choose the next Graph step from here.
   `[data-testid=opponent-select]` → `policy`, then the
   `[data-testid=checkpoint-select]` option, and press "Start game" (the setup
   form has no "New Game" button); the end dialog offers "Rematch".
-  `--out <dir>` leaves `binding.json` (the full load report) even when the
-  run stops early. `python -m manabot.backends.convert` must accept both a
+  `uv run python -m manabot.backends.convert` must accept both a
   PyTorch zip and a container saved under a `.pt` name (`save_checkpoint`
   always writes a container); convert the pinned pilots and u1952, then load
   each `.safetensors`.
-  `manabot recheck` fetches its checkpoint from R2: `doppler run --project
-  manabot --config prd -- uv run --extra artifacts manabot recheck <ref>
-  --seconds <s> --out <new dir>`; one deck pair took about a minute on a
-  loaded laptop, so a short `--seconds` exercises the incomplete path only.
   `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
 - PR CI failures while the run is still in progress: `gh run view --log-failed`
   refuses; read `gh api --allow-escape-sequences

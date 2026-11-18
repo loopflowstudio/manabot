@@ -120,3 +120,7 @@ say so if they should carry a note.
     over: two types in this PR.
 30. `docs/academy.md` quotes pre-build refusal examples; left for gate to
     replace with the loader's real sentences.
+
+31. Both reproduction commands explicitly choose their arm. The historical
+    arm derives its pairs from the existing frontier protocol and committed
+    deck source. A direct comparison matched all 16 previous pair records.

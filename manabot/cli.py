@@ -73,21 +73,6 @@ def sim_command(
     run_simulation(sim_config, runtime_config, backend=resolve("torch"))
 
 
-@app.command("recheck")
-def recheck_command(
-    reference: Path, out: Path | None = None, seconds: float = 7200
-) -> None:
-    """Remeasure a recorded strength on CPU, with both seats of each deck pair."""
-    from manabot.eval.recheck import recheck
-
-    try:
-        status = recheck(reference, out=out, seconds=seconds)
-    except (OSError, ValueError, EOFError) as error:
-        typer.echo(f"incomplete: {error}", err=True)
-        status = 1
-    raise typer.Exit(status)
-
-
 @app.command("training-report")
 def training_report_command(
     source: list[str] = typer.Option(

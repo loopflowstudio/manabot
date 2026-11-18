@@ -254,7 +254,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   `manabot.model.interface.model_interface` checks the recorded input contract.
   The shared policy reader then binds the learned arrays by key. Academy uses
   that reader when listing checkpoints. For a deck-source checkpoint,
-  the world number, card digest and naming digest are recorded facts, never
+  the card digest and naming digest are recorded facts, never
   gates (setup-bound checkpoints still compare their whole binding). Append
   input columns to named buffers. Shared host preparation projects each buffer
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
@@ -264,9 +264,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   definition key or name. A change that alters what a stored pilot computes
   fails `tests/model/test_pinned_pilot.py` until it adds the rename or column
   or declares the break with `scripts/pinned_pilot.py record --reason`. Do not
-  bump the input version for a layout change. A world number moves when
-  `manabot recheck` shows a strength reference outside its interval
-  ([compatibility](docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+  bump the input version for a layout change.
 - Main carries policy input v11, the fresh default
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;

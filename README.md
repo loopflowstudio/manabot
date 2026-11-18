@@ -72,8 +72,7 @@ imports manabot or Torch; and `manabot.sim` imports none of `eval`,
 `training`, `experiment` or `reports` (`tests/test_package_boundaries.py`
 enforces all of it). Academy's trained opponents come from manabot through an
 installed entry point, so they appear when manabot is installed and Academy
-runs without it. A *world* number ([WORLDS.md](WORLDS.md)) names a span of
-revisions whose measurements are comparable. A checkpoint keeps loading as
+runs without it. A checkpoint keeps loading as
 cards are added, bound by name to what it reads
 ([compatibility](docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
 
@@ -164,8 +163,8 @@ observation, and a mechanic reaches all three in the change that adds it
 **Identity is typed.** An `ObjectId` names one appearance of an object in one
 zone and fails after a zone change; a `CardId` names the physical card and
 follows it. An action index is valid only in one decision epoch. Checkpoints
-bind world, deck setup and input schema and load only where the digest
-matches. Every durable value has a canonical serialization and digest
+bind the named policy inputs they read. Fixed-match checkpoints also bind the
+deck setup. Every durable value has a canonical serialization and digest
 (`manabot.infra.identity`), and locators are not identity.
 
 **Replay is exact.** A game regenerates from its deal seed, configuration and
