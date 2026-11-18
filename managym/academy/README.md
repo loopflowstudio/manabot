@@ -49,6 +49,10 @@ pending choice with the same legal offers and permitted information.
   before filtering/pagination; only completed shared replays are readable by
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
+  A live game is saved when its match, revision or event count changes, not on
+  every projection, and each event, decision and presentation event is
+  encoded to JSON once (`append_json.py`); the stored bytes are what
+  `json.dumps` of the whole record gives.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
