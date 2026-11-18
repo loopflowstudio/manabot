@@ -68,6 +68,27 @@ runs. DuckDB plans used hash joins on the two deck identities.
 
 ## Remaining work
 
+0. Next build slice: `training_corpus` returns the DuckDB connection, not the
+   `corpus` relation. Chosen in the concept review of 2026-11-18 with nobody
+   present; reversible until merge (`scratch/concept-review.html`, question
+   43). The corpus now holds six relations (`corpus`, `settings`,
+   `deck_cards`, `card_statistics`, and the inputs `decks` and `matchups`),
+   and five are reachable only through `relation.query("corpus", sql)`,
+   whose first argument those queries never read.
+   - `manabot/eval/training_corpus.py`: end with
+     `create view corpus as <the existing final select>` and return `db`;
+     annotate `-> duckdb.DuckDBPyConnection`; the docstring names the
+     relations a caller can query. No table, column, cutoff or refusal
+     changes.
+   - `docs/evaluation.md` (Querying the training corpus): drop the local
+     `query` helper; examples read `corpus.sql("... from corpus")`,
+     `corpus.sql("... from settings")` and so on.
+   - `tests/eval/test_training_corpus.py`: call sites use `.sql(...)`;
+     `.project("games")` and bare `.fetchall()` become
+     `.sql("select games from corpus")` / `.sql("from corpus")`.
+   - Done when `uv run --extra dev --extra evaluation pytest
+     tests/eval/test_training_corpus.py -q` passes and no
+     `.query("corpus"` remains under `manabot`, `tests` or `docs`.
 1. Etude follow-up, not blocking: its evaluation query database indexes
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude

@@ -193,3 +193,13 @@ say so if they should carry a note.
 42. For historical training settings, report a stage setting only when every
     declared stage records the same value. The settings table has one row per
     run, so a value that varies by stage has no single run-wide value.
+
+## Concept review of the built corpus, 2026-11-18 (nobody present; reversible)
+
+43. `training_corpus` returns the DuckDB connection with `corpus` as a view
+    on it. As built it returns the `corpus` relation and the other tables
+    are reached through `relation.query("corpus", sql)`. Passed over: a
+    wrapper type around the connection, a second function for the side
+    tables, and leaving it until after release. `decks` and `matchups` stay
+    on the connection undocumented. Statistics across a parent chain stay
+    refused until question 38.

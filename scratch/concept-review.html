@@ -17,112 +17,107 @@ table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}td,th{tex
 ol.q>li{margin:14px 0}ol.q ol{list-style:lower-alpha;margin-top:4px}
 .scroll{overflow-x:auto}
 </style></head><body><main>
-<p class="meta">MTG-353 · concept review of the built change, fourth pass, nobody present · 2026-11-18 · branch at 82dc49fe60 against main<br>Read: scratch/plan.md, scratch/questions.md (28–36), manabot/eval/training_corpus.py, manabot/training/decks.py, docs/evaluation.md (comparison and corpus sections), docs/training.md (run settings), managym/statistics.py, managym/recording.py and manabot/env/failures.py (how a training run writes statistics rows). No tests or runs in this pass.</p>
+<p class="meta">MTG-353 · concept review of the built change, fifth pass, nobody present · 2026-11-18 · branch at 879826545c against main<br>Read: scratch/plan.md, scratch/questions.md (34–42), scratch/qa.html, manabot/eval/training_corpus.py, manabot/training/corpus.py, manabot/training/decks.py, the loop changes in self_play.py and minimal.py, docs/evaluation.md (corpus section), tests/eval/test_training_corpus.py call sites. One DuckDB check run (a view and tables on one connection); no tests or training runs in this pass.</p>
 <h1>What a checkpoint trained on</h1>
-<p class="lead">Area taken: the training corpus, the answer to "did this checkpoint meet this matchup, this deck, this card while it trained". The compatibility half of the PR (loading, seating, the participant record) was reviewed three times and has not changed since; the corpus query is the new part, and the plan still owes it one piece.</p>
-<p><strong>Outcome: the plan changed.</strong> The corpus query as built lines up with what a person asks. Plan item 2, card statistics as part of the corpus, is not built. This pass fixes its shape before it is: one more named relation on the corpus's own connection, keyed by update, seat and definition key, and never by deck.</p>
+<p class="lead">Area taken: the training corpus as it now stands, with card statistics, decision settings, deck entries and parent checkpoints in it. That is everything built since the fourth pass. The compatibility half (loading, seating, the participant record) has not changed and is not reviewed again.</p>
+<p><strong>Outcome: the plan changed, by one small thing.</strong> The last pass asked for card statistics as a relation of the corpus; that is built and QA measured it. The same two build passes also added three more tables. The corpus is now a small database of six relations, and the function still hands back one of them. The plan now says: return the database.</p>
 <p class="muted"><span class="tag built">built</span> is in the PR. <span class="tag prop">proposed</span> is written into the plan for the next build pass.</p>
 
 <h2>What the last pass intended, and what is there</h2>
 <div class="scroll"><table>
 <tr><th>Intended</th><th>Observed</th><th></th></tr>
-<tr><td>A corpus derived from how training was configured</td><td><code>roster(run)</code> reads the resolved decks a new run logs at update zero, or a historical declaration's deck source through the writer's archived catalog.</td><td class="yes">done</td></tr>
-<tr><td>Queryable, so specific questions are written on top</td><td><code>training_corpus(run, through)</code> returns a DuckDB relation; the guide carries four SQL questions run on a local recipe and on frontier Small.</td><td class="yes">done</td></tr>
-<tr><td>Missing evidence is unknown, never zero</td><td><code>UnknownCoverage</code> for a missing update, roster or undeclared deck. An explicitly logged empty table is zero games.</td><td class="yes">done</td></tr>
-<tr><td>Plays well with recorded card statistics</td><td>Nothing reads <code>out/statistics/</code>. <code>training_corpus.py</code> has no statistics path.</td><td class="no">not built</td></tr>
+<tr><td><code>card_statistics</code> on the corpus connection, keyed by update, seat and definition key, no deck</td><td>Built as specified. Definition keys come from the native index in the catalog the row's digest names, so generated cards (Clue, Ally) resolve.</td><td class="yes">done</td></tr>
+<tr><td>Measure whether the statistics update label matches the outcome update</td><td>It is one behind; the reader adds one. Local two-update run: two terminal games at capture 0 and 1, two outcome games at updates 1 and 2.</td><td class="yes">done</td></tr>
+<tr><td>Fewer statistics games than corpus games raises; more is allowed</td><td>Built; QA saw a missing directory and update 3 raise <code>UnknownCoverage</code>, and sums match independent counts from game records.</td><td class="yes">done</td></tr>
+<tr><td class="muted">Not in the last page</td><td>Also built: <code>settings</code> and <code>deck_cards</code> tables written at update zero by both loops, and a corpus that follows a published parent checkpoint by run, update and SHA-256. QA ran a parent and child.</td><td class="yes">added</td></tr>
 </table></div>
 
 <h2>One interaction, walked</h2>
-<p>"Before I score frontier Small on a new list: has it ever cast Lightning Bolt, or only sat across from decks that held one?"</p>
+<p>"This checkpoint was continued from another run. Before I compare it on a new list: which settings did each run play under, and did it ever draw Lightning Bolt?"</p>
 <div class="two"><div><h3>Today <span class="tag built">built</span></h3>
-<pre>corpus = training_corpus(run, through=1952)
+<pre>corpus = training_corpus(checkpoint, source=storage)
+
 corpus.query("corpus", """
-  select sum(games) from corpus
-  where list_contains(play_cards || draw_cards,
-                      'lea.lightning_bolt')""")</pre>
-<p>Answers "games where a list held it". It cannot say drawn or cast: the corpus is lists that entered games.</p></div>
-<div><h3>With statistics <span class="tag prop">proposed</span></h3>
-<pre>corpus = training_corpus(
-    run, through=1952,
-    statistics=out / "statistics")
-corpus.query("corpus", """
-  select sum(drawn_copies), sum(selections)
-  from card_statistics
-  where card = 'lea.lightning_bolt'""")</pre>
-<p>Same call, same connection, one more relation. The first argument of <code>query</code> only names the corpus view; any SQL on that connection sees both.</p></div></div>
-<h3>Failure and recovery</h3>
-<pre>UnknownCoverage: local: coverage unknown at update 7          built
-UnknownCoverage: no statistics rows under …/statistics         proposed
-UnknownCoverage: statistics hold 3 completed games at update 2,
-                 the corpus holds 4                             proposed</pre>
-<p>Recovery for the first is the missing metrics block. For the other two there is none after the fact: statistics exist only when the run was declared with <code>statistics: true</code>. The query without <code>statistics=</code> still answers everything it answers today. A run that never recorded them is "not a problem" (direction, 2026-11-18).</p>
+  select run, policy_input_version,
+         learning_seats
+  from settings""")
+
+corpus.query("corpus",
+  "select * from deck_cards")</pre>
+<p>The first argument names a view of the returned relation. Neither query reads it. The guide wraps this in a local <code>query(sql)</code> helper so the reader does not see it; the tests do the same.</p></div>
+<div><h3>Returned as what it is <span class="tag prop">proposed</span></h3>
+<pre>corpus = training_corpus(checkpoint, source=storage)
+
+corpus.sql("""
+  select run, policy_input_version,
+         learning_seats
+  from settings""")
+
+corpus.sql("select sum(games) from corpus")
+corpus.sql("select * from deck_cards")</pre>
+<p><code>training_corpus</code> returns the DuckDB connection. <code>corpus</code> is a view on it beside the other tables. Nothing else about the query changes. Verified on DuckDB here: a view and a table on one connection join in one statement.</p></div></div>
+<h3>Failure and recovery <span class="tag built">built</span></h3>
+<pre>UnknownCoverage: local: coverage unknown at update 3
+UnknownCoverage: cannot resolve parent checkpoint local at 1 with SHA-256 …
+UnknownCoverage: …/statistics: update 2 has 1 terminal statistics games for 2 corpus games
+UnknownCoverage: one statistics directory cannot establish parent and child coverage</pre>
+<p>Recovery for the first two is fetching the missing metrics block or the parent run into the same storage. The last two have none after the fact, and the query without <code>statistics=</code> still answers. All four survive the proposal unchanged: they raise before anything is returned.</p>
 
 <h2>Do the product's concepts and the code's concepts line up?</h2>
 <div class="scroll"><table>
 <tr><th>What a person knows about</th><th>What the code has</th><th></th><th>What is wrong, if anything</th></tr>
-<tr><td>Can this checkpoint play here?</td><td><code>model_interface</code>, then binding by column name, card key and token name</td><td class="yes">yes</td><td>Unchanged since the third pass.</td></tr>
-<tr><td>The decks training could deal</td><td><code>roster(run)</code> → <code>CorpusDeck</code> (content identity, definition keys)</td><td class="yes">yes</td><td>Includes decks never played, and says so.</td></tr>
-<tr><td>The games it completed, by update and ordered matchup</td><td><code>training_corpus</code> relation: <code>update_number, play, draw, games, play_cards, draw_cards</code></td><td class="yes">yes</td><td>One game counts once; mirrors included.</td></tr>
-<tr><td>"Through this checkpoint"</td><td>A <code>CheckpointRecord</code> plus storage, or a run plus <code>through</code></td><td class="yes">yes</td><td>Two spellings of one cutoff; the checkpoint form refuses a second cutoff.</td></tr>
-<tr><td>Unknown is not zero</td><td><code>UnknownCoverage</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>What it drew, was offered and chose, per card</td><td><code>managym.statistics.GameStatistics</code> rows in <code>out/statistics/*.jsonl</code>, labelled with the update</td><td class="no">no</td><td>One idea in two stores with no shared reader. See below.</td></tr>
-<tr><td>Was this evaluation matchup in the corpus?</td><td>A sentence in <code>docs/evaluation.md</code> and one SQL filter</td><td class="yes">yes</td><td>A rule plus a query; no verdict type, on purpose ("it could be lots of things").</td></tr>
-<tr><td>A checkpoint that plays any deck, and one that plays a fixed match</td><td>"exact decks recorded in a binding" in current docs; older words remain in serialized keys</td><td class="yes">yes</td><td>The five names from the earlier pass are gone from prose in <code>40d8036ecf</code>.</td></tr>
+<tr><td>The training corpus of a checkpoint</td><td><code>training_corpus()</code> returns the <code>corpus</code> relation; five more tables sit on its unreturned connection</td><td class="no">no</td><td>One name for two ideas: "corpus" is both the whole answer and one view of it. See below.</td></tr>
+<tr><td>Games completed, by update and ordered matchup</td><td><code>corpus</code>: <code>update_number, play, draw, games, play_cards, draw_cards, experiment, run</code></td><td class="yes">yes</td><td></td></tr>
+<tr><td>The decks training could deal</td><td><code>roster(run)</code> in Python; <code>deck_cards</code> (entry, board, copies) in SQL for runs that logged it</td><td class="yes">yes</td><td>Two readers on purpose: historical runs have a roster and no per-board rows, and the guide says so.</td></tr>
+<tr><td>How decisions were set up in each run</td><td><code>settings</code>, one row per contributing run; historical runs read their declaration, NULL where a value was unrecorded or varied by stage</td><td class="yes">yes</td><td></td></tr>
+<tr><td>The checkpoint it started from</td><td><code>parent_run, parent_update, parent_sha256</code> in <code>settings</code>; the reader follows them in the same storage</td><td class="yes">yes</td><td>An unidentifiable parent is unknown, never skipped.</td></tr>
+<tr><td>What it drew, was offered and chose, per card</td><td><code>card_statistics</code> when <code>statistics=path</code> is given</td><td class="yes">yes</td><td>The only table without <code>experiment, run</code>; consistent while a parent chain refuses statistics.</td></tr>
+<tr><td>Unknown is not zero</td><td><code>UnknownCoverage</code></td><td class="yes">yes</td><td>A run against a non-learning opponent writes no outcome table and is unknown, not zero.</td></tr>
+<tr><td>What a loop must record</td><td><code>log_corpus_setup</code> at update zero, <code>log_corpus_outcomes</code> each update (<code>manabot/training/corpus.py</code>)</td><td class="yes">yes</td><td>Two calls, shown in both loop guides. The minimal loop passes its two fixed settings as words.</td></tr>
 </table></div>
 
-<h2>The biggest mismatch: one experience, two stores</h2>
-<p>To a person, "what the checkpoint trained on" is one thing. The code keeps it in two places that differ in every way that matters to a reader:</p>
-<div class="scroll"><table>
-<tr><th></th><th>Outcome tables <span class="tag built">built</span></th><th>Statistics rows <span class="tag built">written</span>, <span class="tag prop">unread</span></th></tr>
-<tr><td>Where</td><td>Etude metrics, in run storage</td><td>The run's private <code>out/statistics/</code>; Etude never carries it</td></tr>
-<tr><td>Grain</td><td>update × ordered matchup</td><td>one game × seat × card</td></tr>
-<tr><td>Deck identity</td><td>content identity of both decks</td><td>none: main-deck copies per name, no sideboard</td></tr>
-<tr><td>Card identity</td><td>definition key</td><td>printed name, native index and the catalog digest that binds them</td></tr>
-<tr><td>After a resume</td><td>the winning attempt supersedes</td><td>append-only; a superseded attempt's rows stay, with no attempt label</td></tr>
-</table></div>
+<h2>The biggest mismatch: the corpus is a database, returned as one of its tables</h2>
+<p>When the query was first built it had one relation, and returning it was right. Three build passes later a person can ask about six. Five of them are reachable only because DuckDB's <code>relation.query(name, sql)</code> runs any SQL on the relation's connection. The guide's own example defines a helper to hide the idiom, which is the sign the return value is the wrong thing.</p>
 <div class="two"><div><h3>Before <span class="tag built">built</span></h3>
-<pre>training_corpus(run, through)
-  → corpus          (matchups × decks)
+<pre>training_corpus(...) → DuckDBPyRelation
+  the corpus view
+  hidden beside it: settings, deck_cards,
+    decks, matchups, card_statistics
 
-read_statistics(out / "statistics")
-  → GameStatistics  (names, indices)
-no common key, no cutoff, no SQL</pre></div>
+corpus.query("corpus", "… from settings")</pre></div>
 <div><h3>After <span class="tag prop">proposed</span></h3>
-<pre>training_corpus(run, through,
-                statistics=path)
-  → corpus          unchanged
-  → card_statistics update_number, seat, card,
-                    games, wins, deck_copies,
-                    opening_copies, drawn_copies,
-                    opportunities, selections,
-                    resolutions</pre></div></div>
-<div class="box"><p><strong>Choices made for review.</strong></p>
-<p><strong>One connection, a keyword, a named relation.</strong> Passed over: a second function returning its own relation, because DuckDB relations on different connections cannot be joined, and the point is asking both in one query. Passed over: finding <code>out/statistics</code> from the run, because Etude's run storage does not hold it and library code reads no ambient location.</p>
-<p><strong>Keyed by update, seat and definition key; no deck column.</strong> A statistics row cannot name its deck: it has main-deck copies only. A reconstructed identity would be wrong for any list with a sideboard. Seat is the native game seat, 0 on the play, matching <code>play</code>/<code>draw</code>. Names become keys through the catalog the row's own digest names, the same mapping <code>corpus_decks</code> uses.</p>
-<p><strong>The two stores check each other.</strong> Statistics count every game; the corpus counts completed learner games. Fewer completed statistics games than corpus games at any update through the cutoff is missing evidence and raises. More is allowed and documented: games against opponents outside the corpus, and rows left by a superseded attempt.</p></div>
+<pre>training_corpus(...) → DuckDBPyConnection
+  corpus           view, unchanged columns
+  settings         unchanged
+  deck_cards       unchanged
+  card_statistics  when statistics=path
+  decks, matchups  the corpus view's inputs
+
+corpus.sql("… from settings")</pre></div></div>
+<div class="box"><p><strong>Choice made for review.</strong> Return the connection, with <code>corpus</code> created as a view on it. Passed over: a wrapper type holding the connection (wraps another library's handle to add nothing), and a second function for the side tables (they must share a connection to be joined, which was the reason for one call in pass four). Passed over as well: leaving it, since the function is unpublished today and changing a return type after release needs a warning period. Reversible until this merges.</p>
+<p>What changes: the return annotation and docstring, <code>create view corpus as …</code> in place of the final <code>db.sql</code>, the guide's examples (the helper goes, <code>corpus.sql(...)</code> stays), and the test call sites. What survives: every table, column, cutoff rule and refusal.</p></div>
 
 <h3>Counterexamples kept</h3>
 <div class="scroll"><table>
 <tr><th>Case</th><th>What happens</th></tr>
-<tr><td>Run declared without <code>statistics</code></td><td>Omit the keyword: no <code>card_statistics</code> relation exists and SQL naming it fails by name. Supplying an empty or missing directory raises <code>UnknownCoverage</code>. Never an empty table.</td></tr>
-<tr><td>Update label is off by one</td><td>The writer labels a row with the count of finished updates when the game ended. Whether that equals the outcome table's update is not established. The first slice measures it; the cross-check above fails loudly if it is wrong.</td></tr>
-<tr><td>Resumed run</td><td>Card counts may include a superseded attempt's games. Lossy toward more, stated in the guide. Exact supersession needs the attempt in the capture context, which is a change to what training writes and is not in this PR.</td></tr>
-<tr><td>Torn final row, or a row with no catalog digest</td><td>The existing reader's behaviour: warn and stop at a torn tail, fail on a complete malformed row.</td></tr>
-<tr><td>Game in progress at the cutoff</td><td>Non-terminal rows are excluded, as the corpus counts completed games.</td></tr>
+<tr><td>A caller wants only matchup rows</td><td><code>corpus.sql("from corpus")</code> is the relation they had before. One more short call; nothing is lost.</td></tr>
+<tr><td>A caller writes to the tables</td><td>Possible today through <code>query</code> as well. The connection is in memory and belongs to the caller; nothing persists.</td></tr>
+<tr><td><code>card_statistics</code> named without <code>statistics=</code></td><td>DuckDB fails by table name, as now. Never an empty table.</td></tr>
+<tr><td>Parent chain with statistics</td><td>Still refused. One path per run would need <code>experiment, run</code> on <code>card_statistics</code> and belongs with publishing statistics to run storage.</td></tr>
 </table></div>
 
 <h2>Larger than this work</h2>
 <ul>
-<li><strong>Statistics are not in run storage.</strong> A published checkpoint plus storage reaches the corpus and not the statistics; someone must still hold the run's <code>out/</code>. Closing that means publishing the rows as run artifacts (the same route training row tables take), with the attempt recorded so supersession applies.</li>
-<li><strong>Etude's evaluation query database does not ingest training rows</strong> (question 34). Once it does, both relations can be read there; only where rows are read changes.</li>
+<li><strong>Statistics are not in run storage.</strong> A published checkpoint plus storage reaches the corpus and not the statistics, a resumed run's superseded rows stay, and a parent chain cannot carry them. All three close together by publishing the rows as run artifacts with the attempt in their context (question 38).</li>
+<li><strong>Etude's evaluation query database does not ingest training rows</strong>, and its table reader loads every table artifact in the history before a cutoff can apply (questions 34 and 36). Once it does, these relations can be read there.</li>
+<li><strong>The update a checkpoint was written at lives under a key named <code>bc</code></strong> in checkpoint metadata, which <code>parent_checkpoint</code> reads. The name predates this work and says nothing about what it holds. A serialized key, so it keeps its spelling; a named reader for it would be its own small change.</li>
 <li><strong>Fixed-match checkpoints after cards are added</strong> still stop loading on the whole-binding comparison. Unchanged and outside this PR.</li>
 </ul>
 
 <h2>Questions</h2>
 <ol class="q">
-<li>Where card statistics appear:<ol><li>a named relation on the corpus connection, switched on by <code>statistics=path</code> (chosen)</li><li>a separate function and connection</li><li>leave them to <code>read_statistics</code> and say so in the guide</li></ol></li>
-<li>Statistics key:<ol><li>update, seat, definition key; no deck (chosen)</li><li>add the deck by joining through recorded games, which only covers the recorded fraction</li></ol></li>
-<li>When statistics and corpus disagree on completed games at an update:<ol><li>fewer in statistics raises, more is allowed and documented (chosen)</li><li>any difference raises</li><li>no cross-check</li></ol></li>
-<li>Statistics in Etude run storage with attempt supersession:<ol><li>its own Task after this PR (chosen)</li><li>in this PR</li></ol></li>
+<li>What <code>training_corpus</code> returns:<ol><li>the DuckDB connection, with <code>corpus</code> a view on it (chosen)</li><li>the <code>corpus</code> relation, side tables through <code>query("corpus", …)</code> (as built)</li><li>a small record with one relation per table</li></ol></li>
+<li>The input tables <code>decks</code> and <code>matchups</code>:<ol><li>left on the connection, undocumented (chosen)</li><li>documented as relations</li><li>dropped after the view is materialised as a table</li></ol></li>
+<li>Card statistics across a parent chain:<ol><li>refused until statistics are published to run storage (chosen, as built)</li><li>accept one path per run in this PR</li></ol></li>
 </ol>
 </main></body></html>
