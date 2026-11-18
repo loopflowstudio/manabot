@@ -24,7 +24,9 @@ from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import canonical_sha256
 from manabot.policy.checkpoint import read_safetensors, write_safetensors
 from manabot.sim.match import play_game
+from manabot.sim.matchup import DeckMatchup
 from manabot.sim.replay import read_trace, write_trace
+import managym
 from tests.eval.arena_fixture import arena_fixture
 from tests.eval.test_evaluation_policy_inputs import fixture_policy
 
@@ -296,6 +298,31 @@ def test_cli_admission_deadline_is_retained(tmp_path: Path) -> None:
     assert receipt["status"] == "incomplete"
     assert "deadline" in receipt["error"]
     assert not (out / "panel").exists()
+
+
+def test_cli_matchup_file_accepts_deck_pairs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A world-bound checkpoint can be seated from the CLI on two deck lists."""
+    deck = managym.Deck({"Mountain": 20, "Lightning Bolt": 40})
+    matchup = DeckMatchup(
+        population_sha256="0" * 64, entries=("a", "b"), lists=(deck, deck)
+    )
+    path = tmp_path / "matchup.json"
+    path.write_text(matchup.model_dump_json())
+    seen: list[object] = []
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        seen.append(args[3])
+        raise ValueError("stop after parsing")
+
+    monkeypatch.setattr("manabot.eval.local.prepare_local_request", refuse)
+    status = local_main(
+        ["--checkpoint", str(tmp_path / "c.safetensors"), "--matchup", str(path)]
+        + ["--out", str(tmp_path / "out")]
+    )
+    assert status == 1
+    assert seen == [matchup]
 
 
 def test_cli_saved_request_retains_deadline_result(tmp_path: Path) -> None:

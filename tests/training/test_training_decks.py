@@ -267,7 +267,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     with pytest.raises(ValueError, match="not admitted by"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
-    with pytest.raises(ValueError, match="not submitted to the world"):
+    with pytest.raises(ValueError, match="plays decks submitted to the world"):
         validate_agent_setup(policy, [unseen, other_pack])
 
     for key, change in (

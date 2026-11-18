@@ -174,8 +174,10 @@ and replace `local` in the checkpoint path with that name.
 - `--opponent` also accepts another local policy file, `scripted_greedy` or
   `random`. Policy files are `.safetensors`, or `.pt` from an earlier revision.
 - Repeat `--deal-seed` for more blocks; `--include-mirrors` plays all eight legs;
-  `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster. The
-  checkpoint must already admit that setup; nothing is converted.
+  `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster, or a
+  `DeckMatchup` JSON of two deck lists. A checkpoint bound to fixed setups must
+  already admit that setup; nothing is converted. A checkpoint bound to the
+  world, such as a TLA frontier run, plays only a `DeckMatchup`.
 - `--game-seconds` and `--max-commands` bound each game. `--seconds` bounds
   checkpoint preparation, scalar play and replay, including child startup.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated

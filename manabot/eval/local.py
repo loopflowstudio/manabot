@@ -12,6 +12,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 import time
 
+from pydantic import TypeAdapter
 import torch
 
 from manabot.backends import resolve
@@ -39,6 +40,11 @@ from manabot.sim.matchup import (
     AuthoredMatchup,
     DeckMatchup,
     selected_match,
+)
+
+# --matchup reads either named form; their fields do not overlap.
+MATCHUP_FILE: TypeAdapter[AuthoredMatchup | DeckMatchup] = TypeAdapter(
+    AuthoredMatchup | DeckMatchup
 )
 
 
@@ -216,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--matchup",
         type=Path,
-        help="AuthoredMatchup JSON; default selected Allies/Lessons setup",
+        help="AuthoredMatchup or DeckMatchup JSON; default selected Allies/Lessons setup",
     )
     parser.add_argument("--include-mirrors", action="store_true")
     parser.add_argument(
@@ -270,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
             request = EvaluationRequest.model_validate_json(args.request.read_bytes())
         else:
             matchup = (
-                AuthoredMatchup.model_validate_json(args.matchup.read_bytes())
+                MATCHUP_FILE.validate_json(args.matchup.read_bytes())
                 if args.matchup
                 else None
             )
