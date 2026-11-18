@@ -2665,3 +2665,36 @@ decisions per cell), blanking the memory changed the action distribution by
 a mean total variation of 0.019 to 0.025 and the most likely action at 1.4%
 to 2.3% of decisions. The same checkpoint differed from its previous stored
 checkpoint by 0.036 to 0.050.
+
+**The arms learn different policies; decision accounting is the same.**
+Learner decisions equal environment decisions in every run. Decisions per
+game from the training metrics, by update range:
+
+| Seed | Arm | 0–20 | 20–40 | 40–60 | 60–80 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 39101 | control | 200 | 309 | 398 | 385 |
+| 39101 | GRU | 194 | 238 | 224 | 198 |
+| 39102 | control | 209 | 287 | 373 | 377 |
+| 39102 | GRU | 208 | 217 | 228 | 216 |
+| 39103 | control | 182 | 217 | 308 | 331 |
+| 39103 | GRU | 174 | 173 | 232 | 214 |
+
+Policy entropy over updates 40–80 was 0.22, 0.21 and 0.24 for control
+against 0.34, 0.40 and 0.32 for GRU. Thirty local self-play games per final
+checkpoint, on identical decks and seeds, reproduce the difference and place
+it within turns:
+
+| Seed | Arm | Decisions per game | Turns per game | Decisions per turn |
+| --- | --- | ---: | ---: | ---: |
+| 39101 | control | 302 ± 38 | 21.7 | 13.9 |
+| 39101 | GRU | 186 ± 20 | 20.8 | 8.9 |
+| 39102 | control | 405 ± 47 | 24.7 | 16.4 |
+| 39102 | GRU | 194 ± 17 | 21.7 | 8.9 |
+| 39103 | control | 278 ± 24 | 24.1 | 11.5 |
+| 39103 | GRU | 226 ± 22 | 20.7 | 10.9 |
+
+Both arms clip the whole model's gradient to norm 0.267 and the clip is
+active in nearly every update. Over updates 20–40 the GRU arm's pre-clip
+norm was 2.10 against control's 0.81 (seed 39101) and 1.06 against 0.41
+(39102), but 1.22 against 1.54 (39103). Shared clipping is a candidate
+cause of the slower sharpening and is not established.
