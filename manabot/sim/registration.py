@@ -25,6 +25,9 @@ ETUDE_SAMPLER_SPEC: dict[str, Any] = {
 # Retained provenance label carried by arena and participant records.
 type WorldVersion = str
 
+# The w2 interactive mirror: two legs and deterministic checkpoint inference.
+HISTORICAL_MIRROR_SUITE = "w2-interactive-mirror-v1"
+
 
 class SearchSemantics(StrictModel):
     branch_audit: bool = False
@@ -131,7 +134,7 @@ class PlayerRegistration(StrictModel):
                     self.player_spec != expected_checkpoint_spec
                     or type(self.player_spec.get("deterministic")) is not bool
                     or (
-                        self.content_suite == "w2-interactive-mirror-v1"
+                        self.content_suite == HISTORICAL_MIRROR_SUITE
                         and not self.player_spec["deterministic"]
                     )
                 ):

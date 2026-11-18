@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from manabot.infra.identity import SHA256_PATTERN, StrictModel
-from manabot.sim.registration import WorldVersion
+from manabot.sim.registration import HISTORICAL_MIRROR_SUITE, WorldVersion
 
 
 class EvaluationKey(StrictModel):
@@ -88,7 +88,7 @@ class MatchRow(StrictModel):
             raise ValueError("match cell identity mismatch")
         if self.player_a_seat != self.leg % 2:
             raise ValueError("match leg and player-A seat mismatch")
-        historical_mirror = self.arena_key.content_suite == "w2-interactive-mirror-v1"
+        historical_mirror = self.arena_key.content_suite == HISTORICAL_MIRROR_SUITE
         if historical_mirror and self.leg > 1:
             raise ValueError("historical mirror has only two legs")
         failed = self.termination_reason in {
