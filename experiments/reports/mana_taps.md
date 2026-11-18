@@ -1,6 +1,11 @@
 # Do fixed-source mana taps at priority and during payments change TLA learnability?
 
-**The effect on w64 learning and training performance is still unmeasured.**
+**On the first L4 update of seed 21501, enabling taps increased decisions per
+completed game from 246 to 526.** Active training throughput fell from 296 to
+248 retained decisions/s and the update took 544 seconds instead of 213.
+The arms ran on separate L4 hosts. Only this seed delivered metrics from both
+arms, and neither delivered a trained policy export. The sustained throughput
+effect and the effect on learnability remain open.
 The comparison uses three matched training seeds (21501–21503), all 1,000
 TLA trophy decks and the same 16 evaluation pairs per checkpoint. Each seed
 trains w64 in BF16 with and without the additional fixed-source taps, targeting
@@ -107,3 +112,42 @@ The requested comparison covers legal mana taps shared by bots and people
 in Academy. At the earlier priority-only revision, a funded cast drops surplus tap
 choices, resolution payments omit ordinary fixed-source taps, and Academy
 starts both seats with priority taps off. The local w64 smoke above used the widened treatment.
+
+### Three-seed RunPod comparison at `3f1d731a5f`
+
+On 2026-11-18 UTC, Etude quoted all six 250-update runs on RunPod RTX 3090s
+at USD0.50/hour. The first wave quoted USD17.12. The six seven-hour jobs
+had a combined USD27.00 job cap under the launcher's USD28.17 training limit.
+This leaves the earlier Lium rental's USD5.33 cap and USD1.50 for evaluation
+within USD35. RunPod offered cpu32 at USD0.96/hour. Single-slot and two-slot
+RTX 4000 Ada quotes both returned no available machines.
+
+Launch `090cf96c199e` requested seed 21501 on single-slot RTX 3090s.
+RunPod had no machine at admission. Etude started neither arm. The
+two-slot quote for seed 21502 also returned no capacity. These attempts
+produced no solo or packed throughput measurements.
+
+Etude next quoted USD21.99 for the first wave of six single-slot RunPod L4
+jobs at USD0.69/hour. Every job kept the 250-update target with a 6.5-hour
+wall limit and a USD4.67 cap, including startup. The six job caps total
+USD28.02.
+
+Launch `2896671bcf5f` admitted all six runs. The four machine rental ceilings
+Etude actually recorded were USD6.90, USD7.65, USD9.14 and USD13.63
+(USD37.32 combined). The recorded maximum exposure exceeded the training
+allowance even before evaluation. The launch was cancelled. Etude confirmed
+all four L4 machines deleted by 07:30 UTC and estimated their respective
+costs at USD0.14, USD0.17, USD0.15 and USD0.16. The earlier Lium statement
+remains unresolved.
+
+| Seed | Last launcher update, off / on | Updates with stored metrics, off / on |
+| --- | --- | --- |
+| 21501 | 4 / 2 | 3 / 1 |
+| 21502 | 13 / none | 12 / none |
+| 21503 | 8 / none | 7 / none |
+
+Run addresses are `mana_taps/mana-taps-w64-{off,on}@{seed}`. All 23 sealed
+training rows are in the [published CSV](../data/mtg385/launch-2896671bcf5f/training.csv).
+At its first update the on policy chose priority taps on 38.6% of surfaced
+decisions. Only initialization checkpoints reached storage. There is no
+scored trained comparison or GPU packing measurement from this launch.
