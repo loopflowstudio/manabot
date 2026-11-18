@@ -15,10 +15,9 @@ from pydantic import TypeAdapter
 
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
 from manabot.reports.update_metrics import scalar_updates
-from manabot.training.corpus import DECK_TABLE, SETTINGS_TABLE
 from manabot.training.decks import CorpusDeck, DeckCard, corpus_decks
 from manabot.training.rollout.self_play import SelfPlayOutcome
-from manabot.training.update_metrics import OUTCOME_TABLE, ROSTER_TABLE
+from manabot.training.update_metrics import DECK_TABLE, OUTCOME_TABLE, SETTINGS_TABLE
 from managym import Deck
 from managym.statistics import read_statistics
 
@@ -38,7 +37,7 @@ def bound_catalog(digest: str, location: str, current: WriterCatalog) -> WriterC
 def roster(data: RunData) -> list[CorpusDeck]:
     """Resolve all declared population entries, including decks never played."""
     rows = recorded_deck_cards(data)
-    return historical_roster(data) if rows is None else roster_from_cards(rows)
+    return declared_roster(data) if rows is None else roster_from_cards(rows)
 
 
 def recorded_deck_cards(data: RunData) -> list[DeckCard] | None:
@@ -57,10 +56,8 @@ def roster_from_cards(rows: list[DeckCard]) -> list[CorpusDeck]:
     ]
 
 
-def historical_roster(data: RunData) -> list[CorpusDeck]:
-    for table in data.read_table(ROSTER_TABLE, "updates"):
-        if table.x == 0:
-            return TypeAdapter(list[CorpusDeck]).validate_python(table.rows)
+def declared_roster(data: RunData) -> list[CorpusDeck]:
+    """Read the decks of a run that predates `DECK_TABLE` from its declaration."""
     config = (
         json.loads(data.file.config_json) if data.file and data.file.config_json else {}
     )
@@ -277,7 +274,7 @@ def add_run(
                 [*identity, rows],
             )
     else:
-        population = historical_roster(data)
+        population = declared_roster(data)
     cards = {row["deck"]: row["cards"] for row in population}
     games = games_by_update(data, through)
     matchups = [
@@ -302,8 +299,6 @@ def add_run(
         add_card_statistics(db, statistics, games, through)
     tables = data.read_table(SETTINGS_TABLE, "updates")
     if not tables:
-        if rows is not None:
-            raise UnknownCoverage(f"{data.name}: missing recorded training settings")
         db.execute("insert into settings(experiment, run) values (?, ?)", identity)
         return None
     (table,) = tables

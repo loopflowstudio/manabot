@@ -8,10 +8,10 @@ import pytest
 from manabot.eval.training_corpus import UnknownCoverage, training_corpus
 from manabot.model.writer_catalog import writer_catalog
 from manabot.recipes.builders import gray_ogre_self_play
-from manabot.training.decks import corpus_decks
+from manabot.training.decks import deck_cards
 from manabot.training.loops.self_play import CLOCKS, self_play
 from manabot.training.rollout.self_play import SelfPlayCounter
-from manabot.training.update_metrics import OUTCOME_TABLE, ROSTER_TABLE, metric_row
+from manabot.training.update_metrics import DECK_TABLE, OUTCOME_TABLE, metric_row
 from managym import Deck
 from managym.statistics import CardCounts, GameStatistics
 from tests.fixtures.training_records import recording
@@ -40,7 +40,7 @@ def test_corpus_queries_use_completed_games_through_update(
         experiment="corpus", directory=tmp_path, clocks=["updates"], config=config
     ) as run:
         if not historical:
-            run.log_table(ROSTER_TABLE, corpus_decks(decks, catalog), updates=0)
+            run.log_table(DECK_TABLE, deck_cards(decks, catalog), updates=0)
         counter = SelfPlayCounter()
         for update, pair in enumerate([(island, island), (forest, island)], 1):
             counter.record((pair[0].identity, pair[1].identity), None)
@@ -102,9 +102,7 @@ def test_logged_empty_outcomes_are_distinct_from_missing_evidence(
 ) -> None:
     with recording(experiment="empty", directory=tmp_path, clocks=["updates"]) as run:
         run.log_table(
-            ROSTER_TABLE,
-            corpus_decks([Deck({"Island": 10})], writer_catalog()),
-            updates=0,
+            DECK_TABLE, deck_cards([Deck({"Island": 10})], writer_catalog()), updates=0
         )
         run.log_table(OUTCOME_TABLE, [], updates=1)
         run.log({"loss": 1}, updates=2)
@@ -120,7 +118,7 @@ def test_card_statistics_count_terminal_games_at_the_outcome_update(
     island = Deck({"Island": 10})
     catalog = writer_catalog()
     with recording(experiment="cards", directory=tmp_path, clocks=["updates"]) as run:
-        run.log_table(ROSTER_TABLE, corpus_decks([island], catalog), updates=0)
+        run.log_table(DECK_TABLE, deck_cards([island], catalog), updates=0)
         counter = SelfPlayCounter()
         for update in (1, 2):
             counter.record((island.identity, island.identity), 0)

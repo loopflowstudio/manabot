@@ -8,13 +8,10 @@ from etude.train.tracking import TrainingRun
 
 from manabot.model.writer_catalog import writer_catalog
 from manabot.training.decks import deck_cards
-from manabot.training.update_metrics import OUTCOME_TABLE
+from manabot.training.update_metrics import DECK_TABLE, OUTCOME_TABLE, SETTINGS_TABLE
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import Collector
-
-DECK_TABLE = "training_deck_cards"
-SETTINGS_TABLE = "training_settings"
 
 
 class ParentCheckpoint(TypedDict):

@@ -340,14 +340,6 @@ def self_play(
             publish(settings, run, learner, ema, counts)
         with self_play_games(settings, run, counts) as collector:
             if counts.updates == 0:
-                parent = None
-                if settings.pretrained is not None:
-                    record = load_metadata(settings.pretrained)
-                    parent = ParentCheckpoint(
-                        run=(record.get("source") or {}).get("etude_run"),
-                        update=(record.get("bc") or {}).get("update"),
-                        sha256=file_sha256(settings.pretrained),
-                    )
                 log_corpus_setup(
                     run,
                     collector,
@@ -356,7 +348,9 @@ def self_play(
                     disclosure=settings.deck_source.decklists
                     if settings.deck_source
                     else collector.match.config.decklists,
-                    parent=parent,
+                    parent=parent_checkpoint(settings.pretrained)
+                    if settings.pretrained is not None
+                    else None,
                     updates=0,
                     **clocks(counts),
                 )

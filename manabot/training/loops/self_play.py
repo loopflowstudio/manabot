@@ -2,7 +2,8 @@
 
 `SelfPlay` describes the learning problem; `Counts` is the cumulative work
 registered with the run. `step` collects and learns in place. `self_play`
-registers raw weights, Adam, EMA and counts, then publishes immutable policies for evaluation. No native game or RNG is persisted.
+registers raw weights, Adam, EMA and counts, then publishes immutable
+policies for evaluation. No native game or RNG is persisted.
 
 Model initialization uses the run seed s. At starting update u, native streams
 use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
@@ -344,6 +345,16 @@ def pretrained_weights(
     if any(not torch.isfinite(v).all() for v in weights.values()):
         raise ValueError("pretrained policy contains nonfinite tensors")
     return weights
+
+
+def parent_checkpoint(path: Path) -> ParentCheckpoint:
+    """Identify the published policy a run starts from by its writer and bytes."""
+    record = load_metadata(path)
+    return ParentCheckpoint(
+        run=(record.get("source") or {}).get("etude_run"),
+        update=(record.get("bc") or {}).get("update"),
+        sha256=file_sha256(path),
+    )
 
 
 def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | None]:
@@ -705,14 +716,6 @@ def self_play(
             publish(settings, run, learner, ema, counts)
         with self_play_games(settings, run, counts) as collector:
             if counts.updates == 0:
-                parent = None
-                if settings.pretrained is not None:
-                    record = load_metadata(settings.pretrained)
-                    parent = ParentCheckpoint(
-                        run=(record.get("source") or {}).get("etude_run"),
-                        update=(record.get("bc") or {}).get("update"),
-                        sha256=file_sha256(settings.pretrained),
-                    )
                 log_corpus_setup(
                     run,
                     collector,
@@ -721,7 +724,9 @@ def self_play(
                     disclosure=settings.deck_source.decklists
                     if settings.deck_source
                     else collector.match.config.decklists,
-                    parent=parent,
+                    parent=parent_checkpoint(settings.pretrained)
+                    if settings.pretrained is not None
+                    else None,
                     updates=0,
                     **clocks(counts),
                 )
