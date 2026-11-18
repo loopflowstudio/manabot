@@ -2847,3 +2847,10 @@ the opponent's decision history carries almost no hand information beyond
 the public state, so a hand-prediction auxiliary loss has little to teach
 the encoder. Limits: scripted opponents, one fitting recipe, no interval on
 the differences. No arm was trained from these encoders.
+
+The same fit on 240 games that seed 39101's final GRU checkpoint played
+against itself (7,651 decisions, sampled actions) gave test log loss 0.0824
+open and 0.1031 closed from the public state, and 0.0862 and 0.0970 with
+memory: a 0.006 closed gain, none open. The result is not specific to the
+scripted heuristic, but this checkpoint still loses to that heuristic, so it
+says nothing about what a strong policy's history would carry.
