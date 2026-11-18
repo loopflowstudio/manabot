@@ -1,7 +1,4 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Old Checkpoints in New Evaluations: Concept Review</title>
-<style>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Old Checkpoints in New Evaluations: Concept Review</title><style>
 :root{color-scheme:light dark;--bg:#f5f1e9;--ink:#252b27;--muted:#5f6860;--line:#cdd2c6;--paper:#fffcf6;--accent:#356349;--code:#e9ece2;--warn:#8a4b1c;--no:#9b2f2f}
 @media (prefers-color-scheme:dark){:root{--bg:#191c1a;--ink:#e4e6df;--muted:#9ba39a;--line:#39403a;--paper:#212521;--accent:#8fc4a0;--code:#252a26;--warn:#e0a46d;--no:#ec8a8a}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}
@@ -20,85 +17,65 @@ table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}td,th{tex
 ol.q>li{margin:14px 0}ol.q ol{list-style:lower-alpha;margin-top:4px}
 .scroll{overflow-x:auto}
 </style></head><body><main>
-<div class="meta">MTG-353 · concept review of the built change, nobody present · 2026-11-18 · PR #558 at 46dac2b9e1 against base 44f76fe987<br>
-Read: scratch/plan.md, the diff of docs/evaluation.md, docs/observation-and-model.md, WORLDS.md, AGENTS.md, manabot/eval/{admission,agents,local,match,evaluate,models}.py, manabot/sim/registration.py, manabot/model/world.py, manabot/policy/{checkpoint,binding}.py. No tests were run in this pass.</div>
-
+<p class="meta">MTG-353 · concept review of the built change, third pass, nobody present · 2026-11-18 · branch at d4d74a2ff3 against main<br>Read: scratch/plan.md, scratch/qa.html (round 4), manabot/sim/registration.py, manabot/eval/{admission,agents}.py, docs/evaluation.md, docs/observation-and-model.md, README.md, WORLDS.md, and a repository search for the removed names. No tests were run in this pass; QA round 4 reports 42 passing in the three evaluation test files.</p>
 <h1>Seating an old checkpoint in a new evaluation</h1>
-<p class="lead">Area taken: what a person does with a checkpoint after the revision that wrote it has moved on. That is loading it, seating it in an evaluation, and reading the record that evaluation leaves. I took the whole change against its base, because the 2026-11-18 direction narrowed the PR to exactly this.</p>
-<p class="lead"><b>The build matches the revised plan.</b> <code>manabot recheck</code> and strength references are gone, the world number no longer gates anything, the comparison rules are a short section in the evaluation guide, and an admitted checkpoint's record carries its writer and stored-program count. Two small things are off: the new record field has a name that already means something else, and one doc paragraph describes a report that no longer exists.</p>
-<p class="muted"><span class="tag built">built</span> is in the PR. <span class="tag prop">proposed</span> is not.</p>
+<p class="lead">Area taken: what a person does with a checkpoint after the revision that wrote it has moved on: loading it, seating it in an evaluation, and reading the record that evaluation leaves. The 2026-11-18 direction narrowed the PR to exactly this, so the whole change against main is the area.</p>
+<p><strong>Outcome: nothing to change.</strong> The three corrections from the previous pass are built, and the concepts a person meets now have one name each in the code this PR touches. Two older mismatches remain and are larger than this work.</p>
+<p class="muted"><span class="tag built">built</span> is in the PR. <span class="tag prop">proposed</span> is not, and nothing on this page is proposed for this PR.</p>
+
+<h2>What the last pass asked for, and what is there</h2>
+<div class="scroll"><table>
+<tr><th>Asked</th><th>Observed</th><th></th></tr>
+<tr><td>Rename <code>PlayerRegistration.checkpoint_source</code> to <code>writer_revision</code></td><td><code>manabot/sim/registration.py:56</code>, both admission paths and <code>docs/evaluation.md</code> use <code>writer_revision</code>. No <code>checkpoint_source</code> remains in the registration or the two admission modules. QA round 4: a checkpoint written at d5935065d0 and evaluated at 6b928fc30c records the writer, not the running revision.</td><td class="yes">done</td></tr>
+<tr><td>The load paragraph says counts, not changed keys</td><td><code>docs/observation-and-model.md</code>: "360 stored card programs, of which 136 serialize differently". No list of keys is claimed.</td><td class="yes">done</td></tr>
+<tr><td>README stops linking a current world number</td><td>"443 cards are eligible for deck entry", linked to the pool. QA matched 443 against <code>managym.content_pool("world")</code>.</td><td class="yes">done</td></tr>
+</table></div>
 
 <h2>One interaction, walked</h2>
 <p>"Seat last month's frontier player against today's heuristic on today's decks."</p>
-<div class="two">
-<div><h3>Normal path <span class="tag built">built</span></h3>
+<div class="two"><div><h3>Normal path <span class="tag built">built</span></h3>
 <pre>manabot.eval.local --checkpoint final.pt
   --matchup two-decks.json --out NEW
-
 NEW/request.json  candidate:
   checkpoint_sha256  …
-  checkpoint_source  ab2b757d9…
+  writer_revision    d5935065d0…   (omitted when the file records none)
   stored_programs    360</pre>
-<p>The file is not rewritten. Cards it trained on read their stored program. Cards added since read the running catalog. The same two fields go into an Etude match's participant config.</p></div>
+<p>The file is not rewritten. Trained cards read their stored program; cards added since read the running catalog.</p></div>
 <div><h3>Failure and recovery <span class="tag built">built</span></h3>
 <pre>checkpoint is bound to the world, so it plays
 decks submitted to the world (a DeckMatchup),
 not a fixed authored setup</pre>
-<p>Recovery is one file: pass a <code>DeckMatchup</code> of two lists. QA found this case and the sentence now says the fix.</p>
-<pre>unexplained record_token key 12884914233;
+<p>Recovery is one file: a DeckMatchup of two lists.</p>
+<pre>unexplained record_token key …;
 classify it in managym/src/cards/token_renames.rs</pre>
-<p>Recovery is one reviewed line. Loader, CI and Academy give the same sentence.</p></div>
-</div>
+<p>Recovery is one reviewed line; loader, CI and Academy give the same sentence.</p>
+<p>A request shaped as main writes it, without either new field, repeats unchanged (QA round 4).</p></div></div>
 
 <h2>Do the product's concepts and the code's concepts line up?</h2>
 <div class="scroll"><table>
 <tr><th>What a person knows about</th><th>What the code has</th><th></th><th>What is wrong, if anything</th></tr>
 <tr><td>Can this checkpoint run here?</td><td><code>model_interface</code>, then binding by column name, card key and token name</td><td class="yes">yes</td><td>One answer for loading, evaluation and Academy's list.</td></tr>
-<tr><td>Did a change alter what my stored player computes?</td><td>Pinned pilots in CI; <code>record --reason</code> declares a break</td><td class="yes">yes</td><td></td></tr>
-<tr><td>Can I line these two measurements up?</td><td>A section of <code>docs/evaluation.md</code>; no tool</td><td class="yes">yes</td><td>As directed: a rule to read, with Etude's reports doing the lining up.</td></tr>
-<tr><td>Which revision wrote this participant?</td><td><code>PlayerRegistration.checkpoint_source</code>, a commit string</td><td class="no">no</td><td>One name for two ideas. Everywhere else <code>checkpoint_source</code> is the record of commit, dirty flag and Etude run. The checkpoint already calls the commit <code>writer_revision</code>.</td></tr>
-<tr><td>How many of its cards read a stored program?</td><td><code>PlayerRegistration.stored_programs</code></td><td class="yes">yes</td><td>It counts trained cards, not drifted ones. That is the plan's choice ("always assume respelling").</td></tr>
-<tr><td>What did loading move?</td><td><code>BindingReport</code>: six counts, logged at INFO</td><td class="no">no</td><td>The guide still says the report "names the 136" changed programs and holds "changed card keys". The key list was removed in <code>d5935065d0</code>; only the count remains.</td></tr>
-<tr><td>The world number</td><td><code>WORLD_VERSION</code>, a fixed label on old records</td><td class="yes">yes</td><td>Nothing gates on it moving. The top README still links "world w17" as the current world.</td></tr>
-<tr><td>A checkpoint that plays any deck, and one that plays a fixed match</td><td>"world-bound", "deck-source", "world pilot" for the first; "setup-bound", "fixed-match" for the second</td><td class="no">no</td><td>One idea under several names. Left as it is: the names predate this PR and run through training docs.</td></tr>
-<tr><td>A fixed-match checkpoint after cards are added</td><td>Whole-binding comparison; stops loading</td><td class="no">no</td><td>Larger than this work. It would take binding those checkpoints by name as well. Recorded as choice 13.</td></tr>
+<tr><td>Did a change alter what my stored player computes?</td><td>Pinned pilots in CI; <code>record --reason</code></td><td class="yes">yes</td><td></td></tr>
+<tr><td>Can I line these two measurements up?</td><td>A section of <code>docs/evaluation.md</code>; no tool</td><td class="yes">yes</td><td>A rule to read; Etude's reports do the lining up.</td></tr>
+<tr><td>Which revision wrote this participant?</td><td><code>PolicyCheckpoint.writer_revision</code> → <code>PlayerRegistration.writer_revision</code></td><td class="yes">yes</td><td>One name from the file to the record. <code>checkpoint_source</code> keeps its one meaning: commit, dirty flag and Etude run.</td></tr>
+<tr><td>How many of its cards read a stored program?</td><td><code>PlayerRegistration.stored_programs</code></td><td class="yes">yes</td><td>Counts trained cards, including unchanged ones, as the docs say.</td></tr>
+<tr><td>What did loading move?</td><td><code>BindingReport</code>: counts, logged at INFO</td><td class="yes">yes</td><td>The guide now describes counts only.</td></tr>
+<tr><td>The world number</td><td><code>WORLD_VERSION</code>, a fixed label on old records; WORLDS.md is history</td><td class="yes">yes</td><td>Nothing gates on it. "World" still means the card pool in prose, which is a different and real idea.</td></tr>
+<tr><td>A checkpoint that plays any deck, and one that plays a fixed match</td><td>"world-bound", "deck-source"; "setup-bound", "fixed-match"</td><td class="no">no</td><td>One idea under several names. Predates this PR and runs through training docs.</td></tr>
+<tr><td>A fixed-match checkpoint after cards are added</td><td>Whole-binding comparison; stops loading</td><td class="no">no</td><td>Larger than this work: it would take binding those checkpoints by name as well.</td></tr>
 </table></div>
 
-<h2>The biggest mismatch: the new record field's name</h2>
-<div class="box">
-<p>This PR adds one serialized key to every checkpoint participant's record. Once evaluations are retained with it, the spelling is frozen evidence and stays forever. It should be right before the first one is.</p>
-</div>
-<div class="two">
-<div><h3>Before <span class="tag built">built</span></h3>
-<pre>checkpoint["source"] =
-  {commit, dirty, etude_run}   # checkpoint_source()
-PolicyCheckpoint.writer_revision -> commit
-PlayerRegistration.checkpoint_source = commit</pre>
-<p>A reader who knows <code>checkpoint_source</code> expects the run and dirty flag and finds a bare commit.</p></div>
-<div><h3>After <span class="tag prop">proposed</span></h3>
-<pre>checkpoint["source"] =
-  {commit, dirty, etude_run}   # checkpoint_source()
-PolicyCheckpoint.writer_revision -> commit
-PlayerRegistration.writer_revision = commit</pre>
-<p>One name for the commit, from the checkpoint to the record. Old registrations still omit it and hash as before.</p></div>
-</div>
-<p>Tested against the three paths. Normal: the count and revision still land in <code>request.json</code> and the Etude config. Failure: a checkpoint with no recorded source still gives <code>None</code> and the key is omitted. Recovery: a retained registration without the key validates and hashes unchanged, since the field is excluded when absent. No record published so far carries the key; the 160-game measurement predates it.</p>
-<p>Choice made for review: rename the field. Passed over: storing the whole source record under <code>checkpoint_source</code>, because the plan asks for the revision and one count, and the run identity already lives in Etude's own records.</p>
-
-<h2>What goes into the plan</h2>
-<ol>
-<li>Rename <code>PlayerRegistration.checkpoint_source</code> to <code>writer_revision</code> in the model, both admission paths, the tests and <code>docs/evaluation.md</code>.</li>
-<li>Correct the load paragraph in <code>docs/observation-and-model.md</code>: the report holds counts, and no list of changed keys.</li>
-<li>Change the top README's "world w17" link so it does not present a current world number.</li>
-</ol>
+<h2>The biggest remaining mismatch</h2>
+<div class="box"><p>"World-bound" names the kind of checkpoint that survives change, in a PR whose point is that the world number no longer matters. The refusal a person reads says "checkpoint is bound to the world". It is accurate (the world pool), and it reads oddly beside "there is no world number".</p></div>
+<div class="two"><div><h3>Before <span class="tag built">built</span></h3><pre>world-bound / deck-source / world pilot
+setup-bound / fixed-match</pre></div>
+<div><h3>After <span class="tag prop">proposed, not this PR</span></h3><pre>any-deck checkpoint
+fixed-match checkpoint</pre><p>One pair of words across docs and messages. Serialized keys stay as they are. It touches training docs, Academy text and error sentences, so it is its own change.</p></div></div>
 
 <h2>Questions</h2>
 <ol class="q">
-<li>The record field for the writing commit:
-<ol><li><code>writer_revision</code> (chosen for review)</li><li>keep <code>checkpoint_source</code></li><li>store the whole source record, with dirty flag and Etude run</li></ol></li>
-<li>The names for the two kinds of checkpoint:
-<ol><li>leave them (chosen)</li><li>settle on one pair across docs in a later change</li></ol></li>
-<li>Fixed-match checkpoints after cards are added:
-<ol><li>leave them refusing (chosen; outside this PR)</li><li>file a Task to bind them by name</li></ol></li>
+<li>The names for the two kinds of checkpoint:<ol><li>leave them in this PR (chosen)</li><li>settle on one pair across docs and messages in a later change</li></ol></li>
+<li>Fixed-match checkpoints after cards are added:<ol><li>leave them refusing (chosen; outside this PR)</li><li>file a Task to bind them by name</li></ol></li>
+<li>Three small things QA found that predate the branch (no <code>--heuristic-actions</code> on the local CLI, the <code>evaluation.json</code> location in the quick-evaluation docs, the workflow coverage assertion):<ol><li>leave them out of this PR (chosen)</li><li>fix the doc location here</li></ol></li>
 </ol>
 </main></body></html>

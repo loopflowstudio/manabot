@@ -119,6 +119,14 @@ The native pool returned 443 eligible definitions when checked for the README.
 The three requested evaluation test files passed (42 tests).
 Next step is to gate and publish for human review. No landing or paid run.
 
+## Concept review, third pass, 2026-11-18 — nothing to change
+
+The three corrections were checked in the tree at d4d74a2ff3: the registration
+and both admission paths say `writer_revision`, the load paragraph gives counts
+only, and the README links the 443-card pool with no world number. QA round 4
+ran them. No further change is asked of this PR. Next is gate and publish for
+human review.
+
 Left as they are and shown on `scratch/concept-review.html`: the several
 names for the two kinds of checkpoint (world-bound, deck-source; setup-bound,
 fixed-match), and fixed-match checkpoints refusing after cards are added.
