@@ -18,6 +18,16 @@ interface Layout {
   battlefields: number; rows: number; offers: number | null; outside: string[];
 }
 
+/**
+ * The layout once the board has settled: the hand strip's height eases
+ * (`--motion-move`) and the rows resize behind it, so a card is off its half
+ * only if it still is after the move.
+ */
+async function settled(page: Page): Promise<Layout> {
+  await expect.poll(async () => (await layout(page)).outside, { timeout: 2_000 }).toEqual([]);
+  return layout(page);
+}
+
 /** What a person would notice breaking: page scroll, a cramped board, a card off its half, a missing choice. */
 async function layout(page: Page): Promise<Layout> {
   return page.evaluate(() => {
@@ -108,7 +118,7 @@ for (const viewport of VIEWPORTS) {
       const { commands, frame } = await denseTable(page, 40);
       await page.evaluate(() => document.fonts.ready);
       await expect(page.getByTestId('action-option')).toHaveCount(40);
-      expectFits(await layout(page), 40);
+      expectFits(await settled(page), 40);
       // Every offer's card is on the board, outlined as acting.
       for (const id of new Set(frame.offers.map(offer => offer.focus[0]))) {
         await expect(page.locator(`.board [data-testid=table-card][data-object-id="${id}"]`).first()).toBeVisible();
@@ -124,7 +134,7 @@ for (const viewport of VIEWPORTS) {
       await expect.poll(() => commands.length).toBe(1);
       expect(commands[0]).toMatchObject({ expected_revision: revision, offer_id: first.id, match_id: frame.match_id, prompt_id: frame.prompt!.id });
       await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(revision + 1));
-      expectFits(await layout(page), 40);
+      expectFits(await settled(page), 40);
     });
   }
 }
@@ -166,7 +176,7 @@ test('a seeded game keeps the table whole at 1280×800', async ({ page }, testIn
     // would tap; measure the table at rest.
     await page.mouse.move(640, 4);
     await page.waitForTimeout(250);
-    expectFits(await layout(page), offers);
+    expectFits(await settled(page), offers);
     checked += 1;
     const labels = await rows.allTextContents();
     let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast |Attack with /.test(label));
