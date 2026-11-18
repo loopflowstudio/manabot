@@ -41,6 +41,8 @@
     side?: 'you' | 'opponent';
     /** It attacked, blocked, was dealt damage or was targeted since your last move. */
     touched?: boolean;
+    /** The opponent's move being read out is about this card. */
+    beat?: boolean;
     /** Damage it was dealt since your last move, shown as it lands. */
     dealt?: number;
     /** Its place in the automatic payer's plan: "would tap, for {U}". */
@@ -53,7 +55,7 @@
 
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, dealt = 0, planned = null, count = null, onactivate, onpreview,
+    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, onactivate, onpreview,
   }: Props = $props();
 
   // At a recorded choice: the policy's mass on this card's offers, and whether one was played.
@@ -133,6 +135,7 @@
     class:asked
     class:attacking={permanent?.attacking}
     class:touched
+    class:beat
     class:token={permanent?.is_token}
     class:planned={planned !== null}
     data-testid="table-card"
@@ -250,6 +253,7 @@
   }
   .policy[data-chosen='true'] { color: var(--bg-surface); background: var(--text); border-color: var(--text); }
   .tcard:not(.landscape) .policy { bottom: calc(var(--bar) + 3px); }
+  .tcard.beat { box-shadow: 0 0 0 3px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent); transition: box-shadow 160ms ease-out; }
   .tcard.asked { box-shadow: 0 0 0 2px var(--accent), 0 8px 18px rgb(20 14 8 / 0.35); transform: translateY(-8px); }
 
   /* Planned payment: dashed, and what tapping it adds. Distinct from the solid "legal" outline. */

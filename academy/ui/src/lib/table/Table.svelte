@@ -24,6 +24,7 @@
   import Inspect from './Inspect.svelte';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
+  import { BEAT_MS, beatsFor, type Beat } from './beats';
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, type OfferEvidence } from './replay';
   import { paymentPlan, previewable } from './payment';
@@ -153,6 +154,31 @@
   const book = $derived(nameBook(since && sinceGiven === undefined ? [since.frame, frame] : [frame], since && sinceGiven === undefined ? log.slice(since.logLength) : []));
   const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players, book));
   const lines = $derived(tableLines(frame, presentation.events, recent.resolved, sinceRevision));
+
+  // ———————————————— The opponent's moves, one beat at a time
+
+  // Live play only (a recording has its transport). Facts already on screen
+  // when the table opens are history, not news.
+  let shownSeq = $state(untrack(() => presentation.events.at(-1)?.seq ?? -1));
+  let beats = $state.raw<Beat[]>([]);
+  let beatAt = $state(0);
+  const beat = $derived(beats[beatAt] ?? null);
+  const beatSubjects = $derived(new Set(beat?.subjects ?? []));
+  $effect(() => {
+    const facts = recent.facts;
+    if (connection == null) return;
+    untrack(() => {
+      const fresh = prefersReducedMotion() ? [] : beatsFor(facts, shownSeq);
+      shownSeq = Math.max(shownSeq, facts.at(-1)?.seq ?? -1, presentation.events.at(-1)?.seq ?? -1);
+      if (fresh.length) { beats = fresh; beatAt = 0; }
+    });
+  });
+  $effect(() => {
+    if (!beat) return;
+    const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS);
+    return () => clearTimeout(timer);
+  });
+  function skipBeats(): void { beats = []; beatAt = 0; }
   const moves = $derived(movesGiven ?? moveList(log, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion
@@ -227,6 +253,7 @@
 
   function act(placed: PlacedOffer): void {
     if (!live) return;
+    skipBeats();
     menuAt = null;
     hush();
     since = { revision: frame.revision, frame, logLength: log.length };
@@ -353,7 +380,9 @@
 
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
-    if (event.key === 'Escape') { menuAt = null; zoneAt = null; hovered = null; stopDwell(); return; }
+    if (event.key === 'Escape') { menuAt = null; zoneAt = null; hovered = null; stopDwell(); skipBeats(); return; }
+    // While the opponent's moves are read out, Space ends the reading; the next Space acts.
+    if (event.key === ' ' && beat && !ownsSpace(event.target)) { event.preventDefault(); skipBeats(); return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
@@ -408,16 +437,16 @@
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="half you" aria-label="Your battlefield">
       <Plate player={projection.agent} name={you.name} deck={you.deck} offers={view.you.offers} {live} damage={recent.damage.players.get(projection.agent.player_index) ?? 0}
         active={yourTurn} side="you" onactivate={element => activate(you.name, view.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="up" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="hand" aria-label={`Your hand, ${view.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
@@ -433,6 +462,13 @@
       </div>
     </section>
 
+    {#if beat && !result}
+      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={skipBeats}
+        title="Skip (Space)">
+        <span class="beat-text">{beat.text}</span>
+        <span class="beat-count type-caption">{beatAt + 1} of {beats.length} · Space to skip</span>
+      </button>
+    {/if}
     {#if result}
       <!-- Over the board, not over the screen: the final position stays readable around it. -->
       <section class="result-card" class:folded={resultFolded} aria-label="Game result" data-testid="result-card">
@@ -586,6 +622,15 @@
     animation: appear var(--motion-move) ease-out;
   }
   @keyframes appear { from { opacity: 0; } }
+  /* A beat reads out one of the opponent's moves over the top of the board. */
+  .beat {
+    position: absolute; z-index: 40; left: 50%; top: 10px; transform: translateX(-50%); max-width: min(560px, 80%);
+    display: grid; gap: 2px; justify-items: center; padding: 8px 16px 6px; border: 1px solid var(--border-strong);
+    border-radius: 10px; background: color-mix(in srgb, var(--bg-surface) 94%, transparent); box-shadow: var(--shadow-raised);
+    text-align: center; cursor: pointer;
+  }
+  .beat-text { font-size: 15px; line-height: 1.3; color: var(--text); }
+  .beat-count { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .result-card.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; padding: 6px; }
   .result-card .fold { justify-self: end; color: var(--text-secondary); }
   .result-card .fold:hover { color: var(--text); }

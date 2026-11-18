@@ -396,7 +396,18 @@ class Recording:
                 for child in value:
                     retain(child)
 
-        retain(event.kind.model_dump(mode="json"))
+        kind = event.kind.model_dump(mode="json")
+        retain(kind)
+        if kind["kind"] == "cast":
+            key = f"{kind['object']['entity']}:{kind['object']['incarnation']}"
+            if key not in labels["objects"]:
+                # A spell from a hidden hand that resolved within its transition
+                # has no object on either board; the public card it became
+                # (on the stack, a permanent, in a graveyard) names it.
+                arrived = _new_cards(before, after, _side_of(after, kind["controller"]))
+                if arrived["spells"]:
+                    labels["objects"][key] = arrived["spells"][0]
+                    labels["stacks"].setdefault(str(kind["stack"]), arrived["spells"][0])
         return labels
 
     def study_source(self, key: str) -> dict[str, Any]:

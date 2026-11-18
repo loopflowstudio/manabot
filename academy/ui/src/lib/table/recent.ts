@@ -60,6 +60,8 @@ export interface RecentFact {
   text: string;
   /** The card id of the spell a cast fact names. */
   spell: number | null;
+  /** The objects on the table the fact is about (attackers, blockers, targets, what was dealt damage), by id. */
+  subjects: number[];
 }
 
 export interface RecentView {
@@ -221,7 +223,9 @@ export function recentView(
     if (event.from_revision < since) return;
     const labels = labelsAt(index);
     const kind = event.kind;
-    const fact = (by: Side | null, text: string, spell: number | null = null): void => { view.facts.push({ seq: event.seq, by, text, spell }); };
+    const fact = (by: Side | null, text: string, spell: number | null = null, subjects: number[] = []): void => {
+      view.facts.push({ seq: event.seq, by, text, spell, subjects });
+    };
     switch (kind.kind) {
       case 'cast': {
         const by = playerSide(frame, kind.controller) ?? 'opponent';
@@ -238,14 +242,18 @@ export function recentView(
         if (kind.source.kind === 'stack') casts.get(kind.source.id)?.targets.push(target);
         const last = view.facts.at(-1);
         if (last) last.text += `${last.text.includes(', targeting ') ? ' and ' : ', targeting '}${target}`;
-        if (kind.target.kind === 'object') view.touched.add(kind.target.id.entity);
+        if (kind.target.kind === 'object') {
+          view.touched.add(kind.target.id.entity);
+          last?.subjects.push(kind.target.id.entity);
+        }
         break;
       }
       case 'resolved':
         break;
       case 'damage': {
         const source = kind.source ? nameOf(kind.source, labels, frame, names, book) : 'An effect';
-        fact(null, `${source} dealt ${kind.amount} to ${nameOf(kind.target, labels, frame, names, book)}`);
+        fact(null, `${source} dealt ${kind.amount} to ${nameOf(kind.target, labels, frame, names, book)}`, null,
+          [kind.source, kind.target].flatMap(subject => subject?.kind === 'object' ? [subject.id.entity] : []));
         if (kind.target.kind === 'object') {
           view.touched.add(kind.target.id.entity);
           view.damage.objects.set(kind.target.id.entity, (view.damage.objects.get(kind.target.id.entity) ?? 0) + kind.amount);
@@ -262,21 +270,21 @@ export function recentView(
         const same = next?.kind === 'died' && next.objects.map(key).join() === kind.objects.map(key).join();
         if (kind.kind === 'destroyed' && same) break;
         const dead = kind.objects.map(object => objectName(object, labels, book) ?? 'a permanent');
-        fact(null, `${list(dead)} ${kind.kind === 'died' ? 'died' : 'was destroyed'}`);
+        fact(null, `${list(dead)} ${kind.kind === 'died' ? 'died' : 'was destroyed'}`, null, kind.objects.map(object => object.entity));
         break;
       }
       case 'attack_group': {
         const attackers = kind.attackers.map(object => objectName(object, labels, book) ?? 'a creature');
         const owner = kind.defender.kind === 'player' ? playerSide(frame, kind.defender.id) : null;
         const by: Side | null = owner === 'you' ? 'opponent' : owner === 'opponent' ? 'you' : null;
-        fact(by, `${sideName(by)} attacked with ${list(attackers)}`);
+        fact(by, `${sideName(by)} attacked with ${list(attackers)}`, null, kind.attackers.map(object => object.entity));
         kind.attackers.forEach(object => view.touched.add(object.entity));
         break;
       }
       case 'blocked': {
         const attacker = objectName(kind.attacker, labels, book) ?? 'an attacker';
         const blockers = kind.blockers.map(object => objectName(object, labels, book) ?? 'a creature');
-        fact(null, `${list(blockers)} blocked ${attacker}`);
+        fact(null, `${list(blockers)} blocked ${attacker}`, null, [kind.attacker, ...kind.blockers].map(object => object.entity));
         [kind.attacker, ...kind.blockers].forEach(object => view.touched.add(object.entity));
         break;
       }

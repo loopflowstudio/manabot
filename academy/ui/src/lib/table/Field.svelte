@@ -16,6 +16,8 @@
     asked: Set<number>;
     /** Permanents that acted or were acted on since your last move. */
     touched: Set<number>;
+    /** Objects the opponent's move being read out is about. */
+    beat?: Set<number>;
     /** Damage dealt to each permanent since your last move. */
     damage: Map<number, number>;
     /** Sources the automatic payer would tap, by permanent id. */
@@ -29,7 +31,7 @@
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, damage, planned, unpiled, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
+  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -73,6 +75,7 @@
               {live}
               asked={asked.has(item.permanent.id)}
               touched={touched.has(item.permanent.id)}
+              beat={beat.has(item.permanent.id)}
               dealt={damage.get(item.permanent.id) ?? 0}
               planned={planned?.get(item.permanent.id) ?? null}
               side={toward === 'up' ? 'you' : 'opponent'}
