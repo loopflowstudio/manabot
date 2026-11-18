@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 // Real native admission; no mocked card registry or setup service.
 test('correct a file, start a novel deck and reconnect to its pending decision', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByText('Import decklist files', { exact: true }).click();
   await page.getByLabel('Use imported decks for the next game').check();

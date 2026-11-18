@@ -653,6 +653,8 @@ export interface TrainedOpponent {
   policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
+  /** How it decides: "scripted", "checkpoint w17", "search". */
+  kind?: string;
   producer: string;
   group: string;
   details: { label: string; value: string }[];

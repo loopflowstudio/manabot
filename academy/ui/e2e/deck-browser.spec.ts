@@ -17,7 +17,7 @@ test('Watch uses the same browser to assign both bot seats', async ({ page }) =>
 });
 
 test('browse every exact deck and Lesson pool, choose both seats, and keep a running game intact', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByText('Browse decks and cards',{exact:true}).click();
   const browser = page.getByTestId('deck-browser');

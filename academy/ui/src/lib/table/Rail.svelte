@@ -41,14 +41,15 @@
     /** Why the board shows no planned taps for the payment, when the preview says. */
     paymentNote: string | null;
     notices?: Snippet;
-    result?: Snippet;
+    /** The game has ended; its result card sits over the board. */
+    over?: boolean;
     /** The docked inspect pane, when inspecting docks to the rail. */
     dock?: Snippet;
   }
 
   let {
     view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
-    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, result, dock,
+    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock,
   }: Props = $props();
 
   const context = $derived(frame.projection.decision_context);
@@ -155,8 +156,8 @@
     <p class="type-rubric whose" class:yours={live}>
       {#if thinking}<i class="thinking" aria-hidden="true"></i><span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
     </p>
-    {#if result}
-      {@render result()}
+    {#if over}
+      <p class="line type-title text-ink" data-testid="decision-prompt">Game over. The result is over the board.</p>
     {:else}
       {#if interrupted}
         <p class="type-annotation text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>

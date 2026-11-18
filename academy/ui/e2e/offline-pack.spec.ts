@@ -83,7 +83,7 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
   });
 
   const startedAt = Date.now();
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });

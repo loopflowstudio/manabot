@@ -31,7 +31,7 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
     const payload = JSON.parse(String(event.payload));
     if (payload.type === 'command_outcome') outcomes.push(payload);
   }));
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await expect(page.getByTestId('opponent-select')).toHaveValue('search-64');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
@@ -56,7 +56,7 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   for (const seat of ['Seat 1', 'Seat 2']) {
     await expect(page.getByRole('combobox', { name: `${seat} bot`, exact: true }).locator('option')).toHaveText([
-      'Search 16', 'Search 64', 'Search 256', 'Random', 'Passive', 'Registered policy',
+      'Search 16 · search', 'Search 64 · search', 'Search 256 · search', 'Random', 'Passive · scripted', 'Registered policy',
     ]);
   }
   await expect(page.getByText('No policies registered on this server. Supply a Python policy factory or a saved specification.').first()).toBeVisible();

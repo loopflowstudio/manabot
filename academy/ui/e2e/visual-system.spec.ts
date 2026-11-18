@@ -60,7 +60,7 @@ async function palette(page: Page): Promise<Palette> {
 
 test('Sepia Etude parchment palette and typography resolve in light mode', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await page.evaluate(() => document.fonts.ready);
 
   expect(await palette(page)).toEqual(light);
@@ -76,7 +76,7 @@ test('Sepia Etude parchment palette and typography resolve in light mode', async
 
 test('the library-after-dark palette lifts Mountain red for dark mode', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.goto('/');
+  await page.goto('/?setup=1');
 
   expect(await palette(page)).toEqual(dark);
   // The banner is a fixed rich world in both modes; the brand is literal ivory.
@@ -89,7 +89,7 @@ test('the library-after-dark palette lifts Mountain red for dark mode', async ({
 
 test('card name plate stays legible on the light palette', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game' }).first().click();
@@ -108,7 +108,7 @@ test('card name plate stays legible on the light palette', async ({ page }) => {
 
 test('touch controls meet the shared 44px target', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/?setup=1');
 
   const newGame = page.getByRole('button', { name: 'Start game' }).first();
   expect((await newGame.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);

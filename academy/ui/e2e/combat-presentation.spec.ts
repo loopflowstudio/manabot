@@ -164,7 +164,7 @@ async function installCombatAuthority(page: Page, commands: Command[]): Promise<
 
 async function startCombat(page: Page, commands: Command[]): Promise<void> {
   await installCombatAuthority(page, commands);
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');

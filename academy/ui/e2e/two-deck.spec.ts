@@ -48,7 +48,7 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
   test.setTimeout(600_000);
   const consoleErrors = collectConsoleErrors(page);
 
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });

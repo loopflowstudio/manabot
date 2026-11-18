@@ -104,6 +104,7 @@ from .opponent import (
     Opponent,
     catalog_opponent,
     opponent_catalog,
+    opponent_kind,
     policy_registry,
 )
 from .play_session import (
@@ -2883,14 +2884,20 @@ def _live_decision_summaries(record: SessionRecord) -> list[dict[str, Any]]:
 
 
 def _table_opponent_label(record: SessionRecord) -> str | None:
+    """The opponent's name and how it decides: "Search 64 · search",
+    "Heuristic · scripted", "<checkpoint> · checkpoint w17"."""
     trace = record.game.trace
     if trace is None:
         return None
     config = trace.config
     if config.villain_type == "search":
-        return f"Search {config.villain_sims}"
+        return f"Search {config.villain_sims} · search"
     if config.opponent is not None:
-        return f"{config.opponent['name']} · {config.opponent['sha256'][:10]}"
+        policy = (config.opponent_checkpoint or {}).get("policy")
+        kind = opponent_kind(policy) if isinstance(policy, dict) else None
+        return " · ".join(filter(None, (config.opponent["name"], kind)))
+    if config.villain_type == "passive":
+        return "Passive · scripted"
     return config.villain_type.capitalize()
 
 

@@ -417,7 +417,16 @@ exported games they already wrote keep opening.
 
 ### Play a game
 
-The table opens with UR Lessons (you) against GW Allies. Open **New game**
+Open Academy (`/`) in a tab with no game and it offers your last matchup:
+**Play again** starts the same opponent, decks, play/draw seat, deal mode and
+stops as the last game this browser started, in one click. The first time, it
+offers **Play** with the default matchup, UR Lessons (you) against Search 64 ·
+search with GW Allies. **Set up a different game** opens the setup. Play again
+always starts a new session; it never resumes another tab's game. The last
+matchup is a browser preference (`academy.last-matchup` in local storage) and
+holds no credential.
+
+Open **New game**
 to use the [two-seat setup](#one-game-from-setup-to-its-recorded-decisions):
 choose controllers, decks and bot players, then select **Start game** to start
 a separate session. Replacing an active game requires confirmation that it
@@ -448,17 +457,28 @@ pending decision.
 
 Choose **Registered policy**, select the intended policy, and import your decks
 through **New game**. Check the matchup, decklist disclosure, priority stops
-and deal mode, then select **Start game**. After the game finishes, select
-**Rematch** to play again with that setup. After the next game, select
-**Swap sides**: you keep your deck and move from playing first to drawing first,
-or the reverse. Both games and the next one belong to the same session.
+and deal mode, then select **Start game**. When the game ends, a result card
+sits over the board, which stays visible around it (**Look at the board**
+folds the card to a corner). It says who won and how ("Heuristic · scripted
+went to −2 life on turn 9"), the final life totals, and one line from the move
+list: turns, and each player's spells cast and attacks. Select **Rematch** to
+play again with that setup. After the next game, select **Swap sides**: you
+keep your deck and move from playing first to drawing first, or the reverse.
+**Change opponent** opens only the opponent settings, and **Open the recording**
+opens the game in Replay. Both games and the next one belong to the same
+session.
+
+Academy names every opponent with how it decides: **Search 64 · search**,
+**Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
+the world it was trained in (**<name> · checkpoint w17**). The setup picker,
+the table, the waiting line and the result card use the same name.
 
 A trained or independent policy must first be registered with this Academy
 server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
 The provider checks that it can play the selected decks and configuration.
 Built-in opponents need no registration.
 
-The session strip at the table shows the game number, matchup, your play/draw
+The session strip in the table's **Menu** shows the game number, matchup, your play/draw
 seat and deal mode. Open its configuration details with a pointer or Tab and
 Enter to check the full Policy ID, model artifacts, runner and available search
 configuration. A familiar model name alone does not identify the execution.
@@ -582,17 +602,19 @@ on the art. Mana symbols carry their letter, and ◇ for colourless. A tapped
 permanent keeps its frame and place, its art greyed and labelled **Tapped**.
 Cards in hand keep the printed shape, with the type line under the name.
 
-Hover or focus a card to inspect it: its rules text, type line and cost,
+Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
 keywords with why it has each (printed, the effect that granted it, or
 "another ability" for a grant from another permanent's static ability), where its power and toughness come
 from (printed or set, counters, each effect by its source and duration, and
 whatever those do not explain as "other effects"), and its state. The
-inspection floats beside the card and closes when you click or the game moves
-on; **Inspect: docked** in the top bar keeps it in a pane at the top of the rail
+inspection floats beside the card and closes when the pointer leaves, when you
+click or when the game moves on; a card you just clicked does not reopen it
+until the pointer leaves and returns; **Inspect: docked** in the top bar keeps it in a pane at the top of the rail
 instead, showing the last card you inspected. The top bar shows the turn, the
 current step and the steps where your priority stops hold. The hand strip is
-as tall as it needs to be: an empty hand is a label, and a short hand or a
-crowded board leaves more height to the battlefield.
+as tall as the board can spare: an empty hand is a label, a hand on a sparse
+board grows into the height the battlefield rows would not use, and on a
+crowded board the battlefield keeps its height.
 
 The rail holds:
 

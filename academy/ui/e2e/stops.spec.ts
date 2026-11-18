@@ -101,7 +101,7 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
 }
 
 test('stops cut inputs to the same turn boundary, log keeps narrating', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -152,7 +152,7 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
 });
 
 test('F6 passes the turn from the keyboard', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });

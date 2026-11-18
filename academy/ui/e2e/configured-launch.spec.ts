@@ -43,7 +43,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
     const frame = message.recovery?.frame ?? message.frame;
     if (frame) frames.push(frame);
   }));
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();

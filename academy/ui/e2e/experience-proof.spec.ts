@@ -97,7 +97,7 @@ for (const [seed, width, height, motion] of [
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
     await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReturnAsStream' });
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
@@ -176,7 +176,7 @@ test('cold visible-art delivery receipt', async ({ page, browser }, info) => {
     const start = started.get(request);
     if (start !== undefined) delivered.push({ url: request.url(), ms: performance.now() - start, status: request.failure()?.errorText ?? 'unknown' });
   });
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();

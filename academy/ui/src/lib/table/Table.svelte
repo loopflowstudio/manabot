@@ -11,7 +11,7 @@
    * frame's revision as one Command. What happened is read from the
    * authority's presentation events; motion only shows it.
    */
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig } from '$lib/types';
@@ -27,7 +27,7 @@
   import Rail from './Rail.svelte';
   import TableCard from './TableCard.svelte';
   import { phaseTrack } from './phases';
-  import { CARD_RATIO, FRAME_RATIO, pileCounts, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, FRAME_RATIO, handStrip, pileCounts, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -176,6 +176,8 @@
     localStorage.setItem(INSPECT_KEY, inspectMode);
   }
   let hovered = $state<{ subject: Subject; x: number; y: number } | null>(null);
+  let resultFolded = $state(false);
+  $effect(() => { if (!result) resultFolded = false; });
   let docked = $state<Subject | null>(null);
 
   // A new frame replaces the cards a menu or preview was opened from.
@@ -184,6 +186,7 @@
     menuAt = null;
     hovered = null;
     pointed = null;
+    untrack(stopDwell);
   });
   $effect(() => {
     if (menuAt) menuElement?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
@@ -193,6 +196,7 @@
     if (!live) return;
     menuAt = null;
     hovered = null;
+    stopDwell();
     since = { revision: frame.revision, frame, logLength: log.length };
     onact(placed.offer);
   }
@@ -205,15 +209,34 @@
 
   function activate(title: string, offers: PlacedOffer[], element: HTMLElement): void {
     hovered = null;
+    stopDwell();
+    clicked = element;
     if (!live || !offers.length) return;
     if (offers.length === 1) { act(offers[0]); return; }
     const rect = element.getBoundingClientRect();
     menuAt = { title, offers, x: Math.min(rect.left, window.innerWidth - 300), y: rect.bottom + 6 > window.innerHeight - 160 ? Math.max(8, rect.top - 8 - 36 * offers.length - 30) : rect.bottom + 6 };
   }
 
+  // Inspect opens only when asked: after the pointer rests on a card for a
+  // moment, or at once for keyboard focus. A card just clicked stays quiet
+  // until the pointer leaves it, so a resting pointer never leaves a
+  // preview over the board; any frame change closes it.
+  const DWELL_MS = 380;
+  let dwell: ReturnType<typeof setTimeout> | null = null;
+  let clicked: HTMLElement | null = null;
+  function stopDwell(): void {
+    if (dwell !== null) clearTimeout(dwell);
+    dwell = null;
+  }
   function show(subject: Subject | null, element: HTMLElement | null): void {
-    if (!subject || !element) { hovered = null; return; }
+    stopDwell();
+    if (!subject || !element) { hovered = null; clicked = null; return; }
     docked = subject;
+    if (element === clicked) return;
+    if (element.matches(':focus-visible')) { place(subject, element); return; }
+    dwell = setTimeout(() => { dwell = null; if (element.isConnected) place(subject, element); }, DWELL_MS);
+  }
+  function place(subject: Subject, element: HTMLElement): void {
     const rect = element.getBoundingClientRect();
     const flip = rect.right + 290 > window.innerWidth - 290;
     hovered = { subject, x: flip ? rect.left - 282 : rect.right + 12, y: Math.max(48, Math.min(rect.top - 40, window.innerHeight - 440)) };
@@ -259,14 +282,15 @@
 
   // ———————————————— Hand
 
-  // The hand yields height to the board: an empty hand is a label, a short
-  // hand or a crowded board gets a lower strip, and only a full hand on a
-  // sparse board gets the full one.
+  // The hand yields height to the board: an empty hand is a label, and a hand
+  // grows only into height the board's rows would not use (`handStrip`).
   const boardCount = $derived(projection.agent.battlefield.length + projection.opponent.battlefield.length);
-  const handTrack = $derived(view.hand.length === 0 ? '30px'
-    : boardCount >= 24 ? 'clamp(92px, 14vh, 128px)'
-      : boardCount >= 14 || view.hand.length <= 2 ? 'clamp(104px, 17vh, 160px)'
-        : 'clamp(118px, 21vh, 190px)');
+  let boardHeight = $state(0);
+  const handTrack = $derived(view.hand.length === 0 ? '30px' : `${handStrip(boardHeight, [
+    { creatures: pileCounts(view.opponent.creatures), support: pileCounts(view.opponent.support), width: theirRows.width },
+    { creatures: pileCounts(view.you.creatures), support: pileCounts(view.you.support), width: yourRows.width },
+  ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
+  { min: boardCount >= 24 ? 96 : 112, max: Math.max(112, Math.min(236, Math.round(boardHeight * 0.32))), step: 8 })}px`);
   let handWidth = $state(0);
   let handHeight = $state(0);
   const handCard = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
@@ -289,7 +313,7 @@
 
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
-    if (event.key === 'Escape') { menuAt = null; zoneAt = null; hovered = null; return; }
+    if (event.key === 'Escape') { menuAt = null; zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
@@ -337,7 +361,7 @@
     </div>
   </header>
 
-  <div class="board" id="table-board" aria-label="Board" style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
+  <div class="board" id="table-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
     <section class="half opponent" aria-label={`${opponent.name}'s battlefield`}>
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
         active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
@@ -367,7 +391,19 @@
       </div>
     </section>
 
-    {#if view.tray.length}
+    {#if result}
+      <!-- Over the board, not over the screen: the final position stays readable around it. -->
+      <section class="result-card" class:folded={resultFolded} aria-label="Game result" data-testid="result-card">
+        {#if resultFolded}
+          <button type="button" class="btn btn-secondary btn-sm" onclick={() => (resultFolded = false)}>Show the result</button>
+        {:else}
+          {@render result()}
+          <button type="button" class="fold type-caption" onclick={() => (resultFolded = true)}>Look at the board</button>
+        {/if}
+      </section>
+    {/if}
+
+    {#if view.tray.length && !result}
       <section class="tray" aria-label="Choices from outside the table" data-testid="tray">
         <h2 class="type-rubric text-ink-2">{frame.prompt?.title ?? 'Choose'}</h2>
         <div class="tray-items">
@@ -393,7 +429,7 @@
   <div class="rail-slot" id="table-choices">
     <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={opponent.name} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
-      onstack={onStack} onpreviewname={previewName} {notices} {result} dock={inspectMode === 'dock' ? dock : undefined} />
+      onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined} />
   </div>
 </div>
 
@@ -415,8 +451,8 @@
     <p class="type-rubric text-ink-2">{zoneAt.title}</p>
     <ol>
       {#each zoneAt.cards as card (card.id)}
-        <li><button type="button" onmouseenter={event => previewCard(card, event.currentTarget)} onmouseleave={() => (hovered = null)}
-          onfocus={event => previewCard(card, event.currentTarget)} onblur={() => (hovered = null)}>{card.name}</button></li>
+        <li><button type="button" onmouseenter={event => previewCard(card, event.currentTarget)} onmouseleave={() => previewCard(null, null)}
+          onfocus={event => previewCard(card, event.currentTarget)} onblur={() => previewCard(null, null)}>{card.name}</button></li>
       {/each}
     </ol>
     <button type="button" class="cancel" onclick={() => (zoneAt = null)}><kbd>Esc</kbd>Close</button>
@@ -497,6 +533,17 @@
   .tray-items { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; align-items: flex-start; }
   .tray-card { display: grid; justify-items: center; gap: 6px; width: 120px; text-align: center; }
 
+  .result-card {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: 45; width: min(440px, 80%);
+    display: grid; gap: 10px; padding: 18px 20px 14px; border: 1px solid var(--border-strong); border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-surface) 94%, transparent); box-shadow: var(--shadow-raised);
+    animation: appear var(--motion-move) ease-out;
+  }
+  @keyframes appear { from { opacity: 0; } }
+  .result-card.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; padding: 6px; }
+  .result-card .fold { justify-self: end; color: var(--text-secondary); }
+  .result-card .fold:hover { color: var(--text); }
+
   .rail-slot { min-height: 0; }
 
   .menu {
@@ -522,6 +569,6 @@
 
   @media (prefers-reduced-motion: reduce) {
     .hand-card, .board { transition: none; }
-    .menu, .preview { animation: none; }
+    .menu, .preview, .result-card { animation: none; }
   }
 </style>

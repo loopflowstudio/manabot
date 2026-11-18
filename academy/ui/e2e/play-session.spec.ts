@@ -64,7 +64,7 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     page.on('request', request => {if (request.url().includes('/api/advice')) adviceRequests.push(request.url());});
     page.on('pageerror', error => errors.push(error.message));
     page.on('dialog', dialog => dialog.accept());
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await expect(page.getByRole('region', {name:'New session setup'})).toContainText('Choose your setup to start a new session.');
     await expect(page.getByRole('region', {name:'New session setup'})).not.toContainText('current session draft');
@@ -182,7 +182,7 @@ test('one seat-oriented setup starts both registered bots and retains their exac
 
 test('session storage failure leaves current Play usable with an honest warning', async ({page}) => {
   await page.addInitScript(() => Object.defineProperty(window,'sessionStorage',{get:() => {throw new DOMException('Disabled','SecurityError');}}));
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button',{name:'Start game',exact:true}).click();
@@ -199,7 +199,7 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
     await page.addInitScript(theme => localStorage.setItem('etude.theme',theme),theme);
     await page.emulateMedia({colorScheme:theme,reducedMotion:'reduce'});
     page.on('dialog',dialog => dialog.accept());
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await page.getByTestId('opponent-select').selectOption('passive');
     await page.getByRole('combobox',{name:'Deal mode',exact:true}).selectOption('repeat');
     await page.getByLabel('Seed',{exact:true}).fill('18446744073709551615');

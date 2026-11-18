@@ -99,7 +99,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
     });
   });
   await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
@@ -383,7 +383,7 @@ for (const [seed, viewport] of [
         server.send(JSON.stringify(message));
       });
     });
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption('random');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();

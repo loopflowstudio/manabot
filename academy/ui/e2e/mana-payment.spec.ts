@@ -55,7 +55,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
   test(`pay through the plan drawn on the lands at ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     await track(page);
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('table')).toHaveAttribute('data-live', 'true');

@@ -32,7 +32,7 @@ function collectConsoleErrors(page: Page): string[] {
 test('play page reacts to the full game loop', async ({ page }) => {
   const consoleErrors = collectConsoleErrors(page);
 
-  await page.goto('/');
+  await page.goto('/?setup=1');
 
   // 1. Connection badge must leave its initial "connecting"/"disconnected"
   // state. With the frozen DOM it stayed "disconnected" forever.

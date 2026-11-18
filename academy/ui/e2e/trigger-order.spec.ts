@@ -48,7 +48,7 @@ async function choose(page: Page, label: string): Promise<void> {
 for (const first of ['Callous Inspector', 'Bastion of Remembrance']) {
   test(`controller chooses ${first} first and recovers the actual order decision`, async ({ page }) => {
     await track(page);
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('table')).toBeVisible();

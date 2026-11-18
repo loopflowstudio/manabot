@@ -442,3 +442,30 @@ export function splitHalf(
   }
   return best!;
 }
+
+/**
+ * The hand strip's height, px: as tall as the hand can use while the board
+ * keeps its card sizes. Heights are tried from `max` down; the first at which
+ * no row of either half loses more than 3% of the card width it has with the
+ * shortest hand wins. A sparse board lends the hand its spare height; a
+ * crowded one keeps it. `boardHeight` is the board above and including the
+ * hand; each half's width is its rows' width.
+ */
+export function handStrip(
+  boardHeight: number,
+  halves: { creatures: number[]; support: number[]; width: number }[],
+  limits: { creatures: RowLimits; support: RowLimits; gap: number },
+  range: { min: number; max: number; step: number },
+): number {
+  if (boardHeight <= 0 || halves.some(half => half.width <= 0)) return range.min;
+  // Each half's rows: half the board above the hand, less its border and padding.
+  const sizes = (hand: number): number[] => halves.flatMap(half => {
+    const fit = splitHalf(half.creatures, half.support, half.width - 22, (boardHeight - hand) / 2 - 17, limits);
+    return [fit.creatureFit.card, fit.supportFit.card];
+  });
+  const base = sizes(range.min);
+  for (let hand = range.max; hand > range.min; hand -= range.step) {
+    if (sizes(hand).every((card, index) => card >= base[index] * 0.97)) return hand;
+  }
+  return range.min;
+}

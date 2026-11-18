@@ -5,7 +5,7 @@ test('participant access, transfer and real Study survive the simpler table', as
   const watcherContext = await browser.newContext({reducedMotion:'reduce'});
   try {
     const pilot = await pilotContext.newPage();
-    await pilot.goto('/');
+    await pilot.goto('/?setup=1');
     await expect(pilot.getByTestId('connection-badge')).toHaveText('connected');
     await pilot.getByTestId('opponent-select').selectOption('passive');
     await pilot.getByRole('button', {name:'Start game', exact:true}).click();

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { fitRow, offerPlacements, splitHalf, tableView, unpilePlanned, type PermanentItem, type TableView } from './view';
+import { FRAME_RATIO, fitRow, handStrip, offerPlacements, splitHalf, tableView, unpilePlanned, type PermanentItem, type TableView } from './view';
 
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 const PROTOCOL = new URL('../../../../../protocol/fixtures/', import.meta.url);
@@ -203,5 +203,33 @@ describe('the spell being cast', () => {
     const view = tableView(frame);
     expect(view.stack[0]).toMatchObject({ announcing: 'activated_ability', card: null, entry: { source_permanent: land.id } });
     expect(permanents(view).map(item => item.permanent.id)).toContain(land.id);
+  });
+});
+
+describe('handStrip', () => {
+  const limits = {
+    gap: 6,
+    creatures: { gap: 8, minCard: 64, maxCard: 172, maxLines: 3, ratio: FRAME_RATIO },
+    support: { gap: 6, minCard: 52, maxCard: 128, maxLines: 2, ratio: FRAME_RATIO },
+  };
+  const range = { min: 112, max: 236, step: 8 };
+  const half = (creatures: number, lands: number) => ({ creatures: Array(creatures).fill(1), support: Array(lands).fill(1), width: 830 });
+
+  it('gives a sparse board\'s spare height to the hand at 1280×800', () => {
+    expect(handStrip(720, [half(2, 4), half(3, 5)], limits, range)).toBeGreaterThanOrEqual(190);
+  });
+
+  it('keeps a crowded board\'s height for the board', () => {
+    expect(handStrip(720, [half(18, 12), half(18, 12)], limits, range)).toBeLessThanOrEqual(128);
+  });
+
+  it('never shrinks any row by more than 3% of its card width', () => {
+    const halves = [half(7, 7), half(8, 9)];
+    const hand = handStrip(720, halves, limits, range);
+    for (const h of halves) {
+      const at = (strip: number) => splitHalf(h.creatures, h.support, h.width - 22, (720 - strip) / 2 - 17, limits);
+      expect(at(hand).creatureFit.card).toBeGreaterThanOrEqual(at(range.min).creatureFit.card * 0.97);
+      expect(at(hand).supportFit.card).toBeGreaterThanOrEqual(at(range.min).supportFit.card * 0.97);
+    }
   });
 });

@@ -21,7 +21,10 @@
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
-  import { sanitizeDeckSelection } from '$lib/decks';
+  import { sanitizeDeckSelection, DECK_CHOICES } from '$lib/decks';
+  import { builtinOpponentName } from '$lib/opponent-name';
+  import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
+  import { gameResult } from '$lib/table/result';
   import {
     connect,
     disconnect,
@@ -156,10 +159,10 @@
   $effect(() => {
     if (awaitingRecovery && (gameStore.resumeToken || gameStore.resumeFailed || gameStore.tableUnavailable)) awaitingRecovery = false;
     if (!mounted || awaitingRecovery || demoName || page.url.searchParams.has('launch')) return;
-    const wantsNew = page.url.searchParams.has('setup');
+    // A setup address, or one naming decks or an opponent, opens setup; `/` alone is home.
+    const wantsNew = ['setup', 'hero', 'villain', 'opponent'].some(key => page.url.searchParams.has(key));
     untrack(() => {
       if (wantsNew) openEditor('new');
-      else if (!gameStore.observation && editor.kind === 'closed') openEditor('new');
       else if (editor.kind === 'new') editor = {kind:'closed'};
     });
   });
@@ -190,19 +193,42 @@
     if (stopsPending !== null && (gameStore.updateSeq !== stopsPending || gameStore.connection !== 'connected')) stopsPending = null;
   });
 
-  // The matchup names the players: "You (UR Lessons) vs Search 64 (GW
-  // Allies)". Selectors hide while a game runs, so the choice is stable.
-  const OPPONENT_LABELS: Record<string, string> = {
-    'search-16': 'Search 16',
-    'search-64': 'Search 64',
-    'search-256': 'Search 256',
-    random: 'Random',
-    passive: 'Passive',
-  };
+  // The opponent is named with how it decides ("Heuristic · scripted",
+  // "Search 64 · search"): the server's label once a table exists, the
+  // built-in name before. The identity keeps the digest for its description.
   const tableIdentity = $derived(gameStore.table ?? gameStore.interruptedIdentity);
   const opponentIdentity = $derived(tableIdentity?.opponent
     ? checkpointIdentity(tableIdentity.opponent)
-    : playerIdentity({ name: tableIdentity?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
+    : playerIdentity({ name: tableIdentity?.opponent_label ?? builtinOpponentName(gameStore.opponentChoice) ?? 'Opponent' }));
+  const opponentName = $derived(tableIdentity?.opponent_label ?? opponentIdentity.compact);
+
+  // ———————————————— Home: play the last matchup again
+
+  let lastMatchup = $state<LastMatchup | null>(null);
+  onMount(() => { lastMatchup = loadLastMatchup(); });
+  // Each game this tab plays becomes the next "Play again", as the session echoed its setup.
+  $effect(() => {
+    const config = gameStore.playSession?.config;
+    if (!config || demoName || !gameStore.observation || !tableIdentity) return;
+    const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
+    untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
+  });
+  const deckLabel = (key: unknown): string => DECK_CHOICES.find(deck => deck.key === key)?.label ?? 'Imported deck';
+  const homeMatchup = $derived(lastMatchup ?? {
+    config: gameStore.setupConfig(),
+    opponent: builtinOpponentName(gameStore.opponentChoice) ?? 'Registered policy',
+    decks: { hero: deckLabel(gameStore.decks.hero), villain: deckLabel(gameStore.decks.villain) },
+  });
+  const atHome = $derived(mounted && !awaitingRecovery && !demoName && !page.url.searchParams.has('launch')
+    && !gameStore.observation && editor.kind === 'closed');
+
+  function playAgain(): void {
+    if (gameStore.newGamePending) return;
+    gameStore.watchMode = false;
+    gameStore.applySetupDraft(homeMatchup.config);
+    gameStore.setError(null);
+    sendNewGame(gameStore.newGameConfig());
+  }
 
   function syncStopsToServer(): void {
     if (!gameStore.observation && editor.kind !== 'closed') {
@@ -264,14 +290,12 @@
       && gameStore.work.chooser !== null && gameStore.work.chooser !== heroSeat)
     || (tableFrame?.prompt != null && tableFrame.prompt.actor !== heroSeat)));
   const thinking = $derived(!gameActive ? null
-    : opponentChoosing ? `${opponentIdentity.compact} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
+    : opponentChoosing ? `${opponentName} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
       : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The table is working…' : null);
 
-  function winnerText(winner: number | null): string {
-    if (winner === null) return 'Draw';
-    const name = winner === gameStore.observation?.agent.player_index ? 'You' : opponentIdentity.text;
-    return name === 'You' ? 'You win' : `${name} wins`;
-  }
+  const ending = $derived(gameStore.gameOver && boardFrame
+    ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: opponentName }, gameStore.winner) : null);
+  const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
 </script>
 
 {#snippet notices()}
@@ -297,10 +321,27 @@
 
 {#snippet result()}
   <div data-testid="game-result-dialog" class="result">
-    <h2 class="type-display text-display">Game over</h2>
-    <p data-testid="game-result" class="text-ink-2">{winnerText(gameStore.winner)}</p>
-    <button data-testid="game-result-action" class="btn btn-primary" onclick={demoName ? startNewGame : () => sendContinuation('rematch')}>{demoName ? 'Play again' : 'Rematch'}</button>
-    <a class="type-caption underline" href="/?setup=1">New game</a>
+    <p class="type-rubric text-ink-3">Game over</p>
+    <h2 data-testid="game-result" class="type-display text-display">{ending?.headline}</h2>
+    {#if ending}
+      <p class="text-ink-2" data-testid="game-result-how">{ending.how}</p>
+      <p class="type-caption text-ink-2">{ending.life}</p>
+      <p class="type-caption text-ink-3" data-testid="game-result-summary">{ending.summary}</p>
+    {/if}
+    <div class="result-actions">
+      {#if demoName}
+        <button data-testid="game-result-action" class="btn btn-primary" onclick={startNewGame}>Play again</button>
+      {:else}
+        <button data-testid="game-result-action" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
+        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendContinuation('swap_sides')}>Swap sides</button>
+        <button data-testid="game-result-change" class="btn btn-secondary" disabled={!canContinue} onclick={() => openEditor('next', true)}>Change opponent</button>
+      {/if}
+    </div>
+    <p class="type-caption result-links">
+      {#if gameStore.recordingId}<a class="underline" data-testid="game-result-recording" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open the recording</a> · {/if}
+      <a class="underline" href="/?setup=1">New game</a>
+    </p>
+    {#if gameStore.newGamePending}<p role="status" class="type-caption text-ink-2">Preparing the next game…</p>{/if}
   </div>
 {/snippet}
 
@@ -345,7 +386,7 @@
       live={participantStudying ? canStudyRetry : canSubmitLive}
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
-      opponent={{ name: opponentIdentity.compact, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
+      opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
       stops={gameStore.stops}
       connection={gameStore.connection}
       connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
@@ -364,6 +405,23 @@
       result={gameStore.gameOver ? result : undefined}
       {menu}
     />
+  {:else if atHome}
+    {@render notices()}
+    <section class="home" aria-label="Play" data-testid="home">
+      <p class="type-rubric text-ink-3">{lastMatchup ? 'Your last matchup' : 'Ready to play'}</p>
+      <p class="home-matchup type-title" data-testid="home-matchup">
+        <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3"> · {homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">, {matchupSeat(homeMatchup.config)}</span>
+        <span class="text-ink-3"> vs </span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3"> · {homeMatchup.decks.villain}</span>{/if}
+      </p>
+      <button class="btn btn-primary home-play" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
+        onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : lastMatchup ? 'Play again' : 'Play'}</button>
+      <p class="type-caption text-ink-2">
+        <a class="underline" data-testid="home-setup" href="/?setup=1">Set up a different game</a> ·
+        <a class="underline" href="/games">Games</a>
+        <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
+          aria-label={`Connection status: ${gameStore.connection}`} class="type-label uppercase text-ink-3"> · {gameStore.connection}</span>
+      </p>
+    </section>
   {:else}
     {@render notices()}
     <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
@@ -431,7 +489,14 @@
 <style>
   .notice { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-field); font-size: 13px; }
   .notice.error { border-color: color-mix(in srgb, var(--error) 50%, transparent); background: var(--error-wash); color: var(--error-text); }
-  .result { display: grid; gap: 8px; justify-items: start; }
+  .result { display: grid; gap: 6px; justify-items: start; }
+  .result h2 { line-height: 1.1; }
+  .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .result-links { color: var(--text-secondary); }
+  .home { max-width: 640px; margin: 12vh auto 0; display: grid; gap: 14px; justify-items: start;
+    padding: 28px 30px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
+  .home-matchup { line-height: 1.35; }
+  .home-play { font-size: 16px; padding: 10px 22px; }
   .table-menu { position: relative; }
   .table-menu > summary { list-style: none; }
   .table-menu > summary::-webkit-details-marker { display: none; }

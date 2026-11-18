@@ -144,7 +144,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
       window.__choiceNavigation = state;
       window.WebSocket = TrackedSocket;
     }, position.config);
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
     await expect(page.getByTestId('table')).toBeVisible();
