@@ -60,6 +60,7 @@ class PlayerSetup(BaseModel):
     name: str
     decklist: dict[str, int]
     sideboard: dict[str, int]
+    priority_mana_taps: bool = Field(default=False, exclude_if=lambda value: not value)
     # Earlier evidence names the selector `content_pack`.
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "content_pack")
@@ -70,7 +71,10 @@ class PlayerSetup(BaseModel):
 
     @classmethod
     def retain(
-        cls, player: managym.PlayerConfig, decklists: DecklistDisclosure
+        cls,
+        player: managym.PlayerConfig,
+        decklists: DecklistDisclosure,
+        priority_mana_taps: bool = False,
     ) -> "PlayerSetup":
         return cls(
             name=player.name,
@@ -78,6 +82,7 @@ class PlayerSetup(BaseModel):
             sideboard=player.sideboard,
             world=player.world,
             disclosure=decklists,
+            priority_mana_taps=priority_mana_taps,
         )
 
 
@@ -91,7 +96,15 @@ def _game_disclosure(players: list[PlayerSetup]) -> DecklistDisclosure | None:
 
 def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
     disclosure = managym.resolve_decklists(players, seed)
-    return [PlayerSetup.retain(player, disclosure) for player in players]
+    taps = (
+        players.priority_mana_taps
+        if isinstance(players, managym.GameSetup)
+        else (False, False)
+    )
+    return [
+        PlayerSetup.retain(player, disclosure, taps[i])
+        for i, player in enumerate(players)
+    ]
 
 
 class DecisionAnnotation(BaseModel):
@@ -145,10 +158,16 @@ class GameInputs(BaseModel):
             raise ValueError("retained game has no player setups")
         return managym.GameSetup(
             [
-                managym.PlayerConfig(**player.model_dump(exclude={"disclosure"}))
+                managym.PlayerConfig(
+                    **player.model_dump(exclude={"disclosure", "priority_mana_taps"})
+                )
                 for player in self.players
             ],
             decklists=decklists,
+            priority_mana_taps=(
+                self.players[0].priority_mana_taps,
+                self.players[1].priority_mana_taps,
+            ),
         )
 
     def restart(self, seed: int) -> None:
@@ -1505,10 +1524,7 @@ class CapturedVector(_Capture):
             game.restart(seeds[index])
             # The ending row owns the old setup; retain the new native root only
             # after writing it, including disclosure resolved for the new seed.
-            game.players = [
-                PlayerSetup.retain(player, players[index].decklists)
-                for player in players[index]
-            ]
+            game.players = _retain_players(players[index], seeds[index])
         if self._reductions and self._reduction.error is None:
             for index in restarted:
                 self._analysis_indices[index] = 0

@@ -263,6 +263,9 @@ impl Game {
             .collect();
         actions.extend(self.priority_activate_ability_actions(player));
         actions.push(Action::PassPriority { player });
+        if self.priority_mana_taps != [false; 2] {
+            actions.extend(self.fixed_tap_actions(player));
+        }
         actions
     }
 

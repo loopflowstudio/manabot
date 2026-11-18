@@ -1933,7 +1933,8 @@ impl Game {
             .collect()
     }
 
-    /// Fixed sources the payer may tap deliberately
+    /// At priority the configured seat may float mana from every fixed source.
+    /// Otherwise offer fixed sources the payer may tap deliberately
     /// for the pending cast or activation payment, beside `PayCost`, which
     /// finishes automatically from what remains. A source is offered when
     /// its output lets the pool spend more of the cost and the payment and
@@ -1941,6 +1942,21 @@ impl Game {
     /// Empty when the pool already covers the cost, or
     /// every offered source is needed anyway: then nothing is chosen.
     pub(crate) fn fixed_tap_actions(&self, player: PlayerId) -> Vec<Action> {
+        if self.pending_choice.is_none()
+            && self.priority_mana_taps[self.decision_controller(player).0]
+            && self.state.priority.holder == player
+            && self.state.suspended_decision.is_none()
+        {
+            return self
+                .shared_payment_sources(player)
+                .iter()
+                .filter(|source| source.untapped && source.fixed.is_some())
+                .map(|source| Action::TapForMana {
+                    player,
+                    permanent: source.permanent,
+                })
+                .collect();
+        }
         let Some(PendingChoice::ManaPayment {
             player: payer,
             payment,
@@ -2030,13 +2046,14 @@ impl Game {
     ) -> Result<(), AgentError> {
         let offered = Action::TapForMana { player, permanent };
         if !self.fixed_tap_actions(player).contains(&offered) {
-            return Err(AgentError("source is not offered for this payment".into()));
+            return Err(AgentError("source is not offered for this decision".into()));
         }
+        self.tap_fixed_mana_source(player, permanent);
         let Some(PendingChoice::ManaPayment { sacrifice, .. }) = &self.pending_choice else {
-            unreachable!("fixed taps are offered only at a mana payment");
+            self.state.priority_mut().on_non_pass_action(player);
+            return Ok(());
         };
         let sacrifice = *sacrifice;
-        self.tap_fixed_mana_source(player, permanent);
         if self.fixed_tap_actions(player).is_empty()
             && self.mana_ability_actions(player, sacrifice).is_empty()
         {

@@ -142,3 +142,37 @@ fn funded_and_all_sources_needed_payments_remain_trivial() {
         ["Forest", "Mountain", "Mountain", "Mountain"]
     );
 }
+
+#[test]
+fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
+    let lands = ["Mountain", "Forest", "Forest"];
+    let mut game = game(&lands);
+    let ordinary = game.action_space().unwrap().actions.clone();
+    game.priority_mana_taps = [false, true];
+    game.scenario_refresh_priority().unwrap();
+    assert_eq!(game.action_space().unwrap().actions, ordinary);
+
+    game.priority_mana_taps = [true, false];
+    game.scenario_refresh_priority().unwrap();
+    assert_eq!(
+        &game.action_space().unwrap().actions[..ordinary.len()],
+        ordinary
+    );
+    let offers = taps(&game);
+    assert_eq!(
+        offers,
+        [
+            (ordinary.len(), "Mountain".into()),
+            (ordinary.len() + 1, "Forest".into()),
+            (ordinary.len() + 2, "Forest".into())
+        ]
+    );
+    game.step(offers[1].0).unwrap();
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
+    assert_eq!(game.action_space().unwrap().player, Some(PlayerId(0)));
+    assert_eq!(taps(&game).len(), 2);
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    assert!(untapped(&game).is_empty());
+    assert_eq!(game.state.players[0].mana_pool, Mana::default());
+}

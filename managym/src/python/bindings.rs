@@ -5520,7 +5520,7 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         .filter_map(|player| player.legacy_disclosure)
         .map(DecklistMode::from);
     let setup_type = value.py().import_bound("managym")?.getattr("GameSetup")?;
-    let (decklists, conflict) = if value.is_instance(&setup_type)? {
+    let (decklists, priority_mana_taps, conflict) = if value.is_instance(&setup_type)? {
         let name: String = value.getattr("decklists")?.extract()?;
         let decklists = match name.as_str() {
             "mixed" => DecklistMode::Mixed,
@@ -5528,12 +5528,14 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         };
         (
             decklists,
+            value.getattr("priority_mana_taps")?.extract()?,
             "deprecated per-seat disclosure conflicts with GameSetup.decklists",
         )
     } else {
         // A bare seat list takes its game value from the first hint, if any.
         (
             hints.clone().next().unwrap_or_default(),
+            [false; 2],
             "deprecated per-seat disclosure values disagree",
         )
     };
@@ -5543,6 +5545,7 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
     Ok(GameSetup {
         players: players.into_iter().map(PlayerConfig::from).collect(),
         decklists,
+        priority_mana_taps,
     })
 }
 
@@ -5551,10 +5554,15 @@ pub(crate) fn python_game_setup(
     py: Python<'_>,
     players: Vec<PlayerConfig>,
     disclosure: DecklistDisclosure,
+    priority_mana_taps: [bool; 2],
 ) -> PyResult<PyObject> {
     let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
     let kwargs = pyo3::types::PyDict::new_bound(py);
     kwargs.set_item("decklists", disclosure_name(disclosure))?;
+    kwargs.set_item(
+        "priority_mana_taps",
+        (priority_mana_taps[0], priority_mana_taps[1]),
+    )?;
     Ok(py
         .import_bound("managym")?
         .getattr("GameSetup")?

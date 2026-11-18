@@ -162,6 +162,7 @@ impl DecklistMode {
 pub struct GameSetup {
     pub players: Vec<PlayerConfig>,
     pub decklists: DecklistMode,
+    pub priority_mana_taps: [bool; 2],
 }
 
 impl From<Vec<PlayerConfig>> for GameSetup {
@@ -169,6 +170,7 @@ impl From<Vec<PlayerConfig>> for GameSetup {
         Self {
             players,
             decklists: DecklistMode::Open,
+            priority_mana_taps: [false; 2],
         }
     }
 }

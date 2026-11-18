@@ -34,6 +34,7 @@ fn replay(path: &str) {
     env.reset(GameSetup {
         players,
         decklists: DecklistMode::Closed,
+        priority_mana_taps: [false; 2],
     })
     .unwrap();
     let mut digest = env.action_count().unwrap() as u64;
