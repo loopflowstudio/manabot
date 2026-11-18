@@ -267,23 +267,21 @@ def training_corpus(
 
     Missing update evidence raises `UnknownCoverage`.
     """
-    if isinstance(run, Path):
-        if source is None or through is not None:
-            raise ValueError("supply a checkpoint file and its source")
-        name, run_name, through = checkpoint_run(run, experiment)
-        data = read(source, name, run_name)
-    elif experiment is not None:
+    if experiment is not None and not isinstance(run, Path):
         raise ValueError("experiment applies to a checkpoint file")
-    elif isinstance(run, CheckpointRecord):
+    if isinstance(run, RunData):
+        data = run
+    else:
         if source is None or through is not None:
             raise ValueError("supply a checkpoint and its source")
-        coordinate = run.at.get("updates")
-        if coordinate is None or not float(coordinate).is_integer():
-            raise UnknownCoverage("checkpoint has no integral updates coordinate")
-        through = int(coordinate)
-        data = read(source, run.experiment, run.run)
-    else:
-        data = run
+        if isinstance(run, Path):
+            name, run_name, through = checkpoint_run(run, experiment)
+        else:
+            coordinate = run.at.get("updates")
+            if coordinate is None or not float(coordinate).is_integer():
+                raise UnknownCoverage("checkpoint has no integral updates coordinate")
+            name, run_name, through = run.experiment, run.run, int(coordinate)
+        data = read(source, name, run_name)
     if type(through) is not int or through < 0:
         raise ValueError("supply a nonnegative update")
 
@@ -313,22 +311,7 @@ def training_corpus(
                 "one statistics directory cannot establish parent and child coverage"
             )
         storage = as_storage(source) if source is not None else data.blocks[0].storage
-        name, update, digest = parent
-        keys = sorted(storage.keys(""))
-        candidates = located_runs(storage, keys, run=name)
-        matches = [
-            ancestor
-            for ancestor in read_all(storage, keys=keys, declarations=candidates)
-            if any(
-                cp.at.get("updates") == update and cp.artifact.sha256 == digest
-                for cp in ancestor.checkpoints
-            )
-        ]
-        if len(matches) != 1:
-            raise UnknownCoverage(
-                f"cannot resolve parent checkpoint {name} at {update} with SHA-256 {digest}"
-            )
-        data, through = matches[0], update
+        data, through = parent_run(storage, *parent), parent[1]
     db.execute("""
         create table decks as
         select experiment, run, deck, list(distinct card order by card) as cards
@@ -343,6 +326,26 @@ def training_corpus(
         join decks d on (d.experiment, d.run, d.deck) = (m.experiment, m.run, m.draw)
     """)
     return db
+
+
+def parent_run(storage: Storage, name: str, update: int, digest: str) -> RunData:
+    """The one run of this name that published the checkpoint at this update."""
+    keys = sorted(storage.keys(""))
+    matches = [
+        ancestor
+        for ancestor in read_all(
+            storage, keys=keys, declarations=located_runs(storage, keys, run=name)
+        )
+        if any(
+            cp.at.get("updates") == update and cp.artifact.sha256 == digest
+            for cp in ancestor.checkpoints
+        )
+    ]
+    if len(matches) != 1:
+        raise UnknownCoverage(
+            f"cannot resolve parent checkpoint {name} at {update} with SHA-256 {digest}"
+        )
+    return matches[0]
 
 
 def insert_rows(
