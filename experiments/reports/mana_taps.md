@@ -1,8 +1,8 @@
 # Do fixed-source mana taps at priority and during payments change TLA learnability?
 
-**Offering mana taps slowed training per update. Both raw policies learned.** With taps on, the median seed pair took 55% longer per update and surfaced 89% more decisions per game. Against the heuristic the raw on arm trailed at 25 updates (34/192 vs 70/192) and narrowed the gap at 50 (82/192 vs 88/188). At update 75 the raw on arm scored 89/192 against the heuristic to the off arm’s 93/192, and won 88/192 head-to-head. At the early matched-time comparison below, the off arm led in every seed. These three seeds establish an early time cost. The longer-run strength difference remains open.
+**Offering mana taps slowed training and hurt early playing strength.** Across the three paired seeds through update 50, the median increase was 89% in surfaced decisions per game and 55% in seconds per update. At update 25 the raw learners with taps scored 34/192 against the heuristic, compared with 70/192 without taps. At the last scored checkpoint, update 100, that gap narrowed to 93/192 versus 97/192. The raw on arm scored 80/188 head-to-head, with one seed tied and two behind. There is a substantial early learning cost. These three seeds do not establish a lasting deficit of the same size.
 
-**The learners learned to skip most priority taps.** In raw self-play the share of surfaced decisions spent tapping fell from 38.0–38.6% in the first collection to 15.1–17.6% at update 25 and 7.7–9.2% at update 50. The fixed-deal spot checks below also show a decline against the heuristic. The long-horizon EMA hid most of the change.
+**The update-25 and update-50 EMA exports still played much like initialization.** At update 50, on scored 0/192 against the heuristic, off scored 14/192, and on lost head-to-head in all three seeds. Those exports alone could not tell whether the trained agents had learned to skip floats. The separately scored raw learners did skip most floats: in the fixed-deal checks against the heuristic, the share of surfaced decisions spent floating fell from 39.8% at initialization to 8.9% at update 50 and 9.9% at update 100 (233/2,348). The EMA on policies still floated on 39.8% at update 100.
 
 Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16 and undo disabled. Through update 50 each seed pair used one L4. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Each checkpoint played the same 16 fixed deck pairs against the first-64 heuristic and its paired checkpoint, with seats and decks crossed. Training seeds are the three units of evidence.
 
@@ -187,8 +187,7 @@ Launch `2896671bcf5f` admitted all six runs. The four machine rental ceilings
 Etude actually recorded were USD6.90, USD7.65, USD9.14 and USD13.63
 (USD37.32 combined). The recorded maximum exposure exceeded the training
 allowance even before evaluation. The launch was cancelled. Etude confirmed
-all four L4 machines deleted by 07:30 UTC and estimated their respective
-costs at USD0.14, USD0.17, USD0.15 and USD0.16. The earlier Lium statement
+all four L4 machines deleted by 07:30 UTC. Their settled charges totaled USD0.3158. The earlier Lium statement
 remains unresolved.
 
 | Seed | Last launcher update, off / on | Updates with stored metrics, off / on |
@@ -229,33 +228,48 @@ launch `302f3d92743c`, with a USD1.20 cpu32 rental ceiling. Training run
 addresses are `mana-taps-paired-l4/mana-taps-w64-{off,on}@{seed}`.
 Etude confirmed deletion of all four machines. Its machine ledger on
 2026-11-18 showed USD0.7925, USD1.1239 and USD1.0536 billed for seeds
-21501–21503, respectively, and approximately USD0.37 for evaluation.
+21501–21503, respectively, and USD0.0371 billed for evaluation in the final ledger.
 The earlier cancelled RunPod run and unresolved Lium charge are recorded
 above. The final whole-experiment bill remains open.
 
 ### Continuation toward update 250
 
-On 2026-11-18 all six original run addresses resumed from their update-50 learner, optimizer and EMA states on revision `5794a91d97`. Etude retains the original config and applies the absolute target `updates=250`. Seed 21501 uses two L4s. Seeds 21502 and 21503 use A40s after L4 capacity ran out. Each run has its own rental. The six rental ceilings total USD18.01. The unresolved USD5.33 Lium allowance remains reserved within the USD35 whole-experiment cap. The raw checkpoint audit ran locally. Final continuation costs are pending.
-
-### Update 75
-
-Across updates 51–75, the on arms took 110, 126 and 127 active seconds per update, compared with 59, 70 and 66 for the paired off arms. At update 75 the raw heuristic scores differed by at most three games within each seed. Head-to-head, the on policy won more than half its games in one of three seeds. Separate rentals and the change of GPU for two pairs limit timing comparisons with the first 50 updates.
-
-| Seed | Raw off vs heuristic | Raw on vs heuristic | Raw on vs off | EMA off vs heuristic | EMA on vs heuristic | EMA on vs off |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 21501 | 30 | 27 | 30 | 5 | 0 | 15 |
-| 21502 | 31 | 32 | 33 | 6 | 0 | 16 |
-| 21503 | 32 | 30 | 25 | 5 | 0 | 20 |
-
-All cells scored 64 games. Both local evaluations completed 144 matches and all 72 replay blobs matched their digests. On the spot-check deck pair against the heuristic, the raw on policies chose 238 floats in 2,683 surfaced decisions (8.9%). The EMA on policies chose 384 in 966 (39.8%).
+On 2026-11-18 all six original run addresses resumed from their update-50 learner, optimizer and EMA states on revision `5794a91d97`. Etude retains the original config and applies the absolute target `updates=250`. Seed 21501 uses two L4s. Seeds 21502 and 21503 use A40s after L4 capacity ran out. Each run has its own rental. The six rental ceilings total USD18.01. The unresolved USD5.33 Lium allowance remains reserved within the USD35 whole-experiment cap. The raw checkpoint audit and the update-75 and update-100 evaluations ran locally. Update 100 was the last scored milestone when the continuation was stopped.
 
 ![Raw and EMA scores by update and active training time](../data/mtg385/continuation/strength.png)
 
-Fetch the continuation scores, seat-level spot checks, replays and training rows with
-`uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg385/continuation`.
-[Raw games](../data/mtg385/continuation/u75/raw-games.csv) · [EMA games](../data/mtg385/continuation/u75/ema-games.csv) · [Continuation training rows](../data/mtg385/continuation/training.csv)
+### Shared checkpoints after resuming
+
+Each cell is points scored over eligible game legs. Each seed played 16 paired deals per matchup. If a leg failed, all four legs of its deal were excluded. The chart above shows the individual seed curves against both updates and active training hours.
+
+| Update | Raw off vs heuristic | Raw on vs heuristic | Raw on vs off | EMA off vs heuristic | EMA on vs heuristic | EMA on vs off |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 75 | 93/192 | 89/192 | 88/192 | 16/192 | 0/192 | 51/192 |
+| 100 | 97/192 | 93/192 | 80/188 | 15/192 | 0/192 | 49/192 |
+
+At update 100, the scores by training seed were as follows.
+
+| Seed | Raw off vs heuristic | Raw on vs heuristic | Raw on vs off | EMA off vs heuristic | EMA on vs heuristic | EMA on vs off |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 21501 | 32/64 | 29/64 | 32/64 | 5/64 | 0/64 | 14/64 |
+| 21502 | 33/64 | 34/64 | 22/60 | 6/64 | 0/64 | 17/64 |
+| 21503 | 32/64 | 30/64 | 26/64 | 4/64 | 0/64 | 18/64 |
+
+[Raw game rows](../data/mtg385/continuation/u100/raw-games.csv) · [EMA game rows](../data/mtg385/continuation/u100/ema-games.csv)
+
+At update 100 the raw head-to-head for seed 21502 excluded deal 385011 after a stale-object panic. The other 287 update-100 matches across the raw and EMA panels scored all four legs. The 72 retained update-100 replay blobs matched their digests. Updates 51–100 took 60, 72 and 68 seconds per update with taps off and 104, 116 and 122 seconds with taps on, respectively.
+
+### Shutdown and launcher cost
+
+Etude recorded all six runs cancelled and all six continuation rentals deleted by 14:46 UTC on November 18. Final training updates (off/on) were 214/150, 191/136 and 187/127 for seeds 21501–21503. Update 100 was the last completed evaluation for both roles. No further games were scheduled after the stop.
+
+At shutdown, Etude’s machine ledger put the continuation rentals at approximately USD9.67, including estimates for charges still awaiting provider settlement. Together with the earlier RunPod training and evaluation rentals, the RunPod subtotal was approximately USD12.99. The Lium pod was absent from the provider inventory at 14:47 UTC. Its statement remained unavailable, so a settled whole-experiment total cannot be reported.
 
 ## Published results
+
+Fetch the update-75 and update-100 game rows, spot checks, replay archives, chart and training rows with
+`uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg385/continuation`.
+[Continuation training rows](../data/mtg385/continuation/training.csv)
 
 Fetch the raw audit with
 `uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg385/raw-audit`.
