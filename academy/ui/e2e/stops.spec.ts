@@ -34,11 +34,11 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
   }
 }
 
-/** On the table, stops and the session live in the top bar's Menu. */
+/** On the board, stops and the session live in the top bar's Menu. */
 async function openMenu(page: Page): Promise<void> {
-  const menu = page.locator('details.table-menu');
+  const menu = page.locator('details.game-menu');
   if (await menu.count() && !await menu.evaluate((node: HTMLDetailsElement) => node.open)) {
-    await page.getByTestId('table-menu').click();
+    await page.getByTestId('game-menu').click();
   }
 }
 
@@ -64,7 +64,7 @@ async function updateSeq(page: Page): Promise<number> {
 async function playUntilComparisonTurn(page: Page): Promise<number> {
   const actionButtons = page.getByTestId('action-option');
   const gameOverOverlay = page.getByTestId('game-result');
-  const table = page.getByTestId('table');
+  const game = page.getByTestId('game');
   let inputs = 0;
 
   for (let i = 0; i < MAX_ACTIONS; i += 1) {
@@ -72,9 +72,9 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
     await expect(gameOverOverlay).not.toBeVisible();
     await expect(page.locator('[data-testid="action-option"]:enabled').first().or(gameOverOverlay)).toBeVisible();
     await expect(gameOverOverlay).not.toBeVisible();
-    if (await table.getAttribute('data-turn') === String(COMPARISON_TURN)
-      && await table.getAttribute('data-turn-owner') === 'you'
-      && (await table.getAttribute('data-step'))?.startsWith('PRECOMBAT_MAIN')) return inputs;
+    if (await game.getAttribute('data-turn') === String(COMPARISON_TURN)
+      && await game.getAttribute('data-turn-owner') === 'you'
+      && (await game.getAttribute('data-step'))?.startsWith('PRECOMBAT_MAIN')) return inputs;
 
     const seqBefore = await updateSeq(page);
     const labels = await actionButtons.allTextContents();
@@ -117,7 +117,7 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   await setCheckbox(page, 'auto-pass-toggle', false);
 
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  await expect(page.getByTestId('table')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   const baselineInputs = await playUntilComparisonTurn(page);
 
   // ---- Run 2: same seed, stops on main phases only. ----
@@ -161,18 +161,18 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await selectDeck(page, 'villain', 'interactive');
 
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  const table = page.getByTestId('table');
-  await expect(table).toBeVisible({ timeout: 15_000 });
+  const game = page.getByTestId('game');
+  await expect(game).toBeVisible({ timeout: 15_000 });
 
   // Default stops: the game opens at my main1 on turn 1.
-  await expect(table).toHaveAttribute('data-turn', '1');
+  await expect(game).toHaveAttribute('data-turn', '1');
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
   await page.keyboard.press('F6');
 
   // The rest of turn 1 (including the my-main2 stop) is yielded server-side;
   // the next surfaced decision is on a later turn.
-  await expect(table).not.toHaveAttribute('data-turn', '1', { timeout: 30_000 });
+  await expect(game).not.toHaveAttribute('data-turn', '1', { timeout: 30_000 });
   await expect(page.locator('[data-testid=log-entry][data-actor=you]').filter({ hasText: 'Pass turn' })).toHaveCount(1);
 });
 
@@ -238,7 +238,7 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   // client turns that stop off, saying so in the moves as automation.
   await stop('my', 'main1').click();
   await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'once');
-  const table = page.getByTestId('table');
+  const game = page.getByTestId('game');
   for (let pass = 0; pass < 12; pass += 1) {
     if (await stop('my', 'main1').getAttribute('data-state') === 'off') break;
     const seq = await updateSeq(page);
@@ -246,6 +246,6 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
     await expect.poll(() => updateSeq(page), { timeout: 30_000 }).toBeGreaterThan(seq);
   }
   await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'off');
-  await expect(table).toHaveAttribute('data-turn-owner', 'you');
+  await expect(game).toHaveAttribute('data-turn-owner', 'you');
   await expect(page.locator('[data-testid=log-entry][data-actor=auto]').filter({ hasText: 'Stopped once at First main' })).toHaveCount(1);
 });

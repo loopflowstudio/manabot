@@ -1,5 +1,5 @@
 /**
- * The table at laptop sizes. At 1280×800 and 1440×900 the whole game fits the
+ * The board at laptop sizes. At 1280×800 and 1440×900 the whole game fits the
  * screen: no page scroll, the two battlefields together at least 400 px tall,
  * every card inside its half, and the rail listing every legal offer exactly
  * once. A dense constructed board proves the layout; a seeded real game proves
@@ -8,7 +8,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, FrameUpdate, RecoveryEnvelope } from '../src/lib/types';
-import { denseFrame } from './fixtures/laptop-table';
+import { denseFrame } from './fixtures/laptop-board';
 import { tableSnapshot } from './fixtures/table';
 
 const VIEWPORTS = [{ width: 1280, height: 800 }, { width: 1440, height: 900 }] as const;
@@ -39,7 +39,7 @@ async function layout(page: Page): Promise<Layout> {
     const slack = 10;
     for (const half of halves) {
       const bounds = half.getBoundingClientRect();
-      for (const card of half.querySelectorAll<HTMLElement>('[data-testid=table-card]')) {
+      for (const card of half.querySelectorAll<HTMLElement>('[data-testid=board-card]')) {
         const box = card.getBoundingClientRect();
         if (box.top < bounds.top - slack || box.bottom > bounds.bottom + slack || box.left < bounds.left - slack || box.right > bounds.right + slack) {
           const edges = [box.top - bounds.top, bounds.bottom - box.bottom, box.left - bounds.left, bounds.right - box.right].map(Math.round);
@@ -47,7 +47,7 @@ async function layout(page: Page): Promise<Layout> {
         }
       }
     }
-    for (const card of document.querySelectorAll<HTMLElement>('.hand [data-testid=table-card]')) {
+    for (const card of document.querySelectorAll<HTMLElement>('.hand [data-testid=board-card]')) {
       const box = card.getBoundingClientRect();
       if (box.bottom > innerHeight + 1 || box.right > innerWidth + 1) outside.push(`hand ${card.getAttribute('data-card-name')}`);
     }
@@ -73,7 +73,7 @@ function expectFits(measured: Layout, offers: number): void {
 }
 
 /** Serve one dense frame over the play socket; a Command is answered with a stale-revision rejection. */
-async function denseTable(page: Page, offers: number): Promise<{ commands: Command[]; frame: ExperienceFrame; resend: () => void }> {
+async function denseBoard(page: Page, offers: number): Promise<{ commands: Command[]; frame: ExperienceFrame; resend: () => void }> {
   const frame = denseFrame();
   const mine = frame.projection.agent.battlefield;
   // Many offers over exact visible objects, identical copies included.
@@ -109,14 +109,14 @@ async function denseTable(page: Page, offers: number): Promise<{ commands: Comma
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await expect(page.getByTestId('table')).toBeVisible();
+  await expect(page.getByTestId('game')).toBeVisible();
   return { commands, frame, resend: () => resend() };
 }
 
 test('a frame that repeats the revision keeps what the resting pointer shows', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS[1]);
-  const { resend, frame } = await denseTable(page, 4);
-  const card = page.locator('.board .you [data-testid=table-card]').first();
+  const { resend, frame } = await denseBoard(page, 4);
+  const card = page.locator('.board .you [data-testid=board-card]').first();
   await card.hover();
   const preview = page.getByTestId('card-preview');
   await expect(preview).toBeVisible();
@@ -131,16 +131,16 @@ test('a frame that repeats the revision keeps what the resting pointer shows', a
 
 for (const viewport of VIEWPORTS) {
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`dense board fits the table ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
+    test(`dense board fits the screen ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme });
-      const { commands, frame } = await denseTable(page, 40);
+      const { commands, frame } = await denseBoard(page, 40);
       await page.evaluate(() => document.fonts.ready);
       await expect(page.getByTestId('action-option')).toHaveCount(40);
       expectFits(await settled(page), 40);
       // Every offer's card is on the board, outlined as acting.
       for (const id of new Set(frame.offers.map(offer => offer.focus[0]))) {
-        await expect(page.locator(`.board [data-testid=table-card][data-object-id="${id}"]`).first()).toBeVisible();
+        await expect(page.locator(`.board [data-testid=board-card][data-object-id="${id}"]`).first()).toBeVisible();
       }
       expect(commands).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath('dense.png') });
@@ -158,7 +158,7 @@ for (const viewport of VIEWPORTS) {
   }
 }
 
-test('a seeded game keeps the table whole at 1280×800', async ({ page }, testInfo) => {
+test('a seeded game keeps the board whole at 1280×800', async ({ page }, testInfo) => {
   test.setTimeout(240_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   let offers = -1;
@@ -186,13 +186,13 @@ test('a seeded game keeps the table whole at 1280×800', async ({ page }, testIn
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   let checked = 0;
   for (let input = 0; input < 60; input += 1) {
-    await expect(page.locator('[data-testid=table][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => working).toBe(false);
     if (await page.getByTestId('result-card').isVisible()) break;
     const rows = page.getByTestId('action-option');
     await expect(rows).toHaveCount(offers);
     // A row under the resting pointer previews its payment and lifts the lands it
-    // would tap; measure the table at rest.
+    // would tap; measure the board at rest.
     await page.mouse.move(640, 4);
     await page.waitForTimeout(250);
     expectFits(await settled(page), offers);

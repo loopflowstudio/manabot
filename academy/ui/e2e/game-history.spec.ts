@@ -137,7 +137,7 @@ test('shared history identifies both players and preserves private prefixes and 
       await expect.poll(async () => Number(await alice.locator('main').getAttribute('data-update-seq'))).toBeGreaterThan(before);
     }
     await expect(over).toBeVisible();
-    await alice.getByTestId('table-menu').click();
+    await alice.getByTestId('game-menu').click();
     await alice.getByRole('textbox', { name: /How did this game feel/ }).fill('Automated history check: private note, not human feedback.');
     await alice.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect(alice.getByRole('status').filter({ hasText: 'Feedback saved.' })).toBeVisible();
@@ -164,7 +164,7 @@ test('shared history identifies both players and preserves private prefixes and 
     await visitor.getByTestId('game-log').locator('button[data-move]').first().click();
     await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await visitor.getByTestId('table').getByRole('link', { name: 'Games', exact: true }).focus();
+    await visitor.getByTestId('game').getByRole('link', { name: 'Games', exact: true }).focus();
     await visitor.keyboard.press('Enter');
     expect(failures).toEqual([]);
     await expect(visitor).toHaveURL(filtered);

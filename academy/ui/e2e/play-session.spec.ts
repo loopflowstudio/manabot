@@ -2,40 +2,40 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.use({ actionTimeout: 10_000 });
 
-/** The table keeps the Play session strip in its top-bar Menu; open it to read or act on the session. */
+/** The board keeps the Play session strip in its top-bar Menu; open it to read or act on the session. */
 async function session(page: Page) {
   const strip = page.getByRole('region', {name:'Play session', exact:true});
-  // A setup sheet shows the strip itself; on the table, open the Menu until it shows.
+  // A setup sheet shows the strip itself; on the board, open the Menu until it shows.
   await expect(async () => {
-    const menu = page.locator('details.table-menu');
-    if (await menu.count() && !await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('table-menu').click();
+    const menu = page.locator('details.game-menu');
+    if (await menu.count() && !await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('game-menu').click();
     await expect(strip).toBeVisible({timeout: 1_000});
   }).toPass({timeout: 30_000});
   return strip;
 }
 
-/** The session strip shows `text`, opening the Menu again if the table was remounted meanwhile. */
+/** The session strip shows `text`, opening the Menu again if the board was remounted meanwhile. */
 async function expectSession(page: Page, text: string): Promise<void> {
   await expect(async () => {
     await expect(await session(page)).toContainText(text, {timeout: 1_000});
   }).toPass({timeout: 30_000});
 }
 
-/** New game: on the table (Play or Replay) it is in the Menu; a setup sheet uses the site header's link. */
+/** New game: on the board (Play or Replay) it is in the Menu; a setup sheet uses the site header's link. */
 async function newGame(page: Page): Promise<void> {
-  if (await page.getByTestId('table').count()) {
-    const menu = page.locator('details.table-menu');
-    if (!await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('table-menu').click();
+  if (await page.getByTestId('game').count()) {
+    const menu = page.locator('details.game-menu');
+    if (!await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('game-menu').click();
     await menu.getByRole('link', {name:'New game', exact:true}).click();
   } else {
     await page.getByRole('link', {name:'New game', exact:true}).first().click();
   }
 }
 
-/** The open Menu covers the rail; close it before choosing on the table. */
+/** The open Menu covers the rail; close it before choosing on the board. */
 async function closeMenu(page: Page): Promise<void> {
-  const menu = page.locator('details.table-menu');
-  if (await menu.count() && await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('table-menu').click();
+  const menu = page.locator('details.game-menu');
+  if (await menu.count() && await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('game-menu').click();
 }
 
 async function completeShortGame(page: Page): Promise<void> {
@@ -171,7 +171,7 @@ test('one seat-oriented setup starts both registered bots and retains their exac
   await expect(page.getByRole('link',{name:'Current game',exact:true}).first()).toHaveAttribute('href',/trace=/);
   await page.reload();
   await expect(page.getByTestId('position-counter')).toBeVisible();
-  await page.getByTestId('table-menu').click();
+  await page.getByTestId('game-menu').click();
   await page.getByText('Watch another matchup',{exact:true}).click();
   await expect(page.getByTestId('checkpoint-select').nth(0)).toHaveValue(`policy:${smoke[0].sha256}`);
   await expect(page.getByTestId('checkpoint-select').nth(1)).toHaveValue(`policy:${smoke[1].sha256}`);

@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The turn's steps along the bottom of the table, and the stops set on
+   * The turn's steps along the bottom of the board, and the stops set on
    * them, laid out as MTGO does: one cell per step, your turn's stop above
    * the step's name and the opponent's below, a rule between phases, the
    * current step marked. Pressing a stop cycles it off → every time → once

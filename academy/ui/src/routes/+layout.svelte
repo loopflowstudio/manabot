@@ -96,7 +96,7 @@
         </p>
       </div>
       <nav aria-label="Footer" class="type-caption">
-        <div class="type-label text-ink-2">Table</div>
+        <div class="type-label text-ink-2">Pages</div>
         <ul class="mt-1">
           {#each NAV as item}
             <li><a class="inline-block py-1 text-ink-2 underline-offset-2 hover:text-ink hover:underline" href={item.href}>{item.label}</a></li>

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { Command, ExperienceFrame } from '../src/lib/types';
 
-// Payment on the table: the automatic payer's plan is drawn on the lands it
+// Payment on the board: the automatic payer's plan is drawn on the lands it
 // would tap, the primary button reads it, and tapping a land yourself is the
 // authority's own offer. Previewing never sends a Command.
 
@@ -38,12 +38,12 @@ async function track(page: Page): Promise<void> {
 }
 const frame = (page: Page): Promise<ExperienceFrame> => page.evaluate(() => window.__mana.frame!);
 const commands = (page: Page): Promise<number> => page.evaluate(() => window.__mana.commands.length);
-const planned = (page: Page): Locator => page.locator('.board [data-testid=table-card][data-payment-source]');
+const planned = (page: Page): Locator => page.locator('.board [data-testid=board-card][data-payment-source]');
 const rail = (page: Page, text: string | RegExp): Locator => page.getByTestId('action-option').filter({ hasText: text });
 
 async function waitForRevision(page: Page, before: number): Promise<void> {
   await expect.poll(async () => (await frame(page)).revision, { timeout: 20_000 }).toBeGreaterThan(before);
-  await expect(page.getByTestId('table')).toHaveAttribute('data-live', 'true');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
 }
 async function clickCard(card: Locator): Promise<void> {
   // A copy under another in its pile shows only its right edge.
@@ -58,7 +58,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
-    await expect(page.getByTestId('table')).toHaveAttribute('data-live', 'true');
+    await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
 
     // Restricted floating mana says what it is beside its pips.
     let before = (await frame(page)).revision;
@@ -73,7 +73,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
 
     // Pointing at the spell shows its plan on the lands and sends nothing.
     const sent = await commands(page);
-    const strike = page.locator('.hand [data-testid=table-card][data-card-name="Lightning Strike"]');
+    const strike = page.locator('.hand [data-testid=board-card][data-card-name="Lightning Strike"]');
     await strike.hover();
     await expect(planned(page)).toHaveCount(2);
     await expect(planned(page).first()).toHaveAttribute('aria-label', /would tap for \{[WUBRGC]\}/);
@@ -83,11 +83,11 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     before = (await frame(page)).revision;
     await strike.click();
     await waitForRevision(page, before);
-    await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'CHOOSE_TARGET');
+    await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'CHOOSE_TARGET');
     before = (await frame(page)).revision;
     await page.locator('[data-plate-side=opponent] [data-testid=player-target]').click();
     await waitForRevision(page, before);
-    await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PAY_OR_NOT');
+    await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'PAY_OR_NOT');
     const primary = page.getByTestId('primary-action');
     await expect(primary).toHaveText(/^Pay \{1\}\{R\}/);
     await expect(primary).toHaveAccessibleName(/\{1\}\{R\} · \S+/);
@@ -115,7 +115,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     // and the hover raises whichever the browser hits first. The land and the
     // point are read together, since a second read can name another card.
     const { ownId, x, y } = await page.evaluate(() => {
-      const land = [...document.querySelectorAll<HTMLElement>('.you .row.support [data-testid=table-card].legal:not([data-payment-source])')]
+      const land = [...document.querySelectorAll<HTMLElement>('.you .row.support [data-testid=board-card].legal:not([data-payment-source])')]
         .find(card => card.dataset.cardName === 'Mountain')!;
       const box = land.getBoundingClientRect();
       return { ownId: land.dataset.objectId!, x: box.left + 6, y: box.top + box.height / 2 };

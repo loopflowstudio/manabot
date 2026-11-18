@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import prefix from '../../../managym/academy/fixtures/learn-demo-w17-token-cards.json' with { type: 'json' };
 
-for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) test(`Learn on the table: every answer a row, lessons in the tray, reconnect, ${outcome}`, async ({ page }) => {
+for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) test(`Learn on the board: every answer a row, lessons in the tray, reconnect, ${outcome}`, async ({ page }) => {
   await page.addInitScript((config) => {
     const state = { commands: [] as unknown[], sockets: [] as WebSocket[], frame: null as any };
     const Native = window.WebSocket;
@@ -51,7 +51,7 @@ for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) 
     await expect(page.locator(`[data-testid="action-option"][data-action-type="${kind}"]`).first()).toBeVisible();
   }
   // Pointing commits nothing; a reconnect returns the same decision.
-  await page.getByTestId('tray').getByTestId('table-card').first().hover();
+  await page.getByTestId('tray').getByTestId('board-card').first().hover();
   expect(await page.evaluate(() => (window as any).__learn.commands.length)).toBe(before.count);
   await page.evaluate(() => (window as any).__learn.sockets.at(-1).close());
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
@@ -67,7 +67,7 @@ for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) 
   if (outcome === 'LEARN_TAKE_LESSON') {
     expect(after.agent.sideboard).toHaveLength(2);
     expect(after.agent.hand.some((card: any) => card.name === 'Accumulate Wisdom')).toBe(true);
-    await expect(page.locator('.hand [data-testid=table-card][data-card-name="Accumulate Wisdom"]')).toBeVisible();
+    await expect(page.locator('.hand [data-testid=board-card][data-card-name="Accumulate Wisdom"]')).toBeVisible();
   } else {
     expect(after.agent.sideboard).toHaveLength(3);
   }

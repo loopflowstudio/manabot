@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
-   * Replay, Watch and Review: a recorded game on the table, read-only, with a
+   * Replay, Watch and Review: a recorded game on the board, read-only, with a
    * transport bar where live play has its input and the decision strip under
-   * it. At a recorded choice the table draws that choice's own frame, every
+   * it. At a recorded choice the board draws that choice's own frame, every
    * offer on its card and row with the recorded policy beside it; elsewhere
-   * the recorded board. "Try another line" opens Study on the same table: the
+   * the recorded board. "Try another line" opens Study on the same board: the
    * historical offers become live against an isolated rules branch, and Return
    * restores the recorded decision.
    *
@@ -12,7 +12,7 @@
    * `view` (acting or spectator), plus `review` to start from the first
    * position and `watch` to start a bot game. The read cursor, Watch
    * production and Study authority are the stores'; this page only binds them
-   * to the table.
+   * to the board.
    */
   import { currentGame, rememberCurrentGame } from '$lib/current-game.svelte';
   import { goto, replaceState } from '$app/navigation';
@@ -23,15 +23,15 @@
   import WatchSetup from '$lib/components/WatchSetup.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import StudyPanel from '$lib/components/StudyPanel.svelte';
-  import Table from '$lib/table/Table.svelte';
-  import Transport from '$lib/table/Transport.svelte';
-  import Strip from '$lib/table/Strip.svelte';
-  import { moveList } from '$lib/table/moves';
-  import { gameResult } from '$lib/table/result';
+  import Board from '$lib/board/Board.svelte';
+  import Transport from '$lib/board/Transport.svelte';
+  import Strip from '$lib/board/Strip.svelte';
+  import { moveList } from '$lib/board/moves';
+  import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
     bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
-  } from '$lib/table/replay';
+  } from '$lib/board/replay';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
@@ -98,10 +98,10 @@
     return player && player.deck !== 'closed' ? player.deck_name ?? player.deck : null;
   };
 
-  // ———————————————— What the table draws
+  // ———————————————— What the board draws
 
   const recorded = $derived(current && index ? recordedFrame(current, index, bottom) : null);
-  // Study draws the restored decision live, then the branch it played, on the same table.
+  // Study draws the restored decision live, then the branch it played, on the same board.
   const studyFrame = $derived.by<ExperienceFrame | null>(() => {
     const restored = studyStore.restored;
     if (!inStudy || !restored) return null;
@@ -110,7 +110,7 @@
   });
   const frame = $derived(studyFrame ?? recorded);
   const studying = $derived(studyFrame !== null);
-  const tableSeat = $derived(studying ? (studyFrame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
+  const viewerSeat = $derived(studying ? (studyFrame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
   const evidence = $derived(!studying && current?.decision && recorded ? offerEvidence(recorded, current.outputs, current.decision.offer_id) : null);
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
 
@@ -121,7 +121,7 @@
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
 
   const ending = $derived(frame && !studying && frame.projection.game_over && index
-    ? gameResult(frame, replayLog(positions, tableSeat, saidOf), { you: saidOf(tableSeat), opponent: saidOf(1 - tableSeat) }, index.winner)
+    ? gameResult(frame, replayLog(positions, viewerSeat, saidOf), { you: saidOf(viewerSeat), opponent: saidOf(1 - viewerSeat) }, index.winner)
     : null);
 
   const status = $derived(!index ? ''
@@ -199,7 +199,7 @@
 
   // ———————————————— Transport
 
-  // Playback advances one position per beat; the table's motion draws each change.
+  // Playback advances one position per beat; the board's motion draws each change.
   $effect(() => {
     if (!replayStore.playing || replayStore.busy || (replayStore.producing && atLiveEdge) || inStudy) return;
     const timer = setTimeout(() => { void replayStore.next(true); }, 1000 / replayStore.speed);
@@ -256,7 +256,7 @@
     if (index) localStorage.setItem(`etude.score.notes.${index.id}`, JSON.stringify(notes));
   }
 
-  // ———————————————— Study: try another line on the same table
+  // ———————————————— Study: try another line on the same board
 
   async function responseError(response: Response, fallback: string): Promise<string> {
     try {
@@ -438,8 +438,8 @@
       onchange={event => { replayStore.reveal = event.currentTarget.checked; void replayStore.seek(replayStore.selected); }} /> Show both hands</label>
   {/if}
   <a class="type-caption text-ink-2 hover:text-ink" href={page.url.searchParams.get('from')?.startsWith('/games?') ? page.url.searchParams.get('from')! : '/games'}>Games</a>
-  <details class="table-menu">
-    <summary class="btn btn-ghost btn-sm" data-testid="table-menu">Menu</summary>
+  <details class="game-menu">
+    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Menu</summary>
     <div class="menu-panel" role="region" aria-label="Recording and tools">
       <p class="type-label text-ink-2" data-testid="recording-heading">{sourceLabel}</p>
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
@@ -506,12 +506,12 @@
 
 <h1 class="sr-only">Replay</h1>
 {#if index && frame}
-  <Table
+  <Board
     {frame}
     live={studying && canRetry}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
-    you={{ name: nameOf(tableSeat), deck: deckOf(tableSeat) }}
-    opponent={{ name: nameOf(1 - tableSeat), deck: deckOf(1 - tableSeat), description: identity(1 - tableSeat).description }}
+    you={{ name: nameOf(viewerSeat), deck: deckOf(viewerSeat) }}
+    opponent={{ name: nameOf(1 - viewerSeat), deck: deckOf(1 - viewerSeat), description: identity(1 - viewerSeat).description }}
     stops={frame.stops}
     log={[]}
     canPassTurn={false}
@@ -572,9 +572,9 @@
   .reveal { display: inline-flex; gap: 4px; align-items: center; color: var(--text-secondary); white-space: nowrap; }
   .result { display: grid; gap: 6px; justify-items: start; }
   .result h2 { line-height: 1.1; }
-  .table-menu { position: relative; }
-  .table-menu > summary { list-style: none; }
-  .table-menu > summary::-webkit-details-marker { display: none; }
+  .game-menu { position: relative; }
+  .game-menu > summary { list-style: none; }
+  .game-menu > summary::-webkit-details-marker { display: none; }
   .menu-panel {
     position: absolute; right: 0; top: calc(100% + 8px); z-index: 320; width: 360px; max-height: calc(100dvh - 64px); overflow-y: auto;
     display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px;

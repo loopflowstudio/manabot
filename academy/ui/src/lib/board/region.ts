@@ -1,5 +1,5 @@
 /**
- * Keyboard regions of the table: Tab moves between regions, arrows within one.
+ * Keyboard regions of the board: Tab moves between regions, arrows within one.
  * A region with no controls (an empty field) is a stop of its own.
  *
  * `region` is a Svelte action on a region's element (the opponent's field, the

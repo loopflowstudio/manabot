@@ -5,7 +5,7 @@ where colour belongs to the cards. It has a light theme and a dark theme,
 chosen by the system's colour scheme. `src/app.css` holds every value; this
 file says which values exist and what each is for. `src/lib/design.test.ts`
 reads the permitted list below and fails on any literal outside it in
-`app.css` and in the table's Svelte styles (`src/lib/table/`).
+`app.css` and in the board's Svelte styles (`src/lib/board/`).
 
 ```permitted
 families: Spectral, Work Sans
@@ -29,7 +29,7 @@ the SIL Open Font License):
   prompts, buttons, labels, counts, the stop bar and key hints.
 
 Monospace (`--font-mono`, the system's) is for code a person copies, never
-for labels, and never on the table.
+for labels, and never on the board.
 
 Six sizes, each with its line height: 12/16, 14/20, 16/24, 20/28, 28/32 and
 40/44. Nothing is smaller than 12 px, on cards included. Three weights: 400,
@@ -106,6 +106,6 @@ and reduced motion keeps every state change without the travel.
   list and the contrast pairs.
 - Both themes checked by eye at 1280×800 before handing a change over.
 
-The lint covers the table and `app.css`. The other pages still carry older
+The lint covers the board and `app.css`. The other pages still carry older
 literals (the banner's weave and its colours, page-level sizes); a change to
 one of them brings that file under the lint.

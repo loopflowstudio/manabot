@@ -1,17 +1,17 @@
 <script lang="ts">
   /**
-   * The table: one screen for a game. The board is the centre; cards with a
-   * legal offer are outlined and clicking one commits its single offer or
+   * The game screen: the board in the centre, the rail beside it, the stop bar
+   * below. Cards with a legal offer are lifted and clicking one commits its single offer or
    * opens its several at the card. The rail repeats every offer by number.
    *
-   * The table owns only presentation state (open menus, the preview, where
+   * The component owns only presentation state (open menus, the preview, where
    * cards were drawn a moment ago, and the revision of the person's last move,
    * which scopes "since your last move"). It commits nothing itself: `onact`
    * receives the exact offer a person chose, and the caller binds it to the
    * frame's revision as one Command. What happened is read from the
    * authority's presentation events; motion only shows it.
    *
-   * A recorded game draws the same table read-only (`live` false): the caller
+   * A recorded game draws the same board read-only (`live` false): the caller
    * supplies where the recap starts (`since`), the move list (`moves`, which
    * may jump), the recorded policy (`evidence`, shown on each offer's card and
    * row) and a bottom edge (`bottom`: the transport and the decision strip).
@@ -33,14 +33,14 @@
   import { addressOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptLine } from './prompt';
-  import { nameBook, recentView, tableLines, turnOwners, visibleNames } from './recent';
+  import { nameBook, recentView, boardLines, turnOwners, visibleNames } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
-  import TableCard from './TableCard.svelte';
+  import BoardCard from './BoardCard.svelte';
   import { phaseTrack, type OnceStops } from './phases';
   import StopBar from './StopBar.svelte';
   import { shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -60,11 +60,11 @@
     canPassTurn: boolean;
     /** The live presentation track: what happened, as the authority reports it. */
     presentation: PresentationPlayer;
-    /** Set while the opponent is choosing, or the table is working, in words. */
+    /** Set while the opponent is choosing, or the server is working, in words. */
     thinking: string | null;
     /** The opponent is the one choosing now. */
     opponentChoosing: boolean;
-    /** When the work the table waits on started, epoch seconds; null when nothing runs. */
+    /** When the work the game waits on started, epoch seconds; null when nothing runs. */
     workStarted: number | null;
     /** The live session is gone; offers are the last recorded decision's. */
     interrupted: boolean;
@@ -111,9 +111,9 @@
   // Cards read the recorded policy for their own offers.
   setContext(EVIDENCE, () => evidence);
 
-  // The table is the whole screen; the page behind it must not scroll.
+  // The game fills the window; the page behind it must not scroll.
   // What the page draws behind it is out of reach too: Tab and screen readers
-  // stay on the table and the menus and previews it opens.
+  // stay on the board and the menus and previews it opens.
   onMount(() => {
     const page = document.documentElement;
     const previous = page.style.overflow;
@@ -161,7 +161,7 @@
 
   // A new declaration starts from the draft saved for it in this tab, if any.
   $effect(() => {
-    // Live play may connect after the frame is drawn: the draft loads once the table may declare.
+    // Live play may connect after the frame is drawn: the draft loads once the board may declare.
     const key = `${frame.match_id}:${frame.frame_hash}:${declaring}`;
     if (key === draftFrame) return;
     draftFrame = key;
@@ -188,7 +188,7 @@
       if (controller.signal.aborted) return;
       if (Object.entries(address).some(([name, value]) => response[name as keyof typeof address] !== value) || response.viewer !== actor) return;
       previewed = { frameHash, plan: planKey(request), preview: response.preview };
-    }).catch(() => { /* Without a preview the table keeps one creature at a time. */ });
+    }).catch(() => { /* Without a preview the board keeps one creature at a time. */ });
     return () => controller.abort();
   });
   $effect(() => {
@@ -231,7 +231,7 @@
   const counts = $derived.by(() => {
     if (!drafting || !preview || preview.kind !== 'attackers') return [];
     // Piles as drawn without offers: the creature asked about now is still one of its pile.
-    const base = tableView({ ...frame, offers: [] }, players);
+    const base = boardView({ ...frame, offers: [] }, players);
     const pileOf = new Map(base.you.creatures.flatMap(pile => pile.items.map(item => [item.permanent.id, pile.key] as const)));
     return draftPiles(preview.declarable, draft, id => pileOf.get(id) ?? null);
   });
@@ -263,7 +263,7 @@
     const ready = exact;
     if (!ready || ready.refused || !ready.steps.length) return;
     const offer = stepOffer(frame, ready.kind, ready.steps[0]);
-    if (!offer) { stopNote = 'The table changed before the plan was sent; draft again.'; return; }
+    if (!offer) { stopNote = 'The board changed before the plan was sent; draft again.'; return; }
     running = { kind: ready.kind, steps: ready.steps, at: 0, sentAt: frame.revision };
     send(offer);
   }
@@ -296,7 +296,7 @@
 
   /** The frame as the board draws it: with the drafted declaration, while there is one. */
   const drafted = $derived(drafting || running ? drawDraft(frame, draft) : frame);
-  const view = $derived(tableView(drafted, players));
+  const view = $derived(boardView(drafted, players));
   const whose = $derived(heading ?? (frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index
@@ -347,7 +347,7 @@
   // ———————————————— The opponent's moves, one beat at a time
 
   // Live play only (a recording has its transport). Facts already on screen
-  // when the table opens are history, not news.
+  // when the board opens are history, not news.
   let shownSeq = $state(untrack(() => presentation.events.at(-1)?.seq ?? -1));
   let beats = $state.raw<Beat[]>([]);
   let beatAt = $state(0);
@@ -376,14 +376,14 @@
   // rail stays live, and pressing the board skips to the frame's own.
   const beatBoard = $derived(beat ? boardAt(stepBoards, beat.seq) : null);
   const drawn = $derived(beatBoard ? { ...frame, projection: beatBoard, offers: [] } : drafted);
-  const board = $derived(beatBoard ? tableView(drawn, players) : view);
+  const board = $derived(beatBoard ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
   const boardNames = $derived(beatBoard ? new Map([...beatBoard.agent.battlefield, ...beatBoard.opponent.battlefield]
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])) : names);
   // The turn as the drawn board has it: a beat's board may be an earlier step.
   const yourTurn = $derived(boardProjection.turn.active_player_id === boardProjection.agent.id);
   const track = $derived(phaseTrack(boardProjection.turn, stops, yourTurn, onceStops));
-  const lines = $derived(tableLines(drawn, presentation.events, recent.resolved, sinceRevision));
+  const lines = $derived(boardLines(drawn, presentation.events, recent.resolved, sinceRevision));
   /** Permanents something on the stack targets: a dashed edge in the damage colour. */
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
   /** The person may act on the drawn board now: what they cannot act on steps back. */
@@ -633,7 +633,7 @@
 
   // ———————————————— Keyboard
 
-  // The table's keys, as the sheet `?` opens lists them. A recording has its
+  // The board's keys, as the sheet `?` opens lists them. A recording has its
   // transport's keys instead of live play's.
   const recording = $derived(connection === null);
   const keys = $derived<{ key: string; does: string; plain?: boolean }[]>([
@@ -670,7 +670,7 @@
     return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
   }
 
-  /** Space presses a focused control outside the table's regions; in them Enter acts and Space is the primary. */
+  /** Space presses a focused control outside the board's regions; in them Enter acts and Space is the primary. */
   function ownsSpace(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
     if (target.closest('[data-region]')) return false;
@@ -721,7 +721,7 @@
 <svelte:window onkeydown={onKeydown} onpointermove={onPointerMove}
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
-<div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
+<div class="game" data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
   data-turn={boardProjection.turn.turn_number} data-step={boardProjection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
@@ -746,7 +746,7 @@
     </div>
   </header>
 
-  <div class="board" id="table-board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
+  <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
     data-board={beatBoard ? 'step' : 'frame'} bind:this={boardElement}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} name={opponent.name} deck={opponent.deck} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
@@ -769,7 +769,7 @@
       <div class="hand-cards" style:width={`${handCard + Math.max(0, board.hand.length - 1) * handStep}px`}>
         {#each board.hand as item, index (item.card.id)}
           <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * handStep}px`}>
-            <TableCard name={item.card.name} width={handCard} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
+            <BoardCard name={item.card.name} width={handCard} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
               dim={acting && item.offers.length === 0 ? 'hand' : null}
               onactivate={element => activate(item.card.name, item.offers, element)}
               onpreview={element => previewCard(element ? item.card : null, element)} />
@@ -791,13 +791,13 @@
     {/if}
 
     {#if view.tray.length && !result}
-      <section class="tray" aria-label="Choices from outside the table" data-testid="tray">
+      <section class="tray" aria-label="Choices from outside the board" data-testid="tray">
         <h2 class="type-heading text-ink-2">{frame.prompt?.title ?? 'Choose'}</h2>
         <div class="tray-items">
           {#each view.tray as item (item.placed.offer.id)}
             {#if item.name}
               <div class="tray-card">
-                <TableCard name={item.name} width={104} offers={[item.placed]} {live}
+                <BoardCard name={item.name} width={104} offers={[item.placed]} {live}
                   onactivate={() => act(item.placed)}
                   onpreview={element => previewName(element ? item.name : null, element)} />
                 <span class="type-caption">{item.placed.offer.label}</span>
@@ -813,7 +813,7 @@
     {/if}
   </div>
 
-  <div class="rail-slot" id="table-choices">
+  <div class="rail-slot" id="rail-choices">
     <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
@@ -922,7 +922,7 @@
 {/if}
 
 <style>
-  .table {
+  .game {
     position: fixed; inset: 0; z-index: 10; display: grid;
     grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px);
     grid-template-rows: 40px minmax(0, 1fr) auto auto;
@@ -988,7 +988,7 @@
   .result-card .fold:hover { color: var(--text); }
 
   .combat-draft { display: grid; gap: 6px; }
-  /* The draft's buttons are the rail's primary and secondary, drawn by the table. */
+  /* The draft's buttons are the rail's primary and secondary, drawn by the board. */
   .combat-draft .primary { height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: nowrap; }
   .combat-draft .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .combat-draft .primary kbd { flex: none; opacity: 1; }

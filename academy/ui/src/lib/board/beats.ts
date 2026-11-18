@@ -2,7 +2,7 @@
  * The opponent's turn as it happens, one beat at a time.
  *
  * Between two of the person's decisions the authority may play several moves
- * of the opponent's and deliver only the board after the last one. The table
+ * of the opponent's and deliver only the board after the last one. The board
  * draws that board at once (it is the authority's), then reads out what
  * happened on the way, one fact per beat, long enough to read, with what each
  * fact is about raised on the board. `beatsFor(facts, shown, names)` picks the
@@ -11,7 +11,7 @@
  * move alone are already on the board they are looking at). A busy turn of
  * more than `GROUP_ABOVE` facts reads as sentences instead: one player's
  * consecutive moves become one ("Heuristic played Plains and attacked with
- * Ally"), as do consecutive consequences of one kind. The table plays them one
+ * Ally"), as do consecutive consequences of one kind. The board plays them one
  * pace apart (`BeatPace`, a per-browser setting) and drops them all on Space, a
  * click, a commit or a new frame. Reduced motion, or the pace "off", plays
  * none: the recap already lists every fact.
@@ -25,7 +25,7 @@ export interface Beat {
   seq: number;
   by: RecentFact['by'];
   text: string;
-  /** Objects on the table the beat raises, by id. */
+  /** Objects on the board the beat raises, by id. */
   subjects: number[];
 }
 

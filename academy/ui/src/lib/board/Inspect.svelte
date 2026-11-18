@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Everything the table knows about one card, typeset: art, name and cost,
+   * Everything the board knows about one card, typeset: art, name and cost,
    * type line, keywords (granted ones with their source), rules text, where
    * its power and toughness come from, and its state on the battlefield.
    * The floating preview and the docked pane both render this.

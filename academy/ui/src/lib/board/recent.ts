@@ -1,16 +1,16 @@
 /**
- * What changed on the table since the person last decided, and the lines that
+ * What changed on the board since the person last decided, and the lines that
  * join cards to what they act on.
  *
  * `recentView(frame, since, events, labels)` reads the authority's presentation
  * events (never a diff of snapshots) for what happened after revision `since`:
  * spells cast and whether they are still on the stack, lands played, discards,
  * reveals, attacks, blocks, damage and deaths, and how much damage each object and player was dealt.
- * `tableLines(frame, events)` draws standing facts: a spell on the stack to
+ * `boardLines(frame, events)` draws standing facts: a spell on the stack to
  * each of its targets, and each blocker to the attacker it blocks, from the
  * projection while combat lasts and from the block events since the person's
- * last move after it, as long as both creatures are still on the table.
- * Both are pure, so the table's motion is a rendering of facts that remain
+ * last move after it, as long as both creatures are still on the board.
+ * Both are pure, so the board's motion is a rendering of facts that remain
  * readable when motion is reduced.
  *
  * Names: protocol v1's projection carries no incarnation, so presentation
@@ -38,7 +38,7 @@ export type Endpoint =
   /** A spell on (or just off) the stack, by its card id. */
   | { kind: 'stack'; id: number };
 
-export interface TableLine {
+export interface BoardLine {
   from: Endpoint;
   to: Endpoint;
   kind: 'target' | 'block';
@@ -64,7 +64,7 @@ export interface RecentFact {
   text: string;
   /** The card id of the spell a cast fact names. */
   spell: number | null;
-  /** The objects on the table the fact is about (attackers, blockers, targets, what was dealt damage), by id. */
+  /** The objects on the board the fact is about (attackers, blockers, targets, what was dealt damage), by id. */
   subjects: number[];
 }
 
@@ -152,17 +152,17 @@ function endpoint(subject: SubjectRef, frame: ExperienceFrame, onBoard: Set<numb
 }
 
 /** Standing lines: spells on the stack to their targets, blockers to attackers. */
-export function tableLines(
+export function boardLines(
   frame: ExperienceFrame,
   events: readonly PresentationEvent[],
   resolved: readonly ResolvedSpell[] = [],
   since: number | null = null,
-): TableLine[] {
+): BoardLine[] {
   const onStack = stackCardIds(frame);
   const onBoard = battlefieldIds(frame);
-  const lines: TableLine[] = [];
+  const lines: BoardLine[] = [];
   const seen = new Set<string>();
-  const add = (line: TableLine): void => {
+  const add = (line: BoardLine): void => {
     const id = JSON.stringify(line);
     if (!seen.has(id)) { seen.add(id); lines.push(line); }
   };

@@ -13,10 +13,10 @@
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import Thumb from './Thumb.svelte';
-  import { stackName, type PlacedOffer, type StackItem, type TableView } from './view';
+  import { stackName, type PlacedOffer, type StackItem, type BoardView } from './view';
 
   interface Props {
-    view: TableView;
+    view: BoardView;
     frame: ExperienceFrame;
     live: boolean;
     /** What to do now, in plain words. */
@@ -83,7 +83,7 @@
   $effect(() => { void recent.facts; recapOpen = false; });
   const facts = $derived(recapOpen ? recent.facts : recent.facts.slice(0, RECAP_LINES));
 
-  // Seconds the opponent or the table has been working, beside "… is choosing".
+  // Seconds the opponent or the server has been working, beside "… is choosing".
   let elapsed = $state(0);
   $effect(() => {
     const started = workStarted;

@@ -6,7 +6,7 @@ import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
 import { bottomSeat, moveAt, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
-import { tableView } from './view';
+import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
 
@@ -40,7 +40,7 @@ describe('recordedFrame', () => {
     const drawn = recordedFrame(recorded(position('choice', { actor: seat }), frame), { id: 'r', revision: 9, winner: null }, seat);
     expect(drawn.offers.map(offer => offer.id)).toEqual(frame.offers.map(offer => offer.id));
     expect(drawn.prompt).toEqual(frame.prompt);
-    expect(tableView(drawn, PLAYERS).list).toHaveLength(frame.offers.length);
+    expect(boardView(drawn, PLAYERS).list).toHaveLength(frame.offers.length);
   });
 
   it('draws a transition as the board alone, one revision on, with the other seat at the bottom when asked', () => {

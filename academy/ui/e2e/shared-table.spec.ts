@@ -1,14 +1,14 @@
 import {expect, test, type Page} from '@playwright/test';
 
-/** Table and Study tools live in the table's Menu. */
+/** Sharing and Study tools live in the top bar's Menu. */
 async function openTools(page: Page): Promise<void> {
-  const menu = page.locator('details.table-menu');
-  if (await menu.getAttribute('open') === null) await page.getByTestId('table-menu').click();
-  const tools = menu.locator('details').filter({has: page.getByText('Table and Study tools', {exact:true})});
-  if (await tools.getAttribute('open') === null) await page.getByText('Table and Study tools', {exact:true}).click();
+  const menu = page.locator('details.game-menu');
+  if (await menu.getAttribute('open') === null) await page.getByTestId('game-menu').click();
+  const tools = menu.locator('details').filter({has: page.getByText('Sharing and Study tools', {exact:true})});
+  if (await tools.getAttribute('open') === null) await page.getByText('Sharing and Study tools', {exact:true}).click();
 }
 async function closeMenu(page: Page): Promise<void> {
-  if (await page.locator('details.table-menu').getAttribute('open') !== null) await page.getByTestId('table-menu').click();
+  if (await page.locator('details.game-menu').getAttribute('open') !== null) await page.getByTestId('game-menu').click();
 }
 
 test('participant access, transfer and real Study survive the simpler table', async ({browser}, testInfo) => {

@@ -9,10 +9,10 @@ import {
   type DeckSelection,
 } from './decks';
 import { deriveObservationNotes } from './log';
-import { stepBoards, type StepBoard } from './table/boards';
+import { stepBoards, type StepBoard } from './board/boards';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
-import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './table/phases';
+import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
@@ -121,14 +121,14 @@ export class GameStore {
   table = $state<TableSnapshot | null>(null);
   // Frames and projections are the authority's immutable values, replaced
   // whole on every update: raw state, so reading one is a plain property
-  // read rather than a deep proxy's (the table reads them thousands of times
+  // read rather than a deep proxy's (the board reads them thousands of times
   // a frame, and the resume record serializes the frame on every update).
   restoredDecision = $state.raw<RestoredReplayDecision | null>(null);
   branchAttemptId = $state<string | null>(null);
   branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
-  /** The person's board after each step that led to `frameHash`'s frame (`table/boards.ts`). */
+  /** The person's board after each step that led to `frameHash`'s frame (`board/boards.ts`). */
   stepBoards = $state.raw<{ frameHash: string; boards: StepBoard[] } | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state.raw<Observation | null>(null);
@@ -184,8 +184,8 @@ export class GameStore {
     if (this.restoredDecision) return 'Study position — return to live to play.';
     if (this.gameOver) return 'Game over — no next decision.';
     if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
-    if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The table is working.' : 'The table is working.';
-    if (this.commandPending || this.fastForwarding) return 'Waiting for the table — your action is being processed.';
+    if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The game is working.' : 'The game is working.';
+    if (this.commandPending || this.fastForwarding) return 'Waiting for the game — your action is being processed.';
     const prompt = this.protocolFrame?.prompt;
     if (!prompt) return 'Waiting for the next decision.';
     const hero = prompt.actor === this.observation?.agent.player_index;
@@ -224,7 +224,7 @@ export class GameStore {
   applyBranchRetry(payload: BranchRetryPayload): void {
     this.branchAttemptId = payload.attempt_id;
     this.branchProjection = payload.retry.projection;
-    this.tableAnnouncement = 'Isolated line updated. The live table was not changed.';
+    this.tableAnnouncement = 'Isolated line updated. The live game was not changed.';
   }
 
   returnBranch(restored: RestoredReplayDecision): void {
@@ -238,7 +238,7 @@ export class GameStore {
     this.restoredDecision = null;
     this.branchAttemptId = null;
     this.branchProjection = null;
-    this.tableAnnouncement = 'Returned to the live table.';
+    this.tableAnnouncement = 'Returned to the live game.';
   }
 
   setConnection(next: ConnectionState): void {
@@ -497,7 +497,7 @@ export class GameStore {
   }
 
   markResumeFailed(message: string): void {
-    // Keep the last confirmed table readable, but retire every input authority.
+    // Keep the last confirmed board readable, but retire every input authority.
     this.fastForwarding = false;
     this.commandPending = false;
     this.newGamePending = false;

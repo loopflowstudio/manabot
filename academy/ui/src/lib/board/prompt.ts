@@ -9,9 +9,9 @@
 import type { ExperienceFrame } from '$lib/types';
 import type { PaymentPreview } from '$lib/payment-preview';
 import { payLabel, paymentPlan } from './payment';
-import { stackName, type TableView } from './view';
+import { stackName, type BoardView } from './view';
 
-function anyCards(view: TableView): boolean {
+function anyCards(view: BoardView): boolean {
   const permanents = [view.you, view.opponent].flatMap(side => [...side.creatures, ...side.support])
     .flatMap(pile => pile.items).flatMap(item => [item, ...item.attached]);
   return view.hand.some(item => item.offers.length) || permanents.some(item => item.offers.length)
@@ -24,13 +24,13 @@ function yourMain(frame: ExperienceFrame): boolean {
 }
 
 /** The creature a combat prompt asks about, when it is exactly one of yours. */
-function askedCreature(frame: ExperienceFrame, view: TableView): string | null {
+function askedCreature(frame: ExperienceFrame, view: BoardView): string | null {
   const asked = frame.projection.agent.battlefield.filter(permanent => view.asked.has(permanent.id));
   return asked.length === 1 ? asked[0].name ?? null : null;
 }
 
 /** `planned`: the board shows the automatic payer's taps for the primary payment. */
-export function promptLine(frame: ExperienceFrame, view: TableView, planned = false): string {
+export function promptLine(frame: ExperienceFrame, view: BoardView, planned = false): string {
   const context = frame.projection.decision_context;
   const creature = askedCreature(frame, view);
   const source = context?.source?.label ?? null;
@@ -94,7 +94,7 @@ export interface PrimaryLabel {
  * other player passes too); on an empty stack it moves to the next step. The
  * offer committed is unchanged and named in the description.
  */
-export function primaryLabel(frame: ExperienceFrame, view: TableView, preview: PaymentPreview | null = null): PrimaryLabel | null {
+export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: PaymentPreview | null = null): PrimaryLabel | null {
   const primary = view.primary;
   if (!primary) return null;
   const offer = primary.offer.label;

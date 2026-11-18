@@ -12,7 +12,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
-- [Playing on the table](#playing-on-the-table)
+- [Playing on the board](#playing-on-the-board)
 - [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
@@ -28,7 +28,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 ## One game, from setup to its recorded decisions
 
 **New game** and **Games** are the main destinations. **Current game** returns
-this tab to its last table or watched game. Existing launch, replay and Watch
+this tab to its last live or watched game. Existing launch, replay and Watch
 links continue to open their intended games.
 
 **New game** opens setup for a separate session, starting from retained choices.
@@ -73,7 +73,7 @@ ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000", "traces_dir": "/home/you/ac
   Ctrl-C stops the server
 ```
 
-Your browser opens on the table at `http://127.0.0.1:8000`, with a game ready
+Your browser opens on the board at `http://127.0.0.1:8000`, with a game ready
 against the Search 64 opponent. That is the whole installation: no manabot,
 Torch, Node or Rust, and no checkout of this repository. The wheel carries the
 compiled engine, the server and the built client. Cards show their Scryfall
@@ -88,7 +88,7 @@ uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-
 uv run --no-project managym academy replay .runs/demo/games --game 3
 ```
 
-The first opens the table already in that game; the second opens game 3 of the
+The first opens the board already in that game; the second opens game 3 of the
 games a training run recorded, at its first decision. See
 [Start in a chosen game](#start-in-a-chosen-game),
 [Open a replay directly](#open-a-replay-directly) and
@@ -177,7 +177,7 @@ setup screen is shown, and nothing is chosen for you beyond what you named.
 | `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
 | `--decklists` | `open` | `open` or `closed`: whether each player knows the other's list |
 
-A decklist file is the UTF-8 `.txt` or `.dek` format the table imports: one
+A decklist file is the UTF-8 `.txt` or `.dek` format Academy imports: one
 `count card name` per line, with optional `Main` and `Sideboard` headings.
 A bundled name always selects that deck, even if a file or directory has the
 same name. Use an explicit path such as `./ur_lessons` to select that file.
@@ -345,7 +345,7 @@ with serve(port=0) as academy:
   removed in 0.4.0.
 - `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
   game, setup or replay, subject to the recording access rules above. `academy.open(url)`
-  opens it in the default browser; `academy.open()` opens the bare table.
+  opens it in the default browser; `academy.open()` opens Academy with no game.
 
 Leaving the `with` block, or calling `academy.close()`, stops the server and
 frees the port; unfinished games are kept as interrupted, as with Ctrl-C.
@@ -448,8 +448,8 @@ the import option to return to bundled decks.
 
 The game fills the window: the board in the centre, your hand along the
 bottom and a rail with the stack, the current decision and every legal choice.
-Cards a legal action applies to are raised off the table; clicking one with a
-single action commits it ([controls below](#playing-on-the-table)). Decisions with a single
+Cards a legal action applies to are raised off the board; clicking one with a
+single action commits it ([controls below](#playing-on-the-board)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
 
@@ -471,14 +471,14 @@ session.
 Academy names every opponent with how it decides: **Search 64 · search**,
 **Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
 the world it was trained in (**<name> · checkpoint w17**). The setup picker,
-the table, the waiting line and the result card use the same name.
+the board, the waiting line and the result card use the same name.
 
 A trained or independent policy must first be registered with this Academy
 server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
 The provider checks that it can play the selected decks and configuration.
 Built-in opponents need no registration.
 
-The session strip in the table's **Menu** shows the game number, matchup, your play/draw
+The session strip in the top bar's **Menu** shows the game number, matchup, your play/draw
 seat and deal mode. Open its configuration details with a pointer or Tab and
 Enter to check the full Policy ID, model artifacts, runner and available search
 configuration. A familiar model name alone does not identify the execution.
@@ -523,7 +523,7 @@ each seat's deal. These controls do not establish a paired evaluation.
 
 #### Read results and return from a recording
 
-Open session history from the table to see its games in **Games**. Each entry
+Open session history from the board to see its games in **Games**. Each entry
 links to its recording. Use Replay's return link to return to the filtered
 history, then return to Play in the same tab to continue the current game.
 Opening an earlier recording does not replace the live game.
@@ -572,13 +572,13 @@ start the next game explicitly rather than expecting its live state to resume.
 
 Session setup, imported source lists and seeds remain owner-private. Sharing a
 completed recording follows the existing replay rules; it grants neither session
-configuration access nor control of the live table. Earlier ungrouped games stay
+configuration access nor control of the live game. Earlier ungrouped games stay
 in **Games** without being assigned to a session retroactively.
 
-### Playing on the table
+### Playing on the board
 
 Start a game and look at your hand: the cards you can play now are raised off
-the table with a soft shadow, and the ones you cannot are dimmed.
+the board with a soft shadow, and the ones you cannot are dimmed.
 Click a land to play it; click a spell to cast it, then follow its target and
 payment prompts. A card with exactly one legal action commits that action when
 clicked, and its accessible name says which action that is. A card
@@ -633,7 +633,7 @@ inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
 until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
 instead, showing the last card you inspected. The top bar shows the turn. Along
-the bottom of the table runs the step bar: one cell per step, a line between
+the bottom of the screen runs the step bar: one cell per step, a line between
 phases, the current step shaded, and in each cell the stop for your turn above
 the step's name and the stop for the opponent's turn below it. Press a stop to
 change it (see [priority stops](#choosing-priority-stops)).
@@ -652,7 +652,7 @@ The rail holds:
 - **Since your last move**: what happened after your last choice, as the
   server reports it: spells cast and what they targeted, attacks, blocks,
   damage and deaths. The first three lines show; the rest open with **more**. A spell that already resolved keeps its card here, and its
-  line to a target that is still on the table, until your next move. Cards that
+  line to a target that is still on the board, until your next move. Cards that
   attacked, blocked, were targeted or were dealt damage are ringed on the board,
   and damage dealt since your last move shows on the card or the player's plate
   as it lands ("−2").
@@ -683,12 +683,12 @@ While the opponent decides, the rail and the opponent's plate say so, with
 the seconds it has taken ("Search 64 is searching… · 3 s"). An attacking creature steps toward the player it
 attacks, and a blocker is joined to the attacker it blocks by a line. Combat
 usually ends before your next decision, so the line stays after it, until your
-next move, while both creatures are on the table. Cards
+next move, while both creatures are on the board. Cards
 move between zones (hand to stack, stack to battlefield, an opponent's new
 card from their plate) instead of appearing; with reduced motion they appear
 in place and every fact above stays.
 
-Choices with no card on the table, such as Lessons outside the game, appear in
+Choices with no card on the board, such as Lessons outside the game, appear in
 a tray over the board.
 
 Combat is drafted whole. At an attack, every creature that can attack is
@@ -713,7 +713,7 @@ priority until the turn ends.
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button
 (unless a control with its own action has focus), F6 passes the turn and Escape
 closes an open list. **Menu** holds the session controls, priority stops, the
-shared-table and Study tools and feedback.
+sharing and Study tools and feedback.
 
 While disconnected or waiting for a submitted choice, the board remains
 readable and actions are unavailable. Reconnect or reload in the same tab to
@@ -808,7 +808,7 @@ visible. Read the failure, then choose **Retry bot decision**, or **Retry search
 for a search failure, when offered. Retrying asks the same bot to finish its
 pending decision; it does not cast your spell again. Academy acknowledges your
 committed choice before starting the following bot work. Its receipt remains
-fixed while later bot actions advance the table.
+fixed while later bot actions advance the board.
 
 **Who chooses.** Read the chooser and requested input beside the current prompt.
 The player choosing can differ from the player whose turn it is. Target and
@@ -854,7 +854,7 @@ Academy keeps the unresolved submission with that tab's game identity and
 checks whether it was accepted. If it must resend, it resends that exact
 submission so an accepted choice is not applied twice. If the decision or your
 permission changed, Academy reports the stale or unknown outcome and refreshes
-the table. Going back or clearing a selection cannot cancel a submission.
+the board. Going back or clearing a selection cannot cancel a submission.
 In live Watch, recovery checks the recorded position before another step;
 do not repeat a step just because its reply was lost. If that read fails,
 **Refresh saved head** must establish the frontier before production is available.
@@ -862,9 +862,9 @@ After a bot failure, recorded navigation remains available, but playback stops
 at the live edge. Only **Retry bot decision** or **Retry search** retries it.
 
 **When recovery is impossible.** A server restart or an expired live session
-shows **Interrupted**, retaining the last known table and a recording link
+shows **Interrupted**, retaining the last known board and a recording link
 when available. Saved recordings preserve available evidence; they cannot
-restore the live game. A read-only snapshot of the last published table,
+restore the live game. A read-only snapshot of the last published board,
 opponent identity and interruption reason survives further reloads in the same
 tab. The header reads **Interrupted** and the choices are labeled **Last recorded
 choices**; they do not invite live input, even when the server returns. The snapshot
@@ -923,7 +923,7 @@ move list and recording. Pausing narration does not change these settings.
 
 ### Reading consequences
 
-The table's rail tells what happened in prose. In live play it is **Since
+The rail tells what happened in prose. In live play it is **Since
 your last move**: spells cast and their targets, lands played, discards,
 reveals, attacks, blocks, damage and deaths, read from the authority's presentation
 events after your last commit, with the move list beneath grouped by turn.
@@ -957,7 +957,7 @@ recorded**; missing events do not mean that nothing happened.
 
 ### Card art
 
-Cards on the table, in replays and in the deck browser show their Scryfall
+Cards on the board, in replays and in the deck browser show their Scryfall
 art. There is nothing to run first: the first time a card is shown, the
 Academy server fetches its image and artist credit from Scryfall, saves them
 and serves them to the browser itself. Later views, and later launches, read
@@ -989,7 +989,7 @@ deleting the cache directory is safe.
 
 ### Inspect a replay
 
-A recording opens on the same table as live play, read-only. Open **Games**,
+A recording opens on the same board as live play, read-only. Open **Games**,
 choose a game, and step through it; human games, watched bot games and
 imported training or evaluation games all use these controls. At the end of a
 game you played, **Review this game** on the result card opens it from the
@@ -1005,7 +1005,7 @@ recent recordings.
 
 #### Follow the timeline
 
-| Position | What the table shows |
+| Position | What the board shows |
 |---|---|
 | Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
 | Consequences | The recorded board after the action, with what it did in the rail's recap. |
@@ -1062,7 +1062,7 @@ retries that decision; browsing saved positions never retries it.
 Open **Watch** (`/replay?watch=1`), select both seats, decks and a seed, then
 press **Start watching**. Each seat uses the same player menu as Play's **Opponent**.
 A managym-only install offers Random and Search; manabot adds Greedy, Heuristic
-and trained checkpoints. The game opens on the replay table and is saved in
+and trained checkpoints. The game opens on the replay board and is saved in
 **Games**. **Watch another matchup** in the menu opens setup for another bot game.
 
 Browsing earlier positions reads the recording. At the latest position of a live
@@ -1081,7 +1081,7 @@ subject to its access rules, but the original live producer cannot be resumed.
 #### Study and older recordings
 
 At an eligible choice, **Try another line** pauses playback and live production
-and opens an isolated branch on the same table: the historical offers become
+and opens an isolated branch on the same board: the historical offers become
 live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
 A fresh branch requires the server's retained Study state. If that state has
@@ -1159,7 +1159,7 @@ Independent Python policies work without manabot. A saved game that was played
 against a checkpoint still replays without its provider; continuing it needs
 the original admitted policy. Recorded policy and search evidence comes from
 the saved game and works in installed Academy; missing outputs stay unavailable.
-The live table does not load example analysis from a repository checkout.
+The live board does not load example analysis from a repository checkout.
 
 #### How a trained opponent is named
 
@@ -1167,7 +1167,7 @@ Academy shows the first and last parts of a long checkpoint name, followed by
 its identity's first ten characters. For example, `run/checkpoints/step_8`
 appears as `run/…/step_8 · 7ac5d442da`. Human names are never shortened this way.
 
-The same compact identity appears at the table, in Games, Replay and Watch.
+The same compact identity appears on the board, in Games, Replay and Watch.
 Open **status** on the player's bar with a mouse or Tab and Enter to
 read the full recorded name, identity, producer and available provenance.
 Registered policies also retain the runner, artifact digests and configuration.
@@ -1251,7 +1251,7 @@ Search-capable policies can use the shared composition below.
 Choose a registered policy, then change its **Search** control from **None
 (raw policy)** to **Search**. This works for the opponent in Play and
 for either Watch seat. Its configuration includes the exact budget; details retain the magnetic
-mirror update algorithm and recorded identities. While a decision is pending, the table shows
+mirror update algorithm and recorded identities. While a decision is pending, the board shows
 its search budget and elapsed waiting time. Reload preserves the configuration.
 
 | Setting | Default | Range |
@@ -1286,7 +1286,7 @@ and Watch, with search unavailable and a reason. Qwen v1 does not support search
 No missing capability is replaced by a synthetic distribution, terminal rollout,
 raw-policy fallback.
 
-On a timeout, no bot action commits. The pending decision remains on the table
+On a timeout, no bot action commits. The pending decision remains on the board
 with **Retry search**. Only an explicit retry tries it again; reconnecting or
 changing priority stops does not. The retry checks the match, revision and
 pilot authority. Other search failures report their reason without substituting
@@ -1478,11 +1478,11 @@ browser. The invariants that follow:
   source digest; frozen `erd1` evidence keeps its original bindings.
 
 The historical `/api/advice` fixture API remains available to conformance tools.
-The live table does not fetch or display that example as current-game analysis.
+The live board does not fetch or display that example as current-game analysis.
 
 ## Choice navigation
 
-The table numbers every choice in the rail and places it on its card, in
+Academy numbers every choice in the rail and places it on its card, in
 live play, Replay, Watch and Study alike; there is no filter. Selecting a
 choice sends its original offer through the revision-bound Command path, and
 duplicate labels remain separate choices. Human usability acceptance (ETU-77)

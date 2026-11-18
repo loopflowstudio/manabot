@@ -50,7 +50,7 @@ async function track(page: Page): Promise<void> {
 async function choose(page: Page, id: number, via?: Locator): Promise<void> {
   const revision = await page.evaluate(() => window.__surface.frame!.revision);
   const target = via ?? page.locator(`[data-testid="action-option"][data-offer-id="${id}"]`);
-  await expect(page.getByTestId('table')).toHaveAttribute('data-live', 'true');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
   await target.click();
   await expect.poll(() => page.evaluate(() => window.__surface.frame?.revision)).toBeGreaterThan(revision);
   const next = await page.evaluate(() => window.__surface.frame!.revision);
@@ -63,10 +63,10 @@ async function start(page: Page, demo: string): Promise<void> {
   await page.goto(`/?demo=${demo}`);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 30_000 });
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await expect(page.getByTestId('table')).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByTestId('game')).toBeVisible({ timeout: 120_000 });
 }
 
-test('Precision on the table: cards act, inspecting commits nothing, recovery and retry', async ({ page }, testInfo) => {
+test('Precision on the board: cards act, inspecting commits nothing, recovery and retry', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1500, height: 1100 });
   await start(page, 'precision');
   const board = (await page.getByTestId('game-board').boundingBox())!;
@@ -91,7 +91,7 @@ test('Precision on the table: cards act, inspecting commits nothing, recovery an
   const target = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.subjects?.some(subject => subject.object.label === 'Callous Inspector'))!);
   const victim = target.subjects![0].object.entity_id;
   await expect(page.getByTestId('stack-entry').filter({ hasText: 'Deadly Precision' })).toBeVisible();
-  await choose(page, target.id, page.locator(`.board [data-testid=table-card][data-object-id="${target.subjects![0].object.display_id}"]`).first());
+  await choose(page, target.id, page.locator(`.board [data-testid=board-card][data-object-id="${target.subjects![0].object.display_id}"]`).first());
   const sacrifice = await page.evaluate(entity => window.__surface.frame!.offers.find(offer => offer.action_type === 'SELECT_CARD' && offer.subjects?.some(subject => subject.object.entity_id === entity))!.id, victim);
   await choose(page, sacrifice);
   // Treasure is the only mana source left: its activation, {B} and the final

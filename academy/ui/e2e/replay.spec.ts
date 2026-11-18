@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test';
 // worker, alphabetical order), which plays a game to completion so at least
 // one trace exists.
 
-test('replay lists recordings and steps through positions on the table', async ({ page }) => {
+test('replay lists recordings and steps through positions on the board', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 

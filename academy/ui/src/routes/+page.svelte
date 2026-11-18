@@ -9,7 +9,7 @@
   import { watchStart } from '$lib/watch-start.svelte';
   import { onMount, untrack } from 'svelte';
 
-  import Table from '$lib/table/Table.svelte';
+  import Board from '$lib/board/Board.svelte';
   import { PaymentPreviewController, type PreviewState } from '$lib/payment-preview';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
   import { recordFetch } from '$lib/records';
@@ -24,11 +24,11 @@
   import { sanitizeDeckSelection, DECK_CHOICES } from '$lib/decks';
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
-  import { gameResult } from '$lib/table/result';
-  import Strip from '$lib/table/Strip.svelte';
-  import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/table/beats';
-  import { logMarks } from '$lib/table/replay';
-  import { spentOnce } from '$lib/table/phases';
+  import { gameResult } from '$lib/board/result';
+  import Strip from '$lib/board/Strip.svelte';
+  import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
+  import { logMarks } from '$lib/board/replay';
+  import { spentOnce } from '$lib/board/phases';
   import {
     connect,
     disconnect,
@@ -81,16 +81,16 @@
     };
   });
 
-  const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
+  const decisionFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
 
-  // The automatic payer's plan for the offer the table asks about: a
+  // The automatic payer's plan for the offer the board asks about: a
   // read-only query bound to this exact decision. The controller drops an
-  // answer for any other frame, and the table asks for nothing while it
+  // answer for any other frame, and the board asks for nothing while it
   // cannot act, so a commit or a lost connection clears the plan.
   let paymentState = $state<PreviewState | null>(null);
   const payments = new PaymentPreviewController(fetchPaymentPreview, state => { paymentState = state; });
   function previewPayment(offer: InteractionOffer | null): void {
-    if (offer && tableFrame && canSubmitLive) void payments.select(tableFrame, offer.id, offer.label);
+    if (offer && decisionFrame && canSubmitLive) void payments.select(decisionFrame, offer.id, offer.label);
     else payments.clear();
   }
 
@@ -188,11 +188,11 @@
   // Study retains its separate retry capability; live play is one authority gate.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
-  const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && (tableFrame?.offers.length ?? 0) > 0);
+  const canPassTurn = $derived(canSubmitLive && decisionFrame?.action_space === 'PRIORITY' && (decisionFrame?.offers.length ?? 0) > 0);
   const canStudyRetry = $derived(participantStudying && !gameStore.branchAttemptId && gameStore.hasCapability('explore_study') && inputReady);
   // A Study branch shows its own projection with no live offers.
-  const boardFrame = $derived<ExperienceFrame | null>(tableFrame && gameStore.branchProjection
-    ? { ...tableFrame, projection: gameStore.branchProjection, offers: [], prompt: null } : tableFrame);
+  const boardFrame = $derived<ExperienceFrame | null>(decisionFrame && gameStore.branchProjection
+    ? { ...decisionFrame, projection: gameStore.branchProjection, offers: [], prompt: null } : decisionFrame);
   // The boards the opponent's moves were made on, for the frame they came with.
   const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.stepBoards?.frameHash === boardFrame.frame_hash
     ? gameStore.stepBoards.boards : []);
@@ -317,17 +317,17 @@
     sendAction(action.id);
   }
 
-  const onTable = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);
+  const inGame = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);
 
-  // Who is deciding while you wait: the opponent's search or policy, or the table itself.
+  // Who is deciding while you wait: the opponent's search or policy, or the board itself.
   const heroSeat = $derived(gameStore.observation?.agent.player_index ?? null);
   const opponentChoosing = $derived(gameActive && heroSeat !== null && (
     (gameStore.work?.state === 'running' && (gameStore.work.kind === 'choose' || gameStore.work.kind === 'search')
       && gameStore.work.chooser !== null && gameStore.work.chooser !== heroSeat)
-    || (tableFrame?.prompt != null && tableFrame.prompt.actor !== heroSeat)));
+    || (decisionFrame?.prompt != null && decisionFrame.prompt.actor !== heroSeat)));
   const thinking = $derived(!gameActive ? null
     : opponentChoosing ? `${shortName(opponentName)} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
-      : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The table is working…' : null);
+      : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The board is working…' : null);
 
   const ending = $derived(gameStore.gameOver && boardFrame
     ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
@@ -357,8 +357,8 @@
       <button class="btn btn-secondary btn-sm mt-1" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
     </section>
   {/if}
-  {#if !onTable}<WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />{/if}
-  {#if gameStore.tableUnavailable}<p role="status" class="type-caption">The previous table is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
+  {#if !inGame}<WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />{/if}
+  {#if gameStore.tableUnavailable}<p role="status" class="type-caption">The previous game is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
   {#if gameStore.storageWarning}<p role="status" class="type-caption">{gameStore.storageWarning}</p>{/if}
   {#if participantStudying}<p class="type-caption text-ink-2">Study position. {gameStore.branchProjection ? 'Alternate action played; return to the recorded decision to try another.' : 'Choosing an offer tries it in a separate branch.'}</p>{/if}
 {/snippet}
@@ -396,8 +396,8 @@
 
 {#snippet menu()}
   <a class="type-caption text-ink-2 hover:text-ink" href="/games">Games</a>
-  <details class="table-menu">
-    <summary class="btn btn-ghost btn-sm" data-testid="table-menu">Menu</summary>
+  <details class="game-menu">
+    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Menu</summary>
     <div class="menu-panel" role="region" aria-label="Session, stops and tools">
       <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
       <fieldset class="beat-pace" data-testid="beat-pace">
@@ -415,7 +415,7 @@
           onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
       </fieldset>
       {#if gameStore.table}
-        <details><summary class="type-label cursor-pointer">Table and Study tools</summary>
+        <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
           <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
             announcement={gameStore.tableAnnouncement} onTransferPilot={sendTransferPilot} onRestoreDecision={sendRestoreDecision}
             onReturnFromBranch={sendReturnFromBranch} onReturnToLive={sendReturnToLive} />
@@ -434,10 +434,10 @@
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
   data-table-revision={gameStore.table?.table_revision ?? -1}
 >
-  <h1 class="sr-only">{onTable ? 'Current game' : 'New game'}</h1>
+  <h1 class="sr-only">{inGame ? 'Current game' : 'New game'}</h1>
 
-  {#if onTable && boardFrame}
-    <Table
+  {#if inGame && boardFrame}
+    <Board
       frame={boardFrame}
       live={participantStudying ? canStudyRetry : canSubmitLive}
       status={gameStore.decisionStatus}
@@ -532,7 +532,7 @@
         {/if}
         {#if !gameStore.observation}
           <div class="mx-auto max-w-xl py-12 text-center">
-            <p class="type-body mb-1 text-ink-2">The table is set.</p>
+            <p class="type-body mb-1 text-ink-2">The board is set.</p>
             <p role="status" class="type-caption mb-5 text-ink-2">{gameStore.newGamePending ? 'Preparing the game. This may take a moment…' : 'Start a game to begin.'}</p>
             <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
               <fieldset disabled={!gameStore.hasCapability('configure_match')}>
@@ -559,9 +559,9 @@
     padding: 28px 30px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
   .home-matchup { line-height: 1.35; }
   .home-play { font-size: 16px; padding: 10px 22px; }
-  .table-menu { position: relative; }
-  .table-menu > summary { list-style: none; }
-  .table-menu > summary::-webkit-details-marker { display: none; }
+  .game-menu { position: relative; }
+  .game-menu > summary { list-style: none; }
+  .game-menu > summary::-webkit-details-marker { display: none; }
   .menu-panel {
     position: absolute; right: 0; top: calc(100% + 8px); z-index: 320; width: 360px; max-height: calc(100dvh - 64px); overflow-y: auto;
     display: grid; gap: 12px; justify-items: start; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px;

@@ -5,7 +5,7 @@
    * spilling under its neighbours. A tapped card lies on its side in the
    * width its pile reserves for it, centred on the upright cards' line.
    */
-  import TableCard from './TableCard.svelte';
+  import BoardCard from './BoardCard.svelte';
   import type { PlannedSource } from './payment';
   import { fitRow, footprint, pileShapes, pileWidth, unpilePlanned, type PermanentItem, type Pile, type RowLimits } from './view';
 
@@ -94,7 +94,7 @@
           <!-- A leaning attacker paints over its neighbours and the seam. -->
           <div class="member" style:left={`${index * fit.fan}px`} style:top={item.permanent.tapped ? `${Math.round((cardHeight - fit.card) / 2)}px` : '0px'}
             style:z-index={item.permanent.attacking ? members.length + 20 : members.length - index}>
-            <TableCard
+            <BoardCard
               name={item.permanent.name ?? 'Unknown permanent'}
               width={fit.card}
               shape="field"

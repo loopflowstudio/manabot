@@ -47,8 +47,8 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
-  // On the table, the session controls are in the top bar's Menu.
-  await page.getByTestId('table-menu').click();
+  // On the board, the session controls are in the top bar's Menu.
+  await page.getByTestId('game-menu').click();
   await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
   await page.getByText('Browse decks and cards',{exact:true}).click();
   await browser.getByTestId('browse-elemental_bg').click();
@@ -58,8 +58,8 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   await expect(browser).not.toBeVisible();
   // Editing the next game leaves the running game's matchup unchanged.
   await expect(page.getByTestId('deck-names')).toContainText('Temur Lessons');
-  // On the table, the session controls are in the top bar's Menu.
-  await page.getByTestId('table-menu').click();
+  // On the board, the session controls are in the top bar's Menu.
+  await page.getByTestId('game-menu').click();
   await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
   await page.getByText('Browse decks and cards',{exact:true}).click();
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id','elemental_ug');

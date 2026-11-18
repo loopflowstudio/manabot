@@ -1,9 +1,9 @@
 /**
- * What the table draws for one authority frame.
+ * What the board draws for one authority frame.
  *
- * `tableView(frame)` is the one place that decides where each legal offer
+ * `boardView(frame)` is the one place that decides where each legal offer
  * appears: on the card or player it acts on (an anchor), as a button beside
- * the prompt, or in the tray for subjects the table does not draw (Lessons
+ * the prompt, or in the tray for subjects the board does not draw (Lessons
  * outside the game, cards in hidden or collapsed zones). Every offer is also a
  * row of the full list, in authority order, so nothing strategic is reachable
  * only by the board. The view chooses nothing: a commit is always one offer.
@@ -81,7 +81,7 @@ export interface TrayItem {
   name: string | null;
 }
 
-export interface TableView {
+export interface BoardView {
   you: SideView;
   opponent: SideView;
   hand: HandItem[];
@@ -105,7 +105,7 @@ const DECLINE_TYPES = new Set(['DECLINE_CHOICE', 'NO_ATTACK', 'NO_BLOCK']);
 const COMBAT_VERBS = new Set(['declare_attackers', 'declare_blockers']);
 const ROLE_ORDER = ['target', 'source', 'choice'];
 
-/** Ids of every card the table draws, by the zone it is drawn in. */
+/** Ids of every card the board draws, by the zone it is drawn in. */
 function drawnObjects(frame: ExperienceFrame): Set<number> {
   const { agent, opponent } = frame.projection;
   return new Set([
@@ -275,15 +275,15 @@ export function stackName(entry: StackEntryView): string {
 
 // ———————————————————————————————————————— The view
 
-/** How the table's sentences name its two players: "You" and "Heuristic". */
+/** How the board's sentences name its two players: "You" and "Heuristic". */
 export interface PlayerNames {
   you: string;
   opponent: string;
 }
 
 /**
- * An offer as the table labels it, with players named as everywhere else on
- * the table. The rules engine names players by setup role ("Target Hero")
+ * An offer as the board labels it, with players named as everywhere else on
+ * the board. The rules engine names players by setup role ("Target Hero")
  * or by seat ("event: Seat 2"); a person sees "Target yourself", "Target
  * Heuristic", "event: Heuristic". Only the label changes; the offer is the
  * same command.
@@ -303,7 +303,7 @@ export function namedOffer(offer: InteractionOffer, frame: ExperienceFrame, play
   return label === offer.label ? offer : { ...offer, label, confirm_label: label };
 }
 
-export function tableView(frame: ExperienceFrame, players: PlayerNames): TableView {
+export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardView {
   const drawn = drawnObjects(frame);
   const list: PlacedOffer[] = frame.offers.map((offer, index) =>
     ({ offer: namedOffer(offer, frame, players), number: index + 1, anchor: anchorOf(offer, frame, drawn) }));
@@ -349,7 +349,7 @@ export function tableView(frame: ExperienceFrame, players: PlayerNames): TableVi
 }
 
 /** Every place an offer is drawn, for the invariant that each appears somewhere. */
-export function offerPlacements(view: TableView): Map<number, number> {
+export function offerPlacements(view: BoardView): Map<number, number> {
   const counts = new Map<number, number>();
   const count = (placed: PlacedOffer): void => { counts.set(placed.offer.id, (counts.get(placed.offer.id) ?? 0) + 1); };
   const permanents = (pile: Pile[]): PermanentItem[] =>
@@ -411,7 +411,7 @@ export interface RowLimits {
  */
 export type PileShape = readonly boolean[];
 
-/** The width a card takes on the table: upright `card`, or its height when it lies on its side. */
+/** The width a card takes on the board: upright `card`, or its height when it lies on its side. */
 export function footprint(card: number, turned: boolean): number {
   return turned ? Math.round(card / CARD_RATIO) : card;
 }
@@ -442,7 +442,7 @@ function linesNeeded(piles: readonly PileShape[], width: number, card: number, f
  *
  * A larger card never needs fewer lines (every pile widens with it and lines
  * wrap greedily), so each line count's largest fitting card is found by
- * bisection. The table asks this thousands of times a frame (`splitHalf`,
+ * bisection. The board asks this thousands of times a frame (`splitHalf`,
  * `handStrip`), so a pixel-by-pixel walk would cost tens of milliseconds on
  * a crowded board.
  */

@@ -9,7 +9,7 @@ from managym.academy.step_boards import StepBoard, patch, wire_boards
 
 
 def apply(base: Any, node: dict[str, Any]) -> Any:
-    """The patch format as `academy/ui/src/lib/table/boards.ts` applies it."""
+    """The patch format as `academy/ui/src/lib/board/boards.ts` applies it."""
     if "=" in node:
         return node["="]
     if "a" in node:

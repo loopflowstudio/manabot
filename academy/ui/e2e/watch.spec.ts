@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('watch reads choices and consequences on the table, then returns from Study', async ({ page }) => {
+test('watch reads choices and consequences on the board, then returns from Study', async ({ page }) => {
   await page.goto('/replay?watch=1');
   await page.getByRole('button', { name: 'Start watching' }).click();
   await expect(page.getByRole('button', {name: 'Continue', exact: true})).toBeVisible();

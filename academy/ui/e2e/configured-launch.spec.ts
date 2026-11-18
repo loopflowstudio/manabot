@@ -29,7 +29,7 @@ test('starting and reopening an unfinished bot game keeps its live replay positi
   await expect(heading).toBeVisible();
   await expect(page.getByRole('banner').getByRole('link', { name: 'Current game', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(start).toBeHidden();
-  await page.getByTestId('table-menu').click();
+  await page.getByTestId('game-menu').click();
   await page.getByText('Watch another matchup', { exact: true }).click();
   await expect(start).toBeVisible();
 });
@@ -64,8 +64,8 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await second.goto(addresses.game);
   await expect(second.getByTestId('action-option').first()).toBeEnabled();
   await second.close();
-  await page.getByTestId('table-menu').click();
-  await page.getByTestId('table').getByRole('link', {name:'New game',exact:true}).click();
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('game').getByRole('link', {name:'New game',exact:true}).click();
   await expect(page.getByTestId('opponent-select')).toHaveValue('passive');
   await expect(page.getByRole('combobox',{name:'Seat 1 deck',exact:true})).toHaveValue('gw_allies_jeong');
   page.on('dialog',dialog => dialog.accept());
@@ -91,7 +91,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(step).toBeInViewport();
   await expect(step).toBeEnabled();
   await page.screenshot({ path: 'test-results/launch/replay-landing.png' });
-  await page.getByTestId('table-menu').click();
+  await page.getByTestId('game-menu').click();
   await page.getByText('Watch another matchup', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeVisible();
   expect(errors).toEqual([]);
@@ -101,8 +101,8 @@ test('imported launch setup shows selected sources and switches back to bundled 
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { imported_game: string };
   await page.goto(addresses.imported_game);
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
-  await page.getByTestId('table-menu').click();
-  await page.getByTestId('table').getByRole('link',{name:'New game',exact:true}).click();
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('game').getByRole('link',{name:'New game',exact:true}).click();
   page.on('dialog',dialog => dialog.accept());
   const imports = page.getByRole('checkbox', { name: 'Use imported decks for the next game' });
   await expect(imports).toBeVisible();
@@ -133,5 +133,5 @@ test('a recorded collector game opens with both seat names and its training labe
   const plates = page.getByTestId('player-plate');
   await expect(plates.filter({ hasText: 'gaea' })).toHaveCount(1);
   await expect(plates.filter({ hasText: 'urza' })).toHaveCount(1);
-  await expect(page.getByTestId('table-card').first()).toBeVisible();
+  await expect(page.getByTestId('board-card').first()).toBeVisible();
 });

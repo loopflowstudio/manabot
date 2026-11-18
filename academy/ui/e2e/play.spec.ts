@@ -44,7 +44,7 @@ test('play page reacts to the full game loop', async ({ page }) => {
 
   // 3. Start game must actually render a board (observation applied to DOM).
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  await expect(page.getByTestId('table')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
   await expect(page.getByTestId('turn-number')).toContainText('Turn');
 
@@ -56,11 +56,11 @@ test('play page reacts to the full game loop', async ({ page }) => {
   await expect(game.getByTestId('home-matchup')).toContainText('vs Random');
   await expect(game.getByTestId('play-again')).toHaveText('Play again');
   await game.getByTestId('play-again').click();
-  await expect(game.getByTestId('table')).toBeVisible({ timeout: 15_000 });
+  await expect(game.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   await expect(game.getByTestId('deck-names')).toContainText('vs Random');
   await page.close();
 
-  const board = game.getByTestId('table');
+  const board = game.getByTestId('game');
   const logEntries = game.getByTestId('log-entry');
   const actionButtons = game.getByTestId('action-option');
   const gameOverOverlay = game.getByTestId('game-result');

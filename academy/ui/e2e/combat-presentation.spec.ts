@@ -204,12 +204,12 @@ async function startCombat(page: Page, after: Partial<Record<number, Stage>> = {
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
   await expect(page.getByTestId('combat-draft')).toBeVisible();
   return authority;
 }
 
-const card = (page: Page, id: number) => page.locator(`.board [data-testid=table-card][data-object-id="${id}"]`);
+const card = (page: Page, id: number) => page.locator(`.board [data-testid=board-card][data-object-id="${id}"]`);
 
 async function press(page: Page, mode: 'pointer' | 'keyboard', id: number): Promise<void> {
   if (mode === 'pointer') await card(page, id).click();
@@ -247,12 +247,12 @@ for (const mode of ['pointer', 'keyboard'] as const) {
     expect(authority.commands.map(command => [command.expected_revision, command.prompt_id, command.offer_id])).toEqual([[10, 110, 101], [11, 111, 104]]);
 
     // Blocking: Otter-Penguin can block only the Cub, so pressing it drafts that block and draws its line.
-    await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
+    await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
     await expect(page.getByTestId('combat-draft')).toHaveAttribute('data-kind', 'blockers');
     await expect(card(page, 83)).toHaveAccessibleName(/can block; press, then the attacker it blocks/);
     await press(page, mode, 83);
     await expect(card(page, 83)).toHaveAttribute('data-draft', 'in');
-    await expect(page.locator('[data-testid=table-lines] [data-line-kind=block]')).toHaveCount(1);
+    await expect(page.locator('[data-testid=board-lines] [data-line-kind=block]')).toHaveCount(1);
     await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Badgermole Cub');
     await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
     expect(authority.commands).toHaveLength(2);
@@ -272,7 +272,7 @@ test('a frame the preview did not predict stops the sequence and redraws the boa
   await expect(page.getByTestId('primary-action')).toHaveText(/Attack with 2/);
   await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
   await page.getByTestId('primary-action').click();
-  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PRIORITY');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'PRIORITY');
   await page.waitForTimeout(300);
   expect(authority.commands.map(command => command.offer_id)).toEqual([101]);
   await expect(page.getByTestId('combat-stopped')).toHaveText(/Stopped after 1 of 2: the game asked something the preview did not predict/);
@@ -289,7 +289,7 @@ test('a pile of identical creatures takes a count', async ({ page }) => {
   await pile.getByRole('button', { name: 'One more Tiger-Seal' }).click();
   await pile.getByRole('button', { name: 'One more Tiger-Seal' }).click();
   await expect(pile).toHaveAccessibleName('Tiger-Seal: 2 of 3 attacking');
-  await expect(page.locator('.board [data-testid=table-card][data-draft=in]')).toHaveCount(2);
+  await expect(page.locator('.board [data-testid=board-card][data-draft=in]')).toHaveCount(2);
   await expect(page.getByTestId('decision-prompt')).toHaveText('Attack with 2 · not with Otter-Penguin and Tiger-Seal');
   expect(authority.commands).toEqual([]);
 });
@@ -299,7 +299,7 @@ test('a reload mid-draft keeps the draft and commits nothing', async ({ page }) 
   await card(page, 85).click();
   await expect(card(page, 85)).toHaveAttribute('data-draft', 'in');
   await page.reload();
-  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
   await expect(card(page, 85)).toHaveAttribute('data-draft', 'in');
   await expect(card(page, 83)).toHaveAttribute('data-draft', 'can');
   await expect(page.getByTestId('decision-prompt')).toHaveText('Attack with Tiger-Seal · not with Otter-Penguin');
@@ -313,13 +313,13 @@ test('a reload mid-draft keeps the draft and commits nothing', async ({ page }) 
 test('after combat, the block stays drawn and damage shows on the cards it landed on', async ({ page }, testInfo) => {
   const authority = await startCombat(page);
   await page.getByTestId('primary-action').click();
-  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
   await card(page, 83).click();
   await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
   await page.getByTestId('primary-action').click();
-  await expect(page.getByTestId('table')).toHaveAttribute('data-action-space', 'PRIORITY');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'PRIORITY');
   // No frame holds the block any longer; the block events since the move draw it.
-  await expect(page.locator('[data-testid=table-lines] [data-line-kind=block]')).toHaveCount(1);
+  await expect(page.locator('[data-testid=board-lines] [data-line-kind=block]')).toHaveCount(1);
   await expect(card(page, 84).getByTestId('damage-dealt')).toHaveText('−2');
   await expect(card(page, 83).getByTestId('damage-dealt')).toHaveText('−1');
   await expect(card(page, 84)).toHaveAccessibleName(/dealt 2 since your last move/);

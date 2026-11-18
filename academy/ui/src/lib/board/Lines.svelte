@@ -1,30 +1,30 @@
 <script lang="ts">
   /**
-   * Lines over the table that join a card to what it acts on: a spell on the
+   * Lines over the board that join a card to what it acts on: a spell on the
    * stack to each target, a blocker to the attacker it blocks. Lines are drawn
-   * from standing facts (`tableLines`), measured from where the endpoints are
+   * from standing facts (`boardLines`), measured from where the endpoints are
    * drawn, and never take pointer input. Each line is also said in words: the
    * stack entry, the blocker's accessible name and the log carry the same facts.
    */
-  import type { Endpoint, TableLine } from './recent';
+  import type { Endpoint, BoardLine } from './recent';
 
   interface Props {
-    lines: TableLine[];
+    lines: BoardLine[];
     root: HTMLElement | null;
-    /** Changes whenever the table may have moved underneath the lines. */
+    /** Changes whenever the board may have moved underneath the lines. */
     revision: number;
   }
 
   let { lines, root, revision }: Props = $props();
 
-  type Drawn = { key: string; kind: TableLine['kind']; d: string; x: number; y: number };
+  type Drawn = { key: string; kind: BoardLine['kind']; d: string; x: number; y: number };
   let drawn = $state<Drawn[]>([]);
 
   function element(endpoint: Endpoint): HTMLElement | null {
     if (!root) return null;
     const selector = endpoint.kind === 'player' ? `[data-testid=player-plate][data-player-index="${endpoint.index}"] [data-testid=player-target]`
       : endpoint.kind === 'stack' ? `[data-stack-card="${endpoint.id}"]`
-        : `.board [data-testid=table-card][data-object-id="${endpoint.id}"]`;
+        : `.board [data-testid=board-card][data-object-id="${endpoint.id}"]`;
     return [...root.querySelectorAll<HTMLElement>(selector)].find(candidate => candidate.getBoundingClientRect().width > 0) ?? null;
   }
 
@@ -62,7 +62,7 @@
 <svelte:window onresize={measure} />
 
 {#if drawn.length}
-  <svg class="lines" aria-hidden="true" data-testid="table-lines">
+  <svg class="lines" aria-hidden="true" data-testid="board-lines">
     <defs>
       <marker id="line-target" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" class="head target" />

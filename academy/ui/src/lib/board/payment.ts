@@ -1,5 +1,5 @@
 /**
- * The automatic payer's plan, as the table draws it.
+ * The automatic payer's plan, as the board draws it.
  *
  * The native payment preview (`/payment-preview`, `$lib/payment-preview`)
  * answers for one offer: which sources **Pay the cost** would tap and what

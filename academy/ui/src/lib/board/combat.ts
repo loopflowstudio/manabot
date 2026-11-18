@@ -1,7 +1,7 @@
 /**
  * A whole combat declaration, drafted on the board before any of it is sent.
  *
- * The engine asks about one creature at a time. The table lets a person draft
+ * The engine asks about one creature at a time. The board lets a person draft
  * the whole attack (which creatures attack) or block (which blocker blocks
  * which attacker), asks the native preview (`/combat-preview`, read-only) for
  * the exact per-creature offers that declare it, and on confirm sends those

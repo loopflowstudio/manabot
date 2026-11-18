@@ -1,7 +1,7 @@
 import { currentGame, rememberCurrentGame } from './current-game.svelte';
 import type { PlaySession } from './play-session';
 import type { PreviewAddress, PreviewResponse } from './payment-preview';
-import type { CombatAddress, CombatPlan, CombatResponse } from './table/combat';
+import type { CombatAddress, CombatPlan, CombatResponse } from './board/combat';
 import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
@@ -383,7 +383,7 @@ export class GameSocketController {
       return false;
     }
     if (browser && !loadResumeCredentials()) {
-      gameStore.setError('This tab has no resume authority. Recover the table before choosing again.');
+      gameStore.setError('This tab has no resume authority. Recover the game before choosing again.');
       return false;
     }
     if (gameStore.table) request = {...request, grant_revision: gameStore.table.access.grant_revision};
@@ -578,7 +578,7 @@ export class GameSocketController {
       if (this.pendingCommand) {
         this.clearPendingCommand();
         gameStore.endCommand();
-        gameStore.setError('The unresolved submission has an unknown outcome; this table has no live decision.');
+        gameStore.setError('The unresolved submission has an unknown outcome; this game has no live decision.');
       }
       return;
     }
@@ -586,7 +586,7 @@ export class GameSocketController {
     if (message.type === 'belief_changed') {
       gameStore.tableAnnouncement = message.belief.audience.kind === 'personal'
         ? 'Your read is private.'
-        : 'A read was shared with the table.';
+        : 'A read was shared with the game.';
       return;
     }
 

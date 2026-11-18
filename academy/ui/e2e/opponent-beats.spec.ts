@@ -1,5 +1,5 @@
 /**
- * The opponent's moves are read out one beat at a time over the live table:
+ * The opponent's moves are read out one beat at a time over the live board:
  * each long enough to read, Space ends the reading without acting, and reduced
  * motion reads none (the recap still lists every fact).
  */
@@ -13,13 +13,13 @@ async function startAgainstRandom(page: Page, sent: { count: number }): Promise<
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await expect(page.getByTestId('table')).toBeVisible();
+  await expect(page.getByTestId('game')).toBeVisible();
 }
 
 /** Decide until `until` holds, preferring lands, spells and attacks so the game moves. */
 async function playUntil(page: Page, until: () => Promise<boolean>, limit: number): Promise<number> {
   for (let decisions = 0; decisions < limit; decisions += 1) {
-    await expect(page.locator('[data-testid=table][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     if (await until()) return decisions;
     if (await page.getByTestId('result-card').isVisible()) return decisions;
     const rows = page.getByTestId('action-option');
@@ -50,7 +50,7 @@ test('the opponent\'s moves are read out, and Space ends the reading without act
   // own: a past board, with no card outlined (its offers belong to the frame).
   const board = page.getByTestId('game-board');
   const onStep = await board.getAttribute('data-board') === 'step';
-  if (onStep) expect(await board.locator('[data-testid=table-card][data-offer-count]:not([data-offer-count="0"])').count()).toBe(0);
+  if (onStep) expect(await board.locator('[data-testid=board-card][data-offer-count]:not([data-offer-count="0"])').count()).toBe(0);
   const before = sent.count;
   await page.keyboard.press('Space');
   expect(text).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked /);
@@ -77,7 +77,7 @@ test('each beat is shown on its own board, and pressing the board skips to the f
   await page.screenshot({ path: test.info().outputPath('step-board.png') });
   const before = sent.count;
   // A press on a past board commits nothing: its cards had no offers when pressed.
-  const card = board.getByTestId('table-card').first();
+  const card = board.getByTestId('board-card').first();
   await card.click();
   await expect(board).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('beat')).toHaveCount(0);
@@ -104,11 +104,11 @@ test('the Menu turns the reading off, and the browser remembers it', async ({ pa
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
-  await page.getByTestId('table-menu').click();
+  await page.getByTestId('game-menu').click();
   const pace = page.getByTestId('beat-pace');
   await expect(pace.getByRole('radio', { name: 'Quick' })).toBeChecked();
   await pace.getByRole('radio', { name: 'Off' }).check();
-  await page.getByTestId('table-menu').click();
+  await page.getByTestId('game-menu').click();
   let opponentFacts = 0;
   await playUntil(page, async () => {
     expect(await page.getByTestId('beat').count()).toBe(0);
@@ -117,7 +117,7 @@ test('the Menu turns the reading off, and the browser remembers it', async ({ pa
   }, 120);
   expect(opponentFacts).toBeGreaterThan(0);
   await page.reload();
-  await expect(page.getByTestId('table')).toBeVisible();
-  await page.getByTestId('table-menu').click();
+  await expect(page.getByTestId('game')).toBeVisible();
+  await page.getByTestId('game-menu').click();
   await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
 });

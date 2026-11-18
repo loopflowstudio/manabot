@@ -102,7 +102,7 @@
   --info-text: #31599a;
   --neutral: #6a5f86;
   --neutral-text: #554b6e;
-  /* What a legal offer acts on; on the table it lifts rather than outlines. */
+  /* What a legal offer acts on; on the board it lifts rather than outlines. */
   --legal: var(--accent);
   /* Damage, and a target's dashed edge. */
   --damage: #b3261e;
@@ -124,7 +124,7 @@
 
   /* A card's name bar carries its colour: pale tints in light, solid jewel
      bars in dark. White is a neutral ivory-grey and colourless a cool grey,
-     so the two never read alike; several colours blend (TableCard). */
+     so the two never read alike; several colours blend (BoardCard). */
   --card-w: #f3f2ee;
   --card-u: #dde9f6;
   --card-b: #e4e0e6;

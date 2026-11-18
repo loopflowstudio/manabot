@@ -2,9 +2,9 @@
  * Cards move between zones instead of jumping.
  *
  * `Travel` remembers where every card was drawn just before a frame changes
- * the table (`snapshot`), then animates each card from there to where it is
+ * the board (`snapshot`), then animates each card from there to where it is
  * drawn now (`play`): a card that stayed in place but moved because its row
- * reflowed slides; a card that is new to the table comes from the card of the
+ * reflowed slides; a card that is new to the board comes from the card of the
  * same name that has just left (a spell from hand to the stack, a permanent
  * from the stack to the battlefield), or else from its owner's plate, as an
  * opponent's card arrives from a hidden hand. This is a rendering of state
@@ -73,7 +73,7 @@ export class Travel {
     if (reduced || !before.length) return;
     const present = new Set(now.map(element => element.dataset.travelId!));
     const byId = new Map(before.map(seen => [seen.id, seen]));
-    // Cards that left the table this frame, by name, for new cards to come from.
+    // Cards that left the board this frame, by name, for new cards to come from.
     const departed = new Map<string, Seen[]>();
     for (const seen of before) {
       if (present.has(seen.id)) continue;

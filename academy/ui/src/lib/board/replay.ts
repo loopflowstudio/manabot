@@ -1,8 +1,8 @@
 /**
- * A recorded game on the table.
+ * A recorded game on the board.
  *
- * Replay, Watch and Review draw the same `Table` as live play, read-only. This
- * module turns the recording's read model into what the table takes:
+ * Replay, Watch and Review draw the same `Board` as live play, read-only. This
+ * module turns the recording's read model into what the board takes:
  *
  * - `recordedFrame(position, …)`: the frame for one position. At a recorded
  *   choice it is the decision's own frame, with its offers and prompt, so the
@@ -53,7 +53,7 @@ export function bottomSeat(perspective: Perspective, positions: readonly Positio
 // ———————————————————————————————————————— Frames
 
 /**
- * The frame the table draws at a recorded position, seen with `seat` at the
+ * The frame the board draws at a recorded position, seen with `seat` at the
  * bottom. A choice keeps its frame's offers and prompt; a revealed choice
  * draws the spectator board under the same offers.
  */
@@ -296,8 +296,8 @@ export function sinceRevision(positions: readonly Position[], selected: number):
   return null;
 }
 
-/** The context key under which the table gives its cards the recorded policy (a getter of `OfferEvidence | null`). */
-export const EVIDENCE = Symbol('academy.table.evidence');
+/** The context key under which the board gives its cards the recorded policy (a getter of `OfferEvidence | null`). */
+export const EVIDENCE = Symbol('academy.board.evidence');
 
 /** The recorded mass on a card's offers and whether the chooser played one of them; null when none was recorded. */
 export function cardEvidence(evidence: OfferEvidence | null, offerIds: readonly number[]): { p: number | null; chosen: boolean } | null {

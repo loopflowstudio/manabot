@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
-   * Study's controls beside the table: the attempt's phase, Reveal, the three
-   * plans, and Return. The historical offers themselves are the table's: a
+   * Study's controls beside the board: the attempt's phase, Reveal, the three
+   * plans, and Return. The historical offers themselves are the board's: a
    * person tries a line by choosing one on the board or in its list.
    */
   import { tick } from 'svelte';
@@ -121,7 +121,7 @@
 
   {#if phase === 'restored'}
     <p class="type-body mt-3 text-ink-2">
-      {inspected ? 'Choose your line on the table from the exact historical offer. The recorded match stays at its current decision.' : 'Choose your line on the table from the exact historical offer. Policy and Search stay sealed until one command is accepted.'}
+      {inspected ? 'Choose your line on the board from the exact historical offer. The recorded match stays at its current decision.' : 'Choose your line on the board from the exact historical offer. Policy and Search stay sealed until one command is accepted.'}
     </p>
   {:else if phase === 'retried'}
     <p class="type-body mt-3 text-ink-2">
@@ -140,7 +140,7 @@
     {/if}
   {:else if phase === 'revealed'}
     <p class="type-body mt-3 text-ink-2">
-      Played, Policy, and Search are separate judgments. Focus a plan to highlight its authoritative table objects; select it to play its bounded continuation.
+      Played, Policy, and Search are separate judgments. Focus a plan to highlight its authoritative objects on the board; select it to play its bounded continuation.
     </p>
     <div
       class="mt-3 grid gap-2"

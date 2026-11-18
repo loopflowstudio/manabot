@@ -157,7 +157,7 @@ describe('GameStore', () => {
     expect(store.actions).toEqual([]);
   });
 
-  it('keeps the last confirmed table readable after authority is lost', () => {
+  it('keeps the last confirmed board readable after authority is lost', () => {
     const store = createGameStore();
     const frame = structuredClone(boltProtocolFixture.recovery.frame);
     store.applyFrame(frame, 'session-a', 'token-a');

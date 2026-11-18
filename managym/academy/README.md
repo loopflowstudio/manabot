@@ -44,7 +44,7 @@ pending choice with the same legal offers and permitted information.
   attempts/feedback (`ACADEMY_TRACES_DIR/play.sqlite`, default `academy/traces/`).
   New records have one SQLite authority; legacy JSON remains readable.
   `attempt_players` identifies both seats with stable public IDs, types, recorded
-  names, decks and bot versions. Table credentials and browser player credentials
+  names, decks and bot versions. Game resume credentials and browser player credentials
   remain private authorization values. Shared history applies permissions in SQL
   before filtering/pagination; only completed shared replays are readable by
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
@@ -110,22 +110,22 @@ the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
-Live play renders the table (`academy/ui/src/lib/table/`): one window with the
+Live play renders the board (`academy/ui/src/lib/board/`): one window with the
 board, the hand and a rail holding the stack, the decision and every legal
-offer by number. `tableView` places each offer exactly once in that list and
+offer by number. `boardView` places each offer exactly once in that list and
 at least once on the card or player it acts on, as a prompt button (pass, pay,
 declines and combat answers without another creature) or in a tray for subjects
-the table does not draw. A card with one offer commits it on click; several
+the board does not draw. A card with one offer commits it on click; several
 open at the card. Number keys, Space (primary) and F6 act from the keyboard. Rows size
 their cards with `fitRow`, piling identical permanents, keeping a tapped card's
-sideways width and wrapping before scrolling. See [playing on the table](../../docs/academy.md#playing-on-the-table).
-Priority stops are set on the table's bottom step bar (off, every time or once)
-and in the table's menu; see
+sideways width and wrapping before scrolling. See [playing on the board](../../docs/academy.md#playing-on-the-board).
+Priority stops are set on the bottom step bar (off, every time or once)
+and in the top bar's Menu; see
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
 stack responses and F6. Recorded policy/search evidence is attached to the
-decision it describes; the live table has no example Advice panel. Replay,
+decision it describes; the live board has no example Advice panel. Replay,
 Watch and Study keep the earlier lane board and choice panel until they move to
-the table. Public mana pools, spending restrictions and chooser-only inspected
+the board. Public mana pools, spending restrictions and chooser-only inspected
 cards come from native observations. Historical frames without those fields say
 details were not recorded.
 
@@ -133,7 +133,7 @@ Academy uses native trivial-decision skipping, like every game runner: the
 engine resolves sole legal actions for either seat, so no forced prompt reaches
 a person or a policy. Disable **Use priority stops** to surface every priority
 window that offers a real choice. Priority stop/F6 automation retains its
-Commands and is marked **auto** in the table's move list; traces from before native
+Commands and is marked **auto** in the move list; traces from before native
 skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
@@ -288,7 +288,7 @@ for authorized bot spectators, including during active watches. Every read,
 including completed inspection, follows the recording's participant/shared
 access rules; finishing does not make a private recording public. Active Watch
 inspection also requires its watch credential. Choices default to the acting
-bot's view, independently of the stable seat-0 table orientation. Consequence
+bot's view, independently of the stable seat-0 board orientation. Consequence
 and result boards use the authorized recorded seat-0 view where actor-private
 post-action snapshots are absent, with the perspective explicitly labeled.
 Unavailable views stay unavailable. Ordinary trace reads always strip the
@@ -298,7 +298,7 @@ retain their acting-view scope.
 **Try another line** uses retained Study roots from either acting seat, executes
 one exact semantic Command on an isolated branch, and returns to the recorded
 decision. It does not advance the watched match. Roots and active controllers
-have the ordinary table-session lifetime; saved completed inspection remains
+have the ordinary game-session lifetime; saved completed inspection remains
 available after the session expires, while a fresh Study fork requires retained
 roots. Existing structured Study receipts and frozen `erd1` evidence keep their
 original command bindings.

@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * One card on the table: a permanent, a card in hand, a spell on the stack
+   * One card on the board: a permanent, a card in hand, a spell on the stack
    * or a tray candidate. It is a button whenever the viewer may inspect it;
    * its outline says a legal offer acts on it, and its accessible name says
    * which.
@@ -49,9 +49,9 @@
     asked?: boolean;
     /** The side of the centre line this card sits on; attacks lean toward it. */
     toward?: 'up' | 'down' | null;
-    /** The name of the attacker this permanent blocks; the line on the table draws it. */
+    /** The name of the attacker this permanent blocks; the line on the board draws it. */
     blocks?: string | null;
-    /** Whose plate a card new to the table travels from. */
+    /** Whose plate a card new to the board travels from. */
     side?: 'you' | 'opponent';
     /** It attacked, blocked, was dealt damage or was targeted since your last move. */
     touched?: boolean;
@@ -201,7 +201,7 @@
     class:touched
     class:beat
     class:planned={planned !== null}
-    data-testid="table-card"
+    data-testid="board-card"
     data-travel-id={permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
     data-travel-name={name}
     data-travel-side={side}

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { CardState, ExperienceFrame, PermanentState, PresentationEvent, PresentationLabels } from '$lib/types';
-import { nameBook, recentView, tableLines, turnOwners } from './recent';
+import { nameBook, recentView, boardLines, turnOwners } from './recent';
 
 const bolt = JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/bolt-target.json', import.meta.url), 'utf8')) as {
   recovery: { frame: ExperienceFrame; presentation_tail: PresentationEvent[] };
@@ -98,18 +98,18 @@ describe('lands, discards and reveals', () => {
   });
 });
 
-describe('tableLines', () => {
+describe('boardLines', () => {
   it('draws a spell on the stack to its target, and drops the line once it leaves', () => {
     const onStack = withBoard(bolt.recovery.frame, projection => { projection.agent.stack = [card(4001, 'Lightning Bolt')]; });
-    expect(tableLines(onStack, bolt.recovery.presentation_tail)).toEqual([
+    expect(boardLines(onStack, bolt.recovery.presentation_tail)).toEqual([
       { from: { kind: 'stack', id: 4001 }, to: { kind: 'player', index: 1 }, kind: 'target' },
     ]);
-    expect(tableLines(bolt.recovery.frame, bolt.recovery.presentation_tail)).toEqual([]);
+    expect(boardLines(bolt.recovery.frame, bolt.recovery.presentation_tail)).toEqual([]);
   });
 
   it('keeps the line of a spell that just resolved while it is shown beside the stack', () => {
     const resolved = [{ id: 4001, name: 'Lightning Bolt', by: 'you' as const, targets: [] }];
-    expect(tableLines(bolt.recovery.frame, bolt.recovery.presentation_tail, resolved)).toHaveLength(1);
+    expect(boardLines(bolt.recovery.frame, bolt.recovery.presentation_tail, resolved)).toHaveLength(1);
   });
 
   it('joins each blocker to the attacker it blocks', () => {
@@ -117,7 +117,7 @@ describe('tableLines', () => {
       projection.opponent.battlefield = [permanent(50, 'Attacker', { attacking: true })];
       projection.agent.battlefield = [permanent(60, 'Blocker', { blocking: 50, controller_id: 0 })];
     });
-    expect(tableLines(blocked, [])).toEqual([{ from: { kind: 'object', id: 60 }, to: { kind: 'object', id: 50 }, kind: 'block' }]);
+    expect(boardLines(blocked, [])).toEqual([{ from: { kind: 'object', id: 60 }, to: { kind: 'object', id: 50 }, kind: 'block' }]);
   });
 
   it('keeps a block drawn after combat from the block events since your last move', () => {
@@ -128,11 +128,11 @@ describe('tableLines', () => {
     const block: PresentationEvent = { ...bolt.recovery.presentation_tail[0], seq: 9, from_revision: 5, to_revision: 6,
       kind: { kind: 'blocked', attacker: { entity: 50, incarnation: 1 }, blockers: [{ entity: 60, incarnation: 1 }] } };
     const line = { from: { kind: 'object', id: 60 }, to: { kind: 'object', id: 50 }, kind: 'block' };
-    expect(tableLines(after, [block], [], 5)).toEqual([line]);
+    expect(boardLines(after, [block], [], 5)).toEqual([line]);
     // Before your move, or with a creature gone, there is no line.
-    expect(tableLines(after, [block], [], 6)).toEqual([]);
+    expect(boardLines(after, [block], [], 6)).toEqual([]);
     const gone = withBoard(after, projection => { projection.opponent.battlefield = []; });
-    expect(tableLines(gone, [block], [], 5)).toEqual([]);
+    expect(boardLines(gone, [block], [], 5)).toEqual([]);
   });
 });
 

@@ -55,10 +55,10 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
 
 const FAMILIES = ['CHOOSE_TARGET', 'DISCARD', 'LEARN', 'DECLARE_BLOCKER', 'PAY_OR_NOT'] as const;
 
-/** Where the table draws an offer besides its rail row: a card, a player, a prompt button or the tray. */
+/** Where the board draws an offer besides its rail row: a card, a player, a prompt button or the tray. */
 function drawn(page: Page, offer: { id: number; label: string }, number: number) {
   return page.locator([
-    `[data-testid=table-card][aria-label*="${offer.label} (${number})"]`,
+    `[data-testid=board-card][aria-label*="${offer.label} (${number})"]`,
     `[data-testid=player-target][aria-label*="${offer.label} (${number})"]`,
     `[data-testid=primary-action][data-offer-id="${offer.id}"]`,
     `[data-testid=prompt-action][data-offer-id="${offer.id}"]`,
@@ -67,7 +67,7 @@ function drawn(page: Page, offer: { id: number; label: string }, number: number)
 }
 
 for (const family of FAMILIES) {
-  test(`${family}: every offer is a numbered row and drawn on the table, and a click commits exactly it`, async ({ page }) => {
+  test(`${family}: every offer is a numbered row and drawn on the board, and a click commits exactly it`, async ({ page }) => {
     const commands = await installPosition(page, family);
     const frame = positions[family].frame as ExperienceFrame;
     await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
@@ -78,11 +78,11 @@ for (const family of FAMILIES) {
       expect(await drawn(page, offer, index + 1).count(), offer.label).toBeGreaterThanOrEqual(1);
     }
     // Pointing and inspecting send nothing.
-    await page.getByTestId('table-card').first().hover();
+    await page.getByTestId('board-card').first().hover();
     expect(commands).toEqual([]);
 
     // A card with exactly one offer commits that offer; a number key commits its row.
-    const card = page.locator('[data-testid=table-card].legal[data-offer-count="1"]').first();
+    const card = page.locator('[data-testid=board-card].legal[data-offer-count="1"]').first();
     const number = Number((await card.getAttribute('aria-label'))!.match(/\((\d+)\)$/)![1]);
     const target = frame.offers[number - 1];
     const box = (await card.boundingBox())!;
@@ -102,7 +102,7 @@ test('Learn draws Lessons from outside the game in the tray, and declining stays
   const commands = await installPosition(page, 'LEARN');
   const frame = positions.LEARN.frame as ExperienceFrame;
   const lessons = frame.offers.filter(offer => offer.action_type === 'LEARN_TAKE_LESSON');
-  await expect(page.getByTestId('tray').getByTestId('table-card')).toHaveCount(lessons.length);
+  await expect(page.getByTestId('tray').getByTestId('board-card')).toHaveCount(lessons.length);
   await expect(page.getByTestId('prompt-action').filter({ hasText: 'Decline Learn' })).toBeVisible();
   // A click on the Learn spell never declines it.
   await expect(page.getByTestId('stack-entry').locator('xpath=self::*[contains(@class, "legal")]')).toHaveCount(0);
@@ -148,7 +148,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
-    await expect(page.getByTestId('table')).toBeVisible();
+    await expect(page.getByTestId('game')).toBeVisible();
     for (const [ordinal, step] of position.prefix.entries()) {
       await expect.poll(() => page.evaluate(() => window.__choiceNavigation.working)).toBe(false);
       const revision = await page.evaluate(({ ordinal, step }) => {

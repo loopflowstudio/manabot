@@ -2,7 +2,7 @@
 
 Between two of the person's decisions the authority may play many steps (the
 opponent's turn, the person's automatic passes) and publishes one frame, the
-board after the last. The live table reads the opponent's moves out one beat at
+board after the last. The live board reads the opponent's moves out one beat at
 a time; to show each beat on the board it happened on (an attacker that died is
 seen attacking first), the session keeps the person's viewer-safe projection
 after every step that added to their presentation track (`StepBoard`) and sends
@@ -30,7 +30,7 @@ Patch nodes (`patch`):
   that id, unchanged), `{"k": id, "p": node}` (that item, patched) or
   `{"=": value}` (a new item). Other arrays that differ are replaced.
 
-`academy/ui/src/lib/table/boards.ts` applies them.
+`academy/ui/src/lib/board/boards.ts` applies them.
 """
 
 from __future__ import annotations

@@ -562,7 +562,7 @@ export interface FrameUpdate {
   /** Compatibility narration stays outside the immutable canonical frame. */
   log?: LogLine[];
   auto_passed?: number;
-  /** The person's board after each step of this batch, as patches back from the frame (`table/boards.ts`). */
+  /** The person's board after each step of this batch, as patches back from the frame (`board/boards.ts`). */
   boards?: StepBoardPatch[];
 }
 
@@ -570,7 +570,7 @@ export interface FrameUpdate {
 export interface StepBoardPatch {
   first: number;
   last: number;
-  /** A `PatchNode` (`table/boards.ts`) onto the board after this one, or the frame's. */
+  /** A `PatchNode` (`board/boards.ts`) onto the board after this one, or the frame's. */
   patch: unknown;
 }
 
@@ -621,7 +621,7 @@ export interface LogLine {
   text: string;
 }
 
-/** One move of the table's log; automation is its own actor, never the person's. */
+/** One move of the board's log; automation is its own actor, never the person's. */
 export interface GameLogEntry {
   id: string;
   actor: 'hero' | 'villain' | 'auto' | 'system';

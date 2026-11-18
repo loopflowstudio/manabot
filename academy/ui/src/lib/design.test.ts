@@ -1,5 +1,5 @@
 // The design lint: `DESIGN.md`'s permitted list against the literals in
-// `app.css` and the table's Svelte styles, and the contrast of the text tokens
+// `app.css` and the board's Svelte styles, and the contrast of the text tokens
 // on the grounds they sit on, in both themes.
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -217,9 +217,9 @@ function lintFile(path: string): Finding[] {
 }
 
 describe('the design lint', () => {
-  it('finds no literal outside DESIGN.md in app.css or the table', () => {
-    const table = join(ui, 'src', 'lib', 'table');
-    const files = [join(ui, 'src', 'app.css'), ...readdirSync(table).filter(name => name.endsWith('.svelte')).map(name => join(table, name))];
+  it('finds no literal outside DESIGN.md in app.css or the board', () => {
+    const board = join(ui, 'src', 'lib', 'board');
+    const files = [join(ui, 'src', 'app.css'), ...readdirSync(board).filter(name => name.endsWith('.svelte')).map(name => join(board, name))];
     const findings = files.flatMap(lintFile).map(f => `${f.file}:${f.line} ${f.declaration} (${f.why})`);
     expect(findings).toEqual([]);
   });

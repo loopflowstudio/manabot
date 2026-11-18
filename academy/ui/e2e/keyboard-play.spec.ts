@@ -1,5 +1,5 @@
 /**
- * A game played without the mouse: Tab moves between the table's regions
+ * A game played without the mouse: Tab moves between the board's regions
  * (the opponent's field, your field, the hand, the stack, the decision, the
  * legal choices, the moves), arrows move within one, Enter acts on the focused
  * card or choice and Space is the primary. After a move, focus stays in the
@@ -58,7 +58,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('[data-testid=table][data-live=true]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
 
   // Tab visits the regions in reading order, each once, one stop per region,
   // and leaves them only for the top bar's controls and the stop bar (one
@@ -89,7 +89,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   let byEnter = 0;
   let bySpace = 0;
   for (let decision = 0; decision < 40 && (byEnter < 3 || bySpace < 6); decision += 1) {
-    await expect(page.locator('[data-testid=table][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     if (await page.getByTestId('result-card').isVisible()) break;
     const before = await revision(page);
     const commands = sent.length;
@@ -105,7 +105,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
         await page.keyboard.press('Space');
       }
     } else {
-      // Space is the primary wherever focus is in the table; choices without one are numbered.
+      // Space is the primary wherever focus is in the board; choices without one are numbered.
       if (await page.getByTestId('primary-action').count()) await page.keyboard.press('Space');
       else await page.keyboard.press('1');
       bySpace += 1;
@@ -113,20 +113,20 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     await expect.poll(() => revision(page), { timeout: 30_000 }).toBeGreaterThan(before);
     if (space === 'DECLARE_ATTACKER') expect(sent.length).toBeGreaterThan(commands);
     else expect(sent.length).toBe(commands + 1);
-    // Focus stays on the table after the move.
+    // Focus stays on the board after the move.
     await expect.poll(async () => page.evaluate(() => document.activeElement !== document.body)).toBe(true);
   }
   expect(byEnter).toBeGreaterThanOrEqual(2);
   expect(bySpace).toBeGreaterThanOrEqual(4);
 });
 
-test('? opens the sheet of the table\'s keys, and Esc returns to the hint', async ({ page }) => {
+test('? opens the sheet of the board\'s keys, and Esc returns to the hint', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await expect(page.locator('[data-testid=table][data-live=true]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
 
   await page.keyboard.press('?');
   const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });

@@ -547,7 +547,7 @@ def viewer_view(
 
 
 def hero_view(obs: managym.Observation) -> dict[str, Any]:
-    """Backwards-compatible player-0 projection for the live table."""
+    """Backwards-compatible player-0 projection for the live board."""
     return viewer_view(obs, HERO_PLAYER_INDEX)
 
 
