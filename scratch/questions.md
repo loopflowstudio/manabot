@@ -154,3 +154,12 @@ say so if they should carry a note.
     ingest training rows. Both already select winning attempts. Passed over:
     holding this PR for an Etude release. Moving the relation upstream later
     changes only where the rows are read.
+
+36. The current local and frontier recipes declare their recipe arguments and
+    resolve decks inside Python. Record the resolved content IDs and the union
+    of main-deck and sideboard definition keys once at update zero. Keep duplicate
+    population entries in the roster and count each content ID once in matchup
+    joins. The checkpoint entry point accepts Etude's published CheckpointRecord.
+    SDK 0.4.1 selects table artifacts across the supplied history before the
+    caller can filter on update. Include a bounded table read in the Etude
+    follow-up alongside database ingestion.

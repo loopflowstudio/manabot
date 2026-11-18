@@ -2,9 +2,6 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-import json
-from pathlib import Path
-import re
 from typing import Any
 
 from manabot.env.observation import ObservationSpace
@@ -17,7 +14,7 @@ from manabot.model.world import (
     validate_checkpoint_world,
     written_at,
 )
-from manabot.model.writer_catalog import WriterCatalog, writer_catalog
+from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
 import managym
 
 
@@ -198,15 +195,4 @@ def recorded_writer(
         and saved.get("naming_vocabulary") == expected["naming_vocabulary"]
     ):
         return current
-    path = Path(__file__).with_name("writer_catalogs") / f"{digest}.json"
-    if (
-        not isinstance(digest, str)
-        or not re.fullmatch("[0-9a-f]{64}", digest)
-        or not path.is_file()
-    ):
-        raise ValueError(
-            f"missing writer catalog for {digest}; at the writing revision run "
-            f"uv run python -m manabot.model.writer_catalog and save its output as "
-            f"manabot/model/writer_catalogs/{digest}.json; {location}"
-        )
-    return json.loads(path.read_bytes())
+    return archived_catalog(digest, location)

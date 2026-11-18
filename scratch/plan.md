@@ -46,30 +46,33 @@ All 132 observed deck identities joined by content to the 134 entries in
 `training.regime.deck_source.decks` in the declaration. All 262 card names
 in that roster resolve through the writer naming catalog to definition keys.
 
+## Corpus query delivered, 2026-11-18
+
+`manabot.eval.training_corpus.training_corpus` takes an Etude checkpoint
+record plus storage, or a RunData plus an inclusive update. The DuckDB
+relation joins each ordered matchup to both decks' definition keys. Missing
+update evidence raises UnknownCoverage. New self-play runs retain their
+resolved decks at update zero because current recipe arguments need not
+include them. Frontier's historical declaration supplies its own roster.
+
+Ran all four SQL questions from the evaluation guide against the local
+two-update recipe (`mtg353-training-corpus`) and the frontier Small R2
+declaration, writer record and sealed block for updates 0–12. Local had
+four games with Island, one ordered matchup and two seats of each deck
+per update. Frontier through update 1 had 259 games, 218 with Island;
+132 distinct decks occupied 518 seats, from 134 roster entries and 262
+distinct definition keys. The ordered matchup starting `7b246825` on
+the play and `a3d4b7c3` on the draw occurred twice. For a proposed deck
+containing Island and Lightning Bolt, only Lightning Bolt was new in both
+runs. DuckDB plans used hash joins on the two deck identities.
+
 ## Remaining work
 
-1. **Corpus query in manabot, on Etude's public training reader.** The
-   installed SDK already selects the rows: `RunData.read_table(
-   "self_play_outcomes", "updates")` for current runs and
-   `manabot/reports/update_metrics.py::updates_from_run` for historical
-   scalars, both honouring resume supersession. Add the entry point beside
-   the evaluation queries: accept a checkpoint or run and update, select
-   recorded matchups through that update, join their decks to card keys
-   through the run's declared deck source and the writer naming catalog, and
-   expose the result as a DuckDB relation so specific questions are SQL on
-   top. Keep per-update counts for deck-mix questions. Absent outcome
-   evidence reports coverage unknown, never empty.
-2. Test and demonstrate the four queries against a local run and frontier
-   Small (`tla_frontier/59718fe34945`, R2): matchup membership, new cards in
-   a deck, games including a card by an update (count a game once, not per
-   seat), and deck mix over time. Replace the guide's quoted update-1 counts
-   with the executable query. Expected update-1 result: 259 games, 132 of
-   134 roster decks observed, 262 card names resolved.
-3. Etude follow-up, not blocking: its evaluation query database indexes
+1. Etude follow-up, not blocking: its evaluation query database indexes
    `training_checkpoints` only (question 34). Once Etude ingests selected
    training rows, the manabot relation can read them there. File as an Etude
    Task; this PR does not wait for it.
-4. Gate and publish for human review after the query is built. No landing,
+2. Gate and publish for human review after the query is built. No landing,
    paid run, corpus label in the checkpoint or change to exact-deck refusal.
 
 ## Review direction

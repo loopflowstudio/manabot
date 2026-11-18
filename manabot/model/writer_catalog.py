@@ -5,6 +5,8 @@ native public pool and naming APIs available at the writing revision.
 """
 
 import json
+from pathlib import Path
+import re
 from typing import TypedDict
 
 import managym
@@ -45,6 +47,21 @@ def writer_catalog() -> WriterCatalog:
         definition_keys=keys,
         naming_catalog=naming_entries(),
     )
+
+
+def archived_catalog(digest: str, location: str) -> WriterCatalog:
+    path = Path(__file__).with_name("writer_catalogs") / f"{digest}.json"
+    if (
+        not isinstance(digest, str)
+        or not re.fullmatch("[0-9a-f]{64}", digest)
+        or not path.is_file()
+    ):
+        raise ValueError(
+            f"missing writer catalog for {digest}; at the writing revision run "
+            f"uv run python -m manabot.model.writer_catalog and save its output as "
+            f"manabot/model/writer_catalogs/{digest}.json; {location}"
+        )
+    return json.loads(path.read_bytes())
 
 
 if __name__ == "__main__":

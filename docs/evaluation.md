@@ -219,11 +219,6 @@ training corpus, verify that both runs trained on the evaluation matchups by
 the selected updates. A matchup outside a checkpoint’s corpus measures transfer.
 See [training corpus](observation-and-model.md#what-a-checkpoint-is-bound-to).
 
-For example, frontier Small (Etude run `59718fe34945`) recorded 259 games
-through update 1. Counting the play seat once per game, those matchups used
-132 of the 134 decks in its configured roster. Even two decks that both
-appeared can form a pairing the run had yet to play.
-
 Check the revisions between the measurements for a declared change that
 affects the metric. Pinned-pilot recordings give the reason for a change in
 what a stored policy computes. Engine Budget records the reason its reference
@@ -238,6 +233,70 @@ registrations can omit both fields.
 
 Score early learning on the raw learner. An averaged export can still be
 close to initialization while the raw policy is improving.
+
+### Querying the training corpus
+
+Use the `evaluation` extra for DuckDB and open an Etude run from its storage root. For frontier Small, use a local copy
+of `r2://manabot/jobs` containing the run declaration, writer record and sealed
+metrics block covering update 1. The query also accepts a published checkpoint
+as `training_corpus(checkpoint, source=storage)` and uses its recorded update.
+
+```python
+from pathlib import Path
+
+from etude.train.read import read
+from manabot.eval.training_corpus import roster, training_corpus
+
+storage = Path("runs")
+run = read(storage, "tla_frontier", "59718fe34945")
+corpus = training_corpus(run, through=1)
+decks = roster(run)
+print("Roster decks and distinct card keys:", len(decks),
+      len({key for deck in decks for key in deck["cards"]}))
+
+def query(sql: str) -> list[tuple[object, ...]]:
+    return corpus.query("corpus", sql).fetchall()
+
+print("Completed games:", query("select sum(games) from corpus"))
+print("Observed decks:", query("""
+    select count(distinct deck) from (select unnest([play, draw]) as deck from corpus)
+"""))
+
+# Matchup membership and counts. Filter either seat by Deck.identity to
+# inspect a particular matchup. Swapping play and draw gives the reverse leg.
+print(query("""
+    select play, draw, sum(games) as played from corpus
+    group by play, draw order by played desc, play, draw
+"""))
+
+# Which definition keys in a proposed deck are new to this corpus?
+print(query("""
+    select unnest(['lea.island', 'lea.lightning_bolt'])
+    except select unnest(play_cards || draw_cards) from corpus
+"""))
+
+# Games with Island in either list, counting a mirror once.
+print(query("""
+    select coalesce(sum(games), 0) from corpus
+    where list_contains(play_cards || draw_cards, 'lea.island')
+"""))
+
+# Deck mix at each update. A mirror contributes two seats.
+print(query("""
+    select update_number, deck, sum(games) as seats from
+        (select update_number, unnest([play, draw]) as deck, games from corpus)
+    group by update_number, deck order by update_number, seats desc, deck
+"""))
+```
+
+Card membership includes main decks and sideboards. It measures which lists
+entered games. New self-play runs record the resolved roster at update zero.
+For historical scalar outcomes, the roster comes from the declared deck source
+and card keys come from the writer's catalog. An explicitly logged empty
+outcome table records zero completed games. An update missing its outcomes
+raises `UnknownCoverage`, as does a missing roster. With Etude SDK 0.4.1 the
+table reader loads all selected table artifacts in the supplied history, even
+when the requested update is early.
 
 ## Etude agents
 

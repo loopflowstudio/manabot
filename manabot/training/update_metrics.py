@@ -14,6 +14,8 @@ type MetricRow = dict[str, MetricValue]
 
 # The Etude row table holding each self-play update's SelfPlayOutcome rows.
 OUTCOME_TABLE = "self_play_outcomes"
+# The deck population resolved by the writer, keyed by deck content identity.
+ROSTER_TABLE = "training_decks"
 # Lists whose entries are named by fields, not by position. Self-play lists
 # occur only in the offline projection of a run's outcome tables
 # (`manabot.reports.update_metrics`); live updates log the table itself.

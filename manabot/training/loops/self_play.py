@@ -54,7 +54,8 @@ from manabot.model.world import (
     validate_agent_decks,
     validate_agent_setup,
 )
-from manabot.training.decks import UniformDecks
+from manabot.model.writer_catalog import writer_catalog
+from manabot.training.decks import UniformDecks, corpus_decks
 from manabot.training.learning import (
     BatchClosure,
     DampedPolicyLearning,
@@ -85,6 +86,7 @@ from manabot.training.state.game_errors import (
 from manabot.training.state.incidents import save_incident
 from manabot.training.update_metrics import (
     OUTCOME_TABLE,
+    ROSTER_TABLE,
     metric_row,
     phase_seconds,
     time_since,
@@ -699,6 +701,14 @@ def self_play(
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
             publish(settings, run, learner, ema, counts)
         with self_play_games(settings, run, counts) as collector:
+            if counts.updates == 0 and settings.behavior != "random":
+                players = collector.uniform_roster or collector.match.to_rust()
+                run.log_table(
+                    ROSTER_TABLE,
+                    corpus_decks((player.deck for player in players), writer_catalog()),
+                    updates=0,
+                    **clocks(counts),
+                )
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out)
                 if kind is not None:

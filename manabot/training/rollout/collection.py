@@ -81,7 +81,7 @@ from manabot.training.state.game_errors import (
     GameOutcome,
     RecordAttempt,
 )
-from managym import WORLD_SETUP, Deck, GameSetup
+from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -396,7 +396,7 @@ class Collector:
     _record_attempt: RecordAttempt | None
     # The deck source's identity is fixed; every game attempt records it.
     _decks_digest: str | None
-    _uniform_roster: list[Any]
+    uniform_roster: list[PlayerConfig]
     _win_reward: float
     _lose_reward: float
     _streams: list[list[_Transition]]
@@ -494,7 +494,7 @@ def open_collector(
     sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
     assignments = [sampler.draw() for _ in range(num_envs)] if sampler else []
     reverse_cells = _reverse_cells(adaptive) if adaptive is not None else []
-    uniform_roster: list[Any]
+    uniform_roster: list[PlayerConfig]
     if deck_source is not None:
         if matchup_curriculum != "fixed":
             raise ValueError("a deck source cannot be combined with a curriculum")
@@ -607,7 +607,7 @@ def open_collector(
             _observations=_ObservationRows(buffers, observation_keys, 0),
             _record_attempt=record_attempt,
             _decks_digest=deck_source.digest if deck_source is not None else None,
-            _uniform_roster=uniform_roster,
+            uniform_roster=uniform_roster,
             _win_reward=float(reward.config.win_reward),
             _lose_reward=float(reward.config.lose_reward),
             _streams=[[] for _ in range(slots)],
@@ -692,7 +692,7 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
             collector.stream_matches[row] = _assigned_match(
                 collector, collector._assignments[row]
             )
-    if collector._uniform_roster:
+    if collector.uniform_roster:
         # Actual native setups, not indices: they remain exact for any deck
         # the run submitted, even one outside the supply it began with.
         setups = collector._env.current_player_configs()
@@ -709,7 +709,7 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
 
 
 def _expose(collector: Collector, row: int, kind: ExposureKind, count: int = 1) -> None:
-    if not collector._uniform_roster and collector._sampler is None:
+    if not collector.uniform_roster and collector._sampler is None:
         return
     a, b = collector._self_play_decks[row]
     seat = (

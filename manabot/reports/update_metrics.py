@@ -4,11 +4,17 @@ Later attempts supersede resumed coordinates; outcome tables join scalar rows.
 """
 
 from collections.abc import Mapping
+import math
 
 from etude.train.manifest import StoredBlock
 from etude.train.read import RunData
 
-from manabot.training.update_metrics import OUTCOME_TABLE, MetricRow, metric_row
+from manabot.training.update_metrics import (
+    OUTCOME_TABLE,
+    ROSTER_TABLE,
+    MetricRow,
+    metric_row,
+)
 
 # One Etude run's rows by completed-update coordinate.
 type Updates = dict[int, MetricRow]
@@ -27,6 +33,20 @@ def updates_from_run(data: RunData) -> Updates:
     the update's metrics joins them. Rows without values mark a clock position,
     not an update. Etude selects and verifies outcome tables the same way.
     """
+    selected = scalar_updates(data)
+    # `log_table` indexes its table's digest as a metric of the same name;
+    # the rows replace it.
+    for update in selected.values():
+        update.pop(OUTCOME_TABLE, None)
+    for table in data.read_table(OUTCOME_TABLE, "updates"):
+        selected.setdefault(int(table.x), {}).update(
+            metric_row({OUTCOME_TABLE: table.rows})
+        )
+    return dict(sorted(selected.items()))
+
+
+def scalar_updates(data: RunData, through: int | None = None) -> Updates:
+    """Select scalar writes, optionally through an inclusive update."""
     # Group blocks, not decoded rows: read one block at a time without populating
     # RunData.columns, which caches the entire history. Keep empty attempts too.
     writers: dict[str, list[StoredBlock]] = {
@@ -44,17 +64,29 @@ def updates_from_run(data: RunData) -> Updates:
         resumed = attempt.resumed_at.get("updates") if attempt is not None else None
         rows: dict[int, MetricRow] = {}
         for block in writers[writer]:
+            clock = next((c for c in block.header.clocks if c.name == "updates"), None)
+            if clock is None:
+                continue
+            if resumed is None:
+                resumed = clock.first
+            if (
+                through is not None
+                and clock.increasing
+                and clock.first is not None
+                and clock.first > through
+            ):
+                continue
             table = block.columns()
-            for index in range(table.rows):
-                logged = table.row(index)
-                clocks, values = logged.clocks, logged.values
-                if "updates" not in clocks:
+            for index, coordinate in enumerate(table.clocks["updates"]):
+                update = float(coordinate)
+                if math.isnan(update):
                     continue
-                update = clocks["updates"]
-                if not isinstance(update, (int, float)):
-                    raise ValueError("Etude updates clock is not a number")
                 if resumed is None:
                     resumed = update
+                if through is not None and update > through:
+                    continue
+                values = table.row(index).values
+                values.pop(ROSTER_TABLE, None)
                 if values:
                     rows.setdefault(int(update), {}).update(_integral(values))
         # Current writers supersede from their first row, inclusive. Historical
@@ -75,15 +107,7 @@ def updates_from_run(data: RunData) -> Updates:
             f"{_RETIRED_OUTCOME_REFERENCE!r} format; read it from a manabot "
             "revision that still reads it, such as bf4e280f7"
         )
-    # `log_table` indexes its table's digest as a metric of the same name;
-    # the rows replace it.
-    for update in selected.values():
-        update.pop(OUTCOME_TABLE, None)
-    for table in data.read_table(OUTCOME_TABLE, "updates"):
-        selected.setdefault(int(table.x), {}).update(
-            metric_row({OUTCOME_TABLE: table.rows})
-        )
-    return dict(sorted(selected.items()))
+    return selected
 
 
 def _integral(values: Mapping[str, object]) -> MetricRow:
