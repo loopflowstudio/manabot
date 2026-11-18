@@ -1058,7 +1058,9 @@ class GameSession:
             try:
                 # Native skipping resolves sole legal actions, as in every runner;
                 # priority-stop automation still records its Commands here.
-                env = managym.Env(seed=seed)
+                # Bot policies may read the viewer's decision memory, which the
+                # engine only captures when asked.
+                env = managym.Env(seed=seed, decision_memory=True)
                 obs, _ = env.reset(config.to_rust())
                 observe_policies((policy,), env, obs)
             except BaseException as exc:

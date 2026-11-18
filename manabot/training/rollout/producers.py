@@ -48,6 +48,8 @@ class ShardedVectorEnv:
         seed: int,
         workers: int,
         *,
+        decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         games_path: Path | None = None,
         record_fraction: float = 1.0,
     ) -> None:
@@ -71,6 +73,8 @@ class ShardedVectorEnv:
                     seed_stride=num_envs,
                     stream_offset=index * num_envs // workers,
                     skip_trivial=True,
+                    decision_memory=decision_memory,
+                    decision_memory_include_own=decision_memory_include_own,
                     player_policies=("agent", "agent"),
                     **(
                         {
@@ -288,6 +292,30 @@ class ShardedVectorEnv:
         self._check()
         return [
             seed for shard in self._shards for seed in shard.native.current_game_seeds()
+        ]
+
+    def current_game_generations(self) -> list[int]:
+        self._check()
+        return [
+            epoch
+            for shard in self._shards
+            for epoch in shard.native.current_game_generations()
+        ]
+
+    def decision_memory_cursors(self) -> list[list[list[int]]]:
+        self._check()
+        return [
+            cursor
+            for shard in self._shards
+            for cursor in shard.native.decision_memory_cursors()
+        ]
+
+    def decision_memory_counts(self) -> list[list[list[int]]]:
+        self._check()
+        return [
+            counts
+            for shard in self._shards
+            for counts in shard.native.decision_memory_counts()
         ]
 
     def get_last_info(self) -> list[dict[str, Any]]:

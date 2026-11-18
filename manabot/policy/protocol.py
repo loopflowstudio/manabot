@@ -81,6 +81,10 @@ class InferenceScope(Protocol):
 
 
 class BackendPolicy(Protocol):
+    def memory_gates(self) -> dict[str, float]:
+        """Effective decision-memory gates at an update boundary."""
+        ...
+
     observation_space: ObservationSpace
     belief_count_buckets: int
     value_semantic: Literal["signed_outcome", "win_logit"] | None
@@ -142,6 +146,15 @@ class BackendPolicy(Protocol):
     ) -> np.ndarray:
         """Action rows using the backend's RNG and established sampling arithmetic."""
         ...
+
+    def sample_logits(
+        self,
+        logits: np.ndarray,
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray: ...
 
     def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
         """Sigmoid of scalar win-logit values, evaluated in the backend."""

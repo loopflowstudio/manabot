@@ -222,6 +222,13 @@ it never selects an action. `build(player, leaves)` creates the heuristic or
 checkpoint sampler without importing Torch. Each decision's recorded seed
 controls NumPy PCG64 sampling in the game process.
 
+A checkpoint with a decision-memory encoder has its log prepared by the same
+sampler, and the loader forwards each such row as its own batch. A seat whose
+player config holds `blank_decision_memory: True` plays the same bytes with
+the log zeroed at every decision, registered as a distinct player
+([reliance comparison](observation-and-model.md#whole-game-decision-memory));
+`manabot.eval.pairing.play_pairing` plays an authored paired deal with either.
+
 Managed checkpoint registrations name `etude-policy-f32-auto-v1` and
 `numpy-pcg64-v1`. New tournaments have fresh `agents-v1` names and one native
 game group per Etude match. Frozen tournament keys, compute contracts and

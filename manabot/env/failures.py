@@ -54,6 +54,10 @@ class ActionCutoffSample(BaseModel):
 class NativeTrainingTrace(BaseModel):
     model_config = ConfigDict(extra="forbid")
     player_configs: list[_PlayerSetup]
+    decision_memory: bool = Field(default=True, exclude_if=lambda value: value)
+    decision_memory_include_own: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     actions: list[int]
 
     @model_validator(mode="after")

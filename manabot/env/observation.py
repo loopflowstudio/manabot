@@ -22,6 +22,7 @@ from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
 import gymnasium as gym
 import numpy as np
 
+from manabot.env.decision_memory import MEMORY_WIDTHS, encode_records
 from manabot.env.legacy_input import LEGACY_PERMANENT_DIM, legacy_card_lists
 
 # Local imports
@@ -33,6 +34,7 @@ from manabot.env.shared_effects import (
 from manabot.infra.config import ObservationConfig, UnsupportedPolicyInput
 from manabot.infra.log import getLogger
 import managym
+from managym.decision_memory import read_records
 
 # Many modules import the enum mirrors from here; managym.enums owns them.
 from managym.enums import (  # noqa: F401
@@ -330,6 +332,16 @@ class ObservationEncoder:
         self.max_stack_objects = config.max_stack_objects if self.one_token else 0
         self.event_dim = 12 if config.policy_history_version == 1 else 7
         self.turn_state = config.policy_input_version in (10, 11)
+        capacities = (
+            config.max_decision_records,
+            config.max_decision_reference_details,
+            config.max_decision_references,
+            config.max_decision_members,
+        )
+        if any(capacities) and not all(capacities):
+            raise ValueError("decision memory requires all companion capacities")
+        if config.max_decision_records and not self.one_token:
+            raise ValueError("decision memory requires policy input v11")
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = (
@@ -345,6 +357,22 @@ class ObservationEncoder:
     @property
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
+            **(
+                {
+                    key: (capacity, MEMORY_WIDTHS[key])
+                    for key, capacity in (
+                        ("decision_records", self.config.max_decision_records),
+                        ("decision_references", self.config.max_decision_references),
+                        (
+                            "decision_reference_details",
+                            self.config.max_decision_reference_details,
+                        ),
+                        ("decision_members", self.config.max_decision_members),
+                    )
+                }
+                if self.config.max_decision_records
+                else {}
+            ),
             "relations": (RELATION_ROWS, self.relation_dim),
             "facts": (self.config.max_facts, FACT_DIM),
             **SHARED_EFFECT_SHAPES,
@@ -654,6 +682,16 @@ class ObservationEncoder:
             obs.continuation, obs.agent.player_index
         )
 
+        if self.config.max_decision_records:
+            out.update(
+                encode_records(
+                    read_records(obs.decision_memory_json()),
+                    self.config.max_decision_records,
+                    self.config.max_decision_reference_details,
+                    self.config.max_decision_references,
+                    self.config.max_decision_members,
+                )
+            )
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
         return out

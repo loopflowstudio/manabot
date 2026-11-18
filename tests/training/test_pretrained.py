@@ -32,5 +32,5 @@ def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
             "pretrained": path,
         }
     )
-    with pytest.raises(ValueError, match="other model or observation"):
+    with pytest.raises(ValueError, match="differ from requested arm"):
         create(changed, seed=198)

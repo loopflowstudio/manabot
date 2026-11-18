@@ -27,6 +27,7 @@ from etude.jobs import (
 )
 from etude.page import experiment_files
 from etude.records import ArtifactRef
+from etude.report import Curve, Matches, Ranking
 import pytest
 
 from experiments import (
@@ -34,6 +35,7 @@ from experiments import (
     belief,
     elemental,
     llm_claude,
+    opponent_memory,
     seat_comparison,
     tla_frontier,
 )
@@ -79,6 +81,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "belief",
         "elemental",
         "etude_execution",
+        "opponent_memory",
         "seat_comparison",
         "tla_frontier",
     }
@@ -297,3 +300,158 @@ def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
     unknown = replace(lost, name="unknown-run")
     with pytest.raises(EtudeError, match="unknown-run"):
         tla_frontier.with_launcher_ends(replace(state, runs=(unknown,)))
+
+
+# ---------------------------------------------------------------------------
+# Opponent memory: trunks, then both arms of each finished trunk
+
+
+def test_opponent_memory_declares_trunks_then_both_arms_of_a_finished_trunk(
+    tmp_path: Path,
+) -> None:
+    file = EXPERIMENTS / "opponent_memory.py"
+    empty = ExperimentState(experiment="opponent_memory")
+    for wide in (False, True):
+        given = ("--revision", "HEAD", *(("--size", "wide") if wide else ()))
+        trunks = read_training_jobs(file, given, state=empty)
+        assert [(request.job.name, request.seed) for request in trunks] == [
+            (f"decision-memory-{name}", seed)
+            for seed, name in (
+                dict.fromkeys(opponent_memory.SEEDS, "wide-trunk")
+                if wide
+                else opponent_memory.TRUNK_NAMES
+            ).items()
+        ]
+        assert all(request.job.max_attempts == 3 for request in trunks)
+    recipe = opponent_memory.settings(opponent_memory.PilotConfig(size="wide"))
+    assert (recipe.model.hidden_dim, recipe.model.attention_layers) == (128, 3)
+    assert recipe.model.decision_memory == "none"
+    assert recipe.observation.max_decision_records == 1024
+    assert recipe.learner_transitions == 3_300_000
+    assert recipe.learning.decision_schedule.transitions == 3_300_000
+    assert (recipe.collection_rows, recipe.learner_rows) == (128, 128)
+    for request in trunks:
+        # The declared CPU smoke must be a valid recipe of its own.
+        smoke = opponent_memory.PilotConfig.model_validate_json(
+            request.job.smoke.config
+        )
+        assert opponent_memory.settings(smoke).learner_transitions == 64
+    arm = opponent_memory.settings(opponent_memory.PilotConfig(stage="gru-k1"))
+    assert arm.model.decision_memory == "gru"
+    assert arm.learner_transitions == 8_800_000
+
+    seed = opponent_memory.SEEDS[0]
+    trunk = replace(
+        _finished_run(
+            tmp_path, range(0, 81, 40), name="trunk", job="decision-memory-trunk-2"
+        ),
+        seed=seed,
+    )
+    both = read_training_jobs(
+        file, ("--revision", "HEAD"), state=replace(empty, runs=(trunk,))
+    )
+    arms = [request for request in both if request.job.inputs]
+    assert [(request.job.name, request.seed) for request in arms] == [
+        (f"decision-memory-control-{seed}", seed),
+        (f"decision-memory-gru-k1-{seed}", seed),
+    ]
+    final = trunk.checkpoints[-1]
+    assert {request.job.inputs[0].sha256 for request in arms} == {final.artifact.sha256}
+    assert opponent_memory.eval_jobs(empty) == []
+
+
+def test_opponent_memory_evaluation_draws_every_declared_seating(
+    tmp_path: Path,
+) -> None:
+
+    runs = tuple(
+        replace(
+            _finished_run(
+                tmp_path, range(0, final + 1, 40), name=f"{prefix}{arm}-{seed}"
+            ),
+            experiment="opponent_memory",
+            seed=seed,
+            job=f"decision-memory-{prefix}{arm}",
+            launch=f"decision-memory-{prefix}{arm}",
+        )
+        for seed in opponent_memory.SEEDS
+        for prefix in ("", "wide-")
+        for arm, final in (("control", 160), ("gru-k1", 200))
+    )
+    jobs = opponent_memory.eval_jobs(
+        ExperimentState(experiment="opponent_memory", runs=runs)
+    )
+    assert len(jobs) == 1
+    seatings = jobs[0].tournament.seatings
+    assert len(seatings) == 168
+    assert jobs[0].max_hours == 3 and jobs[0].max_usd == 4
+    curves = [
+        panel for panel in opponent_memory.report().evals if isinstance(panel, Curve)
+    ]
+    # Each seed must remain visible; Etude unions a panel's selections by job.
+    for size in ("small", "wide"):
+        for seed in opponent_memory.SEEDS:
+            curve = next(c for c in curves if size in c.title and str(seed) in c.title)
+            assert isinstance(curve.matches, tuple)
+            assert {selection.seating for selection in curve.matches} == {
+                opponent_memory.seating_name(size, seed, disclosure, "control", point)
+                for disclosure in opponent_memory.DISCLOSURES
+                for point in (40, 80, 120, "final")
+            }
+        rankings = {
+            panel.matches
+            for panel in opponent_memory.report().evals
+            if isinstance(panel, Ranking) and size in panel.title
+        }
+        assert rankings == {
+            Matches(tag=f"{size}-control"),
+            Matches(tag=f"{size}-heuristic"),
+        }
+    drawn = {
+        selection.seating
+        for panel in curves
+        for selection in (
+            panel.matches if isinstance(panel.matches, tuple) else (panel.matches,)
+        )
+        if isinstance(selection, Matches)
+    }
+    heuristic = [seating for seating in seatings if "heuristic" in seating.tags]
+    head_to_head = [seating for seating in seatings if seating not in heuristic]
+    assert {seating.name for seating in head_to_head} == drawn
+    # Against the heuristic, per size, seed and disclosure: both arms' finals
+    # (50 deals), and 25-deal curves over control's 0/40/80/120 and GRU's
+    # 40/80/120.
+    finals = [seating for seating in heuristic if seating.name.endswith("-final")]
+    assert (len(finals), len(heuristic)) == (2 * 3 * 2 * 2, 2 * 3 * 2 * 9)
+    for seating in heuristic:
+        opponent = seating.players[1]
+        assert opponent.kind == "code" and opponent.name == "heuristic"
+        assert len(seating.configs) == (50 if seating in finals else 25)
+    games = sum(len(seating.configs) * seating.games for seating in seatings)
+    assert games == 19200 + len(finals) * 200 + (len(heuristic) - len(finals)) * 100
+    for seating in head_to_head:
+        assert seating.fixed and seating.seeds == "one"
+        size, _, seed, *_ = seating.name.split("-")
+        prefix = "wide-" if size == "wide" else ""
+        first, second = seating.players
+        assert first.checkpoint.line == f"{prefix}gru-k1-{seed}"
+        opponent = "gru-k1" if "reliance" in seating.tags else "control"
+        assert second.checkpoint.line == f"{prefix}{opponent}-{seed}"
+        if "control-final" in seating.name:
+            assert [player.checkpoint.at["updates"] for player in seating.players] == [
+                200,
+                160,
+            ]
+        if "reliance" in seating.tags:
+            first, blanked = seating.players
+            assert first.checkpoint == blanked.checkpoint
+            assert first.key != blanked.key and not first.config
+            assert blanked.config == {"blank_decision_memory": True}
+    # Stored milestones remain playable while final checkpoints are unavailable.
+    running = tuple(replace(run, state="running") for run in runs)
+    interiors = opponent_memory.evaluation_matchups(
+        ExperimentState(experiment="opponent_memory", runs=running)
+    )
+    # 36 head-to-heads plus the 84 heuristic-curve seatings.
+    assert len(interiors) == 36 + 84
+    assert all("final" not in seating.name for seating in interiors)

@@ -273,6 +273,56 @@ fn encoded_to_dict<'py>(
         "actions",
         to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
     )?;
+    if config.max_decision_records > 0 {
+        dict.set_item(
+            "decision_records",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.decision_records,
+                &[
+                    config.max_decision_records,
+                    crate::agent::decision_memory::RECORD_DIM,
+                ],
+            )?,
+        )?;
+        dict.set_item(
+            "decision_reference_details",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.decision_reference_details,
+                &[
+                    config.max_decision_reference_details,
+                    crate::agent::decision_memory::DETAIL_DIM,
+                ],
+            )?,
+        )?;
+        dict.set_item(
+            "decision_references",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.decision_references,
+                &[
+                    config.max_decision_references,
+                    crate::agent::decision_memory::REFERENCE_DIM,
+                ],
+            )?,
+        )?;
+        dict.set_item(
+            "decision_members",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.decision_members,
+                &[
+                    config.max_decision_members,
+                    crate::agent::decision_memory::MEMBER_DIM,
+                ],
+            )?,
+        )?;
+    }
     dict.set_item(
         "events",
         to_numpy_array_f32(
@@ -3135,6 +3185,7 @@ pub struct PyObservation {
     pub stack_objects: Vec<PyStackObject>,
     #[pyo3(get, set)]
     pub recent_events: Vec<PyEventData>,
+    pub decision_memory: crate::agent::decision_memory::DecisionLog,
     pub policy_history: crate::agent::policy_history::HistoryWindow,
 }
 
@@ -3178,6 +3229,7 @@ impl From<Observation> for PyObservation {
                 .map(PyStackObject::from)
                 .collect(),
             policy_history: value.policy_history,
+            decision_memory: value.decision_memory,
             continuation: value.continuation,
             recent_events: value
                 .recent_events
@@ -3229,6 +3281,7 @@ impl From<PyObservation> for Observation {
                 .map(StackObjectData::from)
                 .collect(),
             policy_history: value.policy_history,
+            decision_memory: value.decision_memory,
             continuation: value.continuation,
             recent_events: value
                 .recent_events
@@ -3253,6 +3306,10 @@ impl PyObservation {
             observation.continuation = parse_continuation_frames_json(frames)?;
         }
         Ok(Self::from(observation))
+    }
+
+    fn decision_memory_json(&self) -> String {
+        serde_json::to_string(&self.decision_memory).expect("decision memory serializes")
     }
 
     fn continuation_json(&self) -> String {
@@ -3989,7 +4046,7 @@ impl PySelectedBranchRuntime {
 #[pymethods]
 impl PyEnv {
     #[new]
-    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false, *, player_policies=None))]
+    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
     fn new(
         py: Python<'_>,
         seed: u64,
@@ -3997,6 +4054,8 @@ impl PyEnv {
         enable_profiler: bool,
         enable_behavior_tracking: bool,
         player_policies: Option<Vec<String>>,
+        decision_memory_include_own: bool,
+        decision_memory: bool,
     ) -> PyResult<Self> {
         if enable_behavior_tracking {
             py.import_bound("warnings")?.call_method1("warn", (
@@ -4014,7 +4073,9 @@ impl PyEnv {
                     enable_profiler,
                     enable_behavior_tracking,
                 )
-                .with_player_policies(policies),
+                .with_player_policies(policies)
+                .with_decision_memory(decision_memory)
+                .with_decision_memory_include_own(decision_memory_include_own),
             )),
             selected_guard: false,
             prepared_lease: None,
@@ -5035,6 +5096,14 @@ impl PyEnv {
                 .map_err(map_agent_err)?;
             Ok(crate::python::vector_env_bindings::PyRolloutPool::from_inner(pool))
         })
+    }
+
+    fn decision_memory_counts(&self) -> PyResult<[[usize; 4]; 2]> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .decision_memory_counts()
+            .map_err(map_agent_err)
     }
 
     #[pyo3(signature = (obs, max_facts=None))]

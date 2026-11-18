@@ -8,6 +8,7 @@ recovery policy, private state, or writable model memory lives here.
 
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
+from itertools import groupby
 import json
 import re
 from typing import Callable
@@ -27,8 +28,13 @@ from managym.decision_capture import (
     PlayerReference,
     UnavailableReference,
 )
+from managym.decision_memory import (
+    DecisionRecord,
+    DecisionReference,
+    read_records,
+)
 
-REPRESENTATION_VERSION = "manabot-text-7"
+REPRESENTATION_VERSION = "manabot-text-10"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -553,7 +559,8 @@ class _Renderer:
     def action_verb(self, action: managym.Action) -> str:
         if (
             action.action_type == managym.ActionEnum.TAP_FOR_COST
-            and self.state.action_space.action_space_type == managym.ActionSpaceEnum.PAY_OR_NOT
+            and self.state.action_space.action_space_type
+            == managym.ActionSpaceEnum.PAY_OR_NOT
         ):
             return "tap_for_mana"
         return _enum(_VERBS, int(action.action_type))
@@ -1239,6 +1246,7 @@ class _Renderer:
             )
         if not capture.history.rows:
             lines.append("Empty." if capture.history.capacity else "History disabled.")
+        lines.extend(_memory_lines(read_records(state.decision_memory_json())))
         if capture.frames:
             lines += ["", "Current stack and continuation relations:"]
             lines.extend(
@@ -1266,6 +1274,135 @@ class _Renderer:
             actions.append(TextAction(reference, description, command))
             lines.append(f"{reference} — {description}.")
         return "\n".join(lines) + "\n", tuple(actions)
+
+
+_MEMORY_ROLES = ("none", "You", "Opponent")
+
+
+def _production(alternative: tuple[int, int, int, int, int, int]) -> str:
+    symbols = "".join(
+        f"{{{symbol}}}" * count for symbol, count in zip("WUBRGC", alternative)
+    )
+    return symbols or "nothing"
+
+
+def _memory_reference(reference: DecisionReference, snapshot: str) -> str:
+    status = ", ".join(
+        label
+        for label, value in (
+            ("tapped", reference.tapped),
+            ("ready", reference.ready),
+            ("attacking", reference.attacking),
+            ("blocking", reference.blocking),
+        )
+        if value
+    )
+    mana = " or ".join(_production(m) for m in reference.mana) or "none"
+    return (
+        f"{reference.name or 'unavailable'} ({snapshot}; role "
+        f"{_MEMORY_ROLES[reference.role]}; P/T {reference.power}/"
+        f"{reference.toughness}; status {status or 'none'}; untapped mana {mana})"
+    )
+
+
+def _memory_lines(memory: list[DecisionRecord]) -> list[str]:
+    """Whole-game opponent records with each historical snapshot printed once.
+
+    A log repeats the same untapped sources at many choices; printing each
+    snapshot beside every reference grew a prompt by kilobytes per record.
+    Aliases keep every snapshot exactly while context changes avoid repeating
+    unchanged turn, board and mana-source values between adjacent records.
+    """
+    if not memory:
+        return []
+    snapshots: dict[str, str] = {}
+    references_seen: dict[str, str] = {}
+
+    def reference_alias(reference: DecisionReference) -> str:
+        rules = (
+            snapshots.setdefault(reference.description, f"H{len(snapshots) + 1}")
+            if reference.description
+            else "rules snapshot unavailable"
+        )
+        snapshot = _memory_reference(reference, rules)
+        return references_seen.setdefault(snapshot, f"M{len(references_seen) + 1}")
+
+    def reference_group(references: list[DecisionReference]) -> str:
+        # Compress adjacent equals only: order and multiplicity remain exact.
+        groups = groupby(reference_alias(reference) for reference in references)
+        parts: list[str] = []
+        for key, group in groups:
+            count = sum(1 for _ in group)
+            parts.append(key if count == 1 else f"{count}× {key}")
+        return ", ".join(parts) or "none"
+
+    records: list[str] = []
+    previous: dict[str, str] = {}
+    for record in memory:
+        context, choice = record.context, record.choice
+        # Only context is inherited. Empty response/choice groups are explicit,
+        # so a disappearing source or target cannot survive by omission.
+        fields = {
+            "turn": str(context.turn),
+            "phase": str(context.phase),
+            "step": str(context.step),
+            "life": "/".join(map(str, context.life)),
+            "hand": "/".join(map(str, context.hand)),
+            "board": " | ".join(
+                "/".join(map(str, counts)) for counts in context.board_counts
+            ),
+            "mana": reference_group(context.mana_sources),
+        }
+        changes = [
+            f"{label}: {value}"
+            for label, value in fields.items()
+            if previous.get(label) != value
+        ]
+        previous = fields
+        selectors = [
+            f"{label}: {value}"
+            for label, value in (
+                ("mode", choice.mode),
+                ("ability", choice.ability),
+                ("named", choice.named),
+                ("declared", choice.declared),
+            )
+            if value is not None
+        ]
+        records.append(
+            f"{record.ordinal + 1}. {record.kind}/{choice.kind or 'unavailable'}; "
+            f"actor: {'You' if record.actor == 1 else 'Opponent'}; count: {record.count}; span: {record.first_position}..{record.last_position}; "
+            + "; ".join(
+                [
+                    *changes,
+                    *selectors,
+                    f"Response: {reference_group(record.response)}",
+                    f"Chosen subjects: {reference_group(choice.references)}",
+                ]
+            )
+        )
+    return [
+        "",
+        "Decision history, chronological whole-game public signals "
+        "(decision/choice; paired life/hand values and board rows are You/Opponent; "
+        "board counts are total/tapped/land/creature/artifact/enchantment/"
+        "planeswalker/battle; role is the viewer-relative controller, or owner "
+        "off the battlefield; P/T is effective on the battlefield and 0/0 "
+        "elsewhere; M aliases name complete historical reference snapshots, "
+        "H aliases name effective rules snapshots at that choice; "
+        "context fields turn, phase, step, life, hand, board and mana are printed "
+        "in full on the first record, then only when changed from the previous "
+        "record; omitted context fields keep their previous values; none clears "
+        "a reference group; mana lists untapped mana sources; choice selectors, "
+        "Response and Chosen subjects apply only to their own record):",
+        *records,
+        "",
+        "Historical reference snapshots:",
+        *(f"{key} — {description}" for description, key in references_seen.items()),
+        "",
+        "Historical rules snapshots:",
+        *(f"{key} — {description}" for description, key in snapshots.items()),
+    ]
 
 
 def render_decision(capture_json: str, *, max_bytes: int = 262_144) -> TextDecision:

@@ -42,6 +42,14 @@ that seat could see. See the
 [engine guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#record-games)
 for options, costs, interrupted games and replay.
 
+Decision memory is also opt-in: construct `Env` or `VectorEnv` with
+`decision_memory=True` to retain viewer-safe past decisions. The training
+wrappers derive this choice from positive observation record capacity; disabling
+it leaves empty logs and skips capture. `decision_memory_include_own=True` enables
+both capture and own-seat records. Search clones retain the existing log without
+recording hypothetical choices. Saved diagnostic inputs retain the setting;
+older inputs with no setting keep their original enabled behavior on replay.
+
 ## Play in the browser
 
 The distribution includes Academy, a browser table for playing a game against

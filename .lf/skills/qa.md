@@ -560,3 +560,25 @@ publish, land or choose the next Graph step from here.
   have no resumed game. Initial automatic history may precede a launch's received
   tail; compare that tail exactly to the saved source and the full saved prefix
   to Replay, retaining explicit unavailable-prefix labels.
+- Decision memory is opt-in on raw engines: `managym.Env(...)` and
+  `VectorEnv(...)` record no viewer decision log unless built with
+  `decision_memory=True` (the training wrappers derive it from
+  `max_decision_records > 0`). A script, fixture or product path that builds a
+  raw engine and reads `decision_memory_json()`, decision-record buffers or the
+  LLM text history sees an empty log otherwise, with no error. Grep new raw
+  constructions when memory consumers change.
+- Staged experiment launches (`etude launch ... --quote`): run each documented
+  command verbatim under `doppler run -p etude -c prd -- doppler run -p manabot
+  -c prd --preserve-env=RUNPOD_API_KEY --`; the locked client reads the launcher
+  DB (2026-11-17). A quote prints the selected runs and the committed ceiling,
+  then refuses or prices; confirm with `etude runs --experiment <name>` that
+  nothing launched. `etude report` exits 1 until the experiment has a run.
+- Decision memory in self-play (`ModelConfig.decision_memory`): the smallest
+  real run is `tests/training/test_memory_self_play.py`'s `settings()`: Gray
+  Ogre decks, the four `max_decision_*` capacities, and
+  `SelfPlay.{collection,bootstrap,learner}_rows=2`. Train a
+  `decision_memory="none"` control, then start a `"gru"` branch from its
+  checkpoint with `SelfPlay.pretrained`; the branch's gates read 0.0 and its
+  shared tensors equal the control's. A control without the log capacities is
+  refused as a trunk. Test reliance by seating the same checkpoint with
+  `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.

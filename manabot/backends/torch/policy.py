@@ -14,7 +14,7 @@ over the batch's valid objects packed into one sequence; either setting
 composes with the other and neither changes the model.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from types import TracebackType
@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 
 from manabot.backends.torch._continuation import ContinuationEncoder
+from manabot.backends.torch._decision_memory import CollectionMemory, DecisionMemory
 from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
 from manabot.backends.torch._name_candidates import NameCandidateEncoder
 from manabot.backends.torch._numerics import buffer_on
@@ -141,6 +142,14 @@ class ActorCritic(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
+        if config.decision_memory != "none" and not enc.config.max_decision_records:
+            raise ValueError(
+                "decision-memory model requires explicit observation capacities"
+            )
+        if config.decision_memory != "none" and not config.catalog_records():
+            raise ValueError("decision memory requires a catalog world")
+        if config.decision_memory != "none" and not enc.one_token:
+            raise ValueError("decision memory requires policy input v11")
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
         ):
@@ -169,11 +178,14 @@ class ActorCritic(nn.Module):
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
         if config.world is not None:
+            # Log-enabled controls reserve the branches' exact catalog rows,
+            # so trunk copying never remaps a shared embedding or lookup.
             self.semantic_cards = SemanticCardEncoder(
                 config.world,
                 embed_dim,
                 decklists=True,
                 records=config.catalog_records(),
+                decision_memory=bool(enc.config.max_decision_records),
                 library=enc.one_token,
             )
         else:
@@ -202,6 +214,7 @@ class ActorCritic(nn.Module):
                 embed_dim,
                 num_heads=num_heads,
                 feedforward_dim=config.attention_feedforward_dim,
+                memory_gate_scale=config.decision_memory_gate_scale,
             )
             self.logger.info(
                 f"Attention: {embed_dim} -> {embed_dim} with {num_heads} heads"
@@ -283,6 +296,7 @@ class ActorCritic(nn.Module):
                 config.num_attention_heads,
                 ownership=False,
                 feedforward_dim=config.attention_feedforward_dim,
+                memory_gate_scale=config.decision_memory_gate_scale,
             )
             for _ in range(config.attention_layers - 1)
         )
@@ -290,6 +304,20 @@ class ActorCritic(nn.Module):
             nn.Parameter(torch.randn(1, 1, embed_dim) / embed_dim**0.5)
             if config.value_aggregation == "value_token"
             else None
+        )
+        self.decision_memory = (
+            DecisionMemory(
+                config.decision_memory, config.decision_memory_summaries, embed_dim
+            )
+            if config.decision_memory != "none"
+            else None
+        )
+        if self.decision_memory is not None:
+            for layer in (self.attention, *self.extra_attention):
+                layer.memory_gate = nn.Parameter(torch.zeros(()))
+                layer.memory_projection = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.memory_summaries = (
+            config.decision_memory_summaries if self.decision_memory is not None else 0
         )
         self.recent_events = (
             RecentEventEncoder(embed_dim) if config.recent_events else None
@@ -455,11 +483,17 @@ class ActorCritic(nn.Module):
         return spec
 
     def prepare(
-        self, obs: ObservationBuffers, *, inference: bool = False
+        self,
+        obs: ObservationBuffers,
+        *,
+        inference: bool = False,
+        memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
         self.check_observation(obs)
-        return self.prepare_admitted(obs, inference=inference)
+        return self.prepare_admitted(
+            obs, inference=inference, memory_roots=memory_roots
+        )
 
     def check_observation(self, obs: ObservationBuffers) -> None:
         mask = np.asarray(obs["actions_valid"])
@@ -480,6 +514,7 @@ class ActorCritic(nn.Module):
         *,
         inference: bool = False,
         needs: np.ndarray | None = None,
+        memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Prepare unchanged admitted rows for learning or inference.
 
@@ -507,6 +542,9 @@ class ActorCritic(nn.Module):
             bucketed=self.bucketed_shapes,
             live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.value_token is not None,
+            memory_summaries=self.memory_summaries,
+            memory_fold=self.config.decision_memory == "gru",
+            memory_roots=memory_roots,
             binding=spec.binding,
             action_capacity=capacity,
             select_programs=not inference and not self.bucketed_shapes,
@@ -594,21 +632,33 @@ class ActorCritic(nn.Module):
         sampling: Literal["categorical", "multinomial"] = "categorical",
     ) -> np.ndarray:
         """Retain Torch RNG and categorical/multinomial rounding at the boundary."""
-        prepared = on_device(batch, device_of(self))
-        if sampling == "categorical" and temperature == 1.0:
-            actions, _, _, _ = self.get_action_and_value(
-                prepared, deterministic=deterministic
-            )
+        logits, _ = self(on_device(batch, device_of(self)))
+        return self.sample_logits(
+            logits,
+            deterministic=deterministic,
+            temperature=temperature,
+            sampling=sampling,
+        )
+
+    @torch.no_grad()
+    def sample_logits(
+        self,
+        logits: np.ndarray | torch.Tensor,
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray:
+        """Sample once after bounded forwards, preserving backend RNG partition."""
+        values = torch.as_tensor(logits, device=device_of(self))
+        if deterministic:
+            actions = values.argmax(-1)
+        elif sampling == "categorical" and temperature == 1.0:
+            actions = torch.distributions.Categorical(logits=values).sample()
         else:
-            logits, _ = self(prepared)
-            if deterministic:
-                actions = logits.argmax(-1)
-            else:
-                if temperature != 1.0:
-                    logits = logits / temperature
-                actions = torch.multinomial(torch.softmax(logits, dim=-1), 1).squeeze(
-                    -1
-                )
+            actions = torch.multinomial(
+                torch.softmax(values / temperature, dim=-1), 1
+            ).squeeze(-1)
         return to_numpy(actions).astype(np.int64)
 
     @torch.no_grad()
@@ -690,8 +740,22 @@ class ActorCritic(nn.Module):
                 obs.batch,
                 state.objects.shape[1] + int(self.value_token is not None),
             )
+        summaries = None
+        if self.decision_memory is not None:
+            assert obs.memory is not None and self.semantic_cards is not None
+            summaries = self.decision_memory(
+                obs.memory,
+                self.semantic_cards.token_embedding,
+                self.name_candidates.public_definitions(state.programs),
+                self.name_candidates.embedding,
+            )
         encoded = self._attend_objects(
-            state.objects, state.is_agent, state.validity, obs.attention_columns, live
+            state.objects,
+            state.is_agent,
+            state.validity,
+            obs.attention_columns,
+            live,
+            summaries,
         )
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
@@ -717,6 +781,32 @@ class ActorCritic(nn.Module):
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
 
+    def encode_decision_memory(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
+        """Differentiable summaries for offline probes, from admitted policy input.
+
+        Uses the same definition, token and name embeddings as policy inference.
+        No board attention or action/value head is evaluated.
+        """
+        if not isinstance(obs, Prepared) or not isinstance(obs.legal, torch.Tensor):
+            raise TypeError("memory encoding requires device Prepared rows")
+        if obs.guard is not None:
+            obs.guard(self)
+        if obs.binding != self._binding():
+            raise ValueError(
+                "observation was admitted for a different policy configuration"
+            )
+        if self.decision_memory is None or self.semantic_cards is None:
+            raise ValueError("policy has no decision memory encoder")
+        assert obs.memory is not None and obs.programs is not None
+        return self.decision_memory(
+            obs.memory,
+            self.semantic_cards.token_embedding,
+            self.name_candidates.public_definitions(
+                self.semantic_cards.definitions(obs.programs)
+            ),
+            self.name_candidates.embedding,
+        )
+
     def architecture_receipt(self) -> ArchitectureReceipt:
         """This model's receipt; `named_parameters` yields each shared parameter once."""
         return architecture_receipt(
@@ -727,6 +817,18 @@ class ActorCritic(nn.Module):
                 for name, parameter in self.named_parameters()
             },
         )
+
+    def memory_gates(self) -> dict[str, float]:
+        """Effective memory gates, read only at update reporting boundaries."""
+        if self.decision_memory is None:
+            return {}
+        return {
+            f"gate_{index}": float(
+                torch.tanh(layer.memory_gate_scale * layer.memory_gate).detach()
+            )
+            for index, layer in enumerate((self.attention, *self.extra_attention))
+            if layer.memory_gate is not None
+        }
 
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
@@ -742,11 +844,12 @@ class ActorCritic(nn.Module):
         validity: torch.Tensor,
         columns: torch.Tensor | None = None,
         live: LiveTokens | None = None,
+        summaries: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Attend using host-prepared columns or live-token coordinates."""
         if self.live_tokens and self.config.attention_on:
             assert live is not None
-            return self._attend_live(objects, is_agent, live)
+            return self._attend_live(objects, is_agent, live, summaries)
         original_slots = objects.shape[1]
         if not self.config.attention_on:
             columns = None
@@ -764,16 +867,31 @@ class ActorCritic(nn.Module):
             )
         if self.config.attention_on:
             objects = self.attention(
-                objects, is_agent, key_padding_mask=key_padding_mask
+                objects,
+                is_agent,
+                key_padding_mask=key_padding_mask,
+                summaries=summaries,
             )
             for layer in self.extra_attention:
-                objects = layer(objects, is_agent, key_padding_mask)
+                objects = layer(
+                    objects, is_agent, key_padding_mask, summaries=summaries
+                )
         if columns is not None:
             # Restore the optional neutral value token in the same scatter,
             # at the slot immediately after the original object coordinates.
-            if self.value_token is not None:
-                columns = torch.cat((columns, columns.new_tensor([original_slots])))
-                original_slots += 1
+            extras = int(self.value_token is not None)
+            if extras:
+                columns = torch.cat(
+                    (
+                        columns,
+                        torch.arange(
+                            original_slots,
+                            original_slots + extras,
+                            device=columns.device,
+                        ),
+                    )
+                )
+                original_slots += extras
             objects = objects.new_zeros(
                 (objects.shape[0], original_slots, objects.shape[2])
             ).index_copy(1, columns, objects)
@@ -784,14 +902,9 @@ class ActorCritic(nn.Module):
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         tokens: LiveTokens,
+        summaries: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """`_attend_objects` over valid objects only, returned at [B,N(+1),D].
-
-        The value token is one more live token per observation, ownerless as
-        on the padded path. Padding slots come back zero, as every padded
-        layer leaves them, so focus joins and every value aggregation read the
-        same values.
-        """
+        """Attend real objects and optional neutral value token, scattering zero padding."""
         batch = objects.shape[0]
         owner = torch.where(is_agent, 1.0, -1.0).to(objects.dtype)
         if self.value_token is not None:
@@ -802,9 +915,9 @@ class ActorCritic(nn.Module):
             owner = torch.cat((owner, owner.new_zeros((batch, 1))), dim=1)
         packed = tokens.gather(objects)
         owners = tokens.gather(owner)
-        packed = self.attention.forward_live(packed, owners, tokens)
+        packed = self.attention.forward_live(packed, owners, tokens, summaries)
         for layer in self.extra_attention:
-            packed = layer.forward_live(packed, owners, tokens)
+            packed = layer.forward_live(packed, owners, tokens, summaries)
         return tokens.scatter(packed)
 
     def _value_from_objects(
@@ -821,6 +934,8 @@ class ActorCritic(nn.Module):
         it, though critic gradients still reach the shared encoder. All
         variants share value_head's parameter names and MLP.
         """
+        if self.value_token is None:
+            objects = objects[:, : validity.shape[1]]
         if self.config.value_aggregation == "historical_mean":
             return self.value_head(objects)
         if self.value_token is not None:
@@ -1066,6 +1181,7 @@ class PolicyInference:
         self._versions = agent._parameter_versions()
         self._modes = tuple(module.training for module in agent.modules())
         self._binding = agent._binding()
+        self.memory = CollectionMemory()
         self.transfers = 0
         self.transfer_bytes = 0
         agent.clear_cache()
@@ -1077,6 +1193,7 @@ class PolicyInference:
             agent is not self.agent
             or self._versions != self.agent._parameter_versions()
         ):
+            self.memory.clear()
             raise RuntimeError("inference policy changed within its scope")
         if (
             self._modes != tuple(module.training for module in self.agent.modules())
@@ -1107,6 +1224,7 @@ class PolicyInference:
         traceback: TracebackType | None,
     ) -> None:
         self._closed = True
+        self.memory.clear()
         self.agent.clear_cache()
 
     @torch.no_grad()
@@ -1131,7 +1249,13 @@ class PolicyInference:
         self.check(self.agent)
         if any(not isinstance(value, np.ndarray) for value in obs.values()):
             raise TypeError("inference preparation requires NumPy observation buffers")
-        batch = self.agent.prepare(obs, inference=True)
+        batch = self.agent.prepare(
+            obs,
+            inference=True,
+            memory_roots=self.memory.roots(obs)
+            if self.agent.config.decision_memory == "gru"
+            else None,
+        )
         if self.cache_catalog:
             batch = replace(batch, programs=None)
         arrays = (
@@ -1141,7 +1265,10 @@ class PolicyInference:
         )
         self.transfer_bytes = sum(array.nbytes for array in arrays)
         self.transfers = len({array.dtype for array in arrays})
-        return replace(on_device(batch, self.device), guard=self._forward_check)
+        return replace(
+            self.memory.bind(on_device(batch, self.device), obs),
+            guard=self._forward_check,
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -1216,8 +1343,12 @@ class GameObjectAttention(nn.Module):
         *,
         ownership: bool = True,
         feedforward_dim: int | None = None,
+        memory_gate_scale: float = 1.0,
     ) -> None:
         super().__init__()
+        self.memory_gate: nn.Parameter | None = None
+        self.memory_projection: nn.Linear | None = None
+        self.memory_gate_scale = memory_gate_scale
         self.embedding_dim = embedding_dim
         self.logger = getLogger(__name__).getChild("attention")
         self.logger.info(f"Creating perspective vector of size {embedding_dim}")
@@ -1247,14 +1378,28 @@ class GameObjectAttention(nn.Module):
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         key_padding_mask: torch.BoolTensor,
+        summaries: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        if self.memory_gate is not None:
+            assert summaries is not None and self.memory_projection is not None
+            # Mean keeps K>1 summaries usable without extending the attention sequence.
+            delta = self.memory_projection(summaries.mean(1).to(objects.dtype))
+            delta = torch.tanh(self.memory_gate_scale * self.memory_gate) * delta
+            board_mask = (~key_padding_mask).clone()
+            board_mask[:, is_agent.shape[1] :] = False
+            objects = objects + delta.unsqueeze(1) * board_mask.unsqueeze(-1)
         owned_objects = objects
         if self.perspective is not None:
             perspective_scale = torch.where(is_agent.unsqueeze(-1), 1.0, -1.0)
-            # A trailing value token has no owner; real-object indexes stay fixed.
+            # Appended value tokens are neutral; real-object indexes stay fixed.
             if objects.shape[1] > is_agent.shape[1]:
                 perspective_scale = torch.cat(
-                    (perspective_scale, torch.zeros_like(perspective_scale[:, :1])),
+                    (
+                        perspective_scale,
+                        perspective_scale.new_zeros(
+                            (objects.shape[0], objects.shape[1] - is_agent.shape[1], 1)
+                        ),
+                    ),
                     dim=1,
                 )
             owned_objects = objects + perspective_scale * self.perspective
@@ -1275,14 +1420,28 @@ class GameObjectAttention(nn.Module):
         return post_norm * mask
 
     def forward_live(
-        self, packed: torch.Tensor, owners: torch.Tensor, tokens: LiveTokens
+        self,
+        packed: torch.Tensor,
+        owners: torch.Tensor,
+        tokens: LiveTokens,
+        summaries: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """`forward` over packed live tokens [L,D]; `owners` [L] is +1 for the
         acting viewer's objects, -1 for the opponent's and 0 for a value token."""
+        if self.memory_gate is not None:
+            assert summaries is not None and self.memory_projection is not None
+            delta = self.memory_projection(summaries.mean(1).to(packed.dtype))
+            delta = torch.tanh(self.memory_gate_scale * self.memory_gate) * delta
+            # Packed coordinates identify the observation; value tokens have owner zero.
+            packed = packed + delta[tokens.index // tokens.slots] * (
+                owners != 0
+            ).unsqueeze(-1)
         if self.perspective is not None:
             packed = packed + owners.unsqueeze(-1) * self.perspective
-        x = self.norm1(packed + tokens.self_attention(self.mha, packed))
-        return self.norm2(x + self.mlp(x))
+        attended = tokens.self_attention(self.mha, packed)
+        x = self.norm1(packed + attended)
+        output = self.norm2(x + self.mlp(x))
+        return output
 
 
 def layer_init(
