@@ -91,3 +91,13 @@ say so if they should carry a note.
 
 24. Academy runs tensor admission once per cached file identity when it lists
     bots. Hashing streams the file and the cached summary retains no weights.
+
+## Concept review of the built change, 2026-11-18 (nobody present; reversible)
+
+25. The load report becomes a value on the bound checkpoint and a
+    `binding.json` beside a recheck's measurement; the log line keeps counts
+    only. Academy shows refusals only: the report summary on a loaded bot's
+    row (choice 14) is passed over as a new UI surface.
+26. Saving a carried player keeps the implicit metadata rewrite in
+    `write_container`, with a round-trip test; naming that action and its
+    lineage is left to MTG-386.
