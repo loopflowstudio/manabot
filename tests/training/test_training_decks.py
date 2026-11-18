@@ -90,9 +90,9 @@ def _agent() -> ActorCritic:
     )
 
 
-def _collector(decks: UniformDecks, *, priority_mana_taps: bool = False) -> Collector:
+def _collector(decks: UniformDecks, *, mana_taps: bool = False) -> Collector:
     return open_collector(
-        ObservationSpace(ObservationConfig(priority_mana_taps=priority_mana_taps)),
+        ObservationSpace(ObservationConfig(mana_taps=mana_taps)),
         Match(decks.match_config()),
         Reward(RewardConfig()),
         num_envs=2,
@@ -581,7 +581,7 @@ def test_mixed_training_games_export_the_resolved_disclosure(
 
 
 def test_priority_taps_follow_sampled_self_play_roots(decks: UniformDecks) -> None:
-    collector = _collector(decks, priority_mana_taps=True)
+    collector = _collector(decks, mana_taps=True)
     try:
         collect(collector, _agent(), 1)
         assert collector.stats.games > 0
@@ -592,10 +592,6 @@ def test_priority_taps_follow_sampled_self_play_roots(decks: UniformDecks) -> No
             collector._env.current_player_configs(),
             strict=True,
         ):
-            assert (
-                setup.priority_mana_taps
-                == match.config.priority_mana_taps
-                == (True, True)
-            )
+            assert setup.mana_taps == match.config.mana_taps == (True, True)
     finally:
         close_collector(collector)

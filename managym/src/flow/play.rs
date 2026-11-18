@@ -1954,9 +1954,7 @@ impl Game {
             sacrifice,
             alternative: alternative.clone(),
         });
-        if !self.mana_ability_actions(player, sacrifice).is_empty()
-            || !self.fixed_tap_actions(player).is_empty()
-        {
+        if self.has_mana_payment_choices(player, sacrifice) {
             return Ok(());
         }
         self.commit_payment(player, payment, sacrifice, alternative, 0)
@@ -2283,7 +2281,14 @@ impl Game {
         self.tap_permanent(tap_permanent, false);
         let remaining_generic = remaining_generic - 1;
         let tapped = tapped + 1;
-        if remaining_generic == 0 {
+        if remaining_generic == 0
+            && (!self.mana_taps[self.decision_controller(player).0]
+                || self
+                    .payment_mana_cost(player, &payment, None)
+                    .reduced_generic(tapped)
+                    .mana_value
+                    == 0)
+        {
             self.pending_choice = None;
             return self.commit_payment(player, *payment, None, None, tapped);
         }

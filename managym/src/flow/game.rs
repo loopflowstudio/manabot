@@ -747,7 +747,7 @@ pub struct Game {
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
     pub skip_trivial: bool,
-    pub priority_mana_taps: [bool; 2],
+    pub mana_taps: [bool; 2],
     pub current_action_space: Option<ActionSpace>,
     /// Monotonic identity for the currently published external decision.
     ///
@@ -776,7 +776,7 @@ impl Clone for Game {
             payment_sources: Default::default(),
             policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
-            priority_mana_taps: self.priority_mana_taps,
+            mana_taps: self.mana_taps,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,
             semantic_object_candidates: self.semantic_object_candidates.clone(),

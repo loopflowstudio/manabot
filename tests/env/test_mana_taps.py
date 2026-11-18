@@ -18,12 +18,12 @@ def forests() -> list[managym.PlayerConfig]:
 
 
 def test_priority_tap_encodes_and_replays(tmp_path: Path) -> None:
-    setup = managym.GameSetup(forests(), priority_mana_taps=(True, False))
-    assert managym.GameSetup(setup).priority_mana_taps == (True, False)
-    assert setup[::-1].priority_mana_taps == (False, True)
+    setup = managym.GameSetup(forests(), mana_taps=(True, False))
+    assert managym.GameSetup(setup).mana_taps == (True, False)
+    assert setup[::-1].mana_taps == (False, True)
     vector = managym.VectorEnv(num_envs=1, seed=3)
     vector.reset_all(setup)
-    assert vector.current_player_configs()[0].priority_mana_taps == (True, False)
+    assert vector.current_player_configs()[0].mana_taps == (True, False)
 
     env = managym.Env(seed=3)
     capture = ScalarCapture(3, games_path=tmp_path / "games.jsonl")
@@ -68,7 +68,7 @@ def test_default_and_explicit_off_play_and_record_identically(
     games = []
     for setup in (
         managym.GameSetup(seats),
-        managym.GameSetup(seats, priority_mana_taps=(False, False)),
+        managym.GameSetup(seats, mana_taps=(False, False)),
     ):
         env = managym.Env(seed=3)
         path = tmp_path / f"game-{len(games)}.jsonl"
@@ -85,13 +85,13 @@ def test_default_and_explicit_off_play_and_record_identically(
         capture.close()
         games.append((frames, path.read_bytes(), env.state_digest()))
     assert games[0] == games[1]
-    assert b"priority_mana_taps" not in games[0][1]
+    assert b"mana_taps" not in games[0][1]
 
 
 @pytest.mark.parametrize("invalid", [(True,), (True, False, True), (1, False), "no"])
-def test_priority_mana_taps_requires_two_booleans(invalid: object) -> None:
+def test_mana_taps_requires_two_booleans(invalid: object) -> None:
     with pytest.raises(ValueError, match="two booleans"):
-        managym.GameSetup(forests(), priority_mana_taps=invalid)  # type: ignore[arg-type]
+        managym.GameSetup(forests(), mana_taps=invalid)  # type: ignore[arg-type]
 
 
 def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
@@ -99,7 +99,7 @@ def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
     on = managym.Env(seed=3)
     seats = forests()
     for env, taps in ((off, False), (on, True)):
-        obs, _ = env.reset(managym.GameSetup(seats, priority_mana_taps=(taps, False)))
+        obs, _ = env.reset(managym.GameSetup(seats, mana_taps=(taps, False)))
         before = env.skip_trivial_count()
         land = next(
             i
@@ -117,13 +117,13 @@ def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
 
 def test_priority_taps_preserve_default_config_identity_and_follow_seats() -> None:
     for config in (
-        ObservationConfig(priority_mana_taps=False),
-        MatchConfig(priority_mana_taps=(False, False)),
+        ObservationConfig(mana_taps=False),
+        MatchConfig(mana_taps=(False, False)),
     ):
         stored = config.model_dump(mode="json")
-        assert "priority_mana_taps" not in stored
+        assert "mana_taps" not in stored
         assert type(config).model_validate(stored) == config
         assert canonical_sha256(stored) == canonical_sha256(type(config)().model_dump())
-    match = Match(MatchConfig(priority_mana_taps=(True, False)))
-    assert match.to_rust().priority_mana_taps == (True, False)
-    assert match.swapped().to_rust().priority_mana_taps == (False, True)
+    match = Match(MatchConfig(mana_taps=(True, False)))
+    assert match.to_rust().mana_taps == (True, False)
+    assert match.swapped().to_rust().mana_taps == (False, True)

@@ -322,8 +322,8 @@ impl VectorEnv {
         self.envs.iter().map(Env::decklists).collect()
     }
 
-    pub fn current_priority_mana_taps(&self) -> Vec<[bool; 2]> {
-        self.envs.iter().map(Env::priority_mana_taps).collect()
+    pub fn current_mana_taps(&self) -> Vec<[bool; 2]> {
+        self.envs.iter().map(Env::mana_taps).collect()
     }
 
     /// The setups each game was actually reset with, in seat order.
@@ -1002,7 +1002,7 @@ impl VectorEnv {
             GameSetup {
                 players: vec![roster.players[a].clone(), roster.players[b].clone()],
                 decklists: player_configs.decklists,
-                priority_mana_taps: player_configs.priority_mana_taps,
+                mana_taps: player_configs.mana_taps,
             }
         };
         env.reset(configs)

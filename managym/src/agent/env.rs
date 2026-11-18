@@ -127,7 +127,7 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
-    priority_mana_taps: [bool; 2],
+    mana_taps: [bool; 2],
     disclosure: DecklistDisclosure,
     actions: Vec<usize>,
 }
@@ -142,16 +142,16 @@ impl serde::Serialize for NativeActionTrace {
             #[serde(flatten)]
             player: &'a PlayerConfig,
             #[serde(skip_serializing_if = "std::ops::Not::not")]
-            priority_mana_taps: bool,
+            mana_taps: bool,
             #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
             disclosure: DecklistDisclosure,
         }
         let players: Vec<_> = self
             .player_configs
             .iter()
-            .zip(self.priority_mana_taps)
-            .map(|(player, priority_mana_taps)| RetainedSeat {
-                priority_mana_taps,
+            .zip(self.mana_taps)
+            .map(|(player, mana_taps)| RetainedSeat {
+                mana_taps,
                 player,
                 disclosure: self.disclosure,
             })
@@ -333,7 +333,7 @@ impl Env {
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
             disclosure: player_configs.decklists.resolve(self.seed),
-            priority_mana_taps: player_configs.priority_mana_taps,
+            mana_taps: player_configs.mana_taps,
             player_configs: Arc::from(player_configs.players.clone()),
             actions: Vec::new(),
         });
@@ -496,10 +496,8 @@ impl Env {
             .map_or(Default::default(), |game| game.state.disclosure)
     }
 
-    pub fn priority_mana_taps(&self) -> [bool; 2] {
-        self.game
-            .as_ref()
-            .map_or([false; 2], |game| game.priority_mana_taps)
+    pub fn mana_taps(&self) -> [bool; 2] {
+        self.game.as_ref().map_or([false; 2], |game| game.mana_taps)
     }
 
     /// Setups this game was reset with; empty before the first reset.

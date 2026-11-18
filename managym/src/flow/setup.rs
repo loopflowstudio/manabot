@@ -158,7 +158,7 @@ impl Game {
             }),
             policy_history: Default::default(),
             skip_trivial,
-            priority_mana_taps: player_configs.priority_mana_taps,
+            mana_taps: player_configs.mana_taps,
             current_action_space: None,
             decision_epoch: 0,
             semantic_object_candidates: Default::default(),

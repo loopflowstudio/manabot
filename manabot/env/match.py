@@ -63,7 +63,7 @@ class Match:
         return managym.GameSetup(
             [self.to_rust_hero(), self.to_rust_villain()],
             decklists=self.config.decklists,
-            priority_mana_taps=self.config.priority_mana_taps,
+            mana_taps=self.config.mana_taps,
         )
 
     def swapped(self) -> "Match":
@@ -86,7 +86,7 @@ class Match:
                 hero_sideboard=self.villain_sideboard,
                 villain_sideboard=self.hero_sideboard,
                 decklists=self.config.decklists,
-                priority_mana_taps=self.config.priority_mana_taps[::-1],
+                mana_taps=self.config.mana_taps[::-1],
             )
         )
 

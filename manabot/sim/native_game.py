@@ -162,7 +162,7 @@ def execute_game(
             if (
                 registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
                 and player_space is not None
-                and player_space.encoder.config.priority_mana_taps
+                and player_space.encoder.config.mana_taps
             ):
                 tap_players.add(responsible)
         responsible = None
@@ -174,9 +174,7 @@ def execute_game(
         if match is not None:
             first, second = game["seat_players"]
             match = match.model_copy(
-                update={
-                    "priority_mana_taps": (first in tap_players, second in tap_players)
-                }
+                update={"mana_taps": (first in tap_players, second in tap_players)}
             )
             resolved = match.model_dump(mode="json")
             if resolved != game["match_hypers"]:

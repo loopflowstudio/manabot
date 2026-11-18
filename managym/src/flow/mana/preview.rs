@@ -184,7 +184,9 @@ impl Game {
                 }
                 _ => None,
             },
-            Action::PayCost { .. } if self.state.suspended_decision.is_some() => {
+            Action::PayCost { .. } | Action::TapForMana { .. }
+                if self.state.suspended_decision.is_some() =>
+            {
                 let suspended = position
                     .to_mut()
                     .state
@@ -192,6 +194,9 @@ impl Game {
                     .take()
                     .unwrap();
                 if let Decision::Payment(payment) = suspended.decision {
+                    if let Action::TapForMana { permanent, .. } = action {
+                        sources.push(position.to_mut().preview_tap(player, *permanent));
+                    }
                     let cost = payment.remaining.mana_cost();
                     resolution = Some((payment, suspended.frame));
                     Some(cost)
@@ -216,6 +221,9 @@ impl Game {
                     tapped,
                     ..
                 }) => {
+                    if let Action::TapForMana { permanent, .. } = action {
+                        sources.push(position.to_mut().preview_tap(player, *permanent));
+                    }
                     position.to_mut().pending_choice = None;
                     Some(
                         self.waterbend_owed(player, payment, *remaining_generic, *tapped)

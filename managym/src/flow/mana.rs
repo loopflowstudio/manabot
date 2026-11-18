@@ -1251,6 +1251,27 @@ impl PaymentModel<'_> {
         path
     }
 
+    /// The pool already includes the tap's output. Reserve its untapped
+    /// resource before asking whether all remaining costs can be paid.
+    fn payable_after_tap(
+        &self,
+        permanent: PermanentId,
+        pool: Mana,
+        obligations: Vec<Obligation>,
+    ) -> bool {
+        let mut after = PaymentModel {
+            cache: None,
+            sources: self.sources.clone(),
+            life: self.life,
+        };
+        after.reserve(SourceReservation {
+            permanent,
+            tap: true,
+            sacrifice: false,
+        });
+        after.payable(pool, obligations, SourcePolicy::All)
+    }
+
     /// Whether `obligations` can be paid: `plan(..).is_some()` without
     /// building the witness when the direct answer applies.
     fn payable(&self, pool: Mana, obligations: Vec<Obligation>, policy: SourcePolicy) -> bool {
@@ -1933,30 +1954,47 @@ impl Game {
             .collect()
     }
 
-    /// At priority the configured seat may float mana from every fixed source.
-    /// Otherwise offer fixed sources the payer may tap deliberately
-    /// for the pending cast or activation payment, beside `PayCost`, which
-    /// finishes automatically from what remains. A source is offered when
-    /// its output lets the pool spend more of the cost and the payment and
-    /// its saved callers stay payable afterwards, so a tap is never surplus.
-    /// Empty when the pool already covers the cost, or
-    /// every offered source is needed anyway: then nothing is chosen.
-    pub(crate) fn fixed_tap_actions(&self, player: PlayerId) -> Vec<Action> {
-        if self.pending_choice.is_none()
-            && self.priority_mana_taps[self.decision_controller(player).0]
-            && self.state.priority.holder == player
-            && self.state.suspended_decision.is_none()
-        {
-            return self
-                .shared_payment_sources(player)
-                .iter()
-                .filter(|source| source.untapped && source.fixed.is_some())
-                .map(|source| Action::TapForMana {
-                    player,
-                    permanent: source.permanent,
-                })
-                .collect();
+    /// Append fixed sources after the ordinary offers. A committed payment
+    /// must still have a witness after the tap, including any saved callers.
+    pub(crate) fn append_mana_taps(&self, player: PlayerId, actions: &mut Vec<Action>) {
+        if self.mana_taps == [false; 2] || !self.mana_taps[self.decision_controller(player).0] {
+            return;
         }
+        let obligations = self.payment_obligations(player);
+        // The engine also uses ManaPayment to commit purely non-mana
+        // activation costs. That bookkeeping step opens no mana window.
+        if matches!(&self.pending_choice, Some(PendingChoice::ManaPayment { payment, .. }) if matches!(payment.as_ref(), Payment::Activation { .. }))
+            && self.state.suspended_decision.is_none()
+            && matches!(obligations.as_slice(), [Obligation::Pay { cost, .. }] if cost.mana_value == 0)
+        {
+            return;
+        }
+        let model = self.payment_model(player, None);
+        let ordinary_len = actions.len();
+        for source in model.sources.iter().filter(|source| source.untapped) {
+            let Some(output) = &source.fixed else {
+                continue;
+            };
+            let tap = Action::TapForMana {
+                player,
+                permanent: source.permanent,
+            };
+            if actions[..ordinary_len].contains(&tap) {
+                continue;
+            }
+            if !obligations.is_empty() {
+                let mut pool = self.pooled_mana(player);
+                pool.add(output);
+                if !model.payable_after_tap(source.permanent, pool, obligations.clone()) {
+                    continue;
+                }
+            }
+            actions.push(tap);
+        }
+    }
+
+    /// Ordinary source choices make progress toward the announced cost.
+    pub(crate) fn useful_payment_taps(&self, player: PlayerId) -> Vec<Action> {
         let Some(PendingChoice::ManaPayment {
             player: payer,
             payment,
@@ -2005,19 +2043,9 @@ impl Game {
                     return None;
                 }
                 let payable = || {
-                    let mut after = PaymentModel {
-                        cache: None,
-                        sources: model.sources.clone(),
-                        life: model.life,
-                    };
-                    after.reserve(SourceReservation {
-                        permanent: source.permanent,
-                        tap: true,
-                        sacrifice: false,
-                    });
                     let mut obligations = obligations.clone();
                     obligations.extend_from_slice(&tail);
-                    after.payable(tapped, obligations, SourcePolicy::All)
+                    model.payable_after_tap(source.permanent, tapped, obligations)
                 };
                 if fixed_only {
                     debug_assert!(payable(), "a fixed tap changed aggregate affordability");
@@ -2044,22 +2072,35 @@ impl Game {
         player: PlayerId,
         permanent: PermanentId,
     ) -> Result<(), AgentError> {
-        let offered = Action::TapForMana { player, permanent };
-        if !self.fixed_tap_actions(player).contains(&offered) {
-            return Err(AgentError("source is not offered for this decision".into()));
-        }
         self.tap_fixed_mana_source(player, permanent);
-        let Some(PendingChoice::ManaPayment { sacrifice, .. }) = &self.pending_choice else {
-            self.state.priority_mut().on_non_pass_action(player);
-            return Ok(());
-        };
-        let sacrifice = *sacrifice;
-        if self.fixed_tap_actions(player).is_empty()
-            && self.mana_ability_actions(player, sacrifice).is_empty()
-        {
-            return self.finish_mana_payment(player);
+        if self.state.suspended_decision.is_some() {
+            return self.advance_mana_upfront();
+        }
+        match &self.pending_choice {
+            Some(PendingChoice::ManaPayment { sacrifice, .. }) => {
+                if !self.has_mana_payment_choices(player, *sacrifice) {
+                    return self.finish_mana_payment(player);
+                }
+            }
+            None => self.state.priority_mut().on_non_pass_action(player),
+            _ => {}
         }
         Ok(())
+    }
+
+    pub(crate) fn has_mana_payment_choices(
+        &self,
+        player: PlayerId,
+        sacrifice: Option<PermanentId>,
+    ) -> bool {
+        if !self.mana_ability_actions(player, sacrifice).is_empty()
+            || !self.useful_payment_taps(player).is_empty()
+        {
+            return true;
+        }
+        let mut taps = Vec::new();
+        self.append_mana_taps(player, &mut taps);
+        !taps.is_empty()
     }
 
     pub(crate) fn can_pay_with_mana_abilities(
@@ -2355,24 +2396,48 @@ impl Game {
         if tap_remaining > 0 {
             return Ok(());
         }
-        let obligations = self.payment_obligations(player);
-        // Only the prefix through the first Spend must be automatic; later
-        // obligations may still require visible mana activations and outputs.
-        let model = self.payment_model(player, None);
-        let Some(path) = model.plan(
+        if self.characteristics(permanent).activated_abilities[ability_index]
+            .mana_cost
+            .mana_value
+            > 0
+        {
+            let mut taps = Vec::new();
+            self.append_mana_taps(player, &mut taps);
+            if !taps.is_empty() {
+                return Ok(());
+            }
+        }
+        self.pay_mana_upfront(player)
+    }
+
+    fn automatic_upfront_path(&self, player: PlayerId) -> Option<Vec<PaymentStep>> {
+        let path = self.payment_model(player, None).plan(
             self.pooled_mana(player),
-            obligations,
+            self.payment_obligations(player),
             SourcePolicy::AutomaticPrefix,
-        ) else {
+        )?;
+        path.iter()
+            .take_while(|step| !matches!(step, PaymentStep::Spend))
+            .all(|step| step.action(player).is_none())
+            .then_some(path)
+    }
+
+    pub(crate) fn can_pay_mana_upfront(&self, player: PlayerId) -> bool {
+        self.automatic_upfront_path(player).is_some()
+    }
+
+    pub(crate) fn pay_mana_upfront(&mut self, player: PlayerId) -> Result<(), AgentError> {
+        let Some(path) = self.automatic_upfront_path(player) else {
             return Ok(());
         };
-        if path
-            .iter()
-            .take_while(|step| !matches!(step, PaymentStep::Spend))
-            .any(|step| step.action(player).is_some())
-        {
-            return Ok(());
-        }
+        let Decision::ManaUpfront {
+            permanent,
+            ability_index,
+            ..
+        } = self.state.suspended_decision.as_ref().unwrap().decision
+        else {
+            unreachable!()
+        };
         for step in path {
             match step {
                 PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, source),

@@ -223,7 +223,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) ->
     registrations = {}
     agents = {}
     for name, taps in (("tap-on", True), ("tap-off", False)):
-        space = ObservationSpace(ObservationConfig(priority_mana_taps=taps))
+        space = ObservationSpace(ObservationConfig(mana_taps=taps))
         model = ActorCritic(
             space, ModelConfig(world="world", hidden_dim=8, num_attention_heads=2)
         )
@@ -267,8 +267,8 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) ->
             metadata = record.context["evaluation"]
             seat = metadata["seat_players"].index("tap-on")
             pair = (seat == 0, seat == 1)
-            assert tuple(metadata["match_hypers"]["priority_mana_taps"]) == pair
-            assert record.games[0].setup().priority_mana_taps == pair
+            assert tuple(metadata["match_hypers"]["mana_taps"]) == pair
+            assert record.games[0].setup().mana_taps == pair
             replay = walk(record)
             offered = {
                 choice.observation.agent.player_index
@@ -284,7 +284,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) ->
 
             # The native commitments still replay if only the outer match metadata
             # is changed. Verification must catch the conflicting seat assignment.
-            metadata["match_hypers"]["priority_mana_taps"] = list(reversed(pair))
+            metadata["match_hypers"]["mana_taps"] = list(reversed(pair))
             assert not replay_games(
                 [record.model_dump(mode="json", by_alias=True)]
             ).passed

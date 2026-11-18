@@ -76,7 +76,7 @@ struct CanonicalAuthorityState<'a> {
     decision_epoch: u64,
     pending_choice: &'a Option<PendingChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    priority_mana_taps: Option<[bool; 2]>,
+    mana_taps: Option<[bool; 2]>,
     skip_trivial: bool,
     skip_trivial_count: usize,
     rng_probe: [u64; 8],
@@ -109,10 +109,7 @@ fn identity_with_rng(game: &Game, rng_probe: [u64; 8]) -> SearchStateIdentity {
         current_action_space: &game.current_action_space,
         decision_epoch: game.decision_epoch,
         pending_choice: &game.pending_choice,
-        priority_mana_taps: game
-            .priority_mana_taps
-            .contains(&true)
-            .then_some(game.priority_mana_taps),
+        mana_taps: game.mana_taps.contains(&true).then_some(game.mana_taps),
         skip_trivial: game.skip_trivial,
         skip_trivial_count: game.skip_trivial_count,
         rng_probe,

@@ -1628,10 +1628,14 @@ impl Game {
                         self.mana_tap_cost_actions(*player),
                     )
                 } else {
-                    (
-                        ActionSpaceKind::PayOrNot,
-                        self.mana_ability_actions(*player, None),
-                    )
+                    let mut actions = self.mana_ability_actions(*player, None);
+                    if self.mana_taps[self.decision_controller(*player).0]
+                        && self.can_pay_mana_upfront(*player)
+                    {
+                        actions.push(Action::PayCost { player: *player });
+                    }
+                    self.append_mana_taps(*player, &mut actions);
+                    (ActionSpaceKind::PayOrNot, actions)
                 };
                 ActionSpace {
                     player: Some(*player),
@@ -1665,6 +1669,7 @@ impl Game {
                 if payment.can_decline() {
                     actions.push(Action::Decline { player });
                 }
+                self.append_mana_taps(player, &mut actions);
                 ActionSpace {
                     player: Some(player),
                     kind: match payment.remaining {
@@ -2013,6 +2018,17 @@ impl Game {
             if !self.mana_choice_completes_payment(*player, mana) {
                 return Err(AgentError("mana color cannot complete the payment".into()));
             }
+        }
+        if let (
+            Decision::ManaUpfront {
+                player,
+                tap_remaining: 0,
+                ..
+            },
+            Action::PayCost { .. },
+        ) = (&suspended.decision, action)
+        {
+            return self.pay_mana_upfront(*player);
         }
         if let (
             Decision::ManaUpfront { tap_remaining, .. },
@@ -4251,6 +4267,68 @@ mod payment_tests {
             .position(predicate)
             .expect("payment action is legal");
         game.step(action_index).unwrap();
+    }
+
+    #[test]
+    fn resolution_payment_tap_retains_the_offer_and_pays_for_the_selected_effects() {
+        let player = PlayerId(0);
+        let mut game = payment_game(PaymentCost::Mana(ManaCost::parse("U")));
+        let island = game
+            .scenario_force_battlefield(player, "Island", true)
+            .unwrap();
+        let ordinary = game.suspended_decision_action_space().unwrap().actions;
+        game.mana_taps = [true, false];
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let actions = &game.action_space().unwrap().actions;
+        assert_eq!(&actions[..ordinary.len()], ordinary);
+        assert_eq!(
+            actions[ordinary.len()..],
+            [Action::TapForMana {
+                player,
+                permanent: island
+            }]
+        );
+        let before = game.state.zones.size(ZoneType::Hand, player);
+        game.step(ordinary.len()).unwrap();
+        assert!(game.state.permanents[island].as_ref().unwrap().tapped);
+        assert_eq!(game.state.players[0].mana_pool, Mana::parse("U"));
+        assert_eq!(game.action_space().unwrap().actions, ordinary);
+        apply_payment_action(&mut game, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+        assert_eq!(game.state.zones.size(ZoneType::Hand, player), before + 5);
+    }
+
+    #[test]
+    fn nested_mana_activation_allows_surplus_before_paying_its_fee() {
+        let player = PlayerId(0);
+        let mut game = payment_game_with_deck(
+            PaymentCost::Mana(ManaCost::parse("G")),
+            BTreeMap::from([("Island".into(), 40), ("Prophetic Prism".into(), 1)]),
+        );
+        let prism = game
+            .scenario_force_battlefield(player, "Prophetic Prism", true)
+            .unwrap();
+        for _ in 0..2 {
+            game.scenario_force_battlefield(player, "Island", true)
+                .unwrap();
+        }
+        game.mana_taps = [true, false];
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        apply_payment_action(
+            &mut game,
+            |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == prism),
+        );
+        apply_payment_action(&mut game, |a| matches!(a, Action::TapForMana { .. }));
+        apply_payment_action(&mut game, |a| matches!(a, Action::PayCost { .. }));
+        assert!(game.state.permanents[prism].as_ref().unwrap().tapped);
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+        // WUBRG order: select green, then spend it on the original effect.
+        apply_payment_action(&mut game, |a| {
+            matches!(a, Action::ChooseMode { mode: 4, .. })
+        });
+        assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
+        apply_payment_action(&mut game, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
     }
 
     #[test]

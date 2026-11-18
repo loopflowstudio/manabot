@@ -263,9 +263,7 @@ impl Game {
             .collect();
         actions.extend(self.priority_activate_ability_actions(player));
         actions.push(Action::PassPriority { player });
-        if self.priority_mana_taps != [false; 2] {
-            actions.extend(self.fixed_tap_actions(player));
-        }
+        self.append_mana_taps(player, &mut actions);
         actions
     }
 
@@ -516,11 +514,12 @@ impl Game {
                 alternative,
             } => {
                 let mut actions = self.mana_ability_actions(*player, *sacrifice);
-                actions.extend(self.fixed_tap_actions(*player));
+                actions.extend(self.useful_payment_taps(*player));
                 let cost = self.payment_mana_cost(*player, payment, alternative.as_ref());
                 if self.can_pay_mana_cost(*player, &cost) {
                     actions.push(Action::PayCost { player: *player });
                 }
+                self.append_mana_taps(*player, &mut actions);
                 Some(ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::PayOrNot,
@@ -789,6 +788,7 @@ impl Game {
                 if self.can_pay_mana_cost(*player, &owed) {
                     actions.push(Action::PayCost { player: *player });
                 }
+                self.append_mana_taps(*player, &mut actions);
                 let focus = match payment.as_ref() {
                     Payment::Activation {
                         source: ActivationSource::Permanent(permanent),

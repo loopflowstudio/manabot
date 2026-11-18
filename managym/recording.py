@@ -60,7 +60,7 @@ class PlayerSetup(BaseModel):
     name: str
     decklist: dict[str, int]
     sideboard: dict[str, int]
-    priority_mana_taps: bool = Field(default=False, exclude_if=lambda value: not value)
+    mana_taps: bool = Field(default=False, exclude_if=lambda value: not value)
     # Earlier evidence names the selector `content_pack`.
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "content_pack")
@@ -74,7 +74,7 @@ class PlayerSetup(BaseModel):
         cls,
         player: managym.PlayerConfig,
         decklists: DecklistDisclosure,
-        priority_mana_taps: bool = False,
+        mana_taps: bool = False,
     ) -> "PlayerSetup":
         return cls(
             name=player.name,
@@ -82,7 +82,7 @@ class PlayerSetup(BaseModel):
             sideboard=player.sideboard,
             world=player.world,
             disclosure=decklists,
-            priority_mana_taps=priority_mana_taps,
+            mana_taps=mana_taps,
         )
 
 
@@ -97,9 +97,7 @@ def _game_disclosure(players: list[PlayerSetup]) -> DecklistDisclosure | None:
 def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
     disclosure = managym.resolve_decklists(players, seed)
     taps = (
-        players.priority_mana_taps
-        if isinstance(players, managym.GameSetup)
-        else (False, False)
+        players.mana_taps if isinstance(players, managym.GameSetup) else (False, False)
     )
     return [
         PlayerSetup.retain(player, disclosure, taps[i])
@@ -159,14 +157,14 @@ class GameInputs(BaseModel):
         return managym.GameSetup(
             [
                 managym.PlayerConfig(
-                    **player.model_dump(exclude={"disclosure", "priority_mana_taps"})
+                    **player.model_dump(exclude={"disclosure", "mana_taps"})
                 )
                 for player in self.players
             ],
             decklists=decklists,
-            priority_mana_taps=(
-                self.players[0].priority_mana_taps,
-                self.players[1].priority_mana_taps,
+            mana_taps=(
+                self.players[0].mana_taps,
+                self.players[1].mana_taps,
             ),
         )
 

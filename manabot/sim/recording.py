@@ -51,7 +51,7 @@ def record_actions(
             first,
             second,
             decklists=native.decklists,
-            priority_mana_taps=native.priority_mana_taps,
+            mana_taps=native.mana_taps,
         ).model_dump(),
         "observation_hypers": ObservationConfig().model_dump(),
         "world": managym.world_identity(),

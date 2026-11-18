@@ -148,11 +148,11 @@ fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
     let lands = ["Mountain", "Forest", "Forest"];
     let mut game = game(&lands);
     let ordinary = game.action_space().unwrap().actions.clone();
-    game.priority_mana_taps = [false, true];
+    game.mana_taps = [false, true];
     game.scenario_refresh_priority().unwrap();
     assert_eq!(game.action_space().unwrap().actions, ordinary);
 
-    game.priority_mana_taps = [true, false];
+    game.mana_taps = [true, false];
     game.scenario_refresh_priority().unwrap();
     assert_eq!(
         &game.action_space().unwrap().actions[..ordinary.len()],
@@ -172,7 +172,71 @@ fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
     assert_eq!(game.action_space().unwrap().player, Some(PlayerId(0)));
     assert_eq!(taps(&game).len(), 2);
     cast(&mut game);
+    pay_cost(&mut game);
     assert!(game.pending_choice.is_none());
     assert!(untapped(&game).is_empty());
     assert_eq!(game.state.players[0].mana_pool, Mana::default());
+}
+
+#[test]
+fn funded_cast_can_tap_a_surplus_forest_before_paying() {
+    let mut game = game(&["Forest", "Mountain"]);
+    game.state.players[0].mana_pool = Mana::parse("2R");
+    game.mana_taps = [true, false];
+    game.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    assert!(matches!(
+        game.action_space().unwrap().actions[0],
+        Action::PayCost { .. }
+    ));
+    let forest = taps(&game)
+        .into_iter()
+        .find(|(_, name)| name == "Forest")
+        .unwrap()
+        .0;
+    game.step(forest).unwrap();
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("2RG"));
+    pay_cost(&mut game);
+    // Generic spending can ask which floating unit to keep.
+    while game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .all(|a| matches!(a, Action::ChooseMode { .. }))
+    {
+        game.step(0).unwrap();
+    }
+    assert!(game.pending_choice.is_none());
+    assert_eq!(game.state.players[0].mana_pool.total(), 1);
+    assert_eq!(untapped(&game), ["Mountain"]);
+}
+
+fn pay_cost(game: &mut Game) {
+    let index = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::PayCost { .. }))
+        .unwrap();
+    game.step(index).unwrap();
+}
+
+#[test]
+fn surplus_sources_follow_the_existing_payment_actions() {
+    let mut off = game(&["Mountain", "Mountain", "Forest"]);
+    off.state.players[0].mana_pool = Mana::parse("2");
+    let mut on = off.clone();
+    on.mana_taps = [true, false];
+    cast(&mut off);
+    cast(&mut on);
+    let ordinary = &off.action_space().unwrap().actions;
+    assert_eq!(taps(&off).len(), 2);
+    assert_eq!(
+        &on.action_space().unwrap().actions[..ordinary.len()],
+        ordinary
+    );
+    assert_eq!(taps(&on).last(), Some(&(ordinary.len(), "Forest".into())));
+    assert_eq!(on.action_space().unwrap().actions.len(), ordinary.len() + 1);
 }

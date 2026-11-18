@@ -670,17 +670,18 @@ native trivial-decision skipping. These ordinary choices are on by default
 for every consumer. Source taps use the existing `TapForCost` policy action
 with the source as focus; the native Command verb is `tap_for_mana`, distinct
 from waterbend. They do not expose undo, or production at priority unless a
-seat [asks for it](#mana-taps-at-priority).
+seat [asks for it](#mana-taps-at-priority-and-during-payment).
 
-### Mana taps at priority
+### Mana taps at priority and during payment
 
-A seat can also be offered its fixed-output sources while it holds priority.
+A seat can also choose fixed-output sources at priority and during a mana payment,
+including when its pool already covers the cost.
 The option is per seat and off by default:
 
 ```python
 import managym
 
-setup = managym.GameSetup([first, second], priority_mana_taps=(True, False))
+setup = managym.GameSetup([first, second], mana_taps=(True, False))
 ```
 
 With two untapped Forests and a creature spell in hand, the first seat's
@@ -704,9 +705,11 @@ or phase, as any floating mana does. There is no undo.
   actions). Under `action_overflow="first-legal"` the taps are the first
   actions dropped.
 - **Fixed-output sources only.** Activated mana abilities with a choice are
-  already offered at priority. Payments are unchanged: a pending payment
-  offers useful taps as above whatever this option says, and resolution
-  payments offer none.
+  already offered at priority. During cast, activation and resolution payments,
+  existing choices (including useful source taps, waterbend, automatic payment
+  and decline where available) keep their indices. Additional taps follow
+  them. A tap cannot consume a reserved resource or strand a committed cost.
+  The payer can finish from the remaining pool and sources.
 - **More decisions.** A priority window whose only action was `PassPriority`
   is skipped as forced; with an untapped source and the option on it is a
   decision. `Env.skip_trivial_count()` counts forced priority passes and other

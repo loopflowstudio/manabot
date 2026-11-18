@@ -27,7 +27,7 @@ fn configs(disclosure: DecklistDisclosure) -> GameSetup {
             .map(|key| pack.player_config(key, key).unwrap())
             .collect(),
         decklists: disclosure.into(),
-        priority_mana_taps: [false; 2],
+        mana_taps: [false; 2],
     }
 }
 
