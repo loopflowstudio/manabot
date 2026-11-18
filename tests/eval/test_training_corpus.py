@@ -335,6 +335,9 @@ def test_pretrained_corpus_follows_the_published_parent_checkpoint(
     assert training_corpus(parent, source=track, experiment="first").sql(
         "select run, update_number, sum(games) from corpus group by all"
     ).fetchall() == [("parent", 1, 2)]
+    # A string path reads as the file, and a storage without the run says so.
+    with pytest.raises(UnknownCoverage, match="holds no run first/parent"):
+        training_corpus(str(parent), source=tmp_path / "parent", experiment="first")
     unrecorded = tmp_path / "policy.safetensors"
     write_safetensors(
         unrecorded,

@@ -20,6 +20,14 @@ seat. `SelfPlayPoint.position` stays as a warning alias until 0.4.0. Hosted CI
 on `feb228178b` was pending, every job including Academy UI; nothing seen
 green or red yet.
 
+QA at `6fa4efee06` (`scratch/qa.html`, question 57): the guide's file example
+ran on a fresh resumed run, a child, a mixed run and from an installed wheel,
+with the counts of the run form. Repaired in the working tree, not pushed: the
+guide's first example named an undefined `etude_home` and a path nobody has;
+a string path crashed; a storage without the run said "resolved training
+decks are unknown". Hosted CI at that commit: 21 passed, none failed, Academy
+UI, Engine Budget and Integration (evaluation) still pending.
+
 Next: item 5, the gate step: the red Academy UI job, then publish to #558 and
 stop at human review. Nothing else remains to implement.
 

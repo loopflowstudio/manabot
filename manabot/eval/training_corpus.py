@@ -236,7 +236,7 @@ def checkpoint_run(path: Path, experiment: str | None) -> tuple[str, str, int]:
 
 
 def training_corpus(
-    run: RunData | CheckpointRecord | Path,
+    run: RunData | CheckpointRecord | Path | str,
     through: int | None = None,
     *,
     source: Storage | Path | str | None = None,
@@ -267,6 +267,8 @@ def training_corpus(
 
     Missing update evidence raises `UnknownCoverage`.
     """
+    if isinstance(run, str):
+        run = Path(run)
     if experiment is not None and not isinstance(run, Path):
         raise ValueError("experiment applies to a checkpoint file")
     if isinstance(run, RunData):
@@ -282,6 +284,8 @@ def training_corpus(
                 raise UnknownCoverage("checkpoint has no integral updates coordinate")
             name, run_name, through = run.experiment, run.run, int(coordinate)
         data = read(source, name, run_name)
+        if data.file is None and not data.blocks:
+            raise UnknownCoverage(f"{source} holds no run {name}/{run_name}")
     if type(through) is not int or through < 0:
         raise ValueError("supply a nonnegative update")
 

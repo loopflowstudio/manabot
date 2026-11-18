@@ -287,3 +287,13 @@ say so if they should carry a note.
     beside `etude_run`. An `experiment=` that contradicts the file's record
     raises. Not checked: that the file's bytes match a checkpoint the run
     registered (the raw policy is never registered, only the EMA one).
+
+## 57. QA at 6fa4efee06: three repairs to the file form (reversible)
+
+`training_corpus` accepts the checkpoint file as a string as well as a `Path`
+(`source` already did). A storage that holds no record of the selected run
+raises `UnknownCoverage: <source> holds no run <experiment>/<run>` instead of
+"resolved training decks are unknown". The guide's first example names real
+paths (`~/.etude/track/local/out/policies/...`) and its statistics example
+uses the same file; `etude_home` was undefined and frontier Small has no
+statistics.

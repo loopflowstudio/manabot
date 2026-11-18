@@ -608,10 +608,15 @@ publish, land or choose the next Graph step from here.
   the parent's Etude checkpoint record. The child corpus should contain the
   parent's first update and the child's first update. Query historical
   frontier settings against the sealed run declaration as well as its counts.
-  Run the guide as written: extract the three `python` blocks under
-  "Querying the training corpus" with a regex and replace only the storage
-  path, run coordinates, `through=` and the statistics path, so an import or
-  query the guide no longer supports fails. For a consumer outside the
+  Run the guide as written: extract the four `python` blocks under
+  "Querying the training corpus" with a regex and replace only the track
+  root (and, to run every query on the file-form corpus, drop the three
+  frontier `read` lines), so an import or query the guide no longer supports
+  fails. The first block starts from a policy file,
+  `<home>/track/<run>/out/policies/0000000N-raw.safetensors`; try each file a
+  run wrote, a moved copy, a string path, a storage root without the run, and
+  a file from an earlier pass's `.runs/` (older files record no experiment
+  and take `experiment=`). For a consumer outside the
   checkout, build both wheels from the warm target
   (`uv run --extra play maturin build --release -i .venv/bin/python -m
   managym/Cargo.toml -o <dist>` and `uv build --wheel --package manabot -o

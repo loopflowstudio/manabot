@@ -245,15 +245,16 @@ from pathlib import Path
 
 from manabot.eval.training_corpus import training_corpus
 
-# A run of `etude train manabot/recipes/local.py` keeps its policies under its
-# output directory and its records under ETUDE_HOME/track.
-policy = Path("out/policies/00000002-raw.safetensors")
+# Etude keeps its records under ~/.etude/track (moved by ETUDE_HOME). A run of
+# `etude train manabot/recipes/local.py` keeps its policies in local/out there.
+track = Path.home() / ".etude/track"
+policy = track / "local/out/policies/00000002-raw.safetensors"
 # A DuckDB connection holding the corpus, runs, game_settings and deck_cards relations.
-corpus = training_corpus(policy, source=Path(etude_home) / "track")
+corpus = training_corpus(policy, source=track)
 ```
 
 A file that records no run or update raises `UnknownCoverage`, naming what is
-missing. Files written before checkpoints recorded their experiment take it as
+missing, as does a storage root that does not hold the file's run. Files written before checkpoints recorded their experiment take it as
 `experiment="local"`. The file is a policy container (`.safetensors`); convert
 a PyTorch `.pt` checkpoint with `manabot.backends.convert` first.
 
@@ -387,7 +388,7 @@ That request raises `UnknownCoverage`. Aggregate each table before
 joining because several matchups and seats can contribute to the same update.
 
 ```python
-corpus = training_corpus(run, through=1, statistics=Path("out/statistics"))
+corpus = training_corpus(policy, source=track, statistics=policy.parents[1] / "statistics")
 print(corpus.sql("""
     select (select sum(games) from corpus
             where list_contains(play_cards || draw_cards, 'lea.island')) as list_games,
