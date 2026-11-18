@@ -151,3 +151,17 @@ training rows are in the [published CSV](../data/mtg385/launch-2896671bcf5f/trai
 At its first update the on policy chose priority taps on 38.6% of surfaced
 decisions. Only initialization checkpoints reached storage. There is no
 scored trained comparison or GPU packing measurement from this launch.
+
+### Paired L4 training at `68d3a20b09`
+
+On 2026-11-18 UTC, launch `6c36bc30a50d` placed both arms of seed 21501
+on machine `mtg385-l4-pair-fe9567457c20`. Its recorded rental ceiling was
+USD4.485 at USD0.69/hour. The runs share one L4 with at least 12 vCPUs and
+80 GB of host memory. The previous 21501 runs recorded process RSS of
+16.55 GiB off and 31.37 GiB on, which left little room for workers on the
+original 48 GB template.
+
+The paired runs target 50 updates and export at 0, 25 and 50. At the
+previous on arm's first-update pace, 250 updates would take about 38 hours
+on that host. The complete-games collector closes games after its transition
+quota, so equal update counts can contain different numbers of decisions.
