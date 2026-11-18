@@ -141,7 +141,8 @@ test('priority automation advances into a real choice and remains visible in the
   }
   await expect(automated.first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
-  await page.reload();
+  // The game's own address returns to it; the setup address it began from opens setup.
+  await page.goto('/');
   await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);
   await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
 });

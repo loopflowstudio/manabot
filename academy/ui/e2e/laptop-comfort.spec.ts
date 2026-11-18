@@ -73,7 +73,7 @@ function expectFits(measured: Layout, offers: number): void {
 }
 
 /** Serve one dense frame over the play socket; a Command is answered with a stale-revision rejection. */
-async function denseTable(page: Page, offers: number): Promise<{ commands: Command[]; frame: ExperienceFrame }> {
+async function denseTable(page: Page, offers: number): Promise<{ commands: Command[]; frame: ExperienceFrame; resend: () => void }> {
   const frame = denseFrame();
   const mine = frame.projection.agent.battlefield;
   // Many offers over exact visible objects, identical copies included.
@@ -86,12 +86,15 @@ async function denseTable(page: Page, offers: number): Promise<{ commands: Comma
   const commands: Command[] = [];
   const recover = (): RecoveryEnvelope => ({ ...boltJson.recovery as RecoveryEnvelope,
     frame, presentation_tail: [], accepted_commands: [], replay_cursor: frame.revision });
+  const observe = (): string => JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+    table: tableSnapshot(), session_id: 'laptop', resume_token: 'laptop', recovery: recover() });
+  let resend = (): void => {};
   await page.routeWebSocket('**/ws/play', socket => {
+    resend = () => socket.send(observe());
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw));
       if (message.type === 'new_game' || message.type === 'resume') {
-        socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
-          table: tableSnapshot(), session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
+        socket.send(observe());
       } else if (message.type === 'command') {
         commands.push(message.command);
         frame.revision += 1;
@@ -107,8 +110,24 @@ async function denseTable(page: Page, offers: number): Promise<{ commands: Comma
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('table')).toBeVisible();
-  return { commands, frame };
+  return { commands, frame, resend: () => resend() };
 }
+
+test('a frame that repeats the revision keeps what the resting pointer shows', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS[1]);
+  const { resend, frame } = await denseTable(page, 4);
+  const card = page.locator('.board .you [data-testid=table-card]').first();
+  await card.hover();
+  const preview = page.getByTestId('card-preview');
+  await expect(preview).toBeVisible();
+  const revision = await page.locator('main').getAttribute('data-frame-revision');
+  // The resent frame is told apart by the opponent's life, so the test knows it arrived.
+  frame.projection.opponent.life -= 1;
+  resend();
+  await expect(page.locator('[data-plate-side=opponent] .numeral')).toHaveText(String(frame.projection.opponent.life));
+  await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);
+  await expect(preview).toBeVisible();
+});
 
 for (const viewport of VIEWPORTS) {
   for (const colorScheme of ['light', 'dark'] as const) {

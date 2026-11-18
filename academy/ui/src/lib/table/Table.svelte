@@ -476,9 +476,12 @@
   $effect(() => { if (!result) resultFolded = false; });
   let docked = $state<Subject | null>(null);
 
-  // A new frame replaces the cards a menu or preview was opened from.
+  // A new revision replaces the cards a menu or preview was opened from. A
+  // frame that repeats the revision (a resume, a stops echo) keeps them, so
+  // a resting pointer keeps its preview.
+  const revision = $derived(frame.revision);
   $effect(() => {
-    void frame.revision;
+    void revision;
     menuAt = null;
     hovered = null;
     pointed = null;
