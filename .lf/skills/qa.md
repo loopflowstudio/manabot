@@ -464,6 +464,14 @@ publish, land or choose the next Graph step from here.
   figure that changes bytes on every redraw also changes its manifest entry.
   Render SVGs with `rsvg-convert -z 2 -b white` and look at them.
 
+- Combat drafts (`[data-testid=combat-draft]`, `POST
+  /api/sessions/<id>/combat-preview`): the draft appears only after the
+  preview answers, so wait for it before clicking creatures; without a preview
+  (a mocked socket with no route) the table keeps one creature at a time.
+  `[data-draft]` on a card is `can`, `in` or `armed`; confirm only once the
+  primary has `data-draft-ready=true`. Collect creature ids before clicking:
+  a locator over `[data-draft=can]` shifts as cards are drafted.
+
 - Payment previews (`[data-testid=payment-preview]`, `POST
   /api/sessions/<id>/payment-preview`): the panel exists only once a payment
   offer has been previewed in the current decision, so read it with a count

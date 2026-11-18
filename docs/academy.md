@@ -664,12 +664,26 @@ card from their plate) instead of appearing; with reduced motion they appear
 in place and every fact above stays.
 
 Choices with no card on the table, such as Lessons outside the game, appear in
-a tray over the board. During combat the creature the prompt asks about is
-raised. To attack with it, click it; to block with it, click the outlined
-attacker it should block. Not attacking and not blocking are the prompt's
-buttons. Each combat answer commits separately; there is no draft of a whole attack or
-block to edit and confirm. **Pass turn** (F6) passes priority until the turn
-ends.
+a tray over the board.
+
+Combat is drafted whole. At an attack, every creature that can attack is
+outlined; click one (or focus it and press Enter) to add it to the attack or
+leave it out. Drafted attackers are ringed with a dashed line and lean in, and
+a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
+rail. At a block, click a blocker, then the attacker it blocks; a blocker
+that can block only one attacker takes it at once, and the block's line is
+drawn. The prompt reads the whole plan ("Attack with 3 · not with
+Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
+nothing is declared while drafting. The engine still asks about one creature
+at a time: Academy's read-only combat preview replays the draft on a copy of
+the game and returns the exact answers that declare it, or the first one it
+refuses and why (a lone blocker of a creature with menace, a creature that
+cannot attack). Confirm (Space) sends those answers one by one; if the game
+asks anything the preview did not predict, sending stops and the board shows
+where the game stands. Escape stops a confirmed plan between answers. A
+reload keeps the draft for the same decision in that tab. Each creature's own
+answers stay in the full list of legal choices. **Pass turn** (F6) passes
+priority until the turn ends.
 
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button
 (unless a control with its own action has focus), F6 passes the turn and Escape
