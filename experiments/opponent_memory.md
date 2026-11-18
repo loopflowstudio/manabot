@@ -2742,3 +2742,14 @@ Every checkpoint loses to the heuristic. The GRU arm scores at least as
 well as control in all six cells (means 0.431 against 0.367); at seed 39103,
 where the final checkpoints have equal learner decisions, the difference is
 within one standard error.
+
+**Shared gradient clipping does not explain the divergence.** For each GRU
+checkpoint, six local self-play games gave 970 to 2,830 decisions, and a
+stand-in loss (final result as the return, policy-gradient plus value
+terms) was backpropagated in batches of 256. The memory pathway's gradient
+norm was 0.31 to 2.68 against 1.18 to 2.62 for the rest of the model, so
+the rest holds 70% to 97% of the total norm (median about 84%). A shared
+clip therefore shrinks the rest of the model's gradient by 3% to 30%, and
+Adam largely normalizes a uniform rescale. The cause of the GRU arm's slower
+sharpening is open; the candidates left are the memory term added to every
+board token and its interaction with the damped update.
