@@ -179,6 +179,19 @@ publish, land or choose the next Graph step from here.
   buttons, or every click times out while the bot plays on. Hover a card name
   to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
   usually wins before a slow card is used; give the opponent a light deck.
+  The bot is the `select` holding "Search 64"; choose its `Passive` option.
+- Mana controls (float/undo): with imported decks, the controls are
+  `getByRole('region', {name: 'Mana'})` (`Tap for mana` and `^Undo:` buttons);
+  the pool is `[data-testid=mana-pool] summary`. Colour-choice sources are
+  ordinary `Activate ability:` offers. A real refused Undo: `24 Forest` +
+  `16 Tireless Provisioner` vs `40 Plains`; choose the Treasure mode on a land
+  drop, then activate the Treasure. A refused Undo is `aria-disabled`, which
+  Playwright's `click()` waits on forever; use `force: true` and count sent
+  Commands. For stale/duplicate, wrap `WebSocket.prototype.send` in
+  `addInitScript` to keep the socket and resend a captured `command`. Without
+  the owner credential `/api/traces/<id>` is 403; read `attempts.trace_json`
+  in `$ACADEMY_TRACES_DIR/play.sqlite` for `events[].control`. Completed
+  replays open in a fresh context; positions read `Mana control: …`.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
   browser and the real server, destroy its active socket pairs, stop listening
