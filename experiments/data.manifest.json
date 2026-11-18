@@ -41010,6 +41010,30 @@
    "sha256": "bc4fdf3f6ae5333c9c870a3f6c807b9719b820d4c30727f1ccbdc526eb4e7a38",
    "bytes": 110282
   },
+  "experiments/data/mtg385/usable-fixed-only/u0/ema-games.csv": {
+   "sha256": "d3ea308e32b9145f27ebf8cadfdcd15caf9a9b63a9024dfd4d598b084e83fcd5",
+   "bytes": 295154
+  },
+  "experiments/data/mtg385/usable-fixed-only/u0/ema-mana_spot_checks.csv": {
+   "sha256": "41224c65f4659599aa06c5beb51cb57f9d176af3483aa161146192ca53ab35d3",
+   "bytes": 19927
+  },
+  "experiments/data/mtg385/usable-fixed-only/u0/ema-replays.tar": {
+   "sha256": "e6e3bf148ef3c674cad1744869e1066d7001db9ad7f1cdb087d9001a326a0bae",
+   "bytes": 2672640
+  },
+  "experiments/data/mtg385/usable-fixed-only/u0/raw-games.csv": {
+   "sha256": "1be639bc2f690911e054af015e2678a657190552fade3a06d715d65580ceeab5",
+   "bytes": 305816
+  },
+  "experiments/data/mtg385/usable-fixed-only/u0/raw-mana_spot_checks.csv": {
+   "sha256": "e21df406d7b4fa66dedd6f8cf9899bd431dc0f643edb499543d1757812376791",
+   "bytes": 20670
+  },
+  "experiments/data/mtg385/usable-fixed-only/u0/raw-replays.tar": {
+   "sha256": "4f1b6db53d8942296d8caa6437620441c1c95482243dc715cff00ac51f11a668",
+   "bytes": 2621440
+  },
   "experiments/data/one_token_layout/costs.json": {
    "sha256": "dbcde3d1ceac7efe618bbdaec50f6605670aa6a650627dd15490d705e1689791",
    "bytes": 553

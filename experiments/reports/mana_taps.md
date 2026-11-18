@@ -6,7 +6,7 @@
 
 Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16 and undo disabled. Through update 50 each seed pair used one L4. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Each checkpoint played the same 16 fixed deck pairs against the first-64 heuristic and its paired checkpoint, with seats and decks crossed. Training seeds are the three units of evidence.
 
-## Usable-only w64 training
+## Superseded usable comparison at `51ba07d77a`
 
 The usable/off comparison uses revision `51ba07d77a` and the Etude
 experiment `mana-taps-usable-w64`. Each of seeds 21501–21503 shares one L4
@@ -20,6 +20,13 @@ USD2.2425 each. Seeds 21501 and 21503 launched as `5722a7d35e0f` and
 from the queue after earlier capacity refusals. The three-hour job limits
 and 15-minute startup allowances fit within the remaining USD16.68 after
 reserving the earlier Lium cap. Evaluation runs locally.
+
+All six jobs were cancelled when the control changed. At this revision, off
+still offered choice-output mana abilities at priority. The launcher confirmed
+all three L4 rentals deleted by 18:42 UTC, at an estimated total of USD1.27.
+The local evaluator finished 144 matches for each of raw and EMA at
+initialization and verified 36 replay blobs for each role. These panels
+describe the superseded control. [Initialization game rows and replay evidence](../data/mtg385/usable-fixed-only/u0)
 
 ## Usable-only priority floats on CPU
 
