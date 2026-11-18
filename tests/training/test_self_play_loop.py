@@ -122,7 +122,7 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         "lea.llanowar_elves",
     }
     assert all(row["board"] == "main" and row["copies"] > 0 for row in population.rows)
-    (settings_table,) = recorded.read_table("training_settings", "updates")
+    (settings_table,) = recorded.read_table("training_run", "updates")
     assert settings_table.rows[0]["learning_seats"] == settings.learning_seats
     (after_inspection,) = load_time_sources([str(tmp_path / "track")]).runs
     assert after_inspection.updates == reported.updates

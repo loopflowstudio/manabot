@@ -15,7 +15,7 @@ def test_both_seats_deck_swaps_and_drawn_games() -> None:
     counter.record(("lessons", "allies"), 1)
     counter.record(("allies", "lessons"), 0)
     counter.record(("lessons", "allies"), None)
-    rows = counter.drain()
+    rows = counter.drain().outcomes
     lessons_play = next(
         r for r in rows if r["deck"] == "lessons" and r["position"] == "play"
     )
@@ -27,15 +27,15 @@ def test_both_seats_deck_swaps_and_drawn_games() -> None:
     assert sum(r["wins"] for r in rows) == 2
     assert sum(r["losses"] for r in rows) == 2
     assert sum(r["draws"] for r in rows) == 2
-    assert counter.drain() == []
+    assert counter.drain().outcomes == []
 
 
 def test_mirror_and_recovery_keep_seat_counts() -> None:
     counter = SelfPlayCounter()
     counter.record(("allies", "allies"), 0)
     snapshot = deepcopy(counter)
-    counter.drain()
-    rows = snapshot.drain()
+    counter.drain().outcomes
+    rows = snapshot.drain().outcomes
     assert len(rows) == 2
     assert sum(r["wins"] for r in rows) == 1
     assert sum(r["losses"] for r in rows) == 1
@@ -54,11 +54,17 @@ def test_windows_pool_counts_and_unrecorded_history_emits_nothing() -> None:
     assert self_play_points([{"coordinates/updates": 1, "loss": 0.5}]) == []
     counter = SelfPlayCounter()
     counter.record(("a", "b"), 0)
-    rows = [metric_row({"coordinates": {"updates": 1}, OUTCOME_TABLE: counter.drain()})]
+    rows = [
+        metric_row(
+            {"coordinates": {"updates": 1}, OUTCOME_TABLE: counter.drain().outcomes}
+        )
+    ]
     for _ in range(9):
         counter.record(("a", "b"), 1)
     rows.append(
-        metric_row({"coordinates": {"updates": 2}, OUTCOME_TABLE: counter.drain()})
+        metric_row(
+            {"coordinates": {"updates": 2}, OUTCOME_TABLE: counter.drain().outcomes}
+        )
     )
     points = self_play_points(rows, 100)
     first = next(p for p in points if p.deck == "a")

@@ -251,7 +251,7 @@ from manabot.eval.training_corpus import training_corpus
 
 storage = Path("runs")
 run = read(storage, "tla_frontier", "59718fe34945")
-# A DuckDB connection holding the corpus, settings and deck_cards relations.
+# A DuckDB connection holding the corpus, runs, game_settings and deck_cards relations.
 corpus = training_corpus(run, through=1)
 print("Deck entries and distinct card keys:", corpus.sql(
     "select count(distinct entry), count(distinct card) from deck_cards").fetchall())
@@ -291,22 +291,59 @@ print(corpus.sql("""
 Each run keeps its own update numbers. If a learner started from a published
 checkpoint, the corpus includes the parent through that checkpoint’s update.
 The reader matches its recorded run, update and SHA-256 in the same storage.
-An unresolved parent raises `UnknownCoverage`. Inspect each contributing run’s
-decision settings and its exact deck entries with SQL:
+An unresolved parent raises `UnknownCoverage`.
+
+How a learner was trained is split by one rule: could the value differ between
+two games of the same run? What cannot is a column of `runs`, one row per
+contributing run. What can is counted in `game_settings`: for each update, the
+values a setting took and the number of that update's games played under each.
 
 ```python
 print(corpus.sql("""
-    select experiment, run, decklists, mana_taps, max_actions, action_overflow,
-           policy_input_version, behavior, opponent_mode, learning_seats, matchup_curriculum
-    from settings order by experiment, run
+    select experiment, run, max_actions, action_overflow, policy_input_version,
+           behavior, opponent_mode, learning_seats, matchup_curriculum,
+           parent_run, parent_update
+    from runs order by experiment, run
 """).fetchall())
 print(corpus.sql("select run, entry, deck, board, card, copies from deck_cards order by all").fetchall())
+
+# Which settings held one value in every game?
+print(corpus.sql("""
+    select setting, seat, min(value) from game_settings
+    group by setting, seat having count(distinct value) = 1 order by all
+""").fetchall())
+
+# In what share of games did each value hold?
+print(corpus.sql("""
+    select setting, seat, value, sum(games) as games,
+           sum(games) / sum(sum(games)) over (partition by setting, seat) as share
+    from game_settings group by setting, seat, value order by all
+""").fetchall())
+
+# Over which updates of each run did each value hold? A value that stops at
+# one update, or at the checkpoint a child run started from, changed there.
+print(corpus.sql("""
+    select experiment, run, setting, seat, value,
+           min(update_number) as first_update, max(update_number) as last_update,
+           sum(games) as games
+    from game_settings group by all order by setting, seat, experiment, run, first_update
+""").fetchall())
 ```
 
-Self-play and the minimal loop write these tables at update zero. A run's
+`game_settings` records `decklists` (`open` or `closed`) and `skip_trivial`
+(`true` or `false`). `seat` is NULL for a setting of the whole game; a
+per-seat setting carries the native seat, where 0 is on the play. Values are
+text. A setting's counts always sum to the update's completed games; a run
+whose counts do not raises `UnknownCoverage`. A setting with no rows was not
+recorded, which is different from false. Runs that predate the table have
+`decklists` rows only when they declared one disclosure for every game, and
+no `skip_trivial` rows.
+
+Self-play and the minimal loop write `runs` and `deck_cards` at update zero
+and the setting counts with each update's outcomes. A run's
 `deck_cards` can hold several entries with the same deck identity. Older runs use their declared observation
 settings and values shared by every declared stage. They have NULL for
-unrecorded or varying settings.
+unrecorded or varying columns of `runs`.
 Card membership includes main decks and sideboards.
 For historical scalar outcomes, the `deck_cards` entries come from the declared deck source
 and card keys come from the writer's catalog. An explicitly logged empty

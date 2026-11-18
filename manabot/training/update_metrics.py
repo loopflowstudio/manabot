@@ -12,12 +12,14 @@ from manabot.infra.profiler import Profiler
 type MetricValue = float | int | str | bool
 type MetricRow = dict[str, MetricValue]
 
-# The Etude row table holding each self-play update's SelfPlayOutcome rows.
+# The Etude row tables holding each self-play update's SelfPlayOutcome rows and
+# the GameSettingCount rows of the same games.
 OUTCOME_TABLE = "self_play_outcomes"
+GAME_SETTINGS_TABLE = "training_game_settings"
 # Update-zero tables describing a learner's corpus (`manabot.training.corpus`):
-# each resolved deck entry's cards, and the run's decision settings.
+# each resolved deck entry's cards, and the facts that hold for the whole run.
 DECK_TABLE = "training_deck_cards"
-SETTINGS_TABLE = "training_settings"
+RUN_TABLE = "training_run"
 # Lists whose entries are named by fields, not by position. Self-play lists
 # occur only in the offline projection of a run's outcome tables
 # (`manabot.reports.update_metrics`); live updates log the table itself.

@@ -19,7 +19,7 @@ def _outcomes(pairs: int = 2) -> list[SelfPlayOutcome]:
     for i in range(pairs):
         counter.record((f"{i:064x}", f"{i + 1:064x}"), i % 2)
     counter.record(("mirror", "mirror"), None)
-    return counter.drain()
+    return counter.drain().outcomes
 
 
 def _projected(outcomes: list[SelfPlayOutcome]) -> dict[str, object]:

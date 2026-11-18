@@ -805,9 +805,6 @@ def self_play(
                     collector,
                     behavior=settings.behavior,
                     curriculum=settings.matchup_curriculum,
-                    disclosure=settings.deck_source.decklists
-                    if settings.deck_source
-                    else collector.match.config.decklists,
                     parent=parent_checkpoint(settings.pretrained)
                     if settings.pretrained is not None
                     else None,

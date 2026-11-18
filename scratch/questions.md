@@ -251,3 +251,13 @@ say so if they should carry a note.
     (nothing ties its games to the outcome rows across snapshots and
     resumes). Older runs get derived rows only for declared `open` or
     `closed`; `mixed` and `skip_trivial` stay unrecorded.
+
+## Implement, corpus settings, 2026-11-18
+
+52. A run that logged outcome tables but no setting table at any update reads
+    as predating the table (no `game_settings` rows, or derived `decklists`
+    rows), not as `UnknownCoverage`: the reader cannot tell it from an older
+    run. A run that recorded a setting at any update must account for every
+    game at every update. Passed over: a writer-version marker in `runs`.
+53. `SelfPlayCounter.record` takes settings with a default of none, so tests
+    of outcome routing stay as they were; the collector always passes them.

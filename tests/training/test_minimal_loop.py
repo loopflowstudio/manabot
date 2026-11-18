@@ -25,9 +25,13 @@ def test_minimal_loop_publishes_moved_finite_weights(
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
     train(MinimalConfig(updates=2, streams=2, decisions=8, model=tiny))
     recorded = read(tmp_path / "track", "minimal", "minimal-seed-3")
-    (settings,) = recorded.read_table("training_settings", "updates")
+    (settings,) = recorded.read_table("training_run", "updates")
     assert settings.rows[0]["behavior"] == "current-self"
     assert settings.rows[0]["learning_seats"] == "both"
+    # Each update's games are counted under the settings they were played with.
+    assert [
+        table.x for table in recorded.read_table("training_game_settings", "updates")
+    ] == [1, 2]
     assert recorded.read_table("training_deck_cards", "updates")[0].rows
     assert [
         table.x for table in recorded.read_table("self_play_outcomes", "updates")

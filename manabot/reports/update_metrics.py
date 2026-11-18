@@ -11,8 +11,9 @@ from etude.train.read import RunData
 
 from manabot.training.update_metrics import (
     DECK_TABLE,
+    GAME_SETTINGS_TABLE,
     OUTCOME_TABLE,
-    SETTINGS_TABLE,
+    RUN_TABLE,
     MetricRow,
     metric_row,
 )
@@ -87,9 +88,9 @@ def scalar_updates(data: RunData, through: int | None = None) -> Updates:
                 if through is not None and update > through:
                     continue
                 values = table.row(index).values
-                # Setup tables index their digests here too; they are no metrics.
-                values.pop(DECK_TABLE, None)
-                values.pop(SETTINGS_TABLE, None)
+                # Corpus tables index their digests here too; they are no metrics.
+                for corpus_table in (DECK_TABLE, RUN_TABLE, GAME_SETTINGS_TABLE):
+                    values.pop(corpus_table, None)
                 if values:
                     rows.setdefault(int(update), {}).update(_integral(values))
         # Current writers supersede from their first row, inclusive. Historical

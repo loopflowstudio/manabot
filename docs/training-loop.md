@@ -282,7 +282,6 @@ def train(config: MinimalConfig) -> None:
                     collector,
                     behavior="current-self",
                     curriculum="fixed",
-                    disclosure=collector.match.config.decklists,
                     updates=0,
                 )
             for update in run.steps("updates", to=config.updates):

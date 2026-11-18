@@ -17,8 +17,13 @@ from pydantic import TypeAdapter
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
 from manabot.reports.update_metrics import scalar_updates
 from manabot.training.decks import DeckCard, deck_cards
-from manabot.training.rollout.self_play import SelfPlayOutcome
-from manabot.training.update_metrics import DECK_TABLE, OUTCOME_TABLE, SETTINGS_TABLE
+from manabot.training.rollout.self_play import GameSettingCount, SelfPlayOutcome
+from manabot.training.update_metrics import (
+    DECK_TABLE,
+    GAME_SETTINGS_TABLE,
+    OUTCOME_TABLE,
+    RUN_TABLE,
+)
 from managym import Deck
 from managym.statistics import read_statistics
 
@@ -65,14 +70,8 @@ def declared_settings(data: RunData) -> dict[str, object]:
     observation = regime.get("observation", {})
     settings = {
         key: observation.get(key)
-        for key in (
-            "max_actions",
-            "action_overflow",
-            "mana_taps",
-            "policy_input_version",
-        )
+        for key in ("max_actions", "action_overflow", "policy_input_version")
     }
-    settings["decklists"] = (regime.get("deck_source") or {}).get("decklists")
     stages = regime.get("stages", [])
     for key in ("behavior", "learning_seats", "opponent_mode", "matchup_curriculum"):
         # A run-wide value must hold in every declared stage.
@@ -114,6 +113,48 @@ def games_by_update(data: RunData, through: int) -> dict[int, Counter[tuple[str,
         if update not in games:
             raise UnknownCoverage(f"{data.name}: coverage unknown at update {update}")
     return games
+
+
+def game_settings(
+    data: RunData, games: dict[int, Counter[tuple[str, str]]], through: int
+) -> list[tuple[int, int | None, str, str, int]]:
+    """Each value a setting took among an update's games, with its game count.
+
+    A run that logged setting counts must account for every game: each seat
+    and setting it ever recorded sums to that update's completed games. A run
+    that predates the table gets rows only where the answer is certain, a
+    declared disclosure of `open` or `closed`; anything else stays unrecorded.
+    """
+    tables = data.read_table(GAME_SETTINGS_TABLE, "updates")
+    if not tables:
+        deck_source = declared_training(data).get("regime", {}).get("deck_source")
+        declared = (deck_source or {}).get("decklists")
+        if declared not in ("open", "closed"):
+            return []
+        return [
+            (update, None, "decklists", declared, pairs.total())
+            for update, pairs in games.items()
+            if pairs.total()
+        ]
+    counts = TypeAdapter(list[GameSettingCount])
+    rows: list[tuple[int, int | None, str, str, int]] = []
+    totals: Counter[tuple[int, int | None, str]] = Counter()
+    for table in tables:
+        if 0 < table.x <= through:
+            update = int(table.x)
+            for count in counts.validate_python(list(table.rows), strict=True):
+                seat, setting = count["seat"], count["setting"]
+                totals[update, seat, setting] += count["games"]
+                rows.append((update, seat, setting, count["value"], count["games"]))
+    recorded = {(seat, setting) for _, seat, setting in totals}
+    for update, pairs in games.items():
+        for seat, setting in recorded:
+            if totals[update, seat, setting] != pairs.total():
+                raise UnknownCoverage(
+                    f"{data.name}: update {update} records {setting} for "
+                    f"{totals[update, seat, setting]} of {pairs.total()} games"
+                )
+    return rows
 
 
 def add_card_statistics(
@@ -206,7 +247,12 @@ def training_corpus(
     - `corpus`: one row per update and ordered matchup, with both decks' card
       lists (main deck and sideboard). Each completed game contributes once,
       even in mirrors.
-    - `settings`: one row per run, including the parent checkpoint it followed.
+    - `runs`: one row per run with the facts that hold for all its games,
+      including the parent checkpoint it followed.
+    - `game_settings`: per update, each value a setting took and in how many
+      games. `seat` is NULL for a setting of the whole game and the native
+      seat (0 is on the play) for a per-seat one. A setting with no rows was
+      not recorded.
     - `deck_cards`: each roster entry by board, copies and definition key.
     - `card_statistics`: per update, seat and card, when `statistics` is given.
 
@@ -226,11 +272,13 @@ def training_corpus(
         raise ValueError("supply a nonnegative update")
 
     db = duckdb.connect()
-    db.execute("""create table settings(experiment varchar, run varchar,
-        decklists varchar, mana_taps boolean, max_actions bigint, action_overflow varchar,
+    db.execute("""create table runs(experiment varchar, run varchar,
+        max_actions bigint, action_overflow varchar,
         policy_input_version bigint, behavior varchar, opponent_mode varchar,
         learning_seats varchar, matchup_curriculum varchar, parent_run varchar,
         parent_update bigint, parent_sha256 varchar)""")
+    db.execute("""create table game_settings(experiment varchar, run varchar,
+        update_number bigint, seat integer, setting varchar, value varchar, games bigint)""")
     db.execute("""create table deck_cards(experiment varchar, run varchar, entry bigint,
         deck varchar, card varchar, copies bigint, board varchar)""")
     db.execute("""create table matchups(experiment varchar, run varchar, update_number bigint,
@@ -309,16 +357,22 @@ def add_run(
         "insert into matchups select ?, ?, unnest(?::bigint[]), unnest(?::varchar[]), unnest(?::varchar[]), unnest(?::bigint[])",
         [*identity, *columns],
     )
+    settings_columns = [list(c) for c in zip(*game_settings(data, games, through))]
+    if settings_columns:
+        db.execute(
+            "insert into game_settings select ?, ?, unnest(?::bigint[]), unnest(?::integer[]), unnest(?::varchar[]), unnest(?::varchar[]), unnest(?::bigint[])",
+            [*identity, *settings_columns],
+        )
     if statistics is not None:
         add_card_statistics(db, statistics, games, through)
-    tables = data.read_table(SETTINGS_TABLE, "updates")
+    tables = data.read_table(RUN_TABLE, "updates")
     if tables:
         (table,) = tables
         (settings,) = table.rows
     else:
         settings = declared_settings(data)
     db.execute(
-        "insert into settings by name select ? as experiment, ? as run, unnest(?)",
+        "insert into runs by name select ? as experiment, ? as run, unnest(?)",
         [*identity, settings],
     )
     digest = settings.get("parent_sha256")

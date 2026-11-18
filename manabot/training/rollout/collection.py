@@ -78,7 +78,7 @@ from manabot.training.rollout.matchups import (
 )
 from manabot.training.rollout.numerics import CollectionScope, CollectionSession
 from manabot.training.rollout.producers import ShardedVectorEnv
-from manabot.training.rollout.self_play import SelfPlayCounter
+from manabot.training.rollout.self_play import GameSetting, SelfPlayCounter
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLimit,
@@ -451,6 +451,8 @@ class Collector:
     # Legal action prefix of each stream's game in progress, for failure receipts.
     _game_actions: list[list[int]]
     _self_play_decks: list[tuple[str, str]]
+    # Each stream's game in progress: the conditions it is played under.
+    _game_settings: list[tuple[GameSetting, ...]]
     # Scopes a named boundary (collection, learning, inference) in the caller's
     # failure journal; the step loop wraps collection and learning with it.
     operation: OperationScope = no_operation
@@ -680,6 +682,7 @@ def open_collector(
             _game_started=[time.perf_counter()] * num_envs,
             _game_actions=[[] for _ in range(num_envs)],
             _self_play_decks=[("", "")] * num_envs,
+            _game_settings=[()] * num_envs,
             operation=operation,
             _record_annotations=[None] * num_envs,
             _sampler=sampler,
@@ -765,11 +768,17 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
             collector.stream_matches[row] = Match(
                 MatchConfig.from_players(*setups[row], decklists=setups[row].decklists)
             )
+    # The environment that plays the games states whether it skips forced decisions.
+    skip_trivial = "true" if collector._env.skip_trivial else "false"
     for row in rows:
         match = collector.stream_matches[row]
         collector._self_play_decks[row] = (
             Deck(match.hero_deck, match.hero_sideboard).identity,
             Deck(match.villain_deck, match.villain_sideboard).identity,
+        )
+        collector._game_settings[row] = (
+            GameSetting(None, "decklists", match.config.decklists),
+            GameSetting(None, "skip_trivial", skip_trivial),
         )
 
 
@@ -1344,7 +1353,9 @@ def _settle_step(
             raise RuntimeError("collector game truncated; no terminal target available")
         if collector.opponent_mode in ("self", "learning"):
             collector.stats.self_play.record(
-                collector._self_play_decks[int(row)], winner
+                collector._self_play_decks[int(row)],
+                winner,
+                collector._game_settings[int(row)],
             )
         if winner is None:
             reward = 0.0
