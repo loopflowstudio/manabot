@@ -15,15 +15,13 @@ from tests.eval.arena_fixture import ARENA_FIXTURE, arena_fixture
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_current_world_round_trips_arena_and_player_identities() -> None:
+@pytest.mark.parametrize("label", [WORLD_VERSION, "w1"])
+def test_world_label_round_trips_arena_and_player_identities(label: str) -> None:
     contract = arena_fixture()
-    key = contract.key.model_dump() | {"world": WORLD_VERSION}
-    player = contract.anchors[0].model_dump() | {"world": WORLD_VERSION}
-    assert EvaluationKey.model_validate(key).world == WORLD_VERSION
-    assert PlayerRegistration.model_validate(player).world == WORLD_VERSION
-    for model, raw in ((EvaluationKey, key), (PlayerRegistration, player)):
-        with pytest.raises(ValidationError, match="world"):
-            model.model_validate(raw | {"world": "unknown"})
+    key = contract.key.model_dump() | {"world": label}
+    player = contract.anchors[0].model_dump() | {"world": label}
+    assert EvaluationKey.model_validate(key).world == label
+    assert PlayerRegistration.model_validate(player).world == label
 
 
 def test_checked_contract_has_exact_code_only_base() -> None:

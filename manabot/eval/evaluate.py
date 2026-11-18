@@ -169,8 +169,7 @@ def validate_player_compatibility(
     player: PlayerRegistration, key: EvaluationKey, runtime: dict[str, Any]
 ) -> None:
     if (
-        player.world != key.world
-        or player.content_suite != key.content_suite
+        player.content_suite != key.content_suite
         or player.information_boundary != key.viewer_boundary
         or any(
             getattr(player, name) != runtime[name]
@@ -181,7 +180,7 @@ def validate_player_compatibility(
             )
         )
     ):
-        raise EvaluationError("candidate world/content/viewer compatibility mismatch")
+        raise EvaluationError("candidate content/viewer/ABI compatibility mismatch")
 
 
 def append_ledger(out_dir: Path, stage: str, payload: dict[str, Any]) -> None:

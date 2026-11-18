@@ -124,3 +124,8 @@ say so if they should carry a note.
 31. Both reproduction commands explicitly choose their arm. The historical
     arm derives its pairs from the existing frontier protocol and committed
     deck source. A direct comparison matched all 16 previous pair records.
+
+32. New registrations with no binding report count the saved card program
+    rows used directly by the loader (zero for a model without card programs).
+    A retained registration lacking the count stays unknown. Etude already
+    stores these fields in the match participant's registration config.

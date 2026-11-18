@@ -33,7 +33,6 @@ from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt, write_trace
 from manabot.sim.supervision import failure_record, replay_retained
 from manabot.verify.games import INTERACTIVE_DECK
-from managym import WORLD_VERSION
 from managym.recording import atomic_private_json
 from managym.statistics import Reducer, Reduction
 
@@ -128,12 +127,9 @@ def play_cell(
         )
     )
     if authored:
-        if key.world != WORLD_VERSION:
-            raise ValueError("selected matchup requires corrected-world identity")
         for player in (player_a, player_b):
             if (
-                player.world != key.world
-                or player.content_suite != key.content_suite
+                player.content_suite != key.content_suite
                 or player.information_boundary != key.viewer_boundary
                 or player.matchup_sha256 != canonical_sha256(match.model_dump())
             ):

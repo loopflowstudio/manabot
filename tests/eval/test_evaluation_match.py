@@ -337,13 +337,16 @@ def test_native_policy_error_retains_the_responsible_player(
     assert "policy failed" in result["failure"]
 
 
-def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
+def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path: Path) -> None:
     import torch
 
     from manabot.backends.torch.checkpoint import save_checkpoint
     from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.eval.evaluate import validate_registered_player
+    from manabot.eval.evaluate import (
+        validate_player_compatibility,
+        validate_registered_player,
+    )
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints
@@ -372,6 +375,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
         {
             **random.model_dump(),
             "player_id": "checkpoint-fixture-83",
+            "world": "w2",
             "role": "challenger",
             "runner_kind": "checkpoint",
             "source_sha256": None,
@@ -391,6 +395,8 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
             "action_abi_sha256": runtime["action_abi_sha256"],
         }
     )
+    validate_player_compatibility(candidate, key, runtime)
+    assert candidate.checkpoint_source is None and candidate.stored_programs is None
     paths, loaded_space = validate_registered_player(
         candidate, path, backend=TORCH_BACKEND
     )

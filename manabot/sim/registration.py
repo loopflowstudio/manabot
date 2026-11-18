@@ -22,24 +22,8 @@ ETUDE_SAMPLER_SPEC: dict[str, Any] = {
     "allow_deck_repetition": True,
 }
 
-type WorldVersion = Literal[
-    "w2",
-    "w3",
-    "w4",
-    "w5",
-    "w6",
-    "w7",
-    "w8",
-    "w9",
-    "w10",
-    "w11",
-    "w12",
-    "w13",
-    "w14",
-    "w15",
-    "w16",
-    "w17",
-]
+# Retained provenance label carried by arena and participant records.
+type WorldVersion = str
 
 
 class SearchSemantics(StrictModel):
@@ -66,6 +50,10 @@ class PlayerRegistration(StrictModel):
     checkpoint_bytes: int | None = Field(default=None, gt=0)
     parameter_count: int | None = Field(default=None, gt=0)
     # Producer metadata may be unavailable for a standalone policy export.
+    checkpoint_source: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    stored_programs: int | None = Field(
+        default=None, ge=0, exclude_if=lambda v: v is None
+    )
     training_seed: int | None = None
     artifact_id: str | None = None
     evidence_class: Literal["production", "fixture"] = "production"
@@ -80,6 +68,8 @@ class PlayerRegistration(StrictModel):
                 self.checkpoint_sha256,
                 self.checkpoint_bytes,
                 self.parameter_count,
+                self.checkpoint_source,
+                self.stored_programs,
                 self.training_seed,
                 self.artifact_id,
             )
@@ -140,7 +130,10 @@ class PlayerRegistration(StrictModel):
                 if (
                     self.player_spec != expected_checkpoint_spec
                     or type(self.player_spec.get("deterministic")) is not bool
-                    or (self.world == "w2" and not self.player_spec["deterministic"])
+                    or (
+                        self.content_suite == "w2-interactive-mirror-v1"
+                        and not self.player_spec["deterministic"]
+                    )
                 ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
             elif kind == "etude_checkpoint":

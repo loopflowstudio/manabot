@@ -55,9 +55,8 @@ def register_checkpoint(
 ) -> CheckpointAdmission:
     """Admit local bytes; a missing producer seed remains unknown, never invented.
 
-    The world and both ABI hashes come from the checkpoint's own
-    `ObservationSpace`, never the matchup's fresh defaults: serving compares
-    them with the loaded space and refuses a registration that disagrees.
+    The runtime supplies the retained world label. Both ABI hashes describe
+    the checkpoint's own observation space.
     """
     digest, size = file_sha256(path), path.stat().st_size
     if (expected_sha256 is not None and digest != expected_sha256) or (
@@ -95,6 +94,8 @@ def register_checkpoint(
         },
         compute_class_id="policy-cpu-one-thread-one-pass",
         checkpoint_sha256=digest,
+        checkpoint_source=checkpoint.writer_revision,
+        stored_programs=checkpoint.stored_programs,
         checkpoint_bytes=size,
         parameter_count=agent.parameter_count,
         training_seed=training_seed,

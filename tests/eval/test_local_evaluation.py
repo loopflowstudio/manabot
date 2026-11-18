@@ -22,6 +22,7 @@ from manabot.eval.local import checkpoint_request, main as local_main
 from manabot.eval.results import EvaluationRow
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import canonical_sha256
+from manabot.policy.checkpoint import read_safetensors, write_safetensors
 from manabot.sim.match import play_game
 from manabot.sim.replay import read_trace, write_trace
 from tests.eval.arena_fixture import arena_fixture
@@ -52,6 +53,23 @@ def _request(
         game_seconds=240,
         backend=TORCH_BACKEND,
     )
+
+
+@pytest.mark.parametrize("revision", ["a" * 40, None])
+def test_checkpoint_request_records_writer_and_stored_programs(
+    tmp_path: Path, revision: str | None
+) -> None:
+    _, _, _, path = fixture_policy(tmp_path)
+    arrays, metadata = read_safetensors(path)
+    metadata["source"] = json.dumps({"commit": revision})
+    write_safetensors(path, arrays, metadata)
+    request = checkpoint_request(path, backend=TORCH_BACKEND)
+    saved = EvaluationRequest.model_validate_json(request.model_dump_json())
+    assert saved.candidate.checkpoint_source == revision
+    assert saved.candidate.stored_programs == len(
+        arrays["buffer/semantic_cards.tokens"]
+    )
+    assert "stored_programs" not in saved.opponent.model_dump()
 
 
 def _anchor_request(seeds: tuple[int, ...] = (101,)) -> EvaluationRequest:

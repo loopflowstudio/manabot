@@ -194,6 +194,20 @@ class PolicyCheckpoint:
             if key != "converted_from"
         }
 
+    @property
+    def writer_revision(self) -> str | None:
+        source = json.loads(self.metadata.get("source", "null"))
+        return source.get("commit") if isinstance(source, dict) else None
+
+    @property
+    def stored_programs(self) -> int:
+        """Count writer programs in use, excluding new runtime definitions."""
+        if self.report is not None:
+            return self.report.stored_programs
+        # With no catalog rebind the backend uses the saved buffers directly.
+        programs = self.buffers.get("semantic_cards.tokens")
+        return len(programs) if programs is not None else 0
+
     def tables(self) -> Tables:
         return Tables.from_buffers(self.buffers, layout(self.space, self.column_widths))
 
