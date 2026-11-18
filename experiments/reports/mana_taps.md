@@ -1,4 +1,22 @@
-# Do fixed-source mana taps at priority and during payments change TLA learnability?
+# How do priority mana floats affect TLA learning and throughput?
+
+## Corrected off, usable and always levels
+
+At `ec46eec958`, off removes fixed and choice-output mana abilities from priority. The two-color lands still pay costs automatically or through a manual color choice. Usable offers a float when a legal cast or activation spends mana, or the mana activation has another effect such as a sacrifice or tap trigger. Always offers every legal float.
+
+On the original 40 TLA deals, usable added **59% more surfaced decisions per game** over corrected off. Always added **131%**. All 120 games finished. The rehearsal replayed the original deck selections, seeds 1000–1039 and starting policy RNG states independently in each arm.
+
+| Level | Decisions/game | Forced decisions skipped | Priority floats offered / chosen | Surfaced steps/s |
+| --- | ---: | ---: | ---: | ---: |
+| Off | 217.53 | 74.2% | 0 / 0 | 21,862 |
+| Usable | 346.93 | 66.9% | 5,270 / 2,999 | 22,675 |
+| Always | 501.70 | 60.4% | 12,548 / 8,197 | 26,371 |
+
+The skipped share divides skipped decisions by skipped plus surfaced decisions. Steps/s includes observation construction and choice inspection on the M4 Max. Across 40 paired refreshes on identical positions, usable minus always had a median difference of −0.37 µs without a spend and 0.00 µs with a spend.
+
+The corrected paired w64 experiment is `mana-taps-levels-w64`, frozen at `ec46eec958`. Etude quoted USD2.24 per seed pair on one two-slot L4. The common target is 50 updates with raw and EMA panels at initialization, 25 and 50.
+
+## Historical everywhere comparison
 
 **Offering mana taps everywhere slowed training and hurt early playing strength.** Across the three paired seeds through update 50, the median increase was 89% in surfaced decisions per game and 55% in seconds per update. At update 25 the raw learners with taps scored 34/192 against the heuristic, compared with 70/192 without taps. At the last scored checkpoint, update 100, that gap narrowed to 93/192 versus 97/192. The raw on arm scored 80/188 head-to-head, with one seed tied and two behind. There is a substantial early learning cost. These three seeds do not establish a lasting deficit of the same size.
 
@@ -28,7 +46,7 @@ The local evaluator finished 144 matches for each of raw and EMA at
 initialization and verified 36 replay blobs for each role. These panels
 describe the superseded control. [Initialization game rows and replay evidence](../data/mtg385/usable-fixed-only/u0)
 
-## Usable-only priority floats on CPU
+## Earlier CPU rehearsal with choice-output floats in the off control
 
 On the same 40 TLA deals, limiting priority floats to a mana spend or a tap
 trigger removed **62% of the extra decisions** introduced by offering every
