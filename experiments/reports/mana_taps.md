@@ -2,6 +2,8 @@
 
 **Offering mana taps increased median seconds per update by 55%. Its effect on learnability is unresolved through update 50.** The on arm scored 0/64 against the heuristic in each seed at initialization and again at update 50. The off arm started at 4/64 in each seed and reached 5, 5 and 4 wins. Head to head, the on arm scored 39/192 at update 50. The strength gap was already present before training.
 
+The raw learner chose priority taps much less often during self-play. Across seeds the share of surfaced decisions spent tapping fell from 38.0–38.6% in the first collection to 15.1–17.6% at update 25 and 7.7–9.2% at update 50. Each collection drew fresh decks and deals. The recorded EMA spot check on a fixed pair stayed at 39.8% chosen.
+
 ### Checkpoint audit, 2026-11-18
 
 The evaluation loader read all 18 recorded EMA checkpoints after verification against their Etude SHA-256 records. All six runs changed their action probabilities between initialization and updates 25 and 50. The probe used the same two legal choices for every forward, pass or tap on decision index 1 of replay `580a82dd5615c5f4a09bd71dc622c86c8895b7010bc401fa1d7b7cc0be18466d` (deal 385000, on vs heuristic, leg 0). For off-arm models this is a diagnostic input outside their training action space.
