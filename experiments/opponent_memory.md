@@ -2592,3 +2592,16 @@ four times the detail bound and twice the others. Strict failure stays. The
 failed runs keep the label `decision-memory-trunk` as incomplete evidence; the
 relaunch is `decision-memory-trunk-2`. Throughput at the larger layout is
 unmeasured; the first trunk serves as its admission.
+
+### Evaluation admission and wall budget — 2026-11-18
+
+The first evaluation pass (`decision-memory-elemental-v1-f824428377ca`,
+revision `ca4d688099`) played no game: the world-bound pilot checkpoints
+refused authored decks that were not submitted to the world. The evaluation
+matchup now submits them (`89041ebb47`). The next pass
+(`decision-memory-elemental-v1-f8ff34d95eee`) played 112 of 1400 matches on
+an A40 with 28 single-threaded workers, then failed when one game reached the
+600 s wall budget (median game 86 s, p90 238 s, max 521 s across 240 retained
+games). Workers outnumbered the machine's cores about 3.5 to 1. Evaluation
+now runs 30 workers on a 32-vCPU CPU machine (`410fe064d9`, run
+`decision-memory-elemental-v1-ac7e7ee21101`).
