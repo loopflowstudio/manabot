@@ -241,7 +241,8 @@ both full lists and its original deal seed. Offsets `[0, 16]` replay the
 original deals and add 16 more. The interval resamples the 16 deck pairs,
 keeping both deals and all four legs of each deal together. The earlier
 references are [u25](../experiments/references/tla-frontier-small-u25.json)
-and [u800](../experiments/references/tla-frontier-small-u800.json).
+and [u800](../experiments/references/tla-frontier-small-u800.json). Both
+passed checkpoint admission. The proof run measured u1952 only.
 
 Recheck loads the checkpoint through the ordinary loader, so it also prints
 the [load report](observation-and-model.md#running-a-checkpoint-on-a-later-revision),

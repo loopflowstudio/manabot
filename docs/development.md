@@ -402,6 +402,9 @@ FAILED test_pinned_pilot.py::test_recorded_game[v11]
 The replay checks the acting seat, the ordered offers and their focus before
 using a recorded index. It also checks the winner and the player-column
 prefix the model reads, including columns that were zero throughout this game.
+The save/load regression in `tests/model/test_checkpoint_binding.py` also
+checks that appended card, stack, action, history and decklist columns preserve the
+saved pilot’s logits and value after it is loaded and exported again.
 Set `MANABOT_U1952_CHECKPOINT` to the local frontier Small update-1952
 file to include its recording in the same test and in `record`.
 

@@ -125,7 +125,7 @@ class ActorCritic(nn.Module):
         observation_space: ObservationSpace,
         config: ModelConfig,
         *,
-        player_width: int | None = None,
+        column_widths: dict[str, int] | None = None,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> None:
@@ -150,21 +150,22 @@ class ActorCritic(nn.Module):
             raise ValueError(
                 "history observation contract requires recent_events ActorCritic"
             )
-        self.player_width = player_width or enc.player_dim
-        player_dim = self.player_width
-        card_dim = enc.card_dim
+        self.column_widths = column_widths or {}
+        width = self.column_widths.get
+        player_dim = width("agent_player", enc.player_dim)
+        card_dim = width("agent_cards", enc.card_dim)
         # Inputs v10/v11 append each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
         self.turn_state = enc.turn_state
         self.stack_tokens = enc.one_token
         if self.turn_state:
-            player_dim += TURN_STATE_DIM
+            player_dim += width("player_turn_state", TURN_STATE_DIM)
             card_dim += 1
         # Definition IDs and permanent links are categorical joins, never
         # numeric permanent features.
-        columns = layout(observation_space)
+        columns = layout(observation_space, column_widths)
         perm_dim = len(columns.numeric_permanent_columns)
-        action_dim = enc.action_dim
+        action_dim = width("actions", enc.action_dim)
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
 
@@ -311,7 +312,9 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.weight)
             nn.init.zeros_(self.policy_film.bias)
 
-        self.continuation = ContinuationEncoder(embed_dim, enc.relation_dim)
+        self.continuation = ContinuationEncoder(
+            embed_dim, width("relations", enc.relation_dim)
+        )
 
         # The policy input links permanents to other objects: an Aura or
         # Equipment to its host, a blocker to the attacker it blocks. Each
@@ -363,7 +366,7 @@ class ActorCritic(nn.Module):
         # ignores it.
         self._numeric_stack_columns = [
             column
-            for column in range(STACK_DIM)
+            for column in range(width("stack", STACK_DIM))
             if column not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
         ]
         self.stack_embedding: ProjectionLayer | None = None
@@ -425,7 +428,9 @@ class ActorCritic(nn.Module):
             )
 
     def _binding(self) -> str:
-        return admission.binding(self.config, self.observation_space, self.player_width)
+        return admission.binding(
+            self.config, self.observation_space, self.column_widths
+        )
 
     def _admission_spec(self) -> admission.Spec:
         key = (
@@ -447,7 +452,7 @@ class ActorCritic(nn.Module):
             self.observation_space,
             replace(
                 Tables.from_buffers(
-                    buffers, layout(self.observation_space, self.player_width)
+                    buffers, layout(self.observation_space, self.column_widths)
                 ),
                 order_lengths=_catalog_order,
             ),

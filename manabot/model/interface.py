@@ -1,6 +1,6 @@
 """Compare the checkpoint's policy inputs with the engine that will serve it."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -10,7 +10,13 @@ from typing import Any
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.world import WORLD, deck_world, validate_checkpoint_world, written_at
+from manabot.model.world import (
+    WORLD,
+    checkpoint_world,
+    deck_world,
+    validate_checkpoint_world,
+    written_at,
+)
 from manabot.model.writer_catalog import WriterCatalog, writer_catalog
 import managym
 
@@ -29,13 +35,17 @@ def input_columns(space: ObservationSpace) -> dict[str, list[str]]:
     }
 
 
-def world_fields(space: ObservationSpace, player_width: int) -> dict[str, Any]:
-    """Record the rows this model actually reads, including a rebound player's width."""
-    binding = deck_world(space)
+def world_fields(
+    space: ObservationSpace,
+    widths: Mapping[str, int],
+    setups: Sequence[managym.PlayerConfig] | None = None,
+) -> dict[str, Any]:
+    """Record the named input prefixes and catalog rows used by the saved policy."""
+    binding = deck_world(space) if setups is None else checkpoint_world(setups, space)
     columns = input_columns(space)
-    for key in ("agent_player", "opponent_player"):
-        binding["input_schema"][key]["shape"][-1] = player_width
-        columns[key] = columns[key][:player_width]
+    for key, width in widths.items():
+        binding["input_schema"][key]["shape"][-1] = width
+        columns[key] = columns[key][:width]
     return {
         "world_binding": binding,
         "writer_catalog": writer_catalog(),
@@ -47,7 +57,7 @@ def world_fields(space: ObservationSpace, player_width: int) -> dict[str, Any]:
 class ModelInterface:
     writer: WriterCatalog | None
     current: WriterCatalog | None
-    player_width: int
+    widths: dict[str, int]
 
 
 def model_interface(
@@ -55,14 +65,13 @@ def model_interface(
 ) -> ModelInterface:
     """Validate setup identity or resolve the world pilot's writer vocabulary."""
     saved = checkpoint.get("world_binding")
-    width = space.encoder.player_dim
     if not isinstance(saved, dict):
         raise ValueError(f"trained without a world binding; engine is {WORLD}")
     if "world_digest" in saved and ("setups" in saved or "content_manifest" in saved):
         raise ValueError("checkpoint binding mixes a world and a fixed setup")
     if "world_digest" not in saved:
         validate_checkpoint_world(checkpoint, space)
-        return ModelInterface(None, None, width)
+        return ModelInterface(None, None, {})
     model = ModelConfig.from_checkpoint(checkpoint["hypers"]["agent_hypers"])
     if model.world != managym.WORLD_SETUP:
         raise ValueError(
@@ -97,36 +106,35 @@ def model_interface(
         not isinstance(recorded, dict) or recorded.keys() != columns.keys()
     ):
         raise ValueError(f"checkpoint input column declarations differ; {location}")
-    widths = []
+    widths: dict[str, int] = {}
     for key, actual in expected["input_schema"].items():
         entry = schema[key]
         if not isinstance(entry, dict) or entry.get("dtype") != actual["dtype"]:
             raise ValueError(f"incompatible {key} dtype; {location}")
         shape = entry.get("shape")
-        if key in ("agent_player", "opponent_player"):
+        current_shape = actual["shape"]
+        if key in columns:
             if (
                 not isinstance(shape, list)
-                or len(shape) != 2
-                or shape[0] != 1
-                or type(shape[1]) is not int
-                or not 0 < shape[1] <= width
+                or shape[:-1] != current_shape[:-1]
+                or not shape
+                or type(shape[-1]) is not int
+                or not 0 < shape[-1] <= current_shape[-1]
             ):
                 raise ValueError(f"incompatible {key} columns {shape}; {location}")
-            widths.append(shape[1])
-        elif shape != actual["shape"]:
-            raise ValueError(f"incompatible {key} shape {shape}; {location}")
-        if recorded is not None and key in columns:
-            wanted = (
-                columns[key][: shape[-1]]
-                if key in ("agent_player", "opponent_player")
-                else columns[key]
-            )
-            if recorded[key] != wanted:
+            width = shape[-1]
+            wanted = columns[key][:width]
+            if recorded is not None and recorded[key] != wanted:
                 raise ValueError(
                     f"incompatible {key} columns: checkpoint {recorded[key]}, runtime {wanted}; {location}"
                 )
-    if widths[0] != widths[1]:
-        raise ValueError(f"player column counts differ between seats; {location}")
+            if width != current_shape[-1]:
+                widths[key] = width
+        elif shape != current_shape:
+            raise ValueError(f"incompatible {key} shape {shape}; {location}")
+    for group in ("player", "cards", "permanents"):
+        if widths.get(f"agent_{group}") != widths.get(f"opponent_{group}"):
+            raise ValueError(f"{group} column counts differ between seats; {location}")
     current = writer_catalog()
     digest = saved["world_digest"]
     writer = checkpoint.get("writer_catalog")
@@ -144,7 +152,9 @@ def model_interface(
             or not path.is_file()
         ):
             raise ValueError(
-                f"missing writer catalog for {digest}; export with uv run python -m manabot.model.writer_catalog at the writing revision; {location}"
+                f"missing writer catalog for {digest}; at the writing revision run "
+                f"uv run python -m manabot.model.writer_catalog and save its output as "
+                f"manabot/model/writer_catalogs/{digest}.json; {location}"
             )
         writer = json.loads(path.read_bytes())
     if (
@@ -170,4 +180,4 @@ def model_interface(
         raise ValueError(
             f"belief card embedding requires a bound belief vocabulary; {location}"
         )
-    return ModelInterface(writer, current, widths[0])
+    return ModelInterface(writer, current, widths)

@@ -251,11 +251,13 @@ change already touches it; do not rewrite a module only for style. Rust in
   weaken types merely to silence one.
 - A checkpoint records the revision and Etude run that wrote it
   (`checkpoint_source`), its column names, definition keys and naming names.
-  `manabot.model.interface.model_interface` alone decides whether it loads,
-  comparing input columns, token and record names and action kinds by name;
+  `manabot.model.interface.model_interface` checks the recorded input contract.
+  The shared policy reader then binds the learned arrays by key. Academy uses
+  that reader when listing checkpoints. For a deck-source checkpoint,
   the world number, card digest and naming digest are recorded facts, never
   gates (setup-bound checkpoints still compare their whole binding). Append
-  input columns, never insert, remove or reorder them. Renaming a Rust type,
+  input columns to named buffers. Shared host preparation projects each buffer
+  to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in
   `managym/src/cards/token_renames.rs`; a name is never reused with a new
   meaning. Never learn a `CardDefId`: tables indexed by card or name bind by

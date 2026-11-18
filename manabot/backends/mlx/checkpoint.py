@@ -214,6 +214,8 @@ class MLXBackend:
         policy.value_semantic = semantic
         return policy, checkpoint.space
 
+    read_policy = staticmethod(read_container)
+
     @staticmethod
     def metadata(path: str) -> dict[str, Any]:
         return read_metadata(path)

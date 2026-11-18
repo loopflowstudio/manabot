@@ -279,6 +279,9 @@ in this engine. All 348 learned names still resolve. The loader initializes
 One missing field was renamed, 45 token or record names were retired, and
 zero keys were unexplained.
 
+Academy checks the same tensor binding when it lists a checkpoint. A missing
+learned key appears on the bot’s catalog row with the loader’s reason.
+
 Nothing in the file is rewritten. `model` then plays any deck the pool admits,
 including cards it never saw. How well it plays them is a measurement, not a
 promise ([recheck](evaluation.md#rechecking-a-recorded-strength)).
@@ -366,8 +369,9 @@ Add an entry in the change that renames the type. The
 ### Checkpoints written before keys were recorded
 
 A checkpoint now records its column names, definition keys and naming names in
-row order, and the revision and Etude run that wrote it. Earlier files have
-none of these. Their columns are the first N of their input version's layout
+row order, and the revision and Etude run that wrote it. The container carries these in `input_columns`, `writer_catalog` and
+`source`. A saved world pilot can load on another revision using its
+embedded catalog. Earlier checkpoints can lack any of these fields. Their columns are the first N of their input version's layout
 at the recorded width, which holds because columns are only appended. Their
 keys and names come from a writer catalog found by the card digest the file
 records, `manabot/model/writer_catalogs/<world_digest>.json`. The loader
@@ -376,14 +380,13 @@ reproduce the file's naming digest and that its key count equals the file's
 definition rows. Back faces and rules fixtures without keys use their registry
 names.
 
-A file from a card set with no writer catalog is refused with the command that
-writes one:
+For an earlier file, matching card and naming digests allow the loader to use
+the running catalog. If the digests differ and the external catalog is missing,
+the refusal names the digest and destination. Generate the catalog at the writing
+revision and commit its output:
 
-```text
-ValueError: old.pt records world_digest 7c41…e09a and no definition keys.
-No writer catalog exists for that digest. At the revision that wrote it, run
-  uv run python -m manabot.model.writer_catalog > 7c41…e09a.json
-and commit the file under manabot/model/writer_catalogs/.
+```sh
+uv run python -m manabot.model.writer_catalog > "manabot/model/writer_catalogs/${digest}.json"
 ```
 
 For revisions that predate the exporter, run the current

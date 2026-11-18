@@ -233,6 +233,10 @@ class Backend(Protocol):
         """Read a portable policy and validate its world and input contract."""
         ...
 
+    def read_policy(self, path: str) -> PolicyCheckpoint:
+        """Read and bind the tensors without constructing a policy."""
+        ...
+
     def metadata(self, path: str) -> dict[str, Any]:
         """Decode checkpoint metadata without constructing a policy."""
         ...

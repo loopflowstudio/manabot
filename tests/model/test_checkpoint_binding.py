@@ -1,17 +1,19 @@
 """Load an earlier world through each public file format and use its saved rows."""
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND, load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.catalog import checkpoint_incompatibility
+from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
+from manabot.policy import buckets
 from manabot.policy.binding import packed
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
@@ -133,8 +135,103 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
 
     keys = state["semantic_cards.record_token_keys"]
     keys[0] = packed(3, 12345)
-    write_checkpoint(record, path)
+    if legacy_file:
+        torch.save(record, path)
+    else:
+        write_checkpoint(record, path)
     with pytest.raises(
         ValueError, match=f"unexplained record_token key {keys[0].item()}"
-    ):
+    ) as refusal:
+        load_checkpoint(str(path))
+    assert inspect_checkpoint(path, backend=BACKEND).incompatibility == str(
+        refusal.value
+    )
+
+
+def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    space = ObservationSpace(ObservationConfig(policy_history_version=1))
+    policy = ActorCritic(
+        space, ModelConfig(hidden_dim=8, world="world", recent_events=True)
+    ).eval()
+    path = tmp_path / "world.safetensors"
+    # The writing engine has a digest for which no external catalog exists.
+    identity = managym.world_identity
+    pool = managym.content_pool
+    with monkeypatch.context() as writer:
+        writer.setattr(
+            managym, "world_identity", lambda: {**identity(), "card_digest": "f" * 64}
+        )
+        writer.setattr(
+            managym,
+            "content_pool",
+            lambda key: {**pool(key), "content_digest": "f" * 64},
+        )
+        save_checkpoint(policy, space, path, player_configs=None)
+    record = read_checkpoint(path)
+    assert record["source"]["commit"]
+    assert record["writer_catalog"]["definition_keys"]
+    assert record["writer_catalog"]["naming_catalog"][0]["name"]
+    env = managym.Env(seed=7)
+    observation, _ = env.reset(
+        [
+            managym.PlayerConfig("A", {"Mountain": 20, "Gray Ogre": 20}),
+            managym.PlayerConfig("B", {"Forest": 20, "Gray Ogre": 20}),
+        ]
+    )
+    batch = {key: value[None] for key, value in space.encode(observation).items()}
+    expected = policy.evaluate(policy.prepare(batch))
+
+    # Emulate a later engine with appended columns and an unknown card digest.
+    # Without the embedded writer catalog the original file cannot bind here.
+    native_layout = managym.observation_layout
+    growing = (
+        "agent_cards",
+        "opponent_cards",
+        "stack",
+        "actions",
+        "decklists",
+        "events",
+    )
+
+    def extended_layout(**options: bool) -> dict[str, Any]:
+        rows = native_layout(**options)
+        for key in growing:
+            columns = rows[key]["columns"]
+            columns["appended"] = {"index": len(columns)}
+        return rows
+
+    initialize = ObservationSpace.__init__
+
+    def extended_space(
+        self: ObservationSpace, config: ObservationConfig | None = None
+    ) -> None:
+        initialize(self, config)
+        self.encoder.card_dim += 1
+        self.encoder.action_dim += 1
+        for key in growing:
+            shape = self.shapes[key]
+            self.shapes[key] = (*shape[:-1], shape[-1] + 1)
+
+    monkeypatch.setattr(managym, "observation_layout", extended_layout)
+    monkeypatch.setattr(ObservationSpace, "__init__", extended_space)
+    monkeypatch.setattr(buckets, "_EVENT_WIDTH", space.shapes["events"][-1] + 1)
+    loaded, runtime = load_checkpoint(str(path))
+    for key in growing:
+        batch[key] = np.concatenate(
+            (batch[key], np.full_like(batch[key][..., :1], 999)), axis=-1
+        )
+    actual = loaded.evaluate(loaded.prepare(batch))
+    for before, after in zip(expected, actual, strict=True):
+        np.testing.assert_array_equal(before, after)
+    rebound = tmp_path / "rebound.safetensors"
+    save_checkpoint(loaded, runtime, rebound, player_configs=None)
+    assert read_checkpoint(rebound)["input_columns"] == record["input_columns"]
+    again, _ = load_checkpoint(str(rebound))
+    np.testing.assert_array_equal(again.evaluate(again.prepare(batch))[0], expected[0])
+
+    record["input_columns"]["agent_cards"][0] = "lost_column"
+    write_checkpoint(record, path)
+    with pytest.raises(ValueError, match="agent_cards columns:.*lost_column"):
         load_checkpoint(str(path))

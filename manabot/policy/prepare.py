@@ -25,6 +25,7 @@ from functools import cached_property
 import numpy as np
 
 from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
     ACTION_TYPE_DIM,
     FACT_COMBAT_RESTRICTION,
     FACT_CONTINUATION_PROGRAM,
@@ -47,12 +48,11 @@ from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     RELATION_VALID_INDEX,
     STACK_DEFINITION_INDEX,
-    STACK_DIM,
     STACK_IS_MINE_INDEX,
     STACK_SOURCE_INDEX,
     ObservationBuffers,
 )
-from manabot.env.shared_effects import DETAIL_DIM, EFFECT_ROWS, MEMBER_DIM
+from manabot.env.shared_effects import EFFECT_ROWS
 from manabot.policy.buckets import has_history_events
 
 Array = np.ndarray
@@ -100,7 +100,7 @@ class Layout:
 
     numeric_permanent_columns: tuple[int, ...]
     link_columns: tuple[int, ...]
-    player_width: int | None = None
+    column_widths: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -490,6 +490,9 @@ def prepare(
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
     obs = {key: np.asarray(value) for key, value in obs.items()}
+    history = has_history_events(obs)
+    for key, width in (tables.layout.column_widths or {}).items():
+        obs[key] = obs[key][..., :width]
     facts = obs["facts"]
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
@@ -565,18 +568,20 @@ def prepare(
     positions = np.zeros(legal.shape, dtype=np.int64)
     positions[legal_batches, legal_slots] = np.arange(len(legal_batches))
     action_rows = obs["actions"][legal_batches, legal_slots]
-    frames = action_rows[:, -2].astype(np.int64)
+    action_features = action_rows[:, :ACTION_CONTINUATION_INDEX]
+    # Continuation and validity keep their published positions when features grow.
+    suffix = action_rows[:, ACTION_CONTINUATION_INDEX + 2 :]
+    if suffix.shape[1]:
+        action_features = np.concatenate((action_features, suffix), axis=1)
+    frames = action_rows[:, ACTION_CONTINUATION_INDEX].astype(np.int64)
     candidates = obs["name_candidates"][legal_batches, legal_slots].astype(np.int64)
     focus = obs["action_focus"][legal_batches, legal_slots].astype(np.int64)
-    if candidates.shape[-1] == 4:
+    if candidates.shape[-1] >= 4:
         first, last = candidates[:, 2], candidates[:, 3]
     else:
         first = last = np.zeros(len(candidates), np.int64)
 
-    players = [
-        obs[key][..., : tables.layout.player_width].astype(f32)
-        for key in ("agent_player", "opponent_player")
-    ]
+    players = [obs[key].astype(f32) for key in ("agent_player", "opponent_player")]
     cards = [obs[key].astype(f32) for key in ("agent_cards", "opponent_cards")]
     if "player_turn_state" in obs:
         players = [
@@ -627,7 +632,7 @@ def prepare(
             ...,
             [
                 c
-                for c in range(STACK_DIM)
+                for c in range(stack.shape[-1])
                 if c not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
             ],
         ].astype(f32)
@@ -658,7 +663,7 @@ def prepare(
         legal_batches=legal_batches.astype(np.int64),
         legal_slots=legal_slots.astype(np.int64),
         logit_positions=positions,
-        action_features=action_rows[:, :-2].astype(f32),
+        action_features=action_features.astype(f32),
         action_frames=legal_batches * relation_count + (frames - 1).clip(min=0),
         action_frame_mask=(frames != 0).astype(f32),
         name_rows=candidates[:, 0],
@@ -675,14 +680,14 @@ def prepare(
         is_agent=ownership,
         # Full-catalog preparation skips the scan for referenced definitions.
         programs=tables.programs(
-            _referenced_definitions(obs, tables, candidates)
+            _referenced_definitions(obs, tables, candidates, history)
             if select_programs
             else None
         )
         if tables.definition_rows is not None
         else None,
         belief=belief,
-        events=_events(obs, tables, objects),
+        events=_events(obs, tables, objects) if history else None,
         live_index=np.flatnonzero(present) if live_tokens else None,
         live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
         if live_tokens
@@ -691,7 +696,7 @@ def prepare(
 
 
 def _referenced_definitions(
-    obs: ObservationBuffers, tables: Tables, candidates: Array
+    obs: ObservationBuffers, tables: Tables, candidates: Array, history: bool
 ) -> Array:
     """Catalog subset read by learning, in sorted row order (zero is padding)."""
     references = [
@@ -704,7 +709,7 @@ def _referenced_definitions(
     ]
     if "known_library" in obs:
         references.append(obs["known_library"][..., 0])
-    if has_history_events(obs):
+    if history:
         references.extend(
             obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)
         )
@@ -865,9 +870,13 @@ def _effects(
         detail_indexes.extend(range(b * detail_rows + d, b * detail_rows + d + count))
         member_indexes.extend(range(b * member_rows + m, b * member_rows + m + targets))
         member_records.extend([i] * targets)
-    detail_host = details.reshape(-1, DETAIL_DIM)[detail_indexes].astype(np.int64)
+    detail_host = details.reshape(-1, details.shape[-1])[detail_indexes].astype(
+        np.int64
+    )
     kinds, ids = detail_host[:, 0], detail_host[:, 1:]
-    targets = members.reshape(-1, MEMBER_DIM)[member_indexes][:, 0].astype(np.int64)
+    targets = members.reshape(-1, members.shape[-1])[member_indexes][:, 0].astype(
+        np.int64
+    )
     records = np.asarray(member_records, dtype=np.int64)
     numeric = selected[:, 2:10].astype(np.float32)
     numeric[:, -1] /= np.float32(EFFECT_ROWS)
@@ -920,11 +929,7 @@ def _belief(obs: ObservationBuffers) -> BeliefRows[Array] | None:
     )
 
 
-def _events(
-    obs: ObservationBuffers, tables: Tables, objects: int
-) -> EventRows[Array] | None:
-    if not has_history_events(obs):
-        return None
+def _events(obs: ObservationBuffers, tables: Tables, objects: int) -> EventRows[Array]:
     valid = obs["events_valid"]
     rows = np.where((valid != 0)[..., None], obs["events"], 0)
     counts = valid.sum(1, keepdims=True)

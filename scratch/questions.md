@@ -88,3 +88,6 @@ say so if they should carry a note.
     cohort to 128 games by adding 16 to each pair's deal. For the new-card arm
     use the first eight eligible trophy lists in source order, paired adjacently
     for 32 games. Compare the heuristic with the first-64 cap in both arms.
+
+24. Academy runs tensor admission once per cached file identity when it lists
+    bots. Hashing streams the file and the cached summary retains no weights.

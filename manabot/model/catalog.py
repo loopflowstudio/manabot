@@ -8,16 +8,14 @@ this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
 
 Admission belongs to the injected backend's policy loader; the catalog
-uses the same metadata comparison (``manabot.model.interface``). Tensor-level
-failures such as an unexplained learned key are checked on load.
+uses its bound checkpoint reader so tensor and metadata refusals appear in the listing.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Literal
@@ -27,6 +25,7 @@ from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
 )
+from manabot.infra.identity import file_sha256
 from manabot.model.interface import model_interface
 from manabot.policy.protocol import Backend
 import managym
@@ -118,8 +117,7 @@ def _inspect_cached(
     # Refusals are returned, not raised, so they are cached too: run
     # directories hold large optimizer and dataset files that every listing
     # and every game admission would otherwise read again in full.
-    del size, mtime_ns  # cache key only: a rewritten file is re-read
-    data = Path(path).read_bytes()
+    del mtime_ns  # cache key only: a rewritten file is re-read
     try:
         checkpoint = backend.metadata(path)
     except Exception as error:  # legacy unpickling and malformed container headers
@@ -135,8 +133,8 @@ def _inspect_cached(
     search_reason = checkpoint_search_incompatibility(checkpoint)
     return CheckpointSummary(
         path=Path(path),
-        sha256=hashlib.sha256(data).hexdigest(),
-        bytes=len(data),
+        sha256=file_sha256(path),
+        bytes=size,
         label=_default_label(Path(path)),
         source="path",
         producer=_producer(checkpoint),
@@ -150,7 +148,9 @@ def _inspect_cached(
         stage=_text(checkpoint.get("bc"), "stage_id"),
         weights=_text(checkpoint.get("bc"), "weights"),
         setups=_setups(binding),
-        incompatibility=checkpoint_incompatibility(checkpoint),
+        incompatibility=checkpoint_incompatibility(
+            checkpoint, read_policy=lambda: backend.read_policy(path)
+        ),
         policy_input_version=config.get("observation_hypers", {}).get(
             "policy_input_version", 1
         ),
@@ -178,14 +178,26 @@ def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str |
     return None
 
 
-def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
-    """Explain the same metadata admission the policy loader uses."""
+def checkpoint_incompatibility(
+    checkpoint: Mapping[str, Any], *, read_policy: Callable[[], object] | None = None
+) -> str | None:
+    """Explain file admission, or metadata admission when only a record is available."""
     try:
+        if read_policy is not None:
+            read_policy()
+            return None
         observation = ObservationConfig.from_checkpoint(
             checkpoint["hypers"]["observation_hypers"]
         )
         model_interface(checkpoint, ObservationSpace(observation))
-    except (ValueError, TypeError, KeyError, managym.AgentError) as error:
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        IndexError,
+        RuntimeError,
+        managym.AgentError,
+    ) as error:
         return str(error)
     except BaseException as error:
         # Invalid retained native setups may raise a PyO3 panic.

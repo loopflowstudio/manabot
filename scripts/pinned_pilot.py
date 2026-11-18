@@ -60,7 +60,7 @@ def play(
         pilot, space = load_checkpoint(str(path))
     except ValueError as exc:
         raise ValueError(f"the loader refused {path.name}: {exc}") from exc
-    width = pilot.player_embedding.projection[0].in_features
+    width = pilot.column_widths.get("agent_player", space.encoder.player_dim)
     columns = input_columns(space)["agent_player"][:width]
     env = managym.Env(seed=seed)
     obs, _ = env.reset(

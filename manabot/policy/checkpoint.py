@@ -43,7 +43,7 @@ from manabot.model.architecture import (
     architecture_receipt,
     validate_architecture_receipt,
 )
-from manabot.model.interface import ModelInterface, model_interface, world_fields
+from manabot.model.interface import model_interface, world_fields
 from manabot.model.world import checkpoint_source, written_at
 from manabot.policy.binding import bind_catalog
 from manabot.policy.prepare import Layout, Tables
@@ -111,15 +111,17 @@ class Dimensions:
     links: int
 
 
-def layout(space: ObservationSpace, player_width: int | None = None) -> Layout:
+def layout(
+    space: ObservationSpace, column_widths: dict[str, int] | None = None
+) -> Layout:
     encoder = space.encoder
-    joins = (PERMANENT_DEFINITION_INDEX, *PERMANENT_LINK_INDEXES)
+    width = (column_widths or {}).get("agent_permanents", encoder.permanent_dim)
+    links = tuple(c for c in PERMANENT_LINK_INDEXES if c < width)
+    joins = (PERMANENT_DEFINITION_INDEX, *links)
     return Layout(
-        numeric_permanent_columns=tuple(
-            c for c in range(encoder.permanent_dim) if c not in joins
-        ),
-        link_columns=PERMANENT_LINK_INDEXES,
-        player_width=player_width,
+        numeric_permanent_columns=tuple(c for c in range(width) if c not in joins),
+        link_columns=links,
+        column_widths=column_widths,
     )
 
 
@@ -175,7 +177,7 @@ class PolicyCheckpoint:
     parameters: ParameterArrays
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
-    player_width: int | None = None
+    column_widths: dict[str, int] | None = None
 
     def receipt(self) -> ArchitectureReceipt:
         return architecture_receipt(
@@ -192,29 +194,31 @@ class PolicyCheckpoint:
         }
 
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, layout(self.space, self.player_width))
+        return Tables.from_buffers(self.buffers, layout(self.space, self.column_widths))
 
     def dimensions(self) -> Dimensions:
         encoder = self.space.encoder
         model = self.model
+        width = (self.column_widths or {}).get
+        columns = layout(self.space, self.column_widths)
         return Dimensions(
             hidden=model.hidden_dim,
             heads=model.num_attention_heads,
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=self.player_width or encoder.player_dim,
-            card=encoder.card_dim,
-            permanent=len(layout(self.space).numeric_permanent_columns),
-            action=encoder.action_dim,
+            player=width("agent_player", encoder.player_dim),
+            card=width("agent_cards", encoder.card_dim),
+            permanent=len(columns.numeric_permanent_columns),
+            action=width("actions", encoder.action_dim),
             focus=encoder.max_focus_objects,
-            relation=encoder.relation_dim,
+            relation=width("relations", encoder.relation_dim),
             fact_kinds=FACT_KINDS,
             token_rows=int(
                 self.parameters["semantic_cards.token_embedding.weight"].shape[0]
             ),
             name_rows=int(self.parameters["name_candidates.embedding.weight"].shape[0]),
-            links=len(PERMANENT_LINK_INDEXES),
+            links=len(columns.link_columns),
         )
 
 
@@ -285,11 +289,11 @@ def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
     arrays = dict(checkpoint.parameters)
     arrays.update({_BUFFER + k: v for k, v in checkpoint.buffers.items()})
     metadata = dict(checkpoint.metadata)
-    if checkpoint.player_width is not None:
+    if checkpoint.column_widths is not None:
         # read_container returns runtime-bound arrays. Serializing those arrays
         # makes this runtime their writer, while conversion uses the originals.
         record = {
-            **world_fields(checkpoint.space, checkpoint.player_width),
+            **world_fields(checkpoint.space, checkpoint.column_widths),
             "architecture": checkpoint.receipt().model_dump(mode="json"),
             "source": checkpoint_source(),
         }
@@ -347,14 +351,6 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
     space = ObservationSpace(
         ObservationConfig.from_checkpoint(hypers["observation_hypers"])
     )
-    meta.update(
-        {
-            key: json.loads(metadata[key])
-            for key in ("writer_catalog", "input_columns")
-            if key in metadata
-        }
-    )
-    interface = model_interface(meta, space)
     model = ModelConfig.from_checkpoint(hypers["agent_hypers"])
     parameters = {k: v for k, v in arrays.items() if not k.startswith(_BUFFER)}
     for name, value in parameters.items():
@@ -369,28 +365,30 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
         },
         metadata=metadata,
     )
-    return admit_checkpoint(checkpoint, meta, interface)
+    return admit_checkpoint(checkpoint)
 
 
-def admit_checkpoint(
-    checkpoint: PolicyCheckpoint, record: Mapping[str, Any], interface: ModelInterface
-) -> PolicyCheckpoint:
+def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     """Verify the receipt against the tensors that were written, before adding rows."""
+    record = checkpoint.record()
+    interface = model_interface(record, checkpoint.space)
     if record.get("architecture") is not None:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
     if interface.writer is None or interface.current is None:
         return checkpoint
-    width = interface.player_width
+    width = interface.widths.get("agent_player", checkpoint.space.encoder.player_dim)
     projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
     extra = (
-        checkpoint.space.shapes["player_turn_state"][-1]
+        interface.widths.get(
+            "player_turn_state", checkpoint.space.shapes["player_turn_state"][-1]
+        )
         if checkpoint.space.encoder.turn_state
         else 0
     )
     if projected != width + extra:
         raise ValueError("checkpoint player columns differ from its projection")
     if not checkpoint.model.catalog_records() and interface.writer == interface.current:
-        return replace(checkpoint, player_width=width)
+        return replace(checkpoint, column_widths=interface.widths)
     try:
         bound, report = bind_catalog(checkpoint, interface.writer, interface.current)
     except ValueError as error:
@@ -414,7 +412,7 @@ def admit_checkpoint(
         report.new_tokens,
         report.new_names,
     )
-    return replace(bound, player_width=width)
+    return replace(bound, column_widths=interface.widths)
 
 
 # safetensors: an 8-byte little-endian header length, a JSON header naming each

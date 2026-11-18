@@ -344,7 +344,7 @@ requirement, the legacy encoder.
    checkout. Re-exporting the bound container preserved every Torch tensor.
    Slice 3 below records strength on the original and new-card decks.
    General appended-column projection beyond the two player buffers and catalog
-   display of tensor-level refusals still need reconciliation at slice 4.
+   display of tensor-level refusals were completed in slice 4.
 
    Fact and effect records under retired names start unseen. Slice 3 measures
    overall play strength; it cannot isolate the cost of a single row.
@@ -370,11 +370,14 @@ requirement, the legacy encoder.
    with a new main-deck card gave 23/32 (0.719, 0.500–0.938). All 160 games
    finished and passed replay with zero integrity counts. USD 0. The opponent
    changed; attribution to the pilot alone is impossible. Report and receipts:
-   `experiments/reports/best-player-on-main.md`. **Next:** slice 4.
-4. **New checkpoints and the docs.** Saved checkpoints record column names,
-   definition keys, naming names and `source`; MLX and the container reader
-   pass through the same bind; Academy shows the interface result; the docs
-   section and AGENTS.md lines.
+   `experiments/reports/best-player-on-main.md`.
+4. **New checkpoints and docs (complete).** New files carry the writer catalog,
+   ordered column names and source. Setup-bound files retain strict admission.
+   The save/load regression uses a writer digest with no catalog on disk.
+   A wider engine reproduces the original outputs and re-exports the same
+   prefixes. Torch, MLX and Academy use the shared tensor admission. Both file
+   formats expose the same unexplained-key refusal in Academy. The two small
+   pilots and the original u1952 replayed locally. Linux verification is at CI.
 
 Then publish the PR and stop for review. Nothing lands.
 

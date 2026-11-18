@@ -74,7 +74,7 @@ def test_v11_is_the_fresh_default_and_every_input_is_serialized() -> None:
     assert ObservationConfig.from_checkpoint(dumped) == config
     for version in (9, 10):
         # The deprecated v9/v10 rows still load, and warn.
-        with pytest.warns(DeprecationWarning, match="removed in 0.4.0") as caught:
+        with pytest.warns(DeprecationWarning, match="no earlier than 0.4.0") as caught:
             legacy = ObservationConfig(policy_input_version=version)
         assert caught[0].filename == __file__  # The caller, not pydantic.
         assert legacy.model_dump()["policy_input_version"] == version
