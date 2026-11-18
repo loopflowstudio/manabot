@@ -156,9 +156,7 @@
     <p class="type-rubric whose" class:yours={live}>
       {#if thinking}<i class="thinking" aria-hidden="true"></i><span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
     </p>
-    {#if over}
-      <p class="line type-title text-ink" data-testid="decision-prompt">Game over. The result is over the board.</p>
-    {:else}
+    {#if !over}
       {#if interrupted}
         <p class="type-annotation text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
       {:else if frame.prompt}

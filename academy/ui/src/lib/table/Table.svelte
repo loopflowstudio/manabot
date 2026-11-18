@@ -195,8 +195,7 @@
   function act(placed: PlacedOffer): void {
     if (!live) return;
     menuAt = null;
-    hovered = null;
-    stopDwell();
+    hush();
     since = { revision: frame.revision, frame, logLength: log.length };
     onact(placed.offer);
   }
@@ -208,9 +207,7 @@
   }
 
   function activate(title: string, offers: PlacedOffer[], element: HTMLElement): void {
-    hovered = null;
-    stopDwell();
-    clicked = element;
+    hush();
     if (!live || !offers.length) return;
     if (offers.length === 1) { act(offers[0]); return; }
     const rect = element.getBoundingClientRect();
@@ -218,23 +215,33 @@
   }
 
   // Inspect opens only when asked: after the pointer rests on a card for a
-  // moment, or at once for keyboard focus. A card just clicked stays quiet
-  // until the pointer leaves it, so a resting pointer never leaves a
-  // preview over the board; any frame change closes it.
+  // moment, or at once for keyboard focus. After a commit the pointer stays
+  // quiet until it moves, so the card that slides under a resting pointer
+  // opens nothing; any frame change closes it.
   const DWELL_MS = 380;
   let dwell: ReturnType<typeof setTimeout> | null = null;
-  let clicked: HTMLElement | null = null;
+  let pointer = { x: -1, y: -1 };
+  let quietAt: { x: number; y: number } | null = null;
+  function onPointerMove(event: PointerEvent): void {
+    pointer = { x: event.clientX, y: event.clientY };
+    if (quietAt && Math.hypot(pointer.x - quietAt.x, pointer.y - quietAt.y) > 4) quietAt = null;
+  }
+  function hush(): void {
+    stopDwell();
+    hovered = null;
+    quietAt = { ...pointer };
+  }
   function stopDwell(): void {
     if (dwell !== null) clearTimeout(dwell);
     dwell = null;
   }
   function show(subject: Subject | null, element: HTMLElement | null): void {
     stopDwell();
-    if (!subject || !element) { hovered = null; clicked = null; return; }
+    if (!subject || !element) { hovered = null; return; }
     docked = subject;
-    if (element === clicked) return;
     if (element.matches(':focus-visible')) { place(subject, element); return; }
-    dwell = setTimeout(() => { dwell = null; if (element.isConnected) place(subject, element); }, DWELL_MS);
+    // Quiet is read when the dwell ends: the pointer may still be arriving.
+    dwell = setTimeout(() => { dwell = null; if (!quietAt && element.isConnected) place(subject, element); }, DWELL_MS);
   }
   function place(subject: Subject, element: HTMLElement): void {
     const rect = element.getBoundingClientRect();
@@ -327,16 +334,16 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} onpointermove={onPointerMove} />
 
 <div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
   data-turn={projection.turn.turn_number} data-step={projection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
-      <span class="text-ink">You</span>{#if you.deck}<span class="text-ink-3"> · {you.deck}</span>{/if}
-      <span class="text-ink-3"> vs </span>
-      <span class="text-ink" title={opponent.description}>{opponent.name}</span>{#if opponent.deck}<span class="text-ink-3"> · {opponent.deck}</span>{/if}
+      <span class="text-ink">You</span>{#if you.deck}<span class="text-ink-3">{' · '}{you.deck}</span>{/if}
+      <span class="text-ink-3">{' vs '}</span>
+      <span class="text-ink" title={opponent.description}>{opponent.name}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
     <nav class="track" aria-label={`Turn ${projection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}`}>
       <span class="type-rubric turn" data-testid="turn-number">Turn {projection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</span>
@@ -491,14 +498,15 @@
   }
   .brand { font-family: var(--font-serif); font-weight: 600; font-size: 19px; color: var(--accent-text); }
   .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .track { display: flex; align-items: center; gap: 12px; margin: 0 auto; min-width: 0; }
+  /* The matchup gives way first: the phase track and the controls keep their width. */
+  .track { display: flex; align-items: center; gap: 12px; margin: 0 auto; flex-shrink: 0; }
   .track .turn { color: var(--text); white-space: nowrap; }
   .track ol { display: flex; gap: 2px; }
   .track li { position: relative; padding: 2px 7px; border-radius: 10px; color: var(--text-tertiary); white-space: nowrap; }
   .track li.current { background: var(--accent); color: var(--ivory); }
   .track .stop { position: absolute; left: 50%; bottom: -3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 2px; background: var(--accent); }
   .track li.current .stop { background: var(--ivory); }
-  .right { display: flex; align-items: center; gap: 14px; }
+  .right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
   .connection { display: inline-flex; align-items: center; gap: 6px; color: var(--text-tertiary); }
   .connection i { width: 6px; height: 6px; border-radius: 3px; background: var(--neutral); }
   .connection[data-state='connected'] i { background: var(--success); }

@@ -410,8 +410,8 @@
     <section class="home" aria-label="Play" data-testid="home">
       <p class="type-rubric text-ink-3">{lastMatchup ? 'Your last matchup' : 'Ready to play'}</p>
       <p class="home-matchup type-title" data-testid="home-matchup">
-        <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3"> · {homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">, {matchupSeat(homeMatchup.config)}</span>
-        <span class="text-ink-3"> vs </span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3"> · {homeMatchup.decks.villain}</span>{/if}
+        <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
+        <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
       </p>
       <button class="btn btn-primary home-play" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
         onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : lastMatchup ? 'Play again' : 'Play'}</button>

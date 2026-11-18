@@ -44,14 +44,26 @@ test('play page reacts to the full game loop', async ({ page }) => {
 
   // 3. Start game must actually render a board (observation applied to DOM).
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  const board = page.getByTestId('table');
-  await expect(board).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('table')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
   await expect(page.getByTestId('turn-number')).toContainText('Turn');
 
-  const logEntries = page.getByTestId('log-entry');
-  const actionButtons = page.getByTestId('action-option');
-  const gameOverOverlay = page.getByTestId('game-result');
+  // That matchup is the next tab's "Play again": one click from home reaches
+  // its first decision, and the rest of the test plays that game.
+  const game = await page.context().newPage();
+  const gameErrors = collectConsoleErrors(game);
+  await game.goto('/');
+  await expect(game.getByTestId('home-matchup')).toContainText('vs Random');
+  await expect(game.getByTestId('play-again')).toHaveText('Play again');
+  await game.getByTestId('play-again').click();
+  await expect(game.getByTestId('table')).toBeVisible({ timeout: 15_000 });
+  await expect(game.getByTestId('deck-names')).toContainText('vs Random');
+  await page.close();
+
+  const board = game.getByTestId('table');
+  const logEntries = game.getByTestId('log-entry');
+  const actionButtons = game.getByTestId('action-option');
+  const gameOverOverlay = game.getByTestId('game-result');
 
   const boardSnapshots = new Set<string>();
   let actionsTaken = 0;
@@ -69,7 +81,7 @@ test('play page reacts to the full game loop', async ({ page }) => {
         gameOver = true;
         break;
       }
-      await page.getByTestId('game-result-action').click();
+      await game.getByTestId('game-result-action').click();
       await expect(board).toBeVisible({ timeout: 15_000 });
       continue;
     }
@@ -123,5 +135,15 @@ test('play page reacts to the full game loop', async ({ page }) => {
     'board DOM never changed across actions (frozen DOM?)',
   ).toBeGreaterThan(2);
 
-  expect(consoleErrors, `console errors: ${consoleErrors.join('\n')}`).toEqual([]);
+  // The game ends with a result card over the board, which stays readable.
+  await expect(game.getByTestId('result-card')).toBeVisible();
+  await expect(game.getByTestId('game-result')).toHaveText(/^(You win|Random wins|Draw)$/);
+  await expect(game.getByTestId('game-result-how')).toContainText(/on turn \d+/);
+  await expect(game.getByTestId('game-result-summary')).toContainText(/\d+ turns? · you cast/);
+  await expect(game.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
+  await expect(game.getByTestId('game-result-recording')).toHaveAttribute('href', /^\/replay\?trace=/);
+  await expect(game.getByTestId('game-result-action')).toHaveText('Rematch');
+  await expect(game.getByTestId('game-result-swap')).toBeEnabled();
+
+  expect([...consoleErrors, ...gameErrors], `console errors: ${[...consoleErrors, ...gameErrors].join('\n')}`).toEqual([]);
 });
