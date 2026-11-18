@@ -63,7 +63,6 @@ ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "experiments/data/mtg213/corpus-v1/corpus.json"
 POPULATION = "a5062cc5130a6fdbc4531f4269c610ee18f922fe81c2639b01c8bf8d1488c5ed"
 SEEDS = (21501, 21502, 21503)
-MILESTONES = {0, 25, 50, 100, 150, 200, 250}
 OBSERVATION = ObservationConfig(
     policy_input_version=11,
     max_facts=512,
@@ -167,6 +166,7 @@ def training_jobs(
     hours: float = 7,
     usd_per_run: float = 4.50,
     updates: int = 250,
+    max_attempts: int = 1,
 ) -> list[TrainingJob]:
     arms = [Arm(taps=taps, updates=updates) for taps in (False, True)]
     given = corpus_input()
@@ -184,7 +184,7 @@ def training_jobs(
             extras=("artifacts",),
             max_hours=hours,
             max_usd=Decimal(str(usd_per_run)),
-            max_attempts=1,
+            max_attempts=max_attempts,
         )
         for arm in arms
     ]
@@ -254,7 +254,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         off, on = (checkpoints[seed, t] for t in (False, True))
         for label, saved in (("off", off), ("on", on)):
             if saved:
-                for u in sorted(saved.keys() & MILESTONES | {max(saved)}):
+                for u in sorted(saved):
                     compare(
                         f"seed {seed} {label} u{u} vs heuristic",
                         "heuristic",
@@ -263,7 +263,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
                     )
         shared = off.keys() & on.keys()
         if shared:
-            for u in sorted(shared & MILESTONES | {max(shared)}):
+            for u in sorted(shared):
                 compare(f"seed {seed} on vs off u{u}", "on-vs-off", on[u], off[u])
     if not seatings:
         return []

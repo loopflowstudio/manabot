@@ -1,6 +1,12 @@
 # Do fixed-source mana taps at priority and during payments change TLA learnability?
 
-**Offering fixed-source mana taps made the w64 policy weaker on these TLA deals and slowed training per update.** After 50 updates the on arm scored 0/192 against the heuristic. The off arm scored 14/192 (7.3%). Head to head, the on arm scored 39/192 (20.3%) and lost the comparison in all three seeds. The on arm already trailed at initialization. Its score against the heuristic stayed at zero, while the off arm improved by two scored games across three seeds. This measures an early strength disadvantage. The longer-run learning rate remains unresolved.
+**Offering mana taps increased median seconds per update by 55%. Its effect on learnability is unresolved through update 50.** The on arm scored 0/64 against the heuristic in each seed at initialization and again at update 50. The off arm started at 4/64 in each seed and reached 5, 5 and 4 wins. Head to head, the on arm scored 39/192 at update 50. The strength gap was already present before training.
+
+### Checkpoint audit, 2026-11-18
+
+The evaluation loader read all 18 recorded EMA checkpoints after verification against their Etude SHA-256 records. All six runs changed their action probabilities between initialization and updates 25 and 50. The probe used the same two legal choices for every forward, pass or tap on decision index 1 of replay `580a82dd5615c5f4a09bd71dc622c86c8895b7010bc401fa1d7b7cc0be18466d` (deal 385000, on vs heuristic, leg 0). For off-arm models this is a diagnostic input outside their training action space.
+
+Across the six runs, the largest absolute change in a legal action's log probability from initialization to update 50 ranged from 0.0048 to 0.0079 for EMA and from 0.067 to 2.90 for the raw learner on that decision. The 0.999 EMA advances once per collection update and still gives initialization 95.1% of its weight at update 50. The small EMA shifts can leave seeded choices identical even when the raw policy has moved. This probe measures policy movement on one decision. Measuring how well the raw learners play requires scored games.
 
 Both arms trained on all 1,000 TLA trophy decks with the same w64 recipe, BF16, and undo disabled. Each seed pair used one L4. The common target was reduced from 250 to 50 updates based on the previous on-arm pace and the USD35 whole-experiment cap. The comparison uses EMA exports at updates 0, 25 and 50. Each checkpoint played the same 16 fixed deck pairs, with seats and decks crossed over four legs. Training seeds are the three units of evidence. Each eligible source has its own tap action, including identical lands. The policy sees the first 64 legal actions. Both choices affect how often a starting policy taps.
 

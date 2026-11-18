@@ -134,10 +134,12 @@ def test_training_jobs_read_as_addressed_runs(
 
 def test_mana_taps_rental_limits_apply_to_all_six_runs() -> None:
     requests = read_training_jobs(
-        EXPERIMENTS / "mana_taps.py", ("--hours", "0.875", "--usd-per-run", "0.79")
+        EXPERIMENTS / "mana_taps.py",
+        ("--hours", "0.875", "--usd-per-run", "0.79", "--max-attempts", "2"),
     )
     assert len(requests) == 6
     assert {request.seed for request in requests} == set(mana_taps.SEEDS)
+    assert all(request.job.max_attempts == 2 for request in requests)
     assert all(request.job.max_hours == 0.875 for request in requests)
     assert all(str(request.job.max_usd) == "0.79" for request in requests)
 
