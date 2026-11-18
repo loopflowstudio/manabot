@@ -164,3 +164,23 @@ def test_capture_counts_a_priority_float_expiring_through_skipped_steps(
         == 1
     )
     assert off.priority_produced == off.regular_expired == 0
+
+
+@pytest.mark.parametrize(
+    ("land", "has_spend"), [("Prismatic Vista", False), ("Sunbaked Canyon", True)]
+)
+def test_usable_floats_follow_paid_activations(land: str, has_spend: bool) -> None:
+    # Vista pays life and sacrifices itself. Canyon can also spend {1} to draw.
+    seat = managym.PlayerConfig("a", {"Forest": 16, land: 4})
+    env = managym.Env(seed=385)
+    env.reset(managym.GameSetup([seat, forests()[1]], mana_taps=("usable", False)))
+    env.scenario_clear_hand(0)
+    env.scenario_force_battlefield(0, land)
+    env.scenario_force_battlefield(0, "Forest")
+    actions = env.scenario_refresh().action_space.actions
+    assert any(
+        a.action_type == managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY for a in actions
+    )
+    assert sum(
+        a.action_type == managym.ActionEnum.TAP_FOR_COST for a in actions
+    ) == int(has_spend)
