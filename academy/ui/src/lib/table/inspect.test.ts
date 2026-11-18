@@ -43,6 +43,11 @@ describe('ptProvenance', () => {
     expect(ptProvenance(permanent({ power: 4, toughness: 4 }), null)?.parts).toEqual([]);
     expect(ptProvenance(permanent({ power: null, toughness: null }), face)).toBeNull();
   });
+
+  it('gives a noncreature no power and toughness, though the projection reports 0/0', () => {
+    const types = { is_creature: false, is_land: true, is_spell: false, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false };
+    expect(ptProvenance(permanent({ name: 'Island', power: 0, toughness: 0, types }), null)).toBeNull();
+  });
 });
 
 describe('keywordsOf', () => {

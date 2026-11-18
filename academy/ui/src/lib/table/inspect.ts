@@ -39,7 +39,9 @@ function effectLabel(effect: ContinuousEffect): string {
 
 /** The permanent's P/T as a sum of named parts, or null when it has none. */
 export function ptProvenance(permanent: PermanentState, face: CardFace | null): PtProvenance | null {
-  if (permanent.power === null || permanent.toughness === null) return null;
+  // The projection reports 0/0 for a noncreature; only a creature has power and toughness.
+  const creature = permanent.types?.is_creature ?? true;
+  if (!creature || permanent.power === null || permanent.toughness === null) return null;
   const effects = [...(permanent.effects ?? [])].sort((a, b) => a.timestamp - b.timestamp);
   const parts: PtPart[] = [];
   const set = effects.filter(effect => effect.modification === 'SetBasePt').at(-1);
