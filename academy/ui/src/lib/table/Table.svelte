@@ -401,6 +401,39 @@
 
   // ———————————————— Keyboard
 
+  // The table's keys, as the sheet `?` opens lists them. A recording has its
+  // transport's keys instead of live play's.
+  const recording = $derived(connection === null);
+  const keys = $derived<{ key: string; does: string; plain?: boolean }[]>([
+    ...(recording
+      ? [
+          { key: '← →', does: 'Step back or forward' },
+          { key: 'Shift ← →', does: 'Previous or next decision' },
+          { key: 'Home End', does: 'Start or end of the game' },
+          { key: 'Space', does: 'Play or pause' },
+          { key: 'Tab', does: 'Next region: fields, hand, stack, choices, moves' },
+          { key: '↑ ↓', does: 'Move within a region' },
+        ]
+      : [
+          { key: 'Space', does: 'The primary choice (Pass, Resolve, Done…)' },
+          { key: '1–9', does: 'The numbered choice' },
+          { key: 'Enter', does: 'Act on the focused card or choice' },
+          { key: 'Tab', does: 'Next region: fields, hand, stack, choices, moves' },
+          { key: '← → ↑ ↓', does: 'Move within a region' },
+          { key: 'F6', does: 'Pass turn: pass every priority window until it ends' },
+        ]),
+    { key: 'Esc', does: recording ? 'Close a menu or preview' : "Close a menu or preview; skip the opponent's moves" },
+    { key: 'Inspect', does: 'Focus a card, or rest the pointer on it', plain: true },
+    { key: '?', does: 'Show or hide these keys' },
+  ]);
+  let keysOpen = $state(false);
+  let keysButton = $state<HTMLButtonElement | null>(null);
+  function closeKeys(): void {
+    if (!keysOpen) return;
+    keysOpen = false;
+    keysButton?.focus();
+  }
+
   function typing(target: EventTarget | null): boolean {
     return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
   }
@@ -412,8 +445,26 @@
     return target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement || target.tagName === 'SUMMARY';
   }
 
+  const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), summary, [tabindex]';
+  /**
+   * Tab past the last control comes back to the top bar, and Shift+Tab before
+   * the first goes to the last, so a live game's Tab cycle is the top bar's
+   * controls and the regions: never the browser's chrome or the page behind.
+   */
+  function wrapTab(event: KeyboardEvent): void {
+    const stops = [...document.querySelectorAll<HTMLElement>(TABBABLE)]
+      .filter(element => element.tabIndex >= 0 && !element.closest('[inert]') && element.getClientRects().length > 0);
+    const edge = event.shiftKey ? stops[0] : stops.at(-1);
+    if (!edge || document.activeElement !== edge) return;
+    event.preventDefault();
+    (event.shiftKey ? stops.at(-1) : stops[0])?.focus();
+  }
+
   function onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Tab' && !recording && !event.metaKey && !event.ctrlKey && !event.altKey) { wrapTab(event); return; }
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
+    if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
+    if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); skipBeats(); return; }
     // While the opponent's moves are read out, Space ends the reading; the next Space acts.
     if (event.key === ' ' && beat && !ownsSpace(event.target)) { event.preventDefault(); skipBeats(); return; }
@@ -432,7 +483,8 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onpointermove={onPointerMove} />
+<svelte:window onkeydown={onKeydown} onpointermove={onPointerMove}
+  onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
 <div class="table" data-testid="table" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
   data-turn={projection.turn.turn_number} data-step={projection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
@@ -462,6 +514,8 @@
             aria-label={`Connection status: ${connectionLabel}`} class="type-rubric">{connectionLabel}</span>
         </span>
       {/if}
+      <button type="button" class="keys-hint type-caption" data-testid="keys-hint" aria-haspopup="dialog" aria-expanded={keysOpen}
+        aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" bind:this={keysButton} onclick={() => (keysOpen = !keysOpen)}><kbd>?</kbd> keys</button>
       <button type="button" class="inspect-toggle type-caption" data-testid="inspect-toggle" aria-pressed={inspectMode === 'dock'}
         title="Show inspected cards in a pane on the rail, or beside the card" onclick={toggleInspect}>{inspectMode === 'dock' ? 'Inspect: docked' : 'Inspect: beside card'}</button>
       {#if menu}{@render menu()}{/if}
@@ -566,6 +620,18 @@
   </div>
 {/if}
 
+{#if keysOpen}
+  <div class="keys" role="dialog" aria-label="Keyboard shortcuts" data-testid="keys-sheet">
+    <p class="type-rubric text-ink-2">Keys{recording ? ' · Review' : ''}</p>
+    <dl>
+      {#each keys as row (row.key)}
+        <dt>{#if row.plain}<span class="type-caption">{row.key}</span>{:else}<kbd>{row.key}</kbd>{/if}</dt><dd class="type-caption">{row.does}</dd>
+      {/each}
+    </dl>
+    <button type="button" class="cancel type-caption" onclick={closeKeys}><kbd>Esc</kbd>Close</button>
+  </div>
+{/if}
+
 {#if zoneAt}
   <div class="menu zone" role="dialog" aria-label={zoneAt.title} style:left={`${zoneAt.x}px`} style:top={`${zoneAt.y}px`}>
     <p class="type-rubric text-ink-2">{zoneAt.title}</p>
@@ -619,7 +685,7 @@
   .track li.current { background: var(--accent); color: var(--ivory); }
   .track .stop { position: absolute; left: 50%; bottom: -3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 2px; background: var(--accent); }
   .track li.current .stop { background: var(--ivory); }
-  .right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .connection { display: inline-flex; align-items: center; gap: 6px; color: var(--text-tertiary); }
   .connection i { width: 6px; height: 6px; border-radius: 3px; background: var(--neutral); }
   .connection[data-state='connected'] i { background: var(--success); }
@@ -693,11 +759,23 @@
     padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
   .dock { max-height: 100%; overflow-y: auto; }
+  .keys-hint { display: inline-flex; align-items: center; gap: 5px; color: var(--text-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+  .keys-hint:hover, .keys-hint[aria-expanded='true'] { color: var(--text); background: var(--bg-field); }
+  .keys {
+    position: fixed; z-index: 300; top: 46px; right: 14px; width: 340px; padding: 10px 12px 8px; display: grid; gap: 6px;
+    border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-surface); box-shadow: var(--shadow-raised);
+    animation: open var(--motion-fast) ease-out; transform-origin: top right;
+  }
+  .keys dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; align-items: baseline; }
+  .keys dt { text-align: right; white-space: nowrap; }
+  .keys dd { color: var(--text-secondary); }
+  .keys .cancel { justify-self: end; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); padding: 3px 6px; border-radius: 5px; }
+  .keys .cancel:hover, .keys .cancel:focus-visible { background: var(--bg-field); }
   .inspect-toggle { color: var(--text-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
   .inspect-toggle:hover { color: var(--text); background: var(--bg-field); }
 
   @media (prefers-reduced-motion: reduce) {
     .hand-card, .board { transition: none; }
-    .menu, .preview, .result-card { animation: none; }
+    .menu, .preview, .result-card, .keys { animation: none; }
   }
 </style>

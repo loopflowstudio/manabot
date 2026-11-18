@@ -43,7 +43,8 @@
 </script>
 
 <section class="strip" class:open aria-label="Decisions" data-testid="decision-strip" data-open={open}>
-  <button type="button" class="head" aria-expanded={open} onclick={ontoggle} data-testid="strip-toggle">
+  <!-- Live play's strip only counts, so Tab passes it by; a recording's opens to a navigable line. -->
+  <button type="button" class="head" aria-expanded={open} onclick={ontoggle} data-testid="strip-toggle" tabindex={onjump ? undefined : -1}>
     <span class="chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
     <span class="type-rubric">Decisions · {decisions.length}{#if values.length}<span class="text-ink-3"> · value recorded at {values.length}</span>{/if}</span>
     {#if note}<span class="note type-caption text-ink-3">{note}</span>{/if}

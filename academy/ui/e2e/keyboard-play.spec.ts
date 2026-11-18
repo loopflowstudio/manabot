@@ -60,12 +60,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid=table][data-live=true]')).toBeVisible({ timeout: 30_000 });
 
-  // Tab visits the regions in reading order, each once, one stop per region.
+  // Tab visits the regions in reading order, each once, one stop per region,
+  // and leaves them only for the top bar's controls, never the page or browser.
   const stops: string[] = [];
   for (let tabs = 0; tabs < 24 && stops.length < 12; tabs += 1) {
     await page.keyboard.press('Tab');
     const { region } = await focused(page);
     if (region) stops.push(region);
+    const inTopBar = await page.evaluate(() => document.activeElement?.closest('.topbar') !== null);
+    expect(region !== null || inTopBar, `Tab stop ${tabs} is a region or the top bar`).toBe(true);
   }
   const regions = stops.slice(0, stops.indexOf(stops[0], 1) > 0 ? stops.indexOf(stops[0], 1) : stops.length);
   expect(new Set(regions).size).toBe(regions.length);
@@ -108,4 +111,26 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   }
   expect(byEnter).toBeGreaterThanOrEqual(2);
   expect(bySpace).toBeGreaterThanOrEqual(4);
+});
+
+test('? opens the sheet of the table\'s keys, and Esc returns to the hint', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?setup=1');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByTestId('opponent-select').selectOption('random');
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
+  await expect(page.locator('[data-testid=table][data-live=true]')).toBeVisible({ timeout: 30_000 });
+
+  await page.keyboard.press('?');
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(sheet).toBeVisible();
+  for (const key of ['Space', '1–9', 'Enter', 'Tab', 'F6', 'Esc']) await expect(sheet.locator('kbd', { hasText: key }).first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(page.getByTestId('keys-hint')).toBeFocused();
+  // The quiet hint in the top bar opens it too.
+  await page.getByTestId('keys-hint').click();
+  await expect(sheet).toBeVisible();
+  await page.getByTestId('keys-hint').click();
+  await expect(sheet).toBeHidden();
 });
