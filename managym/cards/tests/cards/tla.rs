@@ -474,6 +474,22 @@ fn kyoshi_payment_and_priority_floats_are_independent() {
 }
 
 #[test]
+fn a_deliberate_kyoshi_float_keeps_both_colors_with_automatic_payment() {
+    use managym::state::player::{ManaFloats, ManaPayment};
+    for (index, color) in ["G", "W"].into_iter().enumerate() {
+        let mut s = five_color_unfunded_setup(&["Kyoshi Village"]);
+        let land = s.force_permanent_on_battlefield(0, "Kyoshi Village");
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        s.game_mut().mana_floats[0] = ManaFloats::All;
+        activate(&mut s, land, 1);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+        assert_eq!(s.action_space().actions.len(), 2);
+        choose_mode(&mut s, index);
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(color));
+    }
+}
+
+#[test]
 fn treasure_float_is_a_usable_sacrifice_even_without_a_mana_spend() {
     use managym::state::player::ManaFloats;
     let mut s = five_color_unfunded_setup(&[]);

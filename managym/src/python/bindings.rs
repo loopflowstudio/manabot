@@ -5599,27 +5599,8 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         };
         (
             decklists,
-            {
-                let (first, second): (String, String) = value.getattr("mana_floats")?.extract()?;
-                let mode = |name: &str| match name {
-                    "off" => Ok(ManaFloats::Off),
-                    "usable" => Ok(ManaFloats::Usable),
-                    "all" => Ok(ManaFloats::All),
-                    _ => Err(PyValueError::new_err(
-                        "mana_floats must be off, usable or all",
-                    )),
-                };
-                [mode(&first)?, mode(&second)?]
-            },
-            {
-                let (first, second): (String, String) = value.getattr("mana_payment")?.extract()?;
-                let mode = |name: &str| match name {
-                    "auto" => Ok(ManaPayment::Auto),
-                    "manual" => Ok(ManaPayment::Manual),
-                    _ => Err(PyValueError::new_err("mana_payment must be auto or manual")),
-                };
-                [mode(&first)?, mode(&second)?]
-            },
+            seat_modes(value, "mana_floats", ManaFloats::from_name)?,
+            seat_modes(value, "mana_payment", ManaPayment::from_name)?,
             "deprecated per-seat disclosure conflicts with GameSetup.decklists",
         )
     } else {
@@ -5642,6 +5623,20 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
     })
 }
 
+/// Read a `GameSetup` per-seat mode pair by its native names.
+#[cfg(feature = "python")]
+fn seat_modes<T>(
+    value: &Bound<'_, PyAny>,
+    field: &str,
+    parse: fn(&str) -> Option<T>,
+) -> PyResult<[T; 2]> {
+    let seats: [String; 2] = value.getattr(field)?.extract()?;
+    let [first, second] = seats.map(|name| {
+        parse(&name).ok_or_else(|| PyValueError::new_err(format!("unknown {field} mode {name:?}")))
+    });
+    Ok([first?, second?])
+}
+
 #[cfg(feature = "python")]
 pub(crate) fn python_game_setup(
     py: Python<'_>,
@@ -5653,19 +5648,8 @@ pub(crate) fn python_game_setup(
     let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
     let kwargs = pyo3::types::PyDict::new_bound(py);
     kwargs.set_item("decklists", disclosure_name(disclosure))?;
-    let [first, second] = mana_floats.map(|mode| match mode {
-        ManaFloats::Off => "off",
-        ManaFloats::Usable => "usable",
-        ManaFloats::All => "all",
-    });
-    kwargs.set_item("mana_floats", (first, second))?;
-    kwargs.set_item(
-        "mana_payment",
-        mana_payment.map(|value| match value {
-            ManaPayment::Auto => "auto",
-            ManaPayment::Manual => "manual",
-        }),
-    )?;
+    kwargs.set_item("mana_floats", mana_floats.map(ManaFloats::name))?;
+    kwargs.set_item("mana_payment", mana_payment.map(ManaPayment::name))?;
     Ok(py
         .import_bound("managym")?
         .getattr("GameSetup")?

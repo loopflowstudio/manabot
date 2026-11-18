@@ -124,6 +124,11 @@ impl Game {
         let mut position = std::borrow::Cow::Borrowed(self);
         let mut sources = Vec::new();
         let mut resolution = None;
+        // A deliberate tap in a payment previews its own production first.
+        let offered_tap = match action {
+            Action::TapForMana { permanent, .. } => Some(AutomaticTap::fixed(*permanent)),
+            _ => None,
+        };
         let cost = match action {
             Action::CastSpell { object, .. } => {
                 let card = &self.state[*object];
@@ -194,13 +199,8 @@ impl Game {
                     .take()
                     .unwrap();
                 if let Decision::Payment(payment) = suspended.decision {
-                    if let Action::TapForMana { permanent, .. } = action {
-                        sources.push(
-                            position
-                                .to_mut()
-                                .preview_tap(player, AutomaticTap::fixed(*permanent)),
-                        );
-                    }
+                    sources
+                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
                     let cost = payment.remaining.mana_cost();
                     resolution = Some((payment, suspended.frame));
                     Some(cost)
@@ -214,13 +214,8 @@ impl Game {
                     alternative,
                     ..
                 }) => {
-                    if let Action::TapForMana { permanent, .. } = action {
-                        sources.push(
-                            position
-                                .to_mut()
-                                .preview_tap(player, AutomaticTap::fixed(*permanent)),
-                        );
-                    }
+                    sources
+                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
                     Some(position.payment_mana_cost(player, payment, alternative.as_ref()))
                 }
                 Some(PendingChoice::Waterbend {
@@ -229,13 +224,8 @@ impl Game {
                     tapped,
                     ..
                 }) => {
-                    if let Action::TapForMana { permanent, .. } = action {
-                        sources.push(
-                            position
-                                .to_mut()
-                                .preview_tap(player, AutomaticTap::fixed(*permanent)),
-                        );
-                    }
+                    sources
+                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
                     position.to_mut().pending_choice = None;
                     Some(
                         self.waterbend_owed(player, payment, *remaining_generic, *tapped)

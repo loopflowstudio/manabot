@@ -1,5 +1,23 @@
 # How do priority mana floats affect TLA learning and throughput?
 
+## Independent payment and float controls
+
+On the same 40 TLA deals, automatic payment reduced the number of decisions a player had to make by **35% with usable floats** (347 to 224 per game) and **25% with floats off** (218 to 164). With automatic payment, enabling usable floats added 37% more decisions compared with off. All 200 games finished at engine revision `4b0f168e9c`. The three manual totals exactly reproduced the earlier rehearsal.
+
+| Payment | Priority floats | Surfaced decisions/game | Skipped share | Priority windows offering a float / floats chosen | Surfaced steps/s |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Manual | Off | 217.53 | 74.2% | 0 / 0 | 1,733 |
+| Manual | Usable | 346.93 | 66.9% | 5,270 / 2,999 | 1,887 |
+| Manual | All | 501.70 | 60.4% | 12,548 / 8,197 | 2,727 |
+| Automatic | Off | 164.03 | 80.3% | 0 / 0 | 1,282 |
+| Automatic | Usable | 224.08 | 74.3% | 5,108 / 2,846 | 2,338 |
+
+Both seats sampled uniformly from their surfaced legal actions. Skipped share includes forced actions and internal automatic-payment choices, divided by all surfaced and skipped decisions. The steps/s column is one wall-clock pass on a shared development machine and includes Python observation inspection. Use Engine Budget for controlled engine timings. Across the 40 paired priority refreshes, the median difference for usable minus all was −0.63 μs without a spend and +0.06 μs with a spend. Automatic/all is also supported and covered by a directed test.
+
+Engine Budget measured **21,224 steps/s** across 512 games (124,687 steps) and **125.55 seconds** total for search. The step digest and all three search digests matched the corrected default. The previous reference could not compile the benchmark's new seat settings, so there is no same-run timing ratio. This candidate is the new reference at the existing 10% tolerance. [CI recording](https://github.com/loopflowstudio/manabot/actions/runs/44382949690)
+
+The separate corrected training comparison keeps manual payments for both arms at its original freeze. On November 18 at 19:34 UTC, Etude reported all six jobs running, one two-slot L4 per seed. Corrected raw and EMA playing strength, matched-update and matched-active-time results follow in their own PR.
+
 ## Corrected off, usable and always levels
 
 At `ec46eec958`, off removes fixed and choice-output mana abilities from priority. The two-color lands still pay costs automatically or through a manual color choice. Usable offers a float when a legal cast or activation spends mana, or the mana activation has another effect such as a sacrifice or tap trigger. Always offers every legal float.

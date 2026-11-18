@@ -61,6 +61,29 @@ ManaPayment = Literal["auto", "manual"]
 ManaFloats = Literal["off", "usable", "all"]
 
 
+def _seat_modes(
+    players: Sequence[_managym.PlayerConfig],
+    field: str,
+    value: Sequence[str] | None,
+    names: tuple[str, ...],
+) -> tuple[str, str]:
+    """One mode per native seat; omitted values copy a wrapped setup or default
+    to the first name."""
+    if value is None:
+        value = (
+            getattr(players, field)
+            if isinstance(players, GameSetup)
+            else (names[0],) * 2
+        )
+    if (
+        not isinstance(value, (tuple, list))
+        or len(value) != 2
+        or not all(mode in names for mode in value)
+    ):
+        raise ValueError(f"{field} must contain two seat modes ({', '.join(names)})")
+    return (value[0], value[1])
+
+
 @dataclass(frozen=True, init=False)
 class GameSetup(Sequence[_managym.PlayerConfig]):
     """Read-only seats, decklist disclosure and per-seat mana tap offers.
@@ -86,36 +109,16 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
             decklists = players.decklists if isinstance(players, GameSetup) else "open"
         if decklists not in ("open", "closed", "mixed"):
             raise ValueError("decklists must be open, closed or mixed")
-        if mana_payment is None:
-            mana_payment = (
-                players.mana_payment
-                if isinstance(players, GameSetup)
-                else ("manual", "manual")
-            )
-        if (
-            not isinstance(mana_payment, (tuple, list))
-            or len(mana_payment) != 2
-            or not all(value in ("auto", "manual") for value in mana_payment)
-        ):
-            raise ValueError(
-                "mana_payment must contain two seat modes (auto or manual)"
-            )
-        object.__setattr__(self, "mana_payment", tuple(mana_payment))
-        if mana_floats is None:
-            mana_floats = (
-                players.mana_floats
-                if isinstance(players, GameSetup)
-                else ("off", "off")
-            )
-        if (
-            not isinstance(mana_floats, (tuple, list))
-            or len(mana_floats) != 2
-            or not all(value in ("off", "usable", "all") for value in mana_floats)
-        ):
-            raise ValueError(
-                "mana_floats must contain two seat modes (off, usable, or all)"
-            )
-        object.__setattr__(self, "mana_floats", tuple(mana_floats))
+        object.__setattr__(
+            self,
+            "mana_payment",
+            _seat_modes(players, "mana_payment", mana_payment, ("manual", "auto")),
+        )
+        object.__setattr__(
+            self,
+            "mana_floats",
+            _seat_modes(players, "mana_floats", mana_floats, ("off", "usable", "all")),
+        )
         object.__setattr__(self, "players", tuple(players))
         object.__setattr__(self, "decklists", decklists)
 

@@ -23,7 +23,7 @@ from typing import Any
 from manabot.backends import resolve
 from manabot.env.failures import ScalarCapture
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig
+from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
     runtime_fingerprints,
@@ -43,7 +43,6 @@ from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration, require_open_decklists
 from manabot.sim.replay import replay_environment
 from manabot.sim.supervision import failure_record, is_game_error
-from managym import ManaFloats, ManaPayment
 from managym.bots import BeliefSummary
 from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
@@ -135,8 +134,9 @@ def execute_game(
     )
     try:
         built = {}
-        payment_players: dict[str, ManaPayment] = {}
-        tap_players: dict[str, ManaFloats] = {}
+        # A checkpoint plays with the decision settings it trained under;
+        # every other player keeps manual payment and no floats.
+        trained: dict[str, ObservationConfig] = {}
         in_child = _InChildPlayers(backend_factory)
         match = (
             MatchConfig.model_validate(game["match_hypers"])
@@ -165,8 +165,7 @@ def execute_game(
                 registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
                 and player_space is not None
             ):
-                payment_players[responsible] = player_space.encoder.config.mana_payment
-                tap_players[responsible] = player_space.encoder.config.mana_floats
+                trained[responsible] = player_space.encoder.config
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -174,24 +173,18 @@ def execute_game(
             raise ValueError("players have different observation ABIs")
         space = spaces[0] if spaces else ObservationSpace()
         if match is not None:
-            first, second = game["seat_players"]
+            seats = [trained.get(p, ObservationConfig()) for p in game["seat_players"]]
             match = match.model_copy(
                 update={
-                    "mana_payment": (
-                        payment_players.get(first, "manual"),
-                        payment_players.get(second, "manual"),
-                    ),
-                    "mana_floats": (
-                        tap_players.get(first, "off"),
-                        tap_players.get(second, "off"),
-                    ),
+                    "mana_payment": tuple(seat.mana_payment for seat in seats),
+                    "mana_floats": tuple(seat.mana_floats for seat in seats),
                 }
             )
-            resolved = match.model_dump(mode="json")
-            resolved.update(
-                mana_payment=list(match.mana_payment),
-                mana_floats=list(match.mana_floats),
-            )
+            # Record both seats' settings, defaults included.
+            resolved = match.model_dump(mode="json") | {
+                "mana_payment": list(match.mana_payment),
+                "mana_floats": list(match.mana_floats),
+            }
             if resolved != game["match_hypers"]:
                 game["match_hypers"] = resolved
                 send(("match", resolved))
