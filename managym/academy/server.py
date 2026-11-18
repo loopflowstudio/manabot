@@ -4046,6 +4046,14 @@ def get_recording_index(
         for player in players:
             if player["seat"] == 1 - payload["config"].get("human_seat", 0):
                 player["deck"] = "closed"
+    for player in players:
+        deck = player.get("deck")
+        if isinstance(deck, str):
+            player["deck_name"] = (
+                CLOSED_DECK_NAME
+                if deck == "closed"
+                else DECK_DISPLAY_NAMES.get(deck, deck)
+            )
     return {
         "id": trace_id,
         "positions": [

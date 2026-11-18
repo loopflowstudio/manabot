@@ -8,6 +8,9 @@
   import type { PlannedSource } from './payment';
   import { fitRow, pileCounts, unpilePlanned, type PermanentItem, type Pile, type RowLimits } from './view';
 
+  /** Pixels a lean may pass the row's edge: the rows' padding, short of the other half's cards. */
+  const LEAN_SLACK = 6;
+
   interface Props {
     piles: Pile[];
     label: string;
@@ -40,6 +43,14 @@
   // A pixel of slack keeps rounding from wrapping a row that just fits.
   const fit = $derived(fitRow(pileCounts(shown), width - 2, height, limits));
   const cardHeight = $derived(Math.round(fit.card / limits.ratio));
+  // An attacker steps toward the player it attacks: a fifth of its height
+  // (less when lines are stacked), but never further than the row's own free
+  // space and padding, so it stops short of the defending row and its P/T
+  // stays in sight however full that row is.
+  const lean = $derived(Math.max(0, Math.min(
+    Math.round(cardHeight * (fit.lines > 1 ? 0.08 : 0.2)),
+    Math.floor((height - fit.lines * cardHeight - (fit.lines - 1) * 8) / 2) + LEAN_SLACK,
+  )));
 
   function blocked(item: PermanentItem): string | null {
     const attacker = item.permanent.blocking;
@@ -58,14 +69,15 @@
   data-testid="field-row"
   data-card-width={fit.card}
   data-lines={fit.lines}
-  style:--lean={fit.lines > 1 ? '8%' : '20%'}
+  style:--lean={`${lean}px`}
 >
   {#if width > 0}
     {#each shown as pile (pile.key)}
       {@const members = pile.items.flatMap(item => [item, ...item.attached.map(attached => ({ ...attached, host: item }))])}
       <div class="pile" style:width={`${fit.card + (members.length - 1) * fit.fan}px`} style:height={`${cardHeight}px`}>
         {#each members as item, index (item.permanent.id)}
-          <div class="member" style:left={`${index * fit.fan}px`} style:z-index={members.length - index}>
+          <!-- A leaning attacker paints over its neighbours and the seam. -->
+          <div class="member" style:left={`${index * fit.fan}px`} style:z-index={item.permanent.attacking ? members.length + 20 : members.length - index}>
             <TableCard
               name={item.permanent.name ?? 'Unknown permanent'}
               width={fit.card}

@@ -34,7 +34,8 @@
   import Rail from './Rail.svelte';
   import TableCard from './TableCard.svelte';
   import { phaseTrack } from './phases';
-  import { CARD_RATIO, FRAME_RATIO, handStrip, pileCounts, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { shortName } from '$lib/opponent-name';
+  import { CARD_RATIO, FRAME_RATIO, handStrip, pileCounts, possessive, splitHalf, tableView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -103,6 +104,8 @@
   });
 
   const view = $derived(tableView(frame));
+  // Sentences name the opponent shortly; the plate and top bar keep its kind.
+  const said = $derived(shortName(opponent.name));
   const projection = $derived(frame.projection);
   const yourTurn = $derived(projection.turn.active_player_id === projection.agent.id);
   const track = $derived(phaseTrack(projection.turn, stops, yourTurn));
@@ -111,8 +114,8 @@
   const whose = $derived(heading ?? (frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index
-        ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${you.name}'s decision`
-        : `${opponent.name}'s decision`));
+        ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${possessive(you.name)} decision`
+        : `${possessive(said)} decision`));
   // ———————————————— Payment preview
 
   // The offer the board previews: the one a person points at or focuses, when
@@ -149,7 +152,7 @@
 
   // The revision your last move was made at; events after it are "since your last move".
   let since = $state.raw<{ revision: number; frame: ExperienceFrame; logLength: number } | null>(null);
-  const players = $derived({ you: you.name, opponent: opponent.name });
+  const players = $derived({ you: shortName(you.name), opponent: said });
   const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since?.revision ?? null);
   const book = $derived(nameBook(since && sinceGiven === undefined ? [since.frame, frame] : [frame], since && sinceGiven === undefined ? log.slice(since.logLength) : []));
   const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players, book));
@@ -433,12 +436,12 @@
   </header>
 
   <div class="board" id="table-board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}>
-    <section class="half opponent" aria-label={`${opponent.name}'s battlefield`}>
+    <section class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={projection.opponent} name={opponent.name} deck={opponent.deck} offers={view.opponent.offers} {live} damage={recent.damage.players.get(projection.opponent.player_index) ?? 0}
-        active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(opponent.name, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${opponent.name} · ${zone}`, cards, element)} />
+        active={!yourTurn} choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, view.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={view.opponent.support} label={`${opponent.name}'s lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${opponent.name}'s creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={view.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={view.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={view.asked} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={plan?.sources ?? null} {unpiled} toward="down" {names} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section class="half you" aria-label="Your battlefield">
@@ -462,13 +465,6 @@
       </div>
     </section>
 
-    {#if beat && !result}
-      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={skipBeats}
-        title="Skip (Space)">
-        <span class="beat-text">{beat.text}</span>
-        <span class="beat-count type-caption">{beatAt + 1} of {beats.length} · Space to skip</span>
-      </button>
-    {/if}
     {#if result}
       <!-- Over the board, not over the screen: the final position stays readable around it. -->
       <section class="result-card" class:folded={resultFolded} aria-label="Game result" data-testid="result-card">
@@ -506,10 +502,20 @@
 
   <div class="rail-slot" id="table-choices">
     <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
-      opponentName={opponent.name} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
+      opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
-      {evidence} {recapTitle} {onjump} {currentMove} />
+      {evidence} {recapTitle} {onjump} {currentMove} reading={beat && !result ? reading : undefined} />
   </div>
+
+  {#snippet reading()}
+    {#if beat}
+      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={skipBeats}
+        title="Skip (Space)">
+        <span class="beat-text">{beat.text}</span>
+        <span class="beat-count type-caption">{beatAt + 1} of {beats.length} · Space to skip</span>
+      </button>
+    {/if}
+  {/snippet}
 
   {#if bottom}<div class="bottom">{@render bottom()}</div>{/if}
 </div>
@@ -622,14 +628,13 @@
     animation: appear var(--motion-move) ease-out;
   }
   @keyframes appear { from { opacity: 0; } }
-  /* A beat reads out one of the opponent's moves over the top of the board. */
+  /* A beat reads out one of the opponent's moves over the rail's move list, where it covers no card or choice. */
   .beat {
-    position: absolute; z-index: 40; left: 50%; top: 10px; transform: translateX(-50%); max-width: min(560px, 80%);
-    display: grid; gap: 2px; justify-items: center; padding: 8px 16px 6px; border: 1px solid var(--border-strong);
-    border-radius: 10px; background: color-mix(in srgb, var(--bg-surface) 94%, transparent); box-shadow: var(--shadow-raised);
-    text-align: center; cursor: pointer;
+    display: grid; gap: 4px; align-content: center; justify-items: center; padding: 6px 12px; border: 1px solid var(--border-strong);
+    border-radius: 8px; background: var(--bg-surface); box-shadow: var(--shadow-raised); text-align: center; cursor: pointer;
+    animation: appear var(--motion-fast) ease-out;
   }
-  .beat-text { font-size: 15px; line-height: 1.3; color: var(--text); }
+  .beat-text { font-size: 14px; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
   .beat-count { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .result-card.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; padding: 6px; }
   .result-card .fold { justify-self: end; color: var(--text-secondary); }

@@ -3,7 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { FRAME_RATIO, fitRow, handStrip, offerPlacements, splitHalf, tableView, unpilePlanned, type PermanentItem, type TableView } from './view';
+import { FRAME_RATIO, fitRow, handStrip, offerPlacements, possessive, splitHalf, tableView, unpilePlanned, type PermanentItem, type TableView } from './view';
+import { shortName } from '$lib/opponent-name';
 
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 const PROTOCOL = new URL('../../../../../protocol/fixtures/', import.meta.url);
@@ -231,5 +232,14 @@ describe('handStrip', () => {
       expect(at(hand).creatureFit.card).toBeGreaterThanOrEqual(at(range.min).creatureFit.card * 0.97);
       expect(at(hand).supportFit.card).toBeGreaterThanOrEqual(at(range.min).supportFit.card * 0.97);
     }
+  });
+});
+
+describe('names in sentences', () => {
+  it('drops the kind and takes a plain apostrophe after a final s', () => {
+    expect(shortName('Heuristic · scripted')).toBe('Heuristic');
+    expect(possessive(shortName('Heuristic · scripted'))).toBe("Heuristic's");
+    expect(possessive('Invasion Reinforcements')).toBe("Invasion Reinforcements'");
+    expect(possessive('You')).toBe('your');
   });
 });

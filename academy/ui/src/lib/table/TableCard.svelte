@@ -194,7 +194,7 @@
 
 <style>
   .slot { position: relative; flex: none; transition: transform var(--motion-move) var(--motion-move-ease); }
-  /* An attacker steps toward the player it attacks: a fifth of its height, less when lines are stacked. */
+  /* An attacker steps toward the player it attacks by `--lean`, which its row sizes (Field). */
   .slot.lean-up { transform: translateY(calc(-1 * var(--lean, 20%))); }
   .slot.lean-down { transform: translateY(var(--lean, 20%)); }
 

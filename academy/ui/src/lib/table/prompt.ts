@@ -97,8 +97,10 @@ export function primaryLabel(frame: ExperienceFrame, view: TableView, preview: P
   const offer = primary.offer.label;
   if (primary.offer.verb === 'pay') {
     // The plan is the automatic payer's, read for this offer; without one the button keeps the cost.
-    const text = payLabel(frame.projection.decision_context?.mana_cost ?? null, paymentPlan(preview, frame), preview);
-    return text ? { text, description: `${offer}: ${text.slice('Pay '.length)}` } : { text: offer, description: offer };
+    const full = payLabel(frame.projection.decision_context?.mana_cost ?? null, paymentPlan(preview, frame), preview);
+    // The button says the price on one line; the lands it taps are drawn on
+    // the board and named in its accessible name.
+    return full ? { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Pay '.length)}` } : { text: offer, description: offer };
   }
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   if (top) return { text: `Resolve ${top}`, description: `${offer}: let ${top} resolve` };

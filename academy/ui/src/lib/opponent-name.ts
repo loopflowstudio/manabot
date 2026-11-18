@@ -17,3 +17,8 @@ export function builtinOpponentName(choice: PlayerChoice): string | null {
 export function catalogOpponentName(entry: Pick<TrainedOpponent, 'name' | 'kind'>): string {
   return entry.kind ? `${entry.name} · ${entry.kind}` : entry.name;
 }
+
+/** The name a sentence uses: "Heuristic attacked…", without " · scripted". */
+export function shortName(name: string): string {
+  return name.split(' · ')[0];
+}

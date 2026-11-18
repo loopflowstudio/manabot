@@ -28,6 +28,7 @@
   import Strip from '$lib/table/Strip.svelte';
   import { moveList } from '$lib/table/moves';
   import { gameResult } from '$lib/table/result';
+  import { shortName } from '$lib/opponent-name';
   import {
     bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/table/replay';
@@ -85,9 +86,16 @@
     const name = identity(seat).compact;
     return name === identity(1 - seat).compact ? `${name} · seat ${seat + 1}` : name;
   };
+  // Sentences use the short name ("Heuristic cast…"); the plate keeps its kind.
+  const saidOf = (seat: number): string => {
+    const name = nameOf(seat);
+    if (name === 'You') return name;
+    const said = shortName(name);
+    return said === shortName(nameOf(1 - seat)) ? `${said} (seat ${seat + 1})` : said;
+  };
   const deckOf = (seat: number): string | null => {
-    const deck = index?.players.find(player => player.seat === seat)?.deck;
-    return deck && deck !== 'closed' ? deck : null;
+    const player = index?.players.find(candidate => candidate.seat === seat);
+    return player && player.deck !== 'closed' ? player.deck_name ?? player.deck : null;
   };
 
   // ———————————————— What the table draws
@@ -106,20 +114,20 @@
   const evidence = $derived(!studying && current?.decision && recorded ? offerEvidence(recorded, current.outputs, current.decision.offer_id) : null);
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
 
-  const entries = $derived(replayLog(positions, heroSeat, nameOf));
-  const moves = $derived(moveList(entries, { you: nameOf(heroSeat), opponent: nameOf(1 - heroSeat) }, new Map(), []));
+  const entries = $derived(replayLog(positions, heroSeat, saidOf));
+  const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
   const marks = $derived(stripMarks(positions, heroSeat));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
 
   const ending = $derived(frame && !studying && frame.projection.game_over && index
-    ? gameResult(frame, replayLog(positions, tableSeat, nameOf), { you: nameOf(tableSeat), opponent: nameOf(1 - tableSeat) }, index.winner)
+    ? gameResult(frame, replayLog(positions, tableSeat, saidOf), { you: saidOf(tableSeat), opponent: saidOf(1 - tableSeat) }, index.winner)
     : null);
 
   const status = $derived(!index ? ''
     : replayStore.busy ? 'Reading saved recording…'
       : index.record_stop?.status === 'diverged' ? `Stopped at decision ${index.record_stop.index} · saved recording only`
-        : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `${nameOf(index.winner)} wins`}`
+        : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `${saidOf(index.winner)} wins`}`
           : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only'
             : 'Interrupted · saved recording only');
   const sourceLabel = $derived(index?.source_kind === 'play' ? 'Recorded Play game' : index?.source_kind === 'training' ? 'Training game'
@@ -515,7 +523,7 @@
     onact={offer => void retryStudyOffer(offer)}
     {since}
     recapTitle={studying ? 'This line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
-    heading={studying || !current ? null : positionHeading(current, nameOf, frame.projection.game_over, index?.winner ?? null)}
+    heading={studying || !current ? null : positionHeading(current, saidOf, frame.projection.game_over, index?.winner ?? null)}
     {moves}
     onjump={locked ? undefined : jump}
     {currentMove}

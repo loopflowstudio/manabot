@@ -46,6 +46,8 @@
     over?: boolean;
     /** The docked inspect pane, when inspecting docks to the rail. */
     dock?: Snippet;
+    /** The opponent's move being read out; it sits over the move list, never over a card or a choice. */
+    reading?: Snippet;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
     /** The recap's heading. */
@@ -57,7 +59,7 @@
 
   let {
     view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
-    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock,
+    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null,
   }: Props = $props();
 
@@ -214,7 +216,7 @@
         </div>
       {/if}
       {#if view.primary}
-        <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label}
+        <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} onclick={() => onact(view.primary!)}>
           <span>{#if isChosen(view.primary)}✓ {/if}{primaryText?.text ?? view.primary.offer.label}</span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
@@ -262,6 +264,7 @@
   </section>
 
   <section class="block log" aria-label="Moves">
+    {#if reading}<div class="reading">{@render reading()}</div>{/if}
     <h2><span class="type-rubric text-ink-2">Moves</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>
       {#each moves as turn, index (`${turn.turn}:${index}`)}
@@ -329,8 +332,9 @@
   .line { font-size: 15px; line-height: 20px; }
   .detail summary { cursor: pointer; width: max-content; }
   .detail p { margin-top: 2px; max-height: 6em; overflow-y: auto; }
-  .primary { height: auto; min-height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: normal; text-align: center; }
-  .primary span { min-width: 0; }
+  /* One line at any rail width: the full text is the accessible name and the title. */
+  .primary { height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: nowrap; text-align: center; }
+  .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .primary kbd { flex: none; opacity: 1; }
   .payment-note { margin-top: -4px; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
@@ -353,7 +357,8 @@
   .row:disabled { color: var(--text-secondary); cursor: default; }
   .row .label { flex: 1; min-width: 0; }
   .hidden-key { visibility: hidden; }
-  .log { flex: 0 1 190px; min-height: 80px; display: flex; flex-direction: column; border-bottom: 0; }
+  .log { position: relative; flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
+  .reading { position: absolute; inset: 6px 8px; z-index: 5; display: grid; }
   .turns { flex: 1; min-height: 0; overflow-y: auto; mask-image: linear-gradient(transparent, #000 14px); display: grid; align-content: start; gap: 4px; }
   .turn-head { display: flex; gap: 8px; align-items: baseline; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }

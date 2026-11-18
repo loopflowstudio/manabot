@@ -501,3 +501,22 @@ def test_player_targets_name_roles_at_either_native_seat(
         )
         assert result["status"] == "accepted"
     raise AssertionError("no player target was offered")
+
+
+def test_recording_names_each_deck_by_its_display_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    created = create_watch(WatchRequest(players=["passive", "passive"], seed=3))
+    with TestClient(server.app) as client:
+        index = client.get(
+            f"/api/traces/{created['id']}/recording",
+            headers={"x-etude-participant-token": created["token"]},
+        ).json()
+    names = {player["deck"]: player["deck_name"] for player in index["players"]}
+    assert names == {
+        server.DEFAULT_HERO_DECK_NAME: "UR Lessons",
+        server.DEFAULT_VILLAIN_DECK_NAME: "GW Allies",
+    }
+    server._drop_session(created["id"], "new_game")

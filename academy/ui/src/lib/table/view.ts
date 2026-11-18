@@ -260,11 +260,17 @@ export function announcement(frame: ExperienceFrame): { kind: 'spell' | 'activat
   return context?.announcing && context.source ? { kind: context.announcing, source: context.source } : null;
 }
 
+/** "your", "Heuristic's", "Invasion Reinforcements'": a name ending in s takes the apostrophe alone. */
+export function possessive(name: string): string {
+  if (name === 'You') return 'your';
+  return /s$/i.test(name) ? `${name}'` : `${name}'s`;
+}
+
 /** A stack entry's short name: a spell's name, or "X's trigger" / "X's ability" for an ability of X. */
 export function stackName(entry: StackEntryView): string {
   if (entry.kind === 'spell') return entry.label;
   const source = entry.label.split(' — ')[0];
-  return `${source}'s ${entry.kind.includes('trigger') ? 'trigger' : 'ability'}`;
+  return `${possessive(source)} ${entry.kind.includes('trigger') ? 'trigger' : 'ability'}`;
 }
 
 // ———————————————————————————————————————— The view

@@ -24,6 +24,7 @@
  */
 import { orientBoard, type BotDecision, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
 import type { ExperienceFrame, GameLogEntry } from '$lib/types';
+import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
 
 // ———————————————————————————————————————— Perspective
@@ -273,11 +274,6 @@ export function cardEvidence(evidence: OfferEvidence | null, offerIds: readonly 
 }
 
 // ———————————————————————————————————————— Heading
-
-/** "your", "Heuristic's": a seat's name as an owner. */
-function possessive(name: string): string {
-  return name === 'You' ? 'your' : `${name}'s`;
-}
 
 /**
  * What a recorded position is, in words, for the rail's heading: "Your choice",

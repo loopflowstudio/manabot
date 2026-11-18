@@ -50,7 +50,7 @@ describe('stack names in the prompt', () => {
     frame.action_space = 'PRIORITY';
     frame.projection.stack_objects = [{ id: 9, kind: 'triggered_ability', controller: 0,
       label: 'Fire Nation Cadets — Whenever this attacks (while your graveyard has at least 1 Lesson): Add {R}{R}.' }];
-    expect(promptLine(frame, tableView(frame))).toBe("Fire Nation Cadets's trigger is on the stack. Respond, or Space to let it resolve");
+    expect(promptLine(frame, tableView(frame))).toBe("Fire Nation Cadets' trigger is on the stack. Respond, or Space to let it resolve");
   });
 });
 
@@ -96,7 +96,7 @@ describe('primaryLabel', () => {
     expect(primaryLabel(pay, tableView(pay))?.text).toBe(`Pay ${pay.projection.decision_context!.mana_cost}`);
   });
 
-  it('reads the previewed plan: the cost, then the lands it taps', () => {
+  it('says the cost on the button and the lands it taps in its accessible name', () => {
     const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
     const lands = pay.projection.agent.battlefield.filter(permanent => permanent.types?.is_land).slice(0, 2);
     const preview = {
@@ -107,7 +107,9 @@ describe('primaryLabel', () => {
     const cost = pay.projection.decision_context!.mana_cost;
     const names = lands.map(land => land.name);
     const listed = names[0] === names[1] ? `${names[0]} ×2` : names.join(', ');
-    expect(primaryLabel(pay, tableView(pay), preview)?.text).toBe(`Pay ${cost} · ${listed}`);
+    const label = primaryLabel(pay, tableView(pay), preview);
+    expect(label?.text).toBe(`Pay ${cost}`);
+    expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
     expect(promptLine(pay, tableView(pay), true)).toMatch(/Space taps the dashed lands/);
     // A preview that is not exact draws nothing; the button keeps the cost.
     expect(primaryLabel(pay, tableView(pay), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);

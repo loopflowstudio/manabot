@@ -22,7 +22,7 @@
   import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
   import { sanitizeDeckSelection, DECK_CHOICES } from '$lib/decks';
-  import { builtinOpponentName } from '$lib/opponent-name';
+  import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/table/result';
   import Strip from '$lib/table/Strip.svelte';
@@ -292,11 +292,11 @@
       && gameStore.work.chooser !== null && gameStore.work.chooser !== heroSeat)
     || (tableFrame?.prompt != null && tableFrame.prompt.actor !== heroSeat)));
   const thinking = $derived(!gameActive ? null
-    : opponentChoosing ? `${opponentName} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
+    : opponentChoosing ? `${shortName(opponentName)} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
       : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The table is working…' : null);
 
   const ending = $derived(gameStore.gameOver && boardFrame
-    ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: opponentName }, gameStore.winner) : null);
+    ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
   // The game so far as a strip of decisions, folded unless opened. Live play
   // shows no past position yet: positions open in Review once the game ends.
   let stripOpen = $state(false);
