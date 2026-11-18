@@ -34,6 +34,7 @@ from experiments import (
     belief,
     elemental,
     llm_claude,
+    priority_taps,
     seat_comparison,
     tla_frontier,
 )
@@ -57,6 +58,15 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
+    (
+        priority_taps,
+        (),
+        {
+            f"priority-taps-{size}-{taps}": 1
+            for size in ("w64", "w160l8")
+            for taps in ("off", "on")
+        },
+    ),
 ]
 
 
@@ -79,6 +89,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "belief",
         "elemental",
         "etude_execution",
+        "priority_taps",
         "seat_comparison",
         "tla_frontier",
     }

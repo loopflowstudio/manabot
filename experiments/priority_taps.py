@@ -36,7 +36,7 @@ from etude.train.tracking import track
 from experiments import priority_taps
 from experiments.tla_corpus import Corpus
 from experiments.tla_frontier import HEURISTIC, SIZES, SizeLabel, learning, model
-from manabot.data import fetch_data, load_manifest
+from manabot.data import load_manifest
 from manabot.eval.admission import register_anchor
 from manabot.eval.agents import AGENTS, game_players, registration
 from manabot.eval.evaluation import EvaluationRequest, evaluate
@@ -75,7 +75,6 @@ def corpus_input() -> Input:
     """Etude delivers the manifest object to rentals and verifies the local smoke copy."""
     manifest = load_manifest()
     path = CORPUS.relative_to(ROOT).as_posix()
-    fetch_data([path], manifest=manifest)
     entry = manifest.files[path]
     return Input(
         name=CORPUS.name,
@@ -160,6 +159,7 @@ def train(config: Arm) -> None:
 
 
 def training_jobs(revision: str | None = None) -> list[TrainingJob]:
+    arms = [Arm(size=size, taps=taps) for size in SIZES for taps in (False, True)]
     given = corpus_input()
     return [
         TrainingJob(
@@ -177,9 +177,7 @@ def training_jobs(revision: str | None = None) -> list[TrainingJob]:
             max_usd=Decimal("1.95"),
             max_attempts=1,
         )
-        for size in SIZES
-        for taps in (False, True)
-        for arm in [Arm(size=size, taps=taps)]
+        for arm in arms
     ]
 
 
