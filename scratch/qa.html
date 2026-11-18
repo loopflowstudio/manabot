@@ -5,86 +5,96 @@
 body{max-width:56rem;margin:3rem auto;padding:0 1rem;font:16px/1.55 system-ui;color:#20252a}h1,h2{line-height:1.2}h2{margin-top:2rem}pre,code{background:#f2f4f4}pre{padding:1rem;white-space:pre-wrap;overflow-wrap:anywhere}th,td{padding:.4rem .8rem;text-align:left;border-bottom:1px solid #ccd1d3}table{border-collapse:collapse}img{max-width:100%;border:1px solid #ccd1d3}
 </style></head><body>
 <h1>Checkpoint compatibility and training corpus</h1>
-<p>18 November 2026 · MTG-353 · <code>0217ea13f6</code>, after the merge of main through #555 and the extension rebuild. This pass repeats the user paths that changed since the last one: the corpus query now returns its DuckDB connection, older runs supply <code>deck_cards</code>, and the engine gained opponent decision memory. Outputs are under <code>.runs/qa7</code>. The host was busy throughout (load average 75–84); nothing below is a timing claim.</p>
-<p><strong>Nothing needed fixing in the change.</strong> One QA instruction was added (Academy's confirm dialog).</p>
+<p>18 November 2026 · MTG-353 · <code>1e4ebccb3e</code>. This pass covers what changed since the pass at <code>0217ea13f6</code>: the Python <code>roster</code> reader is gone and the guide counts deck entries from <code>deck_cards</code>; the submitted-deck check moved into <code>admit_world_decks</code>; the loader names the definition-reference token kind. Outputs are under <code>.runs/qa8</code>. The host was busy (load average 55–108); nothing below is a timing claim.</p>
+<p><strong>Nothing in the change broke.</strong> One thing is not as directed: the corpus <code>settings</code> relation (see the end). The QA skill gained the verbatim-guide and wheel-consumer steps.</p>
 
-<h2>1. Train, resume and query the corpus as the guide says</h2>
-<pre>export ETUDE_HOME="$PWD/.runs/qa7"
+<h2>1. The guide, run as written, on a fresh resumed run</h2>
+<pre>export ETUDE_HOME="$PWD/.runs/qa8"
 uv run --extra evaluation etude train manabot/recipes/local.py --config '{"statistics":true}' --until updates=1 --json
 {"run": "local", "experiment": "local", "outcome": "finished"}
 uv run --extra evaluation etude train manabot/recipes/local.py --resume --until updates=2 --json
 {"run": "local", "experiment": "local", "outcome": "finished"}</pre>
-<p>Then every query in <code>docs/evaluation.md</code> “Querying the training corpus”, copied as written, with only the storage path, run and update changed:</p>
-<pre>Roster decks and distinct card keys: 2 29
+<p>A script extracted the three <code>python</code> blocks under “Querying the training corpus” in <code>docs/evaluation.md</code> and replaced only the storage path, run, update and statistics path. So the guide's own import line and queries ran, including the new count query.</p>
+<pre>Deck entries and distinct card keys: [(2, 29)]
 Completed games: [(4,)]
 Observed decks: [(2,)]
-New keys: [('lea.lightning_bolt',)]
+matchups: fc948195… on the play, 7d663f0e… on the draw, 4 games
+new keys: [('lea.lightning_bolt',)]
 Island games: [(4,)]
-Settings: [('local', 'local', 'open', False, 512, 'error', 11, 'current-self', 'self', 'both', 'fixed')]
-deck_cards: 34 rows; main 40 and 41 cards, sideboards 2 and 3
-Statistics (list games, Island draws, Island choices): [(4, 11, 46)]
-checkpoint update 0 -> 0 games; update 1 -> 2 games; update 2 -> 4 games</pre>
-<p>The three checkpoint lines use the other entry point, <code>training_corpus(checkpoint, source=storage)</code>, on each published checkpoint. The Island figures equal the previous pass's independent count from the terminal game records (4, 11, 46).</p>
+deck mix: 2 seats of each deck at updates 1 and 2
+settings: [('local', 'local', 'open', False, 512, 'error', 11, 'current-self', 'self', 'both', 'fixed')]
+deck_cards: 34 rows; main 2 entries, 29 keys, 81 copies; sideboard 2 entries, 5 keys, 5 copies
+statistics (list games, Island draws, Island choices): [(4, 11, 46)]</pre>
+<p>2 and 29 are the counts the plan expected. The Island figures equal the earlier passes' (4, 11, 46). Through a published checkpoint, <code>training_corpus(checkpoint, source=storage)</code> gave 0, 2 and 4 games at updates 0, 1 and 2, each with the same 2 entries and 29 keys.</p>
 
-<h2>2. The same queries on frontier Small</h2>
+<h2>2. The same script on frontier Small</h2>
 <p>Retained R2 copy of <code>tla_frontier/59718fe34945</code> (declaration, writer record, sealed block for updates 0–12), through update 1.</p>
-<pre>Roster decks and distinct card keys: 134 262
+<pre>Deck entries and distinct card keys: [(134, 262)]
 Completed games: [(259,)]
 Observed decks: [(132,)]
-Top matchup: 7b246825… on the play, a3d4b7c3… on the draw, 2 games
-New keys: [('lea.lightning_bolt',)]
+top matchup: 7b246825… on the play, a3d4b7c3… on the draw, 2 games
+new keys: [('lea.lightning_bolt',)]
 Island games: [(218,)]
-Settings: [('tla_frontier', '59718fe34945', None, None, 64, 'first-legal', 9, 'current-self', None, 'both', None)]
-deck_cards: 4,899 rows; main 134 decks, 253 keys, 5,364 copies; sideboard 134 decks, 242 keys, 2,131 copies</pre>
-<p>All figures match the plan's verification. New since the last pass: this historical run now has <code>deck_cards</code> rows, derived from its declared deck source. In both runs, each deck's card list in <code>corpus</code> equals its keys in <code>deck_cards</code> (0 decks differ).</p>
+settings: [('tla_frontier', '59718fe34945', None, None, 64, 'first-legal', 9, 'current-self', None, 'both', None)]
+deck_cards: main 134 entries, 253 keys, 5,364 copies; sideboard 134 entries, 242 keys, 2,131 copies</pre>
+<p>134 and 262 are the counts the plan expected; the rest equals the last pass. In both runs each deck's card list in <code>corpus</code> equals its keys in <code>deck_cards</code> (0 decks differ). Neither run has two entries with one deck identity, so the guide's sentence that a run can hold such entries was not exercised.</p>
 
-<h2>3. Wrong input</h2>
+<h2>3. Installed wheels, outside the checkout</h2>
+<p>Not reached last pass. Built both wheels at this commit (the engine wheel from the checkout's warm target, not from release staging), installed them with <code>manabot[evaluation]</code> into a fresh <code>/tmp</code> venv, and ran the same two guide scripts with <code>python -I</code> from <code>/tmp</code>.</p>
+<pre>modules /tmp/mtg353-qa8-venv/lib/python3.13/site-packages/manabot/eval/training_corpus.py …/site-packages/managym/__init__.py
+local and frontier output: identical to the checkout's, line for line
+etude train …/site-packages/manabot/recipes/local.py --until updates=1 --json
+{"run": "local", "experiment": "local", "outcome": "finished"}
+deck entries and keys [(2, 29)], games [(2,)]</pre>
+<p>My first attempt pointed both scripts at a storage path that did not exist, and both answered <code>UnknownCoverage: …: resolved training decks are unknown</code>: the wrong-root message below, met by accident.</p>
+
+<h2>4. Wrong input and a returning caller</h2>
 <table><thead><tr><th>Request</th><th>Answer</th></tr></thead><tbody>
+<tr><td><code>roster</code> from <code>manabot.eval.training_corpus</code> (this branch's earlier guide)</td><td><code>AttributeError</code>: the module has no <code>roster</code>. It was never released.</td></tr>
 <tr><td>local, update 3 (never trained)</td><td><code>UnknownCoverage: local: coverage unknown at update 3</code></td></tr>
 <tr><td>frontier, update 13 (block not downloaded)</td><td><code>UnknownCoverage: 59718fe34945: coverage unknown at update 13</code></td></tr>
 <tr><td>negative or missing update</td><td><code>ValueError: supply a nonnegative update</code></td></tr>
-<tr><td>statistics directory that does not exist</td><td><code>UnknownCoverage: .runs/qa7/none: no statistics rows</code></td></tr>
+<tr><td>statistics directory that does not exist</td><td><code>UnknownCoverage: .runs/qa8/none: no statistics rows</code></td></tr>
 <tr><td>another run's statistics directory</td><td><code>UnknownCoverage: …: update 1 has 2 terminal statistics games for 259 corpus games</code></td></tr>
 <tr><td>checkpoint without its storage</td><td><code>ValueError: supply a checkpoint and its source</code></td></tr>
 <tr><td>checkpoint with the wrong storage root</td><td><code>UnknownCoverage: local: resolved training decks are unknown</code></td></tr>
-<tr><td>the earlier <code>relation.query("corpus", sql)</code> form</td><td>DuckDB <code>TypeError</code> naming the connection's signature</td></tr>
 </tbody></table>
-<p>Update 0 answers zero games and still lists the 34 deck entries.</p>
 
-<h2>4. Play the historical checkpoint after the merge</h2>
-<p>Frontier Small update 1952 (<code>c95c61aa…</code>, written at <code>ab2b757d9</code>, input v9) against the heuristic on two submitted TLA lists, deal seed 101.</p>
+<h2>5. The historical checkpoint: refused decks, then a replayed deal</h2>
+<p>Frontier Small update 1952 (written at <code>ab2b757d9</code>, input v9) against the heuristic. Without a matchup the CLI uses the authored Allies/Lessons setup, which this checkpoint does not admit. The message now comes from <code>admit_world_decks</code>:</p>
 <pre>uv run --extra evaluation python -m manabot.eval.local --checkpoint .runs/qa/final.pt --opponent heuristic \
-    --matchup .runs/qa6/matchup.json --deal-seed 101 --out .runs/qa7/frontier-matchup --seconds 1500 --game-seconds 240
-completed: 1/1 complete deals; 4/4 games; evidence: .runs/qa7/frontier-matchup/panel
+    --deal-seed 101 --out .runs/qa8/frontier-default --seconds 300
+incomplete: ValueError: Supply a DeckMatchup with submitted decks for this checkpoint.; evidence: .runs/qa8/frontier-default</pre>
+<p>With two submitted TLA lists:</p>
+<pre>… --matchup .runs/qa6/matchup.json --deal-seed 101 --out .runs/qa8/frontier-matchup --seconds 1500 --game-seconds 240
+completed: 1/1 complete deals; 4/4 games; evidence: .runs/qa8/frontier-matchup/panel
 score: 0.750 (1 deal block; uncertainty unavailable from a single deal); local-check-not-admission
-replay.json: 4 games, 829 decisions, 0 state, command, offer, outcome or trace mismatches, 0 private exposures, passed</pre>
-<p>The 829 decisions equal the count from before the merge, so decision memory on main did not move this pilot's games. The request records <code>stored_programs: 360</code> and no <code>writer_revision</code> (the file records none), as the guide says earlier registrations can.</p>
+replay.json: 4 games, 829 decisions, 0 state, command, offer, outcome, frame or trace mismatches, 0 private exposures, passed</pre>
+<p>The score and the 829 decisions equal the two earlier passes, so naming the token kind did not move this pilot's play. The request records <code>stored_programs: 360</code>.</p>
 
-<h2>5. Old and new checkpoints in Academy</h2>
-<p>Started <code>managym academy play</code> with a folder holding the frontier file, both pinned pilots (v9 <code>.pt</code>, v11 <code>.safetensors</code>) and a truncated copy, plus the fresh local run through <code>ETUDE_HOME</code>. <code>/api/opponents</code> and the browser picker listed all nine real checkpoints as available, with no refusal. The local run's checkpoints show <em>Bound decks: ur_lessons vs gw_allies</em>. The truncated file is left out of the list, which is how main treats a file that holds no policy.</p>
-<img src="qa/frontier-setup.png" alt="New game setup with frontier-u1952 selected as the seat 2 registered policy">
-<p>Selected <em>frontier-u1952</em> for seat 2 on the New game page with the default decks and started. It cast Badgermole Cub, Kyoshi Warriors, Invasion Reinforcements, South Pole Voyager, Suki and Yip Yip!, attacked, and won on turn 10 against a script that only played lands. No server error and no browser console error.</p>
-<img src="qa/frontier-game-over.png" alt="Game over: frontier-u1952 wins on turn 10">
+<h2>6. Academy's opponent list</h2>
+<p>Started <code>managym academy play</code> on the folder with the frontier file, both pinned pilots and a truncated copy, plus this pass's local run. <code>/api/opponents</code> listed Heuristic, Greedy, the six local policies, <code>frontier-u1952</code>, <code>pinned-v11</code> and <code>pinned-v9</code>, all available with no refusal reason. The truncated file is left out, as on main. I did not open the browser or play a game this pass. The last pass played one to the end against <code>frontier-u1952</code>, and the loader differs since only by a named constant with the same value (7).</p>
 
-<h2>6. Tests that reach what the real path cannot</h2>
+<h2>7. Tests that reach what the real path cannot</h2>
 <pre>MANABOT_U1952_CHECKPOINT=$PWD/.runs/qa/final.pt uv run --extra dev --extra evaluation pytest \
-    tests/model/test_pinned_pilot.py tests/eval/test_training_corpus.py \
-    tests/model/test_checkpoint_binding.py tests/model/test_writer_catalog.py -q
-13 passed</pre>
-<p>With the frontier file present the u1952 recording runs instead of skipping: the pilot still picks the same actions with the same probabilities as recorded.</p>
+    tests/model/test_pinned_pilot.py tests/eval/test_training_corpus.py tests/model/test_checkpoint_binding.py \
+    tests/model/test_writer_catalog.py tests/training/test_training_decks.py tests/test_package_boundaries.py -q
+70 passed</pre>
+<p>The u1952 recording ran instead of skipping. The boundary test covers the new import of <code>manabot.semantic.learning</code> in <code>manabot.policy.binding</code>. PR #558's checks at this commit: every finished job passes; Academy UI and Clean-machine Play were still pending.</p>
 
 <h2>What works, what was not reached, what is still wrong</h2>
-<p><strong>Works:</strong> the guide's corpus queries on a fresh resumed run and on frontier Small, both entry points, every refusal above, a replay-verified deal with the historical pilot, and a complete Academy game against it.</p>
+<p><strong>Works:</strong> the guide exactly as written on a fresh resumed run and on frontier Small, from the checkout and from installed wheels; both entry points; every refusal above; the submitted-deck refusal and a replay-verified deal with the historical pilot; Academy's listing of old and new checkpoints.</p>
 <p><strong>Not reached:</strong></p>
 <ul>
-<li>A checkpoint the loader refuses, shown in Academy with its reason. No such file exists locally (it needs an unclassified token name or input v1–v8); the refusal text is covered by <code>test_checkpoint_binding.py</code> only.</li>
-<li>Installing the built wheels outside the checkout. The last pass did this; the Python API changed since (the returned connection), and the wheel was not rebuilt here.</li>
-<li>Frontier updates past 12, a statistics run with a parent checkpoint, and a GPU.</li>
+<li>A browser game in Academy this pass, and a checkpoint the loader refuses shown there with its reason (no such file exists locally).</li>
+<li>Wheels built from release staging, and Python 3.12. The wheels here came from the checkout.</li>
+<li>Frontier updates past 12, a statistics run with a parent checkpoint, a run with two entries of one deck identity, and a GPU.</li>
 </ul>
 <p><strong>Still wrong, worst first:</strong></p>
 <ol>
-<li>A checkpoint opened with the wrong storage root answers “resolved training decks are unknown”. It is a refusal, but it does not say the run was not found there.</li>
-<li>Academy drops an unreadable checkpoint file from the list without saying so. This is main's behaviour, not this change.</li>
-<li><code>uv run python scripts/check_loopflow_workflows.py</code> still fails its coverage-graph assertion (<code>_coverage</code>, line 105), as in the last pass. The only workflow file this branch edits is the QA skill text.</li>
+<li>The <code>settings</code> relation does not match direction received during this pass (recorded in <code>scratch/plan.md</code>, not built here). It reports <code>mana_taps: False</code> for the local run from a field the observation settings do not have, records no <code>skip_trivial</code>, has one row per run with no per-seat values, and has no per-update game counts for settings that can vary by game. This is new building, so QA left it for the build step.</li>
+<li>A checkpoint or run opened with the wrong storage root answers “resolved training decks are unknown”. It is a refusal, but it does not say the run was not found there. I hit this myself with a mistyped path.</li>
+<li>Academy drops an unreadable checkpoint file from the list without saying so. This is main's behaviour.</li>
+<li><code>uv run python scripts/check_loopflow_workflows.py</code> still fails with an <code>AssertionError</code>, as in the last two passes. This pass again edits only the QA skill text.</li>
 </ol>
 </body></html>

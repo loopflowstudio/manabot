@@ -608,6 +608,20 @@ publish, land or choose the next Graph step from here.
   the parent's Etude checkpoint record. The child corpus should contain the
   parent's first update and the child's first update. Query historical
   frontier settings against the sealed run declaration as well as its counts.
+  Run the guide as written: extract the three `python` blocks under
+  "Querying the training corpus" with a regex and replace only the storage
+  path, run coordinates, `through=` and the statistics path, so an import or
+  query the guide no longer supports fails. For a consumer outside the
+  checkout, build both wheels from the warm target
+  (`uv run --extra play maturin build --release -i .venv/bin/python -m
+  managym/Cargo.toml -o <dist>` and `uv build --wheel --package manabot -o
+  <dist>`, under a minute), install the engine wheel plus
+  `manabot[evaluation] @ file://<wheel>` in a `/tmp` venv with the CPU Torch
+  index, and run the same script with `<venv>/bin/python -I` from `/tmp` on
+  absolute storage paths. `<venv>/bin/etude train
+  <site-packages>/manabot/recipes/local.py --until updates=1` trains there.
+  An engine wheel built before a merge from main does not match the merged
+  Python; rebuild it.
 - Decision memory is opt-in on raw engines: `managym.Env(...)` and
   `VectorEnv(...)` record no viewer decision log unless built with
   `decision_memory=True` (the training wrappers derive it from

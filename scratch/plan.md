@@ -82,12 +82,32 @@ gave 12 passed, 1 skipped. Nothing wider was run locally; CI owns the suite.
 
 ## Remaining work
 
-Nothing remains to build in this PR. The sixth concept review's leftover
-(question 46) is done: `roster` and `CorpusDeck` are deleted, `deck_rows` is
-the one deck reader, and the guide prints its deck-entry and card counts from
-`deck_cards` (`0a772149d7`). After it, `tests/eval/test_training_corpus.py`
-gave 5 passed. The guide's new count query was not re-run against frontier
-Small (expected 134 and 262) or the local run (2 and 29); QA owns that.
+The sixth concept review's leftover (question 46) is done: `roster` and
+`CorpusDeck` are deleted, `deck_rows` is the one deck reader, and the guide
+prints its deck-entry and card counts from `deck_cards` (`0a772149d7`). QA at
+`1e4ebccb3e` ran the guide's blocks as written: frontier Small gave 134 and
+262, the local run 2 and 29, from the checkout and from installed wheels
+(`scratch/qa.html`).
+
+To build in this PR, from the corpus settings direction below (received
+during QA, not started): today `settings` is one row per run with a
+`mana_taps` column read by `getattr(observation, "mana_taps", False)`, no
+`skip_trivial` and no per-seat or per-update values.
+
+0. Corpus settings, in this order:
+   - Remove the `mana_taps` column (writer, reader, guide query).
+   - Record `skip_trivial`, and shape per-seat values so #559's
+     `mana_payment` and `mana_floats` fit without reshaping; say which shape
+     in `scratch/questions.md`. If #559 is on main at sync, write its two
+     fields explicitly, defaults included (#559 was open at 11:37 PST).
+   - Record settings that can differ between games as game counts per
+     update (update, seat, setting, value, games), written each update by
+     the shared function in both loops from the settings each game was
+     created with; build it for decklists and `skip_trivial`, with a test
+     for each of "always", "share of games" and "changed at update N", and
+     document it. Fixed model or run properties stay in the per-run row.
+   - Not in this PR: naming the difference when a checkpoint is seated under
+     other levels; no admission gate.
 
 1. Etude follow-up, not blocking: its evaluation query database indexes
    `training_checkpoints` only (question 34). Once Etude ingests selected
@@ -168,3 +188,21 @@ Direction, Jack Heart, 2026-11-18:
   part of the curve im more focused on".
 - Asked whether to write this into the plan and send the Task back to
   build: "yes".
+
+Direction on the corpus settings, 2026-11-18, relayed from the MTG-385
+sessions (PR #559; full text in `.lf/prompts/20261118-113616-*-steer.md`):
+
+- Jack Heart: "also negotiate eith mtg-353 to make sure that this kind of
+  change is the kind of thing that is clear to read on how a model was
+  trained".
+- Jack Heart: "I wonder if we want something for like: - this value was
+  always true in its training - this value was true n% of the time - this
+  value was true for the first N games and then not true after that", and
+  "with the mana payment stuff i can imagine turning on increasingly higher
+  levels of mana payment options".
+- Agreed between the sessions: the corpus settings (`log_corpus_setup`,
+  `SETTINGS_TABLE`) record action-space conditions "as facts and never as
+  load gates"; "the settings relation records seat, mana_payment,
+  mana_floats, skip_trivial explicitly at defaults. The second PR to merge
+  adapts log_corpus_setup at sync." The per-update game-count reading is
+  marked "chosen by the MTG-353 session, reversible until merge".
