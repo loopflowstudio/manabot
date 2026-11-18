@@ -515,9 +515,10 @@
         </span>
       {/if}
       <button type="button" class="keys-hint type-caption" data-testid="keys-hint" aria-haspopup="dialog" aria-expanded={keysOpen}
-        aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" bind:this={keysButton} onclick={() => (keysOpen = !keysOpen)}><kbd>?</kbd> keys</button>
+        aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" bind:this={keysButton} onclick={() => (keysOpen = !keysOpen)}><kbd>?</kbd></button>
       <button type="button" class="inspect-toggle type-caption" data-testid="inspect-toggle" aria-pressed={inspectMode === 'dock'}
-        title="Show inspected cards in a pane on the rail, or beside the card" onclick={toggleInspect}>{inspectMode === 'dock' ? 'Inspect: docked' : 'Inspect: beside card'}</button>
+        aria-label="Dock inspected cards on the rail" title={inspectMode === 'dock' ? 'Inspected cards show in a pane on the rail; press to show them beside the card' : 'Inspected cards show beside the card; press to dock them on the rail'}
+        onclick={toggleInspect}>Dock</button>
       {#if menu}{@render menu()}{/if}
     </div>
   </header>
@@ -759,7 +760,7 @@
     padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
   .dock { max-height: 100%; overflow-y: auto; }
-  .keys-hint { display: inline-flex; align-items: center; gap: 5px; color: var(--text-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+  .keys-hint { display: inline-flex; align-items: center; color: var(--text-tertiary); padding: 2px 3px; border-radius: 4px; }
   .keys-hint:hover, .keys-hint[aria-expanded='true'] { color: var(--text); background: var(--bg-field); }
   .keys {
     position: fixed; z-index: 300; top: 46px; right: 14px; width: 340px; padding: 10px 12px 8px; display: grid; gap: 6px;
@@ -773,6 +774,7 @@
   .keys .cancel:hover, .keys .cancel:focus-visible { background: var(--bg-field); }
   .inspect-toggle { color: var(--text-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
   .inspect-toggle:hover { color: var(--text); background: var(--bg-field); }
+  .inspect-toggle[aria-pressed='true'] { color: var(--text); background: var(--bg-field); }
 
   @media (prefers-reduced-motion: reduce) {
     .hand-card, .board { transition: none; }

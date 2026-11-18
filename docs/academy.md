@@ -609,7 +609,7 @@ from (printed or set, counters, each effect by its source and duration, and
 whatever those do not explain as "other effects"), and its state. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
-until the pointer leaves and returns; **Inspect: docked** in the top bar keeps it in a pane at the top of the rail
+until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
 instead, showing the last card you inspected. The top bar shows the turn, the
 current step and the steps where your priority stops hold. The hand strip is
 as tall as the board can spare: an empty hand is a label, a hand on a sparse
