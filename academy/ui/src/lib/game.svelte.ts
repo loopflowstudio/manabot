@@ -9,6 +9,7 @@ import {
   type DeckSelection,
 } from './decks';
 import { deriveObservationNotes } from './log';
+import { stepBoards, type StepBoard } from './table/boards';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredStops, saveStoredStops, sanitizeStops } from './stops';
 import type { RestoredReplayDecision } from './replay-index';
@@ -26,6 +27,7 @@ import type {
   Decklists,
   ExperienceFrame,
   GameLogEntry,
+  StepBoardPatch,
   LogLine,
   Observation,
   OpponentConfig,
@@ -125,6 +127,8 @@ export class GameStore {
   branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
+  /** The person's board after each step that led to `frameHash`'s frame (`table/boards.ts`). */
+  stepBoards = $state.raw<{ frameHash: string; boards: StepBoard[] } | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state.raw<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
@@ -370,6 +374,17 @@ export class GameStore {
     }
   }
 
+  /** Keep the step boards that came with `frame`; boards that do not rebuild are dropped (beats then show the frame). */
+  applyStepBoards(frame: ExperienceFrame, patches: readonly StepBoardPatch[]): void {
+    let boards: StepBoard[] = [];
+    try {
+      boards = patches.length ? stepBoards(frame.projection, patches) : [];
+    } catch {
+      boards = [];
+    }
+    this.stepBoards = { frameHash: frame.frame_hash, boards };
+  }
+
   applyFrame(
     frame: ExperienceFrame,
     sessionId?: string,
@@ -510,6 +525,7 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.protocolFrame = null;
+    this.stepBoards = null;
     this.observation = null;
     this.actions = [];
     this.actionSpaceKind = '';

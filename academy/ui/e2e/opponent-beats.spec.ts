@@ -46,15 +46,42 @@ test('the opponent\'s moves are read out, and Space ends the reading without act
   await playUntil(page, async () => await beat.count() > 0, 120);
   // Read the beat and skip it within its 1.4 s, before it ends by itself.
   const text = await page.evaluate(() => document.querySelector('[data-testid=beat]')?.textContent ?? '');
+  // A beat is shown on the board it happened on, when that is not the frame's
+  // own: a past board, with no card outlined (its offers belong to the frame).
+  const board = page.getByTestId('game-board');
+  const onStep = await board.getAttribute('data-board') === 'step';
+  if (onStep) expect(await board.locator('[data-testid=table-card][data-offer-count]:not([data-offer-count="0"])').count()).toBe(0);
   const before = sent.count;
   await page.keyboard.press('Space');
   expect(text).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked /);
   expect(text).toMatch(/\d+ of \d+ · Space to skip/);
   await expect(beat).toHaveCount(0);
+  // Skipping jumps to the frame's own board.
+  await expect(board).toHaveAttribute('data-board', 'frame');
   expect(sent.count).toBe(before);
   await page.screenshot({ path: testInfo.outputPath('after-skip.png') });
   // Every fact read out stays in the recap.
   await expect(page.getByTestId('recent')).toBeVisible();
+});
+
+test('each beat is shown on its own board, and pressing the board skips to the frame\'s', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
+  const sent = { count: 0 };
+  await startAgainstRandom(page, sent);
+  const board = page.getByTestId('game-board');
+  await playUntil(page, async () => await board.getAttribute('data-board') === 'step', 160);
+  await expect(board).toHaveAttribute('data-board', 'step');
+  await page.screenshot({ path: test.info().outputPath('step-board.png') });
+  const before = sent.count;
+  // A press on a past board commits nothing: its cards had no offers when pressed.
+  const card = board.getByTestId('table-card').first();
+  await card.click();
+  await expect(board).toHaveAttribute('data-board', 'frame');
+  await expect(page.getByTestId('beat')).toHaveCount(0);
+  expect(sent.count).toBe(before);
 });
 
 test('reduced motion reads out no beats', async ({ page }) => {

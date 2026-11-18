@@ -656,6 +656,7 @@ export class GameSocketController {
           resumeToken,
           message.log ?? [],
         );
+        gameStore.applyStepBoards(message.recovery.frame, message.boards ?? []);
         this.reconcileCommand(message.recovery);
       } else if (message.type === 'observation') {
         gameStore.applyObservation(
@@ -832,6 +833,7 @@ export class GameSocketController {
       ...update.frame,
       ...(update.log ? { log: update.log } : {}),
     });
+    gameStore.applyStepBoards(update.frame, update.boards ?? []);
     try {
       validatePresentationUpdate(
         update.presentation,

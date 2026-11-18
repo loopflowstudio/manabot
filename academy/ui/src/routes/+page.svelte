@@ -192,6 +192,9 @@
   // A Study branch shows its own projection with no live offers.
   const boardFrame = $derived<ExperienceFrame | null>(tableFrame && gameStore.branchProjection
     ? { ...tableFrame, projection: gameStore.branchProjection, offers: [], prompt: null } : tableFrame);
+  // The boards the opponent's moves were made on, for the frame they came with.
+  const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.stepBoards?.frameHash === boardFrame.frame_hash
+    ? gameStore.stepBoards.boards : []);
 
   $effect(() => {
     if (stopsPending !== null && (gameStore.updateSeq !== stopsPending || gameStore.connection !== 'connected')) stopsPending = null;
@@ -431,6 +434,7 @@
       result={gameStore.gameOver ? result : undefined}
       {menu}
       {beatPace}
+      {stepBoards}
     />
   {:else if atHome}
     {@render notices()}

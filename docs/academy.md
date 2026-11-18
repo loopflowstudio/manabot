@@ -895,9 +895,14 @@ reveals, attacks, blocks, damage and deaths, read from the authority's presentat
 events after your last commit, with the move list beneath grouped by turn.
 When the opponent moved, those facts are also read out one at a time over the
 move list, about a second each, with the cards each is about outlined on the
-board; Space (when no control has focus), a click on the caption or any
-action ends the reading, and the choices stay live throughout. Reduced motion
-reads out nothing; the recap lists every fact. Sentences name a player
+board. Each fact is shown on the board it happened on: the server sends your
+view of the board after each step with the frame, so an attacker that died is
+seen attacking before it leaves, and cards travel from one board to the next.
+A past board outlines nothing. Space (when no control has focus), a click on
+the caption or on the board, or any action ends the reading and shows the
+current board; a click that ends it acts on nothing. The choices stay live
+throughout. Reduced motion reads out nothing and shows the current board; the
+recap lists every fact. Sentences name a player
 shortly ("Heuristic cast…"); the plate and top bar keep how it decides
 ("Heuristic · scripted"). In Replay the same recap
 covers **This move** at a consequences position and **Since the last

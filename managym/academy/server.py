@@ -56,6 +56,7 @@ from managym.experience import (
     Command,
     ExperienceFrame,
     InteractionOffer,
+    LegacyHeroObservation,
     PresentationEvent,
 )
 from managym.experience_projection import (
@@ -167,6 +168,7 @@ from .shared_table_protocol import (
     ViewerIdentity,
     ViewerRole,
 )
+from .step_boards import MAX_STEP_BOARDS, StepBoard, wire_boards
 from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
 from .study_runtime import (
     HistoricalStudyEvidenceProvider,
@@ -935,6 +937,8 @@ class GameSession:
             1: [],
         }
         self._pending_action_log: list[LogEntry] = []
+        # The person's board after each step since the last surfaced message (`step_boards`).
+        self._step_boards: list[StepBoard] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
         self.stops: dict[str, list[str]] = {
             side: list(steps) for side, steps in DEFAULT_STOPS.items()
@@ -1140,6 +1144,7 @@ class GameSession:
         self._trace_saved = False
         self.trace_id = None
         self._pending_action_log = []
+        self._step_boards = []
         self.stops = {
             side: list(steps) for side, steps in (config.stops or DEFAULT_STOPS).items()
         }
@@ -1403,19 +1408,20 @@ class GameSession:
         The same envelope serves early commitment and the settled response;
         later frames never change the transition named by the receipt.
         """
+        frame = self._experience_frame()
         return {
             "type": "command_outcome",
             "status": "accepted",
             "update": {
                 "base_revision": base_revision,
-                "frame": self._experience_frame(),
+                "frame": frame,
                 "presentation": [
                     dict(event)
                     for event in self.presentation_events
                     if int(event["seq"]) >= cursor
                 ],
                 "receipt": deepcopy(receipt),
-                **self._drain_surface_metadata(),
+                **self._drain_surface_metadata(frame["projection"]),
             },
         }
 
@@ -2000,16 +2006,24 @@ class GameSession:
         self._pending_action_log = []
         return pending
 
-    def _drain_surface_metadata(self) -> dict[str, Any]:
-        """Drain compatibility narration outside the canonical frame."""
+    def _drain_surface_metadata(self, projection: dict[str, Any]) -> dict[str, Any]:
+        """Drain compatibility narration and step boards outside the canonical frame.
+
+        `projection` is the frame these travel with; step boards are patches
+        back from it (`step_boards.wire_boards`).
+        """
         payload: dict[str, Any] = {}
         log = self._drain_pending_action_log()
         auto_passed = self._auto_passed_since_surface
         self._auto_passed_since_surface = 0
+        boards = wire_boards(self._step_boards, projection)
+        self._step_boards = []
         if log:
             payload["log"] = log
         if auto_passed:
             payload["auto_passed"] = auto_passed
+        if boards:
+            payload["boards"] = boards
         return payload
 
     def _advance_protocol_revision(self) -> None:
@@ -2045,6 +2059,8 @@ class GameSession:
 
         live_events = viewer_events[self.human_seat]
         self.presentation_events.extend(live_events)
+        if live_events:
+            self._keep_step_board(live_events)
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
                 -MAX_PRESENTATION_EVENTS:
@@ -2056,6 +2072,26 @@ class GameSession:
                 presentation=deepcopy(live_events),
             )
         return authority_events
+
+    def _keep_step_board(self, events: list[dict[str, Any]]) -> None:
+        """Keep the person's board after a step that added `events` to their track.
+
+        Live play only: Watch and Replay have their own transport.
+        """
+        if self.watch_mode or self.env is None:
+            return
+        # Validated as the frame's projection is, so it patches cleanly against it.
+        board = LegacyHeroObservation.model_validate(
+            decision_surface_view(self.env, self.human_seat)
+        ).model_dump(mode="json")
+        self._step_boards.append(
+            StepBoard(
+                first=int(events[0]["seq"]),
+                last=int(events[-1]["seq"]),
+                projection=board,
+            )
+        )
+        del self._step_boards[:-MAX_STEP_BOARDS]
 
     def _publish_current_prompt(self) -> PublishedPrompt | None:
         if self.obs is None or self.obs.game_over:
@@ -2327,7 +2363,7 @@ class GameSession:
         )
         frame = recovery["frame"]
         prompt = self.published_prompt
-        transient = self._drain_surface_metadata()
+        transient = self._drain_surface_metadata(frame["projection"])
         payload: dict[str, Any] = {
             "type": "game_over" if frame["projection"]["game_over"] else "observation",
             "data": frame["projection"],

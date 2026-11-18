@@ -562,6 +562,16 @@ export interface FrameUpdate {
   /** Compatibility narration stays outside the immutable canonical frame. */
   log?: LogLine[];
   auto_passed?: number;
+  /** The person's board after each step of this batch, as patches back from the frame (`table/boards.ts`). */
+  boards?: StepBoardPatch[];
+}
+
+/** One step board on the wire: the board after presentation events `first`..`last`. */
+export interface StepBoardPatch {
+  first: number;
+  last: number;
+  /** A `PatchNode` (`table/boards.ts`) onto the board after this one, or the frame's. */
+  patch: unknown;
 }
 
 export interface RecoveryEnvelope {
@@ -824,6 +834,7 @@ export type ServerMessage = (
       deck_names?: DeckNames;
       asset_pack?: AssetPackReference | null;
       auto_passed?: number;
+      boards?: StepBoardPatch[];
       session_id?: string;
       resume_token?: string;
       frame?: ExperienceFrame;
@@ -838,6 +849,7 @@ export type ServerMessage = (
       deck_names?: DeckNames;
       asset_pack?: AssetPackReference | null;
       auto_passed?: number;
+      boards?: StepBoardPatch[];
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;
     }
