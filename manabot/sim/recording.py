@@ -48,7 +48,10 @@ def record_actions(
         "leg": 0,
         "seat_players": list(players),
         "match_hypers": MatchConfig.from_players(
-            first, second, decklists=native.decklists
+            first,
+            second,
+            decklists=native.decklists,
+            priority_mana_taps=native.priority_mana_taps,
         ).model_dump(),
         "observation_hypers": ObservationConfig().model_dump(),
         "world": managym.world_identity(),

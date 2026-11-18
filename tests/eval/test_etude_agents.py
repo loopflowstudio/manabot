@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.records import checkpoint_player
+from etude.eval.records import Code, checkpoint_player
 from etude.records import ArtifactRef
 import numpy as np
 import pytest
@@ -14,15 +14,22 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.eval.admission import register_anchor
 from manabot.eval.agent_loader import load
-from manabot.eval.agents import Sampler, build, game_players
+from manabot.eval.agents import Sampler, build, game_players, registration
 import manabot.eval.game as game
-from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.eval.match import play_cell
+from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import prepare
 from manabot.sim.card_evidence import EvidenceRef
+from manabot.sim.matchup import DeckMatchup
+from manabot.sim.replay import replay_games
 import managym
+from managym.recording import read_records
+from managym.replay import walk
 from managym.statistics import Reduction
+from tests.eval.arena_fixture import arena_fixture
 from tests.fixtures.evaluation_callbacks import PanicException
 
 
@@ -95,7 +102,7 @@ def test_native_failures_remain_rows_across_etudes_game_process(
     case: str,
 ) -> None:
     from etude.eval.query import statsdb
-    from etude.eval.records import Benchmark, Code, Environment, Seating
+    from etude.eval.records import Benchmark, Environment, Seating
     from etude.eval.tournament import evaluating
 
     from manabot.eval.agents import AGENTS
@@ -197,3 +204,87 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
     assert len(actual) == len(expected)
     for single, joined in zip(expected, actual, strict=True):
         np.testing.assert_allclose(joined, single, atol=1e-6, rtol=1e-5)
+
+
+def test_checkpoint_priority_taps_follow_seats_through_replay(tmp_path: Path) -> None:
+    torch.manual_seed(385)
+    matchup = DeckMatchup(
+        population_sha256="a" * 64,
+        entries=("forest", "mountain"),
+        lists=(managym.Deck({"Forest": 12}), managym.Deck({"Mountain": 12})),
+    )
+    key = arena_fixture().key.model_copy(
+        update={
+            "world": managym.WORLD_VERSION,
+            "content_suite": matchup.content_suite,
+            "viewer_boundary": "acting-viewer",
+        }
+    )
+    registrations = {}
+    agents = {}
+    for name, taps in (("tap-on", True), ("tap-off", False)):
+        space = ObservationSpace(ObservationConfig(priority_mana_taps=taps))
+        model = ActorCritic(
+            space, ModelConfig(world="world", hidden_dim=8, num_attention_heads=2)
+        )
+        path = tmp_path / f"{name}.safetensors"
+        save_checkpoint(model, space, path, player_configs=None)
+        ref = CheckpointRef(
+            address=f"fixture/{name}",
+            artifact=ArtifactRef(
+                uri=path.as_uri(),
+                sha256=file_sha256(path),
+                size_bytes=path.stat().st_size,
+            ),
+        )
+        player = checkpoint_player(ref)
+        registrations[name] = registration(
+            player,
+            name=name,
+            match=matchup.match(),
+            content_suite=matchup.content_suite,
+            role="challenger",
+        )
+        agents[name] = build(player, {ref.key: load(ref)})
+    registrations["heuristic"] = register_anchor(
+        registrations["tap-on"], "heuristic", player_id="heuristic"
+    )
+    agents["heuristic"] = build(Code(name="heuristic"), {})
+    for opponent in ("tap-off", "heuristic"):
+        rows, trace, receipt = play_cell(
+            key=key,
+            player_a=registrations["tap-on"],
+            player_b=registrations[opponent],
+            authored_matchup=matchup,
+            deal_seeds=(385,),
+            legs=(0, 1),
+            agents=agents,
+            out_dir=tmp_path / opponent,
+            card_evidence_dir=tmp_path / opponent / "cards",
+        )
+        assert receipt["passed"] and len(rows) == 2
+        for record in read_records(Path(trace["path"])):
+            metadata = record.context["evaluation"]
+            seat = metadata["seat_players"].index("tap-on")
+            pair = (seat == 0, seat == 1)
+            assert tuple(metadata["match_hypers"]["priority_mana_taps"]) == pair
+            assert record.games[0].setup().priority_mana_taps == pair
+            replay = walk(record)
+            offered = {
+                choice.observation.agent.player_index
+                for choice in replay
+                if any(
+                    action.action_type == managym.ActionEnum.TAP_FOR_COST
+                    for action in choice.observation.action_space.actions
+                )
+            }
+            # Basic-land decks have no payments; every offered tap is at priority.
+            assert offered == {seat}
+            assert replay.stop is not None and replay.stop.status == "complete"
+
+            # The native commitments still replay if only the outer match metadata
+            # is changed. Verification must catch the conflicting seat assignment.
+            metadata["match_hypers"]["priority_mana_taps"] = list(reversed(pair))
+            assert not replay_games(
+                [record.model_dump(mode="json", by_alias=True)]
+            ).passed

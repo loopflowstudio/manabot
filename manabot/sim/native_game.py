@@ -134,39 +134,55 @@ def execute_game(
     )
     try:
         built = {}
+        tap_players: set[str] = set()
         in_child = _InChildPlayers(backend_factory)
-        if "match_hypers" in game:
-            require_open_decklists(
-                MatchConfig.model_validate(game["match_hypers"]).decklists,
-                registrations,
-            )
+        match = (
+            MatchConfig.model_validate(game["match_hypers"])
+            if "match_hypers" in game
+            else None
+        )
+        if match is not None:
+            require_open_decklists(match.decklists, registrations)
         for registration in registrations:
             responsible = registration.player_id
             send(("phase", responsible))
             if agents is not None:
                 player = agents[responsible]
-                player.admit(MatchConfig.model_validate(game["match_hypers"]))
+                assert match is not None
+                player.admit(match)
                 built[responsible] = (player, player.space)
-                continue
-            with perf.span("player_startup"):
-                built[responsible] = in_child.build(
-                    registration,
-                    seed=game["player_seeds"][responsible],
-                    checkpoint_path=checkpoint_paths.get(responsible),
-                )
+            else:
+                with perf.span("player_startup"):
+                    built[responsible] = in_child.build(
+                        registration,
+                        seed=game["player_seeds"][responsible],
+                        checkpoint_path=checkpoint_paths.get(responsible),
+                    )
+            player_space = built[responsible][1]
+            if (
+                registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
+                and player_space is not None
+                and player_space.encoder.config.priority_mana_taps
+            ):
+                tap_players.add(responsible)
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
         if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
             raise ValueError("players have different observation ABIs")
         space = spaces[0] if spaces else ObservationSpace()
+        if match is not None:
+            first, second = game["seat_players"]
+            match.priority_mana_taps = (first in tap_players, second in tap_players)
+            resolved = match.model_dump(mode="json")
+            if resolved != game["match_hypers"]:
+                game["match_hypers"] = resolved
+                send(("match", resolved))
         game["observation_hypers"] = space.encoder.config.model_dump()
         send(("observation", game["observation_hypers"]))
         game["runtime_identities"] = runtime_fingerprints(
             game["deal_seed"],
-            match_config=MatchConfig.model_validate(game["match_hypers"])
-            if "match_hypers" in game
-            else None,
+            match_config=match,
             observation_space=space,
         )
         game["runtime_identities"]["arena_source_sha256"] = source_bundle_sha256(

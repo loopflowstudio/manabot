@@ -26,7 +26,12 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.run_settings import RunSettings
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.world import (
@@ -85,9 +90,9 @@ def _agent() -> ActorCritic:
     )
 
 
-def _collector(decks: UniformDecks) -> Collector:
+def _collector(decks: UniformDecks, *, priority_mana_taps: bool = False) -> Collector:
     return open_collector(
-        ObservationSpace(),
+        ObservationSpace(ObservationConfig(priority_mana_taps=priority_mana_taps)),
         Match(decks.match_config()),
         Reward(RewardConfig()),
         num_envs=2,
@@ -573,3 +578,22 @@ def test_mixed_training_games_export_the_resolved_disclosure(
         assert replay.game.setup().decklists == disclosure
         settings.add(disclosure)
     assert settings == {"open", "closed"}
+
+
+def test_priority_taps_follow_sampled_self_play_roots(decks: UniformDecks) -> None:
+    collector = _collector(decks, priority_mana_taps=True)
+    try:
+        collect(collector, _agent(), 1)
+        assert collector.stats.games > 0
+        for match, setup in zip(
+            collector.stream_matches,
+            collector._env.current_player_configs(),
+            strict=True,
+        ):
+            assert (
+                setup.priority_mana_taps
+                == match.config.priority_mana_taps
+                == (True, True)
+            )
+    finally:
+        close_collector(collector)

@@ -106,6 +106,7 @@ class ObservationConfig(BaseConfig):
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
     )
+    priority_mana_taps: bool = Field(default=False, exclude_if=lambda value: not value)
     max_focus_objects: int = 2
     max_events: int = 32
     policy_history_version: Literal[0, 1] = Field(
@@ -169,6 +170,10 @@ class MatchConfig(BaseConfig):
         default="open", exclude_if=lambda value: value == "open"
     )
 
+    priority_mana_taps: tuple[bool, bool] = Field(
+        default=(False, False), exclude_if=lambda value: not any(value)
+    )
+
     @field_validator("world")
     @classmethod
     def validate_world(cls, value: str | None) -> str | None:
@@ -199,6 +204,7 @@ class MatchConfig(BaseConfig):
         second: PlayerConfig,
         *,
         decklists: DecklistDisclosure,
+        priority_mana_taps: tuple[bool, bool] = (False, False),
     ) -> "MatchConfig":
         """Record a native root in seat order, rejecting asymmetric match settings."""
         if first.world != second.world:
@@ -215,6 +221,7 @@ class MatchConfig(BaseConfig):
             villain_sideboard=second.sideboard,
             world=first.world,
             decklists=decklists,
+            priority_mana_taps=priority_mana_taps,
         )
 
     @classmethod

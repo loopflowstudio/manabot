@@ -5,8 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ObservationConfig
+from manabot.infra.config import MatchConfig, ObservationConfig
+from manabot.infra.identity import canonical_sha256
 import managym
 from managym.recording import GameRecord, ScalarCapture
 
@@ -111,3 +113,17 @@ def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
             # With only lands, the next surfaced decision is the opponent's land.
             # At least both seats' passes at the current main phase were skipped.
             assert env.skip_trivial_count() >= before + 2
+
+
+def test_priority_taps_preserve_default_config_identity_and_follow_seats() -> None:
+    for config in (
+        ObservationConfig(priority_mana_taps=False),
+        MatchConfig(priority_mana_taps=(False, False)),
+    ):
+        stored = config.model_dump(mode="json")
+        assert "priority_mana_taps" not in stored
+        assert type(config).model_validate(stored) == config
+        assert canonical_sha256(stored) == canonical_sha256(type(config)().model_dump())
+    match = Match(MatchConfig(priority_mana_taps=(True, False)))
+    assert match.to_rust().priority_mana_taps == (True, False)
+    assert match.swapped().to_rust().priority_mana_taps == (False, True)
