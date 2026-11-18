@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 from typer.testing import CliRunner
@@ -9,8 +10,10 @@ from typer.testing import CliRunner
 from experiments.tla_frontier import PROTOCOL, corpus, deck_matchup
 from manabot.cli import app
 from manabot.eval.evaluation import EvaluationRequest, EvaluationResult
+from manabot.eval.local import LocalComparison
 from manabot.eval.recheck import ReferencePair, StrengthReference
 from manabot.infra.artifacts import StoredArtifact
+from manabot.infra.identity import file_sha256
 from manabot.sim.matchup import DeckMatchup
 from tests.eval.test_local_evaluation import _anchor_request, _replayed_rows
 
@@ -43,8 +46,7 @@ def test_cli_requires_every_pair_before_comparing(
         *,
         deadline: float,
         heuristic_actions: int,
-        show_binding: bool,
-    ) -> EvaluationRequest:
+    ) -> LocalComparison:
         index = len(observed)
         observed.append(seeds)
         pair = ReferencePair.model_validate(pairs[index])
@@ -53,7 +55,12 @@ def test_cli_requires_every_pair_before_comparing(
         assert opponent == "heuristic" and heuristic_actions == 64
         request = _anchor_request(seeds)
         key = request.key.model_copy(update={"content_suite": matchup.content_suite})
-        return request.model_copy(update={"key": key, "authored_matchup": matchup})
+        return LocalComparison(
+            request=request.model_copy(
+                update={"key": key, "authored_matchup": matchup}
+            ),
+            report=None,
+        )
 
     def evaluate(
         request: EvaluationRequest, *, deadline: float, out_dir: Path
@@ -100,3 +107,43 @@ def test_references_keep_the_original_frontier_population() -> None:
         for pair, original in zip(pairs, PROTOCOL.pairs, strict=True):
             assert pair.matchup == deck_matchup(population, PROTOCOL, original)
             assert pair.deal_seed == original.deal
+
+
+@pytest.mark.parametrize("pilot", ["v9/pilot.pt", "v11/pilot.safetensors"])
+def test_recheck_retains_the_admitted_pilots_programs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pilot: str
+) -> None:
+    path = REFERENCES.parents[1] / "tests/fixtures/pinned_pilot" / pilot
+    digest = file_sha256(path)
+    monkeypatch.setenv("MANABOT_ARTIFACT_CACHE", str(tmp_path))
+    shutil.copyfile(path, tmp_path / digest)
+    source = json.loads((REFERENCES / "tla-frontier-small-u1952.json").read_bytes())
+    source["checkpoint"].update(sha256=digest, bytes=path.stat().st_size)
+    source["recorded"].update(score=0.5, low=0, high=1)
+    pairs = json.loads((REFERENCES / source["matchups"]).read_bytes())
+    (tmp_path / source["matchups"]).write_text(json.dumps(pairs[:1]))
+    reference = tmp_path / "ref.json"
+    reference.write_text(json.dumps(source))
+
+    def evaluate(
+        request: EvaluationRequest, *, deadline: float, out_dir: Path
+    ) -> EvaluationResult:
+        result = EvaluationResult(request=request, rows=_replayed_rows(request))
+        result.validate_cohort()
+        return result
+
+    monkeypatch.setattr("manabot.eval.recheck.evaluate_local", evaluate)
+    out = tmp_path / "out"
+    result = CliRunner().invoke(app, ["recheck", str(reference), "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    report = json.loads((out / "binding.json").read_bytes())
+    assert report["stored_programs"] > 0
+    if pilot.startswith("v9"):
+        changed = report["changed_programs"]
+        assert "tla.aang_swift_savior" in changed
+        assert f"{len(changed)} changed" in result.output
+        assert result.output.count("  binding ") == 1
+        assert not any(key in result.output for key in changed)
+    else:
+        assert report["changed_programs"] == []
+        assert "  binding " not in result.output

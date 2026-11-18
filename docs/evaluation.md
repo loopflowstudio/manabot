@@ -218,6 +218,7 @@ uv run manabot recheck experiments/references/tla-frontier-small-u1952.json
 ```text
 tla-frontier-small-u1952 against heuristic, 16 deck pairs
   recorded  0.72 (0.61–0.81), 64 games, at ab2b757d9
+  binding   360 stored programs, 136 changed; keys renamed 1, retired 45; 396 new token rows, 103 new name rows
   opponent  heuristic changed since the record (452d7b5357, 86ad8e9c6a)
   measured  0.68 (0.59–0.76), 128 games, at 5f12080d81
   inside the recorded interval
@@ -244,9 +245,13 @@ references are [u25](../experiments/references/tla-frontier-small-u25.json)
 and [u800](../experiments/references/tla-frontier-small-u800.json). Both
 passed checkpoint admission. The proof run measured u1952 only.
 
-Recheck loads the checkpoint through the ordinary loader, so it also prints
-the [load report](observation-and-model.md#running-a-checkpoint-on-a-later-revision),
-and plays through [local evaluation](#quick-local-evaluation): paired deals,
+When catalog binding changes programs, keys or rows, recheck prints one line
+of counts. With `--out DIR`, a catalog-bound checkpoint also leaves
+`DIR/binding.json` beside the measurement. Its `changed_programs` array names
+each card whose stored program differs from the running catalog. See the
+[checkpoint load report](observation-and-model.md#running-a-checkpoint-on-a-later-revision).
+
+Recheck plays through [local evaluation](#quick-local-evaluation): paired deals,
 both seats, CPU, no rental. Run it on a quiet machine; it measures strength
 only and says nothing about speed.
 

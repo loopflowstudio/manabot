@@ -228,7 +228,11 @@ class Backend(Protocol):
     def rollout(self) -> ModuleType: ...
 
     def load_policy(
-        self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+        self,
+        path: str | PolicyCheckpoint,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
     ) -> tuple[BackendPolicy, ObservationSpace]:
         """Read a portable policy and validate its world and input contract."""
         ...

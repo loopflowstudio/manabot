@@ -45,7 +45,7 @@ from manabot.model.architecture import (
 )
 from manabot.model.interface import model_interface, world_fields
 from manabot.model.world import checkpoint_source, written_at
-from manabot.policy.binding import bind_catalog
+from manabot.policy.binding import BindingReport, bind_catalog
 from manabot.policy.prepare import Layout, Tables
 
 type ParameterArrays = Mapping[str, np.ndarray]
@@ -178,6 +178,7 @@ class PolicyCheckpoint:
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
     column_widths: dict[str, int] | None = None
+    report: BindingReport | None = None
 
     def receipt(self) -> ArchitectureReceipt:
         return architecture_receipt(
@@ -394,26 +395,14 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     except ValueError as error:
         raise ValueError(f"{error}; {written_at(record)}") from error
     logging.getLogger(__name__).info(
-        "Policy input v%s (%s). Player columns %d/%d. Stored programs %d, changed %d: %s. "
-        "Token keys renamed %d, retired %d, unexplained 0. New embedding rows %d tokens, %d names.",
+        "Policy input v%s (%s). Player columns %d/%d. %s.",
         checkpoint.space.encoder.config.policy_input_version,
         written_at(record),
         width,
         checkpoint.space.encoder.player_dim,
-        len(
-            set(interface.writer["definition_keys"]).intersection(
-                interface.current["definition_keys"]
-            )
-        ),
-        len(report.changed_programs),
-        # Keyless back faces use registry names, which can contain commas.
-        "; ".join(report.changed_programs) or "none",
-        report.renamed_keys,
-        report.retired_keys,
-        report.new_tokens,
-        report.new_names,
+        report.summary(),
     )
-    return replace(bound, column_widths=interface.widths)
+    return replace(bound, column_widths=interface.widths, report=report)
 
 
 # safetensors: an 8-byte little-endian header length, a JSON header naming each

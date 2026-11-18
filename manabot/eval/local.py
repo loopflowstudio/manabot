@@ -7,7 +7,6 @@ an Etude checkpoint record that could fetch remote bytes.
 """
 
 import argparse
-import logging
 import math
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -32,7 +31,8 @@ from manabot.eval.evaluation import (
 from manabot.eval.models import EvaluationKey
 from manabot.infra.artifacts import StoredArtifact, materialize_artifact
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import StrictModel, canonical_sha256
+from manabot.policy.binding import BindingReport
 from manabot.policy.protocol import Backend
 from manabot.sim.child import ChildProcess
 from manabot.sim.matchup import (
@@ -41,6 +41,11 @@ from manabot.sim.matchup import (
     DeckMatchup,
     selected_match,
 )
+
+
+class LocalComparison(StrictModel):
+    request: EvaluationRequest
+    report: BindingReport | None
 
 
 def checkpoint_request(
@@ -61,9 +66,34 @@ def checkpoint_request(
     setup. CLI preparation is supervised; API callers may prepare requests ahead
     of allocating execution. Registered bytes are verified again by execution.
     """
+    return local_comparison(
+        checkpoint,
+        backend=backend,
+        opponent=opponent,
+        deal_seeds=deal_seeds,
+        authored_matchup=authored_matchup,
+        include_mirrors=include_mirrors,
+        heuristic_actions=heuristic_actions,
+        game_seconds=game_seconds,
+        max_commands=max_commands,
+    ).request
+
+
+def local_comparison(
+    checkpoint: Path,
+    *,
+    backend: Backend,
+    opponent: Path | AnchorKind = "heuristic",
+    deal_seeds: tuple[int, ...] = (101,),
+    authored_matchup: AuthoredMatchup | DeckMatchup | None = None,
+    include_mirrors: bool = False,
+    heuristic_actions: int | None = None,
+    game_seconds: float = 120,
+    max_commands: int = 10_000,
+) -> LocalComparison:
     match = authored_matchup.match() if authored_matchup else selected_match()
     suite = authored_matchup.content_suite if authored_matchup else SELECTED_SUITE
-    candidate = register_checkpoint(
+    admitted = register_checkpoint(
         checkpoint,
         backend=backend,
         match=match,
@@ -71,7 +101,8 @@ def checkpoint_request(
         player_id="local-candidate",
         display_name="Local candidate",
         allow_deck_repetition=include_mirrors,
-    ).registration
+    )
+    candidate = admitted.registration
     paths = {candidate.player_id: str(checkpoint.resolve())}
     if isinstance(opponent, Path):
         other = register_checkpoint(
@@ -101,7 +132,7 @@ def checkpoint_request(
         anchor_cohort_sha256=canonical_sha256(other.model_dump()),
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
-    return EvaluationRequest(
+    request = EvaluationRequest(
         key=key,
         candidate=candidate,
         opponent=other,
@@ -112,6 +143,7 @@ def checkpoint_request(
         game_seconds=game_seconds,
         max_commands=max_commands,
     )
+    return LocalComparison(request=request, report=admitted.report)
 
 
 def _prepare(
@@ -124,16 +156,12 @@ def _prepare(
     game_seconds: float,
     max_commands: int,
     heuristic_actions: int | None,
-    show_binding: bool,
 ) -> None:
     try:
-        if show_binding:
-            logging.basicConfig()
-            logging.getLogger("manabot.policy.checkpoint").setLevel(logging.INFO)
         if isinstance(checkpoint, StoredArtifact):
             checkpoint = materialize_artifact(checkpoint)
         torch.set_num_threads(1)
-        request = checkpoint_request(
+        comparison = local_comparison(
             checkpoint,
             backend=resolve("torch"),
             opponent=opponent,
@@ -144,7 +172,7 @@ def _prepare(
             game_seconds=game_seconds,
             max_commands=max_commands,
         )
-        sender.send((request.model_dump_json(), None))
+        sender.send((comparison.model_dump_json(), None))
     except Exception as exc:
         sender.send((None, f"{type(exc).__name__}: {exc}"))
     finally:
@@ -162,8 +190,7 @@ def prepare_local_request(
     game_seconds: float = 120,
     max_commands: int = 10_000,
     heuristic_actions: int | None = None,
-    show_binding: bool = False,
-) -> EvaluationRequest:
+) -> LocalComparison:
     """Resolve and admit checkpoint bytes within the remaining allocation."""
     process = ChildProcess(
         "manabot.eval.local:_prepare",
@@ -176,7 +203,6 @@ def prepare_local_request(
             game_seconds,
             max_commands,
             heuristic_actions,
-            show_binding,
         ),
     )
     try:
@@ -187,7 +213,7 @@ def prepare_local_request(
         payload, error = process.connection.recv()
         if error:
             raise ValueError(error)
-        return EvaluationRequest.model_validate_json(payload)
+        return LocalComparison.model_validate_json(payload)
     finally:
         process.close()
 
@@ -286,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.opponent in OPPONENT_NAMES
                 else Path(args.opponent)
             )
-            request = prepare_local_request(
+            comparison = prepare_local_request(
                 args.checkpoint,
                 opponent,
                 tuple(args.deal_seed or [101]),
@@ -296,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
                 game_seconds=args.game_seconds,
                 max_commands=args.max_commands,
             )
+            request = comparison.request
         atomic_json(args.out / "request.json", request.model_dump(mode="json"))
         result = evaluate_local(request, deadline=deadline, out_dir=args.out / "panel")
     except Exception as exc:

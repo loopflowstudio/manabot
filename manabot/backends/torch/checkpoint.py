@@ -114,13 +114,12 @@ def load_checkpoint(
 
     if isinstance(path, StoredArtifact):
         path = str(materialize_artifact(path))
-    checkpoint = read_policy(path)
-    agent = restore_policy(
-        checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+    agent, space = BACKEND.load_policy(
+        path, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
     )
     if include_belief_binding:
-        return agent, checkpoint.space, agent.belief_binding
-    return agent, checkpoint.space
+        return agent, space, agent.belief_binding
+    return agent, space
 
 
 def read_policy(path: str) -> PolicyCheckpoint:
@@ -369,11 +368,16 @@ class _Torch:
 
     @staticmethod
     def load_policy(
-        path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+        path: str | PolicyCheckpoint,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
     ) -> tuple[ActorCritic, ObservationSpace]:
-        return load_checkpoint(
-            path, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+        checkpoint = read_policy(path) if isinstance(path, str) else path
+        agent = restore_policy(
+            checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
         )
+        return agent, checkpoint.space
 
     read_policy = staticmethod(read_policy)
 

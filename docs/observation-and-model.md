@@ -271,7 +271,10 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 model, observation_space = load_checkpoint("final.pt")
 ```
 
-The loader logs the binding at INFO level. On the unmodified u1952 file,
+The bound `PolicyCheckpoint.report` holds the catalog binding counts and
+changed card keys. The loader logs the counts at INFO level. To retain the
+full report with a strength measurement, run `recheck` with `--out DIR`
+and read `DIR/binding.json`. On the unmodified u1952 file,
 both player rows read 73 of the running engine's 74 columns. The model uses
 360 stored card programs. The report names the 136 that serialize differently
 in this engine. All 348 learned names still resolve. The loader initializes

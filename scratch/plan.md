@@ -379,38 +379,16 @@ requirement, the legacy encoder.
    formats expose the same unexplained-key refusal in Academy. The two small
    pilots and the original u1952 replayed locally. Linux verification is at CI.
 
-5. **The load report is a record (next).** From the concept review of the
-   built change (`scratch/concept-review.html`, 2026-11-18). The report is
-   today one INFO line that `admit_checkpoint` formats and drops; `recheck`
-   shows it by configuring logging inside its child (`show_binding` in
-   `manabot/eval/local.py`), where 136 card keys fill the screen above the
-   score, and `measured.json` does not say what was loaded.
-   - `BindingReport` (`manabot/policy/binding.py`) gains `stored_programs`
-     (writer definitions still defined). `PolicyCheckpoint` gains
-     `report: BindingReport | None`, set by `admit_checkpoint`; `None` when
-     nothing was bound. `load_checkpoint`'s return type is unchanged.
-   - The INFO line keeps its counts and drops the card list.
-   - `recheck` writes the whole report to `<out>/binding.json` and prints one
-     `binding` line of counts under `recorded`; it prints nothing for a
-     checkpoint written on this revision. The `show_binding` flag and the
-     child's `logging.basicConfig` go; obtain the report from
-     `backend.read_policy(path).report` in the admission child and return it
-     with the request.
-   - `tests/eval/test_strength_recheck.py`: a rebinding fixture leaves
-     `binding.json` naming its changed programs. `tests/model/
-     test_checkpoint_binding.py`: `write_container(read_container(old))`
-     reads back with equal action probabilities (the
-     `column_widths is not None` branch of `write_container` has no caller or
-     test today).
-   - `docs/observation-and-model.md` ("The loader logs the binding…") and
-     `docs/evaluation.md` say where the report is read.
-   **Chosen:** Academy shows refusals only; a report summary on a loaded
-   bot's row (choice 14) is passed over as a new UI surface. Not in this
-   slice: fixed-match checkpoints, and naming or adding lineage to "save a
-   carried player" (MTG-386).
-
-PR #558 is at 2ec5f2334c with CI pending. After slice 5, push and stop for
-review. Nothing lands.
+5. **The load report is a record (built).** The candidate's admitted checkpoint
+   carries its catalog binding report through local preparation to recheck.
+   The INFO log and CLI show counts. `--out` retains the full report in
+   `binding.json`. Academy continues to show admission refusals.
+   The CLI fixture admitted the pinned v9 pilot in a child and retained
+   136 changed programs out of 360, including `tla.aang_swift_savior`.
+   The v11 fixture produced no binding line. Saving and reloading a rebound
+   container preserved action probabilities exactly on the fixture decision.
+   Both targeted test files passed locally (9 tests).
+   The next step is human review of PR #558.
 
 ## Done when
 

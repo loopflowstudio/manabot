@@ -101,3 +101,8 @@ say so if they should carry a note.
 26. Saving a carried player keeps the implicit metadata rewrite in
     `write_container`, with a round-trip test; naming that action and its
     lineage is left to MTG-386.
+
+27. A catalog admission with zero changes still writes its complete report
+    under `--out` and leaves the console quiet. Registration constructs the
+    backend policy from the same admitted tensors that supplied the report,
+    avoiding a second file read.

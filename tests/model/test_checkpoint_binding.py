@@ -15,6 +15,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.policy import buckets
 from manabot.policy.binding import packed
+from manabot.policy.checkpoint import read_container, write_container
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -132,6 +133,15 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
         prepared.agent_player, batch["agent_player"][..., :-1]
     )
     assert np.isfinite(loaded.evaluate(prepared)[0]).all()
+
+    if not legacy_file:
+        carried = tmp_path / "carried.safetensors"
+        write_container(carried, read_container(path))
+        restored, _ = load_checkpoint(str(carried))
+        np.testing.assert_array_equal(
+            restored.evaluate_probabilities(restored.prepare(batch))[0],
+            loaded.evaluate_probabilities(prepared)[0],
+        )
 
     keys = state["semantic_cards.record_token_keys"]
     keys[0] = packed(3, 12345)

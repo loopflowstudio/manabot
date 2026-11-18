@@ -1,5 +1,6 @@
 """Remeasure a strength reference, resampling the same units as its writer."""
 
+from dataclasses import asdict
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -65,15 +66,28 @@ def measure_pairs(
     for index, pair in enumerate(pairs):
         if time.time() >= deadline:
             raise TimeoutError("allocation exhausted before the next pair")
-        request = prepare_local_request(
+        comparison = prepare_local_request(
             reference.checkpoint,
             reference.opponent,
             tuple(pair.deal_seed + offset for offset in reference.deal_offsets),
             pair.matchup,
             deadline=deadline,
             heuristic_actions=reference.max_actions,
-            show_binding=index == 0,
         )
+        request = comparison.request
+        report = comparison.report
+        if index == 0 and report is not None:
+            atomic_json(out / "binding.json", asdict(report))
+            if any(
+                (
+                    report.changed_programs,
+                    report.new_names,
+                    report.new_tokens,
+                    report.renamed_keys,
+                    report.retired_keys,
+                )
+            ):
+                print(f"  binding   {report.summary()}", flush=True)
         if (
             index == 0
             and request.opponent.source_sha256 != reference.opponent_source_sha256

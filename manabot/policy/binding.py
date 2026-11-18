@@ -23,11 +23,19 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class BindingReport:
+    stored_programs: int
     changed_programs: tuple[str, ...]
     new_tokens: int
     new_names: int
     retired_keys: int
     renamed_keys: int
+
+    def summary(self) -> str:
+        return (
+            f"{self.stored_programs} stored programs, {len(self.changed_programs)} changed; "
+            f"keys renamed {self.renamed_keys}, retired {self.retired_keys}; "
+            f"{self.new_tokens} new token rows, {self.new_names} new name rows"
+        )
 
 
 def packed(kind: int, value: int) -> int:
@@ -194,5 +202,10 @@ def bind_catalog(
     result["name_candidates.definitions"] = name_defs
     result["name_candidates.program_rows"] = buffers["definition_rows"][name_defs]
     return replace(checkpoint, parameters=params, buffers=result), BindingReport(
-        tuple(changed), count, len(set(names) - set(stored_names)), retired, renamed
+        stored_programs=len(now.keys() & definitions),
+        changed_programs=tuple(changed),
+        new_tokens=count,
+        new_names=len(set(names) - set(stored_names)),
+        retired_keys=retired,
+        renamed_keys=renamed,
     )

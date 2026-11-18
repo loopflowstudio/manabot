@@ -198,11 +198,15 @@ class MLXBackend:
         self.precision = precision
 
     def load_policy(
-        self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+        self,
+        path: str | PolicyCheckpoint,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
     ) -> tuple[MLXActorCritic, ObservationSpace]:
         if bucketed_shapes or live_tokens:
             raise ValueError("MLX does not support bucketed or live-token inference")
-        checkpoint = read_container(path)
+        checkpoint = read_container(path) if isinstance(path, str) else path
         policy = assemble(checkpoint, precision=self.precision)
         # read_container has already validated the world. Keep it on the loaded
         # policy so simulation's common deck admission cannot silently bypass it.
