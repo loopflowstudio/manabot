@@ -134,6 +134,15 @@ def test_training_jobs_read_as_addressed_runs(
     assert all(request.job.smoke is not None for request in requests)
 
 
+def test_priority_taps_rental_limits_apply_to_all_four_runs() -> None:
+    requests = read_training_jobs(
+        EXPERIMENTS / "priority_taps.py", ("--hours", "0.875", "--usd-per-run", "0.79")
+    )
+    assert len(requests) == 4
+    assert all(request.job.max_hours == 0.875 for request in requests)
+    assert all(str(request.job.max_usd) == "0.79" for request in requests)
+
+
 def test_training_declarations_return_typed_jobs_that_lower() -> None:
     declared = [
         *batched_baseline.training_jobs(),

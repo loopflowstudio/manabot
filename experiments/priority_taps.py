@@ -157,7 +157,9 @@ def train(config: Arm) -> None:
         self_play(settings(config), run, updates=config.updates)
 
 
-def training_jobs(revision: str | None = None) -> list[TrainingJob]:
+def training_jobs(
+    revision: str | None = None, hours: float = 3, usd_per_run: float = 1.95
+) -> list[TrainingJob]:
     arms = [Arm(size=size, taps=taps) for size in SIZES for taps in (False, True)]
     given = corpus_input()
     return [
@@ -172,8 +174,8 @@ def training_jobs(revision: str | None = None) -> list[TrainingJob]:
             setup=machine_setup(" --extra artifacts"),
             inputs=(given,),
             extras=("artifacts",),
-            max_hours=3,
-            max_usd=Decimal("1.95"),
+            max_hours=hours,
+            max_usd=Decimal(str(usd_per_run)),
             max_attempts=1,
         )
         for arm in arms
