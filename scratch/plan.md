@@ -1,5 +1,48 @@
 # MTG-353 — checkpoint compatibility and the training corpus
 
+## Human review of 2026-11-18, third round — items 1 and 4 built, 5 next
+
+Built (questions 54-56): `training_corpus(file, source=storage)` selects the
+run and update a `.safetensors` policy records; new files record
+`source.etude_experiment`, older ones take `experiment=`; a file missing a
+record raises `UnknownCoverage` naming it. Outcome rows are written with
+`seat` (0 on the play) and `outcome_rows` in `manabot/reports/update_metrics.py`
+reads scalar, `position` and `seat` forms into the same rows. Checked:
+`tests/eval/test_training_corpus.py` (all three stored forms; file form on a
+real parent and child run), `tests/training/test_self_play.py`,
+`tests/training/test_outcome_tables.py`, the checkpoint-source test in
+`tests/model/test_world.py`: 18 passed. Not run: the guide's file example
+against a real `etude train` output directory (QA).
+
+Next: item 5, the gate step: the red Academy UI job, then publish to #558 and
+stop at human review.
+
+Jack Heart answered `scratch/concept-review.html` (the review written with a
+person; the graph's eighth review is in git at 309ed9febe): "1a 2a 3a 4 c:
+fix it in this PR 5b". The questions and what those answers select:
+
+1. Reaching the corpus from a checkpoint file: (a) build it in this PR.
+   `training_corpus` accepts a policy checkpoint file with `source=storage`
+   and selects the corpus from the run and update the file records. A file
+   that records neither raises, naming what is missing. Etude's reader needs
+   the experiment name as well as the run; if the file does not record it,
+   new files record it beside the run they already write, and an older file
+   takes the experiment as an argument. The guide's first example uses the
+   file form.
+2. One PR or two: (a) keep #558 as one.
+3. A setting within one matchup: (a) leave for later. No change.
+4. Seat spelling: "c: fix it in this PR". One spelling for which seat a row
+   is about, across the outcome rows, `corpus`, `game_settings` and
+   `card_statistics`: the native seat, 0 on the play. New runs write outcome
+   rows that way; runs already stored keep their bytes and are read through
+   the one reader into the same columns. Choose the column names once, say
+   them in the guide, and record the choice in `scratch/questions.md`.
+5. The red Academy UI job at the head commit: (b) the Task goes back through
+   its gate. Diagnose and fix the failure, or show it is unrelated and
+   already failing on main, before publishing.
+
+Publish to PR #558 and stop at human review; do not land. No paid run.
+
 ## Outcome
 
 A checkpoint can enter a new evaluation as cards, names and input columns

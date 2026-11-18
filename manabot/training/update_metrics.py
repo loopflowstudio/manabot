@@ -2,12 +2,16 @@
 
 `metric_row` flattens diagnostics into "/"-joined names. `phase_seconds` and
 `time_since` measure collection and learning time from live profilers.
+`outcome_scalars` and `parse_outcome_scalar` own the scalar names that runs
+before the outcome table logged.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 import re
+from typing import Literal
 
 from manabot.infra.profiler import Profiler
+from manabot.training.rollout.self_play import SelfPlayOutcome
 
 type MetricValue = float | int | str | bool
 type MetricRow = dict[str, MetricValue]
@@ -20,17 +24,41 @@ GAME_SETTINGS_TABLE = "training_game_settings"
 # each resolved deck entry's cards, and the facts that hold for the whole run.
 DECK_TABLE = "training_deck_cards"
 RUN_TABLE = "training_run"
-# Lists whose entries are named by fields, not by position. Self-play lists
-# occur only in the offline projection of a run's outcome tables
-# (`manabot.reports.update_metrics`); live updates log the table itself.
+# Lists whose entries are named by fields, not by position.
 _KEYED_LISTS = {
     "adaptive/exposures": ("cell", "seat"),
     "adaptive/allocations": ("stream", "game"),
     "adaptive/completed": ("stream", "game", "seat"),
     "adaptive/errors": ("cell",),
     "selection_groups": ("action_type", "terminal_distance"),
-    "self_play_outcomes": ("deck", "opponent_deck", "position"),
 }
+# Runs before the outcome table logged each count as the scalar
+# `self_play_outcomes/<deck>/<opponent>/<play|draw>/<wins|losses|draws>`, and
+# the offline projection still exposes table rows under those names. The
+# label's index is the native seat.
+SEAT_LABELS: tuple[Literal["play"], Literal["draw"]] = ("play", "draw")
+OUTCOME_COUNTS = ("wins", "losses", "draws")
+
+
+def outcome_scalars(rows: Iterable[SelfPlayOutcome]) -> dict[str, int]:
+    """Outcome rows under their historical scalar names."""
+    return {
+        f"{OUTCOME_TABLE}/{row['deck']}/{row['opponent_deck']}"
+        f"/{SEAT_LABELS[row['seat']]}/{count}": row[count]
+        for row in rows
+        for count in OUTCOME_COUNTS
+    }
+
+
+def parse_outcome_scalar(name: str) -> tuple[str, str, int, str] | None:
+    """Deck, opposing deck, native seat and count of a historical scalar name."""
+    parts = name.split("/")
+    if len(parts) != 5 or parts[0] != OUTCOME_TABLE:
+        return None
+    _, deck, opponent, label, count = parts
+    if label not in SEAT_LABELS or count not in OUTCOME_COUNTS:
+        raise ValueError(f"invalid self-play outcome {name!r}")
+    return deck, opponent, SEAT_LABELS.index(label), count
 
 
 def metric_row(diagnostic: Mapping[str, object]) -> MetricRow:

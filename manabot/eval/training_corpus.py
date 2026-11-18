@@ -15,15 +15,11 @@ from etude.train.read import RunData, read, read_all
 from pydantic import TypeAdapter
 
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
-from manabot.reports.update_metrics import scalar_updates
+from manabot.policy.checkpoint import read_metadata
+from manabot.reports.update_metrics import outcome_rows
 from manabot.training.decks import DeckCard, deck_cards
-from manabot.training.rollout.self_play import GameSettingCount, SelfPlayOutcome
-from manabot.training.update_metrics import (
-    DECK_TABLE,
-    GAME_SETTINGS_TABLE,
-    OUTCOME_TABLE,
-    RUN_TABLE,
-)
+from manabot.training.rollout.self_play import GameSettingCount
+from manabot.training.update_metrics import DECK_TABLE, GAME_SETTINGS_TABLE, RUN_TABLE
 from managym import Deck
 from managym.statistics import read_statistics
 
@@ -83,32 +79,14 @@ def declared_settings(data: RunData) -> dict[str, object]:
 def games_by_update(data: RunData, through: int) -> dict[int, Counter[tuple[str, str]]]:
     """Count the play seat once in each recorded matchup, including mirrors."""
     games: dict[int, Counter[tuple[str, str]]] = {}
-    # Historical writers logged each count as the scalar
-    # `self_play_outcomes/<deck>/<opponent>/<seat>/<outcome>`; decode scalars
-    # only when such a series exists, since current writers log the table.
-    if any(
-        c.name.startswith(OUTCOME_TABLE + "/")
-        for b in data.blocks
-        for c in b.header.series
-    ):
-        for update, row in scalar_updates(data, through).items():
-            for name, count in row.items():
-                parts = name.split("/")
-                if update > 0 and len(parts) == 5 and parts[0] == OUTCOME_TABLE:
-                    if parts[3] == "play":
-                        games.setdefault(update, Counter())[parts[1], parts[2]] += int(
-                            count
-                        )
-    outcomes = TypeAdapter(list[SelfPlayOutcome])
-    for table in data.read_table(OUTCOME_TABLE, "updates"):
-        if 0 < table.x <= through:
-            counts: Counter[tuple[str, str]] = Counter()
-            for outcome in outcomes.validate_python(list(table.rows), strict=True):
-                if outcome["position"] == "play":
+    for update, rows in outcome_rows(data, through).items():
+        if update > 0:
+            counts = games[update] = Counter()
+            for outcome in rows:
+                if outcome["seat"] == 0:
                     counts[outcome["deck"], outcome["opponent_deck"]] += (
                         outcome["wins"] + outcome["losses"] + outcome["draws"]
                     )
-            games[int(table.x)] = counts
     for update in range(1, through + 1):
         if update not in games:
             raise UnknownCoverage(f"{data.name}: coverage unknown at update {update}")
@@ -232,21 +210,51 @@ def add_card_statistics(
     db.execute("drop table card_counts")
 
 
+def checkpoint_run(path: Path, experiment: str | None) -> tuple[str, str, int]:
+    """The experiment, run and update a policy checkpoint file was written at.
+
+    The file names its own run and update. Files written before the experiment
+    was recorded take it as an argument.
+    """
+    record = read_metadata(path)
+    source = record.get("source") or {}
+    recorded = source.get("etude_experiment")
+    if experiment and recorded and experiment != recorded:
+        raise ValueError(f"{path} records experiment {recorded!r}, not {experiment!r}")
+    found = {
+        "Etude experiment (pass experiment=)": experiment or recorded,
+        "Etude run": source.get("etude_run"),
+        "update": (record.get("bc") or {}).get("update"),
+    }
+    missing = [name for name, value in found.items() if value is None or value == ""]
+    if missing:
+        raise UnknownCoverage(f"{path} records no {', no '.join(missing)}")
+    name, run, update = found.values()
+    if not isinstance(name, str) or not isinstance(run, str) or type(update) is not int:
+        raise UnknownCoverage(f"{path} records an unreadable run or update")
+    return name, run, update
+
+
 def training_corpus(
-    run: RunData | CheckpointRecord,
+    run: RunData | CheckpointRecord | Path,
     through: int | None = None,
     *,
     source: Storage | Path | str | None = None,
+    experiment: str | None = None,
     statistics: Path | None = None,
 ) -> duckdb.DuckDBPyConnection:
     """Return the training corpus through the cutoff as a DuckDB database.
 
-    Supply a run and update, or a published Etude checkpoint and its storage.
+    Supply a policy checkpoint file and the storage holding its run, a
+    published Etude checkpoint and its storage, or a run and update. The file
+    selects the run and update it records; `experiment` names the experiment
+    for a file written before checkpoints recorded it.
     Query the result with `.sql(...)`:
 
     - `corpus`: one row per update and ordered matchup, with both decks' card
-      lists (main deck and sideboard). Each completed game contributes once,
-      even in mirrors.
+      lists (main deck and sideboard). A row is about a game, so it names both
+      seats: `play` is the deck in native seat 0, `draw` the deck in seat 1.
+      Each completed game contributes once, even in mirrors.
     - `runs`: one row per run with the facts that hold for all its games,
       including the parent checkpoint it followed.
     - `game_settings`: per update, each value a setting took and in how many
@@ -254,11 +262,19 @@ def training_corpus(
       seat (0 is on the play) for a per-seat one. A setting with no rows was
       not recorded.
     - `deck_cards`: each roster entry by board, copies and definition key.
-    - `card_statistics`: per update, seat and card, when `statistics` is given.
+    - `card_statistics`: per update, native seat and card, when `statistics`
+      is given.
 
     Missing update evidence raises `UnknownCoverage`.
     """
-    if isinstance(run, CheckpointRecord):
+    if isinstance(run, Path):
+        if source is None or through is not None:
+            raise ValueError("supply a checkpoint file and its source")
+        name, run_name, through = checkpoint_run(run, experiment)
+        data = read(source, name, run_name)
+    elif experiment is not None:
+        raise ValueError("experiment applies to a checkpoint file")
+    elif isinstance(run, CheckpointRecord):
         if source is None or through is not None:
             raise ValueError("supply a checkpoint and its source")
         coordinate = run.at.get("updates")

@@ -261,3 +261,29 @@ say so if they should carry a note.
     game at every update. Passed over: a writer-version marker in `runs`.
 53. `SelfPlayCounter.record` takes settings with a default of none, so tests
     of outcome routing stay as they were; the collector always passes them.
+
+## Implement, human review third round, 2026-11-18
+
+54. Seat spelling (item 4, "c: fix it in this PR"): the column is `seat`, the
+    native seat as an integer, 0 on the play, on every per-seat row: stored
+    outcome rows (`SelfPlayOutcome.seat` replaces `position`),
+    `game_settings`, `card_statistics` and the report's `SelfPlayPoint`
+    (`position` stays as a warning alias until 0.4.0). `corpus` keeps `play`,
+    `draw`, `play_cards` and `draw_cards`: its row is about a game and names
+    both seats, and the guide says `play` is seat 0. Passed over: `deck_0` /
+    `deck_1` columns on `corpus` (every guide query rewritten for a row that
+    is not about one seat). Reversible until merge.
+55. Stored runs keep their bytes. `manabot.reports.update_metrics.outcome_rows`
+    is the one reader: scalar counts named `play`/`draw`, tables with
+    `position`, and tables with `seat` all read into rows with `seat`. The
+    offline projection (`updates_from_run`) keeps the scalar metric names
+    `self_play_outcomes/<deck>/<opponent>/<play|draw>/<count>` for every run:
+    stored series already carry them and the self-play panels read them.
+56. Corpus from a checkpoint file (item 1): `training_corpus(path,
+    source=storage)` reads the container header only
+    (`manabot.policy.checkpoint.read_metadata`), so the eval library stays
+    backend-free; a PyTorch `.pt` file raises `NotAContainer` and is converted
+    first. New files record `source.etude_experiment` from `ETUDE_EXPERIMENT`
+    beside `etude_run`. An `experiment=` that contradicts the file's record
+    raises. Not checked: that the file's bytes match a checkpoint the run
+    registered (the raw policy is never registered, only the EMA one).

@@ -817,8 +817,12 @@ absent on other devices. CUDA peaks cover the process lifetime; MPS allocations
 are current observations, not peaks. Completed self-play
 outcomes are a row table, logged once per update with Etude's
 `run.log_table("self_play_outcomes", rows, **clocks(counts))`. Each row has `deck`
-and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
-`losses` and `draws`, so deck pairs add rows rather than metric columns. Etude
+and `opponent_deck` (deck identities), `seat` (the native seat of `deck`, 0 on
+the play), `wins`, `losses` and `draws`, so deck pairs add rows rather than
+metric columns. Tables written before the `seat` column label the seat
+`position` (`play` or `draw`);
+`manabot.reports.update_metrics.outcome_rows(history)` reads every stored form
+into rows with `seat`. Etude
 stores the table as an immutable JSON file under the metric run's `artifacts/` and carries it with the
 metrics, including for launched jobs; keep `artifacts/` when copying a run for
 offline analysis. Read the rows directly through Etude:
@@ -833,7 +837,7 @@ for table in history.read_table("self_play_outcomes", "updates"):
 ```
 
 ```text
-1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, ...)
+1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'seat': 1, 'wins': 1, 'losses': 1, 'draws': 0}, ...)
 ```
 
 `manabot.reports.update_metrics.updates_from_run(history)` reads the same

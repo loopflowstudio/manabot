@@ -1,5 +1,6 @@
 """A training corpus follows the writer's cards, completed games and resume cuts."""
 
+import json
 from pathlib import Path
 
 from etude.train.read import read
@@ -12,6 +13,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.eval.training_corpus import UnknownCoverage, training_corpus
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.writer_catalog import writer_catalog
+from manabot.policy.checkpoint import write_safetensors
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.corpus import log_corpus_outcomes, log_corpus_setup
 from manabot.training.decks import UniformDecks, deck_cards
@@ -22,7 +24,8 @@ from manabot.training.update_metrics import (
     DECK_TABLE,
     GAME_SETTINGS_TABLE,
     OUTCOME_TABLE,
-    metric_row,
+    SEAT_LABELS,
+    outcome_scalars,
 )
 from managym import WORLD_SETUP, Deck
 from managym.statistics import CardCounts, GameStatistics
@@ -50,10 +53,13 @@ CLOSED = (
 )
 
 
-@pytest.mark.parametrize("historical", [False, True])
+@pytest.mark.parametrize("stored", ["seat", "position", "scalar"])
 def test_corpus_queries_use_completed_games_through_update(
-    tmp_path: Path, historical: bool
+    tmp_path: Path, stored: str
 ) -> None:
+    """Every stored outcome form reads into the same relations: rows by native
+    seat, earlier rows labelled `play` or `draw`, and scalar counts."""
+    historical = stored == "scalar"
     island, forest = Deck({"Island": 10}), Deck({"Forest": 10}, {"Island": 1})
     catalog = writer_catalog()
     decks = [island, forest]
@@ -87,9 +93,15 @@ def test_corpus_queries_use_completed_games_through_update(
             counter.record((pair[0].identity, pair[1].identity), None, CLOSED)
             games = counter.drain()
             if historical:
-                run.log(metric_row({OUTCOME_TABLE: games.outcomes}), updates=update)
+                run.log(outcome_scalars(games.outcomes), updates=update)
             else:
-                run.log_table(OUTCOME_TABLE, games.outcomes, updates=update)
+                rows = [
+                    {**row, "position": SEAT_LABELS[row.pop("seat")]}
+                    if stored == "position"
+                    else row
+                    for row in map(dict, games.outcomes)
+                ]
+                run.log_table(OUTCOME_TABLE, rows, updates=update)
                 run.log_table(GAME_SETTINGS_TABLE, games.settings, updates=update)
 
         artifact = tmp_path / "policy.bin"
@@ -307,6 +319,7 @@ def test_pretrained_corpus_follows_the_published_parent_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = gray_ogre_self_play(horizon=2).model_copy(update={"checkpoint_every": 1})
+    monkeypatch.delenv("ETUDE_EXPERIMENT", raising=False)
     monkeypatch.setenv("ETUDE_RUN", "parent")
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "parent"))
     with recording(
@@ -314,6 +327,26 @@ def test_pretrained_corpus_follows_the_published_parent_checkpoint(
     ) as run:
         final = self_play(settings, run, updates=2)
     parent = final.with_name("00000001-raw.safetensors")
+    # The file names its run and update. This one was written with no
+    # experiment in its environment, as files before the record were.
+    track = tmp_path / "track"
+    with pytest.raises(UnknownCoverage, match=r"records no Etude experiment \(pass"):
+        training_corpus(parent, source=track)
+    assert training_corpus(parent, source=track, experiment="first").sql(
+        "select run, update_number, sum(games) from corpus group by all"
+    ).fetchall() == [("parent", 1, 2)]
+    unrecorded = tmp_path / "policy.safetensors"
+    write_safetensors(
+        unrecorded,
+        {},
+        {
+            key: json.dumps({"commit": "7c1e9a2"} if key == "source" else {})
+            for key in ("hypers", "world_binding", "architecture", "source")
+        },
+    )
+    with pytest.raises(UnknownCoverage, match="records no Etude run, no update"):
+        training_corpus(unrecorded, source=track, experiment="first")
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "second")
     monkeypatch.setenv("ETUDE_RUN", "child")
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "child"))
     with recording(
@@ -321,13 +354,15 @@ def test_pretrained_corpus_follows_the_published_parent_checkpoint(
     ) as run:
         # The child plays with decklists closed; its parent played them open.
         closed = settings.match.model_copy(update={"decklists": "closed"})
-        self_play(
+        child = self_play(
             settings.model_copy(update={"pretrained": parent, "match": closed}),
             run,
             updates=1,
         )
-    data = read(tmp_path / "track", "second", "child")
-    corpus = training_corpus(data, 1)
+    with pytest.raises(ValueError, match="records experiment 'second', not 'first'"):
+        training_corpus(child, source=track, experiment="first")
+    # A file written under Etude selects its whole corpus, parent included.
+    corpus = training_corpus(child, source=track)
     assert corpus.sql(
         """select run, update_number, sum(games) from corpus
         group by all order by run""",

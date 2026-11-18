@@ -236,22 +236,38 @@ close to initialization while the raw policy is improving.
 
 ### Querying the training corpus
 
-Use the `evaluation` extra for DuckDB and open an Etude run from its storage root. For frontier Small, use a local copy
-of `r2://manabot/jobs` containing the run declaration, writer record and sealed
-metrics block covering update 1. A run of `etude train manabot/recipes/local.py`
-opens as `read(Path(etude_home) / "track", "local", "local")`, where
-`etude_home` is its `ETUDE_HOME`. The query also accepts a published checkpoint
-as `training_corpus(checkpoint, source=storage)` and uses its recorded update.
+Use the `evaluation` extra for DuckDB. Start from the policy checkpoint file
+and the storage root holding its run: the file records the experiment, run and
+update that wrote it, and the corpus is that run through that update.
 
 ```python
 from pathlib import Path
 
-from etude.train.read import read
 from manabot.eval.training_corpus import training_corpus
+
+# A run of `etude train manabot/recipes/local.py` keeps its policies under its
+# output directory and its records under ETUDE_HOME/track.
+policy = Path("out/policies/00000002-raw.safetensors")
+# A DuckDB connection holding the corpus, runs, game_settings and deck_cards relations.
+corpus = training_corpus(policy, source=Path(etude_home) / "track")
+```
+
+A file that records no run or update raises `UnknownCoverage`, naming what is
+missing. Files written before checkpoints recorded their experiment take it as
+`experiment="local"`. The file is a policy container (`.safetensors`); convert
+a PyTorch `.pt` checkpoint with `manabot.backends.convert` first.
+
+The query also accepts a published Etude checkpoint record as
+`training_corpus(checkpoint, source=storage)`, using its recorded update, or
+an opened run and an update. For frontier Small, which predates the file
+records, open the run from a local copy of `r2://manabot/jobs` containing the
+run declaration, writer record and sealed metrics block covering update 1:
+
+```python
+from etude.train.read import read
 
 storage = Path("runs")
 run = read(storage, "tla_frontier", "59718fe34945")
-# A DuckDB connection holding the corpus, runs, game_settings and deck_cards relations.
 corpus = training_corpus(run, through=1)
 print("Deck entries and distinct card keys:", corpus.sql(
     "select count(distinct entry), count(distinct card) from deck_cards").fetchall())
@@ -287,6 +303,13 @@ print(corpus.sql("""
     group by all order by experiment, run, update_number, seats desc, deck
 """).fetchall())
 ```
+
+One spelling says which seat a row is about: `seat`, the native seat, where 0
+is on the play. `game_settings`, `card_statistics` and the stored outcome rows
+all carry it. A `corpus` row is about a game, so it names both seats: `play`
+and `play_cards` are the deck in seat 0, `draw` and `draw_cards` the deck in
+seat 1. Runs that stored their outcomes under the labels `play` and `draw`
+read into the same columns.
 
 Each run keeps its own update numbers. If a learner started from a published
 checkpoint, the corpus includes the parent through that checkpoint’s update.

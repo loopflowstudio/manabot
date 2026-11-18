@@ -1,4 +1,4 @@
-"""Completed self-play games, counted by deck matchup and starting seat.
+"""Completed self-play games, counted by deck matchup and native seat.
 
 Each game contributes two seat outcomes, but one play and one draw observation.
 Its settings (conditions that can differ between two games of one run, such as
@@ -12,13 +12,15 @@ No gradients or policy sampling depend on this accounting.
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Literal, NamedTuple, TypedDict
+from typing import NamedTuple, TypedDict
 
 
 class SelfPlayOutcome(TypedDict):
+    """One deck's results against another from one native seat (0 is on the play)."""
+
     deck: str
     opponent_deck: str
-    position: Literal["play", "draw"]
+    seat: int
     wins: int
     losses: int
     draws: int
@@ -60,9 +62,7 @@ class OutcomeCounts:
 class SelfPlayCounter:
     """Pending counts survive collector snapshots and reset only when exported."""
 
-    counts: dict[tuple[str, str, Literal["play", "draw"]], OutcomeCounts] = field(
-        default_factory=dict
-    )
+    counts: dict[tuple[str, str, int], OutcomeCounts] = field(default_factory=dict)
     settings: Counter[GameSetting] = field(default_factory=Counter)
 
     def record(
@@ -74,8 +74,8 @@ class SelfPlayCounter:
         if winner not in (None, 0, 1):
             raise ValueError("winner must be a seat or a drawn game")
         self.settings.update(settings)
-        for seat, position in ((0, "play"), (1, "draw")):
-            key = (decks[seat], decks[1 - seat], position)
+        for seat in (0, 1):
+            key = (decks[seat], decks[1 - seat], seat)
             counts = self.counts.setdefault(key, OutcomeCounts())
             if winner is None:
                 counts.draws += 1
@@ -89,12 +89,12 @@ class SelfPlayCounter:
             SelfPlayOutcome(
                 deck=deck,
                 opponent_deck=opponent,
-                position=position,
+                seat=seat,
                 wins=c.wins,
                 losses=c.losses,
                 draws=c.draws,
             )
-            for (deck, opponent, position), c in sorted(self.counts.items())
+            for (deck, opponent, seat), c in sorted(self.counts.items())
         ]
         settings = [
             GameSettingCount(**key._asdict(), games=games)

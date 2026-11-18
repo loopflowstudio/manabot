@@ -1,6 +1,8 @@
 """Read one Etude run's update rows for reports.
 
 Later attempts supersede resumed coordinates; outcome tables join scalar rows.
+`outcome_rows` is the one reader of completed self-play outcomes: whatever
+form a run stored, each row names its native seat.
 """
 
 from collections.abc import Mapping
@@ -8,14 +10,18 @@ import math
 
 from etude.train.manifest import StoredBlock
 from etude.train.read import RunData
+from pydantic import TypeAdapter
 
+from manabot.training.rollout.self_play import SelfPlayOutcome
 from manabot.training.update_metrics import (
     DECK_TABLE,
     GAME_SETTINGS_TABLE,
     OUTCOME_TABLE,
     RUN_TABLE,
+    SEAT_LABELS,
     MetricRow,
-    metric_row,
+    outcome_scalars,
+    parse_outcome_scalar,
 )
 
 # One Etude run's rows by completed-update coordinate.
@@ -40,11 +46,72 @@ def updates_from_run(data: RunData) -> Updates:
     # the rows replace it.
     for update in selected.values():
         update.pop(OUTCOME_TABLE, None)
-    for table in data.read_table(OUTCOME_TABLE, "updates"):
-        selected.setdefault(int(table.x), {}).update(
-            metric_row({OUTCOME_TABLE: table.rows})
-        )
+    for update, rows in table_outcomes(data).items():
+        selected.setdefault(update, {}).update(outcome_scalars(rows))
     return dict(sorted(selected.items()))
+
+
+def outcome_rows(
+    data: RunData, through: int | None = None
+) -> dict[int, list[SelfPlayOutcome]]:
+    """Completed self-play outcomes by update, each row naming its native seat.
+
+    Stored runs keep their bytes and read into the same rows: scalar counts
+    named `play` or `draw`, tables whose rows carry that label as `position`,
+    and tables written by native seat. An update present here recorded its
+    outcomes, possibly none; an absent update recorded nothing.
+    """
+    updates: dict[int, list[SelfPlayOutcome]] = {}
+    # Decode scalars only when such a series exists: current writers log the table.
+    if any(
+        column.name.startswith(OUTCOME_TABLE + "/")
+        for block in data.blocks
+        for column in block.header.series
+    ):
+        for update, row in scalar_updates(data, through).items():
+            counts: dict[tuple[str, str, int], dict[str, int]] = {}
+            for name, value in row.items():
+                parsed = parse_outcome_scalar(name)
+                if parsed is not None:
+                    *key, count = parsed
+                    counts.setdefault(tuple(key), {})[count] = int(value)
+            if counts and update > 0:
+                updates[update] = [
+                    SelfPlayOutcome(
+                        deck=deck,
+                        opponent_deck=opponent,
+                        seat=seat,
+                        wins=c.get("wins", 0),
+                        losses=c.get("losses", 0),
+                        draws=c.get("draws", 0),
+                    )
+                    for (deck, opponent, seat), c in counts.items()
+                ]
+    updates.update(table_outcomes(data, through))
+    return updates
+
+
+def table_outcomes(
+    data: RunData, through: int | None = None
+) -> dict[int, list[SelfPlayOutcome]]:
+    outcomes = TypeAdapter(list[SelfPlayOutcome])
+    return {
+        int(table.x): outcomes.validate_python(
+            [
+                # Tables written before the native-seat column labelled the seat.
+                {
+                    **{k: v for k, v in row.items() if k != "position"},
+                    "seat": SEAT_LABELS.index(row["position"]),
+                }
+                if "position" in row
+                else row
+                for row in table.rows
+            ],
+            strict=True,
+        )
+        for table in data.read_table(OUTCOME_TABLE, "updates")
+        if through is None or table.x <= through
+    }
 
 
 def scalar_updates(data: RunData, through: int | None = None) -> Updates:

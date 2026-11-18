@@ -280,7 +280,12 @@ def checkpoint_source() -> dict[str, str | bool | None]:
         dirty: bool | None = source_dirty()
     except (OSError, subprocess.SubprocessError, ValueError):
         commit, dirty = None, None
-    return {"commit": commit, "dirty": dirty, "etude_run": os.environ.get("ETUDE_RUN")}
+    return {
+        "commit": commit,
+        "dirty": dirty,
+        "etude_experiment": os.environ.get("ETUDE_EXPERIMENT"),
+        "etude_run": os.environ.get("ETUDE_RUN"),
+    }
 
 
 def written_at(checkpoint: Mapping[str, Any]) -> str:

@@ -192,4 +192,4 @@ def test_a_saved_checkpoint_records_the_revision_that_wrote_it(
     save_checkpoint(agent, space, path, player_configs=Match().to_rust())
     source = read_checkpoint(path, weights_only=False)["source"]
     assert source["commit"] == source_commit()
-    assert set(source) == {"commit", "dirty", "etude_run"}
+    assert set(source) == {"commit", "dirty", "etude_experiment", "etude_run"}
