@@ -667,7 +667,7 @@ preferred. The class search stops after 1024 arithmetic checks and keeps a
 payable candidate. Payments with saved obligations only receive surplus
 pruning. If fixed sources cannot pay, the planner may also select the color
 of a simple tap activation such as Kyoshi Village. The preview shows that
-source and its output. Sacrifices, life payments and abilities with other
+source and its output. In manual payment mode, sacrifices, life payments and abilities with other
 effects remain explicit payment choices. Native spending choices determine
 the exact mana receipt. Source preference has no setting.
 
@@ -722,29 +722,22 @@ or phase, as any floating mana does. There is no undo.
   one per source, identical sources included (eight Forests are eight
   actions). Under `action_overflow="first-legal"` the taps are the first
   actions dropped.
-- **Fixed-output sources only.** Activated mana abilities with a choice are
-  already offered at priority. During cast, activation and resolution payments,
-  existing choices (including useful source taps, waterbend, automatic payment
-  and decline where available) keep their indices. Additional taps follow
-  them. A tap cannot consume a reserved resource or strand a committed cost.
-  The payer can finish from the remaining pool and sources.
-- **More decisions.** A priority window whose only action was `PassPriority`
-  is skipped as forced. With `True`, every available fixed source opens that
-  window. With `"usable"`, a source opens a pass-only window when tapping it
-  can trigger an ability. `Env.skip_trivial_count()` counts forced priority passes and other
-  single-action decisions skipped since reset.
-- **Each seat has its own value.** The chooser's option determines the offers.
-  Each tap uses the existing `TapForCost` policy action with the source as
-  focus. Both seats use the same observation shapes.
-  The pair is part of the game's setup: recordings carry it and replay
-  rebuilds the same action spaces from it. Omitting it, or passing
-  `(False, False)`, gives the same games, digests and recording bytes as
-  before. Each seat accepts `False`, `True` or `"usable"`. Invalid setup
-  values raise `ValueError`.
-
-Tapping a source at priority for a seat without the option raises
-`managym.AgentError`, as any action that is not offered does. Manabot evaluation seats
-heuristic, random and search players with the option off.
+- **Manual payments.** During cast, activation and resolution payments,
+  extra fixed-source taps follow the ordinary payment choices. A tap must
+  leave reserved resources available and the committed cost payable.
+- **Automatic payments.** Once the player accepts a cost, the engine selects
+  the sources, their outputs, any waterbend contributions and the units to
+  spend. The player still chooses X, optional costs and spell targets.
+- **Skipped decisions.** With floats off, a priority window offering only
+  a pass is skipped. With all floats, any legal mana activation can open the
+  window. With usable floats, a sacrifice or tap trigger can open it even
+  without a listed spend. `Env.skip_trivial_count()` includes forced passes,
+  other skipped single choices and internal automatic payment actions.
+- **Seat order and replay.** Both settings follow the chooser. Fixed-source
+  taps use the existing `TapForCost` policy action with source focus.
+  Choice-output abilities use their activation action. Omitting both fields
+  produces the same native setup, game digest and recording bytes as explicit
+  manual/off for both seats. Invalid values raise `ValueError`.
 
 ### Inspecting automatic payment
 

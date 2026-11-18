@@ -624,13 +624,11 @@ player in the space it trained in:
 | any other checkpoint | no |
 | heuristic, random, search or LLM player | no |
 
-Nothing on an evaluation request chooses this, so a checkpoint cannot be
-played in a space it did not train in, and two arms that differ only in this
-option meet the same heuristic. Each game's record holds the resolved pair
-(`MatchConfig.mana_floats`, omitted when both are `"off"` and exchanged
-with the seats by `swapped()`), which is what replay reads.
+The evaluation runner applies the saved settings to the checkpoint's seat
+and manual/off to its heuristic opponent. Swapping seats swaps the settings.
+Replay checks the recorded player settings against the evaluation record.
 
-A portable checkpoint records the two native seats explicitly in
+A portable checkpoint records the levels in force at export for both native seats in
 `hypers.training_setup.mana_payment` and `hypers.training_setup.mana_floats`,
 including manual/off defaults, beside `skip_trivial`. Evaluation game
 metadata records both actual seats in `match_hypers`. Academy traces record
