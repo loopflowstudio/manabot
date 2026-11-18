@@ -33,3 +33,14 @@ returned 404. The launcher's final cost is pending.
 
 There are no GPU checkpoints or scored evaluation deals from this launch.
 The four planned charts and the result artifacts await a completed comparison.
+
+On 2026-11-18 UTC, Etude quoted USD3.10 for four 52½-minute RunPod L4
+training jobs. No RunPod rental was started. The quote allowed USD3.16
+for training and USD1.50 for cpu32 while the earlier Lium rental retained
+a USD5.33 cap. Its statement still returned HTTP 404.
+
+The requested comparison covers legal mana taps shared by bots and people
+in Academy. At the rehearsed revision, a funded cast drops surplus tap
+choices, resolution payments omit ordinary fixed-source taps, and Academy
+starts both seats with priority taps off. Training and evaluation await
+a revision that exercises those choices through the shared action space.
