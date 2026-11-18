@@ -203,6 +203,19 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   expect(Math.min(room.top, room.bottom)).toBeGreaterThanOrEqual(8);
   for (const gap of room.toName) expect(gap).toBeLessThanOrEqual(2);
 
+  // The folded decision strip is only its toggle, in the stop bar's row: nothing between the board and the bar.
+  const bar = (await page.getByTestId('stop-bar').boundingBox())!;
+  const toggle = (await page.getByTestId('strip-toggle').boundingBox())!;
+  expect(toggle.y).toBeGreaterThanOrEqual(bar.y);
+  expect(toggle.y + toggle.height).toBeLessThanOrEqual(bar.y + bar.height);
+  await expect(page.getByTestId('decision-strip')).toHaveCount(0);
+  const board = (await page.getByTestId('game-board').boundingBox())!;
+  expect(bar.y - (board.y + board.height)).toBeLessThanOrEqual(1);
+  await page.getByTestId('strip-toggle').click();
+  await expect(page.getByTestId('decision-strip')).toBeVisible();
+  await page.getByTestId('strip-toggle').click();
+  await expect(page.getByTestId('decision-strip')).toHaveCount(0);
+
   // On your own turn, the opponent's upkeep: off → every time → once → off. The Menu shows the same stop.
   await stop('opponent', 'upkeep').click();
   await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'every');

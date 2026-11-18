@@ -9,15 +9,18 @@
    * once, arrow keys move between them. Without `oncycle` (a recording) the
    * bar is read-only.
    */
+  import type { Snippet } from 'svelte';
   import type { StopSide } from '$lib/types';
   import { nextStopState, STOP_STATE_WORDS, type PhaseTrack, type StopState } from './phases';
 
   interface Props {
     track: PhaseTrack;
     oncycle?: (side: StopSide, step: string) => void;
+    /** Under the legend, in the rail's column: the decision strip's toggle. */
+    aside?: Snippet;
   }
 
-  let { track, oncycle }: Props = $props();
+  let { track, oncycle, aside }: Props = $props();
 
   const sides: StopSide[] = ['my', 'opponent'];
   const SIDE_WORDS: Record<StopSide, string> = { my: 'your turn', opponent: "the opponent's turn" };
@@ -72,15 +75,18 @@
       </div>
     {/each}
   </div>
-  <p class="legend">
-    {#if track.every}
-      Priority stops are off: every step stops
-    {:else}
-      <span><i class="stop off" aria-hidden="true"><i></i></i>Off</span>
-      <span><i class="stop every" aria-hidden="true"><i></i></i>Every time</span>
-      <span><i class="stop once" aria-hidden="true"><i></i></i>Once</span>
-    {/if}
-  </p>
+  <div class="side">
+    <p class="legend">
+      {#if track.every}
+        Stops off: every step stops
+      {:else}
+        <span><i class="stop off" aria-hidden="true"><i></i></i>Off</span>
+        <span><i class="stop every" aria-hidden="true"><i></i></i>Every time</span>
+        <span><i class="stop once" aria-hidden="true"><i></i></i>Once</span>
+      {/if}
+    </p>
+    {@render aside?.()}
+  </div>
 </div>
 
 <style>
@@ -110,7 +116,10 @@
   button.stop:hover { background: var(--bg-field); }
   button.stop:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
 
-  .legend { display: flex; gap: 12px; align-items: center; justify-content: center; margin: 0; padding: 0 8px; border-left: 1px solid var(--border); font: 14px/20px var(--font-sans); color: var(--text-secondary); text-align: center; }
+  /* The rail's column: the legend, and under it whatever the board puts there
+     (the decision strip's toggle), each one 20 px line. */
+  .side { display: grid; align-content: center; justify-items: center; gap: 4px; min-width: 0; padding: 0 8px; border-left: 1px solid var(--border); }
+  .legend { display: flex; gap: 12px; align-items: center; justify-content: center; margin: 0; font: 14px/20px var(--font-sans); color: var(--text-secondary); text-align: center; white-space: nowrap; }
   .legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .legend .stop { display: inline-grid; align-items: center; }
 </style>

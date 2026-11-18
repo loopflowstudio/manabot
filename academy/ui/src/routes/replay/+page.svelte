@@ -25,7 +25,6 @@
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Board from '$lib/board/Board.svelte';
   import Transport from '$lib/board/Transport.svelte';
-  import Strip from '$lib/board/Strip.svelte';
   import { moveList } from '$lib/board/moves';
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
@@ -500,7 +499,6 @@
       disabled={locked} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce && !replayStore.headUncertain} {retrySearch}
       retryBot={!!index.mirror_retry && !retrySearch} line={!stripOpen} onPrevious={() => seek(replayStore.selected - 1)} onNext={next} onDecision={decision}
       onTogglePlaying={togglePlaying} onScrub={seek} onSpeedChange={speed => (replayStore.speed = speed)} />
-    <Strip {marks} selected={replayStore.selected} open={stripOpen} ontoggle={() => (stripOpen = !stripOpen)} onjump={locked ? undefined : seek} />
   {/if}
 {/snippet}
 
@@ -529,6 +527,7 @@
     {currentMove}
     {evidence}
     bottom={bottomEdge}
+    strip={index ? { marks, selected: replayStore.selected, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen), onjump: locked ? undefined : seek } : undefined}
     {notices}
     result={ending ? result : undefined}
     {menu}

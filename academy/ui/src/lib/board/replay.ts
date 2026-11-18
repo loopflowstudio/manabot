@@ -236,6 +236,19 @@ export interface StripMark {
   label: string;
 }
 
+/** The decision strip as the board draws it: open under the board, or folded to its toggle in the stop bar's row. */
+export interface StripLine {
+  marks: StripMark[];
+  /** The shown position in a recording; null in live play. */
+  selected: number | null;
+  open: boolean;
+  ontoggle: () => void;
+  /** Moves to a position; absent where positions cannot be opened (live play). */
+  onjump?: (at: number) => void;
+  /** Why positions cannot be opened, when they cannot. */
+  note?: string | null;
+}
+
 /** Every position as a mark on one line: decisions stand out, turns are ticked. */
 export function stripMarks(positions: readonly Position[], heroSeat: 0 | 1): StripMark[] {
   return positions.map((position, at) => ({

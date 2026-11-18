@@ -25,7 +25,6 @@
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/board/result';
-  import Strip from '$lib/board/Strip.svelte';
   import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
   import { logMarks } from '$lib/board/replay';
   import { spentOnce } from '$lib/board/phases';
@@ -389,11 +388,6 @@
   </div>
 {/snippet}
 
-{#snippet liveStrip()}
-  <Strip marks={liveMarks} selected={null} open={stripOpen} ontoggle={() => (stripOpen = !stripOpen)}
-    note={gameStore.gameOver ? null : 'Positions open in Review after the game'} />
-{/snippet}
-
 {#snippet menu()}
   <a class="type-caption text-ink-2 hover:text-ink" href="/games">Games</a>
   <details class="game-menu">
@@ -461,7 +455,8 @@
       onact={handleActionSelect}
       onpassturn={handlePassTurn}
       {notices}
-      bottom={liveStrip}
+      strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
+        note: gameStore.gameOver ? null : 'Positions open in Review after the game' }}
       result={gameStore.gameOver ? result : undefined}
       {menu}
       {beatPace}

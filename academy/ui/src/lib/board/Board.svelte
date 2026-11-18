@@ -28,7 +28,7 @@
   import { BEAT_MS, beatsFor, type Beat, type BeatPace } from './beats';
   import { boardAt, type StepBoard } from './boards';
   import { moveList, type MoveTurn } from './moves';
-  import { EVIDENCE, nameSeats, type OfferEvidence } from './replay';
+  import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
@@ -39,6 +39,7 @@
   import BoardCard from './BoardCard.svelte';
   import { phaseTrack, type OnceStops } from './phases';
   import StopBar from './StopBar.svelte';
+  import Strip from './Strip.svelte';
   import { shortName } from '$lib/opponent-name';
   import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
@@ -88,8 +89,10 @@
     recapTitle?: string;
     /** What the shown position is, when the caller knows (a recording): "After Heuristic's move". */
     heading?: string | null;
-    /** Under the board: a recording's transport and decision strip, or live play's strip. */
+    /** Under the board: a recording's transport. */
     bottom?: Snippet;
+    /** The game's decisions: drawn under the board while open, its toggle in the stop bar's row. */
+    strip?: StripLine;
     notices?: Snippet;
     result?: Snippet;
     menu?: Snippet;
@@ -104,7 +107,7 @@
   let {
     frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
-    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, notices, result, menu,
+    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
   }: Props = $props();
 
@@ -858,9 +861,21 @@
     {/if}
   {/snippet}
 
-  {#if bottom}<div class="bottom">{@render bottom()}</div>{/if}
+  {#snippet stripToggle()}
+    <!-- Live play's strip only counts, so Tab passes it by; a recording's opens to a navigable line. -->
+    <button type="button" class="strip-toggle" aria-expanded={strip!.open} onclick={strip!.ontoggle} data-testid="strip-toggle"
+      tabindex={strip!.onjump ? undefined : -1}>
+      <span aria-hidden="true">{strip!.open ? '▾' : '▸'}</span> Decisions · {strip!.marks.filter(mark => mark.decision).length}
+    </button>
+  {/snippet}
+  {#if bottom || strip?.open}
+    <div class="bottom">
+      {@render bottom?.()}
+      {#if strip?.open}<Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} />{/if}
+    </div>
+  {/if}
   <nav class="stops-slot" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
-    <StopBar {track} oncycle={oncyclestop} />
+    <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
 </div>
 
@@ -999,6 +1014,8 @@
   .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-weight: 600; }
   .pile-count .step:disabled { opacity: 0.4; }
   .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
+  .strip-toggle { font: 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
+  .strip-toggle:hover { color: var(--text); }
   .bottom { grid-row: 3; grid-column: 1; min-width: 0; border-top: 1px solid var(--border); background: var(--bg-surface); }
 
   .menu {

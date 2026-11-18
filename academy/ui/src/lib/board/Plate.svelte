@@ -83,6 +83,8 @@
 
 <style>
   .plate { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; overflow-y: auto; padding: 10px 10px 8px; }
+  /* A short half scrolls the plate; its parts keep their height rather than overlap. */
+  .plate > * { flex-shrink: 0; }
   .who { display: block; text-align: left; border-radius: var(--radius-sm); padding: 2px 4px; margin: -2px -4px; background: none; border: 0; color: inherit; }
   .who[aria-disabled=true] { cursor: default; }
   .who.legal { box-shadow: 0 0 0 2px var(--legal); cursor: pointer; }
