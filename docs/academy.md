@@ -9,6 +9,9 @@ detail and demo walkthroughs live in [server guide](../managym/academy/README.md
 the wire contract is
 [experience protocol v1](../protocol/experience-protocol-v1.md), with state
 digests defined by [the state hash](engine.md#forks-replay-and-determinization).
+The engine runs only on the server; the page holds no engine and no hidden
+cards. [Engine in the browser or the Python server](../experiments/reports/academy-wasm.md)
+compares that with a WebAssembly build.
 
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)

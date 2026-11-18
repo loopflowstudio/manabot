@@ -387,6 +387,10 @@ their own and compares a change with the reference commit named in
   games of the same matchup with both seats uniformly random over the legal
   actions and native trivial-decision skipping. Budget lines: steps per
   second, step count and the digest over every decision.
+  `uv run python experiments/academy_wasm.py` runs the same games in a
+  `wasm32-wasip1` build and requires the same digest
+  ([report](../experiments/reports/academy-wasm.md)); keep random draws that
+  choose an action `u64`, since a `usize` draw differs on a 32-bit target.
 
 GitHub-hosted `ubuntu-24.04` runners land on different CPU generations, and
 the same engine measured 6.8k steps/s on an AMD EPYC 7763 and 10.3k on an
