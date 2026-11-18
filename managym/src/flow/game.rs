@@ -30,7 +30,7 @@ use crate::{
             PermanentId, PermanentVec, PlayerId, Target,
         },
         knowledge::LibraryKnowledge,
-        mana::Mana,
+        mana::{Mana, ManaPool},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::{ZoneManager, ZoneType},
@@ -629,19 +629,19 @@ impl TrackedState {
 
     // Mana pools feed `mana_pools` only.
 
-    pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+    pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
         self.revisions.mana_pools += 1;
         &mut self.state.players[player.0].mana_pool
     }
 
     /// The ordinary and until-end-of-combat pools together.
-    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut Mana, &mut Mana) {
+    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut ManaPool, &mut ManaPool) {
         self.revisions.mana_pools += 1;
         let player = &mut self.state.players[player.0];
         (&mut player.mana_pool, &mut player.combat_mana_pool)
     }
 
-    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
         self.revisions.mana_pools += 1;
         &mut self.state.players[player.0].combat_mana_pool
     }

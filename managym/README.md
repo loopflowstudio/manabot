@@ -390,8 +390,12 @@ Any other `world` value is rejected: authored content packs are retired.
 
 Mana feasibility and production share typed costs and pools. `ManaClass`
 retains each class's spending restriction and spend effect; `SpendingContext`
-distinguishes casting, activation and resolving costs. A spell's payment records
-`ManaSpent`, carried to resolution and the entering permanent's own triggers.
+distinguishes casting, activation and resolving costs. A player's `ManaPool`
+keeps, unit for unit, the object that produced its mana (`ManaOrigin`); units
+of one class and color are interchangeable, so the oldest is spent first. A
+spell's payment records a `PaymentReceipt`, one entry per unit spent with its
+origin and applied rider, shared by the stack object, its resolution and the
+entering permanent's own triggers.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation

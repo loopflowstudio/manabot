@@ -25,7 +25,8 @@ use managym::{
     state::{
         card::Keyword,
         game_object::{PermanentId, PlayerId, Target},
-        mana::{Mana, ManaClass, ManaSpent, SpendEffect},
+        mana::{Mana, ManaClass, SpendEffect},
+        payment::PaymentReceipt,
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -548,13 +549,15 @@ fn only_pool(s: &mut Scenario, mana: &str) {
     s.set_player_mana_pool(0, mana);
 }
 
-fn spell_spent(s: &Scenario, object: managym::state::game_object::ObjectId) -> ManaSpent {
+fn spell_spent(s: &Scenario, object: managym::state::game_object::ObjectId) -> PaymentReceipt {
     s.game()
         .state
         .stack_objects
         .iter()
         .find_map(|stack| match stack {
-            StackObject::Spell(spell) if spell.object == now(s, object) => Some(spell.spent),
+            StackObject::Spell(spell) if spell.object == now(s, object) => {
+                Some(spell.spent.clone())
+            }
             _ => None,
         })
         .expect("spell on the stack")
@@ -586,7 +589,7 @@ fn toph_earthbends_the_amount_of_mana_spent_to_cast_her() {
     let land = s.force_permanent_on_battlefield(0, "Forest");
     only_pool(&mut s, "RGGG");
     let toph = cast_owned(&mut s, "Toph, Greatest Earthbender");
-    assert_eq!(spell_spent(&s, toph).amounts, [0, 0, 0, 1, 3, 0]);
+    assert_eq!(spell_spent(&s, toph).amounts(), [0, 0, 0, 1, 3, 0]);
     assert_eq!(spell_spent(&s, toph).total(), 4);
     settle_targeting(&mut s, land);
     assert_eq!(counters(&s, land), 4);
@@ -699,7 +702,7 @@ fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
         );
         let sheep = cast_owned(&mut s, "Koala-Sheep");
         let spent = spell_spent(&s, sheep);
-        assert_eq!(spent.entry_counters, attendants as u8);
+        assert_eq!(spent.entry_counters(), attendants as u8);
         assert_eq!(spent.total(), 3);
         settle(&mut s);
         let permanent = permanent_of(&s, sheep).unwrap();
@@ -715,9 +718,30 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
     s.allow_priority_floats();
     let attendant = attendant_mana(&mut s, "1W", 1)[0];
+    let produced_by = s.game().state.permanents[attendant]
+        .as_ref()
+        .unwrap()
+        .object;
     let card = card_of(&s, attendant);
     move_card(&mut s, card, ZoneType::Graveyard);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
+    // The receipt names the Attendant as it was on the battlefield, never
+    // the card now in the graveyard, and only its unit carries the rider.
+    let spent = spell_spent(&s, sheep);
+    let riders: Vec<_> = spent
+        .mana()
+        .iter()
+        .filter(|unit| unit.effect.is_some())
+        .collect();
+    assert_eq!(riders.len(), 1);
+    let origin = riders[0].source.expect("the Attendant");
+    assert_eq!(origin.object, produced_by);
+    assert_ne!(origin.object, now(&s, produced_by));
+    assert_eq!(
+        Some(origin.definition),
+        managym::cards::content_pack::default_content_pack().definition_id("Animal Attendant")
+    );
+    assert_eq!(spent.mana_sources(), [origin]);
     settle(&mut s);
     let permanent = permanent_of(&s, sheep).unwrap();
     assert_eq!(counters(&s, permanent), 1);
@@ -726,7 +750,7 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     s.allow_priority_floats();
     attendant_mana(&mut s, "R", 1);
     let guard = cast_owned(&mut s, "Capital Guard");
-    assert_eq!(spell_spent(&s, guard).entry_counters, 0);
+    assert_eq!(spell_spent(&s, guard).entry_counters(), 0);
     settle(&mut s);
     let permanent = permanent_of(&s, guard).unwrap();
     assert_eq!(counters(&s, permanent), 0);
@@ -739,7 +763,7 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     if s.action_space().kind == ActionSpaceKind::ChooseTarget {
         s.step_action(0);
     }
-    assert_eq!(spell_spent(&s, shot).entry_counters, 0);
+    assert_eq!(spell_spent(&s, shot).entry_counters(), 0);
 }
 
 /// The chooser may keep mana whose rider would be wasted on a Human.
@@ -786,10 +810,10 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
         only_pool(&mut s, "1W");
         s.game_mut().state.players[0].combat_mana_pool =
-            Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]);
+            Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]).into();
         s.game_mut().state.players[0]
             .mana_pool
-            .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]));
+            .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]), None);
         let sheep = cast_owned(&mut s, "Koala-Sheep");
         let obs = Observation::for_player(s.game(), PlayerId(0));
         let pools = &obs.agent.pooled_mana_classes;
@@ -801,7 +825,7 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
             label.contains("{G}") && label.contains("end of combat") == spend_combat
         });
         spend_named(&mut s, |label| label.contains("{C}"));
-        assert_eq!(spell_spent(&s, sheep).entry_counters, 1);
+        assert_eq!(spell_spent(&s, sheep).entry_counters(), 1);
         let player = &s.game().state.players[0];
         assert_eq!(player.combat_mana_pool.total(), u16::from(!spend_combat));
         assert_eq!(
@@ -834,7 +858,7 @@ fn animal_attendant_spending_can_keep_or_use_the_rider_for_the_same_creature() {
         });
         assert_choice_contract(&s);
         spend_named(&mut s, |label| label.contains("{C}"));
-        assert_eq!(spell_spent(&s, sheep).entry_counters, u8::from(use_rider));
+        assert_eq!(spell_spent(&s, sheep).entry_counters(), u8::from(use_rider));
         assert_eq!(
             s.game().state.players[0]
                 .mana_pool

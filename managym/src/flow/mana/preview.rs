@@ -316,7 +316,7 @@ impl Game {
                 decision: Decision::ManaSpend {
                     player,
                     cost: cost.clone(),
-                    spent: ManaSpent::default(),
+                    spent: Default::default(),
                     completion: Box::new(SpendCompletion::Resolution(payment)),
                 },
             });
@@ -477,7 +477,7 @@ mod tests {
         let mut game = preview_game();
         game.state
             .mana_pool_mut(PlayerId(0))
-            .add(&Mana::parse("UR"));
+            .add(&Mana::parse("UR"), None);
         let exact = preview(&game, cast_index(&game));
         assert!(exact.sources.is_empty());
         assert_eq!(
@@ -559,20 +559,23 @@ mod tests {
         game.scenario_force_card_in_hand(payer, "Spectral Sailor")
             .unwrap();
         let blue = [0, 1, 0, 0, 0, 0];
-        game.state.mana_pool_mut(payer).add(&Mana::restricted_to(
-            ManaRestriction::spell(["Lesson"]),
-            blue,
-        ));
-        game.state.combat_mana_pool_mut(payer).add(&Mana::of_class(
-            ManaClass {
-                restriction: Some(ManaRestriction::spell(["Pirate"])),
-                effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
-                    without_subtype: "Human".into(),
-                }),
-                combat: false,
-            },
-            blue,
-        ));
+        game.state.mana_pool_mut(payer).add(
+            &Mana::restricted_to(ManaRestriction::spell(["Lesson"]), blue),
+            None,
+        );
+        game.state.combat_mana_pool_mut(payer).add(
+            &Mana::of_class(
+                ManaClass {
+                    restriction: Some(ManaRestriction::spell(["Pirate"])),
+                    effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
+                        without_subtype: "Human".into(),
+                    }),
+                    combat: false,
+                },
+                blue,
+            ),
+            None,
+        );
         game.scenario_refresh_priority().unwrap();
         let index = game
             .action_space()
@@ -601,8 +604,8 @@ mod tests {
         let Some(StackObject::Spell(spell)) = game.state.stack_objects.last() else {
             panic!("expected the paid spell on the stack");
         };
-        assert_eq!(spell.spent.amounts, blue);
-        assert_eq!(spell.spent.entry_counters, 1);
+        assert_eq!(spell.spent.amounts(), blue);
+        assert_eq!(spell.spent.entry_counters(), 1);
         let leftover = proposal.pool_after_spending.unwrap();
         assert_eq!(leftover.amounts, blue.map(u16::from));
         assert_eq!(
@@ -615,19 +618,19 @@ mod tests {
     fn payment_preview_keeps_restrictions_and_combat_expiry() {
         use crate::state::mana::ManaRestriction;
         let mut game = preview_game();
-        game.state.mana_pool_mut(PlayerId(0)).add(&Mana::parse("U"));
         game.state
             .mana_pool_mut(PlayerId(0))
-            .add(&Mana::restricted_to(
-                ManaRestriction::spell(["Lesson"]),
-                [0, 1, 0, 0, 0, 0],
-            ));
+            .add(&Mana::parse("U"), None);
+        game.state.mana_pool_mut(PlayerId(0)).add(
+            &Mana::restricted_to(ManaRestriction::spell(["Lesson"]), [0, 1, 0, 0, 0, 0]),
+            None,
+        );
         let rider = crate::state::mana::SpendEffect::CreatureEntersWithPlusOneCounter {
             without_subtype: "Human".into(),
         };
         game.state
             .combat_mana_pool_mut(PlayerId(0))
-            .add(&Mana::of_class(rider.into(), [0, 0, 0, 1, 0, 0]));
+            .add(&Mana::of_class(rider.into(), [0, 0, 0, 1, 0, 0]), None);
         let result = preview(&game, cast_index(&game));
         assert!(result.sources.is_empty());
         let final_pool = result.pool_after_spending.unwrap();

@@ -1071,11 +1071,12 @@ a token or copy is created, and a zone change allocates nothing.
 Slots are private to the store, the zone lists and the match-state hash. Cards
 take the first slots in setup order (main decks, then sideboards), followed by
 tokens and copies in creation order, which is the numbering recorded states
-already use. The match-state hash stays at version 16 and its bytes do not
-change: a field recorded as a row number writes its slot, and a field recorded
-as `{"entity", "incarnation"}` writes slot and generation under those keys.
-Version 16 therefore cannot tell a current id from a stale one in the fields
-that used to hold a bare row; the next hash version writes whole ids.
+already use. A field recorded as a row number writes its slot, and a field
+recorded as `{"entity", "incarnation"}` writes slot and generation under those
+keys. The match-state hash therefore cannot tell a current id from a stale one
+in the fields that used to hold a bare row; a later hash version writes whole
+ids. Version 17 adds, with whole ids, the object that produced each pooled
+unit of mana and each unit a payment spent.
 Observations, replays and the Python API are unchanged.
 
 ### Zones

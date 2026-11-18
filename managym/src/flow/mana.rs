@@ -40,7 +40,8 @@ use crate::{
             TriggeredManaOutput,
         },
         game_object::{ObjectId, PermanentId, PlayerId},
-        mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent, SpellSnapshot, SpendingContext},
+        mana::{Color, Mana, ManaCost, ManaPool, ManaSpendChoice, SpellSnapshot, SpendingContext},
+        payment::{ManaOrigin, PaymentReceipt, SpentMana},
         zone::ZoneType,
     },
 };
@@ -807,7 +808,7 @@ impl PaymentModel<'_> {
                 if pooled {
                     for choice in state.pool.spending_choices(cost) {
                         let mut pool = state.pool.clone();
-                        pool.spend(&choice.unit, &cost.purpose);
+                        pool.spend(&choice.unit);
                         if !pool.can_pay(&choice.remaining) {
                             continue;
                         }
@@ -1169,7 +1170,7 @@ impl PaymentModel<'_> {
     /// Callers first check that the pool exceeds the cost at all.
     fn is_surplus(&self, pool: &Mana, output: &Mana, cost: &ManaCost, tail: &[Obligation]) -> bool {
         let mut remaining = pool.clone();
-        remaining.spend(output, &cost.purpose);
+        remaining.spend(output);
         if !remaining.can_pay(cost) {
             return false;
         }
@@ -2639,13 +2640,14 @@ impl Game {
         let produced = tap
             .output
             .unwrap_or_else(|| fixed_output(&self.characteristics(permanent)));
-        self.tap_permanent(permanent, true);
-        self.state.mana_pool_mut(player).add(&produced);
-        let tapped = self.tapped_for_mana(permanent);
-        let bonuses = self.production_bonuses(player, &tapped);
         let source = self
             .permanent_object(permanent)
             .expect("a tapped fixed source is on the battlefield");
+        self.tap_permanent(permanent, true);
+        let origin = self.mana_origin(source);
+        self.state.mana_pool_mut(player).add(&produced, origin);
+        let tapped = self.tapped_for_mana(permanent);
+        let bonuses = self.production_bonuses(player, &tapped);
         let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None);
         assert!(
             resolved.is_none(),
@@ -2780,7 +2782,8 @@ impl Game {
                 }));
             }
             if let Some(mana) = choices.pop() {
-                self.state.mana_pool_mut(player).add(&mana);
+                let origin = self.mana_origin(bonus.source);
+                self.state.mana_pool_mut(player).add(&mana, origin);
             }
         }
         resume
@@ -2814,9 +2817,17 @@ impl Game {
 
     /// Both pools combined (regular + until-end-of-combat).
     pub(crate) fn pooled_mana(&self, player: PlayerId) -> Mana {
-        let mut total = self.state.players[player.0].mana_pool.clone();
+        let mut total = self.state.players[player.0].mana_pool.mana().clone();
         total.add_combat(&self.state.players[player.0].combat_mana_pool);
         total
+    }
+
+    /// `object` as the producer of mana it is adding to a pool.
+    pub(crate) fn mana_origin(&self, object: ObjectId) -> Option<ManaOrigin> {
+        Some(ManaOrigin {
+            object,
+            definition: self.state.source_base(object).0,
+        })
     }
 
     pub(crate) fn produce_mana(
@@ -3103,7 +3114,12 @@ impl Game {
     }
 
     /// Commit precisely the selected unit, retaining its expiry identity.
-    fn spend_mana_unit(&mut self, player: PlayerId, unit: &Mana, cost: &ManaCost) -> ManaSpent {
+    fn spend_mana_unit(
+        &mut self,
+        player: PlayerId,
+        unit: &Mana,
+        cost: &ManaCost,
+    ) -> Vec<SpentMana> {
         let (regular, combat) = self.state.mana_pools_mut(player);
         if let Some((class, amounts)) = unit.classes().first().filter(|(class, _)| class.combat) {
             let mut class = class.clone();
@@ -3119,8 +3135,9 @@ impl Game {
             combat.spend(&unit, &cost.purpose)
         } else {
             let spent = regular.spend(unit, &cost.purpose);
+            let pooled = regular.total();
             if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
-                exposure.mana[player.0].remove(unit.total(), regular.total(), false);
+                exposure.mana[player.0].remove(unit.total(), pooled, false);
             }
             spent
         }
@@ -3150,7 +3167,7 @@ impl Game {
             .into_iter()
             .filter(|choice| {
                 let mut remaining = pool.clone();
-                remaining.spend(&choice.unit, &cost.purpose);
+                remaining.spend(&choice.unit);
                 if !remaining.can_pay(&choice.remaining) {
                     return false;
                 }
@@ -3180,7 +3197,7 @@ impl Game {
             decision: Decision::ManaSpend {
                 player,
                 cost,
-                spent: ManaSpent::default(),
+                spent: PaymentReceipt::default(),
                 completion: Box::new(completion),
             },
         });
@@ -3217,10 +3234,7 @@ impl Game {
                     unreachable!()
                 };
                 *cost = choice.remaining.clone();
-                for (sum, amount) in spent.amounts.iter_mut().zip(receipt.amounts) {
-                    *sum += amount;
-                }
-                spent.entry_counters += receipt.entry_counters;
+                spent.record_mana(receipt);
                 continue;
             }
             let suspended = self.state.suspended_decision_mut().take().unwrap();
@@ -3312,21 +3326,21 @@ impl Game {
             if let Some(capture) = self.mana_capture(player) {
                 capture.combat_expired += u64::from(before - kept.total());
             }
-            self.state.mana_pool_mut(player).add(&kept);
+            self.state.mana_pool_mut(player).absorb(kept);
         }
     }
 
     /// What survives of `player`'s unspent `pool` as it would empty: all of
     /// it as red under Ozai (CR 614.1a), its red mana while they keep red
     /// mana this turn, otherwise nothing.
-    fn unspent_mana_retained(&self, player: PlayerId, mut pool: Mana) -> Mana {
+    fn unspent_mana_retained(&self, player: PlayerId, mut pool: ManaPool) -> ManaPool {
         if self.unspent_mana_becomes_red(player) {
             pool.become_red();
             pool
         } else if self.keeps_unspent_mana(player, Color::Red) {
             pool.red_only()
         } else {
-            Mana::default()
+            ManaPool::default()
         }
     }
 
@@ -3840,10 +3854,14 @@ mod tests {
 
         // Mana floating in the pool is spent before a source is tapped.
         let (mut game, sources) = board(&["Forest", "Forest", "Forest"], None);
-        game.state.mana_pool_mut(player).add(&Mana::parse("G"));
+        game.state
+            .mana_pool_mut(player)
+            .add(&Mana::parse("G"), None);
         assert_eq!(tapped(&game, &sources, "1G"), [0]);
         assert_eq!(tapped(&game, &sources, "G"), Vec::<usize>::new());
-        game.state.mana_pool_mut(player).add(&Mana::parse("G"));
+        game.state
+            .mana_pool_mut(player)
+            .add(&Mana::parse("G"), None);
         assert_eq!(tapped(&game, &sources, "1G"), Vec::<usize>::new());
     }
 

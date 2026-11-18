@@ -23,7 +23,8 @@ use crate::{
         ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
-        mana::{ManaCost, ManaSpent, SpellSnapshot, SpendingContext, SpendingObject},
+        mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
+        payment::PaymentReceipt,
         stack_object::ActivatedAbilityOnStack,
         zone::ZoneType,
     },
@@ -2012,7 +2013,7 @@ impl Game {
         payment: Payment,
         sacrifice: Option<PermanentId>,
         waterbend: bool,
-        spent: ManaSpent,
+        spent: PaymentReceipt,
     ) -> Result<(), AgentError> {
         let mut events = Vec::new();
         if let Some(target) = sacrifice.and_then(|id| self.permanent_object(id)) {

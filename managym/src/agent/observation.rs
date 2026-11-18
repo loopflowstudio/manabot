@@ -1188,7 +1188,7 @@ impl Observation {
             };
 
         // Regular and combat mana together, as the player may spend it.
-        let mut pool = p.mana_pool.clone();
+        let mut pool = p.mana_pool.mana().clone();
         pool.add_combat(&p.combat_mana_pool);
         // Individual class counts are u8; public totals may exceed one class's
         // capacity when regular and combat mana have the same color.

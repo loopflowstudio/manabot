@@ -29,7 +29,8 @@ use crate::{
         ability::Effect,
         card::CardDefId,
         game_object::{ObjectId, ObjectLki, PlayerId, Target},
-        mana::{Mana, ManaSpent},
+        mana::Mana,
+        payment::PaymentReceipt,
     },
 };
 
@@ -511,18 +512,42 @@ impl<'a> Projection<'a> {
     }
 
     /// The mana actually spent to cast (CR 601.2h) and the entry counters
-    /// its spend effects add.
-    fn receipt(&mut self, spent: &ManaSpent) {
-        self.field("mana spent", spent);
+    /// its spend effects add: the two facts a rule reads from the receipt.
+    /// Which object produced each unit is in the text only; no rule reads it
+    /// yet, so it adds no policy tokens.
+    fn receipt(&mut self, spent: &PaymentReceipt) {
+        /// The receipt's rule-read facts, under the names their tokens have.
+        #[derive(Debug, Serialize)]
+        struct ManaSpent {
+            amounts: [u8; 6],
+            #[serde(skip_serializing_if = "crate::state::is_zero")]
+            entry_counters: u8,
+        }
+        let facts = ManaSpent {
+            amounts: spent.amounts(),
+            entry_counters: spent.entry_counters(),
+        };
+        self.field("mana spent", &facts);
         self.summary(|| {
             let mana = mana_description(&Mana {
-                mana: spent.amounts,
+                mana: facts.amounts,
                 ..Default::default()
             });
-            match spent.entry_counters {
-                0 => format!("Mana spent to cast: {mana}."),
+            let sources = spent
+                .mana_sources()
+                .iter()
+                .filter_map(|origin| default_content_pack().definition(origin.definition))
+                .map(|definition| definition.printed.name.as_str())
+                .collect::<Vec<_>>();
+            let from = if sources.is_empty() {
+                String::new()
+            } else {
+                format!(" (from {})", sources.join(", "))
+            };
+            match facts.entry_counters {
+                0 => format!("Mana spent to cast: {mana}{from}."),
                 counters => format!(
-                    "Mana spent to cast: {mana}; it enters with {counters} additional +1/+1 counter(s)."
+                    "Mana spent to cast: {mana}{from}; it enters with {counters} additional +1/+1 counter(s)."
                 ),
             }
         });
@@ -824,12 +849,12 @@ impl<'a> Projection<'a> {
 /// is, or became the source of, the object defined by `definition`: its
 /// definition counts that mana (Toph, converge), or a spend effect applied
 /// (Animal Attendant's counter). Other receipts are not projected.
-pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) -> bool {
+pub(crate) fn receipt_matters(spent: &PaymentReceipt, definition: Option<CardDefId>) -> bool {
     static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
     if spent.is_empty() {
         return false;
     }
-    if spent.entry_counters > 0 {
+    if spent.entry_counters() > 0 {
         return true;
     }
     let reads = READS.get_or_init(|| {
@@ -849,7 +874,7 @@ pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) 
 /// entering permanent's own trigger became.
 pub(crate) fn project_receipt(
     game: &Game,
-    spent: &ManaSpent,
+    spent: &PaymentReceipt,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
     text: bool,
@@ -959,7 +984,7 @@ pub(crate) fn project_decision(
                 format!(
                     "Mana already spent in this payment: {}.",
                     mana_description(&crate::state::mana::Mana {
-                        mana: spent.amounts,
+                        mana: spent.amounts(),
                         ..Default::default()
                     })
                 )

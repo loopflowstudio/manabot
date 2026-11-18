@@ -708,7 +708,11 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 4);
     assert_eq!(pool(&s).restricted_of(&ally), [0, 0, 0, 0, 1, 0]);
-    s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 1, 0, 1];
+    s.game_mut().state.players[0].mana_pool = Mana {
+        mana: [0, 0, 0, 1, 0, 1],
+        ..Default::default()
+    }
+    .into();
     let captives = library_card(&s, 0, "Rebellious Captives");
     let ogre = library_card(&s, 0, "Gray Ogre");
     let captives = move_card(&mut s, captives, ZoneType::Hand);
@@ -733,7 +737,11 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     s.set_player_mana_pool(0, "");
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 0);
-    s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 0, 0, 5];
+    s.game_mut().state.players[0].mana_pool = Mana {
+        mana: [0, 0, 0, 0, 0, 5],
+        ..Default::default()
+    }
+    .into();
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(
         !can_activate(&s, scroll),
@@ -932,6 +940,23 @@ fn badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana() {
     choose_mode(&mut s, 1);
     settle(&mut s);
     assert_eq!(*pool(&s), managym::state::mana::Mana::parse("UG"));
+    // Each unit keeps the object that produced it: the Herbalist's chosen
+    // output, and the Cub's triggered bonus.
+    let produced_by = |color| {
+        let origins: Vec<_> = s.game().state.players[0]
+            .mana_pool
+            .origins(None, color)
+            .collect();
+        assert_eq!(origins.len(), 1);
+        let origin = origins[0].expect("an object produced it");
+        assert_eq!(
+            s.game().state[origin.object].definition_id,
+            origin.definition
+        );
+        s.game().state[origin.object].name.clone()
+    };
+    assert_eq!(produced_by(Color::Blue), "Hermitic Herbalist");
+    assert_eq!(produced_by(Color::Green), "Badgermole Cub");
 }
 
 fn pool(s: &Scenario) -> &managym::state::mana::Mana {
@@ -5970,9 +5995,10 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     let ozai = s.force_permanent_on_battlefield(0, "Ozai, the Phoenix King");
     s.set_player_mana_pool(0, "WUB");
     let lesson = ManaRestriction::spell(["Lesson"]);
-    s.game_mut().state.players[0]
-        .mana_pool
-        .add(&Mana::restricted_to(lesson.clone(), [0, 0, 0, 0, 1, 0]));
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana::restricted_to(lesson.clone(), [0, 0, 0, 0, 1, 0]),
+        None,
+    );
     assert!(!observed_keywords(&s, ozai).flying);
 
     declare_attackers(&mut s, &[ozai]);
@@ -5983,12 +6009,25 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     );
     let keywords = observed_keywords(&s, ozai);
     assert!(keywords.flying && keywords.indestructible, "eight unspent");
+    // Firebending's mana names Ozai, the source of the effect that added it.
+    let ozai_object = s.game().state.permanents[ozai].as_ref().unwrap().object;
+    let from_ozai = |pool: &managym::state::mana::ManaPool| {
+        pool.origins(None, Color::Red)
+            .filter(|origin| origin.is_some_and(|origin| origin.object == ozai_object))
+            .count()
+    };
+    assert_eq!(from_ozai(&s.game().state.players[0].combat_mana_pool), 4);
 
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     let mut red = Mana::parse("RRRRRRR");
     red.add(&Mana::restricted_to(lesson, [0, 0, 0, 1, 0, 0]));
     assert_eq!(*pool(&s), red);
     assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+    // Becoming red and outliving combat changes a unit's color and pool,
+    // never where it came from: Ozai's four, beside the fixture's three.
+    let regular = &s.game().state.players[0].mana_pool;
+    assert_eq!(from_ozai(regular), 4);
+    assert_eq!(regular.origins(None, Color::Red).flatten().count(), 4);
     assert!(observed_keywords(&s, ozai).indestructible);
 
     s.set_player_mana_pool(0, "RRRRR");

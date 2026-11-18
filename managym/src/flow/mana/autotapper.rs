@@ -325,7 +325,7 @@ impl Chooser<'_> {
             }
             for choice in pool.spending_choices(&remaining) {
                 let mut next = pool.clone();
-                next.spend(&choice.unit, &remaining.purpose);
+                next.spend(&choice.unit);
                 if next.can_pay(&choice.remaining) {
                     pending.push((next, choice.remaining));
                 }

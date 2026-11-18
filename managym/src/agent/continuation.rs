@@ -17,7 +17,8 @@ use crate::{
     state::{
         ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
         game_object::{ObjectId, PlayerId, Target},
-        mana::{ManaCost, ManaSpent},
+        mana::ManaCost,
+        payment::PaymentReceipt,
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -200,13 +201,13 @@ impl ContinuationFrame {
 
 /// The cast receipt a stack object carries when a rule still reads it
 /// (`effect_execution::receipt_matters`).
-fn stack_receipt(object: &StackObject) -> Option<ManaSpent> {
+fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
     let spent = match object {
-        StackObject::Spell(spell) => spell.spent,
-        StackObject::TriggeredAbility(ability) => ability.spent,
+        StackObject::Spell(spell) => &spell.spent,
+        StackObject::TriggeredAbility(ability) => &ability.spent,
         StackObject::ActivatedAbility(_) => return None,
     };
-    super::effect_execution::receipt_matters(&spent, Some(object.source_definition_id()))
+    super::effect_execution::receipt_matters(spent, Some(object.source_definition_id()))
         .then_some(spent)
 }
 
@@ -655,7 +656,7 @@ impl Game {
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
         if let Some(spent) = stack_receipt(object) {
-            super::effect_execution::project_receipt(self, &spent, viewer, &mut frame, false);
+            super::effect_execution::project_receipt(self, spent, viewer, &mut frame, false);
         }
         frame
     }
@@ -861,7 +862,7 @@ impl Game {
         for (frame, object) in frames.iter_mut().zip(self.state.stack_objects.iter().rev()) {
             debug_assert!(matches!(frame.kind, 1..=3));
             if let Some(spent) = stack_receipt(object) {
-                super::effect_execution::project_receipt(self, &spent, viewer, frame, true);
+                super::effect_execution::project_receipt(self, spent, viewer, frame, true);
             }
         }
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
@@ -1321,7 +1322,7 @@ mod tests {
             Decision::ManaSpend {
                 player,
                 cost: ManaCost::default(),
-                spent: crate::state::mana::ManaSpent::default(),
+                spent: Default::default(),
                 completion: Box::new(SpendCompletion::Foretell(game.state.players[0].deck[0])),
             },
             Decision::OrderReplacement {

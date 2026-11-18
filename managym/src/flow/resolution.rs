@@ -213,7 +213,7 @@ impl Game {
             ),
             kicked: spell.kicked,
             x: spell.x,
-            spent: spell.spent,
+            spent: spell.spent.clone(),
             targets,
             completion: FrameCompletion::Spell {
                 object,
@@ -414,7 +414,7 @@ impl Game {
             source_transforms: triggered.source_transforms,
             resolutions_this_turn,
             x: triggered.x,
-            spent: triggered.spent,
+            spent: triggered.spent.clone(),
             targets,
             context_target: triggered.context,
             triggering_player: triggered.player,
@@ -1406,13 +1406,14 @@ impl Game {
             } => {
                 let count = self.effect_value(amount, frame).max(0);
                 self.invalidate_mana_cache(frame.controller);
+                let origin = frame.source().and_then(|source| self.mana_origin(source));
                 let pool = if *until_end_of_combat {
                     self.state.combat_mana_pool_mut(frame.controller)
                 } else {
                     self.state.mana_pool_mut(frame.controller)
                 };
                 for _ in 0..count {
-                    pool.add(mana);
+                    pool.add(mana, origin);
                 }
                 if *until_end_of_combat {
                     self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);
@@ -1564,7 +1565,7 @@ impl Game {
                 );
                 trigger.remembered = frame.remembered.clone();
                 trigger.x = frame.x;
-                trigger.spent = frame.spent;
+                trigger.spent = frame.spent.clone();
                 trigger.player = frame.triggering_player;
                 None
             }

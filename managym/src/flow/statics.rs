@@ -1052,7 +1052,7 @@ mod cache_tests {
             .unwrap();
         let raw = game.layer_view(id);
         assert!(Arc::ptr_eq(&raw, &game.characteristics(id)));
-        *game.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R");
+        *game.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R").into();
         assert!(Arc::ptr_eq(&raw, &game.characteristics(id)));
         let affected = game.affected_permanent(id).unwrap();
         game.apply_continuous(
@@ -1072,7 +1072,7 @@ mod cache_tests {
         let board = game.layer_board();
         let before = game.characteristics(id);
         let mut branch = game.clone();
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR");
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR").into();
         let after = branch.characteristics(id);
         assert!(Arc::ptr_eq(&board, &branch.layer_board()));
         assert_ne!(before.activated_abilities, after.activated_abilities);
@@ -1103,9 +1103,9 @@ mod cache_tests {
             EffectDuration::Indefinite,
         );
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RRR");
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RRR").into();
         assert_eq!(branch.characteristics(id).pt(), (4, 4));
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default();
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default().into();
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
     }
 
@@ -1142,7 +1142,7 @@ mod cache_tests {
         );
         let fixed = branch.characteristics(id);
         branch.state.untap(id);
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R");
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R").into();
         assert!(Arc::ptr_eq(&fixed, &branch.characteristics(id)));
 
         let affected = branch.affected_permanent(id).unwrap();

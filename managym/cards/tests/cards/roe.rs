@@ -450,7 +450,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
         let mut s = five_color_setup(&["Prophetic Prism", "Serra Angel"]);
         enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, &format!("W{}", "U".repeat(blue)));
-        s.game_mut().state.players[0].combat_mana_pool = Mana::parse("U");
+        s.game_mut().state.players[0].combat_mana_pool = Mana::parse("U").into();
         let angel = library_card(&s, 0, "Serra Angel");
         let angel = move_card(&mut s, angel, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -482,7 +482,9 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
         s.set_player_mana_pool(0, if unrestricted { "U" } else { "0" });
         let lesson = ManaRestriction::spell(["Lesson"]);
         let restricted = Mana::restricted_to(lesson, [0, 1, 0, 0, 0, 0]);
-        s.game_mut().state.players[0].mana_pool.add(&restricted);
+        s.game_mut().state.players[0]
+            .mana_pool
+            .add(&restricted, None);
         s.game_mut().scenario_refresh_priority().unwrap();
         let prism = permanent_named(&s, "Prophetic Prism");
         assert_eq!(s.action_space().actions.iter().any(|action|

@@ -772,7 +772,7 @@ impl Game {
             context: trigger.context,
             player: trigger.player,
             x: trigger.x,
-            spent: trigger.spent,
+            spent: trigger.spent.clone(),
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
@@ -1105,7 +1105,7 @@ impl Game {
                     .permanent_of(*object)
                     .and_then(|id| self.state.permanents[id].as_ref())
                     .map_or(Default::default(), |permanent| {
-                        (permanent.cast_x, permanent.cast_spent)
+                        (permanent.cast_x, permanent.cast_spent.clone())
                     }),
                 _ => Default::default(),
             };

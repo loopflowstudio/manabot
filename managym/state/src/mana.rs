@@ -1,11 +1,13 @@
 // mana.rs
 // Mana costs, pooled classes and exact unit spending. SpendingContext checks
-// restrictions; ManaSpent carries one payment's amounts and applicable riders.
+// restrictions; ManaPool keeps, unit for unit, which object produced a
+// player's mana, so the receipt of a later payment (`payment`) can name it.
 
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
     card::{CardType, PrintedCharacteristics},
+    payment::{ManaOrigin, SpentMana},
     zone::ZoneType,
 };
 
@@ -233,38 +235,6 @@ impl ManaClass {
         self.restriction
             .as_ref()
             .is_none_or(|restriction| restriction.allows(context))
-    }
-}
-
-/// The mana one payment actually spent (CR 601.2h): amounts by W/U/B/R/G/C
-/// and the spend effects that applied. A cast spell keeps it for "mana spent
-/// to cast" and converge; it never reads the printed cost.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
-pub struct ManaSpent {
-    pub amounts: [u8; 6],
-    /// +1/+1 counters the spell's permanent enters with, one for each mana
-    /// spent whose `SpendEffect` applied to this spell.
-    #[serde(skip_serializing_if = "crate::is_zero")]
-    pub entry_counters: u8,
-}
-
-impl ManaSpent {
-    pub fn is_empty(&self) -> bool {
-        *self == Self::default()
-    }
-
-    /// "The amount of mana spent to cast" it.
-    pub fn total(&self) -> u16 {
-        self.amounts.iter().map(|amount| u16::from(*amount)).sum()
-    }
-
-    /// Converge (an ability word, CR 207.2c): the number of colors of mana
-    /// spent; colorless is not a color (CR 105.1).
-    pub fn colors(&self) -> u8 {
-        self.amounts[..5]
-            .iter()
-            .filter(|amount| **amount > 0)
-            .count() as u8
     }
 }
 
@@ -902,34 +872,21 @@ impl Mana {
         result
     }
 
-    /// Remove exactly the selected mana and return its contribution to the
-    /// payment receipt. No ordering preference is applied here.
-    pub fn spend(&mut self, unit: &Mana, purpose: &SpendingContext) -> ManaSpent {
-        let mut receipt = ManaSpent {
-            amounts: unit.mana,
-            entry_counters: 0,
-        };
+    /// Remove exactly the selected mana. No ordering preference is applied
+    /// here.
+    pub fn spend(&mut self, unit: &Mana) {
         for (amount, spent) in self.mana.iter_mut().zip(unit.mana) {
             *amount = amount.checked_sub(spent).expect("selected pooled mana");
         }
         for (class, amounts) in unit.classes() {
             let available = self.class_mut(class);
-            let effect_applies = class
-                .effect
-                .as_ref()
-                .is_some_and(|effect| effect.applies(purpose));
             for (color, spent) in amounts.iter().enumerate() {
                 available[color] = available[color]
                     .checked_sub(*spent)
                     .expect("selected class");
-                receipt.amounts[color] += spent;
-                if effect_applies {
-                    receipt.entry_counters += spent;
-                }
             }
         }
         self.prune();
-        receipt
     }
 
     /// Combine combat mana without losing which units survive a step end.
@@ -985,6 +942,183 @@ impl Mana {
         // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];
         self.classes = None;
+    }
+}
+
+/// One pooled unit: its class (`None` for ordinary mana), its color as
+/// `Mana.mana` indexes it, and the object that produced it.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+struct PooledUnit {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    class: Option<ManaClass>,
+    color: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    origin: Option<ManaOrigin>,
+}
+
+/// A player's mana pool: the mana and, unit for unit, where it came from.
+///
+/// Invariant: `units` holds exactly one entry per pooled unit, agreeing with
+/// `mana` per class and color, oldest first. Every writer is a method here,
+/// and debug builds check the agreement after each one.
+///
+/// A property a rule reads belongs in `ManaClass`; the origin only names
+/// which object produced a unit. Units of one class and color are
+/// interchangeable by rule (CR 106.4), so spending takes the oldest: no
+/// choice is hidden and payment search compares `Mana` alone.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
+pub struct ManaPool {
+    #[serde(flatten)]
+    mana: Mana,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    units: Vec<PooledUnit>,
+}
+
+impl ManaPool {
+    pub fn mana(&self) -> &Mana {
+        &self.mana
+    }
+
+    /// Add `mana` produced by `origin` (`None` for mana no object produced).
+    pub fn add(&mut self, mana: &Mana, origin: Option<ManaOrigin>) {
+        let before = self.mana.clone();
+        self.mana.add(mana);
+        // Amounts saturate, so count what the pool actually gained.
+        for (color, amount) in self.mana.mana.iter().enumerate() {
+            for _ in before.mana[color]..*amount {
+                self.units.push(PooledUnit {
+                    class: None,
+                    color: color as u8,
+                    origin,
+                });
+            }
+        }
+        for (class, _) in mana.classes() {
+            let had = before.class_of(class);
+            for (color, amount) in self.mana.class_of(class).iter().enumerate() {
+                for _ in had[color]..*amount {
+                    self.units.push(PooledUnit {
+                        class: Some(class.clone()),
+                        color: color as u8,
+                        origin,
+                    });
+                }
+            }
+        }
+        self.check();
+    }
+
+    /// Join `other`'s units, keeping their origins, after this pool's.
+    pub fn absorb(&mut self, other: ManaPool) {
+        self.mana.add(&other.mana);
+        self.units.extend(other.units);
+        self.check();
+    }
+
+    /// Remove exactly the selected mana and return each unit as it was
+    /// spent: its origin, and its class's rider when that applies to
+    /// `purpose`. The oldest unit of a class and color is spent first.
+    pub fn spend(&mut self, unit: &Mana, purpose: &SpendingContext) -> Vec<SpentMana> {
+        self.mana.spend(unit);
+        let mut spent = Vec::new();
+        let ordinary = std::iter::once((None, &unit.mana));
+        let classed = unit
+            .classes()
+            .iter()
+            .map(|(class, amounts)| (Some(class), amounts));
+        for (class, amounts) in ordinary.chain(classed) {
+            let effect = class
+                .and_then(|class| class.effect.as_ref())
+                .filter(|effect| effect.applies(purpose));
+            for (color, amount) in amounts.iter().enumerate() {
+                for _ in 0..*amount {
+                    let index = self
+                        .units
+                        .iter()
+                        .position(|pooled| {
+                            pooled.color as usize == color && pooled.class.as_ref() == class
+                        })
+                        .expect("a pooled unit has an origin entry");
+                    spent.push(SpentMana {
+                        color: color as u8,
+                        source: self.units.remove(index).origin,
+                        effect: effect.cloned(),
+                    });
+                }
+            }
+        }
+        self.check();
+        spent
+    }
+
+    /// All unspent mana becomes red, keeping its spending restrictions and
+    /// origins (Ozai, the Phoenix King).
+    pub fn become_red(&mut self) {
+        self.mana.become_red();
+        for unit in &mut self.units {
+            unit.color = Color::Red as u8;
+        }
+        self.check();
+    }
+
+    /// Only red mana, with its spending restrictions and origins.
+    pub fn red_only(mut self) -> Self {
+        self.mana = self.mana.red_only();
+        self.units.retain(|unit| unit.color == Color::Red as u8);
+        self.check();
+        self
+    }
+
+    /// The origin of each pooled unit of `class` (`None` for ordinary mana)
+    /// and `color`, oldest first.
+    pub fn origins<'a>(
+        &'a self,
+        class: Option<&'a ManaClass>,
+        color: Color,
+    ) -> impl Iterator<Item = Option<ManaOrigin>> + 'a {
+        self.units
+            .iter()
+            .filter(move |unit| unit.color == color as u8 && unit.class.as_ref() == class)
+            .map(|unit| unit.origin)
+    }
+
+    fn check(&self) {
+        #[cfg(debug_assertions)]
+        {
+            let mut counted = Mana::default();
+            for unit in &self.units {
+                let mut amounts = [0u8; 6];
+                amounts[unit.color as usize] = 1;
+                match &unit.class {
+                    Some(class) => counted.add_class(class, amounts),
+                    None => counted.mana[unit.color as usize] += 1,
+                }
+            }
+            debug_assert_eq!(counted, self.mana, "pool origins disagree with its mana");
+        }
+    }
+}
+
+impl std::ops::Deref for ManaPool {
+    type Target = Mana;
+
+    fn deref(&self) -> &Mana {
+        &self.mana
+    }
+}
+
+impl PartialEq<Mana> for ManaPool {
+    fn eq(&self, other: &Mana) -> bool {
+        self.mana == *other
+    }
+}
+
+/// Mana no object produced: a constructed position's pool.
+impl From<Mana> for ManaPool {
+    fn from(mana: Mana) -> Self {
+        let mut pool = Self::default();
+        pool.add(&mana, None);
+        pool
     }
 }
 
@@ -1082,12 +1216,12 @@ mod tests {
         let options = pool.spending_choices(&spell);
         assert_eq!(options.len(), 5);
         for choice in options {
-            let mut remaining = pool.clone();
+            let mut remaining = super::ManaPool::from(pool.clone());
             let receipt = remaining.spend(&choice.unit, &spell.purpose);
             assert_eq!(remaining.total(), pool.total() - 1);
-            assert_eq!(receipt.total(), 1);
+            assert_eq!(receipt.len(), 1);
             assert_eq!(
-                receipt.entry_counters,
+                u8::from(receipt[0].effect.is_some()),
                 u8::from(
                     choice
                         .unit
@@ -1108,7 +1242,7 @@ mod tests {
         let mut mana = Mana::parse("2RG");
         let cost = ManaCost::parse("1RG");
         assert!(mana.can_pay(&cost));
-        mana.spend(&Mana::parse("1RG"), &cost.purpose);
+        mana.spend(&Mana::parse("1RG"));
         assert_eq!(mana.total(), 1);
     }
 
@@ -1121,7 +1255,7 @@ mod tests {
 
         let cost = ManaCost::parse("2G");
         assert!(mana.can_pay(&cost));
-        mana.spend(&Mana::parse("2G"), &cost.purpose);
+        mana.spend(&Mana::parse("2G"));
 
         assert_eq!(mana.mana[Color::Colorless as usize], 0);
         assert_eq!(mana.mana[Color::Green as usize], 0);
@@ -1136,7 +1270,7 @@ mod tests {
 
         let cost = ManaCost::parse("1");
         assert_eq!(mana.spending_choices(&cost).len(), 2);
-        mana.spend(&Mana::parse("1"), &cost.purpose);
+        mana.spend(&Mana::parse("1"));
 
         // Colorless spent, red preserved
         assert_eq!(mana.mana[Color::Colorless as usize], 0);
@@ -1164,10 +1298,7 @@ mod tests {
         let mut paid = pool.clone();
         let payment = cost("U", SpendingContext::cast(["Lesson"], []));
         assert_eq!(pool.spending_choices(&payment).len(), 2);
-        paid.spend(
-            &Mana::restricted_to(lesson.clone(), [0, 1, 0, 0, 0, 0]),
-            &payment.purpose,
-        );
+        paid.spend(&Mana::restricted_to(lesson.clone(), [0, 1, 0, 0, 0, 0]));
         assert_eq!(paid.restricted_of(&lesson), [0; 6]);
         assert_eq!(paid.restricted_of(&lesson_or_shrine), [0, 1, 0, 0, 0, 0]);
         assert_eq!(paid.classes().len(), 2);
@@ -1199,10 +1330,10 @@ mod tests {
         // An Elemental spell is not an ability of an Elemental source.
         assert!(!pool.can_pay(&cost("G", SpendingContext::cast(["Elemental"], []))));
         let mut paid = pool.clone();
-        paid.spend(
-            &Mana::restricted_to(elemental_sources.clone(), [0, 0, 0, 0, 1, 0]),
-            &cost("G", SpendingContext::ability(["Elemental"])).purpose,
-        );
+        paid.spend(&Mana::restricted_to(
+            elemental_sources.clone(),
+            [0, 0, 0, 0, 1, 0],
+        ));
         assert_eq!(paid.restricted_of(&elemental_sources), [0; 6]);
         assert_eq!(paid.restricted_of(&dragon), [0, 0, 0, 1, 0, 0]);
         assert!(!pool.can_pay(&ManaCost::parse("1")));

@@ -594,7 +594,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         .stack_objects
         .iter()
         .find_map(|stack| match stack {
-            StackObject::Spell(spell) if spell.object == original => Some(spell.spent),
+            StackObject::Spell(spell) if spell.object == original => Some(spell.spent.clone()),
             _ => None,
         })
         .unwrap();

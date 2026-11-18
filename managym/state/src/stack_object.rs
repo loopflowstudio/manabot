@@ -2,7 +2,7 @@ use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
-use crate::mana::ManaSpent;
+use crate::payment::PaymentReceipt;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
@@ -29,8 +29,8 @@ pub struct SpellOnStack {
     pub mode: Option<usize>,
     /// The mana actually spent to cast it (CR 601.2h), for "mana spent to
     /// cast" and converge; empty for a spell cast without paying mana.
-    #[serde(skip_serializing_if = "ManaSpent::is_empty")]
-    pub spent: ManaSpent,
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub spent: PaymentReceipt,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -114,8 +114,8 @@ pub struct TriggeredAbilityOnStack {
     pub x: u8,
     /// The mana spent to cast the permanent whose entering triggered this,
     /// for its own "mana spent to cast" (`PendingTrigger::spent`).
-    #[serde(skip_serializing_if = "ManaSpent::is_empty")]
-    pub spent: ManaSpent,
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub spent: PaymentReceipt,
     /// Delayed triggers resolve these effects instead of looking up
     /// `Object::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,

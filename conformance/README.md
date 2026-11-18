@@ -2,13 +2,13 @@
 
 Current-world (w17) corpora with executable consumers:
 
-- `semantic-kernel-w17-v5/` — seeded cases (`manifest.json`) whose regenerated
+- `semantic-kernel-w17-v6/` — seeded cases (`manifest.json`) whose regenerated
   traces must match `evidence.json`'s per-case `trace_sha256`, plus property and
   Phase-matrix checks (`managym/tests/semantic_conformance_tests.rs`, CI fuzzing).
-  A drifted case is written to `target/semantic-conformance/semantic-kernel-w17-v5/`;
+  A drifted case is written to `target/semantic-conformance/semantic-kernel-w17-v6/`;
   inspect it with `cargo run --manifest-path managym/Cargo.toml --bin
   semantic_conformance -- replay <file>`, and re-record an accepted change with
-  `... -- record --root conformance/semantic-kernel-w17-v5`.
+  `... -- record --root conformance/semantic-kernel-w17-v6`.
 - `authored-match-w17-v2/` — the authored-match authority receipt
   (`conformance.authored_match_receipt`, `scripts/generate_authored_match_receipt.py`).
   Its declared policy uniformly chooses strategic offers and explicitly uses
@@ -48,3 +48,8 @@ state hashes predate. Its commands, action spaces and pending choices equal v3's
 Semantic-kernel w17-v5 records the default priority surface with choice-output
 mana floats disabled and automatic payment from simple choice-output sources.
 The v4 corpus retains its original commands and evidence.
+
+Semantic-kernel w17-v6 hashes states under `MATCH_STATE_HASH_VERSION` 17,
+which adds the object that produced each pooled unit of mana and each unit a
+payment spent. Its commands, action spaces and pending choices equal v5's;
+the v5 corpus is retained unchanged.

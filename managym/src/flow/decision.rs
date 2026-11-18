@@ -26,7 +26,8 @@ use crate::{
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
-        mana::{ManaCost, ManaSpent},
+        mana::ManaCost,
+        payment::PaymentReceipt,
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -50,7 +51,7 @@ pub enum FrameCompletion {
     Paid {
         player: PlayerId,
         payment: Payment,
-        spent: ManaSpent,
+        spent: PaymentReceipt,
     },
     Activated {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
@@ -141,8 +142,8 @@ pub struct EffectFrame {
     pub x: u8,
     /// The mana spent to cast the resolving spell, or the permanent whose
     /// entering triggered the resolving ability; empty otherwise.
-    #[serde(skip_serializing_if = "crate::state::mana::ManaSpent::is_empty")]
-    pub spent: ManaSpent,
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub spent: PaymentReceipt,
     /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
@@ -274,7 +275,7 @@ impl EffectFrame {
             resolutions_this_turn: self.resolutions_this_turn,
             kicked: self.kicked,
             x: self.x,
-            spent: self.spent,
+            spent: self.spent.clone(),
             targets: self.targets.clone(),
             active_requirement: self.active_requirement,
             context_target: self.context_target,
@@ -544,7 +545,7 @@ pub enum Decision {
     ManaSpend {
         player: PlayerId,
         cost: ManaCost,
-        spent: ManaSpent,
+        spent: PaymentReceipt,
         completion: Box<SpendCompletion>,
     },
     /// A mana ability's printed upfront cost, before its output exists.
@@ -1403,7 +1404,7 @@ impl Game {
                                                 crate::state::permanent::Counters::default();
                                             counters.change(
                                                 crate::state::permanent::CounterKind::PlusOnePlusOne,
-                                                i32::from(frame.spent.entry_counters),
+                                                i32::from(frame.spent.entry_counters()),
                                             );
                                             counters
                                         },
@@ -2240,7 +2241,12 @@ impl Game {
                     && self.pending_choice.is_none()
                     && self.mana_capture(player).is_some())
                 .then(|| self.state.players[player.0].mana_pool.total());
-                self.state.mana_pool_mut(player).add(mana);
+                let origin = match production {
+                    ManaProduction::Output { source, .. } => *source,
+                    ManaProduction::Bonus { source, .. } => Some(*source),
+                }
+                .and_then(|source| self.mana_origin(source));
+                self.state.mana_pool_mut(player).add(mana, origin);
                 // The output is produced: its triggered mana abilities
                 // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
                 let next = match production {
@@ -4426,7 +4432,7 @@ mod payment_tests {
         }
         let waterbend = game.lookup_current_permanent(sources[0]).unwrap();
         let prism = game.lookup_current_permanent(sources[1]).unwrap();
-        game.state.players[0].mana_pool = Mana::parse("1");
+        game.state.players[0].mana_pool = Mana::parse("1").into();
         game.invalidate_mana_cache(player);
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let root = witness(&game);

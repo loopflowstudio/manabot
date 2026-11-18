@@ -2434,8 +2434,8 @@ fn player_life_and_mana_move_their_named_columns() {
         let player = &mut game.state.players[0];
         match field {
             "life" => player.life = 7,
-            "mana_pool" => player.mana_pool = Mana::parse("R"),
-            "combat_mana_pool" => player.combat_mana_pool = Mana::parse("R"),
+            "mana_pool" => player.mana_pool = Mana::parse("R").into(),
+            "combat_mana_pool" => player.combat_mana_pool = Mana::parse("R").into(),
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
@@ -5129,7 +5129,8 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::restricted_to(
         managym::state::mana::ManaRestriction::ExceptNonartifactSpells,
         [0, 0, 0, 0, 0, 1],
-    );
+    )
+    .into();
     assert_eq!(
         refusal(&s),
         Some("mana that can't be spent to cast nonartifact spells")
@@ -5197,7 +5198,7 @@ fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
 fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
     let mut s = five_color_setup(&["Animal Attendant"]);
     s.set_player_mana_pool(0, "255");
-    s.game_mut().state.players[0].combat_mana_pool = managym::state::mana::Mana::parse("1");
+    s.game_mut().state.players[0].combat_mana_pool = managym::state::mana::Mana::parse("1").into();
     for viewer in [0, 1] {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
         let player = if viewer == 0 {

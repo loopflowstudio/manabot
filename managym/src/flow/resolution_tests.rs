@@ -2803,7 +2803,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         exiled_object: returned_ref,
         returns: true,
     });
-    game.state.players[player.0].mana_pool = Mana::parse("R");
+    game.state.players[player.0].mana_pool = Mana::parse("R").into();
     game.state.suspended_decision = Some(SuspendedResolution {
         frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
         decision: Decision::Payment(PaymentProgress::new(
