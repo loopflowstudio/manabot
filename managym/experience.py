@@ -189,6 +189,11 @@ class DecisionContextView(ProtocolModel):
     reserved_sacrifice: DecisionObjectView | None
     mana_cost: str | None
     chosen_mode: UInt32 | None
+    # The spell or activated ability `source` names is being announced, so it
+    # is on the stack by the rules (CR 601.2a, 602.2a) while its costs are paid.
+    announcing: Literal["spell", "activated_ability"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class OfferSubjectView(ProtocolModel):
@@ -613,6 +618,7 @@ class LegacyHeroObservation(ProtocolModel):
                 or self.decision_context.reserved_sacrifice is not None
                 or self.decision_context.mana_cost is not None
                 or self.decision_context.chosen_mode is not None
+                or self.decision_context.announcing is not None
             )
         ):
             raise ValueError("decision context is not oriented to its acting viewer")

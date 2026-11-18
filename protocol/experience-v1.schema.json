@@ -722,6 +722,13 @@
           "maximum": 255,
           "minimum": 0
         },
+        "announcing": {
+          "description": "`source` is a spell (`spell`) or an activated ability\n(`activated_ability`) the actor is announcing. By the rules it is on\nthe stack (CR 601.2a, 602.2a); the engine holds it in its zone until\nthe announced costs are paid. Omitted otherwise and on older frames.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "chosen_mode": {
           "$ref": "#/$defs/RequiredNullable4"
         },

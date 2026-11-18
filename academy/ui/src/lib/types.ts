@@ -231,6 +231,8 @@ export interface DecisionContextView {
   reserved_sacrifice: DecisionObjectView | null;
   mana_cost: string | null;
   chosen_mode: number | null;
+  /** `source` is being announced, so it is on the stack by the rules (CR 601.2a, 602.2a). */
+  announcing?: 'spell' | 'activated_ability';
 }
 
 export interface StackEntryView {

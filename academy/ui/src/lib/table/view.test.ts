@@ -180,3 +180,28 @@ describe('splitHalf', () => {
     expect(split.supportFit.card).toBeGreaterThan(80);
   });
 });
+
+describe('the spell being cast', () => {
+  it('is on top of the stack while it is paid for, not in the hand', () => {
+    const frame = navigation.PAY_OR_NOT.frame;
+    const source = frame.projection.decision_context!.source!;
+    expect(frame.projection.decision_context!.announcing).toBe('spell');
+    const view = tableView(frame);
+    expect(view.stack[0].announcing).toBe('spell');
+    expect(view.stack[0].card?.id).toBe(source.display_id);
+    expect(view.stack[0].entry.label).toBe(source.label);
+    expect(view.stack.length).toBe((frame.projection.stack_objects ?? []).length + 1);
+    expect(view.hand.map(item => item.card.id)).not.toContain(source.display_id);
+  });
+
+  it('names an ability being activated by its source and leaves the source on the battlefield', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const land = frame.projection.agent.battlefield[0];
+    const context = frame.projection.decision_context!;
+    context.announcing = 'activated_ability';
+    context.source = { entity_id: land.id, subject: { kind: 'object', id: { entity: land.id, incarnation: 0 } }, display_id: land.id, label: land.name ?? "Land" };
+    const view = tableView(frame);
+    expect(view.stack[0]).toMatchObject({ announcing: 'activated_ability', card: null, entry: { source_permanent: land.id } });
+    expect(permanents(view).map(item => item.permanent.id)).toContain(land.id);
+  });
+});

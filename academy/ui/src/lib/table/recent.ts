@@ -168,7 +168,7 @@ export function tableLines(
   }
   // Targets already chosen for the spell the person is casting now.
   const context = frame.projection.decision_context;
-  if (context?.source && onStack.has(context.source.display_id)) {
+  if (context?.source && (context.announcing || onStack.has(context.source.display_id))) {
     for (const target of context.targets) {
       const to = endpoint(target.object.subject, frame, onBoard, onStack)
         ?? (onBoard.has(target.object.display_id) ? { kind: 'object', id: target.object.display_id } as const : null);

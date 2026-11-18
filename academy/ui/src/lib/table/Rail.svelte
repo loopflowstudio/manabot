@@ -112,7 +112,8 @@
         {#each view.stack as item, index (item.entry.id)}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
-              data-testid="stack-entry" data-stack-card={item.card?.id}
+              data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
+              data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
               aria-label={`${item.entry.label}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
@@ -120,7 +121,7 @@
               <Thumb name={item.card?.name ?? item.entry.label} />
               <span class="entry-text">
                 <span class="truncate">{stackName(item.entry)}</span>
-                <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{index === 0 ? ' · resolves next' : ''}</span>
+                <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
             </button>
           </li>
@@ -253,6 +254,8 @@
     border: 1px solid var(--border); background: var(--bg-field); font-size: 13px; color: var(--text);
   }
   .stack-entry.top { border-color: var(--border-strong); }
+  /* Being cast or activated: on the stack by the rules, its costs still being chosen. */
+  .stack-entry[data-announcing] { border-style: dashed; border-color: var(--planned); }
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
   .entry-text { display: grid; min-width: 0; line-height: 16px; }
   .recent { margin-top: 8px; }

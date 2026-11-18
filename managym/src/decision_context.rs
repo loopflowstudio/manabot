@@ -259,6 +259,7 @@ impl Game {
             mana_cost: RequiredNullable(None),
             chosen_mode: RequiredNullable(None),
             recent_facts: Vec::new(),
+            announcing: None,
         };
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
@@ -300,6 +301,17 @@ impl Game {
                 .collect();
             view.reserved_sacrifice = RequiredNullable(frame.sacrifice.and_then(object));
             view.chosen_mode = RequiredNullable(frame.mode.map(|mode| mode as u32));
+            // An announcement frame names the spell or ability being put on the stack.
+            if frame.kind == 4 && view.source.0.is_some() {
+                view.announcing = Some(
+                    if frame.ability.is_some() {
+                        "activated_ability"
+                    } else {
+                        "spell"
+                    }
+                    .into(),
+                );
+            }
             if let Some(cost) = frame.cost {
                 let mut symbols = String::new();
                 if cost[6] > 0 {

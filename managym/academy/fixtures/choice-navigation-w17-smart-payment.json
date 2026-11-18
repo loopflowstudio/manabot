@@ -564,9 +564,9 @@
       "digest": "449edc9fc583c2a329aa5154f36110210b67988b8b7060d44e43ccab6ffbc1b7",
       "frame": {
         "protocol": 1,
-        "match_id": "LguBYTFXT0HRkpdi-b6czA",
+        "match_id": "5TP7XQ3efEeLGdKD7crkXA",
         "revision": 196,
-        "frame_hash": "9cc3b37b7b5d257e328c8b49b1b61f287a8e728406c2255dc62f9b4b67321f58",
+        "frame_hash": "7938e7826d07282cef4517a5d56b40cda3448e4a628b80441181702a72f6ad24",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2664,9 +2664,9 @@
       "digest": "fd639247ad5aaa345e818a54386211570429c903ed1950d4828954b9a84600d8",
       "frame": {
         "protocol": 1,
-        "match_id": "zUQFCgh6pVU0bckETXWf8w",
+        "match_id": "LDsFj_gYjxvl7x62LtmZsA",
         "revision": 72,
-        "frame_hash": "3231efb67284aabec1af07fc0eed17a3f22911e3fd568e7ca8b0c7c1d7ea5c6f",
+        "frame_hash": "74aaa396dda093bb378d39031bc85bea29f3537ceb17206dd29810703ed35aba",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4324,9 +4324,9 @@
       "digest": "4ab0d8e938de43b7fbe9fa99806ea32fbf661fdbaf7861de00738652bd77b83f",
       "frame": {
         "protocol": 1,
-        "match_id": "MkgCnfdjqaiQRHg_iPeWEQ",
+        "match_id": "5r_qcz-THCQC96aBDfYITQ",
         "revision": 7,
-        "frame_hash": "ced3085a374840902fb3b5c5c5928efd013e4acdd5a5954b4020f5b6108b14dd",
+        "frame_hash": "76dddb37055feac7825876fc0ef7f58a1e67d434a8299c04a49ae159820c38da",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5559,9 +5559,9 @@
       "digest": "460ae4670345fb9950d4549a5c05b73132797a35489d7fa98ed6b918316a59d4",
       "frame": {
         "protocol": 1,
-        "match_id": "SgDtIwZdxL43RnTpadenrw",
+        "match_id": "w4IdCudHlDA_My6oC2rCgg",
         "revision": 40,
-        "frame_hash": "9aacdb5e10c60ecf5ee392d498e6b9e3414bdcb28c98948229c815654ce810fa",
+        "frame_hash": "e0e9a16695c033f5ac8e4a2d8ed99dbd25204506cb270647a0238ac7bfbf490b",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -6912,9 +6912,9 @@
       "digest": "28e33c1c35c901e1292d267b6e8f940a7f07d39e4fffcfb7cfdb8420b28f3056",
       "frame": {
         "protocol": 1,
-        "match_id": "z_b5kelo_i4lPSd1jdpl0Q",
+        "match_id": "Rz0Xso7_Hb8xXIr_xFSXqw",
         "revision": 64,
-        "frame_hash": "658ad85f22f8432ee83815693cb09b2e4cacea19ac573519c9a27cc1b471d47d",
+        "frame_hash": "d9ad946c5de29f782504bfdffdf6cd7410fcd65a08554ff2beeb66f597346d22",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -6982,7 +6982,8 @@
             ],
             "reserved_sacrifice": null,
             "mana_cost": "{1}{U}",
-            "chosen_mode": null
+            "chosen_mode": null,
+            "announcing": "spell"
           },
           "definition_names": {
             "0": "Aang's Iceberg",

@@ -638,6 +638,12 @@ pub struct DecisionContextView {
     pub mana_cost: RequiredNullable<String>,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub chosen_mode: RequiredNullable<u32>,
+    /// `source` is a spell (`spell`) or an activated ability
+    /// (`activated_ability`) the actor is announcing. By the rules it is on
+    /// the stack (CR 601.2a, 602.2a); the engine holds it in its zone until
+    /// the announced costs are paid. Omitted otherwise and on older frames.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announcing: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

@@ -598,7 +598,10 @@ The rail holds:
 
 - **Stack**, top first, each entry with its card and who controls it; a stack
   entry an action applies to is outlined. A line joins a spell on the stack to
-  each of its targets.
+  each of its targets. A spell you are casting, or an ability you are
+  activating, is on top of the stack with a dashed border (**casting**,
+  **activating**) from the moment you choose it, through its targets and
+  payment, with lines to the targets already chosen; the card leaves your hand.
 - **Since your last move**: what happened after your last choice, as the
   server reports it: spells cast and what they targeted, attacks, blocks,
   damage and deaths. The first three lines show; the rest open with **more**. A spell that already resolved keeps its card here, and its

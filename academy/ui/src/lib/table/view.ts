@@ -14,6 +14,7 @@
  */
 import type {
   CardState,
+  DecisionObjectView,
   ExperienceFrame,
   InteractionOffer,
   PermanentState,
@@ -69,6 +70,9 @@ export interface StackItem {
   entry: StackEntryView;
   card: CardState | null;
   offers: PlacedOffer[];
+  /** The spell or ability the person is casting or activating now: on the
+   *  stack by the rules while its targets and costs are chosen. */
+  announcing?: 'spell' | 'activated_ability';
 }
 
 export interface TrayItem {
@@ -220,7 +224,7 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
   const cards = [...frame.projection.agent.stack, ...frame.projection.opponent.stack];
   const used = new Set<number>();
   const entries = frame.projection.stack_objects ?? [];
-  const items = entries.map(entry => {
+  const items: StackItem[] = entries.map(entry => {
     const card = entry.kind === 'spell'
       ? cards.find(candidate => !used.has(candidate.id) && candidate.name === entry.label) ?? null
       : null;
@@ -234,7 +238,26 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
     items.push({ entry: { id: -card.id - 1, kind: 'spell', controller: card.owner_id, label: card.name }, card,
       offers: offersAt({ kind: 'object', id: card.id }) });
   }
+  const announced = announcement(frame);
+  if (announced) {
+    const { source, kind } = announced;
+    // A spell's card is drawn here rather than in the hand; an ability's source stays on the battlefield.
+    const card = kind === 'spell' ? frame.projection.agent.hand.find(candidate => candidate.id === source.display_id) ?? null : null;
+    items.push({
+      entry: { id: -source.display_id - 1, kind, controller: frame.projection.decision_context!.actor, label: source.label,
+        ...(kind === 'activated_ability' ? { source_permanent: source.display_id } : {}) },
+      card,
+      offers: card ? offersAt({ kind: 'object', id: card.id }) : [],
+      announcing: kind,
+    });
+  }
   return items.reverse();
+}
+
+/** The spell or ability the acting viewer is announcing, if any. */
+export function announcement(frame: ExperienceFrame): { kind: 'spell' | 'activated_ability'; source: DecisionObjectView } | null {
+  const context = frame.projection.decision_context;
+  return context?.announcing && context.source ? { kind: context.announcing, source: context.source } : null;
 }
 
 /** A stack entry's short name: a spell's name, or "X's trigger" / "X's ability" for an ability of X. */
@@ -266,8 +289,10 @@ export function tableView(frame: ExperienceFrame): TableView {
   const { agent, opponent } = frame.projection;
   const you = side(agent, offersAt);
   const them = side(opponent, offersAt);
-  const hand = agent.hand.map(card => ({ card, offers: offersAt({ kind: 'object', id: card.id }) }));
   const stack = stackItems(frame, offersAt);
+  const onStack = new Set(stack.map(item => item.card?.id));
+  const hand = agent.hand.filter(card => !onStack.has(card.id))
+    .map(card => ({ card, offers: offersAt({ kind: 'object', id: card.id }) }));
 
   const buttons = list.filter(placed => placed.anchor.kind === 'button');
   buttons.forEach(placed => placedAt.add(placed));
