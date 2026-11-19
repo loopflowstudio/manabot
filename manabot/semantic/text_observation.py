@@ -1218,6 +1218,11 @@ class _Renderer:
         ]
         if context.source is not None:
             lines.append(f"Source: {self.decision_object(context.source)}.")
+        if context.announcing is not None:
+            lines.append(
+                f"Announcing this {context.announcing.replace('_', ' ')}: "
+                "it is on the stack until its costs are paid."
+            )
         if context.chosen_mode is not None:
             lines.append(f"Chosen mode: {context.chosen_mode + 1}.")
         if context.targets:

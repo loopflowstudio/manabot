@@ -857,3 +857,37 @@ combat-expiry classes of the mana in them.
 This is an inspection API for Academy and tools. It adds no action,
 observation field or encoder column, and nothing in `Env.step`, `VectorEnv`,
 search or training calls it.
+
+### Previewing a whole combat declaration
+
+The engine declares attackers and blockers one creature at a time. Ask how a
+whole drafted declaration would be declared, without declaring any of it:
+
+```python
+from managym.combat import CombatPlan, PlannedBlock, preview_combat
+
+frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+ask = preview_combat(env, viewer=frame.actor, revision=frame.revision,
+                     fingerprint=frame.fingerprint, plan=CombatPlan())
+ask.declarable          # every creature the declaration will ask about, in order
+plan = CombatPlan(attackers=[c.creature for c in ask.declarable[:2]])
+preview = preview_combat(env, viewer=frame.actor, revision=frame.revision,
+                         fingerprint=frame.fingerprint, plan=plan)
+preview.refused         # None, or the first creature refused and why
+[(s.action_index, s.revision) for s in preview.steps]
+```
+
+`Game::combat_preview` replays the engine's own per-creature answers to the
+plan on a clone (`managym/src/flow/combat_preview.rs`). Each step is one
+ordinary action at the decision it will be asked at, with that decision's
+revision and fingerprint; stepping them in order declares exactly the plan.
+Creatures with a single legal answer are answered by the engine without a
+step, as in play. A block plan names blocker → attacker pairs
+(`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block
+from here. The plan is refused, with a reason, when a planned creature is
+never asked, a planned answer is not offered (a required block) or the
+finished declaration differs from the plan (a lone block of a creature with
+menace, which the engine removes once every blocker is declared).
+`declared_attackers` and `declared_blocks` are the declaration as the engine
+would finish it. The same address rules as payment previews apply, and the
+call is read-only in the same way.

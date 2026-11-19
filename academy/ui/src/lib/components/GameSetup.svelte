@@ -51,7 +51,7 @@
       {@const hero = seat === setup.humanSeat}
       {#if !opponentOnly || !hero}
         <fieldset {disabled} class="min-w-0 space-y-3 rounded border border-line bg-field p-4">
-          <legend class="type-rubric px-2">Seat {seat + 1} · {seat === 0 ? 'Play first' : 'Draw first'}</legend>
+          <legend class="type-label px-2">Seat {seat + 1} · {seat === 0 ? 'Play first' : 'Draw first'}</legend>
           {#if !opponentOnly}
             <label class="flex flex-col gap-1">Controller
               <select aria-label={`Seat ${seat + 1} controller`} class="rounded border border-line bg-panel p-2" value={hero && !setup.watchMode ? 'human' : 'bot'} onchange={e => controller(seat, e.currentTarget.value === 'human')}>

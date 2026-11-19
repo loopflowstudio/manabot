@@ -87,6 +87,6 @@ export const LIGHTNING_BOLT_PRESENTATION: PresentationSequence = {
   ],
 };
 
-/** Rust/Python-authority recording shared by table, replay, and inspector tests. */
+/** Rust/Python-authority recording shared by board, replay, and inspector tests. */
 export const COMBAT_TO_TURN_PRESENTATION =
   curatedCombatToTurn as PresentationSequence;

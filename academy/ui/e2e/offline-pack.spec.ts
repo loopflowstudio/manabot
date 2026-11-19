@@ -26,7 +26,7 @@ async function updateSeq(page: Page): Promise<number> {
 
 async function finishGame(page: Page): Promise<void> {
   const actionButtons = page.getByTestId('action-option');
-  const gameOver = page.getByText('Game Over', { exact: true });
+  const gameOver = page.getByTestId('game-result');
 
   for (let step = 0; step < MAX_ACTIONS; step += 1) {
     await expect(actionButtons.first().or(gameOver)).toBeVisible({ timeout: 30_000 });
@@ -83,7 +83,7 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
   });
 
   const startedAt = Date.now();
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -93,36 +93,25 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible({ timeout: 15_000 });
   expect(Date.now() - startedAt).toBeLessThan(60_000);
-  await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Random (GW Allies)');
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies');
 
-  const initialTreatments = board.getByTestId('card-treatment');
-  const initialTreatmentCount = await initialTreatments.count();
-  expect(initialTreatmentCount).toBeGreaterThan(0);
-  await expect(board.locator('[data-asset-source="pack"]')).toHaveCount(
-    initialTreatmentCount,
-  );
-  await expect(board.locator('[data-asset-source="fallback"]')).toHaveCount(0);
+  // Board cards draw same-origin art or their type line, never pack treatments.
+  await expect(board.getByTestId('board-card').first()).toBeVisible();
 
   await page.reload();
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
   await expect(board).toBeVisible({ timeout: 15_000 });
-  await expect(board.getByTestId('card-treatment').first()).toHaveAttribute(
-    'data-asset-source',
-    'pack',
-  );
+  await expect(board.getByTestId('board-card').first()).toBeVisible();
 
   await finishGame(page);
   await page.goto('/replay');
-  const traceSelect = page.getByTestId('trace-select');
-  await expect(traceSelect).toBeVisible({ timeout: 15_000 });
-  await traceSelect.selectOption({ index: 1 });
+  const newest = page.getByTestId('recording-link').first();
+  await expect(newest).toBeVisible({ timeout: 15_000 });
+  await newest.click();
   await expect(board).toBeVisible({ timeout: 15_000 });
-  await expect(board.getByTestId('card-treatment').first()).toHaveAttribute(
-    'data-asset-source',
-    'pack',
-  );
+  await expect(board.getByTestId('board-card').first()).toBeVisible();
 
   expect(publicRequests).toEqual([]);
   expect(errors, `console errors: ${errors.join('\n')}`).toEqual([]);

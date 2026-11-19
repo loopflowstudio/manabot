@@ -6,6 +6,7 @@
   import type { Decklists, TrainedOpponent } from '$lib/types';
   import type { SearchConfig } from '$lib/search';
   import SearchControl from './SearchControl.svelte';
+  import { builtinOpponentName, catalogOpponentName } from '$lib/opponent-name';
 
   interface Props {
     value?: PlayerChoice;
@@ -64,7 +65,7 @@
   const replacement = $derived(prior ? runnerReplacement(prior, trained) : null);
   const native = ['search-16', 'search-64', 'search-256', 'random', 'passive'];
   function title(entry: TrainedOpponent): string {
-    return `${entry.name} · ${entry.sha256.slice(0, 10)}${entry.available ? '' : ` — ${entry.reason ?? 'unavailable'}`}`;
+    return `${catalogOpponentName(entry)} · ${entry.sha256.slice(0, 10)}${entry.available ? '' : ` — ${entry.reason ?? 'unavailable'}`}`;
   }
 </script>
 
@@ -76,7 +77,7 @@
       onchange={event => { onChange?.(event.currentTarget.value === 'policy' ? 'policy:' : event.currentTarget.value as PlayerChoice); }}>
       {#each native as kind}
         <option value={kind} disabled={kind.startsWith('search-') && decklists === 'closed'}>
-          {kind.startsWith('search-') ? `Search ${kind.slice(7)}` : kind.charAt(0).toUpperCase() + kind.slice(1)}{kind.startsWith('search-') && decklists === 'closed' ? ' — needs open decklists' : ''}
+          {builtinOpponentName(kind as PlayerChoice)}{kind.startsWith('search-') && decklists === 'closed' ? ' — needs open decklists' : ''}
         </option>
       {/each}
       <option value="policy">Registered policy</option>

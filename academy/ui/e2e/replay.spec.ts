@@ -1,28 +1,32 @@
 import { expect, test } from '@playwright/test';
 
-// The replay route had the same latent frozen-DOM bug as the play page (legacy
-// component reading a runes store): the trace list, board, and position counter
-// never updated after the initial render. Runs after play.spec.ts (single
+// The replay route once had a frozen-DOM bug (a legacy component reading a
+// runes store): the recording list, board and position counter never updated
+// after the initial render. Runs after play.spec.ts (single
 // worker, alphabetical order), which plays a game to completion so at least
 // one trace exists.
 
-test('replay page lists traces and steps through positions', async ({ page }) => {
+test('replay lists recordings and steps through positions on the board', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   await page.goto('/replay');
 
-  // The trace picker is fetched after mount; a frozen DOM would show the
-  // initial "No traces yet." state forever.
-  const traceSelect = page.getByTestId('trace-select');
-  await expect(traceSelect).toBeVisible({ timeout: 15_000 });
-
-  // Index 0 is the disabled placeholder; pick the newest real trace.
-  await traceSelect.selectOption({ index: 1 });
+  // The recording list is fetched after mount; a frozen DOM would show the
+  // initial empty state forever. The newest readable recording opens on the
+  // table (a Watch needs its participant's credential).
+  const links = page.getByTestId('recording-link');
+  await expect(links.first()).toBeVisible({ timeout: 15_000 });
+  const hrefs = await links.evaluateAll(anchors => anchors.map(anchor => anchor.getAttribute('href')!));
   const board = page.getByTestId('game-board');
-  await expect(board).toBeVisible({ timeout: 15_000 });
+  for (const href of hrefs.slice(0, 10)) {
+    await page.goto(href);
+    await expect(board.or(page.getByRole('alert'))).toBeVisible({ timeout: 15_000 });
+    if (await board.isVisible()) break;
+  }
+  await expect(board).toBeVisible();
 
-  const positionCounter = page.getByText(/^Position \d+ \/ \d+$/);
+  const positionCounter = page.getByTestId('position-counter');
   await expect(positionCounter).toHaveText(/Position \d+ \/ \d+/);
 
   // Stepping must move the position counter and re-render the board. Adjacent

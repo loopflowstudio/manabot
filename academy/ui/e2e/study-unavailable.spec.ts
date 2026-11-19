@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  boardObjects,
   collectStudyConsoleErrors,
   createCompletedStudyTrace,
   openPriorityStudyDecision,
@@ -11,12 +12,12 @@ test('normal Study runtime keeps evidence sealed and returns exactly', async ({ 
   const consoleErrors = collectStudyConsoleErrors(page);
   const traceId = await createCompletedStudyTrace(page);
   const decision = await openPriorityStudyDecision(page, traceId);
-  const recordedBoard = await page.getByTestId('game-board').innerHTML();
+  const recordedBoard = await boardObjects(page);
 
   await expect(page.getByTestId('study-return')).toBeVisible();
   await page.getByTestId('study-return').click();
   await expect(decision).toBeFocused();
-  await expect.poll(() => page.getByTestId('game-board').innerHTML()).toBe(recordedBoard);
+  await expect.poll(() => boardObjects(page)).toBe(recordedBoard);
 
   await decision.click();
   const retry = page.getByTestId('action-option').filter({
@@ -34,7 +35,7 @@ test('normal Study runtime keeps evidence sealed and returns exactly', async ({ 
 
   await page.getByTestId('study-return').click();
   await expect(decision).toBeFocused();
-  await expect.poll(() => page.getByTestId('game-board').innerHTML()).toBe(recordedBoard);
+  await expect.poll(() => boardObjects(page)).toBe(recordedBoard);
   expect(consoleErrors.some((message) => message.includes('status of 409'))).toBe(true);
   expect(
     consoleErrors.filter((message) => !message.includes('status of 409')),
