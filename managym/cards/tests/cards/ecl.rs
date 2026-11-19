@@ -1,12 +1,12 @@
 //! Tests for cards filed in `src/ecl.rs`, in card order.
 
 use crate::support::{
-    game::{five_color_unfunded_setup, force_new_card_in_hand},
+    game::{clear_summoning_sickness, five_color_unfunded_setup, force_new_card_in_hand, Scenario},
     inspect::{
         assert_choice_contract, can_cast, card_of, has_action, object_public_id, offer_labels,
         tap_pays_choice, tapped, top_spell,
     },
-    play::{cast_card, choose, pass_until, settle, tap_for_mana},
+    play::{cast_card, choose, fork_choosing, pass_until, pay_rest, settle, tap_for_mana},
 };
 use managym::{
     agent::{
@@ -21,7 +21,7 @@ use managym::{
     },
 };
 
-fn convokes(s: &crate::support::game::Scenario, creature: PermanentId) -> bool {
+fn convokes(s: &Scenario, creature: PermanentId) -> bool {
     has_action(
         s,
         |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == creature),
@@ -29,7 +29,7 @@ fn convokes(s: &crate::support::game::Scenario, creature: PermanentId) -> bool {
 }
 
 /// Cast Appeal to Eirdu targeting `target` alone, up to its payment.
-fn cast_appeal(s: &mut crate::support::game::Scenario, target: PermanentId) {
+fn cast_appeal(s: &mut Scenario, target: PermanentId) {
     let appeal = force_new_card_in_hand(s, 0, "Appeal to Eirdu");
     cast_card(s, appeal);
     pass_until(s, ActionSpaceKind::ChooseTarget);
@@ -58,7 +58,7 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
     let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
-    crate::support::game::clear_summoning_sickness(&mut s, elves);
+    clear_summoning_sickness(&mut s, elves);
     cast_appeal(&mut s, ogre);
 
     // Every creature may convoke; mana alone cannot pay.
@@ -92,7 +92,7 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
     assert!(tapped(&s, elves));
     // A fork at the first convoke tap: only the creature chosen is tapped.
     for chosen in [lions, ogre, giant] {
-        let fork = crate::support::play::fork_choosing(
+        let fork = fork_choosing(
             &s,
             |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == chosen),
         );
@@ -185,7 +185,7 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
     assert_eq!(choice.modes, [0, 5]);
     assert_choice_contract(&s);
     for (mode, white_spent) in [(0, 0), (5, 1)] {
-        let mut fork = crate::support::play::fork_choosing(
+        let mut fork = fork_choosing(
             &s,
             |a| matches!(a, Action::ChooseMode { mode: m, .. } if *m == mode),
         );
@@ -201,7 +201,7 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
                 |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == creature),
             );
         }
-        crate::support::play::pay_rest(&mut fork);
+        pay_rest(&mut fork);
         let spell = top_spell(&fork);
         // Paid {1}, the Lions leave the {W} to the floating white mana.
         assert_eq!(spell.spent.total(), 1);
