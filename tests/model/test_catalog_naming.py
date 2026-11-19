@@ -398,7 +398,7 @@ def test_catalog_naming_programs_affect_scores(
 
 
 @pytest.mark.parametrize("change", ["name", "order", "definition", "representation"])
-def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
+def test_naming_checkpoint_binds_names_before_loading_weights(
     naming_root: managym.Env,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -437,8 +437,18 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
         del checkpoint["world_binding"]["naming_representation"]
         write_checkpoint(checkpoint, path)
     monkeypatch.setattr(managym, "naming_catalog", lambda: candidates)
+    # Learned name rows bind by name: reordering or rejoining a name loads,
+    # while a vanished name or another naming representation refuses.
+    refusal = {
+        "name": "missing learned naming rows",
+        "representation": "binding for naming_representation",
+    }.get(change)
     with patch.object(ActorCritic, "load_state_dict") as load_weights:
-        with pytest.raises(ValueError, match="world/setup/input binding differs"):
+        if refusal is None:
+            load_checkpoint(str(path))
+            load_weights.assert_called_once()
+            return
+        with pytest.raises(ValueError, match=refusal):
             load_checkpoint(str(path))
         load_weights.assert_not_called()
 

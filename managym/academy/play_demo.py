@@ -44,7 +44,9 @@ def load_play_demo(name: str) -> PlayDemo:
 def replay_checked_prefix(
     session: "GameSession", update: dict[str, Any], demo: PlayDemo, name: str
 ) -> dict[str, Any]:
-    if session.env.content_pack_manifest() != demo.manifest:
+    # A fixture written before the world label was removed carries it.
+    recorded = {k: v for k, v in demo.manifest.items() if k != "world_version"}
+    if session.env.content_pack_manifest() != recorded:
         raise ValueError(
             f"{name} demo content/setup identity differs from this runtime"
         )

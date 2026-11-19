@@ -67,7 +67,6 @@ def registration():
     ]
     engine.reset(configs)
     return {
-        "world": managym.WORLD_VERSION,
         "engine_extension_sha256": _sha256(
             Path(managym._managym.__file__).read_bytes()
         ),

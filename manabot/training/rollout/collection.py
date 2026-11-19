@@ -78,7 +78,7 @@ from manabot.training.rollout.matchups import (
 )
 from manabot.training.rollout.numerics import CollectionScope, CollectionSession
 from manabot.training.rollout.producers import ShardedVectorEnv
-from manabot.training.rollout.self_play import SelfPlayCounter
+from manabot.training.rollout.self_play import GameSetting, SelfPlayCounter
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLimit,
@@ -87,7 +87,7 @@ from manabot.training.state.game_errors import (
     GameOutcome,
     RecordAttempt,
 )
-from managym import WORLD_SETUP, Deck, GameSetup
+from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -359,6 +359,8 @@ class CollectorStats:
     learner_transitions: int = 0
     opponent_decisions: int = 0
     games: int = 0
+    skipped_decisions: int = 0  # Completed native games, including initial skips.
+    priority_taps: int = 0  # Selected taps in spaces that also offer PassPriority.
     learner_wins: int = 0
     self_play: SelfPlayCounter = field(default_factory=SelfPlayCounter)
     truncations: int = 0
@@ -441,7 +443,7 @@ class Collector:
     _record_attempt: RecordAttempt | None
     # The deck source's identity is fixed; every game attempt records it.
     _decks_digest: str | None
-    _uniform_roster: list[Any]
+    uniform_roster: list[PlayerConfig]
     _win_reward: float
     _lose_reward: float
     _streams: list[list[_Transition]]
@@ -451,6 +453,8 @@ class Collector:
     # Legal action prefix of each stream's game in progress, for failure receipts.
     _game_actions: list[list[int]]
     _self_play_decks: list[tuple[str, str]]
+    # Each stream's game in progress: the conditions it is played under.
+    _game_settings: list[tuple[GameSetting, ...]]
     # Scopes a named boundary (collection, learning, inference) in the caller's
     # failure journal; the step loop wraps collection and learning with it.
     operation: OperationScope = no_operation
@@ -537,15 +541,24 @@ def open_collector(
         raise ValueError(
             "adaptive collection requires both-seat current-self, one producer and fixed roots"
         )
+    taps = observation_space.encoder.config.mana_floats
+    payment = observation_space.encoder.config.mana_payment
+    match = Match(
+        match.config.model_copy(
+            update={"mana_floats": (taps, taps), "mana_payment": (payment, payment)}
+        )
+    )
     sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
     assignments = [sampler.draw() for _ in range(num_envs)] if sampler else []
     reverse_cells = _reverse_cells(adaptive) if adaptive is not None else []
-    uniform_roster: list[Any]
+    uniform_roster: list[PlayerConfig]
     if deck_source is not None:
         if matchup_curriculum != "fixed":
             raise ValueError("a deck source cannot be combined with a curriculum")
         if match.config.world != WORLD_SETUP:
-            raise ValueError("deck-source games play in the world")
+            raise ValueError(
+                "sampling decks requires a match configured for submitted decks"
+            )
         if (
             deck_source.decklists != "mixed"
             and match.config.decklists != deck_source.decklists
@@ -669,7 +682,7 @@ def open_collector(
             ),
             _record_attempt=record_attempt,
             _decks_digest=deck_source.digest if deck_source is not None else None,
-            _uniform_roster=uniform_roster,
+            uniform_roster=uniform_roster,
             _win_reward=float(reward.config.win_reward),
             _lose_reward=float(reward.config.lose_reward),
             _streams=[[] for _ in range(slots)],
@@ -678,6 +691,7 @@ def open_collector(
             _game_started=[time.perf_counter()] * num_envs,
             _game_actions=[[] for _ in range(num_envs)],
             _self_play_decks=[("", "")] * num_envs,
+            _game_settings=[()] * num_envs,
             operation=operation,
             _record_annotations=[None] * num_envs,
             _sampler=sampler,
@@ -755,24 +769,35 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
             collector.stream_matches[row] = _assigned_match(
                 collector, collector._assignments[row]
             )
-    if collector._uniform_roster:
+    if collector.uniform_roster:
         # Actual native setups, not indices: they remain exact for any deck
         # the run submitted, even one outside the supply it began with.
         setups = collector._env.current_player_configs()
         for row in rows:
             collector.stream_matches[row] = Match(
-                MatchConfig.from_players(*setups[row], decklists=setups[row].decklists)
+                MatchConfig.from_players(
+                    *setups[row],
+                    decklists=setups[row].decklists,
+                    mana_floats=setups[row].mana_floats,
+                    mana_payment=setups[row].mana_payment,
+                )
             )
+    # The environment that plays the games states whether it skips forced decisions.
+    skip_trivial = "true" if collector._env.skip_trivial else "false"
     for row in rows:
         match = collector.stream_matches[row]
         collector._self_play_decks[row] = (
             Deck(match.hero_deck, match.hero_sideboard).identity,
             Deck(match.villain_deck, match.villain_sideboard).identity,
         )
+        collector._game_settings[row] = (
+            GameSetting(None, "decklists", match.config.decklists),
+            GameSetting(None, "skip_trivial", skip_trivial),
+        )
 
 
 def _expose(collector: Collector, row: int, kind: ExposureKind, count: int = 1) -> None:
-    if not collector._uniform_roster and collector._sampler is None:
+    if not collector.uniform_roster and collector._sampler is None:
         return
     a, b = collector._self_play_decks[row]
     seat = (
@@ -854,6 +879,18 @@ def _count_action_types(
 ) -> None:
     chosen = collector._buffers["actions"][rows, actions, :ACTION_TYPE_DIM]
     type_indices = chosen.argmax(axis=1)
+    # At priority all additional mana abilities, fixed and choice-output,
+    # follow PassPriority. The first-legal policy projection preserves order.
+    floats = (chosen[:, ActionEnum.TAP_FOR_COST] > 0) | (
+        chosen[:, ActionEnum.PRIORITY_ACTIVATE_ABILITY] > 0
+    )
+    if floats.any():
+        passes = collector._buffers["actions"][
+            rows[floats], :, ActionEnum.PRIORITY_PASS_PRIORITY
+        ]
+        collector.stats.priority_taps += int(
+            (passes.any(axis=1) & (actions[floats] > passes.argmax(axis=1))).sum()
+        )
     typed = chosen.max(axis=1) > 0
     for idx, has_type in zip(type_indices, typed):
         name = _ACTION_TYPE_NAMES.get(int(idx), "unknown") if has_type else "unknown"
@@ -1147,7 +1184,15 @@ def _record_assignment(collector: Collector, row: int) -> None:
 
 def _assigned_match(collector: Collector, assignment: Assignment) -> Match:
     assert collector._sampler is not None
-    match = Match(collector._sampler.config.cells[assignment.cell])
+    config = collector._sampler.config.cells[assignment.cell]
+    match = Match(
+        config.model_copy(
+            update={
+                "mana_floats": collector.match.config.mana_floats,
+                "mana_payment": collector.match.config.mana_payment,
+            }
+        )
+    )
     return match if assignment.seat == 0 else match.swapped()
 
 
@@ -1332,6 +1377,7 @@ def _settle_step(
                         0.5 if winner is None else float(winner == seat),
                     )
                 )
+        collector.stats.skipped_decisions += infos[row].get("skipped_decisions", 0)
         collector.stats.games += 1
         collector.stats.games_by_stream[int(row)] = (
             collector.stats.games_by_stream.get(int(row), 0) + 1
@@ -1342,7 +1388,9 @@ def _settle_step(
             raise RuntimeError("collector game truncated; no terminal target available")
         if collector.opponent_mode in ("self", "learning"):
             collector.stats.self_play.record(
-                collector._self_play_decks[int(row)], winner
+                collector._self_play_decks[int(row)],
+                winner,
+                collector._game_settings[int(row)],
             )
         if winner is None:
             reward = 0.0

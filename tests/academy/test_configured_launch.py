@@ -540,11 +540,11 @@ def test_exported_game_source_label_and_import_rejection_messages(
         assert rejected.status_code == 400
         assert "edited" in rejected.json()["detail"]
         foreign = copy.deepcopy(game)
-        foreign["world"] = {"world_version": "foreign-world"}
+        foreign["world"] = {"card_digest": "foreign-world"}
         rejected = client.post("/api/watch/import", json=foreign)
         assert rejected.status_code == 400
         assert "foreign-world" in rejected.json()["detail"]
-        assert "differs from running" in rejected.json()["detail"]
+        assert "differ from running" in rejected.json()["detail"]
 
 
 def test_watch_launch_registers_policy_spec_without_starting(

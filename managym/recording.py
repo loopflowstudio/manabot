@@ -60,6 +60,12 @@ class PlayerSetup(BaseModel):
     name: str
     decklist: dict[str, int]
     sideboard: dict[str, int]
+    mana_payment: managym.ManaPayment = Field(
+        default="manual", exclude_if=lambda value: value == "manual"
+    )
+    mana_floats: managym.ManaFloats = Field(
+        default="off", exclude_if=lambda value: value == "off"
+    )
     # Earlier evidence names the selector `content_pack`.
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "content_pack")
@@ -70,7 +76,11 @@ class PlayerSetup(BaseModel):
 
     @classmethod
     def retain(
-        cls, player: managym.PlayerConfig, decklists: DecklistDisclosure
+        cls,
+        player: managym.PlayerConfig,
+        decklists: DecklistDisclosure,
+        mana_floats: managym.ManaFloats = "off",
+        mana_payment: managym.ManaPayment = "manual",
     ) -> "PlayerSetup":
         return cls(
             name=player.name,
@@ -78,6 +88,8 @@ class PlayerSetup(BaseModel):
             sideboard=player.sideboard,
             world=player.world,
             disclosure=decklists,
+            mana_floats=mana_floats,
+            mana_payment=mana_payment,
         )
 
 
@@ -91,7 +103,11 @@ def _game_disclosure(players: list[PlayerSetup]) -> DecklistDisclosure | None:
 
 def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
     disclosure = managym.resolve_decklists(players, seed)
-    return [PlayerSetup.retain(player, disclosure) for player in players]
+    setup = managym.GameSetup(players)
+    return [
+        PlayerSetup.retain(player, disclosure, taps, payment)
+        for player, taps, payment in zip(setup, setup.mana_floats, setup.mana_payment)
+    ]
 
 
 class DecisionAnnotation(BaseModel):
@@ -150,10 +166,19 @@ class GameInputs(BaseModel):
             raise ValueError("retained game has no player setups")
         return managym.GameSetup(
             [
-                managym.PlayerConfig(**player.model_dump(exclude={"disclosure"}))
+                managym.PlayerConfig(
+                    **player.model_dump(
+                        exclude={"disclosure", "mana_floats", "mana_payment"}
+                    )
+                )
                 for player in self.players
             ],
             decklists=decklists,
+            mana_payment=(self.players[0].mana_payment, self.players[1].mana_payment),
+            mana_floats=(
+                self.players[0].mana_floats,
+                self.players[1].mana_floats,
+            ),
         )
 
     def restart(self, seed: int) -> None:
@@ -492,7 +517,6 @@ def runtime_identities() -> dict[str, object]:
         sources.update(data)
     extension = Path(managym._managym.__file__)
     return {
-        "world": managym.WORLD_VERSION,
         "managym_version": version("managym"),
         "card_digest": managym.world_identity()["card_digest"],
         "python": platform.python_version(),
@@ -1529,10 +1553,7 @@ class CapturedVector(_Capture):
             game.restart(seeds[index])
             # The ending row owns the old setup; retain the new native root only
             # after writing it, including disclosure resolved for the new seed.
-            game.players = [
-                PlayerSetup.retain(player, players[index].decklists)
-                for player in players[index]
-            ]
+            game.players = _retain_players(players[index], seeds[index])
         if self._reductions and self._reduction.error is None:
             for index in restarted:
                 self._analysis_indices[index] = 0

@@ -61,7 +61,6 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
     "change",
     [
         "missing",
-        "world",
         "rules",
         "schema",
         "input_version",
@@ -77,9 +76,7 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
         del payload["world_binding"]
     else:
         binding = payload["world_binding"]
-        if change == "world":
-            binding["world"] = "w3"
-        elif change == "rules":
+        if change == "rules":
             binding["rules"] = "discard-only"
         elif change == "schema":
             binding["input_schema"]["actions"]["shape"][0] = 32
@@ -101,6 +98,10 @@ def test_retained_manifests_load_only_when_they_name_no_authored_pack() -> None:
     manifest = payload["world_binding"]["content_manifest"]
     assert "pack_key" not in manifest
     manifest["pack_key"] = None
+    validate_checkpoint_world(payload, ObservationSpace())
+    # Earlier revisions recorded a world label in both places; it is not compared.
+    assert "world" not in payload["world_binding"] and "world_version" not in manifest
+    payload["world_binding"]["world"] = manifest["world_version"] = "w3"
     validate_checkpoint_world(payload, ObservationSpace())
     manifest["pack_key"] = "ur-lessons-vs-gw-allies"
     with pytest.raises(ValueError, match="binding differs"):
@@ -191,4 +192,4 @@ def test_a_saved_checkpoint_records_the_revision_that_wrote_it(
     save_checkpoint(agent, space, path, player_configs=Match().to_rust())
     source = read_checkpoint(path, weights_only=False)["source"]
     assert source["commit"] == source_commit()
-    assert set(source) == {"commit", "dirty", "etude_run"}
+    assert set(source) == {"commit", "dirty", "etude_experiment", "etude_run"}

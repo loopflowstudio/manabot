@@ -45,7 +45,9 @@ forward reads the result; no forward reads an observation dictionary.
 - `checkpoint.py` is the checkpoint container: one safetensors file of
   canonical float32 parameters, lookup buffers and the checkpoint's
   configuration, world binding and source record, for every configuration
-  the torch policy runs. `read_container` validates the world binding and
+  the torch policy runs. `read_container` validates the model interface and
+  binds world policies through `binding.py`. Stored card programs keep their
+  learned tokens while new definitions read the running catalog. The loader
   refuses files that are not containers (`NotAContainer`); `read_metadata`
   reads only the header. `UnsupportedPolicy` is what a backend raises for a
   configuration it does not implement.

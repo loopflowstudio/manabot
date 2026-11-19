@@ -76,7 +76,18 @@ class ExposureResolution(StrictModel):
     definition: int | None
 
 
+class ManaUse(StrictModel):
+    priority_produced: int = Field(ge=0)
+    regular_expired: int = Field(ge=0)
+    combat_expired: int = Field(ge=0)
+    priority_expired_min: int = Field(ge=0)
+    priority_expired_max: int = Field(ge=0)
+
+
 class ExposureCapture(StrictModel):
+    mana: tuple[ManaUse, ManaUse] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     choices: tuple[ExposureChoice, ...]
     resolutions: tuple[ExposureResolution, ...]
 

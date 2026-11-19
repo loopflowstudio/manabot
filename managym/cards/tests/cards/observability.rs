@@ -4506,6 +4506,7 @@ fn hand_only_lock_reaches_both_viewers_tensors() {
 #[test]
 fn restricted_mana_is_encoded_by_spending_subtype() {
     let mut s = five_color_setup(&["Jasmine Dragon Tea Shop"]);
+    s.allow_priority_floats();
     let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
     s.set_player_mana_pool(0, "");
     activate(&mut s, shop, 0);
@@ -4529,6 +4530,7 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
 #[test]
 fn pooled_mana_classes_are_programs_on_their_player() {
     let mut s = five_color_setup(&["Animal Attendant"]);
+    s.allow_priority_floats();
     let attendant = s.force_permanent_on_battlefield(0, "Animal Attendant");
     clear_summoning_sickness(&mut s, attendant);
     s.set_player_mana_pool(0, "");

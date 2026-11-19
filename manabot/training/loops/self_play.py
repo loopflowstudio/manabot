@@ -2,8 +2,8 @@
 
 `SelfPlay` describes the learning problem; `Counts` is the cumulative work
 registered with the run. `step` collects and learns in place. `self_play`
-registers raw weights, Adam, EMA and counts, then publishes immutable,
-world-bound policies for evaluation. No native game or RNG is persisted.
+registers raw weights, Adam, EMA and counts, then publishes immutable
+policies for evaluation. No native game or RNG is persisted.
 
 Model initialization uses the run seed s. At starting update u, native streams
 use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
@@ -34,6 +34,7 @@ import torch
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import (
     load_checkpoint,
+    load_metadata,
     save_checkpoint as save_policy,
 )
 from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
@@ -49,13 +50,18 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.run_settings import RunSettings
 from manabot.model.world import (
     validate_agent_decks,
     validate_agent_setup,
 )
 from manabot.policy.checkpoint import pretrained_memory_branch
+from manabot.training.corpus import (
+    ParentCheckpoint,
+    log_corpus_outcomes,
+    log_corpus_setup,
+)
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import (
     BatchClosure,
@@ -86,7 +92,6 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.state.incidents import save_incident
 from manabot.training.update_metrics import (
-    OUTCOME_TABLE,
     metric_row,
     phase_seconds,
     time_since,
@@ -115,14 +120,14 @@ CLOCKS = [
 class SelfPlay(BaseModel):
     """What one self-play loop plays, how it learns and where it runs.
 
-    The match (or deck source), observation and model configs bind the world
-    once; a world other than the installed native runtime fails validation,
-    as do combinations the collector or learner cannot run.
+    Validation checks the configured match or deck source, observation and
+    model against the installed runtime and the collector and learner.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    world: str = Field(default_factory=lambda: managym.WORLD_VERSION)
+    # Settings recorded before the world label was removed carry it; ignored.
+    world: str | None = Field(default=None, exclude_if=lambda value: value is None)
     match: MatchConfig | None = None
     deck_source: UniformDecks | None = None
     observation: ObservationConfig = ObservationConfig()
@@ -176,8 +181,6 @@ class SelfPlay(BaseModel):
     def valid_settings(self) -> "SelfPlay":
         if isinstance(self.learning, Learning) and self.learning.horizon is None:
             raise ValueError("PPO self-play requires a learning horizon")
-        if self.world != managym.WORLD_VERSION:
-            raise ValueError("self-play world differs from native runtime")
         if (self.match is None) == (self.deck_source is None):
             raise ValueError("self-play needs exactly one match or deck source")
         if self.model.value_kind == "categorical_wdl" and not isinstance(
@@ -422,6 +425,16 @@ def load_pretrained(
     agent.load_state_dict({**fresh, **weights}, strict=True)
 
 
+def parent_checkpoint(path: Path) -> ParentCheckpoint:
+    """Identify the published policy a run starts from by its writer and bytes."""
+    record = load_metadata(path)
+    return ParentCheckpoint(
+        run=(record.get("source") or {}).get("etude_run"),
+        update=(record.get("bc") or {}).get("update"),
+        sha256=file_sha256(path),
+    )
+
+
 def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | None]:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     space = ObservationSpace(settings.observation)
@@ -458,7 +471,6 @@ def write_policy(
     if path.exists():
         return path
     temporary = path.with_name(f".{path.name}.tmp")
-    # A deck-source run binds the world (`None`); a fixed match binds its setups.
     players = (
         None
         if settings.deck_source is not None
@@ -591,6 +603,7 @@ def step(
     """
     device = settings.device
     stats = collector.stats
+    skipped, taps = stats.skipped_decisions, stats.priority_taps
     games, decisions, transitions, idle = (
         stats.games,
         stats.micro_steps,
@@ -633,15 +646,33 @@ def step(
     phases = time_since(before, phase_seconds(collector.profiler, learner.profiler))
     # The collector's totals are this attempt's; counts span every attempt.
     counts.updates += 1
-    counts.training_seconds += phases["time/collection"] + phases["time/learning"]
+    seconds = phases["time/collection"] + phases["time/learning"]
+    counts.training_seconds += seconds
     counts.games += stats.games - games
     counts.environment_decisions += stats.micro_steps - decisions
     counts.learner_transitions += stats.learner_transitions - transitions
     counts.idle_stream_steps += stats.idle_stream_steps - idle
     counts.optimizer_updates += metrics.get("numerical", {}).get("optimizer_steps", 0)
     counts.optimizer_exposures += metrics.get("optimizer_exposures", 0)
+    rates: dict[str, float] = {}
+    # With both seats learning complete games, retained rows count exactly
+    # the surfaced choices of the games that contributed terminal targets.
+    if settings.learning_seats == "both" and settings.batch_closure == "complete-games":
+        completed = stats.games - games
+        rows = batch.actions.size
+        skips = stats.skipped_decisions - skipped
+        rates = {
+            "decisions_per_game": rows / completed,
+            "skipped_share": skips / (skips + rows),
+            "priority_tap_rate": (stats.priority_taps - taps)
+            / (stats.micro_steps - decisions),
+            "rows_per_second": rows / seconds,
+            "updates_per_hour": 3600 / seconds,
+            "games_per_hour": completed * 3600 / seconds,
+        }
     return (
         metric_row(metrics)
+        | rates
         | {f"coordinates/{k}": v for k, v in counts.model_dump().items()}
         | phases
         | resource_metrics(device)
@@ -786,6 +817,18 @@ def self_play(
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
             publish(settings, run, learner, ema, counts)
         with self_play_games(settings, run, counts) as collector:
+            if counts.updates == 0:
+                log_corpus_setup(
+                    run,
+                    collector,
+                    behavior=settings.behavior,
+                    curriculum=settings.matchup_curriculum,
+                    parent=parent_checkpoint(settings.pretrained)
+                    if settings.pretrained is not None
+                    else None,
+                    updates=0,
+                    **clocks(counts),
+                )
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out)
                 if kind is not None:
@@ -793,12 +836,7 @@ def self_play(
                 if recipe is not None:
                     row["run/recipe"] = recipe
                 run.log(row, **clocks(counts))
-                if settings.behavior != "random":
-                    run.log_table(
-                        OUTCOME_TABLE,
-                        collector.stats.self_play.drain(),
-                        **clocks(counts),
-                    )
+                log_corpus_outcomes(run, collector, **clocks(counts))
                 run.save()
                 if is_checkpoint(settings, update):
                     publish(settings, run, learner, ema, counts)

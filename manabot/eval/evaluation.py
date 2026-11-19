@@ -32,7 +32,7 @@ from manabot.sim.agent import GamePlayer
 from manabot.sim.execution import EvalExecutionV1, RecordedExecution
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup, selected_decks
 from manabot.sim.performance import EvalPerformance
-from manabot.sim.registration import PlayerRegistration
+from manabot.sim.registration import HISTORICAL_MIRROR_SUITE, PlayerRegistration
 
 
 class EvaluationRequest(StrictModel):
@@ -69,7 +69,7 @@ class EvaluationRequest(StrictModel):
             return range(8)
         if self.matchup_mode == "mirrors":
             return range(4, 8)
-        return range(2 if self.key.content_suite == "w2-interactive-mirror-v1" else 4)
+        return range(2 if self.key.content_suite == HISTORICAL_MIRROR_SUITE else 4)
 
     @property
     def expected_games(self) -> int:

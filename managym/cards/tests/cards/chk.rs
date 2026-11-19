@@ -105,11 +105,13 @@ fn heartbeat_of_spring_adds_one_mana_of_a_produced_type_to_the_tapping_player() 
 #[test]
 fn heartbeat_of_spring_copies_the_chosen_or_colorless_type() {
     let (mut s, lands) = heartbeat_setup(1, &["North Pole Gates"]);
+    s.allow_priority_floats();
     activate(&mut s, lands[0], 1);
     choose_mode(&mut s, 1);
     assert_eq!(*pool(&s, 0), Mana::parse("UU"));
 
     let (mut s, _) = heartbeat_setup(0, &["Jasmine Dragon Tea Shop"]);
+    s.allow_priority_floats();
     assert_eq!(
         s.game_mut().cached_producible_mana(PlayerId(0)),
         Mana::parse("CC")
@@ -122,6 +124,7 @@ fn heartbeat_of_spring_copies_the_chosen_or_colorless_type() {
 #[test]
 fn two_heartbeats_choose_their_types_separately_after_two_types_are_produced() {
     let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    s.allow_priority_floats();
     s.force_permanent_on_battlefield(1, "Heartbeat of Spring");
     let ability = add_tap_ability(&mut s, lands[0], "WU", false);
     activate(&mut s, lands[0], ability);
@@ -141,6 +144,7 @@ fn two_heartbeats_choose_their_types_separately_after_two_types_are_produced() {
 #[test]
 fn heartbeat_of_spring_triggers_for_a_land_sacrificed_in_its_mana_ability() {
     let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    s.allow_priority_floats();
     let ability = add_tap_ability(&mut s, lands[0], "G", true);
     activate(&mut s, lands[0], ability);
     take_single_output(&mut s);
@@ -154,6 +158,7 @@ fn heartbeat_of_spring_triggers_for_a_land_sacrificed_in_its_mana_ability() {
 #[test]
 fn heartbeat_of_spring_sacrificed_by_the_mana_ability_adds_nothing() {
     let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    s.allow_priority_floats();
     let heartbeat = card_of(&s, permanent_named(&s, "Heartbeat of Spring"));
     let card = card_of(&s, lands[0]);
     let abilities = &mut s.game_mut().state[card].activated_abilities;
@@ -181,6 +186,7 @@ fn heartbeat_of_spring_sacrificed_by_the_mana_ability_adds_nothing() {
 #[test]
 fn heartbeat_of_spring_type_choice_names_its_source_and_the_tapped_land() {
     let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    s.allow_priority_floats();
     let ability = add_tap_ability(&mut s, lands[0], "WU", false);
     activate(&mut s, lands[0], ability);
     take_single_output(&mut s);
@@ -203,6 +209,7 @@ fn heartbeat_of_spring_type_choice_names_its_source_and_the_tapped_land() {
 #[test]
 fn heartbeat_of_spring_ignores_nonlands_and_badgermole_stays_with_its_controller() {
     let (mut s, _) = heartbeat_setup(0, &[]);
+    s.allow_priority_floats();
     s.force_permanent_on_battlefield(1, "Badgermole Cub");
     let herbalist = s.force_permanent_on_battlefield(0, "Hermitic Herbalist");
     clear_summoning_sickness(&mut s, herbalist);

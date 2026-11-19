@@ -971,6 +971,7 @@ fn cr_613_tap_condition_invalidates_cache_and_dependency_loop_uses_timestamps() 
         predicate::CardPredicate,
     };
     let (mut s, ogre) = ogre_scenario();
+    s.allow_priority_floats();
     let mut definition = witness(
         "Tap witness",
         &[CardType::Artifact],
@@ -999,6 +1000,7 @@ fn cr_613_tap_condition_invalidates_cache_and_dependency_loop_uses_timestamps() 
     assert_eq!(before.pt(), (2, 2));
     for blue_first in [false, true] {
         let (mut s, ogre) = ogre_scenario();
+        s.allow_priority_floats();
         let to_artifact = witness(
             "Artifact loop",
             &[CardType::Enchantment],

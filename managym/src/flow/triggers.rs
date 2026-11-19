@@ -920,13 +920,12 @@ impl Game {
         }
     }
 
-    fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
-        #[cfg(feature = "benchmark")]
-        crate::benchmark_layers::record(|m| m.trigger_sources += sources.len() as u64);
-        self.granted_firebending_triggers(event);
-        self.graveyard_triggers(event);
-        self.cast_triggers(event);
-        self.delayed_triggers_for_event(event);
+    /// Resolve printed and granted trigger matches before committing the event.
+    fn firing_battlefield_triggers(
+        &self,
+        event: &GameEvent,
+        sources: &[TriggerSourceSnapshot],
+    ) -> Vec<FiredTrigger> {
         let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources {
             for (ability_index, ability) in self
@@ -1010,6 +1009,18 @@ impl Game {
                 ));
             }
         }
+
+        fired
+    }
+
+    fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_layers::record(|m| m.trigger_sources += sources.len() as u64);
+        self.granted_firebending_triggers(event);
+        self.graveyard_triggers(event);
+        self.cast_triggers(event);
+        self.delayed_triggers_for_event(event);
+        let fired = self.firing_battlefield_triggers(event, sources);
 
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
@@ -1559,6 +1570,47 @@ impl Game {
                 inline_effects: None,
             });
         }
+    }
+
+    /// Without a listed spend, a float still matters if it has an additional
+    /// cost or effect, or its tap fires a battlefield trigger. Inspect only
+    /// already legal activations and use the live event's trigger matching.
+    pub(crate) fn usable_floats_without_spend(&self, player: PlayerId, floats: &mut Vec<Action>) {
+        let listeners = self.indexed_sources(EventKinds::of(EventKind::PermanentTapped));
+        if !listeners.is_empty() {
+            self.append_mana_floats(player, floats);
+        }
+        floats.retain(|action| {
+            let permanent = match *action {
+                Action::TapForMana { permanent, .. } => permanent,
+                Action::ActivateAbility {
+                    permanent,
+                    ability_index,
+                    ..
+                } => {
+                    let view = self.characteristics(permanent);
+                    let ability = &view.activated_abilities[ability_index];
+                    if ability.mana_activation_has_side_effects() {
+                        return true;
+                    }
+                    if !ability.tap_source {
+                        return false;
+                    }
+                    permanent
+                }
+                _ => unreachable!("only mana production is appended after passing priority"),
+            };
+            !listeners.is_empty()
+                && !self
+                    .firing_battlefield_triggers(
+                        &GameEvent::PermanentTapped {
+                            permanent,
+                            for_mana: true,
+                        },
+                        &listeners,
+                    )
+                    .is_empty()
+        });
     }
 
     /// The sources whose abilities can see a battlefield departure or a

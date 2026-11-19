@@ -154,8 +154,8 @@ def test_outcome_supervision_distinguishes_draw_from_balanced_win_loss() -> None
 @pytest.mark.parametrize(
     "fields,error",
     [
-        ({"value_aggregation": "masked_mean"}, 'Unexpected key.*"value_token"'),
-        ({"attention_layers": 1}, 'Unexpected key.*"extra_attention'),
+        ({"value_aggregation": "masked_mean"}, "no policy parameter.*'value_token'"),
+        ({"attention_layers": 1}, "no policy parameter.*'extra_attention"),
         ({"value_kind": "scalar"}, "size mismatch for value_head"),
         ({"attention_layers": 3}, "Missing key.*extra_attention"),
     ],

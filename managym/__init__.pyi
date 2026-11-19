@@ -23,6 +23,9 @@ from managym.disclosure import DecklistDisclosure, DecklistSampling
 from . import format as format
 from .statistics import GameStatistics
 
+ManaPayment = Literal["auto", "manual"]
+ManaFloats = Literal["off", "usable", "all"]
+
 class ObservationValueLayout(TypedDict):
     kind: Literal[
         "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
@@ -68,7 +71,6 @@ class PoolDefinition(TypedDict):
     reason: str | None
 
 class ContentPool(TypedDict):
-    world_version: str
     content_digest: str
     definitions: list[PoolDefinition]
 
@@ -76,11 +78,10 @@ def content_pool(name: str) -> ContentPool:
     """The world pool (``"world"``, the only pool): every catalog card and its support."""
 
 class WorldIdentity(TypedDict):
-    world_version: str
     card_digest: str
 
 def world_identity() -> WorldIdentity:
-    """The installed world's version and the digest of its cards."""
+    """The digest of the installed world's cards."""
 
 def set_cards(sets: list[str]) -> list[PoolDefinition]:
     """World pool rows for cards whose key prefix is in ``sets``."""
@@ -111,6 +112,11 @@ def card_definitions_json() -> str:
 
 def catalog_token_value(name: str) -> int:
     """The catalog's stable token value for a Rust or printed name."""
+
+def catalog_token_renames() -> tuple[
+    list[tuple[int, str, str | None]], list[tuple[str, str, str | None]]
+]:
+    """Historical catalog tokens and record names with their optional successors."""
 
 def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
     """Every name fact/shared-effect encoders hash, as `(namespace, name,
@@ -1046,6 +1052,7 @@ class Observation:
 
 class AgentError(RuntimeError): ...
 
+# Deprecated: the label of the last numbered world; removed in 0.4.0.
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
@@ -1160,11 +1167,17 @@ class GameSetup(Sequence[PlayerConfig]):
     def players(self) -> tuple[PlayerConfig, ...]: ...
     @property
     def decklists(self) -> DecklistSampling: ...
+    @property
+    def mana_payment(self) -> tuple[ManaPayment, ManaPayment]: ...
+    @property
+    def mana_floats(self) -> tuple[ManaFloats, ManaFloats]: ...
     def __init__(
         self,
         players: Sequence[PlayerConfig],
         *,
         decklists: DecklistSampling | None = None,
+        mana_floats: tuple[ManaFloats, ManaFloats] | None = None,
+        mana_payment: tuple[ManaPayment, ManaPayment] | None = None,
     ) -> None: ...
     def __len__(self) -> int: ...
     @overload

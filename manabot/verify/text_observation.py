@@ -10,9 +10,6 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from managym.decision import Observation, SemanticContractError, apply_semantic_command
-from managym.decision_capture import CardReference, DecisionInput
-
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import (
     ResponseProtocolError,
@@ -23,6 +20,8 @@ from manabot.semantic.text_observation import (
     submit_response,
 )
 import managym
+from managym.decision import Observation, SemanticContractError, apply_semantic_command
+from managym.decision_capture import CardReference, DecisionInput
 
 
 def priority_root(
@@ -30,6 +29,7 @@ def priority_root(
     battlefield: tuple[str, ...],
     *,
     opponent: tuple[str, ...] = (),
+    mana_floats: managym.ManaFloats = "off",
 ) -> managym.Env:
     """Seed 23, 20 of each named card per deck; inject at first-main priority."""
     # Diagnostic exception: the collision proof needs sole-offer continuations
@@ -37,7 +37,12 @@ def priority_root(
     # played for a model or policy from these roots.
     env = managym.Env(seed=23, skip_trivial=False)
     deck = {card: 20 for card in sorted(set(hand + battlefield + opponent))}
-    env.reset([managym.PlayerConfig(name, deck) for name in ("a", "b")])
+    env.reset(
+        managym.GameSetup(
+            [managym.PlayerConfig(name, deck) for name in ("a", "b")],
+            mana_floats=(mana_floats, mana_floats),
+        )
+    )
     for _ in range(20):
         contract = SemanticDecisionContract.from_env(env)
         observation = Observation.from_json(

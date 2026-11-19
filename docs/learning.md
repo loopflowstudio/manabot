@@ -360,19 +360,13 @@ they play the next batch. The **EMA** is an average updated once per iteration
 at 0.999, including iterations the filter emptied. A recipe can collect with the
 EMA by setting `behavior="ema-self"`; otherwise it is only an evaluation output.
 
-Checkpoints are bound to their [world](../WORLDS.md): a frozen version of the
-rules, cards and observation encoding. From `validate_checkpoint_world` in
-[`manabot/model/world.py`](../manabot/model/world.py):
-
-```python
-if _digest(current_binding_form(binding)) != _digest(expected):
-    raise ValueError(
-        "checkpoint world/setup/input binding differs from this runtime"
-    )
-```
-
-The check compares a digest of the world, setup and input binding, so a
-matching world number alone isn't enough. Evaluation runs outside
+A checkpoint is bound to the meaning of what it reads and chooses: its input
+columns, token names and action kinds, each by name. It keeps loading as cards
+are added and as the engine changes; `model_interface` in
+[`manabot/model/interface.py`](../manabot/model/interface.py) decides, and a
+refusal names the column, key or field that no longer means what the model
+learned ([running a checkpoint on a later revision](observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+Evaluation runs outside
 the training clock and plays on held-out deals with both decks and seats
 ([evaluation.md](evaluation.md)). Its scores don't affect the loss. A run's
 selection rule is `last-complete-raw`, never the best seed or best evaluation,

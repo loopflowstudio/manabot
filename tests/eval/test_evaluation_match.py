@@ -11,7 +11,7 @@ from manabot.eval.match import derive_seed, play_cell
 from manabot.eval.models import MatchRow
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_trace, replay_games
-from managym import WORLD_VERSION, AgentError
+from managym import AgentError
 from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -124,13 +124,10 @@ def selected_players():
     from manabot.sim.matchup import SELECTED_SUITE, selected_match
 
     contract = arena_fixture()
-    key = contract.key.model_copy(
-        update={"world": WORLD_VERSION, "content_suite": SELECTED_SUITE}
-    )
+    key = contract.key.model_copy(update={"content_suite": SELECTED_SUITE})
     players = [
         player.model_copy(
             update={
-                "world": WORLD_VERSION,
                 "content_suite": SELECTED_SUITE,
                 "matchup_sha256": canonical_sha256(selected_match().model_dump()),
             }
@@ -337,13 +334,16 @@ def test_native_policy_error_retains_the_responsible_player(
     assert "policy failed" in result["failure"]
 
 
-def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
+def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path: Path) -> None:
     import torch
 
     from manabot.backends.torch.checkpoint import save_checkpoint
     from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.eval.evaluate import validate_registered_player
+    from manabot.eval.evaluate import (
+        validate_player_compatibility,
+        validate_registered_player,
+    )
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints
@@ -366,12 +366,13 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
         agent, space, path, player_configs=Match(selected_match()).to_rust()
     )
     runtime = runtime_fingerprints(
-        match_config=selected_match(), observation_space=space, world=WORLD_VERSION
+        match_config=selected_match(), observation_space=space
     )
     candidate = PlayerRegistration.model_validate(
         {
             **random.model_dump(),
             "player_id": "checkpoint-fixture-83",
+            "world": "w2",
             "role": "challenger",
             "runner_kind": "checkpoint",
             "source_sha256": None,
@@ -391,6 +392,8 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
             "action_abi_sha256": runtime["action_abi_sha256"],
         }
     )
+    validate_player_compatibility(candidate, key, runtime)
+    assert {"writer_revision", "stored_programs"}.isdisjoint(candidate.model_dump())
     paths, loaded_space = validate_registered_player(
         candidate, path, backend=TORCH_BACKEND
     )

@@ -105,8 +105,6 @@ pub struct FuzzSpec {
 pub struct Manifest {
     pub schema_version: u32,
     pub contract_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub world_version: Option<String>,
     pub cases: Vec<CaseSpec>,
     pub fuzz: FuzzSpec,
 }
@@ -581,13 +579,6 @@ fn load_manifest(root: &Path) -> Result<Manifest, String> {
     let manifest: Manifest = load_json(&root.join("manifest.json"))?;
     if manifest.schema_version != SCHEMA_VERSION || manifest.contract_id != CONTRACT_ID {
         return Err("unsupported conformance manifest contract".to_string());
-    }
-    if manifest
-        .world_version
-        .as_deref()
-        .is_some_and(|world| world != crate::WORLD_VERSION)
-    {
-        return Err("conformance manifest belongs to a different world".into());
     }
     if manifest.cases.is_empty() {
         return Err("conformance manifest must contain replay cases".to_string());

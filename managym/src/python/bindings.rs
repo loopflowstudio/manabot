@@ -4,6 +4,8 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
+use crate::state::player::{ManaFloats, ManaPayment};
+#[cfg(feature = "python")]
 use std::{
     collections::BTreeMap,
     sync::{
@@ -4367,7 +4369,6 @@ impl PyEnv {
         let manifest = env.content_pack_manifest().map_err(map_agent_err)?;
 
         let out = PyDict::new_bound(py);
-        out.set_item("world_version", manifest.world_version)?;
         out.set_item("schema_version", manifest.schema_version)?;
         out.set_item("content_digest", manifest.content_digest)?;
         let definitions = PyList::empty_bound(py);
@@ -5299,6 +5300,25 @@ fn catalog_token_value(name: &str) -> i32 {
     crate::cards::tokens::name_value(name)
 }
 
+#[cfg(feature = "python")]
+type Renamed<K> = (K, &'static str, Option<&'static str>);
+
+/// Historical (token kind, old name, successor) and (record namespace,
+/// old name, successor) entries. Definition references instead follow the
+/// referenced definition identity.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn catalog_token_renames() -> (Vec<Renamed<u16>>, Vec<Renamed<&'static str>>) {
+    use crate::cards::token_renames::{RECORDS, TOKENS};
+    (
+        TOKENS
+            .iter()
+            .map(|&(kind, old, new)| (kind as u16, old, new))
+            .collect(),
+        RECORDS.to_vec(),
+    )
+}
+
 /// `(namespace, name, value, token_kind, token_value)` of one record name.
 #[cfg(feature = "python")]
 type RecordNameRow = (&'static str, String, i32, Option<u16>, Option<i32>);
@@ -5329,19 +5349,17 @@ fn content_pool(py: Python<'_>, name: &str) -> PyResult<PyObject> {
     let pool =
         crate::cards::content_pool(name).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let out = PyDict::new_bound(py);
-    out.set_item("world_version", &pool.world_version)?;
     out.set_item("content_digest", &pool.content_digest)?;
     out.set_item("definitions", pool_rows(py, &pool.definitions)?)?;
     Ok(out.into())
 }
 
-/// The installed world's version and card digest.
+/// The installed world's card digest.
 #[cfg(feature = "python")]
 #[pyfunction]
 fn world_identity(py: Python<'_>) -> PyResult<PyObject> {
     let identity = crate::world::world_identity();
     let out = PyDict::new_bound(py);
-    out.set_item("world_version", identity.world_version)?;
     out.set_item("card_digest", identity.card_digest)?;
     Ok(out.into())
 }
@@ -5496,7 +5514,6 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
     m.add(
         "MAX_DECISION_CODE",
         crate::agent::continuation::MAX_DECISION_CODE,
@@ -5532,6 +5549,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
     m.add_function(wrap_pyfunction!(reduce_card_capture_json, m)?)?;
     m.add_function(wrap_pyfunction!(catalog_token_value, m)?)?;
+    m.add_function(wrap_pyfunction!(catalog_token_renames, m)?)?;
     m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
     crate::python::layout_bindings::register(m)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
@@ -5610,7 +5628,7 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         .filter_map(|player| player.legacy_disclosure)
         .map(DecklistMode::from);
     let setup_type = value.py().import_bound("managym")?.getattr("GameSetup")?;
-    let (decklists, conflict) = if value.is_instance(&setup_type)? {
+    let (decklists, mana_floats, mana_payment, conflict) = if value.is_instance(&setup_type)? {
         let name: String = value.getattr("decklists")?.extract()?;
         let decklists = match name.as_str() {
             "mixed" => DecklistMode::Mixed,
@@ -5618,12 +5636,16 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         };
         (
             decklists,
+            seat_modes(value, "mana_floats", ManaFloats::from_name)?,
+            seat_modes(value, "mana_payment", ManaPayment::from_name)?,
             "deprecated per-seat disclosure conflicts with GameSetup.decklists",
         )
     } else {
         // A bare seat list takes its game value from the first hint, if any.
         (
             hints.clone().next().unwrap_or_default(),
+            [ManaFloats::Off; 2],
+            [ManaPayment::Manual; 2],
             "deprecated per-seat disclosure values disagree",
         )
     };
@@ -5633,7 +5655,23 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
     Ok(GameSetup {
         players: players.into_iter().map(PlayerConfig::from).collect(),
         decklists,
+        mana_floats,
+        mana_payment,
     })
+}
+
+/// Read a `GameSetup` per-seat mode pair by its native names.
+#[cfg(feature = "python")]
+fn seat_modes<T>(
+    value: &Bound<'_, PyAny>,
+    field: &str,
+    parse: fn(&str) -> Option<T>,
+) -> PyResult<[T; 2]> {
+    let seats: [String; 2] = value.getattr(field)?.extract()?;
+    let [first, second] = seats.map(|name| {
+        parse(&name).ok_or_else(|| PyValueError::new_err(format!("unknown {field} mode {name:?}")))
+    });
+    Ok([first?, second?])
 }
 
 #[cfg(feature = "python")]
@@ -5641,10 +5679,14 @@ pub(crate) fn python_game_setup(
     py: Python<'_>,
     players: Vec<PlayerConfig>,
     disclosure: DecklistDisclosure,
+    mana_floats: [ManaFloats; 2],
+    mana_payment: [ManaPayment; 2],
 ) -> PyResult<PyObject> {
     let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
     let kwargs = pyo3::types::PyDict::new_bound(py);
     kwargs.set_item("decklists", disclosure_name(disclosure))?;
+    kwargs.set_item("mana_floats", mana_floats.map(ManaFloats::name))?;
+    kwargs.set_item("mana_payment", mana_payment.map(ManaPayment::name))?;
     Ok(py
         .import_bound("managym")?
         .getattr("GameSetup")?

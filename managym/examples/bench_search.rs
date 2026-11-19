@@ -27,6 +27,7 @@ fn scores_digest(digest: &blake3::Hasher) -> u64 {
 }
 
 fn main() {
+    let usable_taps = std::env::args().any(|arg| arg == "--usable-taps");
     let layers = std::env::args().any(|arg| arg == "--layers");
     let mut worst_overall: f64 = 0.0;
     let mut total_overall: f64 = 0.0;
@@ -36,7 +37,7 @@ fn main() {
         #[cfg(feature = "benchmark")]
         managym::benchmark_payments::reset();
         let mut env = Env::new(seed, true, false, false);
-        env.reset(curated::players()).unwrap();
+        env.reset(curated::setup(usable_taps)).unwrap();
         if layers {
             curated::add_layer_board(&mut env);
         }
@@ -118,7 +119,7 @@ mod tests {
     #[test]
     fn layered_root_keeps_the_curated_decks_and_exposes_a_real_decision() {
         let mut env = Env::new(244, true, false, false);
-        env.reset(curated::players()).unwrap();
+        env.reset(curated::setup(false)).unwrap();
         curated::add_layer_board(&mut env);
         let observation = env.observation_for_player(1).unwrap();
         assert_eq!(observation.agent_permanents.len(), 5);

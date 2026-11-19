@@ -231,6 +231,7 @@ from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.training.corpus import log_corpus_outcomes, log_corpus_setup
 from manabot.training.rollout.collection import (
     close_collector,
     collect,
@@ -275,6 +276,14 @@ def train(config: MinimalConfig) -> None:
             numerics=CollectionSession(device="cpu", seed=run.seed + start),
         )
         try:
+            if start == 0:
+                log_corpus_setup(
+                    run,
+                    collector,
+                    behavior="current-self",
+                    curriculum="fixed",
+                    updates=0,
+                )
             for update in run.steps("updates", to=config.updates):
                 # Whole games, at least `decisions` learner rows per stream.
                 batch = collect(collector, agent, config.decisions)
@@ -318,6 +327,7 @@ def train(config: MinimalConfig) -> None:
                         learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
                 learner.update_ema(averaged, agent, rate=0.99)
                 run.log({"loss": float(loss.detach())})  # the last minibatch's
+                log_corpus_outcomes(run, collector, updates=update)
                 progress.updates = update
                 run.save()
         finally:

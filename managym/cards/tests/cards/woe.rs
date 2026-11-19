@@ -6,6 +6,7 @@ use managym::{agent::action::Action, state::mana::Mana};
 #[test]
 fn scarecrow_guide_filters_without_a_tap_once_each_turn() {
     let mut s = five_color_unfunded_setup(&["Scarecrow Guide"]);
+    s.allow_priority_floats();
     let guide = s.force_permanent_on_battlefield(0, "Scarecrow Guide");
     s.set_player_mana_pool(0, "CC");
     s.game_mut().scenario_refresh_priority().unwrap();

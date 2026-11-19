@@ -765,6 +765,14 @@ A cost that every available source is needed for has no source choice. The
 game pays it as soon as you cast, with no payment prompt, so the marks you see
 while pointing at the spell are where you see those taps beforehand.
 
+**Mana payment** defaults to **Manual**. Choose **Automatic** to have the engine select sources, colors and spending after you accept a cost. You still choose whether to pay optional costs, which spells to cast, and which abilities to activate.
+
+Under **Mana floats**, **Off** is the default. Choose **Only when the mana could be used** to float when a legal action can spend mana or tapping the source
+can trigger an ability. Usable also offers an activation that pays life,
+sacrifices a permanent or has another effect. **All** offers every legal
+mana activation at priority. With **Manual** payment you can select these abilities and choose a land’s output while paying. A deliberate float at priority also lets you choose its output. The setting follows you when you swap sides.
+Your priority stops still determine which windows pause for a decision.
+
 **When there is no plan to draw.** The primary button then shows only the
 cost, and a line under it says why when the game does:
 
@@ -772,7 +780,7 @@ cost, and a line under it says why when the game does:
 | --- | --- |
 | A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. Nothing is marked until that choice is made; the plan returns at the completing target or at the payment prompt when there is one. When the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
 | No sources needed | The cost is zero or your floating mana already covers it; the button reads "· floating mana". |
-| No automatic payment | The automatic payer cannot fund this cost from fixed sources. Use an offered mana ability and make its choices first. |
+| No automatic payment | The automatic payer cannot fund this cost with its available taps. Use an offered mana ability and make its choices first. |
 | Nothing | There is no automatic payment to preview. When choosing which floating mana to spend, choose the unit directly. Mana abilities with their own fee also have no preview. |
 
 Mana with a spending restriction, an effect when spent or an end-of-combat
@@ -784,9 +792,6 @@ land means "has tapped". The pips on your plate are the only statement of mana
 you actually have. Moving the pointer away changes nothing in the game. A
 tapped source stays tapped and its mana stays in your pool until it is spent or
 empties; there is no undo and no refund for a tap you regret.
-
-Source taps are offered only while a cost is being paid. Academy has no action
-for tapping lands at priority to float mana before choosing a spell.
 
 **When a plan goes away.** A plan belongs to one decision. Submitting an
 action, a new decision or a lost connection clears it, and an answer that
@@ -1221,11 +1226,9 @@ with serve(
 
 Run, stage, raw/EMA, updates and transitions come from the run's `run.json`,
 joined to the exact artifact digest. Missing counts say **not recorded**;
-filenames never supply training counts. A world mismatch stays listed but
-disabled with the precise reason. A selected policy is checked against the setup before Start in Play and Watch;
+filenames never supply training counts. An incompatible checkpoint stays listed with the loader’s refusal reason. A selected policy is checked against the setup before Start in Play and Watch;
 a mismatch shows the provider’s reason beside the picker. Start checks again,
-so changed artifacts and setups are still refused precisely. Bound checkpoint
-decks are also listed as **Bound decks**. Registered launch aliases appear
+so changed artifacts and setups are still refused precisely. If the checkpoint recorded exact decks, Academy lists them as **Bound decks**. Registered launch aliases appear
 alongside provider-authored names in setup and recorded player identities (unless
 they match the name ignoring case), so
 configurations of the same artifact can have recognizable labels. A refused
@@ -1413,7 +1416,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | No browser window opens | Open the printed `open` address yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
 | No policies are listed | Register a Python factory or a saved policy specification; check any provider discovery error shown below the picker. |
 | `No trained checkpoints found.` | Register a saved specification with `--policy <spec.json>` or supply provider-owned discovery sources through Python. |
-| A checkpoint is listed but disabled | It was trained in another world or on other card content; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
+| A checkpoint is listed but disabled | The row states what this revision cannot give it, for example `incompatible agent_player columns: checkpoint …, runtime …` or `unexplained record_token key …; classify it in managym/src/cards/token_renames.rs`. Added cards are compatible unless the checkpoint recorded exact decks and its content manifest changed. [What refuses a checkpoint](observation-and-model.md#what-a-checkpoint-is-bound-to) lists each case and its fix; otherwise run it from the revision that wrote it. |
 | A checkpoint shows **not recorded** for its update | No `run.json` in the listed directories records those bytes. List the run directory rather than the file alone. A run that recorded no counts for its checkpoints stays **not recorded**. |
 | `The selected opponent checkpoint is unavailable.` | The file was moved or deleted after it was listed. Restore it or choose another; Academy does not pick a replacement. |
 | `The selected policy changed; restore the pinned artifact and runner, or restart Academy and explicitly reselect the policy.` | The artifact or runner differs from the pinned Policy ID. Restore the original execution, or restart Academy and deliberately select the new entry. |

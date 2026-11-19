@@ -259,12 +259,13 @@ points[0]
 ```
 
 ```text
-SelfPlayPoint(update=100, deck='7d663f0e…', opponent_deck='fc948195…', position='play', wins=212, losses=187, draws=1)
+SelfPlayPoint(update=100, deck='7d663f0e…', opponent_deck='fc948195…', seat=0, wins=212, losses=187, draws=1)
 ```
 
 `window_updates` defaults to 100 and must be a positive integer; use 1 to
 inspect individual updates. Each point holds joint deck, opposing deck,
-starting position, win/loss/draw counts and the window's last update.
+native seat (0 is on the play), win/loss/draw counts and the window's last
+update.
 
 Self-play deck and play/draw win rates describe the training distribution, not
 playing strength. The panels plot completed outcomes in non-overlapping
@@ -281,7 +282,7 @@ share a curve. No uncertainty interval claims independent training seeds.
 
 Keep the complete Etude metric run when copying evidence, including
 `artifacts/`. Each update references an immutable Etude row table of
-deck/opponent/position counts; Etude resolves those references after selecting
+deck/opponent/seat counts; Etude resolves those references after selecting
 resumed and duplicate updates. See [update metrics](training.md#update-metrics)
 for storage and reader details. Copying only metric blocks leaves the counts
 unavailable. A missing or damaged referenced table raises an error naming its
