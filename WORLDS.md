@@ -1,11 +1,11 @@
-# Worlds
+# Historical world numbers
 
-A world number names a frozen world. Main carries at most one open world, and
-merged rules or shape changes extend it in place, updating its receipts.
-Freezing is deliberate: re-run the headline baselines, record the receipts, mark
-the row frozen, and open the next number. Checkpoints are protected by their
-world binding, which rejects any content or shape difference, not by the
-number. A run on an open world makes no comparability claim.
+These entries describe the revisions and evidence that carried each number.
+The engine no longer carries a world label: new checkpoints, recordings and
+evaluation records write none, and a label in an older file is not compared.
+Stored evidence keeps the label it was written with. Use the
+[evaluation comparison criteria](docs/evaluation.md#comparing-measurements-across-revisions)
+when reading measurements from different revisions.
 
 | world | frozen at | shape (player / card / permanent / action-types) | live artifacts | headline baselines |
 |---|---|---|---|---|
@@ -28,16 +28,9 @@ number. A run on an open world makes no comparability claim.
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
 | **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 512 × 12 fact rows (policy input v9, the only input on main); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, name/group joins | `world` (the default pack): every defined card (340 supported); `semantic-kernel-w17-v2`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
-**Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
-from earlier worlds are **not comparable** to w17; do not reuse their
-win rates or load them as current-world policies. Shape alone is insufficient
-identity. Exp-11 historically ported opponent components with
-`port_legacy_state_dict` and behavioral validation; that utility is now retired.
-Current loaders require current-ABI checkpoints. Cross-world *measurements*
-are regenerated, never ported (exp-10's precedent).
-
-Update the open world's row, section and receipts in the same PR as any
-rules-meaning or shape change.
+w17 is the last number. `managym.WORLD_VERSION` is a deprecated alias that
+returns `"w17"` with a warning and is removed in 0.4.0; nothing reads it. The
+sections below record what each change added while the numbers were in use.
 
 MTG-241 extends the open world with retained simultaneous proposals and causal
 counter replacements, logical token creation before allocation, and complete
@@ -401,7 +394,7 @@ few cards the typed language cannot express are native `CardDefinition`s in thei
 set files; with the rules fixtures they keep the default pack's legacy
 `CardDefId` prefix and content digest.
 
-`managym::world` owns `WORLD_VERSION` and the card/deck support check
+`managym::world` owns the card/deck support check
 (`managym.unsupported_cards`). The world pool is every defined card from every
 set. A card is supported when its set file defines it with a typed program and
 does not mark it incomplete; tests never gate support. `managym.set_cards`

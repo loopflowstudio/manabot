@@ -1,7 +1,8 @@
 //! The one rules world this engine implements.
 //!
-//! A world names rules meaning plus observation/action shape (see `WORLDS.md`).
-//! Any running engine knows its world: [`WORLD_VERSION`]. The world's cards are
+//! The world carries no version label: its cards are identified by their
+//! digest ([`world_identity`]), and `WORLDS.md` keeps the history of the
+//! numbered worlds earlier revisions recorded. The world's cards are
 //! every definition in `managym-cards`, whatever its set; a card is *supported*
 //! when its set file defines it as a non-token card. Tokens and rules fixtures
 //! are not deck entries. Known rules bugs do not revoke playability.
@@ -18,26 +19,21 @@ use std::collections::BTreeSet;
 
 use crate::cards::{content_pack::default_content_pack, world_pool, Eligibility, PoolDefinition};
 
-/// Rules and observation/action meaning; see `WORLDS.md` for compatibility.
-pub const WORLD_VERSION: &str = "w17";
-
 /// The public name of the world pool ([`world_pool`]) and of a deck submitted
 /// to the world for admission (`PlayerConfig::submitted`); frozen evidence
 /// and the Python API (`WORLD_SETUP`, `content_pool("world")`) read it.
 pub const WORLD_POOL: &str = "world";
 
-/// What decks and checkpoints bind: the rules world and the digest of its
-/// cards, which changes whenever any card definition changes.
+/// What decks and recordings bind: the digest of the world's cards, which
+/// changes whenever any card definition changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldIdentity {
-    pub world_version: String,
     pub card_digest: String,
 }
 
-/// The installed world's identity: its version and the catalog's digest.
+/// The installed world's identity: the catalog's digest.
 pub fn world_identity() -> WorldIdentity {
     WorldIdentity {
-        world_version: WORLD_VERSION.to_owned(),
         card_digest: default_content_pack().content_digest(),
     }
 }
@@ -107,9 +103,8 @@ mod tests {
     }
 
     #[test]
-    fn world_identity_names_the_version_and_card_digest() {
+    fn world_identity_names_the_card_digest() {
         let identity = world_identity();
-        assert_eq!(identity.world_version, WORLD_VERSION);
         assert_eq!(
             identity.card_digest,
             default_content_pack().content_digest()

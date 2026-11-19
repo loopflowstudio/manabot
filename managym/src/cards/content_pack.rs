@@ -39,7 +39,6 @@ pub struct ContentPackDefinitionManifest {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackManifest {
-    pub world_version: String,
     pub schema_version: u32,
     pub content_digest: String,
     pub definitions: Vec<ContentPackDefinitionManifest>,
@@ -106,7 +105,6 @@ impl ContentPack {
     /// definition IDs.
     pub fn manifest(&self) -> ContentPackManifest {
         ContentPackManifest {
-            world_version: crate::WORLD_VERSION.into(),
             schema_version: self.schema_version,
             content_digest: self.content_digest(),
             definitions: self

@@ -10,33 +10,30 @@ when loading the container.
 """
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
-from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
+from manabot.backends.torch.checkpoint import read_written, restore_policy
 from manabot.policy.checkpoint import (
     UnsupportedPolicy,
-    checkpoint_metadata,
-    from_torch_state,
+    admit_checkpoint,
     write_container,
 )
 
 
 def convert(checkpoint: Path) -> tuple[Path, int]:
-    """Write the container for a PyTorch checkpoint; return it and the number
-    of torch tensors read."""
-    agent, space = load_checkpoint(str(checkpoint))
-    record = load_metadata(checkpoint)
-    state = {k: v.detach().numpy() for k, v in agent.state_dict().items()}
-    container = from_torch_state(
-        agent.config,
-        space.encoder.config,
-        state,
-        checkpoint_metadata(record, checkpoint),
-        parameter_names=dict(agent.named_parameters()),
-    )
+    """Validate on this runtime and write the writer's original tensors and metadata."""
+    container = read_written(checkpoint)
+    restore_policy(admit_checkpoint(container))
     target = checkpoint.with_suffix(".safetensors")
-    write_container(target, container)
-    return target, len(state)
+    write_container(
+        target,
+        replace(
+            container,
+            metadata={**container.metadata, "converted_from": str(checkpoint)},
+        ),
+    )
+    return target, len(container.buffers) + len(container.parameters)
 
 
 def main(argv: list[str] | None = None) -> None:

@@ -7,7 +7,8 @@ spell was also a card row and permanent rows had no characteristics. The
 encoder's v9/v10 path reads those rows through this module, mirroring native
 `agent::legacy_input`; nothing else depends on it.
 
-Removal release: 0.4.0, with the `policy_input_version` 9 and 10 branches in
+Removal waits for a v11 pilot at least as strong as the best v9 pilot, from
+release 0.4.0 onward, with the `policy_input_version` 9 and 10 branches in
 `manabot.env.observation` and `manabot.backends.torch.policy`. MTG-353 owns
 the general mechanism for checkpoints across worlds.
 """
@@ -27,7 +28,7 @@ REMOVAL_RELEASE = "0.4.0"
 def warn_deprecated_input(version: int) -> None:
     """Warn that a v9/v10 configuration selects the deprecated rows."""
     warnings.warn(
-        f"policy input v{version} is deprecated and will be removed in "
+        f"policy input v{version} is deprecated until a v11 pilot matches the best v9 pilot; removal no earlier than "
         f"{REMOVAL_RELEASE}; it serves checkpoints trained before input v11",
         DeprecationWarning,
         # Validation reaches here through pydantic and manabot frames at

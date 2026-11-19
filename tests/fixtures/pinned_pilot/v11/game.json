@@ -1,0 +1,758 @@
+{
+  "checkpoint_sha256": "46650f27bb9c69115b3903cb0b6919ac3af325174860686d2515f687e8f44aaf",
+  "game": {
+    "decisions": [
+      {
+        "action": 1,
+        "offers": "8b681c594d18d748c3ea93df8b14510b74e8c7bd8aa908690595fcd2f1fbb7a8",
+        "probabilities": [
+          0.5002031326293945,
+          0.4997968375682831
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "8b681c594d18d748c3ea93df8b14510b74e8c7bd8aa908690595fcd2f1fbb7a8",
+        "probabilities": [
+          0.5002084374427795,
+          0.4997915029525757
+        ]
+      },
+      {
+        "action": 3,
+        "offers": "3911bed2a2fd4ca4fe2337a18c176ad65a6a49596b4438ba00c6e6814cf621dc",
+        "probabilities": [
+          0.20018981397151947,
+          0.20018981397151947,
+          0.20018981397151947,
+          0.20018981397151947,
+          0.1992408037185669
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "b69c470d8b385cf71d8668abe25cfdf769049c866963cc2ebef60eedced9d1fb",
+        "probabilities": [
+          0.5003154873847961,
+          0.49968448281288147
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "b69c470d8b385cf71d8668abe25cfdf769049c866963cc2ebef60eedced9d1fb",
+        "probabilities": [
+          0.5003238320350647,
+          0.4996761977672577
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "cd8ad980c77d8f23eb5a5227136d845fd9ccaf028d1a3b0e5b9ccda646a448f0",
+        "probabilities": [
+          0.20019099116325378,
+          0.20019099116325378,
+          0.20019099116325378,
+          0.20019099116325378,
+          0.19923606514930725
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "48a6f84c8b16c6a71f7abef7fad21bf40743538e270df5978b1a120b4bb320be",
+        "probabilities": [
+          0.20019535720348358,
+          0.20019535720348358,
+          0.20019535720348358,
+          0.20019535720348358,
+          0.1992185413837433
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "ec30686508f9a4ccdc3ed138ec3925d47879c2edf6478a11c2236bd7c671a01f",
+        "probabilities": [
+          0.5000064373016357,
+          0.49999353289604187
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "68dd1b88399184a2b0ebbb7049bb1d1be7b2bfa5ca6cc5c23901d4916fc0104a",
+        "probabilities": [
+          0.33358821272850037,
+          0.33358821272850037,
+          0.3328235447406769
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "7fd7d0b7a0f6423e957711c0cf7d585aca84f1b82fc880e2abea5ed1b9c46da0",
+        "probabilities": [
+          0.12496399134397507,
+          0.12517009675502777,
+          0.12496399134397507,
+          0.12517009675502777,
+          0.12496399134397507,
+          0.12517009675502777,
+          0.12496399134397507,
+          0.12463375180959702
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "6f2b46f001863ad20b014e64ee02fa09bc91c030329e1d027f10fe5c17d173e4",
+        "probabilities": [
+          0.20010307431221008,
+          0.20010307431221008,
+          0.20010307431221008,
+          0.20010307431221008,
+          0.19958771765232086
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "a75069be47f82dace84871c941c9793703cbd05094a008d14f4c3eca408feae2",
+        "probabilities": [
+          0.2503277361392975,
+          0.25022223591804504,
+          0.25019925832748413,
+          0.24925073981285095
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "840c8bc4ac6be5aed6ffc7f4df5023017628b89324be95ec2625a26fa5353dce",
+        "probabilities": [
+          0.3334125578403473,
+          0.33329805731773376,
+          0.33328935503959656
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "e09df17e8f8e64ef838080049734e02c249d961168cb5f70bc1fe14bafa1dc5c",
+        "probabilities": [
+          0.2501614987850189,
+          0.2501614987850189,
+          0.2501614987850189,
+          0.24951542913913727
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "50429f8ef65337f0e76f8f986ec927be5b25f52d1064c1ce6b180d885802b4a2",
+        "probabilities": [
+          0.3337846100330353,
+          0.3337414264678955,
+          0.3324739634990692
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "80abe63ce704a848dcedbe85b53533d14919449243be24782eb4141dafdda18f",
+        "probabilities": [
+          0.5009827017784119,
+          0.49901729822158813
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "840c8bc4ac6be5aed6ffc7f4df5023017628b89324be95ec2625a26fa5353dce",
+        "probabilities": [
+          0.33339494466781616,
+          0.3333269953727722,
+          0.333278089761734
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "bff6d441fac0f6beb9b29d30e788ba9ce66f55e67888ba34b7078bafd94cc5d6",
+        "probabilities": [
+          0.33360379934310913,
+          0.33360379934310913,
+          0.33279240131378174
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "840c8bc4ac6be5aed6ffc7f4df5023017628b89324be95ec2625a26fa5353dce",
+        "probabilities": [
+          0.33344200253486633,
+          0.33337461948394775,
+          0.3331833481788635
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "9788b973aa25dfafc46ee6789d8bcd4884a85845a3a3fefa97bbf03a6e5404f2",
+        "probabilities": [
+          0.5001656413078308,
+          0.4998342990875244
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "d463196991160e07642aa3288aca97d3a263bcd61c025acd62d72e0b11157e6a",
+        "probabilities": [
+          0.33361801505088806,
+          0.33361801505088806,
+          0.33276399970054626
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "d463196991160e07642aa3288aca97d3a263bcd61c025acd62d72e0b11157e6a",
+        "probabilities": [
+          0.333617240190506,
+          0.333617240190506,
+          0.3327655494213104
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "846f47f62ed5657aa797256dd2248e17ee27a65651d281be4bd6f58caf6c8fe4",
+        "probabilities": [
+          0.12489772588014603,
+          0.12489772588014603,
+          0.12489772588014603,
+          0.12489772588014603,
+          0.12489772588014603,
+          0.12489772588014603,
+          0.12530682981014252,
+          0.12530682981014252
+        ]
+      },
+      {
+        "action": 4,
+        "offers": "d5f0e02c37af47f60b11d04786fdb4f0e17c488b7b66bf865d348d21ec13d940",
+        "probabilities": [
+          0.20025601983070374,
+          0.20025601983070374,
+          0.1998136192560196,
+          0.20025601983070374,
+          0.19941829144954681
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "c92793f9c86b0f36249f98fdac3d30845cf3af76ea21d47cac85d5c720a9239c",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "6e1a13550d6896b07369f6d7e18f978d722b1fb84bc994576d42294a839cae04",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "a9065279d572321f8eefad5b380c88c7b27122e9a3ef788266a3f9d514533a6b",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "774cbe1d53d8063e9a0271a40b4adbbac573199cbcf580c02c3182eea1f0076f",
+        "probabilities": [
+          0.49999988079071045,
+          0.5000001788139343
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "9788b973aa25dfafc46ee6789d8bcd4884a85845a3a3fefa97bbf03a6e5404f2",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "f158af47e2b6a4db31140c81a01687b59feffef5826aac8f4466b0a4e7f477f7",
+        "probabilities": [
+          0.5000131130218506,
+          0.4999868869781494
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "5b5cb411b4b8dd9e7fb32e93aa84901870139c4536b416914af8bedf71c3b818",
+        "probabilities": [
+          0.5000131130218506,
+          0.4999868869781494
+        ]
+      },
+      {
+        "action": 4,
+        "offers": "d5f0e02c37af47f60b11d04786fdb4f0e17c488b7b66bf865d348d21ec13d940",
+        "probabilities": [
+          0.20025628805160522,
+          0.20025628805160522,
+          0.19980917870998383,
+          0.20025628805160522,
+          0.1994219571352005
+        ]
+      },
+      {
+        "action": 3,
+        "offers": "2026d3f5284897baea1973dbf4732593c0149a4bfe0a85ae6887dfefee7fefb4",
+        "probabilities": [
+          0.25016140937805176,
+          0.25016140937805176,
+          0.25016140937805176,
+          0.24951568245887756
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "2026d3f5284897baea1973dbf4732593c0149a4bfe0a85ae6887dfefee7fefb4",
+        "probabilities": [
+          0.25016099214553833,
+          0.25016099214553833,
+          0.25016099214553833,
+          0.24951699376106262
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "928cfcc49b723571915240b5d643a90614c694da1344a77e956380dd81b116b4",
+        "probabilities": [
+          0.1666538417339325,
+          0.1666538417339325,
+          0.1666538417339325,
+          0.1666538417339325,
+          0.1666538417339325,
+          0.1667308211326599
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "2f0b87483ddfd088a089af948d2e8046bb955973c09899f9638047f372a6ab6f",
+        "probabilities": [
+          0.1668451875448227,
+          0.1668451875448227,
+          0.16646037995815277,
+          0.1668451875448227,
+          0.1668451875448227,
+          0.16615892946720123
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "2c930add289797eef1feaacec860094629b8d621c885517dffdc60d31a00d2b9",
+        "probabilities": [
+          0.5004535913467407,
+          0.49954643845558167
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "b9ea846d9dc9fa0184dd80ddba0de8b4d21671d3bcb39cb3cc51a36f87422f72",
+        "probabilities": [
+          0.2002427875995636,
+          0.20020465552806854,
+          0.20004597306251526,
+          0.20005297660827637,
+          0.19945354759693146
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "26f571e3f6f1a76e385e62667d455f13f8473f9df3c5e831ec95192abd3714f8",
+        "probabilities": [
+          0.2501567304134369,
+          0.25010934472084045,
+          0.24995176494121552,
+          0.24978211522102356
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "c92793f9c86b0f36249f98fdac3d30845cf3af76ea21d47cac85d5c720a9239c",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "6e1a13550d6896b07369f6d7e18f978d722b1fb84bc994576d42294a839cae04",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "a9065279d572321f8eefad5b380c88c7b27122e9a3ef788266a3f9d514533a6b",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "774cbe1d53d8063e9a0271a40b4adbbac573199cbcf580c02c3182eea1f0076f",
+        "probabilities": [
+          0.49999988079071045,
+          0.5000001788139343
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "9788b973aa25dfafc46ee6789d8bcd4884a85845a3a3fefa97bbf03a6e5404f2",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "5b5cb411b4b8dd9e7fb32e93aa84901870139c4536b416914af8bedf71c3b818",
+        "probabilities": [
+          0.4999643862247467,
+          0.5000356435775757
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "2e55447db6edc88d10356ab83a250933586f9293d074f2848559b57c7b732d89",
+        "probabilities": [
+          0.33379340171813965,
+          0.33382678031921387,
+          0.3323797583580017
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "bd9311a34ea19887781c865f1842c1792e761c7d92091feea2ed4f6855f478bc",
+        "probabilities": [
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "3ee8bca5e55c05d898a1d6ce2a397d4e1794f6eff5dd3d549fa9b769174187b8",
+        "probabilities": [
+          0.12489732354879379,
+          0.12489732354879379,
+          0.12489732354879379,
+          0.12489732354879379,
+          0.1252756118774414,
+          0.1252756118774414,
+          0.12489732354879379,
+          0.12496217340230942
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "abe46f3a06ed72744b46a640e44055ba6874e305ce0de59fbff1c2568e8132cf",
+        "probabilities": [
+          0.33361107110977173,
+          0.33361107110977173,
+          0.33277782797813416
+        ]
+      },
+      {
+        "action": 2,
+        "offers": "abe46f3a06ed72744b46a640e44055ba6874e305ce0de59fbff1c2568e8132cf",
+        "probabilities": [
+          0.3336104452610016,
+          0.3336104452610016,
+          0.33277904987335205
+        ]
+      },
+      {
+        "action": 4,
+        "offers": "3d2b58e90736c710d7c2a23c4c50fdf6c42441b5c5670161cbbb0aad197d6504",
+        "probabilities": [
+          0.20025187730789185,
+          0.20025187730789185,
+          0.20025187730789185,
+          0.1998085379600525,
+          0.19943584501743317
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "bcfffda2b04ed48ca6a8652043cc7b1fc2282882e7b1cc93674d4436426b5a78",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "c92793f9c86b0f36249f98fdac3d30845cf3af76ea21d47cac85d5c720a9239c",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "6e1a13550d6896b07369f6d7e18f978d722b1fb84bc994576d42294a839cae04",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "a9065279d572321f8eefad5b380c88c7b27122e9a3ef788266a3f9d514533a6b",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "9788b973aa25dfafc46ee6789d8bcd4884a85845a3a3fefa97bbf03a6e5404f2",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "f158af47e2b6a4db31140c81a01687b59feffef5826aac8f4466b0a4e7f477f7",
+        "probabilities": [
+          0.5000131130218506,
+          0.4999868869781494
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "5b5cb411b4b8dd9e7fb32e93aa84901870139c4536b416914af8bedf71c3b818",
+        "probabilities": [
+          0.4999510943889618,
+          0.5000488758087158
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "76bf47ed8295336112a62acd9e0ae219815550cadf6d133d72aa78cb36df4126",
+        "probabilities": [
+          0.19988644123077393,
+          0.19987957179546356,
+          0.19986331462860107,
+          0.20060615241527557,
+          0.19976453483104706
+        ]
+      },
+      {
+        "action": 4,
+        "offers": "3d2b58e90736c710d7c2a23c4c50fdf6c42441b5c5670161cbbb0aad197d6504",
+        "probabilities": [
+          0.2002541571855545,
+          0.2002541571855545,
+          0.2002541571855545,
+          0.19980831444263458,
+          0.1994292140007019
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "5d481dfcca6436461e4bd85cc27c893ec56205a10ff91f11c9e4a343a4ea0f4c",
+        "probabilities": [
+          0.12485016882419586,
+          0.12485016882419586,
+          0.12485016882419586,
+          0.12522900104522705,
+          0.12522900104522705,
+          0.12485016882419586,
+          0.12522900104522705,
+          0.12491237372159958
+        ]
+      },
+      {
+        "action": 3,
+        "offers": "ef3d6bf564a76f312952061581cbd686b3a4b6364ca643275cfc95c156766340",
+        "probabilities": [
+          0.25015783309936523,
+          0.25015783309936523,
+          0.25015783309936523,
+          0.24952653050422668
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "ef3d6bf564a76f312952061581cbd686b3a4b6364ca643275cfc95c156766340",
+        "probabilities": [
+          0.2501574754714966,
+          0.2501574754714966,
+          0.2501574754714966,
+          0.24952751398086548
+        ]
+      },
+      {
+        "action": 5,
+        "offers": "c52ba3b9e86c8ccfc41a08e1396509f5c212e1a3fca5b9d67b09edb33767a427",
+        "probabilities": [
+          0.16690367460250854,
+          0.16690367460250854,
+          0.16690367460250854,
+          0.16652923822402954,
+          0.16652923822402954,
+          0.16623054444789886
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "bcfffda2b04ed48ca6a8652043cc7b1fc2282882e7b1cc93674d4436426b5a78",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "c92793f9c86b0f36249f98fdac3d30845cf3af76ea21d47cac85d5c720a9239c",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "a9065279d572321f8eefad5b380c88c7b27122e9a3ef788266a3f9d514533a6b",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "9788b973aa25dfafc46ee6789d8bcd4884a85845a3a3fefa97bbf03a6e5404f2",
+        "probabilities": [
+          0.5001623034477234,
+          0.49983763694763184
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "f158af47e2b6a4db31140c81a01687b59feffef5826aac8f4466b0a4e7f477f7",
+        "probabilities": [
+          0.5000131130218506,
+          0.4999868869781494
+        ]
+      },
+      {
+        "action": 0,
+        "offers": "5b5cb411b4b8dd9e7fb32e93aa84901870139c4536b416914af8bedf71c3b818",
+        "probabilities": [
+          0.4999510943889618,
+          0.5000488758087158
+        ]
+      },
+      {
+        "action": 1,
+        "offers": "76e06848bce4128cb699b816fde558d1bd1715b03eea68ec9b4643d4487329ee",
+        "probabilities": [
+          0.24952010810375214,
+          0.25045356154441833,
+          0.2505621910095215,
+          0.24946416914463043
+        ]
+      }
+    ],
+    "decks": [
+      {
+        "Gray Ogre": 8,
+        "Mountain": 9
+      },
+      {
+        "Badgermole Cub": 8,
+        "Forest": 9
+      }
+    ],
+    "player_columns": [
+      "life",
+      "is_active",
+      "library_count",
+      "hand_count",
+      "battlefield_count",
+      "graveyard_count",
+      "stack_count",
+      "exile_count",
+      "command_count",
+      "phase_beginning",
+      "phase_precombat_main",
+      "phase_combat",
+      "phase_postcombat_main",
+      "phase_ending",
+      "step_untap",
+      "step_upkeep",
+      "step_draw",
+      "step_main",
+      "step_beginning_of_combat",
+      "step_declare_attackers",
+      "step_declare_blockers",
+      "step_combat_damage",
+      "step_end_of_combat",
+      "step_postcombat_main",
+      "step_end",
+      "step_cleanup",
+      "graveyard_lessons",
+      "combat_mana",
+      "mana_white",
+      "mana_blue",
+      "mana_black",
+      "mana_red",
+      "mana_green",
+      "mana_colorless",
+      "lesson_mana_white",
+      "lesson_mana_blue",
+      "lesson_mana_black",
+      "lesson_mana_red",
+      "lesson_mana_green",
+      "lesson_mana_colorless",
+      "restricted_lesson_white",
+      "restricted_lesson_blue",
+      "restricted_lesson_black",
+      "restricted_lesson_red",
+      "restricted_lesson_green",
+      "restricted_lesson_colorless",
+      "restricted_shrine_white",
+      "restricted_shrine_blue",
+      "restricted_shrine_black",
+      "restricted_shrine_red",
+      "restricted_shrine_green",
+      "restricted_shrine_colorless",
+      "restricted_ally_white",
+      "restricted_ally_blue",
+      "restricted_ally_black",
+      "restricted_ally_red",
+      "restricted_ally_green",
+      "restricted_ally_colorless",
+      "hand_only",
+      "no_maximum_hand_size",
+      "turn",
+      "seat",
+      "keeps_red_mana",
+      "attacked",
+      "permanents_sacrificed",
+      "land_entered",
+      "cards_drawn",
+      "bent_water",
+      "bent_earth",
+      "bent_fire",
+      "bent_air",
+      "extra_turns",
+      "additional_combats",
+      "decklists_open"
+    ],
+    "seed": 353,
+    "winner": 1
+  },
+  "reason": "First complete games on the world-bound loader.",
+  "revision": "2f826aa3db0dbeba6f404bbfa981732182421e79"
+}

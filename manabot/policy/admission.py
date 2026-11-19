@@ -12,6 +12,7 @@ import numpy as np
 
 from manabot.env.memory_store import CompactObservation
 from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
     FACT_COMBAT_RESTRICTION,
     FACT_DETAIL_INDEX,
     FACT_DIM,
@@ -60,9 +61,16 @@ from manabot.policy.prepare import (
 )
 
 
-def binding(model: ModelConfig, space: ObservationSpace) -> str:
+def binding(
+    model: ModelConfig,
+    space: ObservationSpace,
+    column_widths: dict[str, int] | None = None,
+) -> str:
     """The configuration a prepared batch belongs to, independent of weights."""
-    return model.model_dump_json() + "\n" + space.encoder.config.model_dump_json()
+    key = model.model_dump_json() + "\n" + space.encoder.config.model_dump_json()
+    if column_widths:
+        key += f"\ncolumn_widths={sorted(column_widths.items())}"
+    return key
 
 
 @dataclass(frozen=True)
@@ -76,7 +84,7 @@ class Spec:
 
     @property
     def binding(self) -> str:
-        return binding(self.model, self.space)
+        return binding(self.model, self.space, self.tables.layout.column_widths)
 
 
 def legal_mask(mask: np.ndarray) -> np.ndarray:
@@ -214,7 +222,7 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     relations(obs["relations"], spec.space.encoder.relation_dim, objects)
     if spec.model.recent_events:
         assert lookup is not None
-        recent_events(obs, objects, lookup)
+        recent_events(obs, objects, lookup, spec.space.shapes["events"][-1])
     if (
         spec.model.value_aggregation != "historical_mean"
         and not spec.model.belief_count_buckets
@@ -465,7 +473,7 @@ def names(candidates: np.ndarray, definitions: np.ndarray) -> None:
         candidates[..., 1], definitions[rows].astype(candidates.dtype)
     ):
         raise ValueError("name candidate definition disagrees with vocabulary")
-    if candidates.shape[-1] == 4:
+    if candidates.shape[-1] >= 4:
         first = definition_ids(candidates[..., 2], len(definitions))
         last = definition_ids(candidates[..., 3], len(definitions))
         if not np.array_equal(first > 0, last > 0) or (first > last).any():
@@ -495,7 +503,7 @@ def actions(
 ) -> None:
     """Validate only legal offers' continuation, naming and focus references."""
     batches, slots = np.nonzero(legal)
-    indexes = obs["actions"][batches, slots][..., -2]
+    indexes = obs["actions"][batches, slots, ACTION_CONTINUATION_INDEX]
     if not (
         (indexes == np.floor(indexes)) & (indexes >= 0) & (indexes <= RELATION_ROWS)
     ).all():
@@ -517,14 +525,14 @@ def actions(
 
 
 def recent_events(
-    obs: ObservationBuffers, object_count: int, definition_rows: np.ndarray
+    obs: ObservationBuffers, object_count: int, definition_rows: np.ndarray, width: int
 ) -> None:
     """Reject malformed public history v1 before any forward; padding is ignored."""
     if "events" not in obs or "events_valid" not in obs:
         raise ValueError("recent-event ActorCritic requires events and events_valid")
     events, valid = obs["events"], obs["events_valid"]
-    if events.ndim != 3 or events.shape[-1] != 12 or valid.shape != events.shape[:2]:
-        raise ValueError("public history v1 requires [batch, events, 12]")
+    if events.ndim != 3 or events.shape[-1] != width or valid.shape != events.shape[:2]:
+        raise ValueError(f"public history v1 requires [batch, events, {width}]")
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("event validity must be binary")
     rows = np.where(valid.astype(bool)[..., None], events, 0)

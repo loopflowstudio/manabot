@@ -135,7 +135,7 @@ shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
 attempts and replays record the resolved setting. Both seats see the public
 `decklists_closed` observation flag, stated in the text observation. Its inverse
 (1 open, 0 closed) accompanies the other game facts on the player tokens.
-Older checkpoints with a different player-buffer shape fail normal world binding.
+A checkpoint trained before that column does not read it.
 
 An open source serializes without a `decklists` key, so earlier source
 digests are unchanged; closed and mixed sources have their own digests, so a run
@@ -190,8 +190,8 @@ The earlier trophy pilots execute from their pinned source; see the
 
 `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
-contract. Stable population entry IDs distinguish events even when lists match;
-checkpoints still bind the world, never the population.
+contract. Stable population entry IDs distinguish events even when lists match.
+A checkpoint can also play newly admitted decks.
 
 Run its local evaluation from the training run's pinned source and native world.
 Local Etude evaluation needs an explicit directory for its replay evidence
@@ -386,11 +386,12 @@ including the unresolved near-singleton latency target.
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
-This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
-content manifest and input schema. Deck-source runs bind the world itself
-(`deck_world`: version, card digest, rules and input contract), so the model
-plays any deck the world admits. Missing or mismatched bindings fail before
-weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
+When the binding records exact decks and sideboards, loading compares the
+whole binding, including the content manifest. Otherwise the model can play
+any admitted deck. The card digest describes the cards of the writing revision.
+Loading compares input columns, token names and action kinds by name
+([compatibility](../docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+A missing binding or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
@@ -414,10 +415,7 @@ Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.
 
-An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w15** (`managym.WORLD_VERSION`); its rules, tensor shape,
-and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w14 artifacts, are not compatible with w15. Elemental combat,
+Elemental combat,
 [sacrifice/landfall](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-sacrifice.md) and [Temur](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
@@ -742,7 +740,7 @@ hash. Each reads the row of the card token for the same concept (a granted
 the card tokens. Captured program tokens read their card-token rows; integers
 and booleans read one row per kind plus their exact value. Fact and effect
 sources read the card encoder's row for that definition, and ability or frame
-ordinals are numbers. An id outside the vocabulary fails. World checkpoints
+ordinals are numbers. An id outside the vocabulary fails. Checkpoints with `world="world"`
 that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
 (elsewhere both values build the same model and omission reads as the default): 4096
 learned rows per id column, which held 80% of a w64 L2 model (1,958,402

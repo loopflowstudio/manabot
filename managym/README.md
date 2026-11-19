@@ -209,7 +209,7 @@ each zone holds only the objects the Comprehensive Rules allow it
 ([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values
 directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
-derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
+derives policy tokens from it. `src/world.rs` owns the card/deck
 support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
@@ -606,8 +606,8 @@ mana); every encoder refuses other restricted mana (`unrepresentable_state`)
 rather than drop it.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v5: the schema-8 semantic Observation, shared native continuation frames, bound public card
-characteristics, visible object joins, world/content identity and optional public
+v6: the schema-8 semantic Observation, shared native continuation frames, bound public card
+characteristics, visible object joins, content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
 `DECISION_CAPTURE_VERSION` owns this aggregate's inclusion/order/digest contract;

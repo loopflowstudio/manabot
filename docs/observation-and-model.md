@@ -199,7 +199,7 @@ w160l8, 2.4 s against 2.9 s per pass with both settings on
 known cost of the default at small widths; it stays on at every width.
 
 The setting changes how a forward is computed, not the model. It changes no
-`ModelConfig` field, checkpoint, world binding or policy input, so a checkpoint
+`ModelConfig` field, checkpoint, binding or policy input, so a checkpoint
 trained with either setting loads and runs with the other. On CPU,
 action probabilities, values, losses and gradients agree with the padded path
 up to the order of floating-point sums. A batch that references no card
@@ -258,6 +258,145 @@ shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster 
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
 ([live-token attention](../experiments/reports/live_token_attention.md)).
 
+## Running a checkpoint on a later revision
+
+A checkpoint keeps loading as cards are added, Rust types are renamed and
+input columns are appended. The frontier Small player was written at
+[`ab2b757d9`](https://github.com/loopflowstudio/manabot/tree/ab2b757d9) with
+policy input v9, before about 100 of today's names and several hundred of
+today's card tokens existed.
+It loads from its original file:
+
+```python
+from manabot.backends.torch.checkpoint import load_checkpoint
+
+model, observation_space = load_checkpoint("final.pt")
+```
+
+The bound `PolicyCheckpoint.report` holds the catalog binding counts.
+The loader logs them at INFO level. On the unmodified u1952 file,
+both player rows read 73 of the running engine's 74 columns. The model uses
+360 stored card programs, of which 136 serialize differently in this engine.
+All 348 learned names still resolve. The loader initializes
+396 new token rows and 103 new name rows at their respective table means.
+One missing field was renamed, 45 token or record names were retired, and
+zero keys were unexplained.
+
+Academy checks the same tensor binding when it lists a checkpoint. A missing
+learned key appears on the bot’s catalog row with the loader’s reason.
+
+Nothing in the file is rewritten. `model` then plays any deck the pool admits,
+including cards it never saw. Evaluate its strength on those decks through
+[local evaluation](evaluation.md#quick-local-evaluation).
+
+### What a checkpoint is bound to
+
+A checkpoint is bound to the meaning of what it reads and chooses, by name. It
+can use an expanded card set on a later revision.
+
+| Since the checkpoint was written | Loading it |
+| --- | --- |
+| Cards, tokens or names were added | Loads. Learned rows move to their keys' new positions. A row for a key the checkpoint never saw starts at the mean of its table's learned rows. |
+| A card it trained on is serialized differently (a renamed Rust type, a variant folded into another) | Loads. The model treats every serialization change as a respelling, including a change in the card’s rules. It reads the program stored in the checkpoint for every trained card. |
+| A token or record name the runtime emits was renamed | Loads when the [rename table](#the-rename-table) has the entry. Otherwise refused, naming the key. |
+| A column was appended to an input array | Loads. The model reads the columns it was trained on; the rest are dropped before it sees the array. |
+| A column it reads was removed, renamed or moved | Refused, naming the column. |
+| A decision kind, the naming representation or naming branching changed | Refused, naming the field. |
+| The token kinds or roles changed (`learning_schema_sha256`) | Refused. |
+| The model architecture differs from the saved configuration | Refused, as before. |
+| The policy input version is v1–v8 | `UnsupportedPolicyInput`, naming the revision to run it from. |
+| The possible-world version changed | Refused only for a model with belief inputs; no other model reads it. |
+| Engine rules changed | Loads. Play uses the current rules. An evaluation measures the effect on strength. |
+
+If the checkpoint recorded exact decks (`setups` and `content_manifest`), the
+loader compares its whole binding. When adding cards changes the manifest,
+the loader refuses the checkpoint.
+
+The terms:
+
+- The **training corpus** of a checkpoint consists of the decks its run actually
+  trained on through the update that wrote it. Recorded outcomes identify each
+  completed matchup, including which deck was on the play. The configured
+  roster alone cannot establish which matchups occurred.
+- A **format** (TLA Limited, Standard) is a named card pool plus deck rules.
+- The **model interface** is what the table above compares: input columns,
+  token and record names, and action kinds. It has no version number. A name
+  is never reused with a new meaning, and a rename is an entry in the rename
+  table. The existing version keys (`policy_input_version`,
+  `decision_version`) keep their spelling and their checks.
+- **Card identity** is the definition key (`tla.aang_swift_savior`,
+  `token.spirit`). A definition's row number is a per-revision pointer and is
+  never learned: tables indexed by card or name bind by key or name.
+- An **execution record** (a replay, a scored evaluation, a frozen receipt)
+  names the revision that produced it and is reproduced there. Main does not
+  replay another revision's games exactly; a checkpoint running here after
+  rules changed is new play, measured again.
+
+A decision added to the engine keeps the previous automatic behaviour as a
+selectable action or a seat default, so a pilot trained before it can still be
+seated.
+
+### The rename table
+
+Learned rows are keyed by the hash of a name: a Rust variant, structure, field
+or record name. Renaming one in the engine would leave the trained row
+unreachable, so [`managym/src/cards/token_renames.rs`](../managym/src/cards/token_renames.rs)
+lists every rename since the oldest supported checkpoint, beside the
+serializer that hashes the names. An entry has this form:
+
+```rust
+(Field, "opponent_picks", Some("picks")),
+(Structure, "ManaUse", None),
+```
+
+A learned key that is neither in the running vocabulary nor in this table
+refuses the load:
+
+```text
+ValueError: unexplained record_name key 5779523629; classify it in
+managym/src/cards/token_renames.rs; it records no source revision
+```
+
+Run `uv run python scripts/pinned_pilot.py names --at ab2b757d9` with the
+writer revision. It traces the names hashed by that revision's Rust engine
+in a temporary Git archive. Look up the family and packed key together:
+
+```text
+record_name 5779523629 execution/6/land choices remaining
+```
+
+Add an entry in the change that renames the type. The
+[pinned pilots](development.md#pinned-pilots) fail a pull request that forgets.
+
+### Checkpoints written before keys were recorded
+
+A checkpoint now records its column names, definition keys and naming names in
+row order, and the revision and Etude run that wrote it. The container carries these in `input_columns`, `writer_catalog` and
+`source`. A saved pilot can load on another revision using its
+embedded catalog. Earlier checkpoints can lack any of these fields. Their columns are the first N of their input version's layout
+at the recorded width, which holds because columns are only appended. Their
+keys and names come from a writer catalog found by the card digest the file
+records, `manabot/model/writer_catalogs/<world_digest>.json`. The loader
+checks that the ordered naming candidates (name and optional definition row)
+reproduce the file's naming digest and that its key count equals the file's
+definition rows. Back faces and rules fixtures without keys use their registry
+names.
+
+For an earlier file, matching card and naming digests allow the loader to use
+the running catalog. If the digests differ and the external catalog is missing,
+the refusal names the digest and destination. Generate the catalog at the writing
+revision and commit its output:
+
+```sh
+uv run python -m manabot.model.writer_catalog > "manabot/model/writer_catalogs/${digest}.json"
+```
+
+For revisions that predate the exporter, run the current
+`manabot/model/writer_catalog.py` file with the writing revision’s interpreter
+and engine. At `ab2b757d9` the engine package lives under `manabot/`. From
+that historical checkout, with its native extension built, run
+`PYTHONPATH="$PWD/manabot" uv run python /path/to/current/manabot/model/writer_catalog.py`.
+
 ## Policy inputs
 
 Main carries policy input v11, the fresh default, and the deprecated inputs v9
@@ -271,12 +410,12 @@ last revision supporting v1–v8). Load saved configurations through
 `ObservationConfig.from_checkpoint`; do not edit a checkpoint's version or
 reshape its weights to get past the error.
 
-A layout change on main does not bump the version. Every checkpoint records the
-revision and Etude run that wrote it, and its world binding holds each buffer's
-shape. A checkpoint from an earlier layout is refused with the buffers that
-differ and the revision to run it from. Loading an architecture does not
-admit a checkpoint to the current world; see
-[world identity](../manabot/README.md#world-identity).
+A layout change on main does not bump the version. A column is appended to
+its array and named in `managym.observation_layout`; a checkpoint trained
+before it keeps reading the columns it knows
+([running a checkpoint on a later revision](#running-a-checkpoint-on-a-later-revision)).
+Removing, renaming or reordering a column refuses every checkpoint that reads
+it.
 
 ### Input v11: one row per game thing
 
@@ -331,7 +470,8 @@ historical JSON is normalized to this observation shape before encoding.
 Checkpoints trained before v11 read the v9/v10 rows: a battlefield object or a
 stack spell was also a card row, permanent rows (38 columns) had no
 characteristics and stack abilities had no row. Selecting v9 or v10 warns
-(`DeprecationWarning`) and is removed in 0.4.0. Their rows are rebuilt from
+(`DeprecationWarning`). They are removed once a v11 player is at least as
+strong as the strongest v9 one, and not before 0.4.0. Their rows are rebuilt from
 the same observation by `agent/legacy_input.rs` and
 `manabot/env/legacy_input.py`, and match the encoders of 452d7b5357 byte for
 byte; the model reads them through the same `ActorCritic`, without a stack
@@ -415,8 +555,9 @@ means both players know both lists, 0 means neither knows the opponent's list.
 The native game supplies it for both viewers; it accompanies the other game
 facts on both player learning tokens and is explicit in the text observation.
 Closed opponent list rows remain zero, while public reveals still update
-`known_hand`. This width change uses ordinary checkpoint world binding to
-refuse older layouts; it adds no policy-input version.
+`known_hand`. The column is appended and adds no policy-input version; a
+checkpoint trained without it does not read it, and plays closed-list games
+out of distribution.
 
 Allocate and collect every key from the supplied `ObservationSpace`, on both
 the scalar and vector paths. Fact, relation, effect and action overflow is a
@@ -529,12 +670,11 @@ closed native decklist rows contribute no identities. Action networks score
 only legal rows, and rollouts pack legal action fields and complete behavior
 probabilities with original coordinates.
 
-The checkpoint binding includes the ordered naming vocabulary with definition
-joins, `naming_representation="public-groups-v1"` and `naming_branching`, in
-addition to tensor shapes and the content manifest. A changed vocabulary,
-order, join or branching bound fails admission; there is no warm start or
-remapping. The semantic observation/capture contracts are 8/5, so earlier
-semantic world bindings are rejected for current execution.
+A checkpoint records its naming names in row order with
+`naming_representation="public-groups-v1"` and `naming_branching`. A changed
+representation or branching bound refuses it. Added or reordered names do
+not: learned name rows bind by name, and a new name starts at the mean of the
+learned rows. The semantic observation/capture contracts are 8/6.
 
 The default universe remains real non-token catalog names, including back faces.
 A separate immutable vocabulary can hold validated names without playable card
@@ -548,8 +688,8 @@ The native observation's `known_library` maps a zero-based library position
 from the top to a card definition. The owner sees the union of public and
 private facts; an opponent sees public facts only. The current policy input
 carries twenty rows per seat (ten public plus ten private, with coinciding
-positions represented once). Deprecated inputs v9/v10 omit these facts and preserve their frozen layout. No old checkpoint is relabeled compatible: the new
-buffer shape is part of world binding.
+positions represented once). Deprecated inputs v9/v10 omit these facts and preserve their frozen layout,
+so their checkpoints never read them.
 
 Native and Python encoders use the same definition joins and one-based
 position encoding. Prepared resolves definitions once and weights each by the

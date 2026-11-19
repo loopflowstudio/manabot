@@ -125,7 +125,7 @@ class PolicySnapshot(Strict):
 def inspect_policy(
     path: Path, cases: list[Case], updates: int, *, backend: TrainingBackend
 ) -> PolicySnapshot:
-    """Use the ordinary world-bound loader and exact setup; never refit weights."""
+    """Use the checkpoint loader and exact setup; never refit weights."""
     return backend.verification.inspect_policy(path, cases, updates)
 
 
@@ -172,7 +172,8 @@ class BaselineReport(Strict):
     regime_digest: str
     source: str = "unavailable"
     corpus_sha256: str = "unavailable"
-    world: str
+    # Reports written before the world label was removed carry it; ignored.
+    world: str | None = Field(default=None, exclude_if=lambda value: value is None)
     steps: int
     software: Literal["passed", "error"] = "error"
     learning: LearningEvidence
@@ -355,7 +356,6 @@ def report_recipe(
     report = BaselineReport(
         seed=seed,
         regime_digest=learner_digest(settings),
-        world=settings.world,
         steps=updates,
         learning=learning_evidence([]),
     )
@@ -452,15 +452,10 @@ def aggregate_reports(
     ):
         errors.append("missing source or frozen-corpus identity")
     if (
-        len(
-            {
-                (r.regime_digest, r.world, r.steps, r.source, r.corpus_sha256)
-                for r in reports
-            }
-        )
+        len({(r.regime_digest, r.steps, r.source, r.corpus_sha256) for r in reports})
         != 1
     ):
-        errors.append("cohort recipe/world/horizon/source/corpus differs")
+        errors.append("cohort recipe/horizon/source/corpus differs")
     evidence = (
         LearningEvidence(
             verdict="error", seeds=len(reports), deals=0, reason="; ".join(errors)

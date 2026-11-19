@@ -219,7 +219,6 @@ def runtime_identities() -> dict[str, object]:
             sources.update(path.read_bytes())
     extension = Path(managym._managym.__file__)
     return {
-        "world": managym.WORLD_VERSION,
         "python": platform.python_version(),
         "numpy": np.__version__,
         "source_sha256": sources.hexdigest(),

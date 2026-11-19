@@ -1226,11 +1226,9 @@ with serve(
 
 Run, stage, raw/EMA, updates and transitions come from the run's `run.json`,
 joined to the exact artifact digest. Missing counts say **not recorded**;
-filenames never supply training counts. A world mismatch stays listed but
-disabled with the precise reason. A selected policy is checked against the setup before Start in Play and Watch;
+filenames never supply training counts. An incompatible checkpoint stays listed with the loader’s refusal reason. A selected policy is checked against the setup before Start in Play and Watch;
 a mismatch shows the provider’s reason beside the picker. Start checks again,
-so changed artifacts and setups are still refused precisely. Bound checkpoint
-decks are also listed as **Bound decks**. Registered launch aliases appear
+so changed artifacts and setups are still refused precisely. If the checkpoint recorded exact decks, Academy lists them as **Bound decks**. Registered launch aliases appear
 alongside provider-authored names in setup and recorded player identities (unless
 they match the name ignoring case), so
 configurations of the same artifact can have recognizable labels. A refused
@@ -1418,7 +1416,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | No browser window opens | Open the printed `open` address yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
 | No policies are listed | Register a Python factory or a saved policy specification; check any provider discovery error shown below the picker. |
 | `No trained checkpoints found.` | Register a saved specification with `--policy <spec.json>` or supply provider-owned discovery sources through Python. |
-| A checkpoint is listed but disabled | It was trained in another world or on other card content; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
+| A checkpoint is listed but disabled | The row states what this revision cannot give it, for example `incompatible agent_player columns: checkpoint …, runtime …` or `unexplained record_token key …; classify it in managym/src/cards/token_renames.rs`. Added cards are compatible unless the checkpoint recorded exact decks and its content manifest changed. [What refuses a checkpoint](observation-and-model.md#what-a-checkpoint-is-bound-to) lists each case and its fix; otherwise run it from the revision that wrote it. |
 | A checkpoint shows **not recorded** for its update | No `run.json` in the listed directories records those bytes. List the run directory rather than the file alone. A run that recorded no counts for its checkpoints stays **not recorded**. |
 | `The selected opponent checkpoint is unavailable.` | The file was moved or deleted after it was listed. Restore it or choose another; Academy does not pick a replacement. |
 | `The selected policy changed; restore the pinned artifact and runner, or restart Academy and explicitly reselect the policy.` | The artifact or runner differs from the pinned Policy ID. Restore the original execution, or restart Academy and deliberately select the new entry. |

@@ -23,12 +23,12 @@ import subprocess
 from typing import Any
 
 from manabot.infra.source import source_commit, source_dirty
+from manabot.model.writer_catalog import naming_entries
 from manabot.semantic.learning import DEFAULT_SCHEMA_PATH, BoundSemanticPack
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
-WORLD = managym.WORLD_VERSION
 # The authored setup whose decks form the Elemental roster (`elemental-world-v1`
 # names the same decks).
 _ROSTER_SETUP = "optional_payments"
@@ -82,8 +82,6 @@ def validate_setup_binding(
     if _binds_world(binding):
         if len(player_configs) != 2:
             raise ValueError("execution requires two decks")
-        if any(p.world != managym.WORLD_SETUP for p in player_configs):
-            raise ValueError("execution deck is not submitted to the world")
         admit_world_decks(player_configs)
         return
     actual = _setups(player_configs)
@@ -101,15 +99,13 @@ def validate_agent_decks(
 ) -> None:
     """Check that a checkpoint may play every one of these decks, in any pairing.
 
-    A world binding admits each deck the world admits natively; a setup binding
-    admits only the decks of its setups.
+    Exact decks in the binding restrict play to that roster. Otherwise native
+    admission checks each submitted deck.
     """
     binding = getattr(agent, "world_binding", None)
     if binding is None:
         return
     if _binds_world(binding):
-        if any(p.world != managym.WORLD_SETUP for p in player_configs):
-            raise ValueError("execution deck is not submitted to the world")
         admit_world_decks(player_configs)
         return
     if any(setup not in binding["setups"] for setup in _setups(player_configs)):
@@ -118,37 +114,33 @@ def validate_agent_decks(
 
 def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
     """Admit every deck by the world's native validation; membership grants nothing."""
+    if any(p.world != managym.WORLD_SETUP for p in player_configs):
+        raise ValueError(
+            "Supply a DeckMatchup with submitted decks for this checkpoint."
+        )
     checked = managym.check_decks([player.deck for player in player_configs])
     for player, issues in zip(player_configs, checked, strict=True):
         if issues:
             raise ValueError(
-                f"deck {player.name} is not admitted by world {WORLD}: "
+                f"deck {player.name} is not admitted: "
                 + "; ".join(issue.message for issue in issues)
             )
 
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
-    """A world-bound policy reads the world's complete semantic program input."""
+    """Check the semantic program input required by the recorded binding."""
     if _binds_world(binding) and agent.config.world != managym.WORLD_SETUP:
-        raise ValueError(
-            "world checkpoint requires its complete semantic program input"
-        )
+        raise ValueError("checkpoint requires the complete semantic program input")
 
 
 def _input_binding(observation_space: Any) -> dict:
     return {
-        "world": WORLD,
         "policy_input_version": observation_space.encoder.config.policy_input_version,
         # The input binds the native group partition through its branching
         # bound; changing it reinterprets every group route.
         "naming_representation": "public-groups-v1",
         "naming_branching": managym.NAME_BRANCHING,
-        "naming_vocabulary": _digest(
-            [
-                {"name": candidate.name, "definition": candidate.definition}
-                for candidate in managym.naming_catalog()
-            ]
-        ),
+        "naming_vocabulary": _digest(naming_entries()),
         "rules": {
             "decision_version": SEMANTIC_DECISION_VERSION,
             "possible_world_version": POSSIBLE_WORLD_SPACE_VERSION,
@@ -239,31 +231,42 @@ def expected_world(
 def current_binding_form(binding: Mapping[str, Any]) -> dict:
     """A retained binding in the form this runtime writes.
 
+    Earlier revisions recorded a world label (`world`, and `world_version` in
+    the content manifest); nothing compares it now, so an earlier-world
+    checkpoint is refused by its input version or by the fields that differ.
     Bindings of the world's catalog recorded `pack_key: None` in their content
     manifest before the catalog was the only pack; that field carries nothing
-    now. An authored pack's non-null key stays, so its binding never matches.
+    either. An authored pack's non-null key stays, so its binding never matches.
     """
-    manifest = binding.get("content_manifest")
-    if isinstance(manifest, Mapping) and manifest.get("pack_key", "") is None:
-        manifest = {key: value for key, value in manifest.items() if key != "pack_key"}
-        return {**binding, "content_manifest": manifest}
-    return dict(binding)
+    current = {key: value for key, value in binding.items() if key != "world"}
+    manifest = current.get("content_manifest")
+    if isinstance(manifest, Mapping):
+        current["content_manifest"] = {
+            key: value
+            for key, value in manifest.items()
+            if key != "world_version" and not (key == "pack_key" and value is None)
+        }
+    return current
 
 
 def validate_checkpoint_world(
     checkpoint: Mapping[str, Any], observation_space: Any, player_configs=None
 ) -> dict:
     binding = checkpoint.get("world_binding")
-    if not isinstance(binding, dict) or binding.get("world") != WORLD:
-        raise ValueError(
-            f"checkpoint requires an explicit compatible {WORLD} world binding"
-        )
+    if not isinstance(binding, dict):
+        raise ValueError("checkpoint requires an explicit world binding")
     try:
         expected = expected_world(binding, observation_space, player_configs)
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:
         raise ValueError("checkpoint world binding has invalid setup") from error
     current = current_binding_form(binding)
     if _digest(current) != _digest(expected):
+        manifest = current.get("content_manifest")
+        if isinstance(manifest, dict) and manifest != expected.get("content_manifest"):
+            raise ValueError(
+                "checkpoint content binding differs: trained on content "
+                f"{str(manifest.get('content_digest', 'unknown'))[:12]}; {written_at(checkpoint)}"
+            )
         raise ValueError(
             "checkpoint world/setup/input binding differs from this runtime in "
             f"{binding_difference(current, expected)}; {written_at(checkpoint)}"
@@ -278,7 +281,12 @@ def checkpoint_source() -> dict[str, str | bool | None]:
         dirty: bool | None = source_dirty()
     except (OSError, subprocess.SubprocessError, ValueError):
         commit, dirty = None, None
-    return {"commit": commit, "dirty": dirty, "etude_run": os.environ.get("ETUDE_RUN")}
+    return {
+        "commit": commit,
+        "dirty": dirty,
+        "etude_experiment": os.environ.get("ETUDE_EXPERIMENT"),
+        "etude_run": os.environ.get("ETUDE_RUN"),
+    }
 
 
 def written_at(checkpoint: Mapping[str, Any]) -> str:

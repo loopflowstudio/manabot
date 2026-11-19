@@ -58,12 +58,18 @@ def test_replay_only_retains_native_failures(
             game.replay_in_process([{}], None)
 
 
-def test_loader_batches_prepared_rows_without_sampling(tmp_path: Path) -> None:
+def test_loader_batches_prepared_rows_without_sampling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(71)
     space = ObservationSpace()
     model = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     match = Match()
+    monkeypatch.setattr(
+        "manabot.backends.torch.checkpoint.checkpoint_source",
+        lambda: {"commit": "a" * 40},
+    )
     path = tmp_path / "policy.safetensors"
     save_checkpoint(model, space, path, player_configs=match.to_rust())
     ref = CheckpointRef(
@@ -72,6 +78,15 @@ def test_loader_batches_prepared_rows_without_sampling(tmp_path: Path) -> None:
             uri=path.as_uri(), sha256=file_sha256(path), size_bytes=path.stat().st_size
         ),
     )
+    participant = registration(
+        checkpoint_player(ref),
+        name="test-policy",
+        match=match.config,
+        content_suite="fixture",
+        role="challenger",
+    )
+    assert participant.writer_revision == "a" * 40
+    assert participant.stored_programs == 0
     forward = load(ref)
     sampler = build(checkpoint_player(ref), {ref.key: forward})
     assert isinstance(sampler, Sampler)

@@ -35,7 +35,6 @@ def check_heuristic_registration() -> str:
         player_spec={"kind": "scripted_greedy"},
         compute_class_id="scripted-greedy-cpu-v1",
         information_boundary="acting-viewer",
-        world=runtime["world"],
         content_suite="release-smoke",
         observation_abi_sha256=runtime["observation_abi_sha256"],
         action_abi_sha256=runtime["action_abi_sha256"],

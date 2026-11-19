@@ -408,10 +408,10 @@ def test_checkpoint_watch_refuses_incompatible_and_wrong_decks(
             )
         )
     data = read_checkpoint(checkpoint, weights_only=True)
-    data["world_binding"]["world"] = "w5"
+    data["world_binding"]["policy_input_version"] = 1
     write_checkpoint(data, checkpoint)
     digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
-    with pytest.raises(HTTPException, match="trained in w5"):
+    with pytest.raises(HTTPException, match="policy_input_version"):
         create_watch(WatchRequest(players=[f"policy:{digest}", "random"]))
 
 

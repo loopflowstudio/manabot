@@ -4566,7 +4566,6 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
     return {
         "admitted": True,
         "ruleset": managym.DEVELOPMENT_RULESET,
-        "world_version": world["world_version"],
         "card_digest": world["card_digest"],
     }
 

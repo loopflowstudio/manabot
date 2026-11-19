@@ -29,11 +29,10 @@ from manabot.sim.matchup import (
     selected_match,
 )
 from manabot.sim.performance import EvalPerformance
-from manabot.sim.registration import PlayerRegistration
+from manabot.sim.registration import HISTORICAL_MIRROR_SUITE, PlayerRegistration
 from manabot.sim.replay import ReplayReceipt, write_trace
 from manabot.sim.supervision import failure_record, replay_retained
 from manabot.verify.games import INTERACTIVE_DECK
-from managym import WORLD_VERSION
 from managym.recording import atomic_private_json
 from managym.statistics import Reducer, Reduction
 
@@ -110,7 +109,7 @@ def play_cell(
         and key.content_suite != authored_matchup.content_suite
     ):
         raise ValueError("arena suite differs from explicit authored matrix")
-    if not authored and key.content_suite != "w2-interactive-mirror-v1":
+    if not authored and key.content_suite != HISTORICAL_MIRROR_SUITE:
         raise ValueError("unknown arena content suite")
     if not deal_seeds or len(set(deal_seeds)) != len(deal_seeds):
         raise ValueError("deal seeds must be nonempty and unique")
@@ -128,12 +127,9 @@ def play_cell(
         )
     )
     if authored:
-        if key.world != WORLD_VERSION:
-            raise ValueError("selected matchup requires corrected-world identity")
         for player in (player_a, player_b):
             if (
-                player.world != key.world
-                or player.content_suite != key.content_suite
+                player.content_suite != key.content_suite
                 or player.information_boundary != key.viewer_boundary
                 or player.matchup_sha256 != canonical_sha256(match.model_dump())
             ):

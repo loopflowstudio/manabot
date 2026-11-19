@@ -48,6 +48,9 @@ def new_game(
                 "villain_type": "passive",
                 "seed": 165,
                 "auto_pass": False,
+                # The proof floats restricted mana from a choice-output land
+                # at priority, which a default (off) seat is never offered.
+                "mana_floats": "usable",
             },
         )
         assert self.env is not None

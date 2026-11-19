@@ -33,7 +33,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.run_settings import RunSettings
-from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
+from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_decks,
@@ -249,7 +249,7 @@ def test_sampled_decks_agree_across_producer_counts(
         close_collector(many)
 
 
-def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
+def test_checkpoint_plays_unseen_admitted_decks(
     decks: UniformDecks, tmp_path: Path
 ) -> None:
     target = tmp_path / "policy.pt"
@@ -259,7 +259,6 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     binding = raw["world_binding"]
     assert "setups" not in binding and "content_manifest" not in binding
     assert set(binding) == {
-        "world",
         "world_digest",
         "policy_input_version",
         "rules",
@@ -269,17 +268,19 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "naming_branching",
         "naming_vocabulary",
     }
-    assert binding["world"] == managym.WORLD_VERSION
     assert inspect_checkpoint(target, backend=TORCH_BACKEND).compatible
     policy, _ = load_checkpoint(str(target))
 
     unseen = Deck({"Swamp": 10, "Forest": 4, "Accumulate Wisdom": 1}).player()
     validate_agent_setup(policy, [unseen, decks.players()[0]])
     unsupported = Deck({"Swamp": 9, "Ally": 1}).player()
-    with pytest.raises(ValueError, match="not admitted by"):
+    with pytest.raises(ValueError, match="is not admitted:"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
-    with pytest.raises(ValueError, match="not submitted to the world"):
+    with pytest.raises(
+        ValueError,
+        match="Supply a DeckMatchup with submitted decks",
+    ):
         validate_agent_setup(policy, [unseen, other_pack])
 
     for key, change in (
@@ -292,15 +293,15 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             changed["world_binding"][key] = change
         else:
             changed["world_binding"][key] = {**binding[key], **change}
-        assert checkpoint_incompatibility(changed) is not None
         path = tmp_path / f"changed-{key}.pt"
         write_checkpoint(changed, path)
+        assert not inspect_checkpoint(path, backend=TORCH_BACKEND).compatible
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
 
     # Producer admission for a deck run checks the world, not one pair.
     validate_agent_decks(policy, decks.players())
-    # A setup-bound checkpoint plays only its roster, under the shared rule.
+    # Recording exact decks restricts play to that roster.
     authored = deepcopy(policy)
     authored.world_binding = checkpoint_world(
         [

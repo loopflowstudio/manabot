@@ -26,7 +26,7 @@ from etude.train.records import RowTable
 from etude.train.tracking import write_block
 
 from manabot.training.rollout.self_play import SelfPlayOutcome
-from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
+from manabot.training.update_metrics import OUTCOME_TABLE, outcome_scalars
 
 
 @dataclass(frozen=True)
@@ -47,22 +47,22 @@ def measure(
     root.mkdir(parents=True)
     index = Index(root, writer)
     for update in range(1, 9):
-        # Sixteen matchups, both positions, one win/loss/draw per row. Change
+        # Sixteen matchups, both seats, one win/loss/draw per row. Change
         # counts per update so table deduplication cannot explain the result.
         rows = [
             SelfPlayOutcome(
                 deck=f"{i:064x}",
                 opponent_deck=f"{i + 1:064x}",
-                position=position,
+                seat=seat,
                 wins=update,
                 losses=update,
                 draws=update,
             )
             for i in range(16)
-            for position in ("play", "draw")
+            for seat in (0, 1)
         ]
         values = (
-            metric_row({"self_play_outcomes": rows})
+            outcome_scalars(rows)
             if representation == "scalar"
             # `Run.log_table` indexes only the digest of the table it stores.
             else {OUTCOME_TABLE: _digest(rows)}

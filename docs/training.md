@@ -63,7 +63,7 @@ written under `~/.etude/track` (moved by `ETUDE_HOME`):
         learner.pt        raw weights (a `state_dict` written with `torch.save`)
         optimizer.pt      Adam
         ema.pt            EMA weights
-    policies/             world-bound raw and EMA policies, named by update and never rewritten
+    policies/             raw and EMA policies, named by update and never rewritten
     game-attempts/        append-only ledgers when game-error handling is configured
     failures/             private replay evidence, created when a game fails
 ```
@@ -212,9 +212,8 @@ What stays on main:
   from main: every report naming a regime, a `RegimeRun` or an
   `experiments/data/<name>/` SQLite store is rebuilt from the revision it
   records, or from the one above.
-- Policy checkpoints. `load_checkpoint` loads every world-bound checkpoint as
-  before, with serialized keys unchanged, including fields named for the
-  regime that wrote them (`regime_digest`, the regime tag).
+- Policy checkpoints. `load_checkpoint` reads the original serialized keys, including
+  fields named for the regime that wrote them (`regime_digest`, the regime tag).
 - Run history written through Etude. Update rows, row tables, checkpoints and
   evaluation runs are read with `etude.train.read`, `etude report` and
   [the readers that remain](experiment-metrics.md).
@@ -340,21 +339,26 @@ def self_play(
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
             publish(settings, run, learner, ema, counts)
         with self_play_games(settings, run, counts) as collector:
-            for update in run.steps("updates", to=updates):
-                row = step(
-                    settings, learner, ema, collector, counts, rng, out=run.out
+            if counts.updates == 0:
+                log_corpus_setup(
+                    run,
+                    collector,
+                    behavior=settings.behavior,
+                    curriculum=settings.matchup_curriculum,
+                    parent=parent_checkpoint(settings.pretrained)
+                    if settings.pretrained is not None
+                    else None,
+                    updates=0,
+                    **clocks(counts),
                 )
+            for update in run.steps("updates", to=updates):
+                row = step(settings, learner, ema, collector, counts, rng, out=run.out)
                 if kind is not None:
                     row["run/kind"] = kind
                 if recipe is not None:
                     row["run/recipe"] = recipe
                 run.log(row, **clocks(counts))
-                if settings.behavior != "random":
-                    run.log_table(
-                        OUTCOME_TABLE,
-                        collector.stats.self_play.drain(),
-                        **clocks(counts),
-                    )
+                log_corpus_outcomes(run, collector, **clocks(counts))
                 run.save()
                 if is_checkpoint(settings, update):
                     publish(settings, run, learner, ema, counts)
@@ -394,7 +398,7 @@ The pieces that are manabot's:
 | `self_play_games(settings, run, counts)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. Streams, sampling and minibatch order are seeded from `run.seed` and the update the attempt starts at, so a resumed loop plays fresh, reproducible games. |
 | `step(settings, learner, ema, collector, counts, rng, out=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the metric row. The learner, Adam, EMA and `counts` are updated in place. |
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
-| `publish(settings, run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
+| `publish(settings, run, learner, ema, counts)` | Writes raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
 The loop takes Etude's `TrainingRun` (`etude.train.tracking`); there is no
 untracked path through it. The updates and pieces it calls need no run
@@ -652,8 +656,11 @@ histories = collect_belief(Path("inputs/producer-ema.safetensors"), run.out / "h
                            backend=resolve("torch"))
 ```
 
-`load_checkpoint` refuses a checkpoint from another world or with other model
-or observation configs, and an EMA policy never loads as raw.
+`load_checkpoint` reads a checkpoint's own model and observation
+configuration and binds its learned rows to the running card catalog, so a
+policy published before cards were added still loads
+([what refuses one](observation-and-model.md#what-a-checkpoint-is-bound-to)).
+An EMA policy never loads as raw.
 
 `SelfPlay.pretrained` (a checkpoint path) starts self-play from a published
 policy instead of random weights. Only the policy is inherited: Adam, EMA,
@@ -810,8 +817,12 @@ absent on other devices. CUDA peaks cover the process lifetime; MPS allocations
 are current observations, not peaks. Completed self-play
 outcomes are a row table, logged once per update with Etude's
 `run.log_table("self_play_outcomes", rows, **clocks(counts))`. Each row has `deck`
-and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
-`losses` and `draws`, so deck pairs add rows rather than metric columns. Etude
+and `opponent_deck` (deck identities), `seat` (the native seat of `deck`, 0 on
+the play), `wins`, `losses` and `draws`, so deck pairs add rows rather than
+metric columns. Tables written before the `seat` column label the seat
+`position` (`play` or `draw`);
+`manabot.reports.update_metrics.outcome_rows(history)` reads every stored form
+into rows with `seat`. Etude
 stores the table as an immutable JSON file under the metric run's `artifacts/` and carries it with the
 metrics, including for launched jobs; keep `artifacts/` when copying a run for
 offline analysis. Read the rows directly through Etude:
@@ -826,7 +837,7 @@ for table in history.read_table("self_play_outcomes", "updates"):
 ```
 
 ```text
-1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, ...)
+1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'seat': 1, 'wins': 1, 'losses': 1, 'draws': 0}, ...)
 ```
 
 `manabot.reports.update_metrics.updates_from_run(history)` reads the same
@@ -859,8 +870,8 @@ learning quality. Throughput is cumulative work over observed elapsed cost.
 
 ### Checkpoint cadence
 
-`SelfPlay.checkpoint_every` (`n`) makes the loop publish a world-bound
-policy at absolute updates n, 2n, … with `run.checkpoint`; the loop always
+`SelfPlay.checkpoint_every` (`n`) makes the loop publish a policy at absolute
+updates n, 2n, … with `run.checkpoint`. The loop always
 publishes the untrained policy at update 0 and its last update. A run's final
 checkpoint is the last one of a finished run, including after extension.
 Elemental uses a 50-update grid, chosen by the recipe rather than estimated
@@ -1110,8 +1121,9 @@ Etude compares the config and the seed between attempts and nothing else.
 Keeping the code compatible is the recipe author's: an attempt may run a later
 commit, which it records, but settings built in the recipe's body, the model's
 shape and the world are not compared, and changing them within a run is
-undefined. A changed model shape fails when the saved weights load; published
-policies stay world-bound, so `load_checkpoint` refuses one from another world.
+undefined. A changed model shape fails when the saved weights load. Published
+policies load on later revisions by name
+([what refuses one](observation-and-model.md#what-a-checkpoint-is-bound-to)).
 
 ### What resume does not promise
 

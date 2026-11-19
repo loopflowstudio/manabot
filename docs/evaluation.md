@@ -11,6 +11,7 @@ Training-time monitoring that calls this machinery is in
 
 - [One deal](#one-deal)
 - [What counts](#what-counts)
+- [Comparing measurements across revisions](#comparing-measurements-across-revisions)
 - [Anchors and ratings](#anchors-and-ratings)
 - [Beyond win rate](#beyond-win-rate)
 - [What we know](#what-we-know)
@@ -115,7 +116,7 @@ and diagnostics, not as working anchors; `fit_population` still places
 against each other on shared deals.
 
 Ratings are a seat-aware Bradley-Terry fit expressed on the Elo scale
-(`eval.rating`). A rating belongs to one tuple of world, content suite,
+(`eval.rating`). A rating belongs to one tuple of content suite,
 information boundary, compute class and arena version, and never crosses those
 boundaries; one anchor fixes the origin, so differences carry meaning and the
 absolute number doesn't. The full contract, including why the payoff matrix
@@ -173,8 +174,10 @@ and replace `local` in the checkpoint path with that name.
 - `--opponent` also accepts another local policy file, `scripted_greedy` or
   `random`. Policy files are `.safetensors`, or `.pt` from an earlier revision.
 - Repeat `--deal-seed` for more blocks; `--include-mirrors` plays all eight legs;
-  `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster. The
-  checkpoint must already admit that setup; nothing is converted.
+  `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster, or a
+  `DeckMatchup` JSON of two deck lists. A checkpoint that recorded exact decks
+  must already admit that setup; nothing is converted. A checkpoint that
+  recorded none, such as a TLA frontier run, plays only a `DeckMatchup`.
 - `--game-seconds` and `--max-commands` bound each game. `--seconds` bounds
   checkpoint preparation, scalar play and replay, including child startup.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated
@@ -204,6 +207,195 @@ explicit leg subsets.
 Etude entry points are `manabot.eval.benchmark` (one Etude match is one deal
 with all eight legs; Etude owns match records, resume and uncertainty) and
 `manabot.eval.duel`.
+
+## Comparing measurements across revisions
+
+Seat an older checkpoint alongside its comparator in the same evaluation on
+one revision to compare them directly. Etude reports can also line up existing
+measurements across revisions when the opponent identity, decks, deals,
+decision settings and choice of raw or averaged policy match. Throughput
+comparisons also require the same machine. For a comparison within the
+training corpus, verify that both runs trained on the evaluation matchups by
+the selected updates. A matchup outside a checkpoint’s corpus measures transfer.
+See [training corpus](observation-and-model.md#what-a-checkpoint-is-bound-to).
+
+Check the revisions between the measurements for a declared change that
+affects the metric. Pinned-pilot recordings give the reason for a change in
+what a stored policy computes. Engine Budget records the reason its reference
+moved, and the heuristic registration records its source hash. When a relevant
+change intervenes, measure both participants on the same revision.
+
+Local evaluation requests and Etude match records carry the checkpoint
+registration. `writer_revision` gives the writing revision when known.
+`stored_programs` counts trained card definitions whose saved program the
+policy reads, including programs identical to the current catalog. Earlier
+registrations can omit both fields.
+
+Score early learning on the raw learner. An averaged export can still be
+close to initialization while the raw policy is improving.
+
+### Querying the training corpus
+
+Use the `evaluation` extra for DuckDB. Start from the policy checkpoint file
+and the storage root holding its run: the file records the experiment, run and
+update that wrote it, and the corpus is that run through that update.
+
+```python
+from pathlib import Path
+
+from manabot.eval.training_corpus import training_corpus
+
+# Etude keeps its records under ~/.etude/track (moved by ETUDE_HOME). A run of
+# `etude train manabot/recipes/local.py` keeps its policies in local/out there.
+track = Path.home() / ".etude/track"
+policy = track / "local/out/policies/00000002-raw.safetensors"
+# A DuckDB connection holding the corpus, runs, game_settings and deck_cards relations.
+corpus = training_corpus(policy, source=track)
+```
+
+A file that records no run or update raises `UnknownCoverage`, naming what is
+missing, as does a storage root that does not hold the file's run. Files written before checkpoints recorded their experiment take it as
+`experiment="local"`. The file is a policy container (`.safetensors`); convert
+a PyTorch `.pt` checkpoint with `manabot.backends.convert` first.
+
+The query also accepts a published Etude checkpoint record as
+`training_corpus(checkpoint, source=storage)`, using its recorded update, or
+an opened run and an update. For frontier Small, which predates the file
+records, open the run from a local copy of `r2://manabot/jobs` containing the
+run declaration, writer record and sealed metrics block covering update 1:
+
+```python
+from etude.train.read import read
+
+storage = Path("runs")
+run = read(storage, "tla_frontier", "59718fe34945")
+corpus = training_corpus(run, through=1)
+print("Deck entries and distinct card keys:", corpus.sql(
+    "select count(distinct entry), count(distinct card) from deck_cards").fetchall())
+
+print("Completed games:", corpus.sql("select coalesce(sum(games), 0) from corpus").fetchall())
+print("Observed decks:", corpus.sql("""
+    select count(distinct deck) from (select unnest([play, draw]) as deck from corpus)
+""").fetchall())
+
+# Matchup membership and counts. Filter either seat by Deck.identity to
+# inspect a particular matchup. Swapping play and draw gives the reverse leg.
+print(corpus.sql("""
+    select play, draw, sum(games) as played from corpus
+    group by play, draw order by played desc, play, draw
+""").fetchall())
+
+# Which definition keys in a proposed deck are new to this corpus?
+print(corpus.sql("""
+    select unnest(['lea.island', 'lea.lightning_bolt'])
+    except select unnest(play_cards || draw_cards) from corpus
+""").fetchall())
+
+# Games with Island in either list, counting a mirror once.
+print(corpus.sql("""
+    select coalesce(sum(games), 0) from corpus
+    where list_contains(play_cards || draw_cards, 'lea.island')
+""").fetchall())
+
+# Deck mix at each update. A mirror contributes two seats.
+print(corpus.sql("""
+    select experiment, run, update_number, deck, sum(games) as seats from
+        (select experiment, run, update_number, unnest([play, draw]) as deck, games from corpus)
+    group by all order by experiment, run, update_number, seats desc, deck
+""").fetchall())
+```
+
+One spelling says which seat a row is about: `seat`, the native seat, where 0
+is on the play. `game_settings`, `card_statistics` and the stored outcome rows
+all carry it. A `corpus` row is about a game, so it names both seats: `play`
+and `play_cards` are the deck in seat 0, `draw` and `draw_cards` the deck in
+seat 1. Runs that stored their outcomes under the labels `play` and `draw`
+read into the same columns.
+
+Each run keeps its own update numbers. If a learner started from a published
+checkpoint, the corpus includes the parent through that checkpoint’s update.
+The reader matches its recorded run, update and SHA-256 in the same storage.
+An unresolved parent raises `UnknownCoverage`.
+
+How a learner was trained is split by one rule: could the value differ between
+two games of the same run? What cannot is a column of `runs`, one row per
+contributing run. What can is counted in `game_settings`: for each update, the
+values a setting took and the number of that update's games played under each.
+
+```python
+print(corpus.sql("""
+    select experiment, run, max_actions, action_overflow, policy_input_version,
+           behavior, opponent_mode, learning_seats, matchup_curriculum,
+           parent_run, parent_update
+    from runs order by experiment, run
+""").fetchall())
+print(corpus.sql("select run, entry, deck, board, card, copies from deck_cards order by all").fetchall())
+
+# Which settings held one value in every game?
+print(corpus.sql("""
+    select setting, seat, min(value) from game_settings
+    group by setting, seat having count(distinct value) = 1 order by all
+""").fetchall())
+
+# In what share of games did each value hold?
+print(corpus.sql("""
+    select setting, seat, value, sum(games) as games,
+           sum(games) / sum(sum(games)) over (partition by setting, seat) as share
+    from game_settings group by setting, seat, value order by all
+""").fetchall())
+
+# Over which updates of each run did each value hold? A value that stops at
+# one update, or at the checkpoint a child run started from, changed there.
+print(corpus.sql("""
+    select experiment, run, setting, seat, value,
+           min(update_number) as first_update, max(update_number) as last_update,
+           sum(games) as games
+    from game_settings group by all order by setting, seat, experiment, run, first_update
+""").fetchall())
+```
+
+`game_settings` records `decklists` (`open` or `closed`) and `skip_trivial`
+(`true` or `false`). `seat` is NULL for a setting of the whole game; a
+per-seat setting carries the native seat, where 0 is on the play. Values are
+text. A setting's counts always sum to the update's completed games; a run
+whose counts do not raises `UnknownCoverage`. A setting with no rows was not
+recorded, which is different from false. Runs that predate the table have
+`decklists` rows only when they declared one disclosure for every game, and
+no `skip_trivial` rows.
+
+Self-play and the minimal loop write `runs` and `deck_cards` at update zero
+and the setting counts with each update's outcomes. A run's
+`deck_cards` can hold several entries with the same deck identity. Older runs use their declared observation
+settings and values shared by every declared stage. They have NULL for
+unrecorded or varying columns of `runs`.
+Card membership includes main decks and sideboards.
+For historical scalar outcomes, the `deck_cards` entries come from the declared deck source
+and card keys come from the writer's catalog. An explicitly logged empty
+outcome table records zero completed games. An update missing its outcomes
+raises `UnknownCoverage`, as do missing deck entries. With Etude SDK 0.4.1 the
+table reader loads all selected table artifacts in the supplied history, even
+when the requested update is early.
+
+For a run recorded with `statistics: true`, pass its local statistics directory
+to query card draws and choices alongside list membership. Statistics count
+terminal games by update, native seat and definition key. Games and wins count
+main-deck inclusion. Choice counts also include generated cards. A missing
+directory, empty capture or update with fewer terminal games than the corpus
+raises `UnknownCoverage`. A resumed run keeps rows from superseded attempts,
+so its statistics can exceed the selected corpus. A single capture directory
+cannot establish card statistics for a corpus that follows a parent checkpoint.
+That request raises `UnknownCoverage`. Aggregate each table before
+joining because several matchups and seats can contribute to the same update.
+
+```python
+corpus = training_corpus(policy, source=track, statistics=policy.parents[1] / "statistics")
+print(corpus.sql("""
+    select (select sum(games) from corpus
+            where list_contains(play_cards || draw_cards, 'lea.island')) as list_games,
+           sum(drawn_copies) as draws, sum(selections) as choices
+    from card_statistics where card = 'lea.island'
+""").fetchall())
+```
 
 ## Etude agents
 

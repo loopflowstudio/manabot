@@ -1875,7 +1875,6 @@ mod tests {
             .split_once("; native_failure=")
             .expect("private failure context");
         let context: serde_json::Value = serde_json::from_str(encoded).unwrap();
-        assert_eq!(context["world"], crate::WORLD_VERSION);
         assert_eq!(
             context["trace"]["player_configs"],
             serde_json::to_value(&configs).unwrap()

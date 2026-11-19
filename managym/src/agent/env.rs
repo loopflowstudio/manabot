@@ -562,7 +562,6 @@ impl Env {
     pub(crate) fn vector_failure_context(&self, action: i64) -> String {
         serde_json::json!({
             "schema": "managym-native-failure-v1",
-            "world": crate::WORLD_VERSION,
             "match_state_hash_version": crate::MATCH_STATE_HASH_VERSION,
             "seed": self.seed,
             "skip_trivial": self.skip_trivial,

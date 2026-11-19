@@ -80,7 +80,6 @@ class Duel(BaseModel):
         if self.two_seat.coordinates.updates != self.one_seat.coordinates.updates:
             raise ValueError("head-to-head requires equal update counts")
         for name in (
-            "world",
             "engine_source_sha256",
             "content_manifest_sha256",
             "observation_abi_sha256",

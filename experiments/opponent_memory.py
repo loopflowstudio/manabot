@@ -424,7 +424,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
                     DESIGN.name,
                     files=[Path(__file__), ROOT / "manabot/eval/pairing.py"],
                     config={
-                        "world": managym.WORLD_VERSION,
+                        "world": "w17",
                         "pack": DESIGN.pack,
                         "game_seconds": DESIGN.game_seconds,
                         "disclosures": list(DISCLOSURES),

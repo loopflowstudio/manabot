@@ -116,6 +116,17 @@ publish, land or choose the next Graph step from here.
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
   SIGINT is ignored and the server looks hung.
+- Checkpoints as Academy opponents: launch `managym academy play` with
+  `MANABOT_RUNS_DIR=<folder of .pt/.safetensors>` and `ETUDE_HOME=<home of an
+  etude train run>`; `GET /api/opponents` lists what the picker shows (an
+  unreadable file is omitted, not listed). The launch opens inside a game, so
+  **Start game** on the New game page and **Start next game** raise a browser
+  confirm ("Stop the current game and start a new session?"). Playwright
+  dismisses it by default and the click then does nothing: register
+  `page.on('dialog', d => d.accept())` first. Check the header names the
+  chosen policy before reading the opponent's plays. When this checkout has no
+  `academy/ui/node_modules`, keep the script under `.runs/` and load Playwright
+  from a sibling checkout with `createRequire('<sibling>/academy/ui/')('playwright')`.
 - Game records in Academy (`managym.recording`, `managym academy replay
   <file|dir> --game N`): write records with the `docs/engine-python.md` Record
   games example (a complete game, and one closed after a few steps for
@@ -373,13 +384,14 @@ publish, land or choose the next Graph step from here.
 - Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.
-- Python-only library changes (no engine change): `uv build --wheel --package
-  manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
-  venv with `uv pip install <wheel> --index-url https://pypi.org/simple
-  --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
-  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
-  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
-  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+- Python library changes: build manabot with `uv build --wheel --package
+  manabot -o .runs/<dir>`. When the checkout has unreleased engine changes,
+  stage the engine with scripts/release/prepare.py as in docs/development.md
+  and build its wheel from the staged managym directory. Install both local
+  wheels in the fresh venv, including the evaluation extra for corpus SQL.
+  The PyPI engine can carry the same version and lack modules used by the
+  checkout. Run the user script from /tmp with
+  `uv run --no-project --python <venv>/bin/python python -I <script>`.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
@@ -427,6 +439,15 @@ publish, land or choose the next Graph step from here.
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
   `experiments/regimes/tla-frontier-c5fba4-w64.json`; `experiments/tla_frontier.py` trains that record on the current loop.
+- Old checkpoints in a local evaluation: a checkpoint from a TLA
+  frontier run (such as u1952 at `.runs/qa/final.pt` or the
+  `experiments/best_player_on_main.py` artifact) refuses the CLI's default
+  Allies/Lessons setup. Write a `DeckMatchup` JSON (for example
+  `new_card_pairs()[0].matchup.model_dump_json()` from that experiment) and
+  pass it with `--matchup`; one deal of four games took about 75 s. Read
+  `writer_revision` and `stored_programs` from `<out>/request.json`'s
+  `candidate`; `evaluation.json` is under `<out>/panel/`. To act as a returning
+  user, strip those two fields from a request and repeat it with `--request`.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,
   execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
   runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting
@@ -583,6 +604,76 @@ publish, land or choose the next Graph step from here.
   have no resumed game. Initial automatic history may precede a launch's received
   tail; compare that tail exactly to the saved source and the full saved prefix
   to Replay, retaining explicit unavailable-prefix labels.
+- Checkpoint compatibility (loader and Academy listing): put the
+  checkpoints in one directory, plus broken copies made with `torch.load` /
+  `torch.save` after editing one `world_binding` field (`world_digest`,
+  `learning_schema_sha256`, `naming_branching`). Start
+  `MANABOT_RUNS_DIR=<dir> ACADEMY_FRONTEND_BUILD=… uv run managym academy
+  --no-open --port <unused>` (bare `academy`; `watch` requires `--player`);
+  `GET /api/opponents` lists each entry's `available` and `reason`, and the
+  Seat 2 bot select's "Registered policy" shows them as disabled options.
+  An unexplained-key copy: set `semantic_cards.record_token_keys[0]` in a v9
+  `.pt` state dict to `(3 << 32) | 12345`. In the browser, select
+  `[data-testid=opponent-select]` → `policy`, then the
+  `[data-testid=checkpoint-select]` option, and press "Start game" (the setup
+  form has no "New Game" button); the end dialog offers "Rematch".
+  `uv run python -m manabot.backends.convert` must accept both a
+  PyTorch zip and a container saved under a `.pt` name (`save_checkpoint`
+  always writes a container); convert the pinned pilots and u1952, then load
+  each `.safetensors`.
+  `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
+- PR CI failures while the run is still in progress: `gh run view --log-failed`
+  refuses; read `gh api --allow-escape-sequences
+  repos/loopflowstudio/manabot/actions/jobs/<job-id>/logs` and grep `^FAILED`.
+  Check the PR's checks before QA ends; tests elsewhere in the tree can still
+  assert the behavior the change replaced.
+- Training corpus and checkpoint ancestry: use a fresh ETUDE_HOME for
+  `uv run --extra evaluation etude train manabot/recipes/local.py --config
+  '{"statistics":true}' --until updates=1`. Resume with the same home and
+  recipe, `--resume --until updates=2`, omitting the config. Use the guide
+  in docs/evaluation.md on the resulting checkpoints and compare Island
+  draws and choices with terminal records from
+  `read_statistics(home / "track/local/out/statistics")` at capture update
+  one less than the outcome update. For ancestry, train a one-update recipe
+  in the same home with SelfPlay.pretrained set to the update-one policy in
+  the parent's Etude checkpoint record. The child corpus should contain the
+  parent's first update and the child's first update. Query historical
+  frontier settings against the sealed run declaration as well as its counts.
+  Run the guide as written: extract the four `python` blocks under
+  "Querying the training corpus" with a regex and replace only the track
+  root (and, to run every query on the file-form corpus, drop the three
+  frontier `read` lines), so an import or query the guide no longer supports
+  fails. The first block starts from a policy file,
+  `<home>/track/<run>/out/policies/0000000N-raw.safetensors`; try each file a
+  run wrote, a moved copy, a string path, a storage root without the run, and
+  a file from an earlier pass's `.runs/` (older files record no experiment
+  and take `experiment=`). For a consumer outside the
+  checkout, build both wheels from the warm target
+  (`uv run --extra play maturin build --release -i .venv/bin/python -m
+  managym/Cargo.toml -o <dist>` and `uv build --wheel --package manabot -o
+  <dist>`, under a minute), install the engine wheel plus
+  `manabot[evaluation] @ file://<wheel>` in a `/tmp` venv with the CPU Torch
+  index, and run the same script with `<venv>/bin/python -I` from `/tmp` on
+  absolute storage paths. `<venv>/bin/etude train
+  <site-packages>/manabot/recipes/local.py --until updates=1` trains there.
+  An engine wheel built before a merge from main does not match the merged
+  Python; rebuild it.
+  `etude train <any file>.py` runs a recipe file from an ignored `.runs/`
+  directory too, named by its stem: copy `manabot/recipes/local.py`'s `train`
+  and `model_copy` the settings for a child run (`pretrained=<parent
+  policies/0000000N-ema.safetensors>`, `match` with `decklists="closed"`), or
+  rebuild `SelfPlay(**dump)` with `match=None`, a `UniformDecks(...,
+  decklists="mixed")` deck source and `model.world = managym.WORLD_SETUP` for
+  per-game disclosure. Runs written by an earlier commit of the same branch are
+  returning data; read them again after a table rename.
+- Collector changes: scripted environments in `tests/training`
+  (`collector._env = ...` in `test_credit_assignment.py`,
+  `test_two_seat_learning.py`, `test_game_errors.py`) stand in for the vector
+  environment, so an attribute the collector newly reads fails there, not in
+  the tests of the change. Run those files; CI does not run
+  `test_game_errors.py`. Read a failed job while its run is still in progress
+  with `gh api --allow-escape-sequences
+  repos/<owner>/<repo>/actions/jobs/<job-id>/logs`.
 - Decision memory is opt-in on raw engines: `managym.Env(...)` and
   `VectorEnv(...)` record no viewer decision log unless built with
   `decision_memory=True` (the training wrappers derive it from
@@ -605,3 +696,25 @@ publish, land or choose the next Graph step from here.
   shared tensors equal the control's. A control without the log capacities is
   refused as a trunk. Test reliance by seating the same checkpoint with
   `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.
+- Files a returning user wrote before a change: `git worktree add --detach
+  /private/tmp/<x> main`, build its release extension with its own
+  `CARGO_TARGET_DIR` and copy the `.so` into that worktree's `managym/`. Then,
+  from inside that worktree with `PYTHONPATH=/private/tmp/<x>`, call this
+  checkout's `.venv/bin/etude train manabot/recipes/local.py --experiment demo
+  --config '{"record_games": 1}' --until updates=1` and `.venv/bin/python -m
+  manabot.eval.local ... --deal-seed` four times with `--seconds 45` (print
+  `managym.__file__` first). That leaves a run to `--resume`, recorded games
+  for `managym academy replay` and an incomplete panel for `--status` /
+  `--continue`, all written by main. Copy untracked `experiments/data`
+  fixtures into the worktree before comparing a test there. Earlier passes'
+  `.runs/qa*/` hold older checkpoints, panels and `traces/play.sqlite` too.
+- A checkout without `academy/ui/node_modules` needs `npm --prefix academy/ui
+  ci` before the static build. In the board UI, start a policy game from the
+  header's "New game" (selects, then "Start game") and click
+  `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
+  `os.killpg(pid, SIGINT)`.
+- Once a CI run has finished, `gh run view <run> --job <job-id> --log-failed`
+  gives the pytest summary. CI names its test files in
+  `.github/workflows/manabot-integration.yml`; `tests/sim/test_puct_compatibility.py`,
+  `tests/sim/test_conditional_search.py` and `tests/verify/test_learning_regression.py`
+  are not among them, and the first two fail on main (2026-11-18).
