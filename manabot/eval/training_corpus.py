@@ -1,0 +1,426 @@
+"""Query completed training games by update, ordered deck pair and card identity."""
+
+from collections import Counter
+from collections.abc import Iterator
+from itertools import batched
+import json
+from pathlib import Path
+from typing import Any
+
+import duckdb
+from etude.checkpoints import CheckpointRecord
+from etude.run import as_storage, located_runs
+from etude.storage import Storage
+from etude.train.read import RunData, read, read_all
+from pydantic import TypeAdapter
+
+from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
+from manabot.policy.checkpoint import read_metadata
+from manabot.reports.update_metrics import outcome_rows
+from manabot.training.decks import DeckCard, deck_cards
+from manabot.training.rollout.self_play import GameSettingCount
+from manabot.training.update_metrics import DECK_TABLE, GAME_SETTINGS_TABLE, RUN_TABLE
+from managym import Deck
+from managym.statistics import read_statistics
+
+
+class UnknownCoverage(ValueError):
+    """The retained evidence cannot establish the corpus through this update."""
+
+
+def bound_catalog(digest: str, location: str, current: WriterCatalog) -> WriterCatalog:
+    return (
+        current
+        if current["world_digest"] == digest
+        else archived_catalog(digest, location)
+    )
+
+
+def deck_rows(data: RunData) -> list[DeckCard]:
+    """Each roster entry's cards: the update-zero table, or the declared deck
+    source of a run that predates it, read through the writer's catalog."""
+    for table in data.read_table(DECK_TABLE, "updates"):
+        if table.x == 0:
+            return TypeAdapter(list[DeckCard]).validate_python(table.rows)
+    training = declared_training(data)
+    try:
+        decks = training["regime"]["deck_source"]["decks"]
+        digest = training["identities"]["content_digest"]
+    except (KeyError, TypeError) as error:
+        raise UnknownCoverage(
+            f"{data.name}: resolved training decks are unknown"
+        ) from error
+    catalog = bound_catalog(digest, data.name, writer_catalog())
+    return deck_cards((Deck.from_dict(deck) for deck in decks), catalog)
+
+
+def declared_training(data: RunData) -> dict[str, Any]:
+    """Read historical recipe JSON without applying current recipe defaults."""
+    if not data.file or not data.file.config_json:
+        return {}
+    return json.loads(data.file.config_json).get("training", {})
+
+
+def declared_settings(data: RunData) -> dict[str, object]:
+    regime = declared_training(data).get("regime", {})
+    observation = regime.get("observation", {})
+    settings = {
+        key: observation.get(key)
+        for key in ("max_actions", "action_overflow", "policy_input_version")
+    }
+    stages = regime.get("stages", [])
+    for key in ("behavior", "learning_seats", "opponent_mode", "matchup_curriculum"):
+        # A run-wide value must hold in every declared stage.
+        values = {stage.get(key) for stage in stages}
+        settings[key] = values.pop() if len(values) == 1 else None
+    return settings
+
+
+def games_by_update(data: RunData, through: int) -> dict[int, Counter[tuple[str, str]]]:
+    """Count the play seat once in each recorded matchup, including mirrors."""
+    games: dict[int, Counter[tuple[str, str]]] = {}
+    for update, rows in outcome_rows(data, through).items():
+        if update > 0:
+            counts = games[update] = Counter()
+            for outcome in rows:
+                if outcome["seat"] == 0:
+                    counts[outcome["deck"], outcome["opponent_deck"]] += (
+                        outcome["wins"] + outcome["losses"] + outcome["draws"]
+                    )
+    for update in range(1, through + 1):
+        if update not in games:
+            raise UnknownCoverage(f"{data.name}: coverage unknown at update {update}")
+    return games
+
+
+def game_settings(
+    data: RunData, games: dict[int, Counter[tuple[str, str]]], through: int
+) -> list[tuple[int, int | None, str, str, int]]:
+    """Each value a setting took among an update's games, with its game count.
+
+    A run that logged setting counts must account for every game: each seat
+    and setting it ever recorded sums to that update's completed games. A run
+    that predates the table gets rows only where the answer is certain, a
+    declared disclosure of `open` or `closed`; anything else stays unrecorded.
+    """
+    tables = data.read_table(GAME_SETTINGS_TABLE, "updates")
+    if not tables:
+        deck_source = declared_training(data).get("regime", {}).get("deck_source")
+        declared = (deck_source or {}).get("decklists")
+        if declared not in ("open", "closed"):
+            return []
+        return [
+            (update, None, "decklists", declared, pairs.total())
+            for update, pairs in games.items()
+            if pairs.total()
+        ]
+    counts = TypeAdapter(list[GameSettingCount])
+    rows: list[tuple[int, int | None, str, str, int]] = []
+    totals: Counter[tuple[int, int | None, str]] = Counter()
+    for table in tables:
+        if 0 < table.x <= through:
+            update = int(table.x)
+            for count in counts.validate_python(list(table.rows), strict=True):
+                seat, setting = count["seat"], count["setting"]
+                totals[update, seat, setting] += count["games"]
+                rows.append((update, seat, setting, count["value"], count["games"]))
+    recorded = {(seat, setting) for _, seat, setting in totals}
+    for update, pairs in games.items():
+        for seat, setting in recorded:
+            if totals[update, seat, setting] != pairs.total():
+                raise UnknownCoverage(
+                    f"{data.name}: update {update} records {setting} for "
+                    f"{totals[update, seat, setting]} of {pairs.total()} games"
+                )
+    return rows
+
+
+def add_card_statistics(
+    db: duckdb.DuckDBPyConnection,
+    path: Path,
+    games: dict[int, Counter[tuple[str, str]]],
+    through: int,
+) -> None:
+    current = writer_catalog()
+    catalogs: dict[str, WriterCatalog] = {}
+    terminal: Counter[int] = Counter()
+
+    def rows() -> Iterator[dict[str, object]]:
+        seen = False
+        for game in read_statistics(path) if path.exists() else ():
+            seen = True
+            if not game.terminal:
+                continue
+            finished = (game.context or {}).get("update")
+            if type(finished) is not int or finished < 0:
+                raise UnknownCoverage(
+                    f"{path}: terminal statistics lack a collection update"
+                )
+            # Capture runs during collection, before the learner advances its clock.
+            update = finished + 1
+            if update > through:
+                continue
+            terminal[update] += 1
+            digest = game.card_digest
+            assert digest is not None  # read_statistics validates the digest
+            if digest not in catalogs:
+                catalogs[digest] = bound_catalog(digest, str(path), current)
+            keys = catalogs[digest]["definition_keys"]
+            for count in game.cards:
+                if not 0 <= count.definition < len(keys):
+                    raise UnknownCoverage(
+                        f"{path}: missing definition {count.definition} in {digest}"
+                    )
+                yield {
+                    "update_number": update,
+                    "card": keys[count.definition],
+                    "games": int(count.deck_copies > 0),
+                    "wins": int(count.deck_copies > 0 and game.winner == count.seat),
+                    **count.model_dump(exclude={"definition", "name"}),
+                }
+        if not seen:
+            raise UnknownCoverage(f"{path}: no statistics rows")
+        for update, pairs in games.items():
+            if terminal[update] < pairs.total():
+                raise UnknownCoverage(
+                    f"{path}: update {update} has {terminal[update]} terminal statistics games "
+                    f"for {pairs.total()} corpus games"
+                )
+
+    db.execute("""create table card_counts(update_number bigint, card varchar, games bigint,
+        wins bigint, seat integer, deck_copies bigint, opening_copies bigint, drawn_copies bigint,
+        opportunities bigint, selections bigint, resolutions bigint)""")
+    # Reduce each batch before storing it. Only the grouped contributions to an
+    # update are retained, even when the capture holds millions of game rows.
+    totals = """select update_number, seat, card, sum(games) games, sum(wins) wins,
+        sum(deck_copies) deck_copies, sum(opening_copies) opening_copies,
+        sum(drawn_copies) drawn_copies,
+        case when count(opportunities) = count(*) then sum(opportunities) end opportunities,
+        case when count(selections) = count(*) then sum(selections) end selections,
+        case when count(resolutions) = count(*) then sum(resolutions) end resolutions"""
+    for batch in batched(rows(), 2048):
+        db.execute(
+            f"insert into card_counts by name {totals} from "
+            "(select unnest(?, recursive := true)) group by all",
+            [list(batch)],
+        )
+    db.execute(
+        f"create table card_statistics as {totals} from card_counts group by all"
+    )
+    db.execute("drop table card_counts")
+
+
+def checkpoint_run(path: Path, experiment: str | None) -> tuple[str, str, int]:
+    """The experiment, run and update a policy checkpoint file was written at.
+
+    The file names its own run and update. Files written before the experiment
+    was recorded take it as an argument.
+    """
+    record = read_metadata(path)
+    source = record.get("source") or {}
+    recorded = source.get("etude_experiment")
+    if experiment and recorded and experiment != recorded:
+        raise ValueError(f"{path} records experiment {recorded!r}, not {experiment!r}")
+    found = {
+        "Etude experiment (pass experiment=)": experiment or recorded,
+        "Etude run": source.get("etude_run"),
+        "update": (record.get("bc") or {}).get("update"),
+    }
+    missing = [name for name, value in found.items() if value is None or value == ""]
+    if missing:
+        raise UnknownCoverage(f"{path} records no {', no '.join(missing)}")
+    name, run, update = found.values()
+    if not isinstance(name, str) or not isinstance(run, str) or type(update) is not int:
+        raise UnknownCoverage(f"{path} records an unreadable run or update")
+    return name, run, update
+
+
+def training_corpus(
+    run: RunData | CheckpointRecord | Path | str,
+    through: int | None = None,
+    *,
+    source: Storage | Path | str | None = None,
+    experiment: str | None = None,
+    statistics: Path | None = None,
+) -> duckdb.DuckDBPyConnection:
+    """Return the training corpus through the cutoff as a DuckDB database.
+
+    Supply a policy checkpoint file and the storage holding its run, a
+    published Etude checkpoint and its storage, or a run and update. The file
+    selects the run and update it records; `experiment` names the experiment
+    for a file written before checkpoints recorded it.
+    Query the result with `.sql(...)`:
+
+    - `corpus`: one row per update and ordered matchup, with both decks' card
+      lists (main deck and sideboard). A row is about a game, so it names both
+      seats: `play` is the deck in native seat 0, `draw` the deck in seat 1.
+      Each completed game contributes once, even in mirrors.
+    - `runs`: one row per run with the facts that hold for all its games,
+      including the parent checkpoint it followed.
+    - `game_settings`: per update, each value a setting took and in how many
+      games. `seat` is NULL for a setting of the whole game and the native
+      seat (0 is on the play) for a per-seat one. A setting with no rows was
+      not recorded.
+    - `deck_cards`: each roster entry by board, copies and definition key.
+    - `card_statistics`: per update, native seat and card, when `statistics`
+      is given.
+
+    Missing update evidence raises `UnknownCoverage`.
+    """
+    if isinstance(run, str):
+        run = Path(run)
+    if experiment is not None and not isinstance(run, Path):
+        raise ValueError("experiment applies to a checkpoint file")
+    if isinstance(run, RunData):
+        data = run
+    else:
+        if source is None or through is not None:
+            raise ValueError("supply a checkpoint and its source")
+        if isinstance(run, Path):
+            name, run_name, through = checkpoint_run(run, experiment)
+        else:
+            coordinate = run.at.get("updates")
+            if coordinate is None or not float(coordinate).is_integer():
+                raise UnknownCoverage("checkpoint has no integral updates coordinate")
+            name, run_name, through = run.experiment, run.run, int(coordinate)
+        data = read(source, name, run_name)
+        if data.file is None and not data.blocks:
+            raise UnknownCoverage(f"{source} holds no run {name}/{run_name}")
+    if type(through) is not int or through < 0:
+        raise ValueError("supply a nonnegative update")
+
+    db = duckdb.connect()
+    db.execute("""create table runs(experiment varchar, run varchar,
+        max_actions bigint, action_overflow varchar,
+        policy_input_version bigint, behavior varchar, opponent_mode varchar,
+        learning_seats varchar, matchup_curriculum varchar, parent_run varchar,
+        parent_update bigint, parent_sha256 varchar)""")
+    db.execute("""create table game_settings(experiment varchar, run varchar,
+        update_number bigint, seat integer, setting varchar, value varchar, games bigint)""")
+    db.execute("""create table deck_cards(experiment varchar, run varchar, entry bigint,
+        deck varchar, card varchar, copies bigint, board varchar)""")
+    db.execute("""create table matchups(experiment varchar, run varchar, update_number bigint,
+        play varchar, draw varchar, games bigint)""")
+    visited: set[tuple[str, str]] = set()
+    while True:
+        identity = data.experiment, data.name
+        if identity in visited:
+            raise UnknownCoverage(f"{identity}: cycle in checkpoint ancestry")
+        visited.add(identity)
+        parent = add_run(db, data, through, statistics)
+        if parent is None:
+            break
+        if statistics is not None:
+            raise UnknownCoverage(
+                "one statistics directory cannot establish parent and child coverage"
+            )
+        storage = as_storage(source) if source is not None else data.blocks[0].storage
+        data, through = parent_run(storage, *parent), parent[1]
+    db.execute("""
+        create table decks as
+        select experiment, run, deck, list(distinct card order by card) as cards
+        from deck_cards group by all
+    """)
+    db.execute("""
+        create view corpus as
+        select m.update_number, m.play, m.draw, m.games, p.cards as play_cards,
+               d.cards as draw_cards, m.experiment, m.run
+        from matchups m
+        join decks p on (p.experiment, p.run, p.deck) = (m.experiment, m.run, m.play)
+        join decks d on (d.experiment, d.run, d.deck) = (m.experiment, m.run, m.draw)
+    """)
+    return db
+
+
+def parent_run(storage: Storage, name: str, update: int, digest: str) -> RunData:
+    """The one run of this name that published the checkpoint at this update."""
+    keys = sorted(storage.keys(""))
+    matches = [
+        ancestor
+        for ancestor in read_all(
+            storage, keys=keys, declarations=located_runs(storage, keys, run=name)
+        )
+        if any(
+            cp.at.get("updates") == update and cp.artifact.sha256 == digest
+            for cp in ancestor.checkpoints
+        )
+    ]
+    if len(matches) != 1:
+        raise UnknownCoverage(
+            f"cannot resolve parent checkpoint {name} at {update} with SHA-256 {digest}"
+        )
+    return matches[0]
+
+
+def insert_rows(
+    db: duckdb.DuckDBPyConnection,
+    table: str,
+    identity: list[str],
+    rows: list[tuple[Any, ...]],
+    types: str,
+) -> None:
+    """Insert one run's rows as columns: frontier runs hold hundreds per update."""
+    if rows:
+        columns = ", ".join(f"unnest(?::{kind}[])" for kind in types.split())
+        db.execute(
+            f"insert into {table} select ?, ?, {columns}",
+            [*identity, *(list(column) for column in zip(*rows))],
+        )
+
+
+def add_run(
+    db: duckdb.DuckDBPyConnection, data: RunData, through: int, statistics: Path | None
+) -> tuple[str, int, str] | None:
+    identity = [data.experiment, data.name]
+    rows = deck_rows(data)
+    if rows:
+        db.execute(
+            "insert into deck_cards by name select ? as experiment, ? as run, unnest(?, recursive := true)",
+            [*identity, rows],
+        )
+    declared = {row["deck"] for row in rows}
+    games = games_by_update(data, through)
+    matchups = [
+        (update, play, draw, count)
+        for update, pairs in games.items()
+        for (play, draw), count in pairs.items()
+        if count
+    ]
+    if any(
+        deck not in declared for _, play, draw, _ in matchups for deck in (play, draw)
+    ):
+        raise UnknownCoverage(f"{data.name}: an outcome names an undeclared deck")
+    insert_rows(db, "matchups", identity, matchups, "bigint varchar varchar bigint")
+    insert_rows(
+        db,
+        "game_settings",
+        identity,
+        game_settings(data, games, through),
+        "bigint integer varchar varchar bigint",
+    )
+    if statistics is not None:
+        add_card_statistics(db, statistics, games, through)
+    tables = data.read_table(RUN_TABLE, "updates")
+    if tables:
+        (table,) = tables
+        (settings,) = table.rows
+    else:
+        settings = declared_settings(data)
+    db.execute(
+        "insert into runs by name select ? as experiment, ? as run, unnest(?)",
+        [*identity, settings],
+    )
+    digest = settings.get("parent_sha256")
+    if digest is None:
+        return None
+    name, update = settings["parent_run"], settings["parent_update"]
+    if (
+        not isinstance(name, str)
+        or type(update) is not int
+        or update < 0
+        or not isinstance(digest, str)
+    ):
+        raise UnknownCoverage(
+            f"{data.name}: unknown source of parent checkpoint {digest}"
+        )
+    return name, update, digest

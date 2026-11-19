@@ -114,7 +114,7 @@ def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
         # from read_container otherwise retain the entire weights file.
         tables = Tables.from_buffers(
             {key: value.copy() for key, value in checkpoint.buffers.items()},
-            layout(checkpoint.space),
+            layout(checkpoint.space, checkpoint.column_widths),
         )
         spec = Spec(
             checkpoint.model,
@@ -205,7 +205,6 @@ def registration(
         player_id=name,
         display_name=player.name,
         role=role,
-        world=runtime["world"],
         content_suite=content_suite,
         information_boundary="acting-viewer",
         observation_abi_sha256=runtime["observation_abi_sha256"],
@@ -217,6 +216,8 @@ def registration(
         player_spec=dict(ETUDE_SAMPLER_SPEC)
         | ({"blank_decision_memory": True} if blank_decision_memory(player) else {}),
         checkpoint_sha256=digest,
+        writer_revision=checkpoint.writer_revision,
+        stored_programs=checkpoint.stored_programs,
         checkpoint_bytes=path.stat().st_size,
         parameter_count=sum(int(p.size) for p in checkpoint.parameters.values()),
         training_seed=None,

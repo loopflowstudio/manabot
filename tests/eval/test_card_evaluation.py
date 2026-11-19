@@ -689,6 +689,11 @@ def test_audit_binds_games_to_their_declared_runtime(field: str) -> None:
     assert spec.authored_matchup is not None
     runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
     identity = {key: runtime[key] for key in evaluation.RUNTIME_FIELDS}
+    if field == "world":
+        # An environment and its games declared before the world label was
+        # removed carry it, and are still held to it.
+        runtime = {**runtime, "world": "w17"}
+        identity = {**identity, "world": "w17"}
     environment = Environment(
         name="fixture",
         files=canonical_sha256(identity),

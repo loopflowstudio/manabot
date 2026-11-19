@@ -94,3 +94,17 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
         if isinstance(index, slice):
             return GameSetup(self.players[index], decklists=self.decklists)
         return self.players[index]
+
+
+def __getattr__(name: str) -> str:
+    # The engine carries no world label; the last one it carried was w17.
+    if name == "WORLD_VERSION":
+        warnings.warn(
+            "managym.WORLD_VERSION is deprecated and removed in 0.4.0; the "
+            "engine has no world label, and managym.world_identity() names "
+            "its cards",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return "w17"
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

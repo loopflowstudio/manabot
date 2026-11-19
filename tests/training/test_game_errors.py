@@ -65,6 +65,8 @@ class ScriptedFailures:
     markers so any leaked rows, duplicate steps or cross-game returns are visible.
     """
 
+    skip_trivial = True
+
     def __init__(
         self,
         buffers: dict[str, np.ndarray],
@@ -508,7 +510,6 @@ def test_original_failure_is_immutable_and_cli_replays(
         row,
         {
             "identities": {
-                "world": managym.WORLD_VERSION,
                 "engine_extension_sha256": file_sha256(Path(managym._managym.__file__)),
             }
         },

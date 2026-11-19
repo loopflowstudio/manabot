@@ -10,7 +10,7 @@ import pytest
 
 from manabot.reports.update_metrics import updates_from_run
 from manabot.training.rollout.self_play import SelfPlayCounter, SelfPlayOutcome
-from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
+from manabot.training.update_metrics import OUTCOME_TABLE, outcome_scalars
 from tests.fixtures.training_records import recording
 
 
@@ -19,11 +19,11 @@ def _outcomes(pairs: int = 2) -> list[SelfPlayOutcome]:
     for i in range(pairs):
         counter.record((f"{i:064x}", f"{i + 1:064x}"), i % 2)
     counter.record(("mirror", "mirror"), None)
-    return counter.drain()
+    return counter.drain().outcomes
 
 
 def _projected(outcomes: list[SelfPlayOutcome]) -> dict[str, object]:
-    return dict(metric_row({OUTCOME_TABLE: outcomes}))
+    return dict(outcome_scalars(outcomes))
 
 
 def test_outcome_tables_ship_and_read_from_relocated_run(tmp_path: Path) -> None:
@@ -109,7 +109,7 @@ def test_update_selection_matches_sdk_with_clock_only_and_rewound_attempts(
 
 def test_resume_selects_tables_and_preserves_historical_rows(tmp_path: Path) -> None:
     clocks = ["updates"]
-    historical = metric_row({OUTCOME_TABLE: _outcomes(1)})
+    historical = outcome_scalars(_outcomes(1))
     with recording(
         experiment="outcome-resume", directory=tmp_path, clocks=clocks
     ) as run:

@@ -361,7 +361,7 @@ class ModelConfig(BaseConfig):
     # How fact and shared-effect ids embed: `catalog` reads the card encoder's
     # exact token rows and definition rows; `hashed` learns 4096 hashed rows
     # per id column. Models without a world have only the hashed layout. Saved
-    # world checkpoints that omit the field are hashed (`from_checkpoint`);
+    # models with world="world" that omit the field use hashed rows (`from_checkpoint`);
     # regimes omit the fresh default.
     record_vocabulary: Literal["hashed", "catalog"] = Field(
         default="catalog", exclude_if=lambda value: value == "catalog"

@@ -1,4 +1,4 @@
-"""Self-play uses real Etude saves and preserves world-bound policy evidence."""
+"""Self-play uses real Etude saves and preserves published policy evidence."""
 
 import json
 from pathlib import Path
@@ -113,6 +113,17 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         for name, value in ema.state_dict().items():
             torch.testing.assert_close(value, averaged[name], rtol=0, atol=0)
     recorded = read(tmp_path / "track", "test", "policy")
+    (population,) = recorded.read_table("training_deck_cards", "updates")
+    assert population.x == 0
+    assert {row["card"] for row in population.rows} == {
+        "lea.gray_ogre",
+        "lea.mountain",
+        "lea.forest",
+        "lea.llanowar_elves",
+    }
+    assert all(row["board"] == "main" and row["copies"] > 0 for row in population.rows)
+    (settings_table,) = recorded.read_table("training_run", "updates")
+    assert settings_table.rows[0]["learning_seats"] == settings.learning_seats
     (after_inspection,) = load_time_sources([str(tmp_path / "track")]).runs
     assert after_inspection.updates == reported.updates
     assert after_inspection.learner_transitions == reported.learner_transitions

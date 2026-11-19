@@ -138,14 +138,9 @@ def test_cut_off_edited_and_foreign_receipts_are_refused(
     with pytest.raises(ValueError, match="digest mismatch"):
         TrainingGames(source=edited).games()
     payload = json.loads(game.path.read_text())
-    payload["identities"]["world"] = "foreign-world"
-    foreign = _write_receipt(tmp_path / "foreign", payload)
-    with pytest.raises(ValueError, match="receipt world foreign-world differs"):
-        TrainingGames(foreign).sample().export(tmp_path / "bad.gz")
-    payload = json.loads(game.path.read_text())
     payload["game"]["cards"]["capture"]["content_digest"] = "0" * 64
     foreign_cards = _write_receipt(tmp_path / "foreign-cards", payload)
-    with pytest.raises(ValueError, match="retained cards 0000"):
+    with pytest.raises(ValueError, match="receipt cards 0000"):
         TrainingGames(foreign_cards).sample().export(tmp_path / "bad-cards.gz")
     payload = json.loads(game.path.read_text())
     payload["game"]["trace"]["actions"][0] = 100000
@@ -168,13 +163,11 @@ def test_cut_off_edited_and_foreign_receipts_are_refused(
     # Source bytes stay digest-bound after export as well.
     exported = read_trace(game.export(tmp_path / "valid.gz"))[0]
     changed = copy.deepcopy(exported)
-    changed["world"] = {"world_version": "foreign"}
+    changed["world"] = {"card_digest": "foreign"}
     changed["game_trace_sha256"] = canonical_sha256(
         {k: v for k, v in changed.items() if k != "game_trace_sha256"}
     )
-    with pytest.raises(
-        ValueError, match="recorded world.*foreign.*differs from running"
-    ):
+    with pytest.raises(ValueError, match="recorded cards foreign differ from running"):
         replay_games([changed])
     exported["source"]["kind"] = "evaluation"
     assert not replay_games([exported]).passed

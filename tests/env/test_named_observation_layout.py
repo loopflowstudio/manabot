@@ -176,3 +176,10 @@ def test_deprecated_catalog_names_warn_and_delegate(
 ) -> None:
     with pytest.warns(DeprecationWarning, match=rf"0\.3\.0.*managym\.{new}"):
         assert getattr(managym, old)(*args) == getattr(managym, new)(*args)
+
+
+def test_world_version_warns_and_names_its_removal() -> None:
+    assert "WORLD_VERSION" not in vars(managym)
+    with pytest.warns(DeprecationWarning, match=r"WORLD_VERSION.*0\.4\.0"):
+        assert managym.WORLD_VERSION == "w17"
+    assert set(managym.world_identity()) == {"card_digest"}

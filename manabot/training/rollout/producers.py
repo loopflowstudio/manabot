@@ -61,6 +61,7 @@ class ShardedVectorEnv:
             raise ValueError("native seed must fit uint64")
         self.num_envs = num_envs
         self.workers = workers
+        self.skip_trivial = True
         self._closed = False
         self._shards = tuple(
             _Shard(
@@ -72,7 +73,7 @@ class ShardedVectorEnv:
                     seed=min(seed + index * num_envs // workers, 2**64 - 1),
                     seed_stride=num_envs,
                     stream_offset=index * num_envs // workers,
-                    skip_trivial=True,
+                    skip_trivial=self.skip_trivial,
                     decision_memory=decision_memory,
                     decision_memory_include_own=decision_memory_include_own,
                     player_policies=("agent", "agent"),

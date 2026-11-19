@@ -85,11 +85,9 @@ def test_legacy_source_is_not_reinterpreted(tmp_path: Path) -> None:
             identities, allow_changed_runtime=False, require_source=True
         )
     require_replay_runtime(identities, allow_changed_runtime=True, require_source=True)
-    identities["world"] = "wrong-world"
-    with pytest.raises(ValueError, match="world differs"):
-        require_replay_runtime(
-            identities, allow_changed_runtime=True, require_source=True
-        )
+    # A world label from an earlier recording is not compared.
+    identities["world"] = "w16"
+    require_replay_runtime(identities, allow_changed_runtime=True, require_source=True)
 
 
 def test_standalone_vector_records_global_streams(tmp_path: Path) -> None:

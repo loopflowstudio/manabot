@@ -9,16 +9,24 @@ not performance against a fixed opponent.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
+import warnings
 
-from manabot.training.update_metrics import MetricRow
+from manabot.training.update_metrics import (
+    OUTCOME_COUNTS,
+    SEAT_LABELS,
+    MetricRow,
+    parse_outcome_scalar,
+)
 
 
 @dataclass(frozen=True)
 class SelfPlayPoint:
+    """One deck's pooled results against another from one native seat (0 is on the play)."""
+
     update: int
     deck: str
     opponent_deck: str
-    position: Literal["play", "draw"]
+    seat: int
     wins: int
     losses: int
     draws: int
@@ -27,6 +35,16 @@ class SelfPlayPoint:
     def games(self) -> int:
         return self.wins + self.losses + self.draws
 
+    @property
+    def position(self) -> Literal["play", "draw"]:
+        warnings.warn(
+            "SelfPlayPoint.position is deprecated and will be removed in 0.4.0; "
+            "use seat (0 is on the play)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return SEAT_LABELS[self.seat]
+
 
 def self_play_points(
     rows: Sequence[MetricRow], window_updates: int = 100
@@ -34,26 +52,25 @@ def self_play_points(
     """Joint counts per window of one run's rows; unrecorded history emits nothing."""
     if window_updates < 1:
         raise ValueError("window_updates must be positive")
-    groups: dict[tuple[int, str, str, Literal["play", "draw"]], list[int]] = {}
+    groups: dict[tuple[int, str, str, int], list[int]] = {}
     for row in rows:
         update = row.get("coordinates/updates")
         if not isinstance(update, int):
             continue
         for name, count in row.items():
-            parts = name.split("/")
-            if len(parts) != 5 or parts[0] != "self_play_outcomes":
+            parsed = parse_outcome_scalar(name)
+            if parsed is None:
                 continue
-            _, deck, opponent, seat, outcome = parts
-            if seat not in ("play", "draw") or not isinstance(count, int):
+            deck, opponent, seat, outcome = parsed
+            if not isinstance(count, int):
                 raise ValueError(f"invalid self-play outcome {name!r}")
-            position: Literal["play", "draw"] = "play" if seat == "play" else "draw"
-            key = ((max(update, 1) - 1) // window_updates, deck, opponent, position)
+            key = ((max(update, 1) - 1) // window_updates, deck, opponent, seat)
             totals = groups.setdefault(key, [0, 0, 0, update])
-            totals[("wins", "losses", "draws").index(outcome)] += count
+            totals[OUTCOME_COUNTS.index(outcome)] += count
             totals[3] = max(totals[3], update)
     return [
-        SelfPlayPoint(update, deck, opponent, position, wins, losses, draws)
-        for (_, deck, opponent, position), (wins, losses, draws, update) in sorted(
+        SelfPlayPoint(update, deck, opponent, seat, wins, losses, draws)
+        for (_, deck, opponent, seat), (wins, losses, draws, update) in sorted(
             groups.items()
         )
         if wins + losses + draws

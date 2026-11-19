@@ -35,7 +35,6 @@ from manabot.infra.identity import canonical_sha256
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS
-import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 HEURISTIC = "heuristic"
@@ -50,7 +49,7 @@ def eval_environment() -> Environment:
             ROOT / "experiments/elemental_grid.py",
         ],
         config={
-            "world": managym.WORLD_VERSION,
+            "world": "w17",
             "pack": PACK,
             "game_seconds": GAME_SECONDS,
             "max_commands": MAX_COMMANDS,
@@ -178,7 +177,7 @@ def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
     else:
         opponent = register_anchor(candidate, "heuristic", player_id=names[1])
     key = EvaluationKey(
-        world=managym.WORLD_VERSION,
+        world="w17",
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
         arena_version="elemental-etude-agents-v1",

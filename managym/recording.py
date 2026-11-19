@@ -492,7 +492,6 @@ def runtime_identities() -> dict[str, object]:
         sources.update(data)
     extension = Path(managym._managym.__file__)
     return {
-        "world": managym.WORLD_VERSION,
         "managym_version": version("managym"),
         "card_digest": managym.world_identity()["card_digest"],
         "python": platform.python_version(),

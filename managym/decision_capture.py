@@ -155,8 +155,10 @@ class DecisionInput(CaptureModel):
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
     )
 
-    capture_version: Literal[3, 4, 5]
-    world_version: str
+    capture_version: Literal[3, 4, 5, 6]
+    # Captures through v5 carry a world label inside their digest; nothing
+    # reads it, and v6 has none.
+    world_version: str | None = None
     content_digest: str
     observation: SkipValidation[Observation]
     frames: SkipValidation[list[managym.ContinuationFrame]]

@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 import json
+import os
 from pathlib import Path
 import subprocess
 from typing import Any
@@ -21,8 +22,11 @@ from manabot.eval.local import checkpoint_request, main as local_main
 from manabot.eval.results import EvaluationRow
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import canonical_sha256
+from manabot.policy.checkpoint import read_safetensors, write_safetensors
 from manabot.sim.match import play_game
+from manabot.sim.matchup import DeckMatchup
 from manabot.sim.replay import read_trace, write_trace
+import managym
 from tests.eval.arena_fixture import arena_fixture
 from tests.eval.test_evaluation_policy_inputs import fixture_policy
 
@@ -51,6 +55,24 @@ def _request(
         game_seconds=240,
         backend=TORCH_BACKEND,
     )
+
+
+@pytest.mark.parametrize("revision", ["a" * 40, None])
+def test_checkpoint_request_records_writer_and_stored_programs(
+    tmp_path: Path, revision: str | None
+) -> None:
+    _, _, _, path = fixture_policy(tmp_path)
+    arrays, metadata = read_safetensors(path)
+    metadata["source"] = json.dumps({"commit": revision})
+    write_safetensors(path, arrays, metadata)
+    request = checkpoint_request(path, backend=TORCH_BACKEND)
+    saved = EvaluationRequest.model_validate_json(request.model_dump_json())
+    assert saved.candidate.writer_revision == revision
+    assert ("writer_revision" in saved.candidate.model_dump()) == (revision is not None)
+    assert saved.candidate.stored_programs == len(
+        arrays["buffer/semantic_cards.tokens"]
+    )
+    assert "stored_programs" not in saved.opponent.model_dump()
 
 
 def _anchor_request(seeds: tuple[int, ...] = (101,)) -> EvaluationRequest:
@@ -158,12 +180,14 @@ def test_cli_describes_deal_uncertainty_without_changing_statistics(
     assert request.purpose in output
 
 
-def test_cli_completes_without_training_cloud_or_callback(tmp_path: Path) -> None:
+def test_cli_completes_without_training_cloud_or_callback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _, _, _, path = fixture_policy(tmp_path)
-    # Spawn imports this module-level guard too, so admission/serving/game/replay
-    # children cannot silently take a managed route hidden from parent patches.
-    guard = tmp_path / "offline.py"
-    guard.write_text("""import importlib.abc
+    # Every interpreter, including standalone admission and replay children,
+    # imports the network guard without importing a policy backend.
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join((str(tmp_path), str(Path.cwd()))))
+    (tmp_path / "sitecustomize.py").write_text("""import importlib.abc
 import socket
 import sys
 
@@ -179,6 +203,9 @@ def forbidden(*args, **kwargs):
     raise AssertionError("forbidden cloud/credential/callback entry point")
 
 socket.create_connection = forbidden
+""")
+    guard = tmp_path / "offline.py"
+    guard.write_text("""from sitecustomize import forbidden
 from manabot.backends.torch import checkpoint
 from manabot.infra import artifacts
 artifacts.storage_from_uri = forbidden
@@ -272,6 +299,31 @@ def test_cli_admission_deadline_is_retained(tmp_path: Path) -> None:
     assert receipt["status"] == "incomplete"
     assert "deadline" in receipt["error"]
     assert not (out / "panel").exists()
+
+
+def test_cli_matchup_file_accepts_deck_pairs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A checkpoint can be seated from the CLI on two deck lists."""
+    deck = managym.Deck({"Mountain": 20, "Lightning Bolt": 40})
+    matchup = DeckMatchup(
+        population_sha256="0" * 64, entries=("a", "b"), lists=(deck, deck)
+    )
+    path = tmp_path / "matchup.json"
+    path.write_text(matchup.model_dump_json())
+    seen: list[object] = []
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        seen.append(args[3])
+        raise ValueError("stop after parsing")
+
+    monkeypatch.setattr("manabot.eval.local.prepare_local_request", refuse)
+    status = local_main(
+        ["--checkpoint", str(tmp_path / "c.safetensors"), "--matchup", str(path)]
+        + ["--out", str(tmp_path / "out")]
+    )
+    assert status == 1
+    assert seen == [matchup]
 
 
 def test_cli_saved_request_retains_deadline_result(tmp_path: Path) -> None:

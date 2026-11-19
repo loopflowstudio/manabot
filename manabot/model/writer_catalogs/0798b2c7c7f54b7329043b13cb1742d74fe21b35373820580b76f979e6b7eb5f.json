@@ -1,0 +1,1759 @@
+{
+  "world_digest": "0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f",
+  "definition_keys": [
+    "tla.aang_s_iceberg",
+    "tla.aang_s_journey",
+    "tla.aang_swift_savior",
+    "Aang and La, Ocean's Fury",
+    "tla.aang_at_the_crossroads",
+    "Aang, Destined Savior",
+    "tla.aang_the_last_airbender",
+    "tla.abandon_attachments",
+    "tla.abandoned_air_temple",
+    "tla.accumulate_wisdom",
+    "tla.agna_qel_a",
+    "tla.air_nomad_legacy",
+    "tla.airbender_ascension",
+    "tla.airbender_s_reversal",
+    "tla.airbending_lesson",
+    "tla.airship_engine_room",
+    "tla.allies_at_last",
+    "token.ally",
+    "lea.ancestral_recall",
+    "tla.appa_loyal_sky_bison",
+    "tla.appa_steadfast_guardian",
+    "tla.avatar_aang",
+    "Aang, Master of Elements",
+    "tla.avatar_destiny",
+    "tla.avatar_enthusiasts",
+    "tla.avatar_s_wrath",
+    "tla.azula_always_lies",
+    "tla.azula_cunning_usurper",
+    "tla.azula_on_the_hunt",
+    "tla.ba_sing_se",
+    "tla.badgermole",
+    "tla.badgermole_cub",
+    "token.ballistic_boulder",
+    "tla.barrels_of_blasting_jelly",
+    "iko.bastion_of_remembrance",
+    "token.bear",
+    "tla.beetle_headed_merchants",
+    "tla.beifong_s_bounty_hunters",
+    "tla.bender_s_waterskin",
+    "tla.benevolent_river_spirit",
+    "hob.beorn_the_fierce",
+    "tla.bitter_work",
+    "tla.boar_q_pine",
+    "ori.boggart_brute",
+    "tla.boiling_rock_prison",
+    "tla.boiling_rock_rioter",
+    "tla.boomerang_basics",
+    "tla.bumi_bash",
+    "tla.bumi_king_of_three_trials",
+    "tla.bumi_unleashed",
+    "tla.buzzard_wasp_colony",
+    "tla.callous_inspector",
+    "tla.canyon_crawler",
+    "dft.caradora_heart_of_alacria",
+    "tla.cat_gator",
+    "tla.cat_owl",
+    "token.clue",
+    "tla.combustion_man",
+    "tla.combustion_technique",
+    "tla.compassionate_healer",
+    "ptk.corrupt_court_official",
+    "lea.counterspell",
+    "tla.crashing_wave",
+    "lea.craw_wurm",
+    "tla.crescent_island_temple",
+    "Crossroads of Destiny",
+    "tla.cruel_administrator",
+    "tla.cunning_maneuver",
+    "tla.curious_farm_animals",
+    "tla.cycle_of_renewal",
+    "tla.dai_li_agents",
+    "tla.dai_li_indoctrination",
+    "tla.day_of_black_sun",
+    "afr.deadly_dispute",
+    "tla.deadly_precision",
+    "tla.deserter_s_disciple",
+    "tla.destined_confrontation",
+    "tla.diligent_zookeeper",
+    "stx.divide_by_zero",
+    "rav.doubling_season",
+    "token.dragon",
+    "tla.dragonfly_swarm",
+    "tla.earth_kings_lieutenant",
+    "tla.earth_kingdom_general",
+    "tla.earth_kingdom_jailer",
+    "tla.earth_kingdom_protectors",
+    "tla.earth_kingdom_soldier",
+    "tla.earth_rumble",
+    "tla.earth_rumble_wrestlers",
+    "tla.earth_village_ruffians",
+    "tla.earthbender_ascension",
+    "tla.earthbending_lesson",
+    "tla.earthen_ally",
+    "tla.elemental_teachings",
+    "tla.ember_island_production",
+    "tla.energybending",
+    "tla.enter_the_avatar_state",
+    "stx.enthusiastic_study",
+    "eld.epic_downfall",
+    "stx.eyetwitch",
+    "eld.fabled_passage",
+    "tla.fancy_footwork",
+    "tla.fatal_fissure",
+    "tla.fated_firepower",
+    "rtr.fencing_ace",
+    "stx.field_trip",
+    "tla.fire_lord_azula",
+    "tla.fire_lord_zuko",
+    "tla.fire_nation_attacks",
+    "tla.fire_nation_cadets",
+    "tla.fire_nation_engineer",
+    "tla.fire_nation_palace",
+    "tla.fire_nation_raider",
+    "tla.fire_nation_warship",
+    "tla.fire_navy_trebuchet",
+    "tla.fire_sages",
+    "tla.firebender_ascension",
+    "tla.firebending_lesson",
+    "tla.firebending_student",
+    "tla.first_time_flyer",
+    "mh1.fists_of_flame",
+    "tla.flexible_waterbender",
+    "tla.flopsie_bumi_s_buddy",
+    "tla.foggy_bottom_swamp",
+    "tla.foggy_swamp_hunters",
+    "tla.foggy_swamp_spirit_keeper",
+    "tla.foggy_swamp_vinebender",
+    "tla.foggy_swamp_visions",
+    "token.food",
+    "tla.forecasting_fortune_teller",
+    "lea.forest",
+    "tla.gather_the_white_lotus",
+    "tla.geyser_leaper",
+    "bro.giant_cindermaw",
+    "tla.giant_koi",
+    "lea.giant_spider",
+    "tla.glider_kids",
+    "tla.glider_staff",
+    "ons.glory_seeker",
+    "stx.gnarled_professor",
+    "tla.gran_gran",
+    "lea.gray_ogre",
+    "tla.great_divide_guide",
+    "tla.guru_pathik",
+    "tla.hakoda_selfless_commander",
+    "tla.hama_the_bloodbender",
+    "tla.haru_hidden_talent",
+    "grn.healer_s_hawk",
+    "tla.heartless_act",
+    "tla.hei_bai_spirit_of_balance",
+    "tla.hermitic_herbalist",
+    "lea.hill_giant",
+    "tla.hog_monkey",
+    "tla.honest_work",
+    "tla.how_to_start_a_riot",
+    "token.human_soldier",
+    "stx.igneous_inspiration",
+    "tla.iguana_parrot",
+    "tla.invasion_reinforcements",
+    "tla.invasion_submersible",
+    "tla.invasion_tactics",
+    "tla.iroh_s_demonstration",
+    "tla.iroh_grand_lotus",
+    "tla.iroh_tea_master",
+    "lea.island",
+    "tla.itll_quench_ya",
+    "tla.jasmine_dragon_tea_shop",
+    "tla.jeong_jeongs_deserters",
+    "tla.jeong_jeong_the_deserter",
+    "tla.jet_s_brainwashing",
+    "tla.jet_freedom_fighter",
+    "tla.joo_dee_one_of_many",
+    "tla.june_bounty_hunter",
+    "tla.katara_bending_prodigy",
+    "tla.katara_water_tribe_s_hope",
+    "tla.katara_the_fearless",
+    "fdn.kellan_planar_trailblazer",
+    "tla.knowledge_seeker",
+    "tla.koh_the_face_stealer",
+    "tla.kyoshi_battle_fan",
+    "tla.kyoshi_island_plaza",
+    "tla.kyoshi_village",
+    "tla.kyoshi_warriors",
+    "tla.leaves_from_the_vine",
+    "lea.lightning_bolt",
+    "ths.lightning_strike",
+    "lea.llanowar_elves",
+    "tla.lo_and_li_twin_tutors",
+    "tla.long_feng_grand_secretariat",
+    "tla.lost_days",
+    "zen.lotus_cobra",
+    "tla.mai_jaded_edge",
+    "tla.mai_scornful_striker",
+    "vis.man_o_war",
+    "tla.master_pakku",
+    "tla.master_piandao",
+    "war.mayhem_devil",
+    "tla.meditation_pools",
+    "tla.merchant_of_many_hats",
+    "tla.messenger_hawk",
+    "tla.meteor_sword",
+    "tla.misty_palms_oasis",
+    "tla.momo_friendly_flier",
+    "tla.momo_playful_pet",
+    "ktk.monastery_swiftspear",
+    "tla.mongoose_lizard",
+    "token.monk",
+    "lea.mountain",
+    "tla.north_pole_gates",
+    "tla.north_pole_patrol",
+    "tla.northern_air_temple",
+    "tla.obsessive_pursuit",
+    "tla.octopus_form",
+    "tla.omashu_city",
+    "tla.origin_of_metalbending",
+    "tla.ostrich_horse",
+    "tla.otter_penguin",
+    "tla.ozai_s_cruelty",
+    "tla.ozai_the_phoenix_king",
+    "tla.path_to_redemption",
+    "tla.phoenix_fleet_airship",
+    "tla.pillar_launch",
+    "tla.pirate_peddlers",
+    "lea.plains",
+    "tla.planetarium_of_wan_shi_tong",
+    "tla.platypus_bear",
+    "stx.pop_quiz",
+    "afr.power_word_kill",
+    "tla.pretending_poxbearers",
+    "tla.price_of_freedom",
+    "mh1.prismatic_vista",
+    "tla.professor_zei_anthropologist",
+    "stx.professor_of_symbology",
+    "mkm.proft_s_eidetic_memory",
+    "roe.prophetic_prism",
+    "ice.pyroclasm",
+    "tla.rabaroo_troop",
+    "por.raging_goblin",
+    "tla.ran_and_shaw",
+    "tla.raucous_audience",
+    "tla.raven_eagle",
+    "tla.razor_rings",
+    "tla.realm_of_koh",
+    "tla.rebellious_captives",
+    "tla.redirect_lightning",
+    "tla.rockalanche",
+    "tla.rocky_rebuke",
+    "tla.rough_rhino_cavalry",
+    "tla.rowdy_snowballers",
+    "tla.ruinous_waterbending",
+    "tla.rumble_arena",
+    "tla.saber_tooth_moose_lion",
+    "tla.sandbender_scavengers",
+    "tla.sandbenders_storm",
+    "lea.savannah_lions",
+    "blb.savor",
+    "fin.sazh_s_chocobo",
+    "tla.secret_tunnel",
+    "tla.secret_of_bloodbending",
+    "tla.seismic_sense",
+    "tla.serpent_of_the_pass",
+    "tla.serpents_pass",
+    "lea.serra_angel",
+    "tla.shared_roots",
+    "lea.shivan_dragon",
+    "tla.sokka_s_haiku",
+    "tla.sokka_bold_boomeranger",
+    "tla.sokka_lateral_strategist",
+    "tla.sokka_tenacious_tactician",
+    "tla.sold_out",
+    "token.soldier",
+    "tla.solstice_revelations",
+    "tla.south_pole_voyager",
+    "tla.southern_air_temple",
+    "tla.sozins_comet",
+    "tla.sparring_dummy",
+    "m20.spectral_sailor",
+    "token.spirit",
+    "tla.spirit_water_revival",
+    "tla.suki_courageous_rescuer",
+    "tla.suki_kyoshi_warrior",
+    "tla.sun_warriors",
+    "tla.sun_blessed_peak",
+    "lea.swamp",
+    "tla.swampsnare_trap",
+    "tla.team_avatar",
+    "tla.teo_spirited_glider",
+    "tla.the_boulder_ready_to_rumble",
+    "tla.the_cave_of_two_lovers",
+    "tla.the_earth_king",
+    "tla.the_fire_nation_drill",
+    "tla.the_last_agni_kai",
+    "tla.the_legend_of_kuruk",
+    "Avatar Kuruk",
+    "tla.the_legend_of_kyoshi",
+    "Avatar Kyoshi",
+    "tla.the_legend_of_roku",
+    "Avatar Roku",
+    "tla.the_legend_of_yangchen",
+    "Avatar Yangchen",
+    "tla.the_lion_turtle",
+    "tla.the_mechanist_aerial_artisan",
+    "tla.the_rise_of_sozin",
+    "Fire Lord Sozin",
+    "tla.the_spirit_oasis",
+    "tla.the_unagi_of_kyoshi_island",
+    "tla.the_walls_of_ba_sing_se",
+    "tla.tiger_dillo",
+    "tla.tiger_seal",
+    "mh2.tireless_provisioner",
+    "soi.tireless_tracker",
+    "tla.tolls_of_war",
+    "tla.toph_hardheaded_teacher",
+    "tla.toph_the_blind_bandit",
+    "tla.toph_the_first_metalbender",
+    "token.treasure",
+    "tla.treetop_freedom_fighters",
+    "tla.true_ancestry",
+    "tla.trusty_boomerang",
+    "tla.tundra_tank",
+    "tla.turtle_duck",
+    "tla.twin_blades",
+    "tla.ty_lee_artful_acrobat",
+    "tla.ty_lee_chi_blocker",
+    "isd.typhoid_rats",
+    "tla.uncle_iroh",
+    "tla.united_front",
+    "tla.unlucky_cabbage_merchant",
+    "tla.vengeful_villagers",
+    "tla.vindictive_warden",
+    "lea.wall_of_stone",
+    "tla.walltop_sentries",
+    "tla.wan_shi_tong_librarian",
+    "tla.wandering_musicians",
+    "tla.war_balloon",
+    "lea.war_mammoth",
+    "tla.wartime_protestors",
+    "tla.water_tribe_captain",
+    "tla.water_tribe_rallier",
+    "tla.waterbender_ascension",
+    "tla.waterbending_lesson",
+    "tla.waterbending_scroll",
+    "stx.waterfall_aerialist",
+    "tla.watery_grasp",
+    "iko.weaponize_the_monsters",
+    "tla.white_lotus_hideout",
+    "tla.white_lotus_reinforcements",
+    "tla.white_lotus_tile",
+    "por.wind_drake",
+    "tla.wolfbat",
+    "tla.yip_yip",
+    "sth.youthful_knight",
+    "tla.yue_the_moon_spirit",
+    "tla.yuyan_archers",
+    "tla.zhao_ruthless_admiral",
+    "tla.zhao_the_moon_slayer",
+    "tla.zuko_s_conviction",
+    "tla.zuko_s_exile",
+    "tla.zuko_conflicted",
+    "tla.zuko_exiled_prince"
+  ],
+  "naming_catalog": [
+    {
+      "name": "Aang and La, Ocean's Fury",
+      "definition": 3
+    },
+    {
+      "name": "Aang's Iceberg",
+      "definition": 0
+    },
+    {
+      "name": "Aang's Journey",
+      "definition": 1
+    },
+    {
+      "name": "Aang, Destined Savior",
+      "definition": 5
+    },
+    {
+      "name": "Aang, Master of Elements",
+      "definition": 22
+    },
+    {
+      "name": "Aang, Swift Savior",
+      "definition": 2
+    },
+    {
+      "name": "Aang, at the Crossroads",
+      "definition": 4
+    },
+    {
+      "name": "Aang, the Last Airbender",
+      "definition": 6
+    },
+    {
+      "name": "Abandon Attachments",
+      "definition": 7
+    },
+    {
+      "name": "Abandoned Air Temple",
+      "definition": 8
+    },
+    {
+      "name": "Accumulate Wisdom",
+      "definition": 9
+    },
+    {
+      "name": "Agna Qel'a",
+      "definition": 10
+    },
+    {
+      "name": "Air Nomad Legacy",
+      "definition": 11
+    },
+    {
+      "name": "Airbender Ascension",
+      "definition": 12
+    },
+    {
+      "name": "Airbender's Reversal",
+      "definition": 13
+    },
+    {
+      "name": "Airbending Lesson",
+      "definition": 14
+    },
+    {
+      "name": "Airship Engine Room",
+      "definition": 15
+    },
+    {
+      "name": "Allies at Last",
+      "definition": 16
+    },
+    {
+      "name": "Ancestral Recall",
+      "definition": 18
+    },
+    {
+      "name": "Appa, Loyal Sky Bison",
+      "definition": 19
+    },
+    {
+      "name": "Appa, Steadfast Guardian",
+      "definition": 20
+    },
+    {
+      "name": "Avatar Aang",
+      "definition": 21
+    },
+    {
+      "name": "Avatar Destiny",
+      "definition": 23
+    },
+    {
+      "name": "Avatar Enthusiasts",
+      "definition": 24
+    },
+    {
+      "name": "Avatar Kuruk",
+      "definition": 293
+    },
+    {
+      "name": "Avatar Kyoshi",
+      "definition": 295
+    },
+    {
+      "name": "Avatar Roku",
+      "definition": 297
+    },
+    {
+      "name": "Avatar Yangchen",
+      "definition": 299
+    },
+    {
+      "name": "Avatar's Wrath",
+      "definition": 25
+    },
+    {
+      "name": "Azula Always Lies",
+      "definition": 26
+    },
+    {
+      "name": "Azula, Cunning Usurper",
+      "definition": 27
+    },
+    {
+      "name": "Azula, On the Hunt",
+      "definition": 28
+    },
+    {
+      "name": "Ba Sing Se",
+      "definition": 29
+    },
+    {
+      "name": "Badgermole",
+      "definition": 30
+    },
+    {
+      "name": "Badgermole Cub",
+      "definition": 31
+    },
+    {
+      "name": "Barrels of Blasting Jelly",
+      "definition": 33
+    },
+    {
+      "name": "Bastion of Remembrance",
+      "definition": 34
+    },
+    {
+      "name": "Beetle-Headed Merchants",
+      "definition": 36
+    },
+    {
+      "name": "Beifong's Bounty Hunters",
+      "definition": 37
+    },
+    {
+      "name": "Bender's Waterskin",
+      "definition": 38
+    },
+    {
+      "name": "Benevolent River Spirit",
+      "definition": 39
+    },
+    {
+      "name": "Beorn the Fierce",
+      "definition": 40
+    },
+    {
+      "name": "Bitter Work",
+      "definition": 41
+    },
+    {
+      "name": "Boar-q-pine",
+      "definition": 42
+    },
+    {
+      "name": "Boggart Brute",
+      "definition": 43
+    },
+    {
+      "name": "Boiling Rock Prison",
+      "definition": 44
+    },
+    {
+      "name": "Boiling Rock Rioter",
+      "definition": 45
+    },
+    {
+      "name": "Boomerang Basics",
+      "definition": 46
+    },
+    {
+      "name": "Bumi Bash",
+      "definition": 47
+    },
+    {
+      "name": "Bumi, King of Three Trials",
+      "definition": 48
+    },
+    {
+      "name": "Bumi, Unleashed",
+      "definition": 49
+    },
+    {
+      "name": "Buzzard-Wasp Colony",
+      "definition": 50
+    },
+    {
+      "name": "Callous Inspector",
+      "definition": 51
+    },
+    {
+      "name": "Canyon Crawler",
+      "definition": 52
+    },
+    {
+      "name": "Caradora, Heart of Alacria",
+      "definition": 53
+    },
+    {
+      "name": "Cat-Gator",
+      "definition": 54
+    },
+    {
+      "name": "Cat-Owl",
+      "definition": 55
+    },
+    {
+      "name": "Combustion Man",
+      "definition": 57
+    },
+    {
+      "name": "Combustion Technique",
+      "definition": 58
+    },
+    {
+      "name": "Compassionate Healer",
+      "definition": 59
+    },
+    {
+      "name": "Corrupt Court Official",
+      "definition": 60
+    },
+    {
+      "name": "Counterspell",
+      "definition": 61
+    },
+    {
+      "name": "Crashing Wave",
+      "definition": 62
+    },
+    {
+      "name": "Craw Wurm",
+      "definition": 63
+    },
+    {
+      "name": "Crescent Island Temple",
+      "definition": 64
+    },
+    {
+      "name": "Cruel Administrator",
+      "definition": 66
+    },
+    {
+      "name": "Cunning Maneuver",
+      "definition": 67
+    },
+    {
+      "name": "Curious Farm Animals",
+      "definition": 68
+    },
+    {
+      "name": "Cycle of Renewal",
+      "definition": 69
+    },
+    {
+      "name": "Dai Li Agents",
+      "definition": 70
+    },
+    {
+      "name": "Dai Li Indoctrination",
+      "definition": 71
+    },
+    {
+      "name": "Day of Black Sun",
+      "definition": 72
+    },
+    {
+      "name": "Deadly Dispute",
+      "definition": 73
+    },
+    {
+      "name": "Deadly Precision",
+      "definition": 74
+    },
+    {
+      "name": "Deserter's Disciple",
+      "definition": 75
+    },
+    {
+      "name": "Destined Confrontation",
+      "definition": 76
+    },
+    {
+      "name": "Diligent Zookeeper",
+      "definition": 77
+    },
+    {
+      "name": "Divide by Zero",
+      "definition": 78
+    },
+    {
+      "name": "Doubling Season",
+      "definition": 79
+    },
+    {
+      "name": "Dragonfly Swarm",
+      "definition": 81
+    },
+    {
+      "name": "Earth King's Lieutenant",
+      "definition": 82
+    },
+    {
+      "name": "Earth Kingdom General",
+      "definition": 83
+    },
+    {
+      "name": "Earth Kingdom Jailer",
+      "definition": 84
+    },
+    {
+      "name": "Earth Kingdom Protectors",
+      "definition": 85
+    },
+    {
+      "name": "Earth Kingdom Soldier",
+      "definition": 86
+    },
+    {
+      "name": "Earth Rumble",
+      "definition": 87
+    },
+    {
+      "name": "Earth Rumble Wrestlers",
+      "definition": 88
+    },
+    {
+      "name": "Earth Village Ruffians",
+      "definition": 89
+    },
+    {
+      "name": "Earthbender Ascension",
+      "definition": 90
+    },
+    {
+      "name": "Earthbending Lesson",
+      "definition": 91
+    },
+    {
+      "name": "Earthen Ally",
+      "definition": 92
+    },
+    {
+      "name": "Elemental Teachings",
+      "definition": 93
+    },
+    {
+      "name": "Ember Island Production",
+      "definition": 94
+    },
+    {
+      "name": "Energybending",
+      "definition": 95
+    },
+    {
+      "name": "Enter the Avatar State",
+      "definition": 96
+    },
+    {
+      "name": "Enthusiastic Study",
+      "definition": 97
+    },
+    {
+      "name": "Epic Downfall",
+      "definition": 98
+    },
+    {
+      "name": "Eyetwitch",
+      "definition": 99
+    },
+    {
+      "name": "Fabled Passage",
+      "definition": 100
+    },
+    {
+      "name": "Fancy Footwork",
+      "definition": 101
+    },
+    {
+      "name": "Fatal Fissure",
+      "definition": 102
+    },
+    {
+      "name": "Fated Firepower",
+      "definition": 103
+    },
+    {
+      "name": "Fencing Ace",
+      "definition": 104
+    },
+    {
+      "name": "Field Trip",
+      "definition": 105
+    },
+    {
+      "name": "Fire Lord Azula",
+      "definition": 106
+    },
+    {
+      "name": "Fire Lord Sozin",
+      "definition": 303
+    },
+    {
+      "name": "Fire Lord Zuko",
+      "definition": 107
+    },
+    {
+      "name": "Fire Nation Attacks",
+      "definition": 108
+    },
+    {
+      "name": "Fire Nation Cadets",
+      "definition": 109
+    },
+    {
+      "name": "Fire Nation Engineer",
+      "definition": 110
+    },
+    {
+      "name": "Fire Nation Palace",
+      "definition": 111
+    },
+    {
+      "name": "Fire Nation Raider",
+      "definition": 112
+    },
+    {
+      "name": "Fire Nation Warship",
+      "definition": 113
+    },
+    {
+      "name": "Fire Navy Trebuchet",
+      "definition": 114
+    },
+    {
+      "name": "Fire Sages",
+      "definition": 115
+    },
+    {
+      "name": "Firebender Ascension",
+      "definition": 116
+    },
+    {
+      "name": "Firebending Lesson",
+      "definition": 117
+    },
+    {
+      "name": "Firebending Student",
+      "definition": 118
+    },
+    {
+      "name": "First-Time Flyer",
+      "definition": 119
+    },
+    {
+      "name": "Fists of Flame",
+      "definition": 120
+    },
+    {
+      "name": "Flexible Waterbender",
+      "definition": 121
+    },
+    {
+      "name": "Flopsie, Bumi's Buddy",
+      "definition": 122
+    },
+    {
+      "name": "Foggy Bottom Swamp",
+      "definition": 123
+    },
+    {
+      "name": "Foggy Swamp Hunters",
+      "definition": 124
+    },
+    {
+      "name": "Foggy Swamp Spirit Keeper",
+      "definition": 125
+    },
+    {
+      "name": "Foggy Swamp Vinebender",
+      "definition": 126
+    },
+    {
+      "name": "Foggy Swamp Visions",
+      "definition": 127
+    },
+    {
+      "name": "Forecasting Fortune Teller",
+      "definition": 129
+    },
+    {
+      "name": "Forest",
+      "definition": 130
+    },
+    {
+      "name": "Gather the White Lotus",
+      "definition": 131
+    },
+    {
+      "name": "Geyser Leaper",
+      "definition": 132
+    },
+    {
+      "name": "Giant Cindermaw",
+      "definition": 133
+    },
+    {
+      "name": "Giant Koi",
+      "definition": 134
+    },
+    {
+      "name": "Giant Spider",
+      "definition": 135
+    },
+    {
+      "name": "Glider Kids",
+      "definition": 136
+    },
+    {
+      "name": "Glider Staff",
+      "definition": 137
+    },
+    {
+      "name": "Glory Seeker",
+      "definition": 138
+    },
+    {
+      "name": "Gnarled Professor",
+      "definition": 139
+    },
+    {
+      "name": "Gran-Gran",
+      "definition": 140
+    },
+    {
+      "name": "Gray Ogre",
+      "definition": 141
+    },
+    {
+      "name": "Great Divide Guide",
+      "definition": 142
+    },
+    {
+      "name": "Guru Pathik",
+      "definition": 143
+    },
+    {
+      "name": "Hakoda, Selfless Commander",
+      "definition": 144
+    },
+    {
+      "name": "Hama, the Bloodbender",
+      "definition": 145
+    },
+    {
+      "name": "Haru, Hidden Talent",
+      "definition": 146
+    },
+    {
+      "name": "Healer's Hawk",
+      "definition": 147
+    },
+    {
+      "name": "Heartless Act",
+      "definition": 148
+    },
+    {
+      "name": "Hei Bai, Spirit of Balance",
+      "definition": 149
+    },
+    {
+      "name": "Hermitic Herbalist",
+      "definition": 150
+    },
+    {
+      "name": "Hill Giant",
+      "definition": 151
+    },
+    {
+      "name": "Hog-Monkey",
+      "definition": 152
+    },
+    {
+      "name": "Honest Work",
+      "definition": 153
+    },
+    {
+      "name": "How to Start a Riot",
+      "definition": 154
+    },
+    {
+      "name": "Igneous Inspiration",
+      "definition": 156
+    },
+    {
+      "name": "Iguana Parrot",
+      "definition": 157
+    },
+    {
+      "name": "Invasion Reinforcements",
+      "definition": 158
+    },
+    {
+      "name": "Invasion Submersible",
+      "definition": 159
+    },
+    {
+      "name": "Invasion Tactics",
+      "definition": 160
+    },
+    {
+      "name": "Iroh's Demonstration",
+      "definition": 161
+    },
+    {
+      "name": "Iroh, Grand Lotus",
+      "definition": 162
+    },
+    {
+      "name": "Iroh, Tea Master",
+      "definition": 163
+    },
+    {
+      "name": "Island",
+      "definition": 164
+    },
+    {
+      "name": "It'll Quench Ya!",
+      "definition": 165
+    },
+    {
+      "name": "Jasmine Dragon Tea Shop",
+      "definition": 166
+    },
+    {
+      "name": "Jeong Jeong's Deserters",
+      "definition": 167
+    },
+    {
+      "name": "Jeong Jeong, the Deserter",
+      "definition": 168
+    },
+    {
+      "name": "Jet's Brainwashing",
+      "definition": 169
+    },
+    {
+      "name": "Jet, Freedom Fighter",
+      "definition": 170
+    },
+    {
+      "name": "Joo Dee, One of Many",
+      "definition": 171
+    },
+    {
+      "name": "June, Bounty Hunter",
+      "definition": 172
+    },
+    {
+      "name": "Katara, Bending Prodigy",
+      "definition": 173
+    },
+    {
+      "name": "Katara, Water Tribe's Hope",
+      "definition": 174
+    },
+    {
+      "name": "Katara, the Fearless",
+      "definition": 175
+    },
+    {
+      "name": "Kellan, Planar Trailblazer",
+      "definition": 176
+    },
+    {
+      "name": "Knowledge Seeker",
+      "definition": 177
+    },
+    {
+      "name": "Koh, the Face Stealer",
+      "definition": 178
+    },
+    {
+      "name": "Kyoshi Battle Fan",
+      "definition": 179
+    },
+    {
+      "name": "Kyoshi Island Plaza",
+      "definition": 180
+    },
+    {
+      "name": "Kyoshi Village",
+      "definition": 181
+    },
+    {
+      "name": "Kyoshi Warriors",
+      "definition": 182
+    },
+    {
+      "name": "Leaves from the Vine",
+      "definition": 183
+    },
+    {
+      "name": "Lightning Bolt",
+      "definition": 184
+    },
+    {
+      "name": "Lightning Strike",
+      "definition": 185
+    },
+    {
+      "name": "Llanowar Elves",
+      "definition": 186
+    },
+    {
+      "name": "Lo and Li, Twin Tutors",
+      "definition": 187
+    },
+    {
+      "name": "Long Feng, Grand Secretariat",
+      "definition": 188
+    },
+    {
+      "name": "Lost Days",
+      "definition": 189
+    },
+    {
+      "name": "Lotus Cobra",
+      "definition": 190
+    },
+    {
+      "name": "Mai, Jaded Edge",
+      "definition": 191
+    },
+    {
+      "name": "Mai, Scornful Striker",
+      "definition": 192
+    },
+    {
+      "name": "Man-o'-War",
+      "definition": 193
+    },
+    {
+      "name": "Master Pakku",
+      "definition": 194
+    },
+    {
+      "name": "Master Piandao",
+      "definition": 195
+    },
+    {
+      "name": "Mayhem Devil",
+      "definition": 196
+    },
+    {
+      "name": "Meditation Pools",
+      "definition": 197
+    },
+    {
+      "name": "Merchant of Many Hats",
+      "definition": 198
+    },
+    {
+      "name": "Messenger Hawk",
+      "definition": 199
+    },
+    {
+      "name": "Meteor Sword",
+      "definition": 200
+    },
+    {
+      "name": "Misty Palms Oasis",
+      "definition": 201
+    },
+    {
+      "name": "Momo, Friendly Flier",
+      "definition": 202
+    },
+    {
+      "name": "Momo, Playful Pet",
+      "definition": 203
+    },
+    {
+      "name": "Monastery Swiftspear",
+      "definition": 204
+    },
+    {
+      "name": "Mongoose Lizard",
+      "definition": 205
+    },
+    {
+      "name": "Mountain",
+      "definition": 207
+    },
+    {
+      "name": "North Pole Gates",
+      "definition": 208
+    },
+    {
+      "name": "North Pole Patrol",
+      "definition": 209
+    },
+    {
+      "name": "Northern Air Temple",
+      "definition": 210
+    },
+    {
+      "name": "Obsessive Pursuit",
+      "definition": 211
+    },
+    {
+      "name": "Octopus Form",
+      "definition": 212
+    },
+    {
+      "name": "Omashu City",
+      "definition": 213
+    },
+    {
+      "name": "Origin of Metalbending",
+      "definition": 214
+    },
+    {
+      "name": "Ostrich-Horse",
+      "definition": 215
+    },
+    {
+      "name": "Otter-Penguin",
+      "definition": 216
+    },
+    {
+      "name": "Ozai's Cruelty",
+      "definition": 217
+    },
+    {
+      "name": "Ozai, the Phoenix King",
+      "definition": 218
+    },
+    {
+      "name": "Path to Redemption",
+      "definition": 219
+    },
+    {
+      "name": "Phoenix Fleet Airship",
+      "definition": 220
+    },
+    {
+      "name": "Pillar Launch",
+      "definition": 221
+    },
+    {
+      "name": "Pirate Peddlers",
+      "definition": 222
+    },
+    {
+      "name": "Plains",
+      "definition": 223
+    },
+    {
+      "name": "Planetarium of Wan Shi Tong",
+      "definition": 224
+    },
+    {
+      "name": "Platypus-Bear",
+      "definition": 225
+    },
+    {
+      "name": "Pop Quiz",
+      "definition": 226
+    },
+    {
+      "name": "Power Word Kill",
+      "definition": 227
+    },
+    {
+      "name": "Pretending Poxbearers",
+      "definition": 228
+    },
+    {
+      "name": "Price of Freedom",
+      "definition": 229
+    },
+    {
+      "name": "Prismatic Vista",
+      "definition": 230
+    },
+    {
+      "name": "Professor Zei, Anthropologist",
+      "definition": 231
+    },
+    {
+      "name": "Professor of Symbology",
+      "definition": 232
+    },
+    {
+      "name": "Proft's Eidetic Memory",
+      "definition": 233
+    },
+    {
+      "name": "Prophetic Prism",
+      "definition": 234
+    },
+    {
+      "name": "Pyroclasm",
+      "definition": 235
+    },
+    {
+      "name": "Rabaroo Troop",
+      "definition": 236
+    },
+    {
+      "name": "Raging Goblin",
+      "definition": 237
+    },
+    {
+      "name": "Ran and Shaw",
+      "definition": 238
+    },
+    {
+      "name": "Raucous Audience",
+      "definition": 239
+    },
+    {
+      "name": "Raven Eagle",
+      "definition": 240
+    },
+    {
+      "name": "Razor Rings",
+      "definition": 241
+    },
+    {
+      "name": "Realm of Koh",
+      "definition": 242
+    },
+    {
+      "name": "Rebellious Captives",
+      "definition": 243
+    },
+    {
+      "name": "Redirect Lightning",
+      "definition": 244
+    },
+    {
+      "name": "Rockalanche",
+      "definition": 245
+    },
+    {
+      "name": "Rocky Rebuke",
+      "definition": 246
+    },
+    {
+      "name": "Rough Rhino Cavalry",
+      "definition": 247
+    },
+    {
+      "name": "Rowdy Snowballers",
+      "definition": 248
+    },
+    {
+      "name": "Ruinous Waterbending",
+      "definition": 249
+    },
+    {
+      "name": "Rumble Arena",
+      "definition": 250
+    },
+    {
+      "name": "Saber-Tooth Moose-Lion",
+      "definition": 251
+    },
+    {
+      "name": "Sandbender Scavengers",
+      "definition": 252
+    },
+    {
+      "name": "Sandbenders' Storm",
+      "definition": 253
+    },
+    {
+      "name": "Savannah Lions",
+      "definition": 254
+    },
+    {
+      "name": "Savor",
+      "definition": 255
+    },
+    {
+      "name": "Sazh's Chocobo",
+      "definition": 256
+    },
+    {
+      "name": "Secret Tunnel",
+      "definition": 257
+    },
+    {
+      "name": "Secret of Bloodbending",
+      "definition": 258
+    },
+    {
+      "name": "Seismic Sense",
+      "definition": 259
+    },
+    {
+      "name": "Serpent of the Pass",
+      "definition": 260
+    },
+    {
+      "name": "Serpent's Pass",
+      "definition": 261
+    },
+    {
+      "name": "Serra Angel",
+      "definition": 262
+    },
+    {
+      "name": "Shared Roots",
+      "definition": 263
+    },
+    {
+      "name": "Shivan Dragon",
+      "definition": 264
+    },
+    {
+      "name": "Sokka's Haiku",
+      "definition": 265
+    },
+    {
+      "name": "Sokka, Bold Boomeranger",
+      "definition": 266
+    },
+    {
+      "name": "Sokka, Lateral Strategist",
+      "definition": 267
+    },
+    {
+      "name": "Sokka, Tenacious Tactician",
+      "definition": 268
+    },
+    {
+      "name": "Sold Out",
+      "definition": 269
+    },
+    {
+      "name": "Solstice Revelations",
+      "definition": 271
+    },
+    {
+      "name": "South Pole Voyager",
+      "definition": 272
+    },
+    {
+      "name": "Southern Air Temple",
+      "definition": 273
+    },
+    {
+      "name": "Sozin's Comet",
+      "definition": 274
+    },
+    {
+      "name": "Sparring Dummy",
+      "definition": 275
+    },
+    {
+      "name": "Spectral Sailor",
+      "definition": 276
+    },
+    {
+      "name": "Spirit Water Revival",
+      "definition": 278
+    },
+    {
+      "name": "Suki, Courageous Rescuer",
+      "definition": 279
+    },
+    {
+      "name": "Suki, Kyoshi Warrior",
+      "definition": 280
+    },
+    {
+      "name": "Sun Warriors",
+      "definition": 281
+    },
+    {
+      "name": "Sun-Blessed Peak",
+      "definition": 282
+    },
+    {
+      "name": "Swamp",
+      "definition": 283
+    },
+    {
+      "name": "Swampsnare Trap",
+      "definition": 284
+    },
+    {
+      "name": "Team Avatar",
+      "definition": 285
+    },
+    {
+      "name": "Teo, Spirited Glider",
+      "definition": 286
+    },
+    {
+      "name": "The Boulder, Ready to Rumble",
+      "definition": 287
+    },
+    {
+      "name": "The Cave of Two Lovers",
+      "definition": 288
+    },
+    {
+      "name": "The Earth King",
+      "definition": 289
+    },
+    {
+      "name": "The Fire Nation Drill",
+      "definition": 290
+    },
+    {
+      "name": "The Last Agni Kai",
+      "definition": 291
+    },
+    {
+      "name": "The Legend of Kuruk",
+      "definition": 292
+    },
+    {
+      "name": "The Legend of Kyoshi",
+      "definition": 294
+    },
+    {
+      "name": "The Legend of Roku",
+      "definition": 296
+    },
+    {
+      "name": "The Legend of Yangchen",
+      "definition": 298
+    },
+    {
+      "name": "The Lion-Turtle",
+      "definition": 300
+    },
+    {
+      "name": "The Mechanist, Aerial Artisan",
+      "definition": 301
+    },
+    {
+      "name": "The Rise of Sozin",
+      "definition": 302
+    },
+    {
+      "name": "The Spirit Oasis",
+      "definition": 304
+    },
+    {
+      "name": "The Unagi of Kyoshi Island",
+      "definition": 305
+    },
+    {
+      "name": "The Walls of Ba Sing Se",
+      "definition": 306
+    },
+    {
+      "name": "Tiger-Dillo",
+      "definition": 307
+    },
+    {
+      "name": "Tiger-Seal",
+      "definition": 308
+    },
+    {
+      "name": "Tireless Provisioner",
+      "definition": 309
+    },
+    {
+      "name": "Tireless Tracker",
+      "definition": 310
+    },
+    {
+      "name": "Tolls of War",
+      "definition": 311
+    },
+    {
+      "name": "Toph, Hardheaded Teacher",
+      "definition": 312
+    },
+    {
+      "name": "Toph, the Blind Bandit",
+      "definition": 313
+    },
+    {
+      "name": "Toph, the First Metalbender",
+      "definition": 314
+    },
+    {
+      "name": "Treetop Freedom Fighters",
+      "definition": 316
+    },
+    {
+      "name": "True Ancestry",
+      "definition": 317
+    },
+    {
+      "name": "Trusty Boomerang",
+      "definition": 318
+    },
+    {
+      "name": "Tundra Tank",
+      "definition": 319
+    },
+    {
+      "name": "Turtle-Duck",
+      "definition": 320
+    },
+    {
+      "name": "Twin Blades",
+      "definition": 321
+    },
+    {
+      "name": "Ty Lee, Artful Acrobat",
+      "definition": 322
+    },
+    {
+      "name": "Ty Lee, Chi Blocker",
+      "definition": 323
+    },
+    {
+      "name": "Typhoid Rats",
+      "definition": 324
+    },
+    {
+      "name": "Uncle Iroh",
+      "definition": 325
+    },
+    {
+      "name": "United Front",
+      "definition": 326
+    },
+    {
+      "name": "Unlucky Cabbage Merchant",
+      "definition": 327
+    },
+    {
+      "name": "Vengeful Villagers",
+      "definition": 328
+    },
+    {
+      "name": "Vindictive Warden",
+      "definition": 329
+    },
+    {
+      "name": "Wall of Stone",
+      "definition": 330
+    },
+    {
+      "name": "Walltop Sentries",
+      "definition": 331
+    },
+    {
+      "name": "Wan Shi Tong, Librarian",
+      "definition": 332
+    },
+    {
+      "name": "Wandering Musicians",
+      "definition": 333
+    },
+    {
+      "name": "War Balloon",
+      "definition": 334
+    },
+    {
+      "name": "War Mammoth",
+      "definition": 335
+    },
+    {
+      "name": "Wartime Protestors",
+      "definition": 336
+    },
+    {
+      "name": "Water Tribe Captain",
+      "definition": 337
+    },
+    {
+      "name": "Water Tribe Rallier",
+      "definition": 338
+    },
+    {
+      "name": "Waterbender Ascension",
+      "definition": 339
+    },
+    {
+      "name": "Waterbending Lesson",
+      "definition": 340
+    },
+    {
+      "name": "Waterbending Scroll",
+      "definition": 341
+    },
+    {
+      "name": "Waterfall Aerialist",
+      "definition": 342
+    },
+    {
+      "name": "Watery Grasp",
+      "definition": 343
+    },
+    {
+      "name": "Weaponize the Monsters",
+      "definition": 344
+    },
+    {
+      "name": "White Lotus Hideout",
+      "definition": 345
+    },
+    {
+      "name": "White Lotus Reinforcements",
+      "definition": 346
+    },
+    {
+      "name": "White Lotus Tile",
+      "definition": 347
+    },
+    {
+      "name": "Wind Drake",
+      "definition": 348
+    },
+    {
+      "name": "Wolfbat",
+      "definition": 349
+    },
+    {
+      "name": "Yip Yip!",
+      "definition": 350
+    },
+    {
+      "name": "Youthful Knight",
+      "definition": 351
+    },
+    {
+      "name": "Yue, the Moon Spirit",
+      "definition": 352
+    },
+    {
+      "name": "Yuyan Archers",
+      "definition": 353
+    },
+    {
+      "name": "Zhao, Ruthless Admiral",
+      "definition": 354
+    },
+    {
+      "name": "Zhao, the Moon Slayer",
+      "definition": 355
+    },
+    {
+      "name": "Zuko's Conviction",
+      "definition": 356
+    },
+    {
+      "name": "Zuko's Exile",
+      "definition": 357
+    },
+    {
+      "name": "Zuko, Conflicted",
+      "definition": 358
+    },
+    {
+      "name": "Zuko, Exiled Prince",
+      "definition": 359
+    }
+  ]
+}
