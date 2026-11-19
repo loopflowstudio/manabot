@@ -122,7 +122,7 @@ export function movePhrases(text: string): string[] {
 }
 
 /** The spells a narrated move cast, by name, without their ", targeting …" clauses. */
-export function narratedSpells(text: string): string[] {
+function narratedSpells(text: string): string[] {
   return movePhrases(text)
     .filter(phrase => phrase.startsWith('Cast '))
     .map(phrase => phrase.slice('Cast '.length).split(', targeting ')[0]);

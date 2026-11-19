@@ -6,7 +6,7 @@
  * totals and nothing more.
  */
 import type { ExperienceFrame, GameLogEntry } from '$lib/types';
-import { movePhrases, narratedSpells } from './recent';
+import { movePhrases } from './recent';
 
 export interface GameResult {
   /** "You win", "Heuristic · scripted wins", "Draw". */
@@ -22,10 +22,10 @@ export interface GameResult {
 interface Tally { spells: number; attacks: number }
 
 function tally(log: readonly GameLogEntry[], actor: GameLogEntry['actor']): Tally {
-  const moves = log.filter(entry => entry.actor === actor);
+  const phrases = log.filter(entry => entry.actor === actor).flatMap(entry => movePhrases(entry.text));
   return {
-    spells: moves.reduce((count, entry) => count + narratedSpells(entry.text).length, 0),
-    attacks: moves.reduce((count, entry) => count + movePhrases(entry.text).filter(phrase => phrase.startsWith('Attack')).length, 0),
+    spells: phrases.filter(phrase => phrase.startsWith('Cast ')).length,
+    attacks: phrases.filter(phrase => phrase.startsWith('Attack')).length,
   };
 }
 
