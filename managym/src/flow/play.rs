@@ -476,10 +476,9 @@ impl Game {
                 || self.can_pay_with_mana_abilities(player, &cost.plus(or_mana), None);
         }
         let help = self.spell_help(player, object, cast, &cost);
-        if help.keyworded() {
-            self.payable_with_help(player, &self.pooled_mana(player), &cost, help)
-        } else if help.waterbend > 0 {
-            self.waterbend_payment_possible(player, &cost, help.waterbend)
+        if help != Help::default() {
+            let pool = self.pooled_mana(player);
+            self.payable_with_help(player, &pool, &cost, help, help.waterbend, None)
         } else {
             self.can_pay_with_mana_abilities(player, &cost, None)
         }
@@ -1216,7 +1215,7 @@ impl Game {
             return Vec::new();
         };
         payable_x_values(ability.x_min, |x| {
-            self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x))
+            self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x), None)
         })
     }
 

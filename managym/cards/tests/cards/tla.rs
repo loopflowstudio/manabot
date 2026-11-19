@@ -1624,6 +1624,94 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
     assert_eq!(current_object(&s, strike).owner, PlayerId(1));
 }
 
+/// Hama's waterbend {4} for Appeal to Eirdu keeps Appeal's convoke: an
+/// artifact that cannot convoke can still waterbend, and a creature may pay
+/// {1} by either, which the receipt keeps apart.
+#[test]
+fn hama_can_waterbend_for_a_spell_with_convoke() {
+    let mut s = five_color_setup(&[
+        "Hama, the Bloodbender",
+        "Appeal to Eirdu",
+        "Prophetic Prism",
+        "Gray Ogre",
+    ]);
+    let appeal = library_card(&s, 1, "Appeal to Eirdu");
+    put_on_top(&mut s, appeal);
+    let ogres: Vec<PermanentId> = (0..2)
+        .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
+        .collect();
+    s.set_player_mana_pool(0, "UUUUU");
+    cast(&mut s, "Hama, the Bloodbender");
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+    let appeal = now(&s, appeal);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == appeal),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, appeal), Some(ZoneType::Exile));
+    let prism = s.force_permanent_on_battlefield(0, "Prophetic Prism");
+    s.set_player_mana_pool(0, "");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        can_cast(&s, appeal),
+        "three creatures and one artifact can waterbend {{4}}"
+    );
+    let hama = s.battlefield_permanents_named(0, "Hama, the Bloodbender")[0];
+    cast_card(&mut s, appeal);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogres[0])));
+    if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+        choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    }
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    let tap = |s: &mut crate::support::game::Scenario, tapped: PermanentId| {
+        choose(
+            s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == tapped),
+        );
+    };
+    // The Prism only waterbends: it pays at once.
+    tap(&mut s, prism);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    // A creature convokes or waterbends.
+    for (creature, mode) in [(ogres[0], 0), (ogres[1], 1), (hama, 1)] {
+        tap(&mut s, creature);
+        let labels: Vec<_> = s
+            .game()
+            .semantic_decision_frame()
+            .unwrap()
+            .offers
+            .iter()
+            .map(|offer| offer.label.clone())
+            .collect();
+        assert_eq!(labels.len(), 2, "{labels:?}");
+        assert!(labels[0].ends_with("pays {1} (convoke)"), "{labels:?}");
+        assert!(labels[1].ends_with("pays {1} (waterbend)"), "{labels:?}");
+        choose(
+            &mut s,
+            |a| matches!(a, Action::ChooseMode { mode: m, .. } if *m == mode),
+        );
+    }
+    let spell = crate::support::inspect::top_spell(&s);
+    assert_eq!(spell.spent.total(), 0);
+    assert_eq!(
+        spell
+            .spent
+            .contributed(How::Tapped, Toward::Waterbend)
+            .collect::<Vec<_>>(),
+        [prism, ogres[1], hama].map(|permanent| card_of(&s, permanent))
+    );
+    assert_eq!(
+        spell
+            .spent
+            .contributed(How::Tapped, Toward::Convoke)
+            .collect::<Vec<_>>(),
+        [card_of(&s, ogres[0])]
+    );
+}
+
 /// Hama can exile an opposing noncreature permanent card: cast by
 /// waterbending, Prophetic Prism enters under your control, its enters
 /// trigger draws for you, and its mana ability is yours to activate.

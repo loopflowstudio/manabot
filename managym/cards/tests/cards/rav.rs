@@ -63,7 +63,8 @@ fn doubling_season_doubles_entry_lore_and_tokens_but_not_precombat_lore() {
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
 }
 
-/// A green-white creature convoking for {6}{G}{W} pays either colored pip:
+/// A green-white creature convoking for {6}{G}{W} pays either colored pip
+/// or {1}:
 /// the player chooses which when mana can pay the other, and is not asked
 /// when only one choice leaves the cost payable. The automatic payer pays
 /// mana with mana: with lands for the whole cost it asks nothing, and short
@@ -120,7 +121,8 @@ fn guardian_of_vitu_ghazi_convoker_chooses_which_owed_color_it_pays() {
                 labels,
                 [
                     "Guardian of Vitu-Ghazi pays {W} (convoke)",
-                    "Guardian of Vitu-Ghazi pays {G} (convoke)"
+                    "Guardian of Vitu-Ghazi pays {G} (convoke)",
+                    "Guardian of Vitu-Ghazi pays {1} (convoke)"
                 ]
             );
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));

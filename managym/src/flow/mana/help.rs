@@ -1,38 +1,53 @@
 // help.rs
 // Whether a cost is payable when part of it is paid another way: convoke,
-// improvise, delve and waterbend taps beside the mana of `PaymentModel`.
+// improvise, delve and waterbend beside the mana of `PaymentModel`, and what
+// one direct tap of an artifact or creature may pay. This is the one owner
+// of direct-tap eligibility for casts, activations and payments made during
+// resolution: offers, labels and execution all read `help_taps`.
+//
+// A cost's help splits its generic mana into tiers (`help_obligations`):
+// convoke and improvise taps may pay any of it, any artifact's or creature's
+// tap the announced waterbend part, and mana all of it. A convoking
+// creature paying a colored pip is tried by `convoke_search`.
 
 use super::*;
+use crate::flow::payment::TapPayment;
 use crate::state::payment::Toward;
 
 impl Game {
-    /// Convoke and improvise name which taps may pay generic mana: creatures
-    /// and artifacts respectively, where waterbend alone takes either. A
-    /// cost with both waterbend and one of them keeps only the keyword's
-    /// taps, which may hide a legal waterbend tap and never offers an
-    /// illegal one.
-    pub(super) fn restrict_help_taps(&self, model: &mut PaymentModel, help: Help) {
-        if !help.taps_any_generic() || !model.sources.iter().any(|source| source.waterbend) {
+    /// Mark the sources whose tap `help`'s convoke or improvise lets pay any
+    /// generic mana (`ManaSource::keyword`). Every untapped artifact and
+    /// creature may still pay the waterbend part.
+    pub(super) fn mark_help_taps(&self, model: &mut PaymentModel, help: Help) {
+        let keyword = |source: &ManaSource| {
+            source.waterbend && {
+                let view = self.characteristics(source.permanent);
+                help.convoke && view.is_creature() || help.improvise && view.types.is_artifact()
+            }
+        };
+        if model
+            .sources
+            .iter()
+            .all(|source| source.keyword == keyword(source))
+        {
             return;
         }
-        for source in Arc::make_mut(&mut model.sources)
-            .iter_mut()
-            .filter(|source| source.waterbend)
-        {
-            source.waterbend = self.help_tap_toward(help, source.permanent).is_some();
+        for source in Arc::make_mut(&mut model.sources) {
+            source.keyword = keyword(source);
         }
     }
 
-    /// `cost` as the payment model sees it under `help`: delve pays as much
-    /// generic as the graveyard holds, and the second value is the generic
-    /// that a tap may pay instead of mana.
-    pub(super) fn helped_cost(
+    /// `cost` as the payment model's obligations under `help`, `waterbend`
+    /// of its generic still payable by waterbending: delve pays as much
+    /// generic as the graveyard holds, convoke and improvise taps may pay the
+    /// rest of the generic, and mana pays everything.
+    pub(super) fn help_obligations(
         &self,
         player: PlayerId,
         cost: &ManaCost,
         help: Help,
         waterbend: u8,
-    ) -> (ManaCost, u8) {
+    ) -> Vec<Obligation> {
         let cost = match help.delve {
             Some(spell) => {
                 let cards = self.graveyard_payers(player, spell).len();
@@ -40,31 +55,35 @@ impl Game {
             }
             None => cost.clone(),
         };
-        let split = if help.taps_any_generic() {
-            cost.generic()
+        let waterbend = waterbend.min(cost.generic());
+        let keyword = if help.taps_any_generic() {
+            cost.generic() - waterbend
         } else {
-            waterbend.min(cost.generic())
+            0
         };
-        (cost, split)
+        tap_obligations(&cost, keyword, waterbend)
     }
 
     /// The creatures that may pay colored pips under `help` and `model`,
     /// each with its colors: none unless the cost has convoke.
     fn convokers(&self, model: &PaymentModel, help: Help) -> Vec<(PermanentId, Vec<Color>)> {
+        if !help.convoke {
+            return Vec::new();
+        }
         model
             .sources
             .iter()
-            .filter(|source| help.convoke && source.waterbend)
-            .map(|source| {
-                let colors = &self.characteristics(source.permanent).colors;
-                (source.permanent, colors.iter().copied().collect())
+            .filter(|source| source.keyword)
+            .filter_map(|source| {
+                let view = self.characteristics(source.permanent);
+                view.is_creature()
+                    .then(|| (source.permanent, view.colors.iter().copied().collect()))
             })
             .collect()
     }
 
-    /// Can `cost` be paid from `model` with mana and `help`? Delve and taps
-    /// for generic mana are part of the payment model's question; a
-    /// convoking creature paying a colored pip is tried by `convoke_search`.
+    /// Can `cost` be paid from `model` with mana and `help`, `waterbend` of
+    /// its generic still payable by waterbending?
     #[allow(clippy::too_many_arguments)]
     fn helped_payable(
         &self,
@@ -74,13 +93,13 @@ impl Game {
         convokers: &[(PermanentId, Vec<Color>)],
         cost: &ManaCost,
         help: Help,
+        waterbend: u8,
     ) -> bool {
         self.convoke_search(model, cost, convokers, &mut |model, cost| {
-            let (relaxed, split) = self.helped_cost(player, cost, help, help.waterbend);
             model
                 .payable(
                     pool.clone(),
-                    waterbend_obligations(&relaxed, split),
+                    self.help_obligations(player, cost, help, waterbend),
                     SourcePolicy::All,
                 )
                 .then_some(())
@@ -88,26 +107,69 @@ impl Game {
         .is_some()
     }
 
-    /// Can `player` pay `cost` with mana and `help`, `pool` in their pool?
+    /// Can `player` pay `cost` with mana and `help`, `pool` in their pool
+    /// and `waterbend` of its generic payable by waterbending? `tapped` is a
+    /// permanent the operation taps anyway, which pays nothing else.
     pub(crate) fn payable_with_help(
         &self,
         player: PlayerId,
         pool: &Mana,
         cost: &ManaCost,
         help: Help,
+        waterbend: u8,
+        tapped: Option<PermanentId>,
     ) -> bool {
         let mut model = self.payment_model(player, None);
-        self.restrict_help_taps(&mut model, help);
+        if let Some(permanent) = tapped {
+            model.reserve(SourceReservation::tap(permanent));
+        }
+        self.mark_help_taps(&mut model, help);
         let convokers = self.convokers(&model, help);
-        self.helped_payable(player, pool, &mut model, &convokers, cost, help)
+        self.helped_payable(player, pool, &mut model, &convokers, cost, help, waterbend)
     }
 
-    /// The pips each of `candidates` may pay of `cost` by convoke or
-    /// improvise such that the rest stays payable: each color it has that
-    /// the cost still owes, or {1} (`Color::Generic`) when it has none of
-    /// them. A colored pip is never worse for the payer than {1}: whatever
-    /// mana would have paid that pip can pay the {1} instead. A candidate
-    /// with no such pip is left out.
+    /// What tapping `tapped` may pay of `cost` under `help`, before asking
+    /// whether the rest stays payable: by convoke an owed pip of one of its
+    /// colors or {1}, by improvise {1}, and {1} of the waterbend part while
+    /// `waterbend` of it is left. Each reason is its own payment, since the
+    /// receipt keeps it: a creature that could convoke or waterbend {1}
+    /// offers both.
+    fn tap_payments(
+        &self,
+        cost: &ManaCost,
+        help: Help,
+        waterbend: u8,
+        tapped: PermanentId,
+    ) -> Vec<TapPayment> {
+        let view = self.characteristics(tapped);
+        let (creature, artifact) = (view.is_creature(), view.types.is_artifact());
+        let generic = cost.generic() > 0;
+        let mut payments = Vec::new();
+        let mut pay = |toward: Toward, color: Color| payments.push(TapPayment { toward, color });
+        if help.convoke && creature {
+            for color in view.colors.iter() {
+                if cost.cost[*color as usize] > 0 {
+                    pay(Toward::Convoke, *color);
+                }
+            }
+            if generic {
+                pay(Toward::Convoke, Color::Generic);
+            }
+        }
+        if help.improvise && artifact && generic {
+            pay(Toward::Improvise, Color::Generic);
+        }
+        if waterbend > 0 && (creature || artifact) && generic {
+            pay(Toward::Waterbend, Color::Generic);
+        }
+        payments
+    }
+
+    /// What each of `candidates` may pay of `cost` by one direct tap under
+    /// `help` (`tap_payments`) such that the rest stays payable, `waterbend`
+    /// of its generic still payable by waterbending. `also_tapped` is a
+    /// permanent the operation taps anyway. A candidate with no such payment
+    /// is left out.
     ///
     /// One decision's candidates are judged against one model, each tap
     /// reserved for its own question and then restored. The debug oracle
@@ -117,45 +179,48 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
         help: Help,
+        waterbend: u8,
         candidates: &[PermanentId],
-    ) -> Vec<(PermanentId, Vec<Color>)> {
-        let mut model = self.payment_model(player, None);
-        self.restrict_help_taps(&mut model, help);
-        let convokers = self.convokers(&model, help);
+        also_tapped: Option<PermanentId>,
+    ) -> Vec<(PermanentId, Vec<TapPayment>)> {
+        let model_for = |tapped: Option<PermanentId>| {
+            let mut model = self.payment_model(player, None);
+            for permanent in also_tapped.into_iter().chain(tapped) {
+                model.reserve(SourceReservation::tap(permanent));
+            }
+            self.mark_help_taps(&mut model, help);
+            let convokers = self.convokers(&model, help);
+            (model, convokers)
+        };
+        let (mut model, convokers) = model_for(None);
         let pool = self.pooled_mana(player);
-        // The pips of `asked` that leave the rest payable from `model`.
-        let keeping_payable =
-            |model: &mut PaymentModel, convokers: &[(PermanentId, Vec<Color>)], asked: &[Color]| {
-                let mut options = asked.to_vec();
-                options.retain(|color| {
-                    let rest = cost.less_pip(*color);
-                    self.helped_payable(player, &pool, model, convokers, &rest, help)
-                });
-                options
-            };
+        // The payments of `asked` that leave the rest payable from `model`.
+        let keeping_payable = |model: &mut PaymentModel,
+                               convokers: &[(PermanentId, Vec<Color>)],
+                               asked: &[TapPayment]| {
+            asked
+                .iter()
+                .copied()
+                .filter(|payment| {
+                    let left = waterbend - u8::from(payment.toward == Toward::Waterbend);
+                    let rest = cost.less_pip(payment.color);
+                    self.helped_payable(player, &pool, model, convokers, &rest, help, left)
+                })
+                .collect::<Vec<_>>()
+        };
         candidates
             .iter()
             .filter_map(|&tapped| {
-                let convokes = self.help_tap_toward(help, tapped)? == Toward::Convoke;
-                let mut asked: Vec<Color> = self
-                    .characteristics(tapped)
-                    .colors
-                    .iter()
-                    .copied()
-                    .filter(|color| convokes && cost.cost[*color as usize] > 0)
-                    .collect();
-                if asked.is_empty() && cost.generic() > 0 {
-                    asked.push(Color::Generic);
+                let asked = self.tap_payments(cost, help, waterbend, tapped);
+                if asked.is_empty() {
+                    return None;
                 }
-                // Tapped, the creature is no longer a convoker of the model,
+                // Tapped, the permanent is no longer a source of the model,
                 // so it pays its own pip and not a second one.
                 let options =
                     model.with_tapped(tapped, |model| keeping_payable(model, &convokers, &asked));
                 debug_assert_eq!(options, {
-                    let mut alone = self.payment_model(player, None);
-                    alone.reserve(SourceReservation::tap(tapped));
-                    self.restrict_help_taps(&mut alone, help);
-                    let convokers = self.convokers(&alone, help);
+                    let (mut alone, convokers) = model_for(Some(tapped));
                     keeping_payable(&mut alone, &convokers, &asked)
                 });
                 (!options.is_empty()).then_some((tapped, options))
@@ -207,7 +272,7 @@ impl Game {
             if !model
                 .sources
                 .iter()
-                .any(|source| source.permanent == *permanent && source.waterbend)
+                .any(|source| source.permanent == *permanent && source.keyword)
             {
                 continue;
             }
@@ -229,59 +294,6 @@ impl Game {
             }
         }
         None
-    }
-
-    /// Can `player` pay `cost`, `waterbend` of its generic with mana or
-    /// waterbend taps and the rest with mana?
-    pub(crate) fn waterbend_payment_possible(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        waterbend: u8,
-    ) -> bool {
-        self.payment_model(player, None).payable(
-            self.pooled_mana(player),
-            waterbend_obligations(cost, waterbend),
-            SourcePolicy::All,
-        )
-    }
-
-    /// The `candidates` whose waterbend tap, beside `also_tapped`, leaves
-    /// `cost` payable, without copying the game. A tap reserves its source
-    /// and produces no mana. One decision's candidates are judged against one
-    /// model, each tap reserved for its own question and then restored. The
-    /// debug oracle retains the full fork calculation if future rules add a
-    /// tap dependency.
-    pub(crate) fn waterbend_taps_keeping_payable(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        waterbend: u8,
-        candidates: Vec<PermanentId>,
-        also_tapped: Option<PermanentId>,
-    ) -> Vec<PermanentId> {
-        let mut model = self.payment_model(player, None);
-        if let Some(permanent) = also_tapped {
-            model.reserve(SourceReservation::tap(permanent));
-        }
-        let pool = self.pooled_mana(player);
-        let obligations = waterbend_obligations(cost, waterbend);
-        candidates
-            .into_iter()
-            .filter(|&candidate| {
-                let possible = model.with_tapped(candidate, |model| {
-                    model.payable(pool.clone(), obligations.clone(), SourcePolicy::All)
-                });
-                debug_assert_eq!(possible, {
-                    let mut probe = self.clone();
-                    for permanent in std::iter::once(candidate).chain(also_tapped) {
-                        probe.tap_permanent(permanent, false);
-                    }
-                    probe.waterbend_payment_possible(player, cost, waterbend)
-                });
-                possible
-            })
-            .collect()
     }
 }
 

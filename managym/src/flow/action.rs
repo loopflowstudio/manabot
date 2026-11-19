@@ -12,7 +12,7 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        payment::{CostComponent, Operation, Payment},
+        payment::{CostComponent, Operation, Payment, TapPayment},
     },
     state::{
         ability::Effect,
@@ -66,33 +66,17 @@ impl Game {
                 Some(label)
             }
             Action::WaterbendTap { player, permanent } => {
-                // Convoke and improvise taps say what they pay; a waterbend
-                // tap keeps its type name.
+                // A tap says what it pays unless it only waterbends, which
+                // keeps its type name.
                 let (_, payment, _) = self
                     .paying()
-                    .filter(|(_, payment, _)| payment.help().taps_any_generic())
                     .filter(|_| self.state.suspended_decision.is_none())?;
-                let name = &self.state[self.permanent_object(*permanent)?].name;
-                let keyword = match self.help_tap_toward(payment.help(), *permanent)? {
-                    Toward::Convoke => "convoke",
-                    _ => "improvise",
-                };
-                let symbol = |color: &Color| ["W", "U", "B", "R", "G", "C", "1"][*color as usize];
-                match &self.help_tap_options(*player, payment, *permanent)[..] {
-                    [] => None,
-                    [color] => Some(format!(
-                        "Tap {name} to pay {{{}}} ({keyword})",
-                        symbol(color)
-                    )),
-                    colors => Some(format!(
-                        "Tap {name} to pay {} ({keyword})",
-                        colors
-                            .iter()
-                            .map(|color| format!("{{{}}}", symbol(color)))
-                            .collect::<Vec<_>>()
-                            .join(" or ")
-                    )),
+                let options = self.help_tap_options(*player, payment, *permanent);
+                if options.iter().all(|paid| paid.toward == Toward::Waterbend) {
+                    return None;
                 }
+                let name = &self.state[self.permanent_object(*permanent)?].name;
+                Some(format!("Tap {name} to pay {}", tap_payments_text(&options)))
             }
             // A fixed source tapped while an announced cost is paid: its mana
             // pays toward that cost as it is made (`commit_produced_mana`).
@@ -117,19 +101,15 @@ impl Game {
             }
             Action::ChooseMode { mode, .. }
                 if self.state.suspended_decision.is_none()
-                    && matches!(
-                        self.paying(),
-                        Some((_, _, CostComponent::ConvokeColor { .. }))
-                    ) =>
+                    && matches!(self.paying(), Some((_, _, CostComponent::TapPays { .. }))) =>
             {
-                let (_, _, CostComponent::ConvokeColor { creature, colors }) = self.paying()?
-                else {
+                let (_, _, CostComponent::TapPays { tapped, options }) = self.paying()? else {
                     unreachable!()
                 };
                 Some(format!(
-                    "{} pays {{{}}} (convoke)",
-                    self.state[*creature].name,
-                    colors.get(*mode)?.symbol()
+                    "{} pays {}",
+                    self.state[*tapped].name,
+                    tap_payments_text(std::slice::from_ref(options.get(*mode)?))
                 ))
             }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
@@ -260,7 +240,7 @@ impl Game {
                     }
                     CostComponent::Discard
                     | CostComponent::Mana { .. }
-                    | CostComponent::ConvokeColor { .. }
+                    | CostComponent::TapPays { .. }
                     | CostComponent::Life(_)
                     | CostComponent::Source(_) => None,
                 });
@@ -917,19 +897,9 @@ impl Game {
                 (ActionSpaceKind::LookAndSelect, actions, Vec::new())
             }
             CostComponent::Mana { .. } => {
-                let (owed, waterbend) = payment.mana();
+                let owed = payment.mana().0;
                 let mut actions = self.mana_ability_actions(player);
-                if payment.waterbends() && !payment.help().taps_any_generic() {
-                    actions.extend(self.waterbend_tap_offers(
-                        player,
-                        owed,
-                        waterbend,
-                        self.help_tap_candidates(player, &payment.operation),
-                        self.payment_tapped_source(&payment.operation),
-                    ));
-                } else {
-                    actions.extend(self.useful_payment_taps(player));
-                }
+                actions.extend(self.useful_payment_taps(player));
                 actions.extend(self.help_actions(player));
                 if self.can_pay_mana_cost(player, owed) {
                     actions.push(Action::PayCost { player });
@@ -941,9 +911,9 @@ impl Game {
                     (ActionSpaceKind::PayOrNot, actions, Vec::new())
                 }
             }
-            CostComponent::ConvokeColor { colors, .. } => (
+            CostComponent::TapPays { options, .. } => (
                 ActionSpaceKind::Modal,
-                (0..colors.len())
+                (0..options.len())
                     .map(|mode| Action::ChooseMode { player, mode })
                     .collect(),
                 source_focus(),
@@ -1054,12 +1024,9 @@ impl Game {
             }
             Action::ChooseMode { player, mode }
                 if self.state.suspended_decision.is_none()
-                    && matches!(
-                        self.paying(),
-                        Some((_, _, CostComponent::ConvokeColor { .. }))
-                    ) =>
+                    && matches!(self.paying(), Some((_, _, CostComponent::TapPays { .. }))) =>
             {
-                self.convoke_color_action(*player, *mode)
+                self.tap_pays_action(*player, *mode)
             }
             Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
@@ -1129,7 +1096,7 @@ impl Game {
                 if self.state.suspended_decision.is_some() {
                     return self.execute_decision_action(action);
                 }
-                self.waterbend_tap_action(*player, *permanent)
+                self.help_tap_action(*player, *permanent)
             }
             Action::TapForMana { player, permanent } => {
                 self.tap_for_mana_action(*player, *permanent)
@@ -1155,6 +1122,38 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> Ac
 }
 
 /// A mana cost as its symbols: generic first, then colors.
+/// What a direct tap pays, as "{W} or {1} (convoke)", or "{1} (convoke)
+/// or {1} (waterbend)" when its reasons differ.
+fn tap_payments_text(options: &[TapPayment]) -> String {
+    let mut text = String::new();
+    for (index, paid) in options.iter().enumerate() {
+        if index > 0 {
+            text.push_str(" or ");
+        }
+        let symbol = match paid.color {
+            Color::Generic => "1",
+            color => color.symbol(),
+        };
+        text.push_str(&format!("{{{symbol}}}"));
+        if options
+            .get(index + 1)
+            .is_none_or(|next| next.toward != paid.toward)
+        {
+            text.push_str(&format!(" ({})", toward_keyword(paid.toward)));
+        }
+    }
+    text
+}
+
+/// The keyword a direct tap pays by.
+fn toward_keyword(toward: Toward) -> &'static str {
+    match toward {
+        Toward::Convoke => "convoke",
+        Toward::Improvise => "improvise",
+        _ => "waterbend",
+    }
+}
+
 pub(crate) fn cost_label(cost: &ManaCost) -> String {
     let mut label = String::new();
     if cost.generic() > 0 {

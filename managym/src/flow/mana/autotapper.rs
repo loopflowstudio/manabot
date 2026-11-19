@@ -53,6 +53,7 @@ use std::collections::HashSet;
 
 use super::{
     Color, Mana, ManaCost, Obligation, PaymentModel, PaymentStep, SourcePolicy, SourceReservation,
+    Taps,
 };
 
 /// The most follow-up costs one payment is judged against.
@@ -388,7 +389,7 @@ impl Chooser<'_> {
                 leftover.clone(),
                 vec![Obligation::Pay {
                     cost: followup.clone(),
-                    waterbend: false,
+                    taps: Taps::None,
                 }],
                 SourcePolicy::FixedOnly,
             )
@@ -708,7 +709,7 @@ mod tests {
     use super::{PaymentProbe, Reluctance, Stage, TapChoice, CHECKS, LEFTOVERS, SPEND_STATES};
     use crate::flow::mana::{
         tests::{source, tapping_ability, SEARCHED},
-        ManaActivation, Obligation, PaymentModel, SourcePolicy,
+        ManaActivation, Obligation, PaymentModel, SourcePolicy, Taps,
     };
     use crate::state::{
         game_object::PermanentId,
@@ -731,7 +732,7 @@ mod tests {
     fn pay(text: &str) -> Obligation {
         Obligation::Pay {
             cost: ManaCost::parse(text),
-            waterbend: false,
+            taps: Taps::None,
         }
     }
 
@@ -793,7 +794,7 @@ mod tests {
     fn pay_cost(cost: &ManaCost) -> Obligation {
         Obligation::Pay {
             cost: cost.clone(),
-            waterbend: false,
+            taps: Taps::None,
         }
     }
 

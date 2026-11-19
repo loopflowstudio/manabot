@@ -148,6 +148,73 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
     assert_eq!((view.power, view.toughness), (4, 3));
 }
 
+/// A white creature convoking for {3}{W} may pay the {W} or {1}: with {W}
+/// already floating, both leave the rest payable, so the payer chooses. Each
+/// choice is a native Command of its own, and the one taken is what the
+/// receipt keeps.
+#[test]
+fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
+    let mut s = five_color_unfunded_setup(&["Appeal to Eirdu", "Savannah Lions", "Gray Ogre"]);
+    s.allow_priority_floats();
+    let lions = s.force_permanent_on_battlefield(0, "Savannah Lions");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Forest");
+    s.set_player_mana_pool(0, "W");
+    cast_appeal(&mut s, ogre);
+    assert!(convokes(&s, lions));
+    let labels = |s: &crate::support::game::Scenario| -> Vec<String> {
+        s.game()
+            .semantic_decision_frame()
+            .unwrap()
+            .offers
+            .iter()
+            .map(|offer| offer.label.clone())
+            .collect()
+    };
+    assert!(
+        labels(&s).contains(&"Tap Savannah Lions to pay {W} or {1} (convoke)".to_string()),
+        "{:?}",
+        labels(&s)
+    );
+    choose(
+        &mut s,
+        |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == lions),
+    );
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert_eq!(
+        labels(&s),
+        [
+            "Savannah Lions pays {W} (convoke)",
+            "Savannah Lions pays {1} (convoke)"
+        ]
+    );
+    for (mode, white_spent) in [(0, 0), (1, 1)] {
+        let mut fork = crate::support::play::fork_choosing(
+            &s,
+            |a| matches!(a, Action::ChooseMode { mode: m, .. } if *m == mode),
+        );
+        for creature in [ogre, other] {
+            choose(
+                &mut fork,
+                |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == creature),
+            );
+        }
+        crate::support::play::pay_rest(&mut fork);
+        let spell = top_spell(&fork);
+        // Paid {1}, the Lions leave the {W} to the floating white mana.
+        assert_eq!(spell.spent.total(), 1);
+        assert!(spell.spent.amounts()[Color::White as usize] >= white_spent);
+        assert_eq!(
+            spell
+                .spent
+                .contributed(How::Tapped, Toward::Convoke)
+                .collect::<Vec<_>>(),
+            [lions, ogre, other].map(|creature| card_of(&fork, creature))
+        );
+    }
+}
+
 /// Only a white creature (or white mana) pays the {W}: red creatures alone
 /// do not cast it. The automatic payer pays mana with mana: short of mana,
 /// the player picks each creature to tap and the payer finishes once the

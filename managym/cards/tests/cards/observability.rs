@@ -4959,12 +4959,14 @@ fn help_paying_a_mana_cost_reaches_the_stack_frame_by_keyword() {
                 choose(&mut s, |a| matches!(a, Action::Decline { .. }));
             }
         }
-        // Take every help on offer; the land pays what is left.
-        while let Some(help) = s
-            .action_space()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::WaterbendTap { .. } | Action::SelectCard { .. }))
+        // Take every help on offer, a convoking creature paying what it is
+        // first offered; the land pays what is left.
+        while let Some(help) = s.action_space().actions.iter().position(|a| {
+            matches!(
+                a,
+                Action::WaterbendTap { .. } | Action::SelectCard { .. } | Action::ChooseMode { .. }
+            )
+        })
         {
             s.step_action(help);
         }

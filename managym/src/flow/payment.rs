@@ -84,11 +84,12 @@ pub enum CostComponent {
     /// The mana still owed, and how its payer may pay part of it without
     /// mana. Each such payment is a contribution and reduces `cost`.
     Mana { cost: ManaCost, help: Help },
-    /// The convoking creature just tapped has several colors the cost still
-    /// owes: choose which one it pays (CR 702.51a).
-    ConvokeColor {
-        creature: ObjectId,
-        colors: Vec<Color>,
+    /// The artifact or creature just tapped could pay more than one thing
+    /// of the mana owed (`Game::help_taps`): choose which, such as a color
+    /// or {1} by convoke (CR 702.51a), or {1} by convoke or by waterbending.
+    TapPays {
+        tapped: ObjectId,
+        options: Vec<TapPayment>,
     },
     /// "Pay N life" (CR 119.4): an ability's life cost, or a spell's life
     /// paid rather than its other cost.
@@ -182,18 +183,15 @@ impl Help {
     pub fn taps_any_generic(self) -> bool {
         self.convoke || self.improvise
     }
+}
 
-    /// The keyword under which tapping a permanent pays part of the cost:
-    /// convoke for a creature, improvise for an artifact.
-    pub fn tap_toward(self, creature: bool, artifact: bool) -> Option<Toward> {
-        if self.convoke && creature {
-            Some(Toward::Convoke)
-        } else if self.improvise && artifact {
-            Some(Toward::Improvise)
-        } else {
-            None
-        }
-    }
+/// What one direct tap of an artifact or creature pays of a mana cost: one
+/// pip of `color`, or {1} for `Color::Generic`, under `toward` (convoke,
+/// improvise or waterbend), which the receipt keeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TapPayment {
+    pub toward: Toward,
+    pub color: Color,
 }
 
 /// One cast or activation being paid for (CR 601.2f-h): the announced
@@ -856,8 +854,8 @@ impl Game {
                 let exiled = self.move_object(object, ZoneType::Exile);
                 payment.help_paid(exiled, How::Exiled, Toward::Delve, Color::Generic);
             }
-            CostComponent::ConvokeColor { .. } => {
-                return Err(AgentError("choose the color this creature pays".into()));
+            CostComponent::TapPays { .. } => {
+                return Err(AgentError("choose what the tapped permanent pays".into()));
             }
             CostComponent::Life(_) | CostComponent::Source(_) => {
                 unreachable!("paid as the payment completes, after its mana")
@@ -880,9 +878,10 @@ impl Game {
     pub(crate) fn commit_produced_mana(&mut self, player: PlayerId, start: usize) {
         let mut index = start;
         loop {
-            let Some((payer, _, CostComponent::Mana { cost, help })) = self.paying() else {
+            let Some((payer, payment, CostComponent::Mana { cost, help })) = self.paying() else {
                 return;
             };
+            let waterbend = payment.mana().1;
             let pool = &self.state.players[player.0].mana_pool;
             if payer != player || index >= pool.unit_count() || cost.mana_value == 0 {
                 return;
@@ -896,7 +895,7 @@ impl Game {
                 left.spend(&unit);
                 cost.paid_with(pool.unit_color(index))
                     .into_iter()
-                    .find(|rest| self.payable_with_help(player, &left, rest, help))
+                    .find(|rest| self.payable_with_help(player, &left, rest, help, waterbend, None))
                     // Pooled mana of another class or color could pay this
                     // pip instead, with other consequences (a rider applied
                     // or kept, a restriction used up, the colors spent and
@@ -1156,75 +1155,23 @@ impl Game {
     ) -> bool {
         // An X cost is payable when its least X is.
         let cost = ability.mana_cost.with_x(ability.x_min);
-        if !ability.tap_source {
-            return self.can_pay_with_waterbend(player, &cost);
-        }
-        !self
-            .waterbend_taps_keeping_payable(player, &cost, cost.generic(), vec![source], None)
-            .is_empty()
+        self.can_pay_with_waterbend(player, &cost, ability.tap_source.then_some(source))
     }
 
-    /// Can `player` cover `cost` with untapped waterbend candidates
-    /// ({1} each, generic only) plus available mana?
-    pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.waterbend_payment_possible(player, cost, cost.generic())
-    }
-
-    /// Tap `tapped`, one of `candidates`, to pay {1} of the waterbend part
-    /// of `cost` (CR 701.67): the one waterbend tap, for a cast, an
-    /// activation and a payment made during resolution. It pays without
-    /// activating a mana ability; `receipt` names the permanent tapped.
-    pub(crate) fn waterbend_tap(
-        &mut self,
-        tapped: PermanentId,
-        candidates: &[PermanentId],
-        cost: &mut ManaCost,
-        help: Help,
-        receipt: &mut PaymentReceipt,
-    ) -> Result<(), AgentError> {
-        if help.waterbend_left(cost, receipt) == 0 {
-            return Err(AgentError("waterbend cost is already paid".to_string()));
-        }
-        let object = self
-            .permanent_object(tapped)
-            .filter(|_| candidates.contains(&tapped))
-            .ok_or_else(|| AgentError("permanent cannot be tapped for waterbend".to_string()))?;
-        self.tap_permanent(tapped, false);
-        pay_pip_with(
-            cost,
-            receipt,
-            object,
-            How::Tapped,
-            Toward::Waterbend,
-            Color::Generic,
-        );
-        Ok(())
-    }
-
-    /// The waterbend taps among `candidates` that leave the rest of `cost`
-    /// payable, `waterbend` of its generic mana being payable by taps.
-    /// `also_tapped` is the source a cost taps as well.
-    pub(crate) fn waterbend_tap_offers(
+    /// Can `player` cover `cost` with untapped artifacts and creatures ({1}
+    /// each, generic only) plus available mana, `tapped` tapped anyway?
+    pub(crate) fn can_pay_with_waterbend(
         &self,
         player: PlayerId,
         cost: &ManaCost,
-        waterbend: u8,
-        candidates: Vec<PermanentId>,
-        also_tapped: Option<PermanentId>,
-    ) -> Vec<Action> {
-        if waterbend == 0 {
-            return Vec::new();
-        }
-        self.waterbend_taps_keeping_payable(
-            player,
-            &cost.reduced_generic(1),
-            waterbend - 1,
-            candidates,
-            also_tapped,
-        )
-        .into_iter()
-        .map(|permanent| Action::WaterbendTap { player, permanent })
-        .collect()
+        tapped: Option<PermanentId>,
+    ) -> bool {
+        let help = Help {
+            waterbend: cost.generic(),
+            ..Default::default()
+        };
+        let pool = self.pooled_mana(player);
+        self.payable_with_help(player, &pool, cost, help, help.waterbend, tapped)
     }
 
     /// Pay `life` as a cost (CR 119.4) and record it on `receipt`. The
@@ -1239,30 +1186,132 @@ impl Game {
         receipt.pay_life(life);
     }
 
-    /// Tap `tapped` to pay {1} of the pending cost: a waterbend tap, or a
-    /// convoke or improvise tap when the cost's help allows one.
-    pub(crate) fn waterbend_tap_action(
+    /// What tapping `tapped` may pay of the pending cost; see `help_taps`.
+    /// Empty unless `tapped` is a tap the payment offers.
+    pub(crate) fn help_tap_options(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+        tapped: PermanentId,
+    ) -> Vec<TapPayment> {
+        if !self
+            .help_tap_candidates(player, &payment.operation)
+            .contains(&tapped)
+        {
+            return Vec::new();
+        }
+        let (cost, waterbend) = payment.mana();
+        let also_tapped = self.payment_tapped_source(&payment.operation);
+        self.help_taps(
+            player,
+            cost,
+            payment.help(),
+            waterbend,
+            &[tapped],
+            also_tapped,
+        )
+        .pop()
+        .map_or_else(Vec::new, |(_, options)| options)
+    }
+
+    /// The taps and exiles that may pay part of the pending mana cost by
+    /// convoke, improvise, waterbend or delve, each leaving the rest payable.
+    pub(crate) fn help_actions(&self, player: PlayerId) -> Vec<Action> {
+        let Some((payer, payment, CostComponent::Mana { cost, help })) = self.paying() else {
+            return Vec::new();
+        };
+        if payer != player {
+            return Vec::new();
+        }
+        let (_, waterbend) = payment.mana();
+        let mut actions: Vec<Action> = self
+            .help_taps(
+                player,
+                cost,
+                *help,
+                waterbend,
+                &self.help_tap_candidates(player, &payment.operation),
+                self.payment_tapped_source(&payment.operation),
+            )
+            .into_iter()
+            .map(|(permanent, _)| Action::WaterbendTap { player, permanent })
+            .collect();
+        if let Some(spell) = help.delve.filter(|_| cost.generic() > 0) {
+            actions.extend(
+                self.graveyard_payers(player, spell)
+                    .into_iter()
+                    .map(|object| Action::SelectCard { player, object }),
+            );
+        }
+        actions
+    }
+
+    /// Tap `tapped` to pay part of the pending cost: {1} or a pip of its
+    /// color by convoke, {1} by improvise or {1} of a waterbend cost (CR
+    /// 702.51a, 702.126a, 701.67). Tapping pays without activating a mana
+    /// ability. A permanent that could pay more than one thing is tapped now
+    /// and what it pays chosen next.
+    pub(crate) fn help_tap_action(
         &mut self,
         player: PlayerId,
         tapped: PermanentId,
     ) -> Result<(), AgentError> {
         let mut payment = self.pending_payment(player)?.clone();
-        if payment.paying_mana() && payment.help().taps_any_generic() {
-            return self.help_tap_action(player, tapped, payment);
+        if !payment.paying_mana() {
+            return Err(AgentError("no mana payment is pending".to_string()));
         }
-        if !payment.paying_mana() || !payment.waterbends() {
-            return Err(AgentError("no waterbend payment is pending".to_string()));
+        let options = self.help_tap_options(player, &payment, tapped);
+        let object = self
+            .permanent_object(tapped)
+            .filter(|_| !options.is_empty())
+            .ok_or_else(|| AgentError("permanent cannot help pay this cost".to_string()))?;
+        self.pending_choice = None;
+        self.tap_permanent(tapped, false);
+        match options[..] {
+            [paid] => payment.help_paid(object, How::Tapped, paid.toward, paid.color),
+            _ => {
+                payment.owed.insert(
+                    0,
+                    CostComponent::TapPays {
+                        tapped: object,
+                        options,
+                    },
+                );
+                return self.advance_payment(player, payment);
+            }
         }
-        let candidates = self.help_tap_candidates(player, &payment.operation);
-        let (cost, help, receipt) = payment.mana_step();
-        self.waterbend_tap(tapped, &candidates, cost, help, receipt)?;
+        self.after_help_tap(player, payment)
+    }
+
+    /// Choose what the permanent just tapped pays.
+    pub(crate) fn tap_pays_action(
+        &mut self,
+        player: PlayerId,
+        mode: usize,
+    ) -> Result<(), AgentError> {
+        let mut payment = self.pending_payment(player)?.clone();
+        let CostComponent::TapPays { tapped, options } = payment.owed[0].clone() else {
+            return Err(AgentError("no tap payment is being chosen".into()));
+        };
+        let paid = *options
+            .get(mode)
+            .ok_or_else(|| AgentError("not something this tap can pay".into()))?;
+        payment.owed.remove(0);
+        payment.help_paid(tapped, How::Tapped, paid.toward, paid.color);
+        self.after_help_tap(player, payment)
+    }
+
+    /// Continue `payment` after a tap paid part of its mana. Once a plain
+    /// waterbend cost's taps are made, pay the rest from the pool when it can
+    /// (`advance_payment` always leaves a waterbend cost's choice open). A
+    /// remaining colored cost can still need a mana ability such as
+    /// sacrificing Treasure: the committed payment stays open for it. A cost
+    /// that convoke, improvise or delve also helps stays open for them.
+    fn after_help_tap(&mut self, player: PlayerId, payment: Payment) -> Result<(), AgentError> {
         let (owed, waterbend) = payment.mana();
-        // Once the waterbend taps are made, pay the rest from the pool when
-        // it can (`advance_payment` always leaves a waterbend cost's choice
-        // open). A remaining colored cost can still
-        // need a mana ability such as sacrificing Treasure: leave the
-        // committed payment open for it.
-        if waterbend == 0
+        if payment.waterbends()
+            && !payment.help().keyworded()
+            && waterbend == 0
             && !self.offers_extra_payment_taps(player)
             && self.can_pay_mana_cost(player, owed)
         {
@@ -1275,110 +1324,35 @@ impl Game {
         self.advance_payment(player, payment)
     }
 
-    /// The keyword under which tapping `tapped` pays part of a cost with
-    /// `help`: convoke for a creature, improvise for an artifact.
-    pub(crate) fn help_tap_toward(&self, help: Help, tapped: PermanentId) -> Option<Toward> {
-        let view = self.characteristics(tapped);
-        help.tap_toward(view.is_creature(), view.types.is_artifact())
-    }
-
-    /// The pips `tapped` may pay of the pending cost by convoke or
-    /// improvise; see `help_taps`. `tapped` is a tap the payment offers.
-    pub(crate) fn help_tap_options(
-        &self,
-        player: PlayerId,
-        payment: &Payment,
-        tapped: PermanentId,
-    ) -> Vec<Color> {
-        self.help_taps(player, payment.mana().0, payment.help(), &[tapped])
-            .pop()
-            .map_or_else(Vec::new, |(_, colors)| colors)
-    }
-
-    /// The taps and exiles that may pay part of the pending mana cost by
-    /// convoke, improvise or delve, each leaving the rest payable.
-    pub(crate) fn help_actions(&self, player: PlayerId) -> Vec<Action> {
-        let Some((payer, payment, CostComponent::Mana { cost, help })) = self.paying() else {
-            return Vec::new();
-        };
-        if payer != player || !help.keyworded() {
-            return Vec::new();
-        }
-        let mut actions = Vec::new();
-        if help.taps_any_generic() {
-            let candidates = self.help_tap_candidates(player, &payment.operation);
-            actions.extend(
-                self.help_taps(player, cost, *help, &candidates)
-                    .into_iter()
-                    .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
-            );
-        }
-        if let Some(spell) = help.delve.filter(|_| cost.generic() > 0) {
-            actions.extend(
-                self.graveyard_payers(player, spell)
-                    .into_iter()
-                    .map(|object| Action::SelectCard { player, object }),
-            );
-        }
-        actions
-    }
-
-    /// Tap `tapped` to pay one pip of the pending cost by convoke or
-    /// improvise. A creature that could pay more than one owed color is
-    /// tapped now and its color chosen next.
-    fn help_tap_action(
+    /// Tap `tapped` to pay {1} of a payment made during resolution: only
+    /// waterbend helps one (`CostComponent::resolving`), so a tap pays one
+    /// thing. The receipt names the permanent tapped.
+    pub(crate) fn resolution_help_tap(
         &mut self,
         player: PlayerId,
         tapped: PermanentId,
-        mut payment: Payment,
+        cost: &mut ManaCost,
+        help: Help,
+        receipt: &mut PaymentReceipt,
     ) -> Result<(), AgentError> {
-        let colors = if self
-            .help_tap_candidates(player, &payment.operation)
-            .contains(&tapped)
-        {
-            self.help_tap_options(player, &payment, tapped)
+        let waterbend = help.waterbend_left(cost, receipt);
+        let options = if self.waterbend_candidates(player).contains(&tapped) {
+            self.help_taps(player, cost, help, waterbend, &[tapped], None)
         } else {
             Vec::new()
         };
-        let object = self
-            .permanent_object(tapped)
-            .filter(|_| !colors.is_empty())
-            .ok_or_else(|| AgentError("permanent cannot help pay this cost".to_string()))?;
-        let toward = self
-            .help_tap_toward(payment.help(), tapped)
-            .expect("a tap with options pays by a keyword");
-        self.pending_choice = None;
-        // Convoke and improvise pay a cost without activating a mana ability.
-        self.tap_permanent(tapped, false);
-        match colors[..] {
-            [color] => payment.help_paid(object, How::Tapped, toward, color),
-            _ => payment.owed.insert(
-                0,
-                CostComponent::ConvokeColor {
-                    creature: object,
-                    colors,
-                },
-            ),
-        }
-        self.advance_payment(player, payment)
-    }
-
-    /// Choose which owed color the convoking creature just tapped pays.
-    pub(crate) fn convoke_color_action(
-        &mut self,
-        player: PlayerId,
-        mode: usize,
-    ) -> Result<(), AgentError> {
-        let mut payment = self.pending_payment(player)?.clone();
-        let CostComponent::ConvokeColor { creature, colors } = payment.owed[0].clone() else {
-            return Err(AgentError("no convoke color is being chosen".into()));
+        let paid = match &options[..] {
+            [(_, paid)] => paid.as_slice(),
+            _ => &[],
         };
-        let color = *colors
-            .get(mode)
-            .ok_or_else(|| AgentError("not a color this creature can pay".into()))?;
-        payment.owed.remove(0);
-        payment.help_paid(creature, How::Tapped, Toward::Convoke, color);
-        self.advance_payment(player, payment)
+        let ([paid], Some(object)) = (paid, self.permanent_object(tapped)) else {
+            return Err(AgentError(
+                "permanent cannot be tapped for waterbend".to_string(),
+            ));
+        };
+        self.tap_permanent(tapped, false);
+        pay_pip_with(cost, receipt, object, How::Tapped, paid.toward, paid.color);
+        Ok(())
     }
 }
 

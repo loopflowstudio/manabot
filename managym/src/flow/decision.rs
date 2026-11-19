@@ -1671,7 +1671,8 @@ impl Game {
                 let waterbend = help.waterbend_left(cost, &payment.receipt);
                 if self.automatic_mana_payment(player) && payment.can_decline() {
                     let mut actions = Vec::new();
-                    if self.waterbend_payment_possible(player, cost, waterbend) {
+                    let pool = self.pooled_mana(player);
+                    if self.payable_with_help(player, &pool, cost, help, waterbend, None) {
                         actions.push(Action::PayCost { player });
                     }
                     actions.push(Action::Decline { player });
@@ -1683,13 +1684,18 @@ impl Game {
                     });
                 }
                 let mut actions = self.mana_ability_actions(player);
-                actions.extend(self.waterbend_tap_offers(
-                    player,
-                    cost,
-                    waterbend,
-                    self.waterbend_candidates(player),
-                    None,
-                ));
+                actions.extend(
+                    self.help_taps(
+                        player,
+                        cost,
+                        help,
+                        waterbend,
+                        &self.waterbend_candidates(player),
+                        None,
+                    )
+                    .into_iter()
+                    .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
+                );
                 if self.can_pay_mana_cost(player, cost) {
                     actions.push(Action::PayCost { player });
                 }
@@ -2173,11 +2179,10 @@ impl Game {
                 Ok(())
             }
             (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
-                let candidates = self.waterbend_candidates(payment.player);
                 let tapped = match &mut payment.owed {
-                    CostComponent::Mana { cost, help } => self.waterbend_tap(
+                    CostComponent::Mana { cost, help } => self.resolution_help_tap(
+                        payment.player,
                         *permanent,
-                        &candidates,
                         cost,
                         *help,
                         &mut payment.receipt,

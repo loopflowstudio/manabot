@@ -1,6 +1,6 @@
 use super::{
-    waterbend_obligations as waterbend, ManaActivation, ManaSource, Obligation, PaymentModel,
-    PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy,
+    tap_obligations, ManaActivation, ManaSource, Obligation, PaymentModel, PaymentSearch,
+    PaymentSearchState, PaymentStep, SourcePolicy, Taps,
 };
 use crate::cards::content_pack::ContentPack;
 use crate::state::{
@@ -9,6 +9,12 @@ use crate::state::{
     payment::How,
 };
 use std::sync::Arc;
+
+/// `cost` with `split` of its generic that any artifact or creature may tap
+/// to pay.
+fn waterbend(cost: &ManaCost, split: u8) -> Vec<Obligation> {
+    tap_obligations(cost, 0, split)
+}
 
 #[test]
 fn production_totals_preserve_first_modes_classes_and_trigger_choices() {
@@ -433,6 +439,7 @@ pub(in crate::flow::mana) fn source(
         untapped: true,
         fixed: fixed.map(Mana::parse),
         abilities,
+        keyword: false,
         waterbend: false,
     }
 }
@@ -452,7 +459,7 @@ fn forests(count: usize) -> PaymentModel<'static> {
 fn pay(text: &str) -> Obligation {
     Obligation::Pay {
         cost: ManaCost::parse(text),
-        waterbend: false,
+        taps: Taps::None,
     }
 }
 
@@ -665,6 +672,7 @@ fn direct_payment_matches_the_search_on_fixed_sources() {
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
                             abilities: Vec::new(),
+                            keyword: false,
                             waterbend: untapped && rng.gen_bool(0.4),
                         }
                     })
@@ -923,6 +931,7 @@ fn payment_search_bounds_modal_and_restricted_bottlenecks() {
             object: payment_object(count),
             untapped: true,
             fixed: None,
+            keyword: false,
             waterbend: true,
             abilities: vec![tapping_ability(vec![
                 Mana::parse("U"),
@@ -1121,6 +1130,7 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
                     [0, 0, 0, 0, 2, 0],
                 )]),
             ],
+            keyword: false,
             waterbend: true,
         })
         .collect();
@@ -1137,11 +1147,11 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
         obligations: vec![
             Obligation::Pay {
                 cost: ManaCost::default(),
-                waterbend: false,
+                taps: Taps::None,
             },
             Obligation::Pay {
                 cost: ManaCost::parse("5"),
-                waterbend: true,
+                taps: Taps::Any,
             },
         ],
         prefix: None,
@@ -1157,7 +1167,7 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
             Mana::default(),
             vec![Obligation::Pay {
                 cost: ManaCost::parse("4"),
-                waterbend: true,
+                taps: Taps::Any,
             }],
             SourcePolicy::All,
         )
@@ -1183,6 +1193,7 @@ fn payment_bound_keeps_non_tapping_production_after_a_tap() {
             untapped: true,
             fixed: Some(Mana::parse("G")),
             abilities: vec![sacrifice],
+            keyword: false,
             waterbend: true,
         }]),
         life: 20,
@@ -1192,7 +1203,7 @@ fn payment_bound_keeps_non_tapping_production_after_a_tap() {
             Mana::default(),
             vec![Obligation::Pay {
                 cost: ManaCost::parse("GU"),
-                waterbend: false,
+                taps: Taps::None,
             }],
             SourcePolicy::All,
         )
@@ -1219,7 +1230,7 @@ fn payment_bound_counts_restricted_mana_for_each_pending_purpose() {
                 purpose: SpendingContext::cast([subtype], []),
                 ..ManaCost::parse("U")
             },
-            waterbend: false,
+            taps: Taps::None,
         })
         .to_vec();
     assert!(model.plan(pool, obligations, SourcePolicy::All).is_some());
@@ -1294,7 +1305,7 @@ fn payment_bound_allows_restricted_mana_to_fund_a_filter() {
             pool,
             vec![Obligation::Pay {
                 cost: ManaCost::parse("U"),
-                waterbend: false,
+                taps: Taps::None,
             }],
             SourcePolicy::All,
         )
@@ -1562,7 +1573,7 @@ fn payment_color_bound_keeps_payable_costs_at_the_bound() {
             purpose: SpendingContext::cast(["Lesson"], []),
             ..ManaCost::parse(text)
         },
-        waterbend: false,
+        taps: Taps::None,
     };
     let mut herbalist = modal_source(9, &["U", "R"], "");
     Arc::make_mut(&mut herbalist.abilities[0].outputs).push(Mana::restricted_to(
@@ -1714,7 +1725,11 @@ fn payment_color_bound_matches_the_search_without_it() {
                                 purpose: purpose.clone(),
                                 ..ManaCost::parse(text)
                             },
-                            waterbend: cost.len() == 1,
+                            taps: if cost.len() == 1 {
+                                Taps::Any
+                            } else {
+                                Taps::None
+                            },
                         })
                         .collect::<Vec<_>>();
                     if cost.len() == 2 {
