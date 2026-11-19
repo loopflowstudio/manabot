@@ -484,6 +484,8 @@ publish, land or choose the next Graph step from here.
   Compare `[data-payment-source]` ids with the frame's tapped permanent ids
   after the commit. `trigger_order_server` with `payment_fixture: true` in the
   `new_game` config gives a ready Lightning Strike payment with nine offers.
+  `npx playwright test --config playwright.release.config.ts
+  e2e/mana-payment.spec.ts` (from `academy/ui`) starts that fixture server itself.
   Rebuilding the SPA stops running `npm run preview` servers; restart them.
   For a fixture-free game, `managym academy play --deck <f> --opponent-deck
   <f> --opponent passive --seed 7` with `18 Mountain / 18 Forest / 12
