@@ -1,95 +1,113 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reusing a Trained Player: Concept Review</title><style>
-  :root { color-scheme: light dark; --fg:#1c1b19; --bg:#faf8f3; --mute:#6b655b; --line:#d9d3c6;
-          --yes:#2f6b3a; --no:#a23b2a; --new:#1f5f8b; --newbg:#e6f0f7; --card:#fff; }
-  @media (prefers-color-scheme: dark) {
-    :root { --fg:#ece8df; --bg:#191816; --mute:#a39c8f; --line:#3a3731; --yes:#7fc48b; --no:#ef8f7c;
-            --new:#8cc4ea; --newbg:#1d2b36; --card:#22201d; } }
-  body { font: 16px/1.5 Georgia, serif; color:var(--fg); background:var(--bg); max-width: 60rem;
-         margin: 2rem auto; padding: 0 1.2rem; }
-  h1 { font-size: 1.6rem; } h2 { font-size: 1.2rem; margin-top: 2.2rem; border-bottom:1px solid var(--line); }
-  h3 { font-size: 1rem; margin-bottom:.3rem; }
-  code, pre { font: 13px/1.45 ui-monospace, Menlo, monospace; }
-  pre { background:var(--card); border:1px solid var(--line); padding:.7rem .9rem; overflow-x:auto; }
-  table { border-collapse: collapse; width:100%; margin:.8rem 0; }
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-353 concept review 10: after the world label</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fbfaf7; --fg:#1d1b18; --mute:#6b655c; --line:#d9d3c7;
+    --yes:#1f6f43; --no:#a3341f; --card:#fff; --prop:#1d4f8f; --propbg:#eaf1fa; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161513; --fg:#ebe7df; --mute:#a39c90; --line:#3a3731;
+    --yes:#6fcf97; --no:#f08a75; --card:#1f1d1a; --prop:#8fb8ee; --propbg:#1b2635; } }
+  body { background:var(--bg); color:var(--fg); font:16px/1.5 Georgia, serif; max-width:60rem; margin:2rem auto; padding:0 1.2rem; }
+  h1 { font-size:1.6rem; margin-bottom:.2rem; } h2 { font-size:1.2rem; margin-top:2.2rem; border-bottom:1px solid var(--line); padding-bottom:.2rem; }
+  .sub { color:var(--mute); margin-top:0; }
+  table { border-collapse:collapse; width:100%; font-size:.93rem; }
   th, td { text-align:left; vertical-align:top; padding:.45rem .6rem; border-bottom:1px solid var(--line); }
-  th { font-weight:600; color:var(--mute); font-size:.85rem; }
-  .yes { color:var(--yes); font-weight:700; } .no { color:var(--no); font-weight:700; }
-  .box { background:var(--newbg); border-left:3px solid var(--new); padding:.1rem .8rem; margin:.8rem 0; }
-  .tag { font: 11px ui-monospace, monospace; border:1px solid currentColor; padding:0 .3rem; border-radius:3px; }
-  .built { color:var(--yes); } .prop { color:var(--new); }
-  .meta, .mute { color:var(--mute); font-size:.9rem; }
-  .two { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; } @media (max-width:40rem){ .two{grid-template-columns:1fr;} }
-  .scroll { overflow-x:auto; }
-</style></head><body><main>
-<p class="meta">MTG-353 · concept review in the graph, nobody present · 2026-11-18 · PR #558 at 225d2d4212 against main<br>
-Read: the changes since d7cd488fba, <code>manabot/eval/training_corpus.py</code>, <code>manabot/reports/update_metrics.py</code>, <code>manabot/training/rollout/self_play.py</code>, the corpus section of <code>docs/evaluation.md</code>, the previous page (in git at d7cd488fba). Run: <code>tests/eval/test_training_corpus.py</code>, <code>tests/training/test_outcome_tables.py</code>, <code>tests/training/test_self_play.py</code>, 17 passed.</p>
-<h1>Can I use this trained player for my next experiment?</h1>
-<p>Area taken: everything a person does with a player after its run ends, as PR #558 leaves it with the third human review's two changes built (the corpus from a checkpoint file, one seat spelling). The whole area, not only those two changes.</p>
-<p><strong>Outcome: nothing to change.</strong> The two mismatches the last page marked "no" and the person chose to fix now line up. The third was deferred by the person and stays as it was.</p>
-<p class="mute"><span class="tag built">built</span> is in the PR. <span class="tag prop">proposed</span> is not; nothing on this page is proposed for this PR.</p>
+  th { color:var(--mute); font-weight:normal; }
+  code, pre { font:.85rem/1.45 ui-monospace, Menlo, monospace; }
+  pre { background:var(--card); border:1px solid var(--line); padding:.7rem .9rem; overflow-x:auto; margin:.4rem 0; }
+  .yes { color:var(--yes); font-weight:bold; } .no { color:var(--no); font-weight:bold; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:1rem; } @media (max-width:44rem) { .cols { grid-template-columns:1fr; } }
+  .box { background:var(--card); border:1px solid var(--line); padding:.8rem 1rem; }
+  .prop { background:var(--propbg); border:1px dashed var(--prop); }
+  .tag { font:.72rem ui-monospace, monospace; padding:.05rem .4rem; border:1px solid var(--line); color:var(--mute); }
+  .tag.p { color:var(--prop); border-color:var(--prop); border-style:dashed; }
+  ol.q > li { margin-bottom:.9rem; } ol.q ol { list-style:lower-alpha; }
+</style>
+</head>
+<body>
+<h1>After the world label: do the concepts line up?</h1>
+<p class="sub">MTG-353, tenth concept review, at <code>fa900158fc</code> (PR #558), against base <code>62c3338f0d</code>. Written with nobody present.</p>
+
+<p><strong>Area taken:</strong> what a stored thing (checkpoint, recorded game, decision capture, evaluation record) is bound to, now that the fourth review round removed <code>WORLD_VERSION</code>. The earlier parts of this PR (binding by name, the training corpus, seat spelling) were reviewed in passes 6 to 9 and are not reopened here.</p>
+
+<p><strong>Outcome:</strong> the built removal matches the direction. The code needs no change. Five sentences in three guides still tell a reader that a world label separates measurements; they are listed for gate. One naming mismatch larger than this PR is stated below.</p>
 
 <h2>One interaction, walked</h2>
-<p>"I have last month's best player as a file. What did it train on?"</p>
-<div class="two"><div><h3>Normal <span class="tag built">built</span></h3>
-<pre>corpus = training_corpus(
-    "00000002-raw.safetensors",
-    source="~/.etude/track")
-corpus.sql("select ... from corpus")</pre>
-<p>The file's recorded experiment, run and update select the corpus. Only the file's header is read, so no model framework loads.</p></div>
-<div><h3>Failure <span class="tag built">built</span></h3>
-<pre>UnknownCoverage: pilot.safetensors records
-no Etude experiment (pass experiment=)
+<div class="cols">
+<div class="box">
+<p><span class="tag">normal</span> Load frontier Small (written at <code>ab2b757d9</code>, labelled w17) on this revision.</p>
+<pre>current_binding_form(binding)   # drops "world", manifest "world_version"
+expected binding                # writes neither
+→ equal on the fields that carry something; rows bind by key</pre>
+<p><span class="tag">failure</span> Load a v8 checkpoint from an earlier world.</p>
+<pre>UnsupportedPolicyInput: ... run it from ac601834d</pre>
+<p>The refusal names the field that differs (input version, shapes, exact decks). The message "trained in X, engine is Y" is gone, and nothing replaced it.</p>
+</div>
+<div class="box">
+<p><span class="tag">recovery</span> A recorded game from main, replayed here.</p>
+<pre>game["world"]["card_digest"] vs world_identity()["card_digest"]
+native bytes compared as before</pre>
+<p>The stored JSON keeps its label; the reader skips the key. Decision captures v3 to v5 recompute their own digest from their own bytes, label included. No stored file is rewritten.</p>
+<p><span class="tag">counterexample kept</span> A registration made now has no <code>world</code>, so its hash differs from a retained one for the same player (question 59).</p>
+</div>
+</div>
 
-UnknownCoverage: runs holds no run
-local/local</pre>
-<p>Each names the one thing missing. A file and an <code>experiment=</code> that disagree raise instead of one silently winning.</p></div></div>
-<h3>Recovery <span class="tag built">built</span></h3>
-<p>An older file takes <code>experiment="..."</code>. A file that records no run at all (frontier Small) is reached through its run and update, as before. A child's file follows its parent's checkpoint by run, update and hash; the test runs this on a real parent and child.</p>
+<h2>Product concepts against code concepts</h2>
+<table>
+<tr><th>What a person knows</th><th>What the code has</th><th>Lines up?</th><th>Note</th></tr>
+<tr><td>Can this checkpoint play here?</td><td>input version, <code>model_interface</code>, <code>current_binding_form</code>, rows bound by key</td><td class="yes">yes</td><td>One refusal path. The label check that duplicated it is deleted.</td></tr>
+<tr><td>Is this recording the same game here?</td><td>card digest and native bytes in <code>managym/replay.py</code>, <code>manabot/sim/replay.py</code></td><td class="yes">yes</td><td>The label was a third check that could only agree or be wrong.</td></tr>
+<tr><td>Which cards are installed?</td><td><code>managym.world_identity()</code> (card digest)</td><td class="yes">yes</td><td>The digest is the identity; a number beside it added nothing.</td></tr>
+<tr><td>Was this matchup in training?</td><td><code>training_corpus</code></td><td class="yes">yes</td><td>Unchanged since review 9.</td></tr>
+<tr><td>Can these two measurements be lined up?</td><td><code>docs/evaluation.md</code>, comparing across revisions</td><td class="no">no, in the docs only</td><td>README lines 199, 284 and 308 and <code>docs/engine.md</code> line 1307 still say a number belongs to a world and is never compared across worlds. The evaluation guide says revision and corpus. Two answers to one question.</td></tr>
+<tr><td>An old record's label</td><td>optional <code>world</code> on <code>PlayerRegistration</code>, <code>EvaluationKey</code>, <code>SelfPlay</code>, <code>BaselineReport</code>; <code>DecisionInput.world_version</code></td><td class="yes">yes</td><td>The person never sees it; it exists so a stored hash recomputes. Each field says so in a comment. Goes away when the records do.</td></tr>
+<tr><td>The matchup suite a tournament played</td><td><code>SUITE_PREFIX = "w17"</code> in <code>manabot/sim/matchup.py</code></td><td class="yes">yes</td><td>Now a plain part of a stored name, no longer a claim about the engine.</td></tr>
+<tr><td>"world"</td><td>the pool name <code>"world"</code> (<code>ModelConfig.world</code>, <code>WORLD_SETUP</code>, <code>MatchConfig.world</code>); the card identity (<code>world_identity</code>, <code>world_binding</code>); the old label</td><td class="no">no</td><td>One name for three ideas. Larger than this PR; see below.</td></tr>
+</table>
 
-<h2>Do the product's concepts and the code's concepts line up?</h2>
-<div class="scroll"><table>
-<tr><th>What a person knows about</th><th>What the code has</th><th></th><th>What is wrong, if anything</th></tr>
-<tr><td>A trained player I can still use</td><td>Name binding: columns, card keys, token names; stored card programs</td><td class="yes">yes</td><td></td></tr>
-<tr><td>"This checkpoint"</td><td>One entry point taking the file, Etude's checkpoint record, or a run and update; all three resolve to a run and an update before anything else happens</td><td class="yes">yes</td><td>Was "no". The file a person holds now works.</td></tr>
-<tr><td>What it trained on</td><td><code>corpus</code>, <code>deck_cards</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>How it was trained</td><td><code>runs</code> for a whole run; <code>game_settings</code> for what can differ between games</td><td class="yes">yes</td><td></td></tr>
-<tr><td>Where it came from</td><td>Parent checkpoint on <code>runs</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>Which seat</td><td><code>seat</code>, the native seat, 0 on the play, on every per-seat row; <code>outcome_rows</code> is the one reader of the three stored forms</td><td class="yes">yes</td><td>Was "no". <code>corpus</code> keeps <code>play</code>/<code>draw</code> because its row is a game and names both seats; the guide says so.</td></tr>
-<tr><td>Cards it drew and cast</td><td><code>card_statistics</code></td><td class="yes">yes</td><td></td></tr>
-<tr><td>When two measurements compare</td><td>A documented rule; no tool</td><td class="yes">yes</td><td></td></tr>
-<tr><td>A setting within one matchup</td><td>Nothing; settings are counted per update</td><td class="no">no</td><td>Left for later by the person (answer 3a). Adding it changes the table format.</td></tr>
-</table></div>
+<h2>Biggest mismatch: the guides still answer with "world"</h2>
+<div class="cols">
+<div class="box">
+<p><span class="tag">existing</span></p>
+<pre>README.md:199   a rating belongs to one EvaluationKey (world,
+                content suite, viewer boundary, ...)
+README.md:284   All numbers belong to the world they were
+                measured in
+README.md:308   Ratings are pinned to an anchor version and a
+                world, never compared across them.
+docs/engine.md:1307  Engine and checkpoint worlds must remain
+                compatible; keep frozen runs on their
+                recorded world.</pre>
+</div>
+<div class="box prop">
+<p><span class="tag p">proposed, for gate</span></p>
+<pre>README.md:199   ... one EvaluationKey (content suite, viewer
+                boundary, ...)
+README.md:284   All numbers belong to the revision and decks
+                they were measured on
+README.md:308   Ratings are pinned to an anchor version and a
+                revision; see comparing across revisions.
+docs/engine.md:1307  A checkpoint loads when its input
+                contract matches (link); keep frozen runs on
+                their recorded revision.</pre>
+</div>
+</div>
+<p>Historical sentences that name a world as a fact about a past run ("the ten-deck Elemental world (w13)") stay as written.</p>
 
-<h2>The biggest remaining mismatch</h2>
-<div class="box"><p>A checkpoint file is trusted for what it says about itself. The corpus reader takes the run and update from the file's header and never checks that the run produced those bytes. Etude registers the averaged policy and not the raw one, so for a raw file there is no registered hash to compare.</p></div>
-<div class="two"><div><h3>Before <span class="tag built">built</span></h3>
-<p>A file copied, renamed or re-saved with another run's header answers with that run's corpus and no warning.</p></div>
-<div><h3>After <span class="tag prop">proposed, not in this PR</span></h3>
-<p>When the run registered a checkpoint at the file's update, compare hashes and raise on a difference; say "unverified" for a raw file. Needs Etude to register the raw policy, or the file to record which registered one it pairs with.</p></div></div>
-<p>Recommendation: leave it. A header is only wrong when someone edits it, and the question the corpus answers ("what did the run that wrote this train on") is still answered truthfully for the header.</p>
-
-<h2>Counterexamples kept</h2>
-<ul>
-<li>A run with outcome tables and no setting table reads as predating the table, not as unknown (question 52).</li>
-<li>A run resumed at a revision that adds a setting raises for the whole corpus; strict on purpose.</li>
-<li>The offline projection still names stored series <code>.../play/...</code> and <code>.../draw/...</code>. Those are stored metric names read by the panels, not a second spelling of a row's column (question 55).</li>
-<li><code>SelfPlayPoint.position</code> warns until 0.4.0.</li>
-</ul>
+<h2>Question 59, reasoned but not run</h2>
+<p>A registration's hash already covers <code>source_sha256</code> for code players and, since this PR, <code>writer_revision</code> and <code>stored_programs</code> for checkpoints. A tournament resumed at a different revision therefore already held different registrations for its anchors before the label was removed. The label's removal adds one more differing field to a case that already differed. Frozen experiment files pass <code>"w17"</code> and keep their records. Whether Etude replays matches for a changed registration was not run; it is the same answer as for any resume across revisions.</p>
 
 <h2>Larger than this work</h2>
-<ul>
-<li>The evaluation card page filters by "Position" with <code>play</code>/<code>draw</code>, while evaluation tables say <code>game_seat</code>. Same idea as the seat fix, in a part this PR does not touch.</li>
-<li>The first argument of <code>training_corpus</code> is named <code>run</code> and may be a file. Positional in every use; renaming it is cosmetic.</li>
-<li>One answer for one checkpoint and one planned experiment ("loads; 3 of 40 cards new; trained open, you plan closed") is a report over these pieces and belongs with Etude's reports.</li>
-<li>Card statistics stop at a parent boundary until the counters are published with the run (question 38).</li>
-</ul>
-
-<h2>Not seen</h2>
-<p>Hosted CI at 225d2d4212: 2 jobs passed, 17 pending, none failed when read. The Academy UI job, red at an earlier commit, was pending. Gate owns seeing it green (plan item 5).</p>
+<p><strong>"world" names three things.</strong> With the label gone, the word still means the one card pool (<code>world="world"</code> in model and match configuration), the installed cards' identity (<code>world_identity</code>, the checkpoint field <code>world_binding</code>) and, in old evidence, the removed label. A person only needs "the installed cards" and "a revision". Renaming would take deprecated aliases for <code>ModelConfig.world</code>, <code>WORLD_SETUP</code> and <code>world_identity</code>, while <code>world_binding</code> and the serialized configuration keys keep their spelling, so both names would remain in stored files. Not proposed for this PR.</p>
+<p><strong>Policy input versions.</strong> Retiring v9 and v10 and "v11 is the last number" were discussed in the fourth round and nothing was chosen.</p>
 
 <h2>Questions</h2>
-<ol>
-<li>A checkpoint file that claims a run:<ol type="a"><li>leave as built; the header is the record</li><li>file a Task to verify the file against the run's registered checkpoints</li></ol></li>
-<li>The evaluation card page's "Position" filter:<ol type="a"><li>leave</li><li>file a Task to spell it by seat</li></ol></li>
+<ol class="q">
+<li>The four stale guide sentences: <ol><li>gate rewrites them as proposed above (chosen for review);</li><li>leave the README findings section as history and fix only line 199 and <code>docs/engine.md</code>.</li></ol></li>
+<li>Question 59, a resumed tournament's registrations: <ol><li>accept as the ordinary cost of resuming across revisions (chosen for review);</li><li>check against Etude with a real retained tournament before merge;</li><li>keep writing <code>world="w17"</code> in registrations so hashes stay equal.</li></ol></li>
+<li>The word "world" for the pool, the identity and the old label: <ol><li>leave it (chosen for review);</li><li>file a Task to rename the pool and identity with warning aliases.</li></ol></li>
 </ol>
-</main></body></html>
+</body>
+</html>

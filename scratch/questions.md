@@ -327,3 +327,15 @@ statistics.
     browser still prints `provenance.world` of a recorded game when present.
 62. `experiments/protocols/mtg186-identity.json`, the conformance manifests and
     every JSON fixture keep the label they were written with.
+
+## Tenth concept review (after the label removal), 2026-11-18
+
+63. Choices made for review, all reversible: (1) the four guide sentences that
+    still say a world separates measurements (`README.md` 199, 284, 308;
+    `docs/engine.md` 1307) are rewritten by gate, not by another implement
+    pass; (2) question 59 is accepted as the ordinary cost of resuming a
+    tournament across revisions, since `source_sha256`, `writer_revision` and
+    `stored_programs` already change a registration's hash there; not run
+    against Etude; (3) the word "world" for the pool, the card identity and
+    the old label is left as it is. Passed over: writing `world="w17"` into
+    new registrations to keep hashes equal (keeps the label alive).

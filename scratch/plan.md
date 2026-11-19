@@ -129,6 +129,30 @@ pushed. Of the three failures above, none is in CI's file lists; the first and
 third fail on main too; the second failed again under load and was not run on
 main. Gate still owes: push the test fixes and see CI green.
 
+Tenth concept review at `fa900158fc` (`scratch/concept-review.html`): the
+removal lines up with the direction and the code needs no change. The two
+test repairs are committed and pushed in `fa900158fc`; hosted CI on it was
+pending in every job when read, nothing seen green or red. Gate owes, besides
+CI green:
+
+- Four guide sentences still say a world separates measurements, against
+  `docs/evaluation.md`: `README.md` lines 199 (`EvaluationKey (world, ...)`),
+  284 ("belong to the world they were measured in") and 308 ("an anchor
+  version and a world"), and `docs/engine.md` line 1307 ("Engine and
+  checkpoint worlds must remain compatible"). Rewrite them to say revision,
+  decks and the input contract, linking the evaluation guide's comparison
+  section. Sentences naming a world as a fact about a past run (w13) stay.
+
+Question 59, reasoned and not run: a registration hash already covers
+`source_sha256` (code players) and `writer_revision`/`stored_programs`
+(checkpoints), so a tournament resumed at another revision already held
+different registrations; the missing label adds one more differing field.
+Chosen for review: accept it (question 63).
+
+Larger than this PR, on the page only: "world" still names the one card pool
+(`ModelConfig.world`, `WORLD_SETUP`), the installed cards' identity
+(`world_identity`, `world_binding`) and the old label.
+
 For the person at review, not decided: question 59. A registration written
 now has no `world`, so it differs from the one a retained tournament holds
 for the same player; whether Etude then replays a resumed tournament's
