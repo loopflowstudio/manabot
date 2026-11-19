@@ -119,3 +119,67 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
         }
     }
 }
+
+/// Which permanent is sacrificed to bargain is the player's choice under
+/// automatic payment too: both are offered, each choice is its own line of
+/// play that casts the spell once, and the mana is paid for the player.
+#[test]
+fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_new_card_in_hand},
+        inspect::offered_cards,
+        play::{cast_card, choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{
+            game_object::{PlayerId, Target},
+            payment::{How, Toward},
+            player::ManaPayment,
+            stack_object::StackObject,
+        },
+    };
+    let mut s = five_color_unfunded_setup(&["Archon's Glory", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Plains");
+    let tokens = ["token.treasure", "token.food"].map(|key| {
+        let token = s.game_mut().create_token(key, PlayerId(0), false).unwrap();
+        s.game().state.permanents[token].as_ref().unwrap().object
+    });
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let glory = force_new_card_in_hand(&mut s, 0, "Archon's Glory");
+    cast_card(&mut s, glory);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    let mut offered = offered_cards(&s);
+    offered.sort();
+    let mut expected = tokens.to_vec();
+    expected.sort();
+    assert_eq!(offered, expected);
+
+    for (chosen, kept) in [(tokens[0], tokens[1]), (tokens[1], tokens[0])] {
+        let mut fork = s.game().clone();
+        let action = fork
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == chosen))
+            .unwrap();
+        fork.step(action).unwrap();
+        let [StackObject::Spell(spell)] = fork.state.stack_objects.as_slice() else {
+            panic!("the spell is cast once, its mana paid automatically")
+        };
+        assert_eq!(
+            spell
+                .spent
+                .contributed(How::Sacrificed, Toward::Bargain)
+                .collect::<Vec<_>>(),
+            [chosen]
+        );
+        assert_eq!(spell.spent.total(), 1);
+        assert!(fork.state.permanent_of(chosen).is_none());
+        assert!(fork.state.permanent_of(kept).is_some());
+    }
+}
