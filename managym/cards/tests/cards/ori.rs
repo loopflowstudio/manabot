@@ -88,7 +88,7 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
         inspect::{card_of, tapped, top_spell},
         play::{cast_card, pay_rest, settle_targeting_opponent, tap_for_mana, target_opponent},
     };
-    use managym::{agent::action::Action, state::player::ManaPayment};
+    use managym::state::player::ManaPayment;
 
     for auto in [false, true] {
         // A blue instant paid for with the Goggles's red: no trigger.
@@ -183,7 +183,7 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
                     offer.label.starts_with("Spend") && offer.label.contains("copy") == copies
                 })
                 .unwrap_or_else(|| panic!("both units are offered: {:?}", frame.offers));
-            let fork = crate::support::play::fork_stepping(&s, spend);
+            let fork = crate::support::play::fork_stepping(s, spend);
             assert_eq!(
                 fork.game().state.stack_objects.len(),
                 1 + usize::from(copies)
