@@ -40,7 +40,10 @@ use crate::{
             TriggeredManaOutput,
         },
         game_object::{ObjectId, PermanentId, PlayerId},
-        mana::{Color, Mana, ManaCost, ManaPool, ManaSpendChoice, SpellSnapshot, SpendingContext},
+        mana::{
+            Color, Mana, ManaCost, ManaPool, ManaSpendChoice, SpellSnapshot, SpendOrder,
+            SpendingContext,
+        },
         payment::{ManaOrigin, PaymentReceipt, SpentMana},
         zone::ZoneType,
     },
@@ -2038,7 +2041,24 @@ impl Game {
         match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
             Some(Decision::Payment(progress)) if !progress.can_decline() => {}
             Some(Decision::ManaUpfront { .. }) => {}
-            Some(Decision::ManaSpend { .. }) => return space.actions.first().cloned(),
+            // The most specific unit that can pay goes first, so mana only
+            // this kind of cost can use is not left floating beside
+            // ordinary mana; a rider this cost would waste goes last. The
+            // offers keep their order: this is the automatic payer's choice.
+            Some(Decision::ManaSpend { cost, .. }) => {
+                let order = |choice: &ManaSpendChoice| {
+                    choice
+                        .unit
+                        .classes()
+                        .first()
+                        .map_or(SpendOrder::Ordinary, |(class, _)| {
+                            class.spend_order(&cost.purpose)
+                        })
+                };
+                let choices = self.mana_spend_choices(player, cost);
+                let mode = (0..choices.len()).min_by_key(|mode| order(&choices[*mode]))?;
+                return space.actions.get(mode).cloned();
+            }
             Some(Decision::ManaChoice {
                 choices, resume, ..
             }) if resume.is_some() || self.pending_choice.is_some() => {

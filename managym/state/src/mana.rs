@@ -224,6 +224,19 @@ pub struct ManaClass {
     pub effect: Option<SpendEffect>,
 }
 
+/// Where the automatic payer spends a pooled unit among those that can pay
+/// the same pip, lowest first: mana that only some costs can use (narrowest
+/// first) or whose rider applies to this cost, then ordinary mana, and last
+/// mana whose rider this cost would waste.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SpendOrder {
+    /// The value counts the purposes a restriction allows; mana restricted
+    /// some other way, or unrestricted with a rider that applies, is widest.
+    Specific(usize),
+    Ordinary,
+    WastedRider,
+}
+
 impl From<ManaRestriction> for ManaClass {
     fn from(restriction: ManaRestriction) -> Self {
         Self {
@@ -250,6 +263,25 @@ impl ManaClass {
         self.restriction
             .as_ref()
             .is_none_or(|restriction| restriction.allows(context))
+    }
+
+    /// This class's place in the automatic payer's order for a cost spent
+    /// in `context`. Until-end-of-combat mana has no place of its own.
+    pub fn spend_order(&self, context: &SpendingContext) -> SpendOrder {
+        if self
+            .effect
+            .as_ref()
+            .is_some_and(|effect| !effect.applies(context))
+        {
+            return SpendOrder::WastedRider;
+        }
+        match (&self.restriction, &self.effect) {
+            (Some(ManaRestriction::Only(purposes)), _) => SpendOrder::Specific(purposes.len()),
+            (Some(ManaRestriction::ExceptNonartifactSpells), _) | (None, Some(_)) => {
+                SpendOrder::Specific(usize::MAX)
+            }
+            (None, None) => SpendOrder::Ordinary,
+        }
     }
 }
 

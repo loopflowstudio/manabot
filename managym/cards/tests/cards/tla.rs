@@ -708,6 +708,47 @@ fn allies_at_last_can_choose_one_source_and_uses_its_current_power() {
     assert_eq!(s.life(0), life + 3);
 }
 
+/// The automatic payer spends mana that only this kind of spell can use
+/// before ordinary mana that pays the same pip, so the ordinary mana is what
+/// stays in the pool.
+#[test]
+fn automatic_payment_spends_ally_only_mana_before_ordinary_mana() {
+    let ally = ManaRestriction::only(["Ally"], ["Ally"]);
+    let mut s = five_color_setup(&["Jasmine Dragon Tea Shop", "Rebellious Captives"]);
+    s.allow_priority_floats();
+    let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, shop, 0);
+    choose_mode(&mut s, 4);
+    assert_eq!(pool(&s).restricted_of(&ally), [0, 0, 0, 0, 1, 0]);
+    // Two ordinary green beside it: {1}{G} needs two of the three units.
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana {
+            mana: [0, 0, 0, 0, 2, 0],
+            ..Default::default()
+        },
+        None,
+    );
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let captives = library_card(&s, 0, "Rebellious Captives");
+    let captives = move_card(&mut s, captives, ZoneType::Hand);
+    crate::support::play::cast_card(&mut s, captives);
+    let spell = crate::support::inspect::top_spell(&s);
+    assert_eq!(spell.spent.total(), 2);
+    let from_shop = spell
+        .spent
+        .mana()
+        .iter()
+        .filter(|unit| {
+            unit.source
+                .is_some_and(|origin| origin.object == card_of(&s, shop))
+        })
+        .count();
+    assert_eq!(from_shop, 1, "the Ally-only unit paid");
+    assert_eq!(pool(&s).restricted_of(&ally), [0; 6]);
+    assert_eq!(pool(&s).total(), 1, "one ordinary green is left");
+}
+
 /// Restricted mana (CR 106.6) pays for Ally spells and abilities of Ally
 /// sources, and nothing else.
 #[test]
