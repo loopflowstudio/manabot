@@ -2270,7 +2270,7 @@ impl Game {
         self.commit_produced_mana(player, start);
         match self.paying() {
             Some((_, _, CostComponent::Mana { .. })) => {
-                let payment = self.pending_payment(player)?;
+                let payment = self.pending_payment(player)?.clone();
                 return self.advance_payment(player, payment);
             }
             None => self.state.priority_mut().on_non_pass_action(player),

@@ -86,8 +86,7 @@ impl FactKind {
 }
 
 pub const ACTION_TYPE_DIM: usize = action::DECLARED;
-/// Declaration choice is separate from its family: attack and decline must
-/// have distinct policy inputs even when they focus the same permanent.
+/// Width of the current v11 action layout. Use the config for a selected layout.
 pub const ACTION_DIM: usize = action::WIDTH;
 /// Selectors encode index+1, reserving zero for absence. Keep f32 integers exact.
 pub const MAX_ACTION_SELECTOR: usize = (1 << 24) - 1;
@@ -2066,18 +2065,13 @@ fn encode_actions(
     object_to_index: &HashMap<i32, i32>,
 ) {
     // encode_into has validated the retained policy support and its focus capacity.
-    let action_dim = config.action_dim();
-    for (action_index, action) in obs
+    for (action_index, (action, row)) in obs
         .action_space
         .actions
         .iter()
-        .take(config.max_actions)
+        .zip(out_actions.chunks_exact_mut(config.action_dim()))
         .enumerate()
     {
-        let action_start = action_index * action_dim;
-        let action_end = action_start + action_dim;
-        let row = &mut out_actions[action_start..action_end];
-
         let action_type_index = action.action_type as usize;
         if action_type_index < ACTION_TYPE_DIM {
             row[action_type_index] = 1.0;
@@ -2190,14 +2184,14 @@ mod tests {
     };
 
     use super::{
-        encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
+        action, encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
         ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, FACT_DIM, PERMANENT_DIM,
         PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
     fn selector_encoding_is_exact_and_rejects_overflow() {
-        use super::{action, MAX_ACTION_SELECTOR};
+        use super::MAX_ACTION_SELECTOR;
         let mut obs = sample_observation();
         obs.action_space.actions[0].mode_index = Some(0);
         obs.action_space.actions[1].ability_index = Some(MAX_ACTION_SELECTOR);
@@ -2465,11 +2459,8 @@ mod tests {
             .collect();
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&observation, &config).expect("attack decision encodes");
-        assert_ne!(
-            &encoded.actions[..ACTION_DIM - 1],
-            &encoded.actions[ACTION_DIM..2 * ACTION_DIM - 1],
-            "the policy must be able to prefer attacking or declining"
-        );
+        assert_eq!(encoded.actions[action::DECLARED], 1.0);
+        assert_eq!(encoded.actions[config.action_dim() + action::DECLARED], 0.0);
         assert_eq!(
             &encoded.action_focus[..config.max_focus_objects],
             &encoded.action_focus[config.max_focus_objects..2 * config.max_focus_objects]

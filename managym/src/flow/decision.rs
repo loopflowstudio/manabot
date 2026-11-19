@@ -2317,7 +2317,7 @@ impl Game {
                     if start.is_some()
                         && matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
                     {
-                        let payment = self.pending_payment(player)?;
+                        let payment = self.pending_payment(player)?.clone();
                         return self.advance_payment(player, payment);
                     }
                 }

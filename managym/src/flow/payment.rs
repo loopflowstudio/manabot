@@ -647,9 +647,9 @@ impl Game {
             })
     }
 
-    pub(crate) fn pending_payment(&self, player: PlayerId) -> Result<Payment, AgentError> {
+    pub(crate) fn pending_payment(&self, player: PlayerId) -> Result<&Payment, AgentError> {
         match self.paying() {
-            Some((payer, payment, _)) if payer == player => Ok(payment.clone()),
+            Some((payer, payment, _)) if payer == player => Ok(payment),
             Some(_) => Err(AgentError("wrong payer".into())),
             None => Err(AgentError("no cost payment is pending".into())),
         }
@@ -719,7 +719,7 @@ impl Game {
         player: PlayerId,
         object: ObjectId,
     ) -> Result<(), AgentError> {
-        let mut payment = self.pending_payment(player)?;
+        let mut payment = self.pending_payment(player)?.clone();
         let permanent = self.state.permanent_of(object);
         match payment.owed[0].clone() {
             CostComponent::TapPower { power, toward } => {
@@ -926,36 +926,42 @@ impl Game {
     /// `PayCost` while a cost is being paid: take a sacrifice cost's mana
     /// branch, or pay the mana still owed.
     pub(crate) fn pay_cost_action(&mut self, player: PlayerId) -> Result<(), AgentError> {
-        let mut payment = self.pending_payment(player)?;
-        let extra = match payment.owed[0].clone() {
+        let payment = self.pending_payment(player)?;
+        let extra = match &payment.owed[0] {
             CostComponent::Sacrifice(cost, _) => cost
                 .or_mana
+                .as_ref()
                 .ok_or_else(|| AgentError("sacrifice required".into()))?,
             CostComponent::Forage { or_mana, exiled: 0 } => or_mana,
             CostComponent::Mana { .. } => return self.finish_mana_payment(player),
             _ => return Err(AgentError("this cost is not paid with mana".into())),
         };
+        let mut payment = payment.clone();
         payment.owed.remove(0);
-        payment.owe_mana(&extra);
+        payment.owe_mana(extra);
         self.advance_payment(player, payment)
     }
 
     /// Pay the mana the pending payment still owes, then cast the spell or
     /// activate the ability.
-    pub(crate) fn finish_mana_payment(&mut self, player: PlayerId) -> Result<(), AgentError> {
+    fn finish_mana_payment(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let payment = self.pending_payment(player)?;
         if !payment.paying_mana() {
             return Err(AgentError("no mana payment pending".into()));
         }
         let cost = payment.mana().0.clone();
+        // The solver reads the pending payment, so leave it installed until
+        // production succeeds.
         self.produce_mana(player, &cost)?;
         // Commit the complete announced cost once, before sacrifice triggers
         // can observe a departing permanent or a spell reaches the stack.
-        self.pending_choice = None;
+        let Some(PendingChoice::Pay { payment, .. }) = self.pending_choice.take() else {
+            unreachable!("automatic mana production does not replace the pending payment")
+        };
         self.begin_mana_spend(
             player,
             cost,
-            SpendCompletion::Announced(payment),
+            SpendCompletion::Announced(*payment),
             EffectFrame::new(player, Vec::new()),
         )
     }
@@ -1240,7 +1246,7 @@ impl Game {
         player: PlayerId,
         tapped: PermanentId,
     ) -> Result<(), AgentError> {
-        let mut payment = self.pending_payment(player)?;
+        let mut payment = self.pending_payment(player)?.clone();
         if payment.paying_mana() && payment.help().taps_any_generic() {
             return self.help_tap_action(player, tapped, payment);
         }
@@ -1363,7 +1369,7 @@ impl Game {
         player: PlayerId,
         mode: usize,
     ) -> Result<(), AgentError> {
-        let mut payment = self.pending_payment(player)?;
+        let mut payment = self.pending_payment(player)?.clone();
         let CostComponent::ConvokeColor { creature, colors } = payment.owed[0].clone() else {
             return Err(AgentError("no convoke color is being chosen".into()));
         };
