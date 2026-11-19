@@ -130,6 +130,7 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
                     object: card_of(s, *permanent),
                     how: How::Tapped,
                     toward: Toward::Crew,
+                    after_mana: 0,
                 })
                 .collect()
         };

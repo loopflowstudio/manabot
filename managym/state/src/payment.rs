@@ -84,6 +84,18 @@ pub struct Contribution {
     pub object: ObjectId,
     pub how: How,
     pub toward: Toward,
+    /// How many units of mana the receipt held when the object was chosen:
+    /// its place among the mana in the order paid.
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub after_mana: u16,
+}
+
+/// One thing that paid toward a cost, as `PaymentReceipt::in_order` yields
+/// it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaidWith<'a> {
+    Mana(&'a SpentMana),
+    Object(&'a Contribution),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
@@ -102,8 +114,8 @@ static NOTHING: Paid = Paid {
 };
 
 /// What one payment spent: one entry per unit of mana in spend order, the
-/// objects that paid otherwise in the order they were chosen, and the life
-/// paid. A cast spell
+/// objects that paid otherwise in the order they were chosen, each placed
+/// among the mana by `Contribution::after_mana`, and the life paid. A cast spell
 /// keeps it for "mana spent to cast", converge and spend riders; it never
 /// reads the printed cost. Contributions are a separate list, so mana spent
 /// never counts a tapped or sacrificed object.
@@ -159,15 +171,34 @@ impl PaymentReceipt {
             .map(|paid| paid.object)
     }
 
-    /// Record the object one payment choice committed.
+    /// Record the object one payment choice committed, after the mana
+    /// already on the receipt.
     pub fn contribute(&mut self, object: ObjectId, how: How, toward: Toward) {
-        Arc::make_mut(self.0.get_or_insert_with(Default::default))
-            .contributions
-            .push(Contribution {
-                object,
-                how,
-                toward,
-            });
+        let paid = Arc::make_mut(self.0.get_or_insert_with(Default::default));
+        let after_mana = paid.mana.len() as u16;
+        paid.contributions.push(Contribution {
+            object,
+            how,
+            toward,
+            after_mana,
+        });
+    }
+
+    /// Each unit of mana and each contributing object, in the order paid.
+    pub fn in_order(&self) -> impl Iterator<Item = PaidWith<'_>> + '_ {
+        let paid = self.paid();
+        let mut objects = paid.contributions.iter().peekable();
+        let mut mana = paid.mana.iter().enumerate().peekable();
+        std::iter::from_fn(move || {
+            let next_unit = mana.peek().map(|(index, _)| *index as u16);
+            match (objects.peek(), next_unit) {
+                (Some(object), Some(unit)) if object.after_mana > unit => {
+                    mana.next().map(|(_, unit)| PaidWith::Mana(unit))
+                }
+                (Some(_), _) => objects.next().map(PaidWith::Object),
+                (None, _) => mana.next().map(|(_, unit)| PaidWith::Mana(unit)),
+            }
+        })
     }
 
     /// The life paid as part of the cost (CR 119.4).

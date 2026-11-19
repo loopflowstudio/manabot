@@ -90,6 +90,22 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
             &mut s,
             |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == creature),
         );
+        if creature == lions {
+            // The committed list is in the order paid: the Elves's {G},
+            // then the Lions.
+            let paid: Vec<_> = s
+                .game()
+                .decision_context(PlayerId(0))
+                .unwrap()
+                .paid
+                .into_iter()
+                .map(|paid| paid.phrase)
+                .collect();
+            assert!(
+                matches!(&paid[..], [elves, lions] if elves.contains("Llanowar Elves") && lions.contains("Savannah Lions")),
+                "{paid:?}"
+            );
+        }
     }
     let spell = top_spell(&s);
     assert_eq!(spell.spent.total(), 1);

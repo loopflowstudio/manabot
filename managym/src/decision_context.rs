@@ -25,7 +25,7 @@ use crate::{
     state::{
         card::CastOption,
         game_object::{ObjectId, PlayerId, Target},
-        payment::{PaymentReceipt, Toward},
+        payment::{PaidWith, PaymentReceipt, Toward},
     },
 };
 
@@ -375,28 +375,25 @@ impl Game {
                 view.mana_cost = RequiredNullable(Some(symbols));
             }
         }
-        // What is committed to the pending cost: the contributions on its
-        // receipt, for a cast, an activation and a resolving payment alike,
-        // then each unit of mana spent toward it as it was produced.
-        let receipt = self.pending_receipt();
-        view.paid = receipt
-            .map_or(&[][..], PaymentReceipt::contributions)
-            .iter()
-            .map(|paid| PaidView {
-                phrase: contribution_phrase(self, viewer, paid),
-                object: self.paid_object(paid.object, viewer),
+        // What is committed to the pending cost, for a cast, an activation
+        // and a resolving payment alike: each object and each unit of mana
+        // spent toward it as it was produced, in the order paid.
+        view.paid = self
+            .pending_receipt()
+            .into_iter()
+            .flat_map(PaymentReceipt::in_order)
+            .map(|paid| match paid {
+                PaidWith::Object(paid) => PaidView {
+                    phrase: contribution_phrase(self, viewer, paid),
+                    object: self.paid_object(paid.object, viewer),
+                },
+                PaidWith::Mana(unit) => PaidView {
+                    phrase: spent_mana_phrase(self, viewer, unit),
+                    object: unit
+                        .source
+                        .and_then(|origin| self.paid_object(origin.object, viewer)),
+                },
             })
-            .chain(
-                receipt
-                    .map_or(&[][..], PaymentReceipt::mana)
-                    .iter()
-                    .map(|unit| PaidView {
-                        phrase: spent_mana_phrase(self, viewer, unit),
-                        object: unit
-                            .source
-                            .and_then(|origin| self.paid_object(origin.object, viewer)),
-                    }),
-            )
             .collect();
         // The one yes-or-no cost choice of a cast, named for what the card
         // offers: `KickerChoice` asks bargain and alternative costs too.

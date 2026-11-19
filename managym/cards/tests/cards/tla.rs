@@ -14787,6 +14787,8 @@ fn a_sources_own_tap_sacrifice_and_life_are_on_its_activation_receipt() {
             object: room_object,
             how,
             toward: Toward::Printed,
+            // The source's own costs are paid after its mana.
+            after_mana: 4,
         })
     );
     assert_eq!((ability.paid.total(), ability.paid.life()), (4, 0));

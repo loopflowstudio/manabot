@@ -52,7 +52,7 @@
       "commands": 205,
       "outcome": "terminal",
       "final_state_hash": "v17:abd2c32624188c7e9b4e236191e4246a14251693a470b8552df446e8fcf98894",
-      "trace_sha256": "cc6426edcaff3a4e0c6e492185d3075e5c06631e7d6d46e5e7c6660e488a31bc"
+      "trace_sha256": "ad3f49110387a37da6e656b10ebf0965bbf20ceeed5bc24734a6cc3a0efc248c"
     },
     {
       "case_id": "elemental-163",
@@ -76,7 +76,7 @@
       "commands": 233,
       "outcome": "terminal",
       "final_state_hash": "v17:c146297a4a766e8d5c028a5e1b0b569aa9c0fbc664fd5011486698803a8b051a",
-      "trace_sha256": "99a62145c94f36327048245cdec1836fac06aa0643a0a22f503cfc1da1dc7f83"
+      "trace_sha256": "b13661c662ac7ad08bd993450e8f4c5f3ead7aebc84f3e28605160b4cdde833d"
     },
     {
       "case_id": "sacrifice-163",
@@ -84,7 +84,7 @@
       "commands": 344,
       "outcome": "terminal",
       "final_state_hash": "v17:38024ec9e9af6784766e690513296dfc87e41b39b5db31aa1c40d7b4156e326e",
-      "trace_sha256": "835fe3b9d09985a2d506eb122b8c771a35f5533786d860cea7d49ac69989fa67"
+      "trace_sha256": "65ce075952c003c3d0c757f3aa120c5563b81e2993ac0e46e61c20c642e3d48b"
     },
     {
       "case_id": "temur-163",
@@ -116,7 +116,7 @@
       "commands": 166,
       "outcome": "terminal",
       "final_state_hash": "v17:2cffe47c1751c2be0fcdc335f1ef588cb9423dc730313bdba2218dec96968021",
-      "trace_sha256": "395c42724a1007876007eb464c85c8e8205bccd8831f0c691baae648458e0b0d"
+      "trace_sha256": "57152ce324bfd7ab61efaffef135f68b5ec0c269650bf206ecafd40d98c3691a"
     }
   ],
   "exercised_prompt_kinds": [

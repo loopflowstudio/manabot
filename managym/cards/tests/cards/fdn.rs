@@ -435,6 +435,7 @@ fn hungry_ghoul_receipt_names_the_sacrificed_creature_after_it_has_left() {
                 object: ogre_object,
                 how: How::Sacrificed,
                 toward: Toward::Printed,
+                after_mana: 0,
             }],
             "auto={auto}"
         );
