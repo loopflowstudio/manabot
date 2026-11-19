@@ -133,7 +133,7 @@ Academy uses native trivial-decision skipping, like every game runner: the
 engine resolves sole legal actions for either seat, so no forced prompt reaches
 a person or a policy. Disable **Use priority stops** to surface every priority
 window that offers a real choice. Priority stop/F6 automation retains its
-Commands and is marked **auto** in the move list; traces from before native
+Commands and is marked **auto** in the history; traces from before native
 skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
@@ -161,14 +161,15 @@ offer on a retained isolated root, then **Return to recorded decision** restores
 its original address/frame/Command; **Return to live** is a separate destination.
 Expired roots remain unavailable rather than being reconstructed from the screen.
 
-After resolving a spell, open **History and settings** to read its recorded
-consequences by turn. Earlier/later pages and **Latest** let you read older
-events without being pulled away by incoming or recovered rows. Gaps appear
-inline and turn context stays unknown until the next recorded turn change. Narration can be paused,
-accelerated or skipped while the pending choice remains usable. Reloaded active
-games label unavailable earlier history; older recordings without event data say
-**Consequences not recorded**. See
-[reading consequences and controlling narration](../../docs/academy.md#reading-consequences-and-controlling-narration)
+The rail's **History** lists everything that happened, in order: each move
+with what followed from it indented beneath, and the rule that did it ("died ·
+lethal damage"). Select a line, or step with ← and →, to see the board as it
+was after it; Esc returns to now. After the opponent acts the board walks
+their moves a beat at a time while the pending choice remains usable. Reloaded
+active games keep the lines and say **Board not kept for this step** for
+earlier ones; recordings made before moves were recorded as events read as a
+flat list. See
+[reading the history](../../docs/academy.md#reading-the-history)
 for controls, exact-subject inspection and Replay/Study behavior.
 
 Long action lists have an optional **Find an action** filter. See the
