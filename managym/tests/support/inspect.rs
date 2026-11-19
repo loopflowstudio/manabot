@@ -435,8 +435,9 @@ pub fn tap_pays_choice(s: &Scenario) -> TapPaysChoice {
 }
 
 /// Exercise every offered atomic continuation through the real Command
-/// authority, with an independent replay; once one commits, every Command of
-/// the decision (itself included) is stale and changes nothing. Every legal
+/// authority, with an independent replay; an unoffered Command, and once one
+/// commits every Command of the decision (itself included), is stale and
+/// changes nothing. Every legal
 /// action and a follow-up step run on exact forks that leave the source
 /// untouched.
 pub fn assert_choice_contract(s: &Scenario) {
@@ -458,6 +459,21 @@ pub fn assert_choice_contract(s: &Scenario) {
             }
         })
         .collect();
+    // An offer the frame does not publish is rejected and changes nothing.
+    let unoffered = Command {
+        command_id: "elemental-choice-unoffered".to_string(),
+        offer_id: frame
+            .offers
+            .iter()
+            .map(|offer| offer.id.0)
+            .max()
+            .unwrap_or(0)
+            + 1,
+        ..commands[0].clone()
+    };
+    let mut branch = s.game().clone();
+    assert!(branch.execute_semantic_command(&unoffered).is_err());
+    assert_eq!(witness(&branch), root);
     for command in &commands {
         let mut branch = s.game().clone();
         let mut replay = s.game().clone();
