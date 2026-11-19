@@ -43,8 +43,9 @@ fn cast_appeal(s: &mut Scenario, target: PermanentId) {
 /// Appeal to Eirdu ({3}{W}) with no lands: a white creature pays the {W},
 /// any creature pays {1}, and a creature tapped for mana cannot also convoke.
 /// With no white mana floating the Lions can only pay the {W}, so no tap-pays
-/// choice is published here; the next test checks that choice's modes, focus
-/// and Commands.
+/// choice is published here;
+/// `appeal_to_eirdu_can_convoke_a_white_creature_for_generic` checks that
+/// choice's modes, focus and Commands.
 #[test]
 fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
     let mut s = five_color_unfunded_setup(&[
@@ -183,6 +184,9 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
     let choice = tap_pays_choice(&s);
     assert_eq!(choice.focus, [object_public_id(&s, lions)]);
     assert_eq!(choice.modes, [0, 5]);
+    // Each mode is a native Command: an unoffered one is rejected, both
+    // replay to the same witness on an independent clone, and once one
+    // commits every Command of the choice is stale.
     assert_choice_contract(&s);
     for (mode, white_spent) in [(0, 0), (5, 1)] {
         let mut fork = fork_choosing(
