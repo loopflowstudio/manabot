@@ -34,11 +34,16 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
   }
 }
 
-async function openStopsPanel(page: Page): Promise<void> {
-  const secondary = page.locator('details.secondary-panels');
-  if (await secondary.count() && !await secondary.evaluate((node: HTMLDetailsElement) => node.open)) {
-    await secondary.locator(':scope > summary').click();
+/** On the board, stops and the session live in the top bar's Menu. */
+async function openMenu(page: Page): Promise<void> {
+  const menu = page.locator('details.game-menu');
+  if (await menu.count() && !await menu.evaluate((node: HTMLDetailsElement) => node.open)) {
+    await page.getByTestId('game-menu').click();
   }
+}
+
+async function openStopsPanel(page: Page): Promise<void> {
+  await openMenu(page);
   const panel = page.getByTestId('stops-panel');
   if (!(await panel.getAttribute('open'))) {
     await panel.locator('summary').first().click();
@@ -58,7 +63,8 @@ async function updateSeq(page: Page): Promise<number> {
 // scrolling/layout waits; pointer submission is covered by the release suite.
 async function playUntilComparisonTurn(page: Page): Promise<number> {
   const actionButtons = page.getByTestId('action-option');
-  const gameOverOverlay = page.getByText('Game Over', { exact: true });
+  const gameOverOverlay = page.getByTestId('game-result');
+  const game = page.getByTestId('game');
   let inputs = 0;
 
   for (let i = 0; i < MAX_ACTIONS; i += 1) {
@@ -66,8 +72,9 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
     await expect(gameOverOverlay).not.toBeVisible();
     await expect(page.locator('[data-testid="action-option"]:enabled').first().or(gameOverOverlay)).toBeVisible();
     await expect(gameOverOverlay).not.toBeVisible();
-    const board = await page.getByTestId('game-board').textContent();
-    if (board?.includes(`Turn ${COMPARISON_TURN} · Your turn · Precombat Main`)) return inputs;
+    if (await game.getAttribute('data-turn') === String(COMPARISON_TURN)
+      && await game.getAttribute('data-turn-owner') === 'you'
+      && (await game.getAttribute('data-step'))?.startsWith('PRECOMBAT_MAIN')) return inputs;
 
     const seqBefore = await updateSeq(page);
     const labels = await actionButtons.allTextContents();
@@ -94,7 +101,7 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
 }
 
 test('stops cut inputs to the same turn boundary, log keeps narrating', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -110,7 +117,7 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   await setCheckbox(page, 'auto-pass-toggle', false);
 
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   const baselineInputs = await playUntilComparisonTurn(page);
 
   // ---- Run 2: same seed, stops on main phases only. ----
@@ -137,15 +144,15 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   expect(baselineInputs).toBeGreaterThan(stopsInputs * 2);
   expect(stopsInputs).toBeGreaterThan(0);
 
-  // The narrative survives the fast-forward: villain actions inside skipped
-  // stretches are logged, and the auto-passed windows are called out.
-  const logTexts = await page.getByTestId('log-entry').allTextContents();
-  expect(logTexts.some((text) => text.trimStart().startsWith('Villain'))).toBe(true);
-  expect(logTexts.some((text) => /Auto-passed \d+ priority window/.test(text))).toBe(true);
+  // The narrative survives the fast-forward: the opponent's moves inside
+  // skipped stretches are in the move list, and automated passes are marked
+  // as automation, never as the person's moves; passes fold into quiet runs.
+  await expect(page.locator('[data-testid=log-entry][data-actor=opponent]').first()).toBeAttached();
+  await expect(page.locator('[data-testid=pass-run] [data-testid=log-entry][data-actor=auto]').first()).toBeAttached();
 });
 
 test('F6 passes the turn from the keyboard', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -154,20 +161,104 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await selectDeck(page, 'villain', 'interactive');
 
   await page.getByRole('button', { name: 'Start game' }).first().click();
-  const board = page.getByTestId('game-board');
-  await expect(board).toBeVisible({ timeout: 15_000 });
+  const game = page.getByTestId('game');
+  await expect(game).toBeVisible({ timeout: 15_000 });
 
   // Default stops: the game opens at my main1 on turn 1.
-  await expect(board).toContainText('Turn 1');
+  await expect(game).toHaveAttribute('data-turn', '1');
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
   await page.keyboard.press('F6');
 
   // The rest of turn 1 (including the my-main2 stop) is yielded server-side;
   // the next surfaced decision is on a later turn.
-  await expect(board).toContainText(/Turn (?!1 )\d+/, { timeout: 30_000 });
-  const logTexts = await page.getByTestId('log-entry').allTextContents();
-  expect(
-    logTexts.some((text) => /Hero\s*Pass turn/.test(text.replace(/\s+/g, ' '))),
-  ).toBe(true);
+  await expect(game).not.toHaveAttribute('data-turn', '1', { timeout: 30_000 });
+  await expect(page.locator('[data-testid=log-entry][data-actor=you]').filter({ hasText: 'Pass turn' })).toHaveCount(1);
+});
+
+test('the stop bar sets the same stops as the Menu, for either turn, and a once stop is spent', async ({ page }) => {
+  await page.goto('/?setup=1');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
+  await page.getByTestId('opponent-select').selectOption('random');
+  await page.getByRole('button', { name: 'Start game' }).first().click();
+  await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
+
+  // Default stops: your main phases and the opponent's end step stop every time.
+  const stop = (side: string, step: string) => page.getByTestId(`bar-stop-${side}-${step}`);
+  await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'every');
+  await expect(stop('opponent', 'end_step')).toHaveAttribute('data-state', 'every');
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'off');
+
+  // The bar has room: 12 px markers held against the step's name and kept 8 px or more in from the bar's edges.
+  const room = await page.getByTestId('stop-bar').evaluate(bar => {
+    const edge = bar.getBoundingClientRect();
+    const cell = bar.querySelector('[data-step=upkeep]')!.parentElement!;
+    const [above, below] = [...cell.querySelectorAll('.stop i')].map(marker => marker.getBoundingClientRect());
+    const name = cell.querySelector('.name')!.getBoundingClientRect();
+    return { height: edge.height, marker: above.height, top: above.top - edge.top, bottom: edge.bottom - below.bottom,
+      toName: [name.top - above.bottom, below.top - name.bottom] };
+  });
+  expect(room.height).toBeGreaterThanOrEqual(60);
+  expect(room.marker).toBe(12);
+  expect(Math.min(room.top, room.bottom)).toBeGreaterThanOrEqual(8);
+  for (const gap of room.toName) expect(gap).toBeLessThanOrEqual(2);
+
+  // The folded decision strip is only its toggle, in the stop bar's row: nothing between the board and the bar.
+  const bar = (await page.getByTestId('stop-bar').boundingBox())!;
+  const toggle = (await page.getByTestId('strip-toggle').boundingBox())!;
+  expect(toggle.y).toBeGreaterThanOrEqual(bar.y);
+  expect(toggle.y + toggle.height).toBeLessThanOrEqual(bar.y + bar.height);
+  await expect(page.getByTestId('decision-strip')).toHaveCount(0);
+  const board = (await page.getByTestId('game-board').boundingBox())!;
+  expect(bar.y - (board.y + board.height)).toBeLessThanOrEqual(1);
+  await page.getByTestId('strip-toggle').click();
+  await expect(page.getByTestId('decision-strip')).toBeVisible();
+  await page.getByTestId('strip-toggle').click();
+  await expect(page.getByTestId('decision-strip')).toHaveCount(0);
+
+  // On your own turn, the opponent's upkeep: off → every time → once → off. The Menu shows the same stop.
+  await stop('opponent', 'upkeep').click();
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'every');
+  await openStopsPanel(page);
+  await expect(page.getByTestId('stop-opponent-upkeep').first()).toBeChecked();
+  await stop('opponent', 'upkeep').click();
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'once');
+  await expect(page.getByTestId('stop-opponent-upkeep').first()).toBeChecked();
+  await stop('opponent', 'upkeep').click();
+  await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'off');
+  await expect(page.getByTestId('stop-opponent-upkeep').first()).not.toBeChecked();
+
+  // The Menu's change shows on the bar; the stops are one Tab stop, moved by arrows.
+  await page.getByTestId('stop-my-main2').first().click();
+  await expect(stop('my', 'main2')).toHaveAttribute('data-state', 'off');
+  await stop('opponent', 'upkeep').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(stop('my', 'upkeep')).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');
+  // Fast presses keep their last state: the server's echoes of earlier ones are not applied over it.
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');
+  await page.waitForTimeout(500);
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'off');
+
+  // Your first main phase set to once: the next time the game arrives there it stops, and the
+  // client turns that stop off, saying so in the moves as automation.
+  await stop('my', 'main1').click();
+  await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'once');
+  const game = page.getByTestId('game');
+  for (let pass = 0; pass < 12; pass += 1) {
+    if (await stop('my', 'main1').getAttribute('data-state') === 'off') break;
+    const seq = await updateSeq(page);
+    await page.keyboard.press('F6');
+    await expect.poll(() => updateSeq(page), { timeout: 30_000 }).toBeGreaterThan(seq);
+  }
+  await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'off');
+  await expect(game).toHaveAttribute('data-turn-owner', 'you');
+  await expect(page.locator('[data-testid=log-entry][data-actor=auto]').filter({ hasText: 'Stopped once at First main' })).toHaveCount(1);
 });

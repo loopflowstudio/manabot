@@ -189,8 +189,8 @@ export class PresentationPlayer {
 }
 
 export function createPresentationPlayer(): PresentationPlayer { return new PresentationPlayer(); }
-/** Live table player fed only by validated protocol updates and recovery tails. */
+/** Live board player fed only by validated protocol updates and recovery tails. */
 export const presentationPlayer = createPresentationPlayer();
 
-/** Isolated shared-table Study cursor; live updates continue on the table player. */
+/** Isolated shared-table Study cursor; live updates continue on the board player. */
 export const studyPresentationPlayer = createPresentationPlayer();

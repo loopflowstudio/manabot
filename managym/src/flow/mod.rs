@@ -3,6 +3,7 @@ pub mod card_capture;
 pub mod cast_permission;
 pub mod combat;
 pub mod combat_actions;
+pub mod combat_preview;
 pub mod damage;
 pub mod decision;
 pub mod effects;

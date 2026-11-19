@@ -95,3 +95,28 @@ export function saveStoredStops(stops: StopsConfig): void {
     // Storage full or unavailable: stops simply won't persist.
   }
 }
+
+/** Stops set to hold once (`OnceStops`); the config holds them as ordinary stops. */
+export const ONCE_STORAGE_KEY = 'academy.stops.once';
+
+export function loadStoredOnce(): Record<'my' | 'opponent', string[]> {
+  const empty = { my: [], opponent: [] };
+  if (typeof localStorage === 'undefined') return empty;
+  try {
+    const raw = JSON.parse(localStorage.getItem(ONCE_STORAGE_KEY) ?? 'null') as Record<string, unknown> | null;
+    const my = sanitizeSteps(raw?.my);
+    const opponent = sanitizeSteps(raw?.opponent);
+    return my && opponent ? { my, opponent } : empty;
+  } catch {
+    return empty;
+  }
+}
+
+export function saveStoredOnce(once: Record<'my' | 'opponent', string[]>): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(ONCE_STORAGE_KEY, JSON.stringify(once));
+  } catch {
+    // Storage full or unavailable: once stops simply won't persist.
+  }
+}

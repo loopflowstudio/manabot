@@ -48,7 +48,7 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
   test.setTimeout(600_000);
   const consoleErrors = collectConsoleErrors(page);
 
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -66,7 +66,7 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
 
   // Deck names must render in the game header.
   await expect(page.getByTestId('deck-names')).toHaveText(
-    'You (UR Lessons) vs Random (GW Allies)',
+    'You · UR Lessons vs Random · GW Allies',
     { timeout: 15_000 },
   );
 

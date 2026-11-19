@@ -129,16 +129,19 @@ describe('GameStore', () => {
     expect(store.gameOver).toBe(false);
   });
 
-  it('accumulates authoritative log entries from hero and villain actions', () => {
+  it('records each move with its actor and the turn it was made in', () => {
     const store = createGameStore();
-    const observation = makeObservation();
+    store.applyObservation(makeObservation(), []);
+    store.appendHeroAction('Pass turn');
+    store.applyObservation(makeObservation(), [], undefined, undefined, [
+      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
+      { actor: 'villain', turn: 2, text: 'Pass priority' },
+    ]);
 
-    store.appendHeroAction('Play land: Mountain');
-    store.applyObservation(observation, [], undefined, undefined, ['Villain: Pass priority']);
-
-    expect(store.actionLog.map((entry) => entry.text)).toEqual([
-      'Hero: Play land: Mountain',
-      'Villain: Pass priority',
+    expect(store.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text }))).toEqual([
+      { actor: 'hero', turn: 1, text: 'Pass turn' },
+      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
+      { actor: 'villain', turn: 2, text: 'Pass priority' },
     ]);
   });
 
@@ -154,7 +157,7 @@ describe('GameStore', () => {
     expect(store.actions).toEqual([]);
   });
 
-  it('keeps the last confirmed table readable after authority is lost', () => {
+  it('keeps the last confirmed board readable after authority is lost', () => {
     const store = createGameStore();
     const frame = structuredClone(boltProtocolFixture.recovery.frame);
     store.applyFrame(frame, 'session-a', 'token-a');
@@ -296,7 +299,6 @@ describe('GameStore', () => {
       undefined,
       [],
       undefined,
-      0,
       { hero: 'UR Lessons', villain: 'GW Allies' },
     );
 
@@ -306,7 +308,7 @@ describe('GameStore', () => {
     });
   });
 
-  it('narrates auto-passed windows and clears the fast-forward flag', () => {
+  it('logs automated moves as automation and clears the fast-forward flag', () => {
     const store = createGameStore();
     store.beginFastForward();
     expect(store.fastForwarding).toBe(true);
@@ -316,18 +318,14 @@ describe('GameStore', () => {
       [],
       undefined,
       undefined,
-      ['Villain: Cast Grey Ogre', 'Auto: Choose red'],
-      undefined,
-      3,
+      [{ actor: 'villain', turn: 3, text: 'Cast Grey Ogre' }, { actor: 'auto', turn: 3, text: 'Choose red' }],
     );
 
     expect(store.fastForwarding).toBe(false);
-    expect(store.actionLog.map((entry) => entry.text)).toEqual([
-      'Villain: Cast Grey Ogre',
-      'Auto: Choose red',
-      'Auto-passed 3 priority windows.',
+    expect(store.actionLog.map(({ actor, text }) => [actor, text])).toEqual([
+      ['villain', 'Cast Grey Ogre'],
+      ['auto', 'Choose red'],
     ]);
-    expect(store.actionLog[1].actor).toBe('system');
   });
 });
 
@@ -358,5 +356,27 @@ describe('current decision status', () => {
     expect(store.decisionStatus).toBe('Game over — no next decision.');
     store.restoredDecision = {} as NonNullable<typeof store.restoredDecision>;
     expect(store.decisionStatus).toBe('Study position — return to live to play.');
+  });
+});
+
+describe('stop changes in flight', () => {
+  it('drops the echo of an older config, so fast presses keep their last state', () => {
+    const store = createGameStore();
+    const before = { ...store.stops, my: [...store.stops.my] };
+    store.cycleStop('my', 'upkeep');
+    store.noteStopsSent();
+    const every = { ...store.stops, my: [...store.stops.my] };
+    store.cycleStop('my', 'upkeep');
+    store.noteStopsSent();
+    expect(store.onceStops.my).toEqual(['upkeep']);
+    // The frame that answers an earlier change, or one sent before any, still carries the old config.
+    store.applyServerStops(before);
+    expect(store.stops.my).toContain('upkeep');
+    expect(store.onceStops.my).toEqual(['upkeep']);
+    store.applyServerStops(every);
+    expect(store.onceStops.my).toEqual(['upkeep']);
+    // After the last echo the server's config holds again.
+    store.applyServerStops({ ...before, my: ['main1'] });
+    expect(store.stops.my).toEqual(['main1']);
   });
 });

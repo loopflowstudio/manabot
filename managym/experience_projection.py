@@ -29,6 +29,23 @@ from managym.experience import LegacyHeroObservation
 
 # The protocol-v1 projection labels seat 0 "Hero" and seat 1 "Villain".
 HERO_PLAYER_INDEX = 0
+# Native `Keywords` attributes in `KeywordData` declaration order.
+KEYWORD_NAMES = (
+    "flying",
+    "reach",
+    "haste",
+    "flash",
+    "vigilance",
+    "trample",
+    "first_strike",
+    "double_strike",
+    "deathtouch",
+    "lifelink",
+    "defender",
+    "menace",
+    "hexproof",
+    "indestructible",
+)
 
 ACTION_LABELS = {
     "PRIORITY_PLAY_LAND": "Play land",
@@ -192,12 +209,18 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
+        "keywords": _keywords(permanent.characteristics.keywords) or None,
         "used_abilities": list(permanent.used_abilities) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
         "copy_of": _copy(permanent.copy),
     }
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _keywords(keywords: managym.Keywords) -> list[str]:
+    """Effective keyword names after continuous effects, in declaration order."""
+    return [name for name in KEYWORD_NAMES if getattr(keywords, name)]
 
 
 def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
@@ -488,8 +511,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     if context is not None:
         data["decision_context"] = context
     data["definition_names"] = {
-        str(row["card_def_id"]): row["registry_name"]
-        for row in env.content_pack_manifest()["definitions"]
+        str(definition): name for definition, name in definition_names(env).items()
     }
     data["stack_objects"] = [
         {
@@ -516,6 +538,14 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
         }
     redact_observation(data)
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
+
+
+def definition_names(env: managym.Env) -> dict[int, str]:
+    """Every card definition of the game's content pack, by id, by name."""
+    return {
+        int(row["card_def_id"]): row["registry_name"]
+        for row in env.content_pack_manifest()["definitions"]
+    }
 
 
 def _player_label(player: managym.Player) -> str:

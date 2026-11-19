@@ -7,7 +7,7 @@
 <span class="player-name" title={identity.description}>
   <span class="sr-only">{identity.description}</span>
   <span class="truncate" aria-hidden="true">{identity.compact}</span>
-  {#if chip && identity.digest}<span class="type-rubric shrink-0" aria-hidden="true">· {shortHash(identity.digest)}</span>{/if}
+  {#if chip && identity.digest}<span class="type-label shrink-0" aria-hidden="true">· {shortHash(identity.digest)}</span>{/if}
 </span>
 
 <style>

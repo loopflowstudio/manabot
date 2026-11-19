@@ -189,6 +189,11 @@ class DecisionContextView(ProtocolModel):
     reserved_sacrifice: DecisionObjectView | None
     mana_cost: str | None
     chosen_mode: UInt32 | None
+    # The spell or activated ability `source` names is being announced, so it
+    # is on the stack by the rules (CR 601.2a, 602.2a) while its costs are paid.
+    announcing: Literal["spell", "activated_ability"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class OfferSubjectView(ProtocolModel):
@@ -415,6 +420,9 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
+    keywords: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -612,6 +620,7 @@ class LegacyHeroObservation(ProtocolModel):
                 or self.decision_context.reserved_sacrifice is not None
                 or self.decision_context.mana_cost is not None
                 or self.decision_context.chosen_mode is not None
+                or self.decision_context.announcing is not None
             )
         ):
             raise ValueError("decision context is not oriented to its acting viewer")
@@ -728,6 +737,24 @@ class TurnStartedPresentation(ProtocolModel):
     turn_number: UInt32
 
 
+class LandPlayedPresentation(ProtocolModel):
+    kind: Literal["land_played"]
+    object: ObjectRenderId
+    player: UInt8
+
+
+class DiscardedPresentation(ProtocolModel):
+    kind: Literal["discarded"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
+class RevealedPresentation(ProtocolModel):
+    kind: Literal["revealed"]
+    cards: list[str]
+    player: UInt8
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
@@ -737,7 +764,10 @@ PresentationKind: TypeAlias = Annotated[
     | DiedPresentation
     | AttackGroupPresentation
     | BlockedPresentation
-    | TurnStartedPresentation,
+    | TurnStartedPresentation
+    | LandPlayedPresentation
+    | DiscardedPresentation
+    | RevealedPresentation,
     Field(discriminator="kind"),
 ]
 

@@ -4475,6 +4475,27 @@ impl PyEnv {
         serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Read-only whole combat declaration preview for a JSON plan; see
+    /// `managym.combat`.
+    fn combat_preview_json(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        plan_json: &str,
+    ) -> PyResult<String> {
+        let plan: crate::flow::combat_preview::CombatPlan = serde_json::from_str(plan_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let preview = env
+            .combat_preview(viewer, revision, fingerprint, &plan)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Shared semantic DecisionFrame for the current revision, as canonical
     /// JSON. See `managym.decision.DecisionFrame`.
     fn semantic_decision_frame_json(&self) -> PyResult<String> {

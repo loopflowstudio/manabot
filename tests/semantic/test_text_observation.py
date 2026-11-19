@@ -388,6 +388,19 @@ def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
     assert "; granted keywords lifelink" in stack.split("\n", 1)[0]
 
 
+def test_continuation_text_states_announcing_only_when_present() -> None:
+    env = priority_root(("Gray Ogre",), ())
+    decision = capture_text_decision(env)
+    assert "Announcing" not in decision.text
+    payload = json.loads(decision.capture_json)
+    payload["continuation"]["announcing"] = "activated_ability"
+    text = render_decision(_redigest(payload)).text
+    assert (
+        "Announcing this activated ability: it is on the stack until its costs are paid."
+        in text.split("Current continuation:\n", 1)[1].splitlines()
+    )
+
+
 def test_face_down_card_text_appears_only_when_present() -> None:
     env = priority_root(("Gray Ogre",), ())
     decision = capture_text_decision(env)
