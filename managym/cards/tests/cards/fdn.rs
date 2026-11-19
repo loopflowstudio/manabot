@@ -185,10 +185,8 @@ fn sire_of_seven_deaths_ward_is_paid_in_life_or_counters_the_spell() {
     }
 }
 
-/// The payment preview reads the cost being paid. Hungry Ghoul's "{1},
-/// Sacrifice another creature" has no preview until the creature is chosen;
-/// at the mana it forecasts the land that would be tapped, and the pending
-/// decision names the creature already sacrificed and where it still is.
+/// A mana ability's own cost, paid inside Hungry Ghoul's payment, suspends a
+/// decision of its own; the Ghoul's chosen sacrifice is still what has paid.
 #[test]
 fn hungry_ghoul_sacrifice_stays_named_while_a_mana_ability_is_being_paid() {
     use crate::support::{
@@ -219,6 +217,10 @@ fn hungry_ghoul_sacrifice_stays_named_while_a_mana_ability_is_being_paid() {
     assert_eq!(context["paid"][0]["object"]["label"], "Gray Ogre");
 }
 
+/// The payment preview reads the cost being paid. Hungry Ghoul's "{1},
+/// Sacrifice another creature" has no preview until the creature is chosen;
+/// at the mana it forecasts the land that would be tapped, and the pending
+/// decision names the creature already sacrificed and where it still is.
 #[test]
 fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
     use crate::support::{
