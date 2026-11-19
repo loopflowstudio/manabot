@@ -1064,6 +1064,7 @@ impl ManaPool {
     pub fn absorb(&mut self, other: ManaPool) {
         self.mana.add(&other.mana);
         self.units.extend(other.units);
+        self.drop_uncounted_units();
         self.check();
     }
 
@@ -1110,6 +1111,7 @@ impl ManaPool {
         for unit in &mut self.units {
             unit.color = Color::Red as u8;
         }
+        self.drop_uncounted_units();
         self.check();
     }
 
@@ -1132,6 +1134,22 @@ impl ManaPool {
             .iter()
             .filter(move |unit| unit.color == color as u8 && unit.class.as_ref() == class)
             .map(|unit| unit.origin)
+    }
+
+    /// Amounts saturate at 255 per class and color, so joining or recoloring
+    /// can leave more units than the mana counts. The newest go: the mana
+    /// they stood for no longer exists.
+    fn drop_uncounted_units(&mut self) {
+        let mut left = self.mana.clone();
+        self.units.retain(|unit| {
+            let slot = match &unit.class {
+                Some(class) => &mut left.class_mut(class)[unit.color as usize],
+                None => &mut left.mana[unit.color as usize],
+            };
+            let counted = *slot > 0;
+            *slot = slot.saturating_sub(1);
+            counted
+        });
     }
 
     fn check(&self) {
@@ -1178,6 +1196,28 @@ impl From<Mana> for ManaPool {
 mod tests {
     use super::{Mana, ManaCost, ManaRestriction, SpendingContext};
     use crate::card::CardType;
+
+    /// A color holds at most 255 mana. Joining two pools or turning a pool
+    /// red past that keeps one origin entry per unit of mana that remains.
+    #[test]
+    fn a_saturated_pool_keeps_one_origin_per_remaining_unit() {
+        use super::{Color, ManaPool};
+        let of = |color: Color, amount: u8| {
+            let mut mana = Mana::default();
+            mana.mana[color as usize] = amount;
+            ManaPool::from(mana)
+        };
+        let mut joined = of(Color::Red, 200);
+        joined.absorb(of(Color::Red, 100));
+        assert_eq!(joined.total(), 255);
+        assert_eq!(joined.origins(None, Color::Red).count(), 255);
+
+        let mut red = of(Color::Green, 200);
+        red.absorb(of(Color::Blue, 100));
+        red.become_red();
+        assert_eq!(red.total(), 255);
+        assert_eq!(red.origins(None, Color::Red).count(), 255);
+    }
 
     #[test]
     fn spendable_units_count_a_maximum_assignment_to_pips() {
