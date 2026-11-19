@@ -739,19 +739,17 @@ impl Mana {
     /// that could pay in its place with different consequences, whether a
     /// rider, a restriction or the color spent and the color left over.
     pub fn other_than(&self, unit: &Mana) -> Mana {
-        let mut out = self.clone();
-        for color in 0..6 {
-            if unit.mana[color] > 0 {
-                out.mana[color] = 0;
-            }
-        }
-        for (class, amounts) in unit.classes() {
-            let pooled = out.class_mut(class);
-            for color in 0..6 {
-                if amounts[color] > 0 {
-                    pooled[color] = 0;
+        fn clear(pooled: &mut [u8; 6], kind: &[u8; 6]) {
+            for (pooled, kind) in pooled.iter_mut().zip(kind) {
+                if *kind > 0 {
+                    *pooled = 0;
                 }
             }
+        }
+        let mut out = self.clone();
+        clear(&mut out.mana, &unit.mana);
+        for (class, kind) in unit.classes() {
+            clear(out.class_mut(class), kind);
         }
         out.prune();
         out

@@ -14,6 +14,7 @@ import random
 import time
 from typing import Literal
 
+import numpy as np
 import torch
 
 from manabot.env.observation import (
@@ -361,11 +362,9 @@ def action_inputs(
     result: list[ActionInput] = []
     for index in range(count):
         # Every action column except validity, which is 1 for every offer.
-        row = obs["actions"][0, index]
-        action: list[float] = [
-            *row[:ACTION_VALID_INDEX].tolist(),
-            *row[ACTION_VALID_INDEX + 1 :].tolist(),
-        ]
+        action: list[float] = np.delete(
+            obs["actions"][0, index], ACTION_VALID_INDEX
+        ).tolist()
         if mutation == "without_declaration":
             action[ACTION_DECLARED_INDEX] = 0.0
         focus = tuple(
