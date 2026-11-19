@@ -1,7 +1,7 @@
 //! Tests for cards filed in `src/eoe.rs`, in card order.
 
 use crate::support::{
-    game::{five_color_unfunded_setup, set_counters},
+    game::{five_color_unfunded_setup, move_card, set_counters},
     inspect::{card_of, counters_of, has_action, offered_cards, tapped},
     play::{activate, fork_selecting, select_card, settle},
 };
@@ -15,6 +15,7 @@ use managym::{
         permanent::CounterKind,
         player::ManaPayment,
         stack_object::StackObject,
+        zone::ZoneType,
     },
 };
 
@@ -54,6 +55,13 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
                 .any(|offer| offer.label == "Tap Hill Giant to station"),
             "{:?}",
             frame.offers
+        );
+
+        let context = s.game().decision_context(PlayerId(0)).unwrap();
+        assert!(
+            context.instruction.contains("to station"),
+            "{}",
+            context.instruction
         );
 
         // A fork at the tap choice: the counters follow the creature chosen.
@@ -107,6 +115,23 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
         assert_eq!(counters_of(&s, frigate, CounterKind::Charge), 3);
         assert!(tapped(&s, giant) && !tapped(&s, ogre) && !tapped(&s, frigate));
     }
+}
+
+/// A creature that left the battlefield before the station ability resolves
+/// counts for its last known power.
+#[test]
+fn lumen_class_frigate_stations_for_a_departed_creatures_last_known_power() {
+    let mut s = five_color_unfunded_setup(&["Lumen-Class Frigate", "Hill Giant"]);
+    let frigate = s.force_permanent_on_battlefield(0, "Lumen-Class Frigate");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let giant_object = card_of(&s, giant);
+    activate(&mut s, frigate, 0);
+    if s.game().state.stack_objects.is_empty() {
+        select_card(&mut s, giant_object);
+    }
+    move_card(&mut s, giant_object, ZoneType::Graveyard);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, frigate, CounterKind::Charge), 3);
 }
 
 /// The printed levels read the charge counters: other creatures get +1/+1 at

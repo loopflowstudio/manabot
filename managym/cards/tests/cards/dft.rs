@@ -110,6 +110,12 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
                 "{:?}",
                 frame.offers
             );
+            let context = s.game().decision_context(PlayerId(0)).unwrap();
+            assert!(
+                context.instruction.contains("to saddle"),
+                "{}",
+                context.instruction
+            );
             let rider = card_of(&s, elves);
             // Either creature saddles, each in its own line of play.
             for chosen in [rider, card_of(&s, ogre)] {

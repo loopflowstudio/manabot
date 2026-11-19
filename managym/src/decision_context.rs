@@ -17,7 +17,10 @@ use crate::{
         decision::Decision,
         game::{CostComponent, Game, PendingChoice},
     },
-    state::game_object::{ObjectId, PlayerId, Target},
+    state::{
+        game_object::{ObjectId, PlayerId, Target},
+        payment::Toward,
+    },
 };
 
 impl Game {
@@ -330,6 +333,8 @@ impl Game {
                     ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
                 CostComponent::Discard =>
                     ("additional_cost", "Choose a card to discard as an activation cost."),
+                CostComponent::Tap(_, Toward::Station) =>
+                    ("additional_cost", "Choose another untapped creature to tap to station. The ability puts charge counters equal to that creature's power on its source as it resolves."),
                 CostComponent::Tap(..) =>
                     ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
                 CostComponent::Sacrifice(..) =>
@@ -340,6 +345,8 @@ impl Game {
                     ("payment", "Choose which color of mana the creature just tapped pays for (convoke)."),
                 CostComponent::Life(_) | CostComponent::TapSource | CostComponent::SacrificeSource | CostComponent::DiscardSource =>
                     unreachable!("paid as the payment completes, after its mana"),
+                CostComponent::TapPower { toward: Toward::Saddle, .. } =>
+                    ("additional_cost", "Choose a creature to tap to saddle. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the saddle number."),
                 CostComponent::TapPower { .. } =>
                     ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             },
