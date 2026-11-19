@@ -143,4 +143,37 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
     assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
     settle_targeting_opponent(&mut s);
     s.assert_life(1, 17);
+
+    // Both units float before the cast, so the payment asks which to spend.
+    // A fork at that choice: the Goggles's unit copies, the Mountain's does not.
+    let mut s = five_color_unfunded_setup(&["Pyromancer's Goggles", "Lightning Bolt"]);
+    let goggles = s.force_permanent_on_battlefield(0, "Pyromancer's Goggles");
+    let mountain = s.force_permanent_on_battlefield(0, "Mountain");
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    s.allow_priority_floats();
+    tap_for_mana(&mut s, goggles);
+    tap_for_mana(&mut s, mountain);
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    for (copies, source) in [(true, goggles), (false, mountain)] {
+        let spend = frame
+            .offers
+            .iter()
+            .position(|offer| {
+                offer.label.starts_with("Spend") && offer.label.contains("copy") == copies
+            })
+            .unwrap_or_else(|| panic!("both units are offered: {:?}", frame.offers));
+        let fork = crate::support::play::fork_stepping(&s, spend);
+        assert_eq!(
+            fork.game().state.stack_objects.len(),
+            1 + usize::from(copies)
+        );
+        assert_eq!(
+            top_spell(&fork).spent.mana()[0].source.unwrap().object,
+            card_of(&fork, source)
+        );
+        assert_eq!(fork.game().state.players[0].mana_pool.total(), 1);
+    }
+    assert!(s.game().state.stack_objects.is_empty());
 }

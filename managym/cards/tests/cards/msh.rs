@@ -55,6 +55,17 @@ fn ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells() {
                 "{:?}",
                 frame.offers
             );
+            // A fork at the first improvise tap: only the Staff chosen taps.
+            for chosen in &staffs[..2] {
+                let fork = crate::support::play::fork_choosing(
+                    &s,
+                    |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == chosen),
+                );
+                for staff in &staffs {
+                    assert_eq!(tapped(&fork, *staff), staff == chosen);
+                    assert!(!tapped(&s, *staff));
+                }
+            }
             for staff in &staffs {
                 choose(
                     &mut s,

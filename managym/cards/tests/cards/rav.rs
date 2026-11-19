@@ -65,10 +65,11 @@ fn doubling_season_doubles_entry_lore_and_tokens_but_not_precombat_lore() {
 
 /// A green-white creature convoking for {6}{G}{W} pays either colored pip:
 /// the player chooses which when mana can pay the other, and is not asked
-/// when only one choice leaves the cost payable.
+/// when only one choice leaves the cost payable. The automatic payer convokes
+/// only when mana alone cannot pay.
 #[test]
 fn guardian_of_vitu_ghazi_convoker_chooses_which_owed_color_it_pays() {
-    for plains in [true, false] {
+    for (plains, auto) in [(true, false), (false, false), (true, true), (false, true)] {
         let mut s = five_color_unfunded_setup(&["Guardian of Vitu-Ghazi"]);
         let convoker = s.force_permanent_on_battlefield(0, "Guardian of Vitu-Ghazi");
         for _ in 0..6 {
@@ -79,6 +80,27 @@ fn guardian_of_vitu_ghazi_convoker_chooses_which_owed_color_it_pays() {
             s.force_permanent_on_battlefield(0, "Plains");
         }
         let guardian = force_new_card_in_hand(&mut s, 0, "Guardian of Vitu-Ghazi");
+        if auto {
+            // The automatic payer convokes only when mana cannot pay: eight
+            // lands pay it all, and seven leave the {W} to the convoker.
+            s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+            cast_card(&mut s, guardian);
+            let spell = top_spell(&s);
+            assert_eq!(spell.spent.total(), if plains { 8 } else { 7 });
+            assert_eq!(
+                spell
+                    .spent
+                    .contributed(How::Tapped, Toward::Convoke)
+                    .collect::<Vec<_>>(),
+                if plains {
+                    vec![]
+                } else {
+                    vec![card_of(&s, convoker)]
+                }
+            );
+            assert_eq!(tapped(&s, convoker), !plains);
+            continue;
+        }
         cast_card(&mut s, guardian);
         pass_until(&mut s, ActionSpaceKind::PayOrNot);
         choose(

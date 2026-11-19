@@ -120,7 +120,8 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
             // Either creature saddles, each in its own line of play.
             for chosen in [rider, card_of(&s, ogre)] {
                 let fork = fork_selecting(&s, chosen);
-                let [StackObject::ActivatedAbility(ability)] = fork.state.stack_objects.as_slice()
+                let [StackObject::ActivatedAbility(ability)] =
+                    fork.game().state.stack_objects.as_slice()
                 else {
                     panic!("one saddle activation, auto={auto}")
                 };

@@ -68,7 +68,8 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
         for (creature, power) in creatures {
             let chosen = card_of(&s, creature);
             let mut fork = fork_selecting(&s, chosen);
-            let [StackObject::ActivatedAbility(ability)] = fork.state.stack_objects.as_slice()
+            let [StackObject::ActivatedAbility(ability)] =
+                fork.game().state.stack_objects.as_slice()
             else {
                 panic!("one station activation, auto={auto}")
             };
@@ -79,7 +80,7 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
                     .collect::<Vec<_>>(),
                 [chosen]
             );
-            let context = fork.decision_context(PlayerId(0)).unwrap();
+            let context = fork.game().decision_context(PlayerId(0)).unwrap();
             assert!(
                 context
                     .pending
@@ -89,24 +90,19 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
                 "{:?}",
                 context.pending
             );
-            for _ in 0..2 {
-                let pass = fork
-                    .action_space()
-                    .unwrap()
-                    .actions
-                    .iter()
-                    .position(|a| matches!(a, Action::PassPriority { .. }))
-                    .unwrap();
-                fork.step(pass).unwrap();
-            }
-            assert!(fork.state.stack_objects.is_empty());
-            let stationed = fork.state.permanents[frigate].as_ref().unwrap();
+            settle(&mut fork);
+            let stationed = fork.game().state.permanents[frigate].as_ref().unwrap();
             assert_eq!(
                 stationed.counter_count(CounterKind::Charge),
                 power,
                 "auto={auto}"
             );
-            assert!(fork.state.permanents[creature].as_ref().unwrap().tapped);
+            assert!(
+                fork.game().state.permanents[creature]
+                    .as_ref()
+                    .unwrap()
+                    .tapped
+            );
         }
 
         let giant_object = card_of(&s, giant);

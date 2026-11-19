@@ -65,6 +65,24 @@ fn teval_grants_delve_and_takes_life_equal_to_mana_value() {
                 frame.offers
             );
             select_card(&mut s, graveyard[0]);
+            // A fork at the second delve choice: the card not chosen stays.
+            for (chosen, kept) in [(1, 2), (2, 1)] {
+                let fork = crate::support::play::fork_selecting(&s, graveyard[chosen]);
+                assert_eq!(
+                    top_spell(&fork)
+                        .spent
+                        .contributed(How::Exiled, Toward::Delve)
+                        .count(),
+                    2
+                );
+                let in_graveyard = |object| {
+                    fork.game()
+                        .state
+                        .zones
+                        .contains(object, ZoneType::Graveyard, PlayerId(0))
+                };
+                assert!(in_graveyard(graveyard[kept]) && !in_graveyard(graveyard[chosen]));
+            }
             select_card(&mut s, graveyard[2]);
         }
         // With {R} left and one Mountain, the payment finishes itself.

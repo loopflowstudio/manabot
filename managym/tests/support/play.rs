@@ -19,7 +19,6 @@ use managym::{
         target::Target,
         zone::ZoneType,
     },
-    Game,
 };
 
 use crate::support::{
@@ -364,18 +363,33 @@ pub fn select_card(s: &mut Scenario, object: ObjectId) {
     );
 }
 
-/// A copy of the game in which the offered `object` was selected: one line
-/// of play from a choice, leaving `s` at the choice.
-pub fn fork_selecting(s: &Scenario, object: ObjectId) -> Game {
-    let mut fork = s.game().clone();
-    let action = s
+/// A copy of the scenario in which the offered action at `index` was taken:
+/// one line of play from a choice, leaving `s` at the choice.
+pub fn fork_stepping(s: &Scenario, index: usize) -> Scenario {
+    let mut fork = Scenario {
+        game: s.game().clone(),
+    };
+    fork.step_action(index);
+    fork
+}
+
+/// `fork_stepping` the first offered action matching `predicate`.
+pub fn fork_choosing(s: &Scenario, predicate: impl Fn(&Action) -> bool) -> Scenario {
+    let index = s
         .action_space()
         .actions
         .iter()
-        .position(|a| matches!(a, Action::SelectCard { object: offered, .. } if *offered == object))
-        .unwrap_or_else(|| panic!("{object:?} is not offered: {:?}", s.action_space()));
-    fork.step(action).unwrap();
-    fork
+        .position(predicate)
+        .unwrap_or_else(|| panic!("no such action is offered: {:?}", s.action_space()));
+    fork_stepping(s, index)
+}
+
+/// `fork_stepping` the selection of the offered `object`.
+pub fn fork_selecting(s: &Scenario, object: ObjectId) -> Scenario {
+    fork_choosing(
+        s,
+        |a| matches!(a, Action::SelectCard { object: offered, .. } if *offered == object),
+    )
 }
 
 /// Tap `source` for mana while a cost is being paid or at priority. A source

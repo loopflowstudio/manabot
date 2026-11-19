@@ -74,7 +74,17 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
     // The Elves taps for {G} instead: it then cannot convoke as well.
     tap_for_mana(&mut s, elves);
     assert!(tapped(&s, elves));
-    assert!(!convokes(&s, elves));
+    // A fork at the first convoke tap: only the creature chosen is tapped.
+    for chosen in [lions, ogre, giant] {
+        let fork = crate::support::play::fork_choosing(
+            &s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == chosen),
+        );
+        for creature in [lions, ogre, giant] {
+            assert_eq!(tapped(&fork, creature), creature == chosen);
+            assert!(!tapped(&s, creature));
+        }
+    }
     for creature in [lions, ogre, giant] {
         choose(
             &mut s,

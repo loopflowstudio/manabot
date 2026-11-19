@@ -160,7 +160,7 @@ fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
 
     for (chosen, kept) in [(tokens[0], tokens[1]), (tokens[1], tokens[0])] {
         let fork = fork_selecting(&s, chosen);
-        let [StackObject::Spell(spell)] = fork.state.stack_objects.as_slice() else {
+        let [StackObject::Spell(spell)] = fork.game().state.stack_objects.as_slice() else {
             panic!("the spell is cast once, its mana paid automatically")
         };
         assert_eq!(
@@ -171,7 +171,7 @@ fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
             [chosen]
         );
         assert_eq!(spell.spent.total(), 1);
-        assert!(fork.state.permanent_of(chosen).is_none());
-        assert!(fork.state.permanent_of(kept).is_some());
+        assert!(fork.game().state.permanent_of(chosen).is_none());
+        assert!(fork.game().state.permanent_of(kept).is_some());
     }
 }
