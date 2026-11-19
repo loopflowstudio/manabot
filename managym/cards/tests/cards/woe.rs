@@ -46,6 +46,9 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
     for (treasure, bargain) in [(false, false), (true, false), (true, true)] {
         let mut s = five_color_unfunded_setup(&["Archon's Glory", "Gray Ogre"]);
         let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        // Two lands, so the mana is a choice and the payment stays pending
+        // after the sacrifice is chosen.
+        s.force_permanent_on_battlefield(0, "Plains");
         s.force_permanent_on_battlefield(0, "Plains");
         let token = treasure.then(|| {
             let token = s
@@ -86,13 +89,12 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
             assert_eq!(frame.offers[0].label, "Sacrifice Treasure (bargain)");
             select_card(&mut s, token);
             // Chosen and still on the battlefield until the mana is paid.
-            if s.action_space().kind == ActionSpaceKind::PayOrNot {
-                let context = s.game().decision_context(PlayerId(0)).unwrap();
-                assert_eq!(
-                    context.paid[0].phrase,
-                    "Treasure, sacrificed to bargain when the payment completes"
-                );
-            }
+            assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+            let context = s.game().decision_context(PlayerId(0)).unwrap();
+            assert_eq!(
+                context.paid[0].phrase,
+                "Treasure, sacrificed to bargain when the payment completes"
+            );
         }
         if s.action_space().kind == ActionSpaceKind::PayOrNot {
             pay_rest(&mut s);
