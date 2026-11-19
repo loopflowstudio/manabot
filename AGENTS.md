@@ -412,6 +412,11 @@ committed-choice facts. Search clones omit those sinks and their copy provenance
 transactional rollback snapshots must restore them. Training supplies recorder
 paths and phase markers; engine recording never discovers training scope.
 
+`protocol/*.schema.json` has no generator. Patch the files when a protocol
+type changes; the Rust schema tests compare them byte for byte with what
+`schemars` derives. A resolution payment's focus (ward, "unless pays") is the
+permanent's `object_id`, never its permanent id.
+
 ## Forced decisions
 
 Every game runner, benchmark and Academy session uses native trivial-decision
