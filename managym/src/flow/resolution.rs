@@ -27,6 +27,7 @@ use crate::{
         effect::{Affected, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
+        payment::How,
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
         stack_object::{
@@ -78,6 +79,20 @@ impl Game {
             },
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::ExcessDamage => frame.excess_damage,
+            EffectValue::PowerTappedToPay => frame
+                .spent
+                .contributions()
+                .iter()
+                .filter(|paid| paid.how == How::Tapped)
+                .map(|paid| {
+                    let power = self
+                        .state
+                        .permanent_of(paid.object)
+                        .map(|id| self.characteristics(id).power)
+                        .or_else(|| self.object_lki(paid.object).map(|lki| lki.power));
+                    power.unwrap_or(0).max(0)
+                })
+                .sum(),
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
             EffectValue::ColorsSpentToCast => i32::from(frame.spent.colors()),
             EffectValue::SourcePower => self
@@ -116,6 +131,7 @@ impl Game {
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
             | EffectValue::SourcePower
+            | EffectValue::PowerTappedToPay
             | EffectValue::TriggeringPower
             | EffectValue::TriggeringManaValue
             | EffectValue::TargetToughness
@@ -328,6 +344,7 @@ impl Game {
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
             x: ability.x,
+            spent: ability.paid,
             targets,
             context_target: attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),

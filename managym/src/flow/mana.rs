@@ -2031,8 +2031,11 @@ impl Game {
             && self.mana_payment[self.decision_controller(player).0] == ManaPayment::Auto
     }
 
-    /// Follow one step of the live payment witness. Optional costs still offer
-    /// Pay/Decline, and a deliberate priority float still chooses its output.
+    /// Follow one step of the live payment witness. Only the mana component is
+    /// paid for the player: units of one mana class are interchangeable, the
+    /// creatures and cards of every other component are not. Optional costs
+    /// still offer Pay/Decline, and a deliberate priority float still chooses
+    /// its output.
     pub(crate) fn automatic_payment_action(&self, space: &ActionSpace) -> Option<Action> {
         let player = space.player?;
         if !self.automatic_mana_payment(player) {
@@ -2081,9 +2084,6 @@ impl Game {
                 Some((_, _, CostComponent::ConvokeColor { .. })) => {
                     return space.actions.first().cloned();
                 }
-                Some((_, _, CostComponent::TapPower { power, .. })) => {
-                    return self.automatic_power_tap(space, *power);
-                }
                 _ => return None,
             },
             _ => return None,
@@ -2130,44 +2130,6 @@ impl Game {
             }),
             step => step.action(player),
         }
-    }
-
-    /// The automatic payer's tap toward a crew-like cost that still owes
-    /// `owed` power: the fewest creatures that reach it, the weakest of them
-    /// first.
-    fn automatic_power_tap(&self, space: &ActionSpace, owed: i32) -> Option<Action> {
-        let mut offers: Vec<(i32, &Action)> = space
-            .actions
-            .iter()
-            .filter_map(|action| match action {
-                Action::SelectCard { object, .. } => {
-                    let permanent = self.state.permanent_of(*object)?;
-                    Some((self.characteristics(permanent).power, action))
-                }
-                _ => None,
-            })
-            .collect();
-        offers.sort_by_key(|(power, _)| *power);
-        // Taps still needed for `owed` from the strongest offers, less `used`.
-        let needed = |mut owed: i32, used: Option<usize>| {
-            let mut taps = 0;
-            for (index, (power, _)) in offers.iter().enumerate().rev() {
-                if owed <= 0 {
-                    break;
-                }
-                if used != Some(index) {
-                    owed -= power;
-                    taps += 1;
-                }
-            }
-            taps
-        };
-        let fewest = needed(owed, None);
-        offers
-            .iter()
-            .enumerate()
-            .find(|(index, (power, _))| needed(owed - power, Some(*index)) < fewest)
-            .map(|(_, (_, action))| (*action).clone())
     }
 
     pub(crate) fn mana_float_mode(&self, player: PlayerId) -> ManaFloats {
@@ -2330,8 +2292,8 @@ impl Game {
         payment: &Payment,
         selected: Option<PermanentId>,
     ) -> bool {
-        let Some(tap) = payment.owed.iter().find_map(|component| match component {
-            CostComponent::Tap(tap) => Some(tap),
+        let Some((tap, toward)) = payment.owed.iter().find_map(|component| match component {
+            CostComponent::Tap(tap, toward) => Some((tap, *toward)),
             _ => None,
         }) else {
             return false;
@@ -2341,7 +2303,9 @@ impl Game {
         };
         let obligations = vec![
             Obligation::Tap {
-                candidates: self.tap_candidates(player, &tap.predicate).into(),
+                candidates: self
+                    .tap_component_candidates(player, &payment.operation, tap, toward)
+                    .into(),
                 remaining: tap.count,
             },
             Obligation::Pay {

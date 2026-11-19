@@ -33,7 +33,8 @@ enum Place {
 /// Paths (JSON pointers) of resolution-only conditions outside an
 /// `Effect::If` condition, and of source questions outside an `Effect::If`
 /// condition, an intervening-if clause or a type grant's / land-type
-/// overwrite's / P/T buff's own condition (layers ask those of the source).
+/// overwrite's / P/T buff's / battlefield keyword grant's own condition
+/// (layers ask those of the source).
 fn misplaced_resolution_conditions(definition: &PrintedCharacteristics) -> Vec<String> {
     let value = serde_json::to_value(definition).expect("definitions serialize");
     let mut found = Vec::new();
@@ -78,9 +79,19 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                         }
                     }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
-                    ("TypeGrant" | "SetsLandType" | "PtBuff", Value::Object(ability)) => {
+                    (
+                        "TypeGrant" | "SetsLandType" | "PtBuff" | "KeywordGrant",
+                        Value::Object(ability),
+                    ) => {
+                        // Layers ask a battlefield grant's condition of its
+                        // source; a grant to spells has no source permanent.
+                        let to_spells = key == "KeywordGrant"
+                            && ability
+                                .get("scope")
+                                .and_then(Value::as_object)
+                                .is_some_and(|scope| scope.contains_key("SpellsYouControl"));
                         for (part, inner) in ability {
-                            let place = if part == "condition" {
+                            let place = if part == "condition" && !to_spells {
                                 Place::SourceStatic
                             } else {
                                 place

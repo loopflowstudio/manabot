@@ -585,8 +585,6 @@ impl ActivatedAbilityDefinition {
         }
     }
 
-    /// For a known mana ability, does activation change anything besides
-    /// paying mana, tapping its own source and producing its output?
     /// The total power of other creatures this ability taps as a cost, and
     /// the keyword that asks for it.
     pub fn tap_power(&self) -> Option<(i32, crate::payment::Toward)> {
@@ -596,6 +594,26 @@ impl ActivatedAbilityDefinition {
             .or(self.saddle.map(|power| (power, Toward::Saddle)))
     }
 
+    /// The permanents this ability taps as a chosen cost and the part of the
+    /// cost they pay: its printed tap cost, or station's one creature. The
+    /// station creature is another than the source, which the predicate
+    /// cannot say; the payment's candidates exclude it.
+    pub fn chosen_tap(&self) -> Option<(TapCost, crate::payment::Toward)> {
+        use crate::payment::Toward;
+        if self.station {
+            return Some((
+                TapCost {
+                    predicate: CardPredicate::creature(),
+                    count: 1,
+                },
+                Toward::Station,
+            ));
+        }
+        self.tap_cost.clone().map(|cost| (cost, Toward::Printed))
+    }
+
+    /// For a known mana ability, does activation change anything besides
+    /// paying mana, tapping its own source and producing its output?
     pub fn mana_activation_has_side_effects(&self) -> bool {
         self.life_cost > 0
             || self.sacrifice_source
@@ -604,6 +622,7 @@ impl ActivatedAbilityDefinition {
             || self.discard_card
             || self.tap_cost.is_some()
             || self.tap_power().is_some()
+            || self.station
             || self.effects.len() > 1
     }
 
@@ -773,6 +792,11 @@ pub struct ActivatedAbilityDefinition {
     /// "Saddle N": the same cost as crew (CR 702.171a), toward saddling.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub saddle: Option<i32>,
+    /// "Station": tap another untapped creature you control (CR 702.184a).
+    /// The effects read that creature's power from the activation's receipt
+    /// (`EffectValue::PowerTappedToPay`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub station: bool,
     /// The least X the activation may announce ("X can't be 0", CR 107.3).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x_min: u8,

@@ -63,7 +63,8 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
 
 /// Saddle 1 taps other creatures with total power 1 or more, at sorcery
 /// speed, and the ability's receipt names them. The Jaguar gets +2/+2 only
-/// when it attacks while saddled.
+/// when it attacks while saddled. The automatic payer leaves the choice of
+/// creatures to the player.
 #[test]
 fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
     use crate::support::{
@@ -76,11 +77,15 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
         flow::turn::StepKind,
         state::{
             payment::{How, Toward},
+            player::ManaPayment,
             stack_object::StackObject,
         },
     };
-    for saddled in [false, true] {
+    for (saddled, auto) in [(false, false), (true, false), (true, true)] {
         let mut s = five_color_unfunded_setup(&["Alacrian Jaguar", "Llanowar Elves", "Gray Ogre"]);
+        if auto {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
         let jaguar = s.force_permanent_on_battlefield(0, "Alacrian Jaguar");
         let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
         let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
@@ -92,7 +97,10 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
             offered.sort();
             let mut expected = vec![card_of(&s, elves), card_of(&s, ogre)];
             expected.sort();
-            assert_eq!(offered, expected, "the Jaguar cannot saddle itself");
+            assert_eq!(
+                offered, expected,
+                "the Jaguar cannot saddle itself, auto={auto}"
+            );
             let frame = s.game().semantic_decision_frame().unwrap();
             assert!(
                 frame

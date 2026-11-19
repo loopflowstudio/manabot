@@ -565,6 +565,11 @@ pub enum EffectValue {
     PermanentsSacrificedThisTurn,
     /// "The number of spells you've cast this turn."
     SpellsCastThisTurn,
+    /// The total power of the creatures tapped to pay the resolving
+    /// ability's cost ("charge counters equal to its power", station, CR
+    /// 702.184a), each read as the ability resolves or from its last known
+    /// information once it has left; 0 outside a resolution.
+    PowerTappedToPay,
     /// The power of the permanent whose event fired the trigger, from its
     /// last known information once it has left ("where X is that
     /// creature's power").

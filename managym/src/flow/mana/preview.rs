@@ -259,7 +259,7 @@ impl Game {
                 }
                 if ability.mana_cost.x > 0
                     || ability.sacrifice.is_some()
-                    || ability.tap_cost.is_some()
+                    || ability.chosen_tap().is_some()
                     || ability.waterbend
                     || ability.discard_card
                 {

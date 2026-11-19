@@ -4859,6 +4859,47 @@ fn help_paying_a_mana_cost_reaches_the_stack_frame_by_keyword() {
     }
 }
 
+/// Station's tap is a contribution toward `Station`, and the resolving
+/// ability reads its power from the same receipt: the stack frame names the
+/// tapped creature for both players, and the definition's tokens carry the
+/// keyword and the value its effect reads (Lumen-Class Frigate,
+/// `eoe::lumen_class_frigate_stations_for_the_tapped_creatures_power`).
+#[test]
+fn a_station_tap_reaches_the_stack_frame_and_the_definition_tokens() {
+    let mut s = five_color_unfunded_setup(&["Lumen-Class Frigate", "Gray Ogre"]);
+    let frigate = s.force_permanent_on_battlefield(0, "Lumen-Class Frigate");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_definition = s.game().state[card_of(&s, ogre)].definition_id.0;
+    activate(&mut s, frigate, 0);
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    let paid = ["How::Tapped", "Toward::Station"]
+        .map(|name| (TokenKind::Variant as u16, name_value(name)));
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 2, "the activated ability's stack frame");
+        for token in paid {
+            assert!(frame.effect_execution.contains(&token));
+        }
+        assert!(frame
+            .effect_execution_references
+            .iter()
+            .any(|reference| reference.definition == Some(ogre_definition)));
+        assert_execution_tokens_registered(frame);
+    }
+
+    let pack = default_content_pack();
+    let definition = pack
+        .definition(pack.definition_id("Lumen-Class Frigate").unwrap())
+        .unwrap();
+    let rules = tokens_of(definition);
+    assert!(rules.contains(&(TokenKind::Field, name_value("station"))));
+    assert!(rules.contains(&(
+        TokenKind::Variant,
+        name_value("EffectValue::PowerTappedToPay")
+    )));
+}
+
 /// A permanent sacrificed to bargain or to forage is a contribution toward
 /// that cost on the spell's stack frame, for both players
 /// (`woe::archons_glory_gains_flying_and_lifelink_only_when_bargained`,

@@ -287,8 +287,10 @@ pub enum CostComponent {
     /// Tap other untapped creatures until their total power reaches `power`
     /// (crew, CR 702.122a). `power` is what is still owed.
     TapPower { power: i32, toward: Toward },
-    /// "Tap N untapped [predicate] you control"; `count` is what is still owed.
-    Tap(TapCost),
+    /// "Tap N untapped [predicate] you control"; `count` is what is still
+    /// owed, and the second value is the part of the cost the taps pay. A
+    /// station tap is another creature than the source (CR 702.184a).
+    Tap(TapCost, Toward),
     /// "Discard a card".
     Discard,
     /// Exile a matching card from hand rather than pay the mana cost

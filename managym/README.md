@@ -433,7 +433,15 @@ holds. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
 whose step offers a Food to sacrifice, the graveyard cards to exile (the first
 commits to three) and the mana instead. Crew and saddle are the same
 `TapPower` component, toward `Crew` or `Saddle`; a saddled Mount carries a
-`Modification::Saddled` record until end of turn.
+`Modification::Saddled` record until end of turn. Station
+(`ActivatedAbilityDefinition.station`) is a one-creature `Tap` component
+toward `Station` that never offers the source; an activated ability's
+resolving frame carries its receipt, and the station effect reads the tapped
+creature's power from it (`EffectValue::PowerTappedToPay`). A Spacecraft's
+"N+" lines are static abilities conditioned on its charge counters.
+The automatic payer pays only the mana component, with its help: which
+creatures crew, saddle or station, and every other object a cost takes, is
+the player's choice under either `mana_payment` setting.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation

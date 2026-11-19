@@ -36,6 +36,9 @@ pub enum CounterKind {
     Age,
     /// No rules meaning of its own; cards count it (Dark Depths).
     Ice,
+    /// No rules meaning of its own; station puts them on and a Spacecraft's
+    /// or Planet's "N+" abilities count them (CR 702.184).
+    Charge,
 }
 
 impl CounterKind {
@@ -56,6 +59,7 @@ impl CounterKind {
             CounterKind::MinusOneMinusOne => "minus_one_minus_one",
             CounterKind::Age => "age",
             CounterKind::Ice => "ice",
+            CounterKind::Charge => "charge",
         }
     }
 
@@ -67,7 +71,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 14] = [
+    pub const ALL: [CounterKind; 15] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -82,6 +86,7 @@ impl CounterKind {
         CounterKind::MinusOneMinusOne,
         CounterKind::Age,
         CounterKind::Ice,
+        CounterKind::Charge,
     ];
 }
 

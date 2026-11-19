@@ -70,6 +70,8 @@ pub enum Toward {
     Bargain,
     /// The Food sacrificed or the cards exiled to forage (CR 701.61a).
     Forage,
+    /// The creature tapped to station (CR 702.184a).
+    Station,
 }
 
 /// An object that paid part of a cost instead of, or beside, mana. `object`

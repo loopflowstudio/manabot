@@ -212,6 +212,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Bargain",
                 "Forage",
                 "Saddle",
+                "Station",
             ][..],
         ),
         (

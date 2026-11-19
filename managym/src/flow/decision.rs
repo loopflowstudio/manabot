@@ -140,8 +140,9 @@ pub struct EffectFrame {
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
-    /// The mana spent to cast the resolving spell, or the permanent whose
-    /// entering triggered the resolving ability; empty otherwise.
+    /// What was paid to cast the resolving spell, to cast the permanent whose
+    /// entering triggered the resolving ability, or to activate the
+    /// resolving ability; empty otherwise.
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub spent: PaymentReceipt,
     /// Excess damage (CR 120.4a) the latest damage instruction dealt to its

@@ -229,7 +229,10 @@ impl Game {
                         ..
                     } => Some(format!("Tap {name} to saddle")),
                     CostComponent::TapPower { .. } => Some(format!("Tap {name} to crew")),
-                    CostComponent::Tap(_) => Some(format!("Tap {name} to pay")),
+                    CostComponent::Tap(_, Toward::Station) => {
+                        Some(format!("Tap {name} to station"))
+                    }
+                    CostComponent::Tap(..) => Some(format!("Tap {name} to pay")),
                     CostComponent::Sacrifice(_, Toward::Bargain) => {
                         Some(format!("Sacrifice {name} (bargain)"))
                     }
@@ -490,7 +493,7 @@ impl Game {
                 }) {
                     continue;
                 }
-                let affordable = if ability.tap_cost.is_some() {
+                let affordable = if ability.chosen_tap().is_some() {
                     let payment = Payment {
                         owed: self.cost_components(player, &operation),
                         operation,
@@ -845,10 +848,10 @@ impl Game {
                     Vec::new(),
                 )
             }
-            CostComponent::Tap(cost) => (
+            CostComponent::Tap(cost, toward) => (
                 ActionSpaceKind::LookAndSelect,
                 select(permanents(
-                    self.tap_candidates(player, &cost.predicate)
+                    self.tap_component_candidates(player, &payment.operation, cost, *toward)
                         .into_iter()
                         .filter(|id| {
                             self.tap_activation_payment_possible(player, payment, Some(*id))

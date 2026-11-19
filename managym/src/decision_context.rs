@@ -330,7 +330,7 @@ impl Game {
                     ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
                 CostComponent::Discard =>
                     ("additional_cost", "Choose a card to discard as an activation cost."),
-                CostComponent::Tap(_) =>
+                CostComponent::Tap(..) =>
                     ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
                 CostComponent::Sacrifice(..) =>
                     ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),

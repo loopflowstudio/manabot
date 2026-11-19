@@ -686,7 +686,7 @@ impl Game {
                         frame.cost(payment.mana().0);
                     }
                     // A cost of several taps shows how many are still owed.
-                    CostComponent::Tap(cost)
+                    CostComponent::Tap(cost, _)
                         if cost.count
                             + payment
                                 .receipt

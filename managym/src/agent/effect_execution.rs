@@ -549,6 +549,7 @@ impl<'a> Projection<'a> {
                         Toward::Delve => " to delve",
                         Toward::Bargain => " to bargain",
                         Toward::Forage => " to forage",
+                        Toward::Station => " to station",
                     };
                     format!(
                         "{how} {}{toward}",

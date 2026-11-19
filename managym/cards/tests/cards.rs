@@ -44,6 +44,8 @@ mod ecl;
 mod eld;
 #[path = "cards/emn.rs"]
 mod emn;
+#[path = "cards/eoe.rs"]
+mod eoe;
 #[path = "cards/fdn.rs"]
 mod fdn;
 #[path = "cards/frf.rs"]

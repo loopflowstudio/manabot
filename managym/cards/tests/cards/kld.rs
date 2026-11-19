@@ -89,7 +89,7 @@ fn noxious_gearhulk_gains_the_destroyed_creatures_toughness_only_if_destroyed() 
 /// Chosen-colour mana and crew on one permanent (CR 702.122a, 601.2h): the
 /// mana the Caravan makes names the Caravan on the spell it pays for, and its
 /// crew ability's receipt names the creatures tapped for it. Manual offers
-/// every creature that can help; auto taps the fewest that reach the number.
+/// every creature that can help, and so does auto: it pays only the mana.
 #[test]
 fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creatures() {
     use crate::support::{
@@ -159,25 +159,21 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
 
         // Crew 3 with a 2/2, a 3/3 and a 1/1: a tapped Vehicle can be crewed.
         activate(&mut s, caravan, 1);
-        let crew = if auto {
-            vec![giant]
-        } else {
-            let mut offered = offered_cards(&s);
-            offered.sort();
-            let mut expected = vec![card_of(&s, ogre), card_of(&s, giant), card_of(&s, elves)];
-            expected.sort();
-            assert_eq!(offered, expected);
-            let (ogre_object, elves_object) = (card_of(&s, ogre), card_of(&s, elves));
-            select_card(&mut s, ogre_object);
-            // One power is still owed; the tapped Ogre is no longer offered.
-            let mut offered = offered_cards(&s);
-            offered.sort();
-            let mut expected = vec![card_of(&s, giant), elves_object];
-            expected.sort();
-            assert_eq!(offered, expected);
-            select_card(&mut s, elves_object);
-            vec![ogre, elves]
-        };
+        let mut offered = offered_cards(&s);
+        offered.sort();
+        let mut expected = vec![card_of(&s, ogre), card_of(&s, giant), card_of(&s, elves)];
+        expected.sort();
+        assert_eq!(offered, expected, "auto={auto}");
+        let (ogre_object, elves_object) = (card_of(&s, ogre), card_of(&s, elves));
+        select_card(&mut s, ogre_object);
+        // One power is still owed; the tapped Ogre is no longer offered.
+        let mut offered = offered_cards(&s);
+        offered.sort();
+        let mut expected = vec![card_of(&s, giant), elves_object];
+        expected.sort();
+        assert_eq!(offered, expected, "auto={auto}");
+        select_card(&mut s, elves_object);
+        let crew = [ogre, elves];
         let Some(StackObject::ActivatedAbility(ability)) = s.game().state.stack_objects.last()
         else {
             panic!("the crew ability is on the stack, auto={auto}")

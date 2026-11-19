@@ -1804,8 +1804,8 @@ impl Game {
                 if let Some((power, toward)) = ability.tap_power().filter(|(power, _)| *power > 0) {
                     owed.push(CostComponent::TapPower { power, toward });
                 }
-                if let Some(cost) = ability.tap_cost {
-                    owed.push(CostComponent::Tap(cost));
+                if let Some((cost, toward)) = ability.chosen_tap() {
+                    owed.push(CostComponent::Tap(cost, toward));
                 }
                 if ability.discard_card {
                     owed.push(CostComponent::Discard);
@@ -1898,6 +1898,30 @@ impl Game {
             .collect()
     }
 
+    /// The untapped permanents `player` controls that can pay a `Tap`
+    /// component of `operation`. Station taps another creature than its
+    /// source, whatever its power.
+    pub(crate) fn tap_component_candidates(
+        &self,
+        player: PlayerId,
+        operation: &Operation,
+        cost: &TapCost,
+        toward: Toward,
+    ) -> Vec<PermanentId> {
+        let mut candidates = self.tap_candidates(player, &cost.predicate);
+        if let (
+            Toward::Station,
+            Operation::Activation {
+                source: ActivationSource::Permanent(source),
+                ..
+            },
+        ) = (toward, operation)
+        {
+            candidates.retain(|id| id != source);
+        }
+        candidates
+    }
+
     /// The untapped permanents `player` controls that can pay `ability`'s
     /// tap cost.
     pub(crate) fn tap_cost_candidates(
@@ -1945,9 +1969,12 @@ impl Game {
                     payment.owed.remove(0);
                 }
             }
-            CostComponent::Tap(cost) => {
+            CostComponent::Tap(cost, toward) => {
                 let tapped = permanent
-                    .filter(|id| self.tap_candidates(player, &cost.predicate).contains(id))
+                    .filter(|id| {
+                        self.tap_component_candidates(player, &payment.operation, &cost, toward)
+                            .contains(id)
+                    })
                     .ok_or_else(|| {
                         AgentError("tap cost must be an untapped permanent you control".into())
                     })?;
@@ -1958,14 +1985,15 @@ impl Game {
                 }
                 self.pending_choice = None;
                 self.tap_permanent(tapped, false);
-                payment
-                    .receipt
-                    .contribute(object, How::Tapped, Toward::Printed);
+                payment.receipt.contribute(object, How::Tapped, toward);
                 if cost.count > 1 {
-                    payment.owed[0] = CostComponent::Tap(TapCost {
-                        count: cost.count - 1,
-                        ..cost
-                    });
+                    payment.owed[0] = CostComponent::Tap(
+                        TapCost {
+                            count: cost.count - 1,
+                            ..cost
+                        },
+                        toward,
+                    );
                 } else {
                     payment.owed.remove(0);
                 }
