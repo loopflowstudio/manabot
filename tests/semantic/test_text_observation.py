@@ -1699,20 +1699,20 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ).read_text()
     )
     matchup = manifest["matchup"]
-    env = managym.Env(seed=167, decision_memory=True)
+    env = managym.Env(seed=197, decision_memory=True)
     env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
             for role in ("hero", "villain")
         ]
     )
-    rng = random.Random(167)
+    rng = random.Random(197)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 366
+    assert len(memory) == 440
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250
