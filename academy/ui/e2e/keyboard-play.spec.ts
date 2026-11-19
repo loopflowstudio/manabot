@@ -11,10 +11,10 @@ import { CONTROLS } from '../src/lib/board/region';
 /**
  * The region holding focus, by its accessible name, and the focused control:
  * its name and its position among the region's visible controls (the set the
- * region roves over). Copies of one card share a name, so movement is judged
- * by position.
+ * region roves over), with how many there are. Copies of one card share a
+ * name, so movement is judged by position.
  */
-async function focused(page: Page): Promise<{ region: string | null; label: string; index: number }> {
+async function focused(page: Page): Promise<{ region: string | null; label: string; index: number; count: number }> {
   return page.evaluate(selector => {
     const active = document.activeElement as HTMLElement | null;
     const region = active?.closest<HTMLElement>('[data-region]');
@@ -26,18 +26,29 @@ async function focused(page: Page): Promise<{ region: string | null; label: stri
       region: region?.getAttribute('aria-label') ?? null,
       label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '',
       index: active ? controls.indexOf(active) : -1,
+      count: controls.length,
     };
   }, CONTROLS);
 }
 
-/** Tab to the region whose name matches, then arrow to a control whose name matches. */
+/**
+ * Tab to the region whose name matches, then arrow to a control whose name
+ * matches. Tab enters a region on its first control with an offer, which can
+ * be its last, so the walk first steps left to the region's first control;
+ * a region has no Home key.
+ */
 async function reach(page: Page, region: RegExp, control: RegExp): Promise<boolean> {
   for (let tabs = 0; tabs < 16; tabs += 1) {
     if (region.test((await focused(page)).region ?? '')) break;
     await page.keyboard.press('Tab');
   }
   if (!region.test((await focused(page)).region ?? '')) return false;
-  await page.keyboard.press('Home');
+  for (let steps = 0; steps < 40; steps += 1) {
+    const at = (await focused(page)).index;
+    if (at <= 0) break;
+    await page.keyboard.press('ArrowLeft');
+    if ((await focused(page)).index === at) break;
+  }
   const seen = new Set<number>();
   for (let steps = 0; steps < 40; steps += 1) {
     const now = await focused(page);
@@ -93,8 +104,9 @@ test('a game is played from the keyboard alone', async ({ page }) => {
 
   // Arrows move within a region: the hand's cards one by one.
   expect(await reach(page, /^Your hand/, /./)).toBe(true);
-  const first = (await focused(page)).index;
-  await page.keyboard.press('ArrowRight');
+  const { index: first, count } = await focused(page);
+  expect(count).toBeGreaterThan(1);
+  await page.keyboard.press(first < count - 1 ? 'ArrowRight' : 'ArrowLeft');
   const second = await focused(page);
   expect(second.region).toMatch(/^Your hand/);
   expect(second.index).not.toBe(first);
