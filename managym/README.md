@@ -826,10 +826,17 @@ from another offer set raises `managym.AgentError` and returns no plan.
 
 | `state` | Meaning |
 | --- | --- |
-| `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
+| `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. `contributions` names what objects have already paid toward this cost, in the order paid ("sacrificed Gray Ogre to bargain"). |
 | `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
 | `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability with its own fee. |
+
+The preview reads the cost as the payment owes it (`Payment.owed`). While a
+sacrifice, discard, exile or forage is still the payer's to choose, the state
+is `needs_choice`; once those are paid and only mana is owed, the plan is
+exact and lists them. A cost with convoke, improvise or delve stays
+`needs_choice` throughout, because its taps and exiled cards pay part of the
+mana itself.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending

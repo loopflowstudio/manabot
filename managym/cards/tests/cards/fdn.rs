@@ -53,6 +53,54 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
         .is_empty());
 }
 
+/// The payment preview reads the cost being paid. Hungry Ghoul's "{1},
+/// Sacrifice another creature" has no preview until the creature is chosen;
+/// at the mana it names the creature already sacrificed beside the land that
+/// would be tapped.
+#[test]
+fn hungry_ghoul_payment_preview_names_the_creature_already_sacrificed() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, Scenario},
+        play::select_card,
+    };
+    use managym::agent::action::Action;
+
+    let preview = |s: &Scenario, action: &dyn Fn(&Action) -> bool| {
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let index = s.action_space().actions.iter().position(action).unwrap();
+        let preview = s
+            .game()
+            .payment_preview(PlayerId(0), frame.revision, &frame.fingerprint, index)
+            .unwrap();
+        serde_json::to_value(&preview).unwrap()
+    };
+    let mut s = five_color_unfunded_setup(&["Hungry Ghoul", "Gray Ogre"]);
+    let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Swamp");
+    s.force_permanent_on_battlefield(0, "Forest");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let ogre_object = card_of(&s, ogre);
+
+    let announced = preview(
+        &s,
+        &|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == ghoul),
+    );
+    assert_eq!(announced["state"], "needs_choice");
+    assert_eq!(announced["contributions"], serde_json::json!([]));
+
+    activate(&mut s, ghoul, 0);
+    select_card(&mut s, ogre_object);
+    let paying = preview(&s, &|a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(paying["state"], "exact", "{paying}");
+    assert_eq!(
+        paying["contributions"],
+        serde_json::json!(["sacrificed Gray Ogre"])
+    );
+    assert_eq!(paying["sources"][0]["label"], "Swamp");
+    assert_eq!(paying["sources"].as_array().unwrap().len(), 1);
+}
+
 /// CR 601.2h, 602.2b: the ability's receipt names the creature sacrificed
 /// for it, and what that creature was stays readable after it has left.
 /// The sacrifice is the player's choice under both payment settings; only

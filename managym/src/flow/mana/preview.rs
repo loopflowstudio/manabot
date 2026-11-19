@@ -2,9 +2,9 @@
 //! output or mana unit is committed by this query.
 use super::*;
 use crate::agent::ability_description::cost_description;
+use crate::agent::effect_execution::contribution_phrase;
 use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
-use crate::flow::game::CastChoices;
-use crate::state::game_object::Object;
+use crate::flow::game::{CastChoices, CostComponent};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -27,6 +27,9 @@ pub struct PaymentPreview {
     pub state: PaymentPreviewState,
     pub explanation: String,
     pub cost: Option<String>,
+    /// What objects have already paid toward this cost, in the order paid:
+    /// "sacrificed Gray Ogre to bargain".
+    pub contributions: Vec<String>,
     pub sources: Vec<PaymentSourcePreview>,
     pub pool_after_production: Option<PreviewPool>,
     /// Absent if more than one legal unit can be spent at any point.
@@ -67,14 +70,15 @@ impl From<&Mana> for PreviewPool {
     }
 }
 
-/// A sacrifice, waterbend or exile alternative needs its own choice, which the
-/// preview does not make for the player.
-fn has_unannounced_cost(card: &Object, cast: CastChoices) -> bool {
-    card.sacrifice_cost().is_some()
-        || card.forage_or().is_some()
-        || (cast.kicked && card.bargain())
-        || card.required_waterbend().is_some()
-        || (cast.kicked && card.exile_alternative().is_some())
+/// Whether `owed` still asks its payer for something other than mana: a
+/// component ahead of the mana (a sacrifice, discard, exile or forage), or
+/// taps and exiled cards that may pay part of the mana itself. The preview
+/// does not make those choices for the player.
+fn owes_a_choice(owed: &[CostComponent]) -> bool {
+    match &owed[0] {
+        CostComponent::Mana { help, .. } => help.keyworded(),
+        _ => true,
+    }
 }
 
 impl PaymentPreview {
@@ -90,6 +94,7 @@ impl PaymentPreview {
             state,
             explanation: explanation.into(),
             cost: None,
+            contributions: Vec::new(),
             sources: Vec::new(),
             pool_after_production: None,
             pool_after_spending: None,
@@ -98,6 +103,24 @@ impl PaymentPreview {
 }
 
 impl Game {
+    /// Whether casting `object` with `cast` would ask its payer for more than
+    /// mana. Before the payment begins a waterbend cost's taps are such a
+    /// choice too; once it is being paid, the preview shows its mana route.
+    fn spell_owes_a_choice(&self, player: PlayerId, object: ObjectId, cast: CastChoices) -> bool {
+        let owed = self.cost_components(
+            player,
+            &Operation::Spell {
+                object,
+                cast,
+                mode: None,
+                targets: Vec::new(),
+                target_req_indices: Vec::new(),
+            },
+        );
+        owes_a_choice(&owed)
+            || matches!(&owed[0], CostComponent::Mana { help, .. } if help.waterbend > 0)
+    }
+
     /// Query one legal action at its exact semantic authority address.
     pub fn payment_preview(
         &self,
@@ -128,6 +151,7 @@ impl Game {
         // before cost completion can advance the spell or ability.
         let mut position = std::borrow::Cow::Borrowed(self);
         let mut sources = Vec::new();
+        let mut contributions = Vec::new();
         let mut resolution = None;
         // A deliberate tap in a payment previews its own production first.
         let offered_tap = match action {
@@ -151,11 +175,7 @@ impl Game {
                         "Choose the optional or alternative cost before previewing payment.",
                     ));
                 };
-                if has_unannounced_cost(card, cast)
-                    || self
-                        .spell_help(player, *object, cast, &ManaCost::default())
-                        .keyworded()
-                {
+                if self.spell_owes_a_choice(player, *object, cast) {
                     return Ok(PaymentPreview::needs_additional_cost());
                 }
                 if card.cost_reduction_if_targets().is_some() {
@@ -177,11 +197,7 @@ impl Game {
                     ..
                 }) => {
                     let card = &self.state[*object];
-                    if has_unannounced_cost(card, *cast)
-                        || self
-                            .spell_help(player, *object, *cast, &ManaCost::default())
-                            .keyworded()
-                    {
+                    if self.spell_owes_a_choice(player, *object, *cast) {
                         return Ok(PaymentPreview::needs_additional_cost());
                     }
                     let requirements = card.target_requirements_for_mode(*mode);
@@ -222,12 +238,16 @@ impl Game {
                 }
             }
             Action::PayCost { .. } | Action::TapForMana { .. } => match &self.pending_choice {
-                Some(PendingChoice::Pay { payment, .. })
-                    if payment.paying_mana() && payment.help().keyworded() =>
-                {
+                Some(PendingChoice::Pay { payment, .. }) if owes_a_choice(&payment.owed) => {
                     return Ok(PaymentPreview::needs_additional_cost());
                 }
-                Some(PendingChoice::Pay { payment, .. }) if payment.paying_mana() => {
+                Some(PendingChoice::Pay { payment, .. }) => {
+                    contributions = payment
+                        .receipt
+                        .contributions()
+                        .iter()
+                        .map(|paid| contribution_phrase(self, viewer, paid))
+                        .collect();
                     sources
                         .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
                     if payment.waterbends() {
@@ -257,28 +277,24 @@ impl Game {
                         "No automatic activation fee preview.",
                     ));
                 }
-                if ability.mana_cost.x > 0
-                    || ability.sacrifice.is_some()
-                    || ability.chosen_tap().is_some()
-                    || ability.waterbend
-                    || ability.discard_card
-                {
-                    return Ok(PaymentPreview::message(
-                        PaymentPreviewState::NeedsChoice,
-                        "Choose the activation's additional costs before previewing payment.",
-                    ));
-                }
                 let operation = Operation::Activation {
                     source: ActivationSource::Permanent(*permanent),
                     ability_index: *ability_index,
                     targets: Vec::new(),
                     x: 0,
                 };
+                let owed = self.cost_components(player, &operation);
+                if ability.mana_cost.x > 0 || ability.waterbend || owes_a_choice(&owed) {
+                    return Ok(PaymentPreview::message(
+                        PaymentPreviewState::NeedsChoice,
+                        "Choose the activation's additional costs before previewing payment.",
+                    ));
+                }
                 let cost = ability.mana_cost.clone();
                 position.to_mut().pending_choice = Some(PendingChoice::Pay {
                     player,
                     payment: Box::new(Payment {
-                        owed: self.cost_components(player, &operation),
+                        owed,
                         operation,
                         receipt: Default::default(),
                     }),
@@ -341,6 +357,7 @@ impl Game {
             }
             .into(),
             cost: Some(cost_description(&cost)),
+            contributions,
             sources,
             pool_after_production: Some(PreviewPool::from(&pool)),
             pool_after_spending: final_pool.as_ref().map(PreviewPool::from),

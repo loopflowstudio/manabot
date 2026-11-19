@@ -539,31 +539,7 @@ impl<'a> Projection<'a> {
         self.summary(|| {
             let paid: Vec<_> = shown
                 .iter()
-                .map(|paid| {
-                    let how = match paid.how {
-                        How::Tapped => "tapped",
-                        How::Sacrificed => "sacrificed",
-                        How::Exiled => "exiled",
-                        How::Discarded => "discarded",
-                    };
-                    let toward = match paid.toward {
-                        Toward::Printed => "",
-                        Toward::Waterbend => " to waterbend",
-                        Toward::Crew => " to crew",
-                        Toward::Saddle => " to saddle",
-                        Toward::Alternative => " instead of paying mana",
-                        Toward::Convoke => " to convoke",
-                        Toward::Improvise => " to improvise",
-                        Toward::Delve => " to delve",
-                        Toward::Bargain => " to bargain",
-                        Toward::Forage => " to forage",
-                        Toward::Station => " to station",
-                    };
-                    format!(
-                        "{how} {}{toward}",
-                        Self::label(game.visible_reference(paid.object, viewer))
-                    )
-                })
+                .map(|paid| contribution_phrase(game, viewer, paid))
                 .collect();
             format!("Paid with: {}.", paid.join("; "))
         });
@@ -921,6 +897,34 @@ impl ManaSpent {
             copies: spent.copy_triggers().count() as u8,
         }
     }
+}
+
+/// What one object did toward a cost, as `viewer` may name it: "tapped Gray
+/// Ogre to crew". A departed object is named by what it last was.
+pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribution) -> String {
+    let how = match paid.how {
+        How::Tapped => "tapped",
+        How::Sacrificed => "sacrificed",
+        How::Exiled => "exiled",
+        How::Discarded => "discarded",
+    };
+    let toward = match paid.toward {
+        Toward::Printed => "",
+        Toward::Waterbend => " to waterbend",
+        Toward::Crew => " to crew",
+        Toward::Saddle => " to saddle",
+        Toward::Alternative => " instead of paying mana",
+        Toward::Convoke => " to convoke",
+        Toward::Improvise => " to improvise",
+        Toward::Delve => " to delve",
+        Toward::Bargain => " to bargain",
+        Toward::Forage => " to forage",
+        Toward::Station => " to station",
+    };
+    format!(
+        "{how} {}{toward}",
+        Projection::label(game.visible_reference(paid.object, viewer))
+    )
 }
 
 /// The contributions a frame of `source` shows. The receipt keeps everything

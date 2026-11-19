@@ -38,6 +38,12 @@
   {:else if preview}
     <p>{state.label}{#if preview.cost}{` · Cost ${preview.cost}`}{/if}</p>
     {#if preview.state === 'exact'}
+      {#if preview.contributions.length}
+        <p class="font-semibold">Already paid</p>
+        <ul aria-label="Already paid" class="list-disc pl-5">
+          {#each preview.contributions as paid}<li>{paid}</li>{/each}
+        </ul>
+      {/if}
       {#if preview.sources.length}
         <p class="font-semibold">Would tap</p>
         <ol aria-label="Would tap" class="list-decimal pl-5">
