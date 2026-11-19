@@ -550,7 +550,7 @@ export interface HandFan {
 }
 
 /** A covered card keeps at least this much of its left edge in view, px. */
-export const HAND_MIN_SLICE = 24;
+const HAND_MIN_SLICE = 24;
 
 /**
  * Lay out `count` cards in hand within `width` px: as large as `card.max`
@@ -559,10 +559,10 @@ export const HAND_MIN_SLICE = 24;
  * slice (name and cost) in view. A hand that fits keeps its cards apart.
  */
 export function handFan(count: number, width: number, card: { min: number; max: number }, gap: number): HandFan {
-  const largest = card.max;
-  if (count <= 1) return { card: largest, step: largest + gap, covered: false };
+  if (count <= 1) return { card: card.max, step: card.max + gap, covered: false };
   const side = Math.floor((width - gap * (count - 1)) / count);
-  const size = Math.max(Math.min(card.min, largest), Math.min(largest, side));
+  // A short strip can make the full size smaller than the floor; the full size wins.
+  const size = Math.max(Math.min(card.min, card.max), Math.min(card.max, side));
   if (size * count + gap * (count - 1) <= width) return { card: size, step: size + gap, covered: false };
   return { card: size, step: Math.max(HAND_MIN_SLICE, (width - size) / (count - 1)), covered: true };
 }

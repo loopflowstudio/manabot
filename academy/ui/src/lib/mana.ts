@@ -9,7 +9,8 @@ export function manaText(amounts: number[]): string {
 
 /** What sets a class of pooled mana apart, after its amount: "only for Lesson spells, normally expires at step end". */
 export function pooledManaTerms(pool: PooledManaView): string {
-  return `${pool.restriction ? `only for ${pool.restriction}` : ''}${pool.effect ? `${pool.restriction ? ' ' : ''}that puts ${pool.effect}` : ''}${pool.restriction || pool.effect ? ', ' : ''}normally expires ${pool.combat ? 'at end of combat' : 'at step end'}`;
+  const sets = [pool.restriction && `only for ${pool.restriction}`, pool.effect && `that puts ${pool.effect}`].filter(Boolean).join(' ');
+  return `${sets ? `${sets}, ` : ''}normally expires ${pool.combat ? 'at end of combat' : 'at step end'}`;
 }
 
 /** What restricted mana may be spent on: "Lesson spells", "abilities of Shrine sources". */
