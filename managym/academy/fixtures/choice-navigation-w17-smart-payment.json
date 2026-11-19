@@ -564,9 +564,9 @@
       "digest": "83da2ba97b50886bba2131075f968a90d6db3d36d3e185de45fff1daa86c6c51",
       "frame": {
         "protocol": 1,
-        "match_id": "kxmIb9Rs1Bg9-L9901SqSw",
+        "match_id": "UHXWXLfZrCbqzIHcTx8pzw",
         "revision": 196,
-        "frame_hash": "8ad9bb92e9095d1c69a79907daadd753656467c7a19c35648e519059a04ab0f3",
+        "frame_hash": "3a826a4f7d74dcac5acf0336b33239a57c87dcc37533ea3f3bca974ef117bb72",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2731,9 +2731,9 @@
       "digest": "e6113de449dd28281876686ee921ff3c28442c6661894313c08d85656dfaf287",
       "frame": {
         "protocol": 1,
-        "match_id": "QdOeT9AQQ9sgb5lod8cc8w",
+        "match_id": "ZFF6VIb4W8T0jFu5q_s2qQ",
         "revision": 72,
-        "frame_hash": "9c4a74e0d078f32a2187e254a79234e00607f73ef8b12810bbf2f686d4ee7f22",
+        "frame_hash": "6e81d34d188bccc1618c9f5f9de71ef795e69bc20b0973d5a6b878e027f22829",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4458,9 +4458,9 @@
       "digest": "02c67aa1ef83544561c1146440f609b090c0701001a96ddc88015e8a1f7429c2",
       "frame": {
         "protocol": 1,
-        "match_id": "3ic6cGvUZFaVbxUankCuSw",
+        "match_id": "n9sb1FL7lQf319ck3sfm6g",
         "revision": 7,
-        "frame_hash": "1cb16e645514512cf4009ae7f2373f54060e5d7b61bc967f2ee140447dcc7943",
+        "frame_hash": "5948ff194a93a734743e39703d66ed999d69aa1ed673babc69729a8dad099c35",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5760,9 +5760,9 @@
       "digest": "ed6aaf6781b999ac1be847fa9e2f84f5b3573cd628fde839e89e526414ef2cbc",
       "frame": {
         "protocol": 1,
-        "match_id": "KMfY8vzP1jyJuYh5hwtLuQ",
+        "match_id": "SbWgirvN8xweD8TLVSRcdg",
         "revision": 40,
-        "frame_hash": "f228bc63b78c80cfca3f02f8c29b17415308965b484cba9cb4f4504bb958beca",
+        "frame_hash": "3d9890bdd587ad384644494c3f8040089275def4460a20cf41d4dc6b83a2a663",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -7180,9 +7180,9 @@
       "digest": "e772042dff783e47f608a73ea7ed63fe57a85e86ef20a0052b1e7aee51678d18",
       "frame": {
         "protocol": 1,
-        "match_id": "qlz5bkUvDPXkRgsioMJQ0Q",
+        "match_id": "yP_8uh7gTvsvpC0SVxf8Pw",
         "revision": 64,
-        "frame_hash": "486fcd190ccb3b2e7de7671116b09cbc9b8d63c2275faaeec7fbf12688892bb6",
+        "frame_hash": "95130d081e2202ab26ed9c75b023024c7eb5d95cf43103b291b0ae05355805b3",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -7191,7 +7191,7 @@
           "actor": 0,
           "kind": "pay_or_not",
           "title": "Payment",
-          "instruction": "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."
+          "instruction": "Produce mana or finish the announced payment. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately."
         },
         "projection": {
           "schedule": {
@@ -7218,7 +7218,7 @@
             ],
             "actor": 0,
             "stage": "payment",
-            "instruction": "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately.",
+            "instruction": "Produce mana or finish the announced payment. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately.",
             "source": {
               "entity_id": 25,
               "subject": {
