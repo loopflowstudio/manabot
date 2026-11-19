@@ -6221,5 +6221,225 @@
     "keywords": [],
     "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {R} or {W}.",
     "colors": []
+  },
+  "Azorius Guildgate": {
+    "name": "Azorius Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {W} or {U}.",
+    "colors": []
+  },
+  "Boros Guildgate": {
+    "name": "Boros Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {R} or {W}.",
+    "colors": []
+  },
+  "Dimir Guildgate": {
+    "name": "Dimir Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {U} or {B}.",
+    "colors": []
+  },
+  "Golgari Guildgate": {
+    "name": "Golgari Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {B} or {G}.",
+    "colors": []
+  },
+  "Gruul Guildgate": {
+    "name": "Gruul Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {R} or {G}.",
+    "colors": []
+  },
+  "Izzet Guildgate": {
+    "name": "Izzet Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {U} or {R}.",
+    "colors": []
+  },
+  "Orzhov Guildgate": {
+    "name": "Orzhov Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {W} or {B}.",
+    "colors": []
+  },
+  "Rakdos Guildgate": {
+    "name": "Rakdos Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {B} or {R}.",
+    "colors": []
+  },
+  "Selesnya Guildgate": {
+    "name": "Selesnya Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {G} or {W}.",
+    "colors": []
+  },
+  "Simic Guildgate": {
+    "name": "Simic Guildgate",
+    "mana_cost": "",
+    "type_line": "Land — Gate",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {G} or {U}.",
+    "colors": []
+  },
+  "Temple of Abandon": {
+    "name": "Temple of Abandon",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {R} or {G}.",
+    "colors": []
+  },
+  "Temple of Deceit": {
+    "name": "Temple of Deceit",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {U} or {B}.",
+    "colors": []
+  },
+  "Temple of Enlightenment": {
+    "name": "Temple of Enlightenment",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {W} or {U}.",
+    "colors": []
+  },
+  "Temple of Epiphany": {
+    "name": "Temple of Epiphany",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {U} or {R}.",
+    "colors": []
+  },
+  "Temple of Malady": {
+    "name": "Temple of Malady",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {B} or {G}.",
+    "colors": []
+  },
+  "Temple of Malice": {
+    "name": "Temple of Malice",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {B} or {R}.",
+    "colors": []
+  },
+  "Temple of Mystery": {
+    "name": "Temple of Mystery",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {G} or {U}.",
+    "colors": []
+  },
+  "Temple of Plenty": {
+    "name": "Temple of Plenty",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {G} or {W}.",
+    "colors": []
+  },
+  "Temple of Silence": {
+    "name": "Temple of Silence",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {W} or {B}.",
+    "colors": []
+  },
+  "Temple of Triumph": {
+    "name": "Temple of Triumph",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {R} or {W}.",
+    "colors": []
   }
 }

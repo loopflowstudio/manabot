@@ -36,12 +36,14 @@ mod frf;
 mod fut;
 mod gpt;
 mod grn;
+mod gtc;
 mod hob;
 mod ice;
 mod iko;
 mod inv;
 mod isd;
 mod j22;
+mod jou;
 mod khm;
 mod kld;
 mod ktk;
@@ -137,12 +139,14 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     fut::cards,
     gpt::cards,
     grn::cards,
+    gtc::cards,
     hob::cards,
     ice::cards,
     iko::cards,
     inv::cards,
     isd::cards,
     j22::cards,
+    jou::cards,
     khm::cards,
     kld::cards,
     ktk::cards,

@@ -480,6 +480,51 @@ pub fn play_land(s: &mut Scenario, name: &str) -> PermanentId {
         .expect("land entered")
 }
 
+/// Play player 0's two-color land `name`, which enters tapped, and check it
+/// pays a one-colored-pip spell of each color in `colors` and of no other.
+/// `entered` settles and checks whatever the land does as it enters.
+pub fn tapped_dual_land_pays_either_color(
+    name: &str,
+    colors: &str,
+    entered: impl Fn(&mut Scenario, PermanentId),
+) {
+    let spells = [
+        ('W', "Healer's Hawk"),
+        ('U', "Wind Drake"),
+        ('B', "Typhoid Rats"),
+        ('R', "Raging Goblin"),
+        ('G', "Llanowar Elves"),
+    ];
+    for (color, spell) in spells {
+        let mut s = crate::support::game::five_color_setup(&[name, spell]);
+        let land = play_land(&mut s, name);
+        assert!(
+            crate::support::inspect::tapped(&s, land),
+            "{name} enters tapped"
+        );
+        entered(&mut s, land);
+        // Wind Drake is {2}{U}: the pool pays its generic part.
+        s.set_player_mana_pool(0, if color == 'U' { "2" } else { "0" });
+        let id = move_to_hand(&mut s, spell);
+        assert!(!castable(&mut s, id), "{name} is tapped");
+        s.game_mut().state.permanents[land].as_mut().unwrap().tapped = false;
+        assert_eq!(
+            castable(&mut s, id),
+            colors.contains(color),
+            "{name} for {color}"
+        );
+        if colors.contains(color) {
+            cast_card(&mut s, id);
+            settle(&mut s);
+            assert!(
+                crate::support::inspect::tapped(&s, land),
+                "{name} pays {color}"
+            );
+            assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        }
+    }
+}
+
 /// Like `cast`, but the copy may already be in player 0's hand.
 pub fn cast_owned(s: &mut Scenario, name: &str) -> ObjectId {
     let object = find_owned_card(s, 0, name);

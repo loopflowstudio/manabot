@@ -54,6 +54,8 @@ mod frf;
 mod fut;
 #[path = "cards/gpt.rs"]
 mod gpt;
+#[path = "cards/gtc.rs"]
+mod gtc;
 #[path = "cards/hob.rs"]
 mod hob;
 #[path = "cards/ice.rs"]
@@ -66,6 +68,8 @@ mod inv;
 mod isd;
 #[path = "cards/j22.rs"]
 mod j22;
+#[path = "cards/jou.rs"]
+mod jou;
 #[path = "cards/khm.rs"]
 mod khm;
 #[path = "cards/kld.rs"]
@@ -114,6 +118,8 @@ mod ptk;
 mod rav;
 #[path = "cards/roe.rs"]
 mod roe;
+#[path = "cards/rtr.rs"]
+mod rtr;
 #[path = "cards/scryfall.rs"]
 mod scryfall;
 #[path = "cards/shm.rs"]
