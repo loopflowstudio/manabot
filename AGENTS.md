@@ -597,6 +597,13 @@ observation. `force_permanent_on_battlefield` places a permanent without an
 entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
+A forced permanent is not summoning-sick. With exactly enough untapped lands a
+manual payment finishes itself after its last object choice; calling `pay_rest`
+then overruns into the next priority. Read a new card's printing with `curl`
+from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
+apart on `cards/search`, and append its row to
+`managym/tests/fixtures/scryfall_cards.json` with the fixture's eight fields.
+
 Funded fixtures must finish native spending decisions before passing priority
 or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve
 the colors in `five_color_setup`; tests of color, restriction, rider or expiry
