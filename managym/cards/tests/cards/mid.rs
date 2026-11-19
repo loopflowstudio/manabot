@@ -40,48 +40,9 @@ fn join_the_dance_makes_two_humans_and_flashes_back_for_two_more() {
 /// never a creature, and has flash.
 #[test]
 fn cathar_commando_sacrifices_itself_to_destroy_an_artifact_and_has_flash() {
-    use crate::support::{
-        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
-        inspect::{can_cast, card_of, has_action, zone_of},
-        play::{activate, cast_card, settle},
-    };
-    use managym::{
-        agent::action::{Action, ActionSpaceKind},
-        state::{game_object::Target, player::ManaPayment, zone::ZoneType},
-    };
-    let mut s = five_color_unfunded_setup(&["Cathar Commando", "Sol Ring", "Gray Ogre"]);
-    let source = s.force_permanent_on_battlefield(0, "Cathar Commando");
-    let source_card = card_of(&s, source);
-    force_lands(&mut s, 0, "Plains", 1);
-    let target = s.force_permanent_on_battlefield(1, "Sol Ring");
-    let target_card = card_of(&s, target);
-    let other = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    s.game_mut().mana_payment[0] = ManaPayment::Auto;
-    activate(&mut s, source, 0);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    assert!(!has_action(&s, |a| {
-        matches!(a, Action::ChooseTarget { target: Target::Permanent(id), .. } if *id == other)
-    }));
-    assert!(s.choose_target(Target::Permanent(target)));
-    assert_eq!(zone_of(&s, source_card), Some(ZoneType::Graveyard));
-    assert_eq!(s.untapped_permanents_named(0, "Plains"), 0);
-    settle(&mut s);
-    assert_eq!(zone_of(&s, target_card), Some(ZoneType::Graveyard));
-    assert!(s.game().state.permanents[other].is_some());
-
-    // Flash: castable while a spell is on the stack; the Ogre is not.
-    let mut s = five_color_unfunded_setup(&["Cathar Commando", "Sol Ring", "Gray Ogre"]);
-    force_lands(&mut s, 0, "Mountain", 8);
-    force_lands(&mut s, 0, "Plains", 8);
-    s.game_mut().mana_payment[0] = ManaPayment::Auto;
-    let first = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
-    let second = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
-    let flashed = force_new_card_in_hand(&mut s, 0, "Cathar Commando");
-    s.game_mut().scenario_refresh_priority().unwrap();
-    cast_card(&mut s, first);
-    assert!(!s.game().state.stack_objects.is_empty());
-    assert!(can_cast(&s, flashed));
-    assert!(!can_cast(&s, second));
+    use crate::support::play::{casts_at_instant_speed, sacrifices_itself_to_destroy_an_artifact};
+    sacrifices_itself_to_destroy_an_artifact("Cathar Commando", "Plains");
+    casts_at_instant_speed("Cathar Commando");
 }
 
 /// Eaten Alive is cast by sacrificing a creature or by paying {3}{B} more; it

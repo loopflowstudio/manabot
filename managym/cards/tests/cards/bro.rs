@@ -124,12 +124,12 @@ fn unearthed_cityscape_leveler_is_exiled_at_the_next_end_step() {
 #[test]
 fn goblin_firebomb_sacrifices_itself_to_destroy_any_permanent_and_has_flash() {
     use crate::support::{
-        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
-        inspect::{can_cast, card_of, zone_of},
-        play::{activate, cast_card, settle},
+        game::{five_color_unfunded_setup, force_lands},
+        inspect::{card_of, zone_of},
+        play::{activate, settle},
     };
     use managym::state::{game_object::Target, player::ManaPayment, zone::ZoneType};
-    let mut s = five_color_unfunded_setup(&["Goblin Firebomb", "Gray Ogre"]);
+    let mut s = five_color_unfunded_setup(&["Goblin Firebomb"]);
     let bomb = s.force_permanent_on_battlefield(0, "Goblin Firebomb");
     let bomb_card = card_of(&s, bomb);
     force_lands(&mut s, 0, "Mountain", 7);
@@ -143,17 +143,5 @@ fn goblin_firebomb_sacrifices_itself_to_destroy_any_permanent_and_has_flash() {
     settle(&mut s);
     assert_eq!(zone_of(&s, plains_card), Some(ZoneType::Graveyard));
 
-    // Flash: castable while a spell is on the stack; the Ogre is not.
-    let mut s = five_color_unfunded_setup(&["Goblin Firebomb", "Gray Ogre"]);
-    force_lands(&mut s, 0, "Mountain", 8);
-    force_lands(&mut s, 0, "Plains", 8);
-    s.game_mut().mana_payment[0] = ManaPayment::Auto;
-    let first = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
-    let second = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
-    let flashed = force_new_card_in_hand(&mut s, 0, "Goblin Firebomb");
-    s.game_mut().scenario_refresh_priority().unwrap();
-    cast_card(&mut s, first);
-    assert!(!s.game().state.stack_objects.is_empty());
-    assert!(can_cast(&s, flashed));
-    assert!(!can_cast(&s, second));
+    crate::support::play::casts_at_instant_speed("Goblin Firebomb");
 }

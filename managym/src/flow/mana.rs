@@ -44,7 +44,7 @@ use crate::{
             Color, Mana, ManaCost, ManaPool, ManaSpendChoice, SpellSnapshot, SpendOrder,
             SpendingContext,
         },
-        payment::{ManaOrigin, PaymentReceipt, SpentMana},
+        payment::{How, ManaOrigin, PaymentReceipt, SpentMana},
         zone::ZoneType,
     },
 };
@@ -1551,7 +1551,6 @@ fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
     else {
         return None;
     };
-    use crate::state::payment::How;
     let owes = |how| payment.owes(&CostComponent::Source(how));
     let tap = owes(How::Tapped);
     Some(SourceReservation {
@@ -3707,6 +3706,7 @@ mod tests {
     use crate::state::{
         game_object::{ObjectId, PermanentId},
         mana::{Mana, ManaCost, ManaRestriction, SpendEffect, SpendingContext},
+        payment::How,
     };
     use std::sync::Arc;
 
@@ -3806,10 +3806,7 @@ mod tests {
         assert_eq!(payment.help().waterbend, 1);
         assert_eq!(
             payment.owed[1..],
-            [
-                CostComponent::Life(2),
-                CostComponent::Source(crate::state::payment::How::Tapped)
-            ]
+            [CostComponent::Life(2), CostComponent::Source(How::Tapped)]
         );
         for life in [2, 4] {
             game.scenario_set_life(player, life);

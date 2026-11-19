@@ -235,62 +235,9 @@ fn wildborn_preserver_pays_x_for_x_counters_when_a_non_human_creature_enters() {
 /// in hand; the receipt names the discarded card, and it then draws two.
 #[test]
 fn thrill_of_possibility_discards_a_chosen_card_as_it_is_cast() {
-    use crate::support::{
-        game::{clear_hand, five_color_unfunded_setup, force_lands, force_new_card_in_hand},
-        inspect::{has_action, offered_cards, top_spell, zone_of},
-        play::{cast_card, castable, fork_selecting, select_card, settle},
-    };
-    use managym::{
-        agent::action::{Action, ActionSpaceKind},
-        state::{
-            payment::{How, Toward},
-            player::ManaPayment,
-            zone::ZoneType,
-        },
-    };
     for auto in [false, true] {
-        let mut s =
-            five_color_unfunded_setup(&["Thrill of Possibility", "Gray Ogre", "Hill Giant"]);
-        force_lands(&mut s, 0, "Mountain", 2);
-        if auto {
-            s.game_mut().mana_payment[0] = ManaPayment::Auto;
-        }
-        clear_hand(&mut s, 0);
-        let spell = force_new_card_in_hand(&mut s, 0, "Thrill of Possibility");
-        assert!(!castable(&mut s, spell), "no other card to discard");
-        let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
-        let giant = force_new_card_in_hand(&mut s, 0, "Hill Giant");
-        assert!(castable(&mut s, spell));
-        cast_card(&mut s, spell);
-        // The discard is the player's pick under either payment setting,
-        // and never the spell being cast.
-        assert_eq!(
-            s.action_space().kind,
-            ActionSpaceKind::Discard,
-            "auto={auto}"
-        );
-        let mut offered = offered_cards(&s);
-        offered.sort();
-        let mut expected = vec![ogre, giant];
-        expected.sort();
-        assert_eq!(offered, expected);
-        assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
-        let fork = fork_selecting(&s, ogre);
-        assert_eq!(zone_of(&fork, ogre), Some(ZoneType::Graveyard));
-        assert_eq!(zone_of(&fork, giant), Some(ZoneType::Hand));
-        // The Mountains pay the rest without a further choice.
-        select_card(&mut s, giant);
-        assert_eq!(zone_of(&s, giant), Some(ZoneType::Graveyard));
-        assert_eq!(zone_of(&s, ogre), Some(ZoneType::Hand));
-        let cast = top_spell(&s);
-        assert_eq!(cast.spent.total(), 2);
-        assert_eq!(
-            cast.spent
-                .contributed(How::Discarded, Toward::Printed)
-                .count(),
-            1
-        );
-        settle(&mut s);
+        let s =
+            crate::support::play::cast_discarding_a_chosen_card("Thrill of Possibility", 2, auto);
         // The Ogre and two drawn cards.
         assert_eq!(s.zone_size(0, ZoneType::Hand), 3);
     }

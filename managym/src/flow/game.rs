@@ -290,9 +290,8 @@ impl Operation {
 }
 
 /// One part of a total cost. The payer chooses how to pay each component up
-/// to and including `Mana`; the ones after it (life and the source's own {T},
-/// sacrifice and discard) have no choice and are paid as the payment
-/// completes.
+/// to and including `Mana`; the ones after it (life and what the source
+/// itself pays) have no choice and are paid as the payment completes.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum CostComponent {
     /// Tap other untapped creatures until their total power reaches `power`

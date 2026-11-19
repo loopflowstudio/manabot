@@ -16,14 +16,22 @@ use managym::{
     },
     state::{
         game_object::{ObjectId, PermanentId, PlayerId},
+        payment::{How, Toward},
+        player::ManaPayment,
         target::Target,
         zone::ZoneType,
     },
 };
 
 use crate::support::{
-    game::{move_to_hand, Scenario},
-    inspect::{can_cast, find_owned_card, has_action, library_card, now, permanent_named},
+    game::{
+        clear_hand, five_color_setup, five_color_unfunded_setup, force_lands,
+        force_new_card_in_hand, move_to_hand, Scenario,
+    },
+    inspect::{
+        can_cast, card_of, find_owned_card, has_action, library, library_card, now, offered_cards,
+        permanent_named, tapped, top_spell, zone_of,
+    },
 };
 
 const MAX_SCENARIO_ACTIONS: usize = 20_000;
@@ -496,12 +504,9 @@ pub fn tapped_dual_land_pays_either_color(
         ('G', "Llanowar Elves"),
     ];
     for (color, spell) in spells {
-        let mut s = crate::support::game::five_color_setup(&[name, spell]);
+        let mut s = five_color_setup(&[name, spell]);
         let land = play_land(&mut s, name);
-        assert!(
-            crate::support::inspect::tapped(&s, land),
-            "{name} enters tapped"
-        );
+        assert!(tapped(&s, land), "{name} enters tapped");
         entered(&mut s, land);
         // Wind Drake is {2}{U}: the pool pays its generic part.
         s.set_player_mana_pool(0, if color == 'U' { "2" } else { "0" });
@@ -516,13 +521,121 @@ pub fn tapped_dual_land_pays_either_color(
         if colors.contains(color) {
             cast_card(&mut s, id);
             settle(&mut s);
-            assert!(
-                crate::support::inspect::tapped(&s, land),
-                "{name} pays {color}"
-            );
+            assert!(tapped(&s, land), "{name} pays {color}");
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         }
     }
+}
+
+/// A Temple is a `tapped_dual_land_pays_either_color` that scries 1 as it
+/// enters: the top card stays, or goes to the bottom, as chosen.
+pub fn temple_scries_one_and_pays_either_color(name: &str, colors: &str) {
+    for bottom in [false, true] {
+        tapped_dual_land_pays_either_color(name, colors, |s, _| {
+            pass_until(s, ActionSpaceKind::Scry);
+            let before = library(s, 0);
+            assert_eq!(s.action_space().actions.len(), 2);
+            choose(
+                s,
+                |a| matches!(a, Action::ScryCard { to_bottom, .. } if *to_bottom == bottom),
+            );
+            settle(s);
+            let mut expected = before;
+            if bottom {
+                expected.rotate_right(1);
+            }
+            assert_eq!(library(s, 0), expected, "{name}");
+        });
+    }
+}
+
+/// Cast the red spell `name`, whose additional cost is "discard a card", with
+/// `mountains` for its mana, and return it settled. The discard is player 0's
+/// pick under either payment setting, from a Gray Ogre and a Hill Giant and
+/// never the spell itself; the Giant is discarded and the receipt names it.
+pub fn cast_discarding_a_chosen_card(name: &str, mountains: usize, auto: bool) -> Scenario {
+    let mut s = five_color_unfunded_setup(&[name, "Gray Ogre", "Hill Giant"]);
+    force_lands(&mut s, 0, "Mountain", mountains);
+    if auto {
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    }
+    clear_hand(&mut s, 0);
+    let spell = force_new_card_in_hand(&mut s, 0, name);
+    assert!(!castable(&mut s, spell), "no other card to discard");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let giant = force_new_card_in_hand(&mut s, 0, "Hill Giant");
+    assert!(castable(&mut s, spell));
+    cast_card(&mut s, spell);
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::Discard,
+        "auto={auto}"
+    );
+    let mut offered = offered_cards(&s);
+    offered.sort();
+    let mut expected = vec![ogre, giant];
+    expected.sort();
+    assert_eq!(offered, expected);
+    assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
+    let fork = fork_selecting(&s, ogre);
+    assert_eq!(zone_of(&fork, ogre), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&fork, giant), Some(ZoneType::Hand));
+    // The Mountains pay the rest without a further choice.
+    select_card(&mut s, giant);
+    assert_eq!(zone_of(&s, giant), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Hand));
+    let cast = top_spell(&s);
+    assert_eq!(usize::from(cast.spent.total()), mountains);
+    assert_eq!(
+        cast.spent
+            .contributed(How::Discarded, Toward::Printed)
+            .count(),
+        1
+    );
+    settle(&mut s);
+    s
+}
+
+/// `name` has flash: player 0 may cast it while a spell is on the stack, where
+/// a Gray Ogre may not be cast.
+pub fn casts_at_instant_speed(name: &str) {
+    let mut s = five_color_unfunded_setup(&[name, "Gray Ogre"]);
+    force_lands(&mut s, 0, "Mountain", 8);
+    force_lands(&mut s, 0, "Plains", 8);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let first = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let second = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let flashed = force_new_card_in_hand(&mut s, 0, name);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(&mut s, first);
+    assert!(!s.game().state.stack_objects.is_empty());
+    assert!(can_cast(&s, flashed));
+    assert!(!can_cast(&s, second));
+}
+
+/// The creature `name` pays {1}, from one `land`, and itself to destroy an
+/// artifact or enchantment: it leaves as the cost is paid, and a creature is
+/// no target.
+pub fn sacrifices_itself_to_destroy_an_artifact(name: &str, land: &str) {
+    let mut s = five_color_unfunded_setup(&[name, "Sol Ring", "Gray Ogre"]);
+    let source = s.force_permanent_on_battlefield(0, name);
+    let source_card = card_of(&s, source);
+    force_lands(&mut s, 0, land, 1);
+    let target = s.force_permanent_on_battlefield(1, "Sol Ring");
+    let target_card = card_of(&s, target);
+    let other = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    activate(&mut s, source, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(!has_action(&s, |a| {
+        matches!(a, Action::ChooseTarget { target: Target::Permanent(id), .. } if *id == other)
+    }));
+    assert!(s.choose_target(Target::Permanent(target)));
+    assert_eq!(zone_of(&s, source_card), Some(ZoneType::Graveyard));
+    assert_eq!(s.untapped_permanents_named(0, land), 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, target_card), Some(ZoneType::Graveyard));
+    assert!(s.game().state.permanents[other].is_some());
 }
 
 /// Like `cast`, but the copy may already be in player 0's hand.
