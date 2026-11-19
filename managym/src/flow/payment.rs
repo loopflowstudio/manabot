@@ -566,15 +566,26 @@ impl Game {
         )
     }
 
-    /// Offer the next owed component. Once only mana is owed and no source
-    /// or mana-ability choice remains, pay it and finish.
-    fn advance_payment(&mut self, player: PlayerId, payment: Payment) -> Result<(), AgentError> {
+    /// Offer the next owed component. The payment is over once its mana
+    /// step owes no mana, whatever else could still be tapped: surplus or
+    /// unusable mana stays in the pool for the priority that follows. While
+    /// mana is owed and no source, mana-ability or help choice remains, pay
+    /// it from the pool and finish.
+    pub(crate) fn advance_payment(
+        &mut self,
+        player: PlayerId,
+        payment: Payment,
+    ) -> Result<(), AgentError> {
+        let paid = payment.paying_mana() && payment.mana().0.mana_value == 0;
         // A waterbend cost always offers its taps beside paying with mana.
         let chooses = !payment.paying_mana() || payment.waterbends();
         self.pending_choice = Some(PendingChoice::Pay {
             player,
             payment: Box::new(payment),
         });
+        if paid {
+            return self.finish_mana_payment(player);
+        }
         let offers = chooses || {
             let _payments = self.payment_scan();
             self.has_mana_payment_choices(player) || !self.help_actions(player).is_empty()
@@ -631,7 +642,7 @@ impl Game {
             })
     }
 
-    fn pending_payment(&self, player: PlayerId) -> Result<Payment, AgentError> {
+    pub(crate) fn pending_payment(&self, player: PlayerId) -> Result<Payment, AgentError> {
         match self.paying() {
             Some((payer, payment, _)) if payer == player => Ok(payment.clone()),
             Some(_) => Err(AgentError("wrong payer".into())),
@@ -1240,18 +1251,18 @@ impl Game {
         let (owed, waterbend) = payment.mana();
         // A remaining colored cost can still need a mana ability such as
         // sacrificing Treasure. Leave the committed payment open for it.
-        let finished = waterbend == 0
-            && (owed.mana_value == 0
-                || (!self.offers_extra_payment_taps(player)
-                    && self.can_pay_mana_cost(player, owed)));
-        self.pending_choice = Some(PendingChoice::Pay {
-            player,
-            payment: Box::new(payment),
-        });
-        if finished {
+        if waterbend == 0
+            && owed.mana_value > 0
+            && !self.offers_extra_payment_taps(player)
+            && self.can_pay_mana_cost(player, owed)
+        {
+            self.pending_choice = Some(PendingChoice::Pay {
+                player,
+                payment: Box::new(payment),
+            });
             return self.finish_mana_payment(player);
         }
-        Ok(())
+        self.advance_payment(player, payment)
     }
 
     /// The keyword under which tapping `tapped` pays part of a cost with

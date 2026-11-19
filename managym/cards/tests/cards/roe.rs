@@ -54,7 +54,6 @@ fn prism_payment_preserves_the_spells_required_green_mana() {
         // Green is the only output that leaves the announced GG spell payable.
         assert_eq!(s.action_space().actions.len(), 1);
         choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert!(s.game().state.stack_objects.iter().any(|object| matches!(
             object,
@@ -84,7 +83,6 @@ fn prism_payment_preserves_required_blue_already_in_the_pool() {
     // Spend the Forest's G on Prism, retaining the pooled U for Counterspell.
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     assert_eq!(s.game().state.stack_objects.len(), 2);
 }
@@ -172,7 +170,6 @@ fn prism_upfront_payment_preserves_professors_second_green() {
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert_eq!(s.action_space().actions.len(), 1);
         choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(zone_of(&s, professor), Some(ZoneType::Stack));
         settle(&mut s);
         assert!(!s
@@ -251,7 +248,6 @@ fn prism_upfront_payment_can_preserve_mana_already_in_the_pool() {
     activate_named(&mut s, "Prophetic Prism", 0);
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(zone_of(&s, professor), Some(ZoneType::Stack));
 }
 
@@ -265,7 +261,6 @@ fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
     assert_eq!(s.action_space().actions.len(), 1);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(zone_of(&s, angel), Some(ZoneType::Stack));
 }
 
@@ -467,7 +462,6 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
             assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
-            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
             // The nested filter paid once: the Angel's receipt holds its five
             // units, names the Prism for the one it made, and never counts

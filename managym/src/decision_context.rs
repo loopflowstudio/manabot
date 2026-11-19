@@ -412,9 +412,9 @@ impl Game {
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
                 CostComponent::Mana { help, .. } if help.keyworded() =>
-                    ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise or a graveyard card exiled for delve pays {1}. Each such payment commits immediately."),
+                    ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise or a graveyard card exiled for delve pays {1}. Each such payment commits immediately. The payment ends once no mana is owed."),
                 CostComponent::Mana { .. } =>
-                    ("payment", "Produce mana or finish the announced payment. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately."),
+                    ("payment", "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed."),
                 CostComponent::ExileFromHand =>
                     ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
                 CostComponent::Discard if payment.operation.spell().is_some() =>

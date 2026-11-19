@@ -162,15 +162,9 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
         target_opponent(&mut s);
         if !goggles_first {
             tap_for_mana(&mut s, goggles);
-            // Both units are pooled; only "Pay the cost" is left to choose.
-            assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
-            let pay = s
-                .action_space()
-                .actions
-                .iter()
-                .position(|action| matches!(action, Action::PayCost { .. }))
-                .expect("the payment stays open for its spend choice");
-            s.step_action(pay);
+            // Neither unit was committed; with no source left the payment
+            // goes on to spending.
+            assert!(s.game().state.stack_objects.is_empty());
         }
         assert_spend_choice_forks(&s, goggles, mountain);
     }

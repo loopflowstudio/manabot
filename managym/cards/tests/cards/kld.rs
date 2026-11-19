@@ -142,7 +142,6 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
                 |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == caravan),
             );
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         }
         let Some(StackObject::Spell(cast)) = s.game().state.stack_objects.last() else {
             panic!("Llanowar Elves is on the stack, auto={auto}")

@@ -2004,14 +2004,6 @@ impl Game {
             return;
         }
         let obligations = self.payment_obligations(player);
-        // The engine also commits purely non-mana activation costs through
-        // the mana step. That bookkeeping step opens no mana window.
-        if matches!(self.paying(), Some((_, payment, CostComponent::Mana { .. })) if !payment.waterbends() && matches!(payment.operation, Operation::Activation { .. }))
-            && self.state.suspended_decision.is_none()
-            && matches!(obligations.as_slice(), [Obligation::Pay { cost, .. }] if cost.mana_value == 0)
-        {
-            return;
-        }
         let model = self.payment_model(player, None);
         let ordinary_len = actions.len();
         for source in model.sources.iter().filter(|source| source.untapped) {
@@ -2255,8 +2247,8 @@ impl Game {
         actions
     }
 
-    /// Tap one offered fixed source, then finish automatically once no
-    /// source or mana-ability choice remains.
+    /// Tap one offered fixed source; an announced payment then advances
+    /// (`advance_payment`), finishing once no mana is owed.
     pub(crate) fn tap_for_mana_action(
         &mut self,
         player: PlayerId,
@@ -2277,12 +2269,9 @@ impl Game {
         }
         self.commit_produced_mana(player, start);
         match self.paying() {
-            Some((_, payment, CostComponent::Mana { .. }))
-                if !payment.waterbends()
-                    && !self.has_mana_payment_choices(player)
-                    && self.help_actions(player).is_empty() =>
-            {
-                return self.finish_mana_payment(player);
+            Some((_, _, CostComponent::Mana { .. })) => {
+                let payment = self.pending_payment(player)?;
+                return self.advance_payment(player, payment);
             }
             None => self.state.priority_mut().on_non_pass_action(player),
             _ => {}

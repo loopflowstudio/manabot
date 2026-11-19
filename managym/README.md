@@ -791,7 +791,11 @@ or phase, as any floating mana does. There is no undo.
   made while a cast or activation is being paid pays toward it at once: the
   cost owed shrinks and the receipt names the unit's source, as a convoke tap
   does. Mana that was floating before, a source's surplus and mana that can
-  pay nothing still owed stay in the pool for the spend choice.
+  pay nothing still owed stay in the pool for the spend choice, and so does
+  new mana when pooled mana of another class (a rider, a restriction) could
+  pay the same pip. A payment ends as soon as no mana is owed, whatever is
+  still untapped: surplus waits for the priority that follows, and a cost
+  whose mana is {0} from the start never opens its mana step.
 - **Automatic payments.** Once the player accepts a cost, the engine selects
   the sources, their outputs, any waterbend contributions and the units to
   spend. The player still chooses X, optional costs and spell targets.

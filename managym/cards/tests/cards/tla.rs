@@ -3164,7 +3164,6 @@ fn treasure_completes_an_announced_cost_without_a_priority_window() {
     assert_eq!(frame.offers[0].label, "Add {B}");
     assert_choice_contract(&s);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 2, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(zone_of(&s, victim), Some(ZoneType::Graveyard));
     assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
 }
@@ -4021,7 +4020,6 @@ fn treasure_is_available_when_announcing_a_kicker_cost() {
     let treasure = permanent_named(&s, "Treasure");
     activate_first(&mut s, treasure);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     assert!(s
         .battlefield_permanents_named(1, "Gnarled Professor")
@@ -7282,7 +7280,6 @@ fn a_committed_nonlesson_cost_excludes_herbalists_restricted_activation() {
     assert_choice_contract(&s);
     activate_named(&mut s, "Hermitic Herbalist", 0);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }

@@ -67,7 +67,6 @@ fn supportive_parents_repeats_only_with_distinct_shared_creatures() {
     // Both outputs paid the parent spell as they were made. Badgermole Cub
     // adds no green mana.
     assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
-    command(&mut s, |action| matches!(action, Action::PayCost { .. }));
     assert_eq!(top_spell(&s).spent.amounts(), [0, 1, 0, 1, 0, 0]);
     assert_eq!(zone_of(&s, spell), Some(ZoneType::Stack));
     assert!([first, second, third, fourth]

@@ -36,7 +36,9 @@ fn carnelian_orb_gives_haste_only_to_a_dragon_its_mana_paid_for() {
         cast_card(&mut s, dragon);
         if !auto {
             tap_for_mana(&mut s, orb);
-            pay_rest(&mut s);
+            if s.game().state.stack_objects.is_empty() {
+                pay_rest(&mut s);
+            }
         }
         let spell = top_spell(&s);
         assert_eq!(spell.spent.total(), 6, "auto={auto}");
@@ -90,7 +92,9 @@ fn carnelian_orb_gives_haste_only_to_a_dragon_its_mana_paid_for() {
         cast_card(&mut s, ogre);
         if !auto {
             tap_for_mana(&mut s, orb);
-            pay_rest(&mut s);
+            if s.game().state.stack_objects.is_empty() {
+                pay_rest(&mut s);
+            }
         }
         let spell = top_spell(&s);
         assert!(tapped(&s, orb));
@@ -117,34 +121,36 @@ fn carnelian_orb_mana_floated_first_is_a_distinct_unit_the_player_may_keep() {
     // A Mountain's unit floats beside it.
     tap_for_mana(&mut s, mountains[0]);
 
-    // Gray Ogre costs three and four red are available. The other Mountains'
-    // mana pays as it is made; the floating units wait for "Pay the cost".
+    // Gray Ogre costs three and four red are available. The Orb's floating
+    // unit could pay any pip the other Mountains' mana pays, with its rider
+    // kept or spent, so their mana is not committed as it is made: which red
+    // units pay is the player's choice at spending, and the Orb's is its own
+    // class.
     let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
     cast_card(&mut s, ogre);
     tap_for_mana(&mut s, mountains[1]);
-    // The last source tapped leaves only the pool, so the payment goes on to
-    // spending: which floating red unit pays the last {1} is the player's
-    // choice, and the Orb's is its own class.
     let last = mountains[2];
     choose(
         &mut s,
         |a| matches!(a, Action::TapForMana { permanent, .. } if *permanent == last),
     );
-    let frame = s.game().semantic_decision_frame().unwrap();
-    let labels: Vec<_> = frame
-        .offers
-        .iter()
-        .map(|offer| offer.label.clone())
-        .collect();
-    assert!(
-        labels.iter().any(|label| label.contains("haste")),
-        "{labels:?}"
-    );
-    let plain = labels
-        .iter()
-        .position(|label| label.starts_with("Spend") && !label.contains("haste"))
-        .unwrap_or_else(|| panic!("an ordinary red unit is offered: {labels:?}"));
-    s.step_action(plain);
+    while s.game().state.stack_objects.is_empty() {
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let labels: Vec<_> = frame
+            .offers
+            .iter()
+            .map(|offer| offer.label.clone())
+            .collect();
+        assert!(
+            labels.iter().any(|label| label.contains("haste")),
+            "{labels:?}"
+        );
+        let plain = labels
+            .iter()
+            .position(|label| label.starts_with("Spend") && !label.contains("haste"))
+            .unwrap_or_else(|| panic!("an ordinary red unit is offered: {labels:?}"));
+        s.step_action(plain);
+    }
     let spell = top_spell(&s);
     assert_eq!(spell.spent.total(), 3);
     assert!(spell

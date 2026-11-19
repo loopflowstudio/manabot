@@ -433,7 +433,6 @@ fn merchant_cannot_reuse_the_food_reserved_for_its_own_activation() {
         }
         choose_mode(&mut s, 4);
     }
-    choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
     settle(&mut s);
     assert_eq!(s.game().state.players[0].life, 23);
     assert!(s.game().state.permanents[payer].is_none());
@@ -899,7 +898,6 @@ fn toph_nested_filter_fee_is_not_part_of_the_cast_receipt() {
     assert_choice_contract(&s);
     spend_named(&mut s, |label| label.contains("{G}"));
     choose_mode(&mut s, 4);
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(spell_spent(&s, card).total(), 4);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
 }

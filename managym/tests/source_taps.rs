@@ -306,9 +306,9 @@ fn surplus_of_mana_made_while_paying_floats() {
     tap(&mut game, "Mountain");
     tap(&mut game, "Forest");
     assert_eq!(owed(&game), "{1}");
+    // The Sol Ring's {C} paid the last {1}: the Ogre is cast, the surplus
+    // floats.
     tap(&mut game, "Sol Ring");
-    assert_eq!(owed(&game), "{0}");
-    pay_cost(&mut game);
     assert!(game.pending_choice.is_none());
     assert_eq!(untapped(&game), ["Mountain"]);
     assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 1, 1]);
@@ -332,12 +332,60 @@ fn mana_made_while_paying_that_cannot_pay_floats() {
     assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
     assert_eq!(committed(&game).len(), 2);
     tap(&mut game, "Mountain");
-    if game.pending_choice.is_some() {
-        pay_cost(&mut game);
-    }
     assert!(game.pending_choice.is_none());
     assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 2, 0]);
     assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
+}
+
+/// A payment ends when no mana is owed, however it was paid: the last unit
+/// here comes from an activated mana ability while another one is still
+/// untapped beside two lands, floats off, and the Ogre is cast with no
+/// "Pay the cost".
+#[test]
+fn a_payment_ends_when_its_last_unit_comes_from_a_mana_ability() {
+    let deck = [
+        ("Mountain", 20),
+        ("Forest", 10),
+        ("Meteorite", 2),
+        ("Gray Ogre", 8),
+    ];
+    let lands = [
+        "Mountain",
+        "Mountain",
+        "Forest",
+        "Forest",
+        "Meteorite",
+        "Meteorite",
+    ];
+    let mut game = game_with(&lands, &deck);
+    cast(&mut game);
+    tap(&mut game, "Mountain");
+    tap(&mut game, "Forest");
+    assert_eq!(owed(&game), "{1}");
+    let activate = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::ActivateAbility { .. }))
+        .expect("a Meteorite's mana ability is offered");
+    game.step(activate).unwrap();
+    while game.pending_choice.is_some() {
+        // The Meteorite's color: any pays {1}.
+        let space = game.action_space().unwrap();
+        assert!(
+            space
+                .actions
+                .iter()
+                .all(|action| matches!(action, Action::ChooseMode { .. })),
+            "only the Meteorite's color is chosen: {space:?}"
+        );
+        game.step(0).unwrap();
+    }
+    assert!(game.pending_choice.is_none());
+    assert_eq!(untapped(&game), ["Forest", "Meteorite", "Mountain"]);
+    assert_eq!(ogre_receipt(&game).amounts().iter().sum::<u8>(), 3);
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
 }
 
 fn pay_cost(game: &mut Game) {

@@ -2312,6 +2312,14 @@ impl Game {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
                     self.state.priority_mut().on_non_pass_action(player);
+                    // The announced payment its output paid toward advances
+                    // as a fixed tap's does.
+                    if start.is_some()
+                        && matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
+                    {
+                        let payment = self.pending_payment(player)?;
+                        return self.advance_payment(player, payment);
+                    }
                 }
                 Ok(())
             }
