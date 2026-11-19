@@ -177,7 +177,9 @@ for (const theme of ['light', 'dark'] as const) {
         expect(await page.locator('[data-testid=player-plate][data-plate-side=opponent] [data-testid=player-target]').textContent()).toBe(opponent);
       }
       await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/interrupted-${theme}.png`, import.meta.url)) });
-      const setup = page.getByRole('banner').getByRole('link', {name: 'New game', exact: true});
+      // The site header is inert behind the full-window board; New game is in the board's menu.
+      await page.getByTestId('game-menu').click();
+      const setup = page.getByRole('region', {name: 'Session, stops and tools'}).getByRole('link', {name: 'New game', exact: true});
       await expect(setup).toBeVisible();
       await setup.focus();
       await page.keyboard.press('Enter');

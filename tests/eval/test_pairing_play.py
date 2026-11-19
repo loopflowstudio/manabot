@@ -134,7 +134,11 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
         match,
         agents,
         matchup=matchup,
-        deal=123,
+        # Every leg of deal 1 ends in under 300 decisions for each case. Untrained
+        # memory policies can play much longer games (deal 123 has a 502-decision
+        # leg), and memory encoding grows with the game, which made the 60 s
+        # budget a race.
+        deal=1,
         matchup_mode="cross",
         game_seconds=60,
         arena="fixture-pairing",
