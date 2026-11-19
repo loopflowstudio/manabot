@@ -61,7 +61,10 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
     case 'LOOK_AND_SELECT':
       return `Choose from the revealed cards${source ? ` (${source})` : ''}`;
     case 'MODAL':
-      return `Choose a mode${source ? ` for ${source}` : ''}`;
+      // Mid-payment, a modal choice is what a tap pays, not a mode of the spell.
+      return context?.stage === 'payment'
+        ? `Choose what the tap pays${source ? ` for ${source}` : ''}`
+        : `Choose a mode${source ? ` for ${source}` : ''}`;
     case 'LEGEND_RULE':
       return 'Choose which legendary permanent to keep';
     default:
