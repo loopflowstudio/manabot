@@ -40,7 +40,7 @@
   import { phaseTrack, type OnceStops } from './phases';
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
-  import { shortName } from '$lib/opponent-name';
+  import { decidesBy, shortName } from '$lib/opponent-name';
   import { CARD_RATIO, handFan, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
@@ -319,14 +319,15 @@
   $effect(() => { onpreview(previewing?.offer ?? null); });
   const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
   const payPlanned = $derived(paymentPlan(answered, frame));
-  // Piles part around the pending payment's own plan only, and keep that
-  // layout while a person points at other lands: a preview never moves a card
+  // Piles part around whatever plan is shown, so each planned land has its own
+  // outline and mark. While a payment is pending they keep its own plan's
+  // layout as a person points at other lands: that preview never moves a card
   // from under the pointer.
   let payPlan = $state.raw<{ revision: number; sources: ReadonlyMap<number, unknown> } | null>(null);
   $effect(() => {
     if (payPlanned && previewing === payOffer) payPlan = { revision: frame.revision, sources: payPlanned.sources };
   });
-  const unpiled = $derived(payPlan && payPlan.revision === frame.revision ? payPlan.sources : null);
+  const unpiled = $derived(payPlan && payPlan.revision === frame.revision ? payPlan.sources : payPlanned?.sources ?? null);
   const primaryText = $derived(primaryLabel(frame, view, payOffer && previewing === payOffer ? answered : null));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
@@ -764,7 +765,7 @@
   <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
     data-board={beatBoard ? 'step' : 'frame'}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
-      <Plate player={boardProjection.opponent} name={opponent.name} deck={opponent.deck} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
+      <Plate player={boardProjection.opponent} name={said} deck={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
         <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -829,7 +830,7 @@
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
+    <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
       {evidence} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}

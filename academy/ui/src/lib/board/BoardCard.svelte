@@ -366,7 +366,7 @@
   /* Planned payment: dashed amber, and what tapping it adds. */
   .tcard.planned { outline: 2px dashed var(--planned); outline-offset: 2px; }
   .plan {
-    position: absolute; left: 50%; top: 3px; transform: translateX(-50%);
+    position: absolute; left: 3px; top: 3px;
     display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 3px; border-radius: var(--radius-full);
     background: var(--bg-surface); border: 1px dashed var(--planned);
   }

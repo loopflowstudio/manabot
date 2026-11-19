@@ -592,7 +592,7 @@ The board is split at the centre line: the opponent's creatures face yours,
 with each side's lands and other permanents behind them. A plate at the left of
 each half shows the player, life, zone counts and floating mana as mana
 symbols, with any restriction or expiry written under them and wrapped within
-the plate ("2 {R}, normally empties at end of step" shows its pips, not
+the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
 outlined plate. Identical permanents with the same choices share a pile, its

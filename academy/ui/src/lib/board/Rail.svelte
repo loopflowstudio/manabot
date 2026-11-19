@@ -25,8 +25,10 @@
     primaryText: PrimaryLabel | null;
     status: string;
     whose: string;
-    /** "Search 64 is choosing…" while someone else decides. */
+    /** "Search 64 is choosing" while someone else decides; the rail adds the seconds. */
     thinking: string | null;
+    /** The opponent is the one deciding: an empty choice list waits for them by name. */
+    opponentChoosing?: boolean;
     /** When the awaited work started, epoch seconds. */
     workStarted: number | null;
     interrupted: boolean;
@@ -67,7 +69,7 @@
   }
 
   let {
-    view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
+    view, frame, live, line, primaryText, status, whose, thinking, opponentChoosing = false, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
@@ -186,7 +188,7 @@
   <section use:region={{ across: !onjump }} class="block prompt" class:waiting aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
     {#if reading}{@render reading()}{/if}
     <p class="type-heading whose" class:yours={live}>
-      {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
+      {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
     </p>
     {#if !over}
       {#if interrupted}
@@ -257,8 +259,9 @@
   <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
     <h2 class="heading type-heading text-ink-2">
       <span>{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
-      <span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
+      {#if frame.offers.length || !opponentChoosing}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
     </h2>
+    {#if !frame.offers.length && opponentChoosing}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
         <li>

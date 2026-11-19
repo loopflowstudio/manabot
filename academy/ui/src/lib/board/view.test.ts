@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
 import { fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, splitHalf, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
-import { shortName } from '$lib/opponent-name';
+import { decidesBy, shortName } from '$lib/opponent-name';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
 
@@ -291,6 +291,9 @@ describe('names in sentences', () => {
   it('drops the kind and takes a plain apostrophe after a final s', () => {
     expect(shortName('Heuristic · scripted')).toBe('Heuristic');
     expect(possessive(shortName('Heuristic · scripted'))).toBe("Heuristic's");
+    expect(decidesBy('Heuristic · scripted')).toBe('Scripted');
+    expect(decidesBy('Search 1 · search 1×1')).toBe('Search 1×1');
+    expect(decidesBy('You')).toBeNull();
     expect(possessive('Invasion Reinforcements')).toBe("Invasion Reinforcements'");
     expect(possessive('You')).toBe('your');
   });

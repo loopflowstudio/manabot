@@ -21,7 +21,7 @@ for (const theme of ['light', 'dark'] as const) {
     }));
     await page.goto(addresses.play);
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
-    await expect(page.getByTestId('player-plate').getByText(/search 1×1/).first()).toBeVisible();
+    await expect(page.getByTestId('player-plate').getByText(/search 1×1/i).first()).toBeVisible();
     const before = frames.at(-1)!;
     await page.reload();
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
