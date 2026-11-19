@@ -38,7 +38,7 @@ use crate::{
             RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
             StackTargetData, StackTargetKindData, TurnData,
         },
-        observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
+        observation_encoder::ObservationEncoderConfig,
         shared_effects,
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
         vector_env::ObservationRead,
@@ -273,7 +273,12 @@ fn encoded_to_dict<'py>(
     }
     dict.set_item(
         "actions",
-        to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.actions,
+            &[config.max_actions, config.action_dim()],
+        )?,
     )?;
     if config.max_decision_records > 0 {
         dict.set_item(

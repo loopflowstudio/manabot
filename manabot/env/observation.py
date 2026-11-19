@@ -58,8 +58,8 @@ ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
 ACTION_VALID_INDEX = ACTION_CONTINUATION_INDEX + 1
-# Appended after validity so saved prefixes keep their columns: the tap pays
-# part of the cost itself (convoke, improvise, waterbend), not with mana.
+# In v11 this flag marks taps that directly pay a cost (convoke, improvise,
+# waterbend). Its position preserves the saved 22-column prefix.
 ACTION_PAYS_DIRECTLY_INDEX = ACTION_VALID_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 # Name candidate columns: name row + 1, definition + 1, then the first and
@@ -353,7 +353,9 @@ class ObservationEncoder:
 
         # Preserve attack/decline independently of action family and focus.
         # declaration, mode, ability, continuation join, validity, direct payment
-        self.action_dim = ACTION_PAYS_DIRECTLY_INDEX + 1
+        self.action_dim = (
+            ACTION_PAYS_DIRECTLY_INDEX if self.one_token else ACTION_VALID_INDEX
+        ) + 1
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -1286,7 +1288,8 @@ class ObservationEncoder:
         candidates = np.zeros((self.max_actions, self.name_dim), dtype=np.float32)
         for idx, action in enumerate(actions):
             arr[idx, ACTION_VALID_INDEX] = 1.0
-            arr[idx, ACTION_PAYS_DIRECTLY_INDEX] = float(action.pays_directly)
+            if self.one_token:
+                arr[idx, ACTION_PAYS_DIRECTLY_INDEX] = float(action.pays_directly)
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:
                 arr[idx, action_type] = 1.0

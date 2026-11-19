@@ -1,5 +1,6 @@
 use super::observation_layout::{
-    action, card, decklist, event, fact, known_hand, name, permanent, player, stack, turn_state,
+    action, action_columns, card, decklist, event, fact, known_hand, name, permanent, player,
+    stack, turn_state,
 };
 
 use std::{
@@ -287,8 +288,12 @@ impl ObservationEncoderConfig {
         self.stack_rows() * STACK_DIM
     }
 
+    pub fn action_dim(&self) -> usize {
+        action_columns(self.layout).len()
+    }
+
     pub fn actions_len(&self) -> usize {
-        self.max_actions * ACTION_DIM
+        self.max_actions * self.action_dim()
     }
 
     pub fn action_focus_len(&self) -> usize {
@@ -2061,6 +2066,7 @@ fn encode_actions(
     object_to_index: &HashMap<i32, i32>,
 ) {
     // encode_into has validated the retained policy support and its focus capacity.
+    let action_dim = config.action_dim();
     for (action_index, action) in obs
         .action_space
         .actions
@@ -2068,8 +2074,8 @@ fn encode_actions(
         .take(config.max_actions)
         .enumerate()
     {
-        let action_start = action_index * ACTION_DIM;
-        let action_end = action_start + ACTION_DIM;
+        let action_start = action_index * action_dim;
+        let action_end = action_start + action_dim;
         let row = &mut out_actions[action_start..action_end];
 
         let action_type_index = action.action_type as usize;
@@ -2099,7 +2105,9 @@ fn encode_actions(
             .continuation_index
             .map_or(0.0, |index| (index + 1) as f32);
         row[action::VALID] = 1.0;
-        row[action::PAYS_DIRECTLY] = f32::from(u8::from(action.pays_directly));
+        if let Some(column) = row.get_mut(action::PAYS_DIRECTLY) {
+            *column = bool_to_f32(action.pays_directly);
+        }
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;

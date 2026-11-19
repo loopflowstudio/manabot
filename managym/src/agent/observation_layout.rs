@@ -375,9 +375,16 @@ columns! { action {
     19: ABILITY => ("ability", ValueLayout::SELECTOR),
     20: CONTINUATION => ("continuation", ValueLayout::SELECTOR),
     21: VALID => ("valid", ValueLayout::FLAG),
-    // Appended after `valid` so saved 22-column prefixes keep their meaning.
+    // Input v11 only. Saved 22-column prefixes keep their meaning.
     22: PAYS_DIRECTLY => ("pays_directly", ValueLayout::FLAG),
 } }
+
+pub fn action_columns(layout: InputLayout) -> &'static [Column] {
+    match layout {
+        InputLayout::OneToken => action::COLUMNS,
+        InputLayout::Legacy => &action::COLUMNS[..action::PAYS_DIRECTLY],
+    }
+}
 
 columns! { name {
     0: NAME => ("name", ValueLayout::new("reference", "naming_catalog row + 1; 0 absent", "nonnegative integers; 0 absent")),
@@ -769,7 +776,7 @@ pub fn observation_layout(
     }
     layout.insert(
         "actions".into(),
-        ArrayLayout::features(&["action"], &[None], action::COLUMNS),
+        ArrayLayout::features(&["action"], &[None], action_columns(layout_kind)),
     );
     layout.insert(
         "events".into(),
@@ -947,7 +954,11 @@ mod tests {
                     config.permanent_dim(),
                     if one_token { 51 } else { 38 },
                 ),
-                ("actions", action::WIDTH, 23),
+                (
+                    "actions",
+                    config.action_dim(),
+                    if one_token { 23 } else { 22 },
+                ),
                 (
                     "events",
                     config.event_dim(),

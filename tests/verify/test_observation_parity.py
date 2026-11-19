@@ -12,6 +12,7 @@ from manabot.env.match import Match
 
 # Local imports
 from manabot.env.observation import (
+    ACTION_PAYS_DIRECTLY_INDEX,
     CARD_DIM,
     CARD_PERMISSION_INDEX,
     FACT_COPY,
@@ -782,7 +783,10 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
     assert len(capture_text_decision(env).actions) == 5
 
 
-def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps() -> None:
+@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 23)])
+def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
+    version: int, width: int
+) -> None:
     """Both taps share TAP_FOR_COST; the native flag names which pays directly."""
     env = priority_root(
         ("Appeal to Eirdu",),
@@ -805,6 +809,34 @@ def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps() -> None:
         "Tap for cost P4 (Llanowar Elves). Native description: "
         "Tap Llanowar Elves to pay {1} (convoke)",
     ]
+
+    actor = env.current_agent_index()
+    assert actor is not None
+    obs = env.observation_for_player(actor)
+    with pytest.warns(DeprecationWarning) if version < 11 else nullcontext():
+        config = ObservationConfig(policy_input_version=version)
+    encoder = ObservationEncoder(config)
+    reference = encoder.encode(obs)
+    scalar = encoder.allocate()
+    env.encode_observation_into(obs, scalar)
+    batch = encoder.allocate(1)
+    assert managym.encode_observations_into([env], batch, 1) == [5]
+    for key, value in reference.items():
+        np.testing.assert_array_equal(scalar[key], value, err_msg=key)
+        np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
+    actions = reference["actions"]
+    assert actions.shape[1] == width
+    np.testing.assert_array_equal(
+        reference["action_focus"][0], reference["action_focus"][4]
+    )
+    np.testing.assert_array_equal(
+        actions[0, :ACTION_PAYS_DIRECTLY_INDEX], actions[4, :ACTION_PAYS_DIRECTLY_INDEX]
+    )
+    if version == 11:
+        np.testing.assert_array_equal(
+            actions[:5, ACTION_PAYS_DIRECTLY_INDEX], [0, 1, 1, 1, 1]
+        )
+
     root = env.state_digest()
     for index, committed in (
         (0, "Committed to this cost: {G} from Llanowar Elves."),
