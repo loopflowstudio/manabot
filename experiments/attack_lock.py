@@ -21,11 +21,14 @@ from manabot.recipes.elemental import ElementalConfig, train
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 41901
 # Arm name -> (input ablation, tau_scale override).
+# `bare` stopped at update 5 on a relation-capacity overflow; `bare-recover`
+# repeats it ending such games instead.
 ARMS: dict[str, tuple[str, float | None]] = {
     "none": ("none", None),
     "timestamp": ("timestamp", None),
     "bare": ("bare", None),
     "tau2x": ("none", 0.1),
+    "bare-recover": ("bare", None),
 }
 
 
@@ -37,7 +40,11 @@ def training_jobs(
             name=f"attack-lock-{arm}",
             train=train,
             config=ElementalConfig(
-                updates=updates, device="cuda", input_ablation=ablation, tau_scale=tau
+                updates=updates,
+                device="cuda",
+                input_ablation=ablation,
+                tau_scale=tau,
+                recover_capacity=arm.endswith("-recover"),
             ),
             smoke=ElementalConfig(
                 updates=1,

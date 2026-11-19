@@ -30,6 +30,9 @@ class ElementalConfig(RunSettings):
     input_ablation: Literal["none", "timestamp", "bare"] = "none"
     # Attack-lock study: weight of the KL to the reference policy (default 0.05).
     tau_scale: float | None = Field(default=None, ge=0)
+    checkpoint_every: int | None = Field(default=None, ge=1)
+    # End a game past its observation capacities instead of failing the run.
+    recover_capacity: bool = False
 
 
 def gate(directory: Path) -> None:
@@ -56,6 +59,12 @@ def train(config: ElementalConfig) -> None:
             "learning": base.learning
             if config.tau_scale is None
             else base.learning.model_copy(update={"tau_scale": config.tau_scale}),
+            "checkpoint_every": config.checkpoint_every or base.checkpoint_every,
+            "game_errors": base.game_errors
+            if base.game_errors is None
+            else base.game_errors.model_copy(
+                update={"recover_capacity": config.recover_capacity}
+            ),
             "device": config.device,
             "streams": config.streams,
             "run_settings": config.run_settings,
