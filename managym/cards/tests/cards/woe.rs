@@ -175,3 +175,32 @@ fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
         assert!(fork.game().state.permanent_of(kept).is_some());
     }
 }
+
+/// Mocking Sprite makes its controller's instant and sorcery spells cost {1}
+/// less, and no creature spell.
+#[test]
+fn mocking_sprite_reduces_only_instant_and_sorcery_spells() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
+        inspect::top_spell,
+        play::{cast_card, castable, settle},
+    };
+    use managym::state::{
+        game_object::{PlayerId, Target},
+        player::ManaPayment,
+    };
+    let mut s = five_color_unfunded_setup(&["Mocking Sprite", "Lightning Strike", "Gray Ogre"]);
+    force_lands(&mut s, 0, "Mountain", 2);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let strike = force_new_card_in_hand(&mut s, 0, "Lightning Strike");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    assert!(!castable(&mut s, ogre));
+    s.force_permanent_on_battlefield(0, "Mocking Sprite");
+    assert!(!castable(&mut s, ogre), "a creature spell is not reduced");
+    assert!(castable(&mut s, strike));
+    cast_card(&mut s, strike);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert_eq!(top_spell(&s).spent.total(), 1);
+    settle(&mut s);
+    s.assert_life(1, 17);
+}

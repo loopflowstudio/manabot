@@ -14,6 +14,7 @@
 
 mod aer;
 mod afr;
+mod bfz;
 mod blb;
 mod bng;
 mod bro;
@@ -24,6 +25,7 @@ mod clb;
 mod cmr;
 mod csp;
 mod dft;
+mod dmu;
 mod dom;
 mod dtk;
 mod ecl;
@@ -57,6 +59,7 @@ mod mh2;
 mod mid;
 mod mkm;
 mod mmq;
+mod mrd;
 mod msh;
 mod nec;
 mod ody;
@@ -67,6 +70,7 @@ mod por;
 mod psal;
 mod ptk;
 mod rav;
+mod rix;
 mod roe;
 mod rtr;
 mod shm;
@@ -118,6 +122,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
     blb::cards,
+    bfz::cards,
     bng::cards,
     bro::cards,
     c17::cards,
@@ -127,6 +132,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     cmr::cards,
     csp::cards,
     dft::cards,
+    dmu::cards,
     dom::cards,
     dtk::cards,
     ecl::cards,
@@ -160,6 +166,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     mid::cards,
     mkm::cards,
     mmq::cards,
+    mrd::cards,
     msh::cards,
     nec::cards,
     ody::cards,
@@ -171,6 +178,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ptk::cards,
     rav::cards,
     roe::cards,
+    rix::cards,
     rtr::cards,
     shm::cards,
     soi::cards,

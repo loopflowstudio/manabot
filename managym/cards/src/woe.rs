@@ -3,14 +3,15 @@ use managym_state::{
     ability::{Condition, Effect, ObjectSelector, TargetSpec},
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics,
+        Keywords, PrintedCharacteristics, SpellCostReduction, StaticAbility,
     },
     effect::Modification,
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![archons_glory(), scarecrow_guide()]
+    vec![archons_glory(), mocking_sprite(), scarecrow_guide()]
 }
 
 fn scarecrow_guide() -> CardDefinition {
@@ -64,6 +65,35 @@ fn archons_glory() -> CardDefinition {
                     otherwise: vec![],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mocking_sprite() -> CardDefinition {
+    let text_box = "Flying\nInstant and sorcery spells you cast cost {1} less to cast.";
+    CardDefinition {
+        key: "woe.mocking_sprite",
+        scryfall_id: "e595014d-4ff4-4561-b7f2-a9bd56300b01",
+        printed: PrintedCharacteristics {
+            name: "Mocking Sprite".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Faerie".into(), "Rogue".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
+                first_on_own_turn: false,
+                predicate: CardPredicate {
+                    card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                    ..Default::default()
+                },
+                condition: Condition::Always,
+                generic: 1,
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

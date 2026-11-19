@@ -420,3 +420,33 @@ fn blasphemous_edict_asks_for_its_cost_and_for_the_creatures_kept() {
     settle(&mut s);
     assert_eq!((creature_count(&s, 0), creature_count(&s, 1)), (2, 0));
 }
+
+/// Claws Out costs {1} less for each Cat its caster controls and gives that
+/// player's creatures +2/+2 until end of turn.
+#[test]
+fn claws_out_costs_less_per_cat_and_pumps_its_casters_creatures() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
+        inspect::top_spell,
+        play::{cast_card, castable, settle},
+    };
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_unfunded_setup(&["Claws Out", "Felidar Cub", "Gray Ogre"]);
+    force_lands(&mut s, 0, "Plains", 3);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let claws = force_new_card_in_hand(&mut s, 0, "Claws Out");
+    let first = s.force_permanent_on_battlefield(0, "Felidar Cub");
+    assert!(!castable(&mut s, claws), "one Cat: {{2}}{{W}}{{W}}");
+    let second = s.force_permanent_on_battlefield(0, "Felidar Cub");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert!(castable(&mut s, claws), "two Cats: {{1}}{{W}}{{W}}");
+    cast_card(&mut s, claws);
+    assert_eq!(top_spell(&s).spent.total(), 3);
+    settle(&mut s);
+    for cat in [first, second] {
+        assert_eq!(s.game().characteristics(cat).pt(), (4, 4));
+    }
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
+}

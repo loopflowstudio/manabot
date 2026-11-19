@@ -12,6 +12,8 @@ mod support;
 mod aer;
 #[path = "cards/afr.rs"]
 mod afr;
+#[path = "cards/bfz.rs"]
+mod bfz;
 #[path = "cards/blb.rs"]
 mod blb;
 #[path = "cards/bng.rs"]
@@ -34,6 +36,8 @@ mod csp;
 mod definitions;
 #[path = "cards/dft.rs"]
 mod dft;
+#[path = "cards/dmu.rs"]
+mod dmu;
 #[path = "cards/dom.rs"]
 mod dom;
 #[path = "cards/dtk.rs"]
@@ -94,6 +98,8 @@ mod mid;
 mod mkm;
 #[path = "cards/mmq.rs"]
 mod mmq;
+#[path = "cards/mrd.rs"]
+mod mrd;
 #[path = "cards/msh.rs"]
 mod msh;
 #[path = "cards/nec.rs"]
@@ -116,6 +122,8 @@ mod psal;
 mod ptk;
 #[path = "cards/rav.rs"]
 mod rav;
+#[path = "cards/rix.rs"]
+mod rix;
 #[path = "cards/roe.rs"]
 mod roe;
 #[path = "cards/rtr.rs"]

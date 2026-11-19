@@ -17,6 +17,7 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         blasphemous_edict(),
+        claws_out(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
@@ -185,6 +186,29 @@ fn blasphemous_edict() -> CardDefinition {
                 },
             }],
             spell_effects: vec![Effect::EachPlayerSacrificesCreatures { count: 13 }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn claws_out() -> CardDefinition {
+    let text_box = "Affinity for Cats (This spell costs {1} less to cast for each Cat you control.)\nCreatures you control get +2/+2 until end of turn.";
+    CardDefinition {
+        key: "fdn.claws_out",
+        scryfall_id: "4396049c-b976-4b7f-8ecd-564e24ebd631",
+        printed: PrintedCharacteristics {
+            name: "Claws Out".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            statics: vec![StaticAbility::CostsLessPerPermanent(
+                CardPredicate::subtype("Cat"),
+            )],
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::each_you_control(CardPredicate::creature()),
+                Modification::pump(2, 2),
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

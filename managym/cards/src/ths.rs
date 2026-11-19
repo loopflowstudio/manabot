@@ -1,14 +1,18 @@
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
         ReplacementEffect,
     },
     mana::{Mana, ManaCost},
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        burnished_hart(),
         lightning_strike(),
         temple_of_abandon(),
         temple_of_deceit(),
@@ -121,4 +125,36 @@ fn temple_of_triumph() -> CardDefinition {
         "Temple of Triumph",
         ["R", "W"],
     )
+}
+
+fn burnished_hart() -> CardDefinition {
+    let text_box = "{3}, Sacrifice this creature: Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.";
+    CardDefinition {
+        key: "ths.burnished_hart",
+        scryfall_id: "772cbcba-9efa-4894-9b57-e73fd296333d",
+        printed: PrintedCharacteristics {
+            name: "Burnished Hart".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Elk".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}"),
+                sacrifice_source: true,
+                effects: vec![Effect::search_library(
+                    CardPredicate::basic_land(),
+                    EffectValue::Fixed(2),
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Selected,
+                        true,
+                    )],
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

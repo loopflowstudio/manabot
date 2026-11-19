@@ -6441,5 +6441,225 @@
     ],
     "oracle_text": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {R} or {W}.",
     "colors": []
+  },
+  "Burnished Hart": {
+    "name": "Burnished Hart",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Elk",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{3}, Sacrifice this creature: Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": []
+  },
+  "Burst Lightning": {
+    "name": "Burst Lightning",
+    "mana_cost": "{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nBurst Lightning deals 2 damage to any target. If this spell was kicked, it deals 4 damage instead.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Cathar Commando": {
+    "name": "Cathar Commando",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\n{1}, Sacrifice this creature: Destroy target artifact or enchantment.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Claws Out": {
+    "name": "Claws Out",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Affinity"
+    ],
+    "oracle_text": "Affinity for Cats (This spell costs {1} less to cast for each Cat you control.)\nCreatures you control get +2/+2 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Dragonlord's Servant": {
+    "name": "Dragonlord's Servant",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Shaman",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Dragon spells you cast cost {1} less to cast.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Eaten Alive": {
+    "name": "Eaten Alive",
+    "mana_cost": "{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As an additional cost to cast this spell, sacrifice a creature or pay {3}{B}.\nExile target creature or planeswalker.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Evolving Wilds": {
+    "name": "Evolving Wilds",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+    "colors": []
+  },
+  "Expedition Map": {
+    "name": "Expedition Map",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{2}, {T}, Sacrifice this artifact: Search your library for a land card, reveal it, put it into your hand, then shuffle.",
+    "colors": []
+  },
+  "Fanatical Firebrand": {
+    "name": "Fanatical Firebrand",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Goblin Pirate",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)\n{T}, Sacrifice this creature: It deals 1 damage to any target.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Felidar Cub": {
+    "name": "Felidar Cub",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Cat Beast",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Sacrifice this creature: Destroy target enchantment.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Gilded Lotus": {
+    "name": "Gilded Lotus",
+    "mana_cost": "{5}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add three mana of any one color.",
+    "colors": []
+  },
+  "Goblin Firebomb": {
+    "name": "Goblin Firebomb",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\n{7}, {T}, Sacrifice this artifact: Destroy target permanent.",
+    "colors": []
+  },
+  "Hedron Archive": {
+    "name": "Hedron Archive",
+    "mana_cost": "{4}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}{C}.\n{2}, {T}, Sacrifice this artifact: Draw two cards.",
+    "colors": []
+  },
+  "Into the Roil": {
+    "name": "Into the Roil",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {1}{U} (You may pay an additional {1}{U} as you cast this spell.)\nReturn target nonland permanent to its owner's hand. If this spell was kicked, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Mocking Sprite": {
+    "name": "Mocking Sprite",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Faerie Rogue",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nInstant and sorcery spells you cast cost {1} less to cast.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Thrashing Brontodon": {
+    "name": "Thrashing Brontodon",
+    "mana_cost": "{1}{G}{G}",
+    "type_line": "Creature — Dinosaur",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "{1}, Sacrifice this creature: Destroy target artifact or enchantment.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Tolarian Terror": {
+    "name": "Tolarian Terror",
+    "mana_cost": "{6}{U}",
+    "type_line": "Creature — Serpent",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Ward"
+    ],
+    "oracle_text": "This spell costs {1} less to cast for each instant and sorcery card in your graveyard.\nWard {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Vampiric Rites": {
+    "name": "Vampiric Rites",
+    "mana_cost": "{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{1}{B}, Sacrifice a creature: You gain 1 life and draw a card.",
+    "colors": [
+      "B"
+    ]
   }
 }

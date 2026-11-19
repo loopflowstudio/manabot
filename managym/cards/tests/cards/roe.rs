@@ -611,3 +611,36 @@ fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
     });
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
 }
+
+/// Evolving Wilds is sacrificed as the ability is activated and fetches one
+/// basic land, which enters tapped; a nonbasic land is not offered.
+#[test]
+fn evolving_wilds_sacrifices_itself_for_a_tapped_basic_land() {
+    use crate::support::{
+        game::five_color_unfunded_setup,
+        inspect::{card_of, has_action, library_card, tapped, zone_of},
+        play::{activate, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::zone::ZoneType,
+    };
+    let mut s = five_color_unfunded_setup(&["Evolving Wilds", "Rumble Arena"]);
+    let wilds = s.force_permanent_on_battlefield(0, "Evolving Wilds");
+    let wilds_card = card_of(&s, wilds);
+    activate(&mut s, wilds, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(zone_of(&s, wilds_card), Some(ZoneType::Graveyard));
+    let forest = library_card(&s, 0, "Forest");
+    let arena = library_card(&s, 0, "Rumble Arena");
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == arena)
+    ));
+    select_card(&mut s, forest);
+    settle(&mut s);
+    let [entered] = s.battlefield_permanents_named(0, "Forest")[..] else {
+        panic!("one Forest entered")
+    };
+    assert!(tapped(&s, entered));
+}
