@@ -46,16 +46,25 @@
     });
   }
 
-  // Remeasure after the frame lays out, and again once cards have finished travelling.
+  /** Longest card travel after a frame (a cast flying from the hand to the stack), in ms. */
+  const TRAVEL_MS = 400;
+
+  // Remeasure every frame while cards travel, so a line follows its endpoints
+  // instead of pointing from where a card was, then on any resize.
   $effect(() => {
     void revision;
     void lines;
     if (!root) return;
-    const first = requestAnimationFrame(measure);
-    const settled = window.setTimeout(measure, 360);
+    const start = performance.now();
+    let frame = 0;
+    const follow = (now: number): void => {
+      measure();
+      if (now - start < TRAVEL_MS) frame = requestAnimationFrame(follow);
+    };
+    frame = requestAnimationFrame(follow);
     const observer = new ResizeObserver(() => measure());
     observer.observe(root);
-    return () => { cancelAnimationFrame(first); window.clearTimeout(settled); observer.disconnect(); };
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   });
 </script>
 
