@@ -5975,5 +5975,67 @@
     "keywords": [],
     "oracle_text": "{T}: Add {R}. When that mana is spent to cast a red instant or sorcery spell, copy that spell and you may choose new targets for the copy.",
     "colors": []
+  },
+  "Appeal to Eirdu": {
+    "name": "Appeal to Eirdu",
+    "mana_cost": "{3}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Convoke"
+    ],
+    "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nOne or two target creatures each get +2/+1 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Ironheart, Clever Champion": {
+    "name": "Ironheart, Clever Champion",
+    "mana_cost": "{4}{U}",
+    "type_line": "Legendary Artifact Creature — Human Hero",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Improvise"
+    ],
+    "oracle_text": "Improvise (Your artifacts can help cast this spell. Each artifact you tap after you're done activating mana abilities pays for {1}.)\nFlying\nNoncreature spells you cast have improvise.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Teval, Arbiter of Virtue": {
+    "name": "Teval, Arbiter of Virtue",
+    "mana_cost": "{2}{B}{G}{U}",
+    "type_line": "Legendary Creature — Spirit Dragon",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying",
+      "Lifelink"
+    ],
+    "oracle_text": "Flying, lifelink\nSpells you cast have delve. (Each card you exile from your graveyard while casting those spells pays for {1}.)\nWhenever you cast a spell, you lose life equal to its mana value.",
+    "colors": [
+      "B",
+      "G",
+      "U"
+    ]
+  },
+  "Guardian of Vitu-Ghazi": {
+    "name": "Guardian of Vitu-Ghazi",
+    "mana_cost": "{6}{G}{W}",
+    "type_line": "Creature — Elemental",
+    "power": "4",
+    "toughness": "7",
+    "keywords": [
+      "Vigilance",
+      "Convoke"
+    ],
+    "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nVigilance",
+    "colors": [
+      "G",
+      "W"
+    ]
   }
 }

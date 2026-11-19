@@ -38,6 +38,8 @@ mod dft;
 mod dom;
 #[path = "cards/dtk.rs"]
 mod dtk;
+#[path = "cards/ecl.rs"]
+mod ecl;
 #[path = "cards/eld.rs"]
 mod eld;
 #[path = "cards/emn.rs"]
@@ -86,6 +88,8 @@ mod mid;
 mod mkm;
 #[path = "cards/mmq.rs"]
 mod mmq;
+#[path = "cards/msh.rs"]
+mod msh;
 #[path = "cards/nec.rs"]
 mod nec;
 #[path = "cards/observability.rs"]
@@ -120,6 +124,8 @@ mod spm;
 mod sth;
 #[path = "cards/stx.rs"]
 mod stx;
+#[path = "cards/tdm.rs"]
+mod tdm;
 #[path = "cards/ths.rs"]
 mod ths;
 #[path = "cards/tla.rs"]

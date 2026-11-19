@@ -17,7 +17,7 @@ use crate::{
         ability::Effect,
         card::ActivationZone,
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId},
-        mana::Mana,
+        mana::{Color, Mana},
         player::ManaFloats,
         zone::ZoneType,
     },
@@ -63,6 +63,34 @@ impl Game {
                 }
                 Some(label)
             }
+            Action::WaterbendTap { player, permanent } => {
+                // Convoke and improvise taps say what they pay; a waterbend
+                // tap keeps its type name.
+                let (_, payment, _) = self
+                    .paying()
+                    .filter(|(_, payment, _)| payment.help().taps_any_generic())
+                    .filter(|_| self.state.suspended_decision.is_none())?;
+                let name = &self.state[self.permanent_object(*permanent)?].name;
+                let convokes =
+                    payment.help().convoke && self.characteristics(*permanent).is_creature();
+                let keyword = if convokes { "convoke" } else { "improvise" };
+                let symbol = |color: &Color| ["W", "U", "B", "R", "G", "C", "1"][*color as usize];
+                match &self.help_tap_options(*player, payment, *permanent)[..] {
+                    [] => None,
+                    [color] => Some(format!(
+                        "Tap {name} to pay {{{}}} ({keyword})",
+                        symbol(color)
+                    )),
+                    colors => Some(format!(
+                        "Tap {name} to pay {} ({keyword})",
+                        colors
+                            .iter()
+                            .map(|color| format!("{{{}}}", symbol(color)))
+                            .collect::<Vec<_>>()
+                            .join(" or ")
+                    )),
+                }
+            }
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),
@@ -73,6 +101,23 @@ impl Game {
                 ) =>
             {
                 Some(format!("X = {mode}"))
+            }
+            Action::ChooseMode { mode, .. }
+                if self.state.suspended_decision.is_none()
+                    && matches!(
+                        self.paying(),
+                        Some((_, _, CostComponent::ConvokeColor { .. }))
+                    ) =>
+            {
+                let (_, _, CostComponent::ConvokeColor { creature, colors }) = self.paying()?
+                else {
+                    unreachable!()
+                };
+                let color = ["W", "U", "B", "R", "G"].get(*colors.get(*mode)? as usize)?;
+                Some(format!(
+                    "{} pays {{{color}}} (convoke)",
+                    self.state[*creature].name
+                ))
             }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
                 let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
@@ -180,7 +225,14 @@ impl Game {
                     CostComponent::TapPower { .. } => Some(format!("Tap {name} to crew")),
                     CostComponent::Tap(_) => Some(format!("Tap {name} to pay")),
                     CostComponent::Sacrifice(_) => Some(format!("Sacrifice {name}")),
-                    CostComponent::Discard | CostComponent::Mana { .. } => None,
+                    CostComponent::Mana { help, .. }
+                        if help.delve && self.state.suspended_decision.is_none() =>
+                    {
+                        Some(format!("Exile {name} to pay {{1}} (delve)"))
+                    }
+                    CostComponent::Discard
+                    | CostComponent::Mana { .. }
+                    | CostComponent::ConvokeColor { .. } => None,
                 });
                 if paying.is_some() {
                     paying
@@ -830,7 +882,7 @@ impl Game {
             CostComponent::Mana { .. } => {
                 let (owed, waterbend) = payment.mana();
                 let mut actions = self.mana_ability_actions(player);
-                if payment.waterbends() {
+                if payment.waterbends() && !payment.help().taps_any_generic() {
                     if waterbend > 0 {
                         // Only offer taps that keep the rest of the cost payable.
                         for candidate in self.waterbend_taps_keeping_payable(
@@ -849,6 +901,7 @@ impl Game {
                 } else {
                     actions.extend(self.useful_payment_taps(player));
                 }
+                actions.extend(self.help_actions(player));
                 if self.can_pay_mana_cost(player, owed) {
                     actions.push(Action::PayCost { player });
                 }
@@ -859,6 +912,13 @@ impl Game {
                     (ActionSpaceKind::PayOrNot, actions, Vec::new())
                 }
             }
+            CostComponent::ConvokeColor { colors, .. } => (
+                ActionSpaceKind::Modal,
+                (0..colors.len())
+                    .map(|mode| Action::ChooseMode { player, mode })
+                    .collect(),
+                source_focus(),
+            ),
         };
         ActionSpace {
             player: Some(player),
@@ -959,6 +1019,15 @@ impl Game {
                         .is_some_and(|p| p.placing.is_some()) =>
             {
                 self.choose_trigger_mode(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if self.state.suspended_decision.is_none()
+                    && matches!(
+                        self.paying(),
+                        Some((_, _, CostComponent::ConvokeColor { .. }))
+                    ) =>
+            {
+                self.convoke_color_action(*player, *mode)
             }
             Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>

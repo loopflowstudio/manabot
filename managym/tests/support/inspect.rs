@@ -231,12 +231,18 @@ pub fn stack_spell_card(s: &Scenario, name: &str) -> ObjectId {
 // Permanents
 // ---------------------------------------------------------------------------
 
-/// The spell on top of the stack, with the receipt of what paid for it.
+/// The topmost spell on the stack, with the receipt of what paid for it.
 pub fn top_spell(s: &Scenario) -> &SpellOnStack {
-    match s.game().state.stack_objects.last() {
-        Some(StackObject::Spell(spell)) => spell,
-        other => panic!("a spell is on the stack: {other:?}"),
-    }
+    s.game()
+        .state
+        .stack_objects
+        .iter()
+        .rev()
+        .find_map(|object| match object {
+            StackObject::Spell(spell) => Some(spell),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("a spell is on the stack: {:?}", s.action_space()))
 }
 
 /// Player 0's first battlefield permanent with this name.

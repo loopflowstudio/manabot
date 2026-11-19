@@ -201,7 +201,15 @@ fn execution_names(out: &mut Vec<RecordName>) {
         ("How", &["Tapped", "Sacrificed", "Exiled", "Discarded"][..]),
         (
             "Toward",
-            &["Printed", "Waterbend", "Crew", "Alternative"][..],
+            &[
+                "Printed",
+                "Waterbend",
+                "Crew",
+                "Alternative",
+                "Convoke",
+                "Improvise",
+                "Delve",
+            ][..],
         ),
         (
             "Effect",

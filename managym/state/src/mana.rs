@@ -509,6 +509,16 @@ impl ManaCost {
         self.with_generic(self.generic().saturating_sub(amount))
     }
 
+    /// This cost with one pip of `color` paid some other way; `Color::Generic`
+    /// is {1} (convoke, improvise, delve).
+    pub fn less_pip(&self, color: Color) -> ManaCost {
+        let mut out = self.clone();
+        debug_assert!(out.cost[color as usize] > 0, "the pip is owed");
+        out.cost[color as usize] = out.cost[color as usize].saturating_sub(1);
+        out.update_mana_value();
+        out
+    }
+
     /// This cost with X announced as `value` (CR 601.2b): each {X} becomes
     /// `value` generic mana.
     pub fn with_x(&self, value: u8) -> ManaCost {

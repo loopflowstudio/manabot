@@ -557,6 +557,10 @@ pub enum EffectValue {
     /// last known information once it has left ("where X is that
     /// creature's power").
     TriggeringPower,
+    /// The mana value of the spell whose casting fired the trigger ("you lose
+    /// life equal to its mana value"), its announced X included while it is
+    /// on the stack.
+    TriggeringManaValue,
     /// The toughness of the frame's primary target, from its last known
     /// information once it has left ("you gain life equal to its
     /// toughness").
@@ -1593,6 +1597,11 @@ impl Effect {
             }
             // "Copy that spell": the cast spell is the context.
             Effect::CopyTriggeringObject | Effect::CopyTriggeringSpellForEach { .. } => true,
+            // "Equal to its mana value".
+            Effect::LoseLife {
+                amount: EffectValue::TriggeringManaValue,
+                ..
+            } => true,
             Effect::ForPlayer { effects, .. } => effects.iter().any(Effect::asks_triggering_spell),
             _ => false,
         }

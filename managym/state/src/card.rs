@@ -924,6 +924,12 @@ pub enum StaticAbility {
     /// "Untap this during each other player's untap step" (CR 502.3): it
     /// untaps in its controller's opponents' untap steps as well as theirs.
     UntapsDuringOtherUntapSteps,
+    /// "[Predicate] spells you cast have [convoke, improvise or delve]": the
+    /// spell is paid as though it printed `cost`.
+    SpellsHave {
+        predicate: crate::predicate::CardPredicate,
+        cost: AdditionalCost,
+    },
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -972,6 +978,15 @@ pub enum AdditionalCost {
     /// spell is cast, a trigger copies it once per payment; each copy may
     /// take new targets. Payments add to the total cost, not the mana value.
     Replicate(ManaCost),
+    /// Convoke (CR 702.51): each creature its caster taps while casting it
+    /// pays for {1} or one mana of that creature's color.
+    Convoke,
+    /// Improvise (CR 702.126): each artifact its caster taps while casting
+    /// it pays for {1}.
+    Improvise,
+    /// Delve (CR 702.66): each card its caster exiles from their graveyard
+    /// while casting it pays for {1}.
+    Delve,
 }
 
 /// An object as printed (CR 108.4, 111.3): what cards and tokens share,
@@ -1209,6 +1224,9 @@ impl PrintedCharacteristics {
             AdditionalCost::Sacrifice(_)
             | AdditionalCost::RequiredWaterbend(_)
             | AdditionalCost::Replicate(_)
+            | AdditionalCost::Convoke
+            | AdditionalCost::Improvise
+            | AdditionalCost::Delve
             | AdditionalCost::ExileFromHandAlternative { .. } => None,
         })
     }

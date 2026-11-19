@@ -149,7 +149,11 @@ impl Game {
                         "Choose the optional or alternative cost before previewing payment.",
                     ));
                 };
-                if has_unannounced_cost(card, cast) {
+                if has_unannounced_cost(card, cast)
+                    || self
+                        .spell_help(player, *object, cast, &ManaCost::default())
+                        .keyworded()
+                {
                     return Ok(PaymentPreview::needs_additional_cost());
                 }
                 if card.cost_reduction_if_targets().is_some() {
@@ -171,7 +175,11 @@ impl Game {
                     ..
                 }) => {
                     let card = &self.state[*object];
-                    if has_unannounced_cost(card, *cast) {
+                    if has_unannounced_cost(card, *cast)
+                        || self
+                            .spell_help(player, *object, *cast, &ManaCost::default())
+                            .keyworded()
+                    {
                         return Ok(PaymentPreview::needs_additional_cost());
                     }
                     let requirements = card.target_requirements_for_mode(*mode);
@@ -212,6 +220,11 @@ impl Game {
                 }
             }
             Action::PayCost { .. } | Action::TapForMana { .. } => match &self.pending_choice {
+                Some(PendingChoice::Pay { payment, .. })
+                    if payment.owed.len() == 1 && payment.help().keyworded() =>
+                {
+                    return Ok(PaymentPreview::needs_additional_cost());
+                }
                 Some(PendingChoice::Pay { payment, .. }) if payment.owed.len() == 1 => {
                     sources
                         .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));

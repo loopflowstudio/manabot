@@ -1494,6 +1494,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "avatar_aang_draws_on_each_bending_and_transforms_after_all_four",
         ),
+        StaticAbility::SpellsHave { .. } => witnessed(
+            "StaticAbility::SpellsHave",
+            Seen::Actions("a spell castable only with the granted help is offered; then its taps or exiles, each a receipt reference"),
+            "Teval, Arbiter of Virtue",
+            "tdm",
+            "teval_grants_delve_and_takes_life_equal_to_mana_value",
+        ),
         StaticAbility::UntapsDuringOtherUntapSteps => witnessed(
             "StaticAbility::UntapsDuringOtherUntapSteps",
             Seen::Via("the permanent's tapped column after another player's untap step"),
@@ -1598,6 +1605,27 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "gpt",
             "shattering_spree_replicated_twice_destroys_three_artifacts",
         ),
+        AdditionalCost::Convoke => witnessed(
+            "AdditionalCost::Convoke",
+            Seen::Actions("the cast is offered when creatures can pay; each convoke tap is an action and a receipt reference"),
+            "Appeal to Eirdu",
+            "ecl",
+            "appeal_to_eirdu_convokes_for_generic_and_for_white",
+        ),
+        AdditionalCost::Improvise => witnessed(
+            "AdditionalCost::Improvise",
+            Seen::Actions("the cast is offered when artifacts can pay; each improvise tap is an action and a receipt reference"),
+            "Ironheart, Clever Champion",
+            "msh",
+            "ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells",
+        ),
+        AdditionalCost::Delve => witnessed(
+            "AdditionalCost::Delve",
+            Seen::Actions("the cast is offered when the graveyard can pay; each exiled card is an action and a receipt reference"),
+            "Teval, Arbiter of Virtue",
+            "tdm",
+            "teval_grants_delve_and_takes_life_equal_to_mana_value",
+        ),
         AdditionalCost::RequiredWaterbend(_) => witnessed(
             "AdditionalCost::RequiredWaterbend",
             Seen::Actions("the cast is offered only while the waterbend total is payable"),
@@ -1685,6 +1713,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
             unless: None,
         }),
         StaticAbility::UntapsDuringOtherUntapSteps,
+        StaticAbility::SpellsHave {
+            predicate: CardPredicate::default(),
+            cost: AdditionalCost::Delve,
+        },
         StaticAbility::SpellsCostLessMana(ManaCost::parse("{W}{U}{B}{R}{G}")),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
@@ -1731,6 +1763,9 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
         AdditionalCost::Waterbend(ManaCost::parse("{6}")),
         AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}")),
         AdditionalCost::Replicate(ManaCost::parse("{R}")),
+        AdditionalCost::Convoke,
+        AdditionalCost::Improvise,
+        AdditionalCost::Delve,
         AdditionalCost::PayLifeOrMana {
             life: 5,
             mana: ManaCost::parse("{2}"),
@@ -2577,6 +2612,15 @@ fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
     Some(&source[start..end])
 }
 
+/// The cost a static ability gives other spells ("spells you cast have
+/// delve"): its card prints that cost as much as a spell with the keyword.
+fn granted_cost(ability: &StaticAbility) -> Option<&AdditionalCost> {
+    match ability {
+        StaticAbility::SpellsHave { cost, .. } => Some(cost),
+        _ => None,
+    }
+}
+
 /// Every variant is witnessed by a real card that prints it, and that card's
 /// named directed test exists in its card test file and names the card.
 #[test]
@@ -2591,9 +2635,11 @@ fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
     });
     let costs = cost_witnesses().into_iter().map(|cost| {
         let row = cost_seen(&cost);
-        let printed = card_definition(row.card)
+        let card = card_definition(row.card);
+        let printed = card
             .additional_costs
             .iter()
+            .chain(card.statics.iter().filter_map(granted_cost))
             .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&cost));
         (row, printed)
     });
@@ -2677,9 +2723,14 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
         let card = card_definition(row.card);
         let tokens = tokens_of(&card);
         let mut stripped = card.clone();
-        Arc::make_mut(&mut stripped.printed)
-            .additional_costs
-            .retain(|candidate| std::mem::discriminant(candidate) != std::mem::discriminant(&cost));
+        let differs = |candidate: &AdditionalCost| {
+            std::mem::discriminant(candidate) != std::mem::discriminant(&cost)
+        };
+        let printed = Arc::make_mut(&mut stripped.printed);
+        printed.additional_costs.retain(differs);
+        printed
+            .statics
+            .retain(|ability| granted_cost(ability).is_none_or(differs));
         let without = tokens_of(&stripped);
         assert_ne!(tokens, without, "{}", row.card);
         assert!(tokens.contains(&variant(row.token)), "{}", row.card);
@@ -4685,6 +4736,88 @@ fn payment_contributions_reach_the_stack_frame_as_references() {
             .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
             .count();
         assert_eq!(programs, frame.effect_execution.len());
+    }
+}
+
+/// A tap or exiled card that pays part of a spell's mana cost is a
+/// contribution like any other: the stack frame says which keyword it paid
+/// under (convoke, `ecl::appeal_to_eirdu_convokes_for_generic_and_for_white`;
+/// improvise, `msh::ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells`;
+/// delve, `tdm::teval_grants_delve_and_takes_life_equal_to_mana_value`).
+#[test]
+fn help_paying_a_mana_cost_reaches_the_stack_frame_by_keyword() {
+    for (spell, helper, how, toward) in [
+        ("Hill Giant", "Savannah Lions", "Exiled", "Delve"),
+        ("Appeal to Eirdu", "Savannah Lions", "Tapped", "Convoke"),
+        ("Dramatic Reversal", "Glider Staff", "Tapped", "Improvise"),
+    ] {
+        let mut s = five_color_unfunded_setup(&[
+            spell,
+            helper,
+            "Teval, Arbiter of Virtue",
+            "Ironheart, Clever Champion",
+        ]);
+        let land = match toward {
+            "Delve" => {
+                s.force_permanent_on_battlefield(0, "Teval, Arbiter of Virtue");
+                for _ in 0..3 {
+                    crate::support::game::plant_in_graveyard(&mut s, 0, helper);
+                }
+                "Mountain"
+            }
+            "Improvise" => {
+                s.force_permanent_on_battlefield(0, "Ironheart, Clever Champion");
+                s.force_permanent_on_battlefield(0, helper);
+                "Island"
+            }
+            _ => {
+                for _ in 0..3 {
+                    s.force_permanent_on_battlefield(0, helper);
+                }
+                "Plains"
+            }
+        };
+        s.force_permanent_on_battlefield(0, land);
+        let card = crate::support::game::force_new_card_in_hand(&mut s, 0, spell);
+        crate::support::play::cast_card(&mut s, card);
+        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+            s.step_action(0);
+            if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+                choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+            }
+        }
+        // Take every help on offer; the land pays what is left.
+        while let Some(help) = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::WaterbendTap { .. } | Action::SelectCard { .. }))
+        {
+            s.step_action(help);
+        }
+        let paid = [
+            (
+                TokenKind::Variant as u16,
+                name_value(&format!("How::{how}")),
+            ),
+            (
+                TokenKind::Variant as u16,
+                name_value(&format!("Toward::{toward}")),
+            ),
+        ];
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let frame = observation
+                .continuation
+                .iter()
+                .find(|frame| frame.kind == 1)
+                .unwrap_or_else(|| panic!("{spell} is on the stack: {:?}", s.action_space()));
+            for token in paid {
+                assert!(frame.effect_execution.contains(&token), "{spell}");
+            }
+            assert!(!frame.effect_execution_references.is_empty());
+            assert_execution_tokens_registered(frame);
+        }
     }
 }
 

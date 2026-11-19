@@ -407,6 +407,19 @@ as the whole cost completes. A spell's receipt is shared by the stack object,
 its resolution and the entering permanent's own triggers; an activated
 ability keeps its own as `paid`. A source's own {T}, sacrifice, discard and
 life costs are paid at completion and are not on the receipt.
+Waterbend, convoke, improvise and delve pay part of a mana cost with something
+other than mana, so they are the `Help` of the `Mana` component and no step of
+their own: while it is owed the payer may tap a creature or artifact, or exile
+a card from their graveyard, each paying {1} and adding a contribution, or pay
+the rest with mana. A convoking creature pays an owed pip of its color when
+there is one, asking which (`CostComponent::ConvokeColor`) when more than one
+keeps the cost payable. `AdditionalCost::{Convoke, Improvise, Delve}` give a
+spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
+Offers and affordability ask the payment model with the help included
+(`payable_with_help`, `while_paying`), so a spell castable only with help is
+offered and a tap that would strand the cost is not; the automatic payer takes
+help only when mana alone cannot pay. A cost with waterbend and convoke or
+improvise offers only the keyword's taps.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation

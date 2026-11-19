@@ -542,6 +542,9 @@ impl<'a> Projection<'a> {
                         Toward::Waterbend => " to waterbend",
                         Toward::Crew => " to crew",
                         Toward::Alternative => " instead of paying mana",
+                        Toward::Convoke => " to convoke",
+                        Toward::Improvise => " to improvise",
+                        Toward::Delve => " to delve",
                     };
                     format!(
                         "{how} {}{toward}",

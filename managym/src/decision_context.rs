@@ -322,6 +322,8 @@ impl Game {
         }
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
+                CostComponent::Mana { help, .. } if help.keyworded() =>
+                    ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise or a graveyard card exiled for delve pays {1}. Each such payment commits immediately."),
                 CostComponent::Mana { .. } =>
                     ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
                 CostComponent::ExileFromHand =>
@@ -332,6 +334,8 @@ impl Game {
                     ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
                 CostComponent::Sacrifice(_) =>
                     ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+                CostComponent::ConvokeColor { .. } =>
+                    ("payment", "Choose which color of mana the creature just tapped pays for (convoke)."),
                 CostComponent::TapPower { .. } =>
                     ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             },

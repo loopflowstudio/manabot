@@ -58,6 +58,12 @@ pub enum Toward {
     Crew,
     /// A cost paid rather than the mana cost (CR 118.9).
     Alternative,
+    /// {1} or one mana of the tapped creature's color (CR 702.51a).
+    Convoke,
+    /// {1} for the tapped artifact (CR 702.126a).
+    Improvise,
+    /// {1} for the card exiled from a graveyard (CR 702.66a).
+    Delve,
 }
 
 /// An object that paid part of a cost instead of, or beside, mana. `object`

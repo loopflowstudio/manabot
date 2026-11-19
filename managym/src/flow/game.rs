@@ -30,7 +30,7 @@ use crate::{
             PermanentId, PermanentVec, PlayerId, Target,
         },
         knowledge::LibraryKnowledge,
-        mana::{Mana, ManaCost, ManaPool},
+        mana::{Color, Mana, ManaCost, ManaPool},
         payment::{How, PaymentReceipt, Toward},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
@@ -296,10 +296,48 @@ pub enum CostComponent {
     ExileFromHand,
     /// Sacrifice a matching permanent, or pay its `or_mana` instead.
     Sacrifice(SacrificeCost),
-    /// The mana still owed. Taps of untapped artifacts and creatures may pay
-    /// up to `waterbend` of its generic part as the cost was announced; each
-    /// tap is a `Toward::Waterbend` contribution and reduces `cost` by {1}.
-    Mana { cost: ManaCost, waterbend: u8 },
+    /// The mana still owed, and how its payer may pay part of it without
+    /// mana. Each such payment is a contribution and reduces `cost`.
+    Mana { cost: ManaCost, help: Help },
+    /// The convoking creature just tapped has several colors the cost still
+    /// owes: choose which one it pays (CR 702.51a).
+    ConvokeColor {
+        creature: ObjectId,
+        colors: Vec<Color>,
+    },
+}
+
+/// The ways a payer may pay part of a mana cost with something other than
+/// mana, fixed as the cost is announced.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct Help {
+    /// Generic mana that taps of untapped artifacts and creatures may pay,
+    /// {1} each (waterbend), as announced; taps made are the receipt's
+    /// `Toward::Waterbend` contributions.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub waterbend: u8,
+    /// Each creature tapped pays {1} or one mana of its color (CR 702.51).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub convoke: bool,
+    /// Each artifact tapped pays {1} (CR 702.126).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub improvise: bool,
+    /// Each card exiled from the payer's graveyard pays {1} (CR 702.66).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub delve: bool,
+}
+
+impl Help {
+    /// Whether any tap or exile may pay beside waterbend's.
+    pub fn keyworded(self) -> bool {
+        self.convoke || self.improvise || self.delve
+    }
+
+    /// Whether taps pay for any of the generic mana rather than only the
+    /// announced waterbend part.
+    pub fn taps_any_generic(self) -> bool {
+        self.convoke || self.improvise
+    }
 }
 
 /// One cast or activation being paid for (CR 601.2f-h): the announced
@@ -319,19 +357,30 @@ impl Payment {
     /// The mana still owed and the generic part of it that waterbend taps
     /// may still pay.
     pub fn mana(&self) -> (&ManaCost, u8) {
-        let Some(CostComponent::Mana { cost, waterbend }) = self.owed.last() else {
+        let Some(CostComponent::Mana { cost, help }) = self.owed.last() else {
             unreachable!("a payment ends with its mana component")
         };
         let tapped = self
             .receipt
             .contributed(How::Tapped, Toward::Waterbend)
             .count() as u8;
-        (cost, waterbend.saturating_sub(tapped).min(cost.generic()))
+        (
+            cost,
+            help.waterbend.saturating_sub(tapped).min(cost.generic()),
+        )
+    }
+
+    /// How the mana owed may be paid without mana, as announced.
+    pub fn help(&self) -> Help {
+        let Some(CostComponent::Mana { help, .. }) = self.owed.last() else {
+            unreachable!("a payment ends with its mana component")
+        };
+        *help
     }
 
     /// Whether the cost being paid is a waterbend cost, however it is paid.
     pub fn waterbends(&self) -> bool {
-        matches!(self.owed.last(), Some(CostComponent::Mana { waterbend, .. }) if *waterbend > 0)
+        self.help().waterbend > 0
     }
 
     fn mana_mut(&mut self) -> &mut ManaCost {
@@ -345,6 +394,14 @@ impl Payment {
     pub(crate) fn owe_mana(&mut self, extra: &ManaCost) {
         let cost = self.mana_mut();
         *cost = cost.plus(extra);
+    }
+
+    /// `object` paid one pip of the mana owed without mana: a pip of `color`,
+    /// or {1} for `Color::Generic`.
+    pub(crate) fn help_paid(&mut self, object: ObjectId, how: How, toward: Toward, color: Color) {
+        let cost = self.mana_mut();
+        *cost = cost.less_pip(color);
+        self.receipt.contribute(object, how, toward);
     }
 
     /// One waterbend tap paid {1} of the generic mana owed.

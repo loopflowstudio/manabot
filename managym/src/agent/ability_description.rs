@@ -802,6 +802,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
         EffectValue::ColorsSpentToCast => "the number of colors of mana spent to cast it".into(),
         EffectValue::TriggeringPower => "that creature's power".into(),
+        EffectValue::TriggeringManaValue => "that spell's mana value".into(),
         EffectValue::TargetToughness => "its toughness".into(),
         EffectValue::AttackingMatching { predicate } => format!(
             "the number of attacking {} you control",

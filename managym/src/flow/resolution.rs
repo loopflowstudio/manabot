@@ -67,6 +67,15 @@ impl Game {
                 .count() as i32,
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
+            EffectValue::TriggeringManaValue => match frame.context_target {
+                // A spell that has left the stack is read as the card it became.
+                Some(Target::StackSpell(spell)) => self
+                    .state
+                    .live(spell)
+                    .or_else(|| self.state.zones.successor(spell))
+                    .map_or(0, |object| i32::from(self.object_mana_value(object))),
+                _ => 0,
+            },
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
@@ -108,6 +117,7 @@ impl Game {
             | EffectValue::ColorsSpentToCast
             | EffectValue::SourcePower
             | EffectValue::TriggeringPower
+            | EffectValue::TriggeringManaValue
             | EffectValue::TargetToughness
             | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self
