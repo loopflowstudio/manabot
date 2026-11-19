@@ -716,8 +716,8 @@ priority until the turn ends.
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button
 (unless a control with its own action has focus), F6 passes the turn, ← and →
 step through the history, and Escape closes an open list or, with none open,
-returns the board to now. **Menu** holds the session controls, priority stops, the
-sharing and Study tools and feedback.
+returns the board to now. **Menu** holds the session controls, priority stops,
+the sharing and Study tools and feedback.
 
 While disconnected or waiting for a submitted choice, the board remains
 readable and actions are unavailable. Reconnect or reload in the same tab to
@@ -832,8 +832,8 @@ action, searching and advancing the live game. When a wait lasts more than a
 second, elapsed time shows how long that operation has been running; it is
 not a completion estimate. Recorded playback shows saved choices and
 consequences without running a bot. Looking at an earlier line of the history
-changes only what the board draws. **Disconnected** or **Reconnecting** takes precedence when the connection
-cannot confirm the live state. The last board remains readable, with submission
+changes only what the board draws. **Disconnected** or **Reconnecting** takes
+precedence when the connection cannot confirm the live state. The last board remains readable, with submission
 disabled until recovery confirms the current decision.
 
 **Retrying a bot.** An unsuccessful bot proposal leaves its native decision
@@ -1033,9 +1033,8 @@ stays on now and the unread lines are in **Since your last move**.
 Every fact is a line of the history whatever the motion setting.
 
 Sentences name a player shortly ("Heuristic drew a card"); the plate and top
-bar keep how it decides ("Heuristic · scripted"). Moves by priority-stop
-automation are marked **Auto**. A move alone is not evidence that a spell
-resolved or a creature died; the lines beneath it are.
+bar keep how it decides ("Heuristic · scripted"). A move alone is not
+evidence that a spell resolved or a creature died; the lines beneath it are.
 
 #### What is kept
 
@@ -1127,9 +1126,10 @@ The transport bar sits where live play has your hand's input:
 Under it, the **Decisions** strip draws the game as one line: each choice is a
 tick, coloured by whose it was, or a point on that chooser's value line where
 a value was recorded; turns are ruled and numbered. Click it to jump. It is
-open in Replay and folded in live play, where it counts decisions but past
-every board from before a reload opens only in Review after the game. A line of
-the rail's history jumps to its position too, with what it is about raised. Keys never act while you type in a field.
+open in Replay and folded in live play, where it counts decisions; positions
+from before a reload open only in Review after the game. A line of the rail's
+history jumps to its position, with what it is about raised. Keys never act
+while you type in a field.
 
 The replay address keeps the position, the perspective and the information
 view. Reloading restores them, with a saved position in this tab as a
@@ -1619,15 +1619,15 @@ can alter or delay the committed frame.
 
 ```json
 [
-  {"seq": 41, "kind": "cast",     "cause": null, "group": 41, "rule": null, "caused_by": null},
-  {"seq": 42, "kind": "targeted", "cause": 41,   "group": 41, "rule": null, "caused_by": null},
-  {"seq": 43, "kind": "damage",   "cause": 41,   "group": 41, "rule": null, "caused_by": null},
-  {"seq": 44, "kind": "died",     "cause": 43,   "group": 41, "rule": "lethal_damage", "caused_by": null},
-  {"seq": 45, "kind": "triggered","cause": 44,   "group": 41, "rule": null, "caused_by": null}
+  {"seq": 41, "kind": "cast",      "cause": null, "group": 41, "rule": null},
+  {"seq": 42, "kind": "targeted",  "cause": 41,   "group": 41, "rule": null},
+  {"seq": 43, "kind": "damage",    "cause": 41,   "group": 41, "rule": null},
+  {"seq": 44, "kind": "died",      "cause": 43,   "group": 41, "rule": "lethal_damage"},
+  {"seq": 45, "kind": "triggered", "cause": 44,   "group": 41, "rule": null}
 ]
 ```
 
-(Subjects, revisions and amounts are omitted here.)
+(Subjects, revisions, amounts and `caused_by` are omitted here.)
 
 | Field | Meaning |
 |---|---|
