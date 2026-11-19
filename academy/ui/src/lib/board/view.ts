@@ -44,7 +44,7 @@ export interface PermanentItem {
   offers: PlacedOffer[];
   /** Auras and Equipment attached to this permanent, drawn behind it. */
   attached: PermanentItem[];
-  /** What it has already paid toward the pending cost: "tapped to crew". */
+  /** What it has committed to the pending cost: "tapped to crew". */
   paid: string | null;
 }
 

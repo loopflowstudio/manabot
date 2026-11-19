@@ -523,6 +523,18 @@ class _Renderer:
         except KeyError as error:
             raise TextEncodingError("unbound definition") from error
 
+    def taken_cost(self, definition: int | None) -> tuple[str, str]:
+        """How a set `kicked` flag reads for a spell of `definition`.
+
+        The flag records every optional cast cost; the bound definition names
+        the ones that are not kicker. Returns the spell's participle and the
+        cost's noun: ("bargained", "bargain").
+        """
+        bound = self.capture.definitions.get(str(definition))
+        if bound is None or bound.cast_option is None:
+            return "kicked", "kicker"
+        return bound.cast_option.taken, bound.cast_option.cost
+
     def decision_object(self, value: DecisionObject) -> str:
         if value.subject.kind == "player" and isinstance(value.subject.id, int):
             return self.seats[value.subject.id]
@@ -690,7 +702,7 @@ class _Renderer:
         if relation.x:
             details.append(f"X = {relation.x}")
         if relation.kicked:
-            details.append("kicker included")
+            details.append(f"{self.taken_cost(relation.source.definition)[1]} included")
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
         if relation.decision and relation.kind != 13:
@@ -1201,7 +1213,7 @@ class _Renderer:
             ):
                 details.append(f"granted keywords {granted}")
             if item.kicked:
-                details.append("kicked")
+                details.append(self.taken_cost(item.source_card_registry_key)[0])
             if targets:
                 details.append("targets " + ", ".join(targets))
             spell = ""
@@ -1243,13 +1255,16 @@ class _Renderer:
                 )
                 + "."
             )
-        if context.reserved_sacrifice is not None:
-            lines.append(
-                f"Reserved sacrifice: {self.decision_object(context.reserved_sacrifice)}."
-            )
         if context.paid:
             lines.append(
-                "Already paid: " + "; ".join(paid.phrase for paid in context.paid) + "."
+                "Committed to this cost: "
+                + "; ".join(paid.phrase for paid in context.paid)
+                + "."
+            )
+        elif context.reserved_sacrifice is not None:
+            # Frames recorded before `paid` name the chosen sacrifice only here.
+            lines.append(
+                f"Reserved sacrifice: {self.decision_object(context.reserved_sacrifice)}."
             )
         if context.mana_cost is not None:
             lines.append(f"Outstanding mana cost: {context.mana_cost}.")

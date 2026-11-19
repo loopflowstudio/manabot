@@ -64,6 +64,11 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
         );
         if treasure {
             assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+            // The choice is named for bargain, not for a kicker.
+            assert_eq!(
+                s.game().decision_context(PlayerId(0)).unwrap().instruction,
+                "Choose whether to bargain: sacrifice an artifact, enchantment or token as you cast this spell."
+            );
             choose(&mut s, |a| {
                 if bargain {
                     matches!(a, Action::PayCost { .. })
@@ -80,6 +85,14 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
             let frame = s.game().semantic_decision_frame().unwrap();
             assert_eq!(frame.offers[0].label, "Sacrifice Treasure (bargain)");
             select_card(&mut s, token);
+            // Chosen and still on the battlefield until the mana is paid.
+            if s.action_space().kind == ActionSpaceKind::PayOrNot {
+                let context = s.game().decision_context(PlayerId(0)).unwrap();
+                assert_eq!(
+                    context.paid[0].phrase,
+                    "Treasure, sacrificed to bargain when the payment completes"
+                );
+            }
         }
         if s.action_space().kind == ActionSpaceKind::PayOrNot {
             pay_rest(&mut s);

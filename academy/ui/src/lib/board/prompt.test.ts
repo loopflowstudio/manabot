@@ -37,14 +37,15 @@ describe('promptLine', () => {
     expect(promptLine(pay!, boardView(pay!, PLAYERS))).toMatch(/^Pay \{.*Space pays automatically/);
   });
 
-  it('lists what has already paid, in order, after the decision', () => {
+  it('lists what is committed to the cost, in order, after the decision', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
     const paying = { ...pay, projection: { ...pay.projection, decision_context: { ...pay.projection.decision_context!,
-      paid: [{ phrase: 'sacrificed Gray Ogre' }, { phrase: 'tapped Hill Giant to crew' }] } } };
+      paid: [{ phrase: 'Gray Ogre, sacrificed when the payment completes' }, { phrase: 'tapped Hill Giant to crew' }] } } };
     const line = promptLine(paying, boardView(paying, PLAYERS));
     expect(line).toMatch(/^Pay \{/);
-    expect(line.endsWith('. Already paid: sacrificed Gray Ogre; tapped Hill Giant to crew')).toBe(true);
-    expect(promptLine(pay, boardView(pay, PLAYERS))).not.toContain('Already paid');
+    expect(line.endsWith('. Committed to this cost: Gray Ogre, sacrificed when the payment completes; tapped Hill Giant to crew')).toBe(true);
+    expect(line).not.toContain('Already paid');
+    expect(promptLine(pay, boardView(pay, PLAYERS))).not.toContain('Committed to this cost');
   });
 
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {

@@ -434,7 +434,9 @@ Costs chosen while casting use the kicker choice: bargain
 (`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
 marks the spell kicked, and a conditional alternative
 (`AdditionalCost::AlternativeMana`) replaces the mana cost while its condition
-holds. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
+holds. `PrintedCharacteristics::cast_option` says which of these a card's
+choice is, so the instruction, the offer label and the text observation say
+"bargained" or "cast for its alternative cost" where the flag says `kicked`. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
 whose step offers a Food to sacrifice, the graveyard cards to exile (the first
 commits to three) and the mana instead. "Discard a card" as a spell's
 additional cost (`AdditionalCost::Discard`) is the `Discard` component an
@@ -841,10 +843,13 @@ from another offer set raises `managym.AgentError` and returns no plan.
 The preview reads the cost as the payment owes it (`Payment.owed`). While a
 sacrifice, discard, exile or forage is still the payer's to choose, the state
 is `needs_choice`; once those are paid and only mana is owed, the plan is
-exact. The preview is a forecast only: what has already paid is a fact of the
-pending decision, `decision_context.paid`, one phrase per object in the order
-paid ("sacrificed Gray Ogre to bargain") with the object as it is now, and it
-is there at every step of the payment, including one with no Pay offer. A cost with convoke, improvise or delve previews its
+exact. The preview is a forecast only: what is committed to the cost is a fact
+of the pending decision, `decision_context.paid`, one phrase per object in the
+order committed ("tapped Gray Ogre to crew") with the object as it is now, and
+it is there at every step of the payment, including one with no Pay offer. A
+chosen sacrifice leaves as the payment completes, so until then its phrase is
+"Gray Ogre, sacrificed when the payment completes". A waterbend paid as an
+effect resolves lists its taps the same way. A cost with convoke, improvise or delve previews its
 mana route like any other: automatic payment pays mana with mana and never
 picks a creature, artifact or card. When mana alone cannot pay, the state is
 `needs_choice` ("Mana alone cannot pay this cost. Choose what to tap or

@@ -19,7 +19,10 @@ use super::names::{NameCandidate, NameVocabulary};
 use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
-    card::{CardDefId, CardDefinition, ObjectDefinition, PrintedCharacteristics, TokenDefinition},
+    card::{
+        CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
+        TokenDefinition,
+    },
     game_object::{Object, PlayerId, PublicId},
 };
 
@@ -308,6 +311,17 @@ impl ContentPack {
                         // key is absent on every other definition.
                         if let Some(PaymentCost::Life(life)) = card.ward() {
                             public["ward_life"] = (*life).into();
+                        }
+                        // A cost choice other than kicker names itself, so
+                        // a reader of `kicked` says "bargained"; the key is
+                        // absent on every other definition.
+                        if let Some(option) = card
+                            .cast_option()
+                            .filter(|option| *option != CastOption::Kicker)
+                        {
+                            let (taken, cost) = option.words();
+                            public["cast_option"] =
+                                serde_json::json!({ "taken": taken, "cost": cost });
                         }
                         public
                     })

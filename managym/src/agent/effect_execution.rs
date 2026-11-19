@@ -900,7 +900,9 @@ impl ManaSpent {
 }
 
 /// What one object did toward a cost, as `viewer` may name it: "tapped Gray
-/// Ogre to crew". A departed object is named by what it last was.
+/// Ogre to crew". A departed object is named by what it last was. A chosen
+/// sacrifice is carried out as the payment completes (CR 601.2h), so while
+/// its object is still where it was the phrase says so, not "sacrificed X".
 pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribution) -> String {
     let how = match paid.how {
         How::Tapped => "tapped",
@@ -921,10 +923,12 @@ pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribu
         Toward::Forage => " to forage",
         Toward::Station => " to station",
     };
-    format!(
-        "{how} {}{toward}",
-        Projection::label(game.visible_reference(paid.object, viewer))
-    )
+    let object = Projection::label(game.visible_reference(paid.object, viewer));
+    if paid.how == How::Sacrificed && game.state.live(paid.object).is_some() {
+        format!("{object}, sacrificed{toward} when the payment completes")
+    } else {
+        format!("{how} {object}{toward}")
+    }
 }
 
 /// The contributions a frame of `source` shows. The receipt keeps everything

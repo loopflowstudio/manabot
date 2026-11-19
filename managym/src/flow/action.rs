@@ -15,7 +15,7 @@ use crate::{
     },
     state::{
         ability::Effect,
-        card::ActivationZone,
+        card::{ActivationZone, CastOption},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId},
         mana::{Color, Mana, ManaCost},
         payment::Toward,
@@ -192,20 +192,18 @@ impl Game {
             Action::PayCost { .. } => match &self.pending_choice {
                 Some(PendingChoice::KickerChoice {
                     object: object_id, ..
-                }) if self.state[*object_id].exile_alternative().is_some() => {
-                    Some("Exile a card from your hand instead of paying the mana cost".into())
-                }
-                Some(PendingChoice::KickerChoice {
-                    object: object_id, ..
-                }) if self.state[*object_id].alternative_mana().is_some() => {
-                    let (cost, _) = self.state[*object_id].alternative_mana()?;
-                    Some(format!("Pay {} instead of the mana cost", cost_label(cost)))
-                }
-                Some(PendingChoice::KickerChoice {
-                    object: object_id, ..
-                }) if self.state[*object_id].bargain() => {
-                    Some("Bargain: sacrifice an artifact, enchantment or token".into())
-                }
+                }) => match self.state[*object_id].cast_option()? {
+                    CastOption::ExileFromHand => {
+                        Some("Exile a card from your hand instead of paying the mana cost".into())
+                    }
+                    CastOption::AlternativeMana(cost) => {
+                        Some(format!("Pay {} instead of the mana cost", cost_label(cost)))
+                    }
+                    CastOption::Bargain => {
+                        Some("Bargain: sacrifice an artifact, enchantment or token".into())
+                    }
+                    CastOption::Kicker => None,
+                },
                 Some(PendingChoice::Pay { payment, .. }) => {
                     let (or_mana, instead) = match &payment.owed[0] {
                         CostComponent::Sacrifice(cost, _) => {
@@ -306,7 +304,7 @@ impl Game {
                 if matches!(
                     &self.pending_choice,
                     Some(PendingChoice::KickerChoice { object: object_id, .. })
-                        if self.state[*object_id].exile_alternative().is_some()
+                        if self.state[*object_id].cast_option() == Some(CastOption::ExileFromHand)
                 ) =>
             {
                 Some("Pay the mana cost".into())
@@ -1154,7 +1152,7 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> Ac
 }
 
 /// A mana cost as its symbols: generic first, then colors.
-fn cost_label(cost: &ManaCost) -> String {
+pub(crate) fn cost_label(cost: &ManaCost) -> String {
     let mut label = String::new();
     if cost.generic() > 0 {
         label.push_str(&format!("{{{}}}", cost.generic()));

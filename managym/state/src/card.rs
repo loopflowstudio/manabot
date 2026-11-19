@@ -1272,6 +1272,35 @@ impl std::ops::Deref for ObjectDefinition {
     }
 }
 
+/// The cost a spell's caster may choose to pay as it is cast. One choice
+/// (`PendingChoice::KickerChoice`) and one flag (`kicked`) record the answer
+/// for every kind, so a reader names the taken cost from this, not the flag.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CastOption<'a> {
+    /// Kicker, an optional waterbend or "pay life or mana": more mana.
+    Kicker,
+    /// Bargain (CR 702.166): sacrifice an artifact, enchantment or token.
+    Bargain,
+    /// This mana rather than the mana cost, while a condition holds.
+    AlternativeMana(&'a ManaCost),
+    /// Exile a card from hand rather than pay the mana cost.
+    ExileFromHand,
+}
+
+impl CastOption<'_> {
+    /// The word for a spell cast with this cost taken, as a participle
+    /// ("kicked") and as the cost itself ("kicker").
+    pub fn words(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Kicker => ("kicked", "kicker"),
+            Self::Bargain => ("bargained", "bargain"),
+            Self::AlternativeMana(_) | Self::ExileFromHand => {
+                ("cast for its alternative cost", "alternative cost")
+            }
+        }
+    }
+}
+
 impl PrintedCharacteristics {
     /// A Saga (CR 714.1): an enchantment with the Saga subtype.
     pub fn is_saga(&self) -> bool {
@@ -1297,6 +1326,21 @@ impl PrintedCharacteristics {
             | AdditionalCost::Discard
             | AdditionalCost::ExileFromHandAlternative { .. } => None,
         })
+    }
+
+    /// What this card's one yes-or-no cost choice asks as it is cast (CR
+    /// 601.2b); see [`CastOption`]. An alternative cost is asked before an
+    /// optional additional one.
+    pub fn cast_option(&self) -> Option<CastOption<'_>> {
+        if self.exile_alternative().is_some() {
+            Some(CastOption::ExileFromHand)
+        } else if let Some((cost, _)) = self.alternative_mana() {
+            Some(CastOption::AlternativeMana(cost))
+        } else if self.bargain() {
+            Some(CastOption::Bargain)
+        } else {
+            self.optional_cost().map(|_| CastOption::Kicker)
+        }
     }
 
     /// Whether casting this spell discards a card as an additional cost.

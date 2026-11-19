@@ -236,7 +236,18 @@ fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
     select_card(&mut s, ogre_object);
     let context = serde_json::to_value(s.game().decision_context(PlayerId(0)).unwrap()).unwrap();
     assert_eq!(context["paid"].as_array().unwrap().len(), 1, "{context}");
-    assert_eq!(context["paid"][0]["phrase"], "sacrificed Gray Ogre");
+    // Chosen, and still there: it leaves as the payment completes.
+    assert_eq!(
+        context["paid"][0]["phrase"],
+        "Gray Ogre, sacrificed when the payment completes"
+    );
+    assert!(
+        context["instruction"]
+            .as_str()
+            .unwrap()
+            .contains("A chosen sacrifice leaves when the payment completes"),
+        "{context}"
+    );
     // The sacrifice is reserved until the mana is paid: the Ogre is still
     // the battlefield permanent the board draws.
     assert_eq!(context["paid"][0]["object"]["label"], "Gray Ogre");
@@ -248,6 +259,23 @@ fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
     assert_eq!(paying["state"], "exact", "{paying}");
     assert_eq!(paying["sources"][0]["label"], "Swamp");
     assert_eq!(paying["sources"].as_array().unwrap().len(), 1);
+
+    // Once the payment completes the Ogre has left, and the ability's frame
+    // says so in the past tense.
+    crate::support::play::choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    if s.action_space().kind == managym::agent::action::ActionSpaceKind::PayOrNot {
+        crate::support::play::pay_rest(&mut s);
+    }
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert!(context.paid.is_empty(), "{:?}", context.paid);
+    assert!(
+        context
+            .pending
+            .iter()
+            .any(|line| line.contains("Paid with: sacrificed Gray Ogre.")),
+        "{:?}",
+        context.pending
+    );
 }
 
 /// CR 601.2h, 602.2b: the ability's receipt names the creature sacrificed
@@ -550,6 +578,11 @@ fn blasphemous_edict_asks_for_its_cost_and_for_the_creatures_kept() {
             .any(|offer| offer.label == "Pay {B} instead of the mana cost"),
         "{:?}",
         frame.offers
+    );
+    // The choice is the card's alternative cost, not a kicker.
+    assert_eq!(
+        s.game().decision_context(PlayerId(0)).unwrap().instruction,
+        "Choose whether to pay {B} rather than the mana cost."
     );
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     if s.action_space().kind == ActionSpaceKind::PayOrNot {

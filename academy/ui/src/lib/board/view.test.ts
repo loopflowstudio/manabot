@@ -65,7 +65,7 @@ describe('boardView over every retained frame', () => {
   );
 });
 
-describe('what has already paid', () => {
+describe('what is committed to the pending cost', () => {
   const pay = retained.map(({ frame }) => frame)
     .find(frame => frame.projection.decision_context && frame.projection.agent.battlefield.length >= 2)!;
   const [ogre, other] = pay.projection.agent.battlefield;

@@ -10060,6 +10060,44 @@ fn waterbend_and_mana_floats_have_distinct_bonus_accounting() {
     }
 }
 
+/// A waterbend paid as an effect resolves lists its taps to the payer as a
+/// waterbend cost paid while casting does: Waterbending Lesson's "discard a
+/// card unless you waterbend {2}".
+#[test]
+fn waterbending_lesson_resolution_payment_names_the_creature_tapped() {
+    // Two helpers, so {2} is payable with an empty pool and the tap is offered.
+    let mut s = five_color_setup(&["Waterbending Lesson", "Gray Ogre", "Hill Giant"]);
+    for name in ["Gray Ogre", "Hill Giant"] {
+        enter_and_settle(&mut s, name);
+        ready(&mut s, name);
+    }
+    let ogre = permanent_named(&s, "Gray Ogre");
+    s.set_player_mana_pool(0, "3U");
+    cast(&mut s, "Waterbending Lesson");
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    s.set_player_mana_pool(0, "0");
+    pass_until(&mut s, ActionSpaceKind::Waterbend);
+    assert!(s
+        .game()
+        .decision_context(PlayerId(0))
+        .unwrap()
+        .paid
+        .is_empty());
+    choose(
+        &mut s,
+        |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == ogre),
+    );
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "resolution_payment");
+    let [paid] = context.paid.as_slice() else {
+        panic!("one tap: {:?}", context.paid)
+    };
+    assert_eq!(paid.phrase, "tapped Gray Ogre to waterbend");
+    assert_eq!(paid.object.as_ref().unwrap().label, "Gray Ogre");
+}
+
 #[test]
 fn committed_optional_payment_resumes_after_two_nested_mana_decisions() {
     let (mut s, lesson, drawn) = lesson_payment(

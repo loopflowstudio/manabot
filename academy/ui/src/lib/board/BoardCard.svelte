@@ -61,7 +61,7 @@
     dealt?: number;
     /** Its place in the automatic payer's plan: "would tap, for {U}". */
     planned?: PlannedSource | null;
-    /** What it has already paid toward the pending cost: "tapped to crew". */
+    /** What it has committed to the pending cost: "tapped to crew". */
     paid?: string | null;
     /** Copies in this card's pile, shown after the top copy's name. */
     count?: number | null;
@@ -164,7 +164,7 @@
     ...counters.map(([kind, amount]) => `${amount} ${kind} counter${amount === 1 ? '' : 's'}`),
     permanent?.is_token ? 'token' : '',
     dealt ? `dealt ${dealt} since your last move` : '',
-    paid ? `already paid: ${paid}` : '',
+    paid ? `committed to this cost: ${paid}` : '',
     planned ? `would tap for ${planned.output || 'mana'} (payment plan, source ${planned.order})` : '',
     recorded?.p != null ? `recorded policy ${formatProbability(recorded.p)}` : '',
     recorded?.chosen ? 'chosen' : '',
@@ -249,7 +249,7 @@
       {#if planned}
         <span class="plan"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
       {/if}
-      {#if paid}<span class="paid-mark" title={paid}>paid</span>{/if}
+      {#if paid}<span class="paid-mark" title={paid}>committed</span>{/if}
       {#if recorded && (recorded.p !== null || recorded.chosen)}
         <span class="policy" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
       {/if}
@@ -358,7 +358,7 @@
     display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 3px; border-radius: var(--radius-full);
     background: var(--bg-surface); border: 1px dashed var(--planned);
   }
-  /* Already paid toward the pending cost: solid amber, where a plan is dashed. */
+  /* Committed to the pending cost: solid amber, where a plan is dashed. */
   .tcard.paid { outline: 2px solid var(--planned); outline-offset: 2px; }
   .paid-mark {
     position: absolute; left: 50%; top: 3px; transform: translateX(-50%);

@@ -14,12 +14,14 @@ use crate::{
         OfferSubjectView, PaidView, RequiredNullable, SubjectRef,
     },
     flow::{
+        action::cost_label,
         decision::{Decision, PaymentProgress},
         game::{CostComponent, Game, PendingChoice},
     },
     state::{
+        card::CastOption,
         game_object::{ObjectId, PlayerId, Target},
-        payment::Toward,
+        payment::{Contribution, How, Toward},
     },
 };
 
@@ -380,12 +382,51 @@ impl Game {
                 })
                 .collect();
         }
+        // A resolving waterbend payment (CR 701.67) keeps its taps on its own
+        // progress, with no receipt; they read as the same taps do on a cast.
+        if let Some(Decision::Payment(PaymentProgress {
+            remaining: PaymentCost::Waterbend { .. },
+            waterbend_paid,
+            ..
+        })) = self
+            .state
+            .suspended_decision
+            .as_ref()
+            .map(|suspended| &suspended.decision)
+        {
+            view.paid = waterbend_paid
+                .iter()
+                .map(|object| PaidView {
+                    phrase: contribution_phrase(
+                        self,
+                        viewer,
+                        &Contribution {
+                            object: *object,
+                            how: How::Tapped,
+                            toward: Toward::Waterbend,
+                        },
+                    ),
+                    object: self.paid_object(*object, viewer),
+                })
+                .collect();
+        }
+        // The one yes-or-no cost choice of a cast, named for what the card
+        // offers: `KickerChoice` asks bargain and alternative costs too.
+        let cast_option = match &self.pending_choice {
+            Some(PendingChoice::KickerChoice { object, .. }) => match self.state[*object].cast_option() {
+                Some(CastOption::ExileFromHand) => "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative.".into(),
+                Some(CastOption::AlternativeMana(cost)) => format!("Choose whether to pay {} rather than the mana cost.", cost_label(cost)),
+                Some(CastOption::Bargain) => "Choose whether to bargain: sacrifice an artifact, enchantment or token as you cast this spell.".into(),
+                Some(CastOption::Kicker) | None => "Choose whether to pay the kicker cost.".into(),
+            },
+            _ => String::new(),
+        };
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
                 CostComponent::Mana { help, .. } if help.keyworded() =>
                     ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise or a graveyard card exiled for delve pays {1}. Each such payment commits immediately."),
                 CostComponent::Mana { .. } =>
-                    ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+                    ("payment", "Produce mana or finish the announced payment. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately."),
                 CostComponent::ExileFromHand =>
                     ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
                 CostComponent::Discard if payment.operation.spell().is_some() =>
@@ -413,8 +454,7 @@ impl Game {
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
-            Some(PendingChoice::KickerChoice { object: object_id, .. }) if self.state[*object_id].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
-            Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
+            Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),
             Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {

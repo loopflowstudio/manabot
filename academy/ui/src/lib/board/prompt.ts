@@ -31,15 +31,15 @@ function askedCreature(frame: ExperienceFrame, view: BoardView): string | null {
 
 /**
  * `planned`: the board shows the automatic payer's taps for the primary
- * payment. While a cost is being paid, the line ends with what has already
- * paid toward it, in the engine's words and order.
+ * payment. While a cost is being paid, the line ends with what is committed
+ * to it, in the engine's words and order: a chosen sacrifice has not left yet.
  */
 export function promptLine(frame: ExperienceFrame, view: BoardView, planned = false): string {
   const line = decisionLine(frame, view, planned);
   const paid = frame.projection.decision_context?.paid ?? [];
   if (!paid.length) return line;
-  const already = `Already paid: ${paid.map(entry => entry.phrase).join('; ')}`;
-  return line ? `${line}. ${already}` : already;
+  const committed = `Committed to this cost: ${paid.map(entry => entry.phrase).join('; ')}`;
+  return line ? `${line}. ${committed}` : committed;
 }
 
 function decisionLine(frame: ExperienceFrame, view: BoardView, planned: boolean): string {
