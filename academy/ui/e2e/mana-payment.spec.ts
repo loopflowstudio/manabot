@@ -60,6 +60,11 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
 
+    // A pile's top copy names it with its count; the copies beneath show no name of their own.
+    const pile = page.locator('.board .pile').filter({ has: page.getByTestId('pile-count-badge') }).first();
+    await expect(pile.locator('.title:visible')).toHaveCount(1);
+    await expect(pile.locator('.title:visible')).toContainText('×');
+
     // Restricted floating mana says what it is beside its pips.
     let before = (await frame(page)).revision;
     await rail(page, 'White Lotus Hideout').first().click();

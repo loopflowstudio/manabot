@@ -63,6 +63,8 @@
     planned?: PlannedSource | null;
     /** Copies in this card's pile, shown after the top copy's name. */
     count?: number | null;
+    /** A copy beneath its pile's top card: the top card's bar names the pile, so this one's name stays hidden. */
+    piled?: boolean;
     /**
      * How much of a covered card in hand stays in view, from its left edge,
      * px: its cost moves from the art into the name bar, before the name, so
@@ -83,7 +85,7 @@
 
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, slice = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
+    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
   }: Props = $props();
 
   // At a recorded choice: the policy's mass on this card's offers, and whether one was played.
@@ -203,6 +205,7 @@
     class:offered={!live && recorded !== null}
     class:chosen={recorded?.chosen}
     class:asked
+    class:piled
     class:attacking={permanent?.attacking}
     class:touched
     class:beat
@@ -306,6 +309,7 @@
   .sliced:not(:hover, :focus-visible) :is(.corner .cost, .on-type + .type), .sliced:is(:hover, :focus-visible) .bar-cost { display: none; }
   .bar-cost.on-type { height: 16px; align-items: center; }
   /* A pile's count follows the name, in the interface face; the line breaks before it, never inside the name. */
+  .piled .title { visibility: hidden; }
   .count { font-family: var(--font-sans); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .type { font: 12px/16px var(--font-sans); color: inherit; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

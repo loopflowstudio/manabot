@@ -59,7 +59,7 @@
     onclick={event => onactivate(event.currentTarget)}
   >
     <span class="type-title text-display block truncate">{name}</span>
-    {#if caption}<span class="type-caption block truncate text-ink-2">{caption}</span>{/if}
+    {#if caption}<span class="type-caption caption text-ink-2">{caption}</span>{/if}
     {#if choosing}<span class="type-label choosing" data-testid="plate-choosing">Choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-caption text-ink-2">life</span>
       {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{/if}</span>
@@ -97,6 +97,8 @@
   .who { display: block; text-align: left; border-radius: var(--radius-sm); padding: 2px 4px; margin: -2px -4px; background: none; border: 0; color: inherit; }
   .who[aria-disabled=true] { cursor: default; }
   .who.legal { box-shadow: 0 0 0 2px var(--legal); cursor: pointer; }
+  /* Kind and deck wrap to a second line rather than cut a long deck name. */
+  .caption { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .choosing { display: block; margin-top: 2px; color: var(--warning-text); }
   .life { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
   .numeral { font-family: var(--font-serif); font-size: 40px; font-weight: 600; line-height: 44px; color: var(--text); font-variant-numeric: lining-nums tabular-nums; }

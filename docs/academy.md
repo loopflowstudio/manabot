@@ -473,7 +473,8 @@ Academy names every opponent with how it decides: **Search 64 · search**,
 the world it was trained in (**<name> · checkpoint w17**). The setup picker,
 the top bar and the result card use that full name. The opponent's plate is
 titled with the short name ("Heuristic", "Search 64") and puts how it decides
-in the caption beside the deck ("Scripted · GW Allies").
+in the caption beside the deck ("Scripted · GW Allies"), which wraps to a
+second line rather than cutting a long deck name.
 
 A trained or independent policy must first be registered with this Academy
 server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
@@ -596,7 +597,8 @@ the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
 outlined plate. Identical permanents with the same choices share a pile, its
-count after the name ("Forest ×4"), and each copy remains its own control. Crowded rows shrink their cards
+count after the top copy's name ("Forest ×4"; the copies beneath show no name of
+their own), and each copy remains its own control. Crowded rows shrink their cards
 and wrap onto a further line before anything scrolls, and each half gives the
 crowded row more of its height.
 
