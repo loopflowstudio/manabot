@@ -673,3 +673,25 @@ publish, land or choose the next Graph step from here.
   shared tensors equal the control's. A control without the log capacities is
   refused as a trunk. Test reliance by seating the same checkpoint with
   `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.
+- Files a returning user wrote before a change: `git worktree add --detach
+  /private/tmp/<x> main`, build its release extension with its own
+  `CARGO_TARGET_DIR` and copy the `.so` into that worktree's `managym/`. Then,
+  from inside that worktree with `PYTHONPATH=/private/tmp/<x>`, call this
+  checkout's `.venv/bin/etude train manabot/recipes/local.py --experiment demo
+  --config '{"record_games": 1}' --until updates=1` and `.venv/bin/python -m
+  manabot.eval.local ... --deal-seed` four times with `--seconds 45` (print
+  `managym.__file__` first). That leaves a run to `--resume`, recorded games
+  for `managym academy replay` and an incomplete panel for `--status` /
+  `--continue`, all written by main. Copy untracked `experiments/data`
+  fixtures into the worktree before comparing a test there. Earlier passes'
+  `.runs/qa*/` hold older checkpoints, panels and `traces/play.sqlite` too.
+- A checkout without `academy/ui/node_modules` needs `npm --prefix academy/ui
+  ci` before the static build. In the board UI, start a policy game from the
+  header's "New game" (selects, then "Start game") and click
+  `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
+  `os.killpg(pid, SIGINT)`.
+- Once a CI run has finished, `gh run view <run> --job <job-id> --log-failed`
+  gives the pytest summary. CI names its test files in
+  `.github/workflows/manabot-integration.yml`; `tests/sim/test_puct_compatibility.py`,
+  `tests/sim/test_conditional_search.py` and `tests/verify/test_learning_regression.py`
+  are not among them, and the first two fail on main (2026-11-18).

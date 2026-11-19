@@ -1,106 +1,74 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MTG-353 compatibility QA</title>
+<title>MTG-353 QA: world label removal</title>
 <style>
-body{max-width:56rem;margin:3rem auto;padding:0 1rem;font:16px/1.55 system-ui;color:#20252a}h1,h2{line-height:1.2}h2{margin-top:2rem}pre,code{background:#f2f4f4}pre{padding:1rem;white-space:pre-wrap;overflow-wrap:anywhere}th,td{padding:.4rem .8rem;text-align:left;border-bottom:1px solid #ccd1d3;vertical-align:top}table{border-collapse:collapse}
+body{max-width:56rem;margin:3rem auto;padding:0 1rem;font:16px/1.55 system-ui;color:#20252a}h1,h2{line-height:1.2}h2{margin-top:2rem}pre,code{background:#f2f4f4}pre{padding:1rem;white-space:pre-wrap;overflow-wrap:anywhere}th,td{padding:.4rem .8rem;text-align:left;border-bottom:1px solid #ccd1d3;vertical-align:top}table{border-collapse:collapse}img{max-width:100%;border:1px solid #ccd1d3}
 </style></head><body>
-<h1>Checkpoint compatibility and training corpus</h1>
-<p>18 November 2026 · MTG-353 · <code>6fa4efee06</code> plus the fixes below. This pass covers what changed since the pass at <code>90df80d245</code>: reaching the corpus from a policy checkpoint file, and outcome rows spelled by native seat. No Rust changed, so the loader, the historical pilot's replayed deal and Academy's opponent list were not repeated. Outputs are under <code>.runs/qa10</code>. The host was busy (load average 90–120); nothing here is a timing claim.</p>
-<p><strong>Three things were wrong and are fixed</strong>, all in the new file form: the guide's first example did not run as written, a string path crashed, and a storage root without the run gave a misleading message. The fixes are in the working tree, not committed or pushed.</p>
+<h1>Removing the world label</h1>
+<p>18 November 2026 · MTG-353 · <code>93f1f371c2</code> (PR #558 head), extension rebuilt at that commit. This pass covers the fourth review round: new files write no world label and readers ignore one in old files. Earlier passes (corpus, file form, seat spelling) are in git history of this page. Outputs are under <code>.runs/qa4</code>.</p>
+<p><strong>The removal works for a new user and for a user with files written by main.</strong> Hosted CI on the head commit was red in two jobs; both were tests still asserting the removed label check, and both are fixed in the working tree (not committed or pushed).</p>
 
 <h2>Fixed</h2>
-<table><thead><tr><th>What I did</th><th>Before</th><th>Now</th></tr></thead><tbody>
-<tr><td>Ran the guide's first block as written</td><td><code>etude_home</code> was never defined, and <code>Path("out/policies/…")</code> names no directory a person has: the policies are under <code>&lt;ETUDE_HOME&gt;/track/local/out</code>.</td><td>The block sets <code>track = Path.home() / ".etude/track"</code> and takes the policy from <code>track / "local/out/policies/…"</code>. The statistics example at the end uses the same file and <code>policy.parents[1] / "statistics"</code>; it used the frontier run, which has no statistics.</td></tr>
-<tr><td>Passed the file as a string</td><td><code>AttributeError: 'str' object has no attribute 'at'</code></td><td>Reads as the file. <code>source</code> already took a string.</td></tr>
-<tr><td>Passed a storage root that does not hold the file's run</td><td><code>UnknownCoverage: local: resolved training decks are unknown</code></td><td><code>UnknownCoverage: .runs/qa9/int/track holds no run local/local</code>. Applies to a published checkpoint record too. This was item 3 of the last pass's “still wrong”.</td></tr>
+<table><thead><tr><th>Where</th><th>Before</th><th>Now</th></tr></thead><tbody>
+<tr><td>CI <em>Integration (evaluation-long)</em>: <code>tests/eval/test_card_evaluation.py::test_audit_binds_games_to_their_declared_runtime[world]</code></td><td><code>DID NOT RAISE</code>: it corrupted a <code>world</code> runtime field that a current environment no longer declares.</td><td>The <code>world</code> case declares the environment and its game the way a pre-removal run did (label hashed into <code>files</code>) and still expects a game with another label to be refused. Passes.</td></tr>
+<tr><td>CI <em>Integration (experiment)</em>: <code>tests/verify/test_checkpoint_scenarios.py::test_bound_checkpoint_scores_and_replays</code>, 5 cases</td><td><code>DID NOT RAISE</code>: it set <code>scenario_root.world = "wrong"</code> and expected a refusal.</td><td>It corrupts <code>source_sha256</code> for the refusal, and asserts that a root carrying <code>world: "w17"</code> replays. 13 passed across both files.</td></tr>
 </tbody></table>
-<p>One assertion was added to the file-form test for the string path and the missing run.</p>
+<p>The QA skill gained the steps for producing before-change files from a main worktree, the board UI selectors, and which test files CI does not run.</p>
 
-<h2>1. The guide's file example on a fresh resumed run</h2>
-<pre>export ETUDE_HOME="$PWD/.runs/qa10"
-uv run --extra evaluation etude train manabot/recipes/local.py --config '{"statistics":true}' --until updates=1 --json
-{"run": "local", "experiment": "local", "outcome": "finished"}
-uv run --extra evaluation etude train manabot/recipes/local.py --resume --until updates=2 --json
-{"run": "local", "experiment": "local", "outcome": "finished"}</pre>
-<p>A script extracted the four <code>python</code> blocks under “Querying the training corpus”, replaced the track root, and dropped the three frontier <code>read</code> lines so every query ran on the corpus selected by <code>00000002-raw.safetensors</code>.</p>
-<pre>Deck entries and distinct card keys: [(2, 29)]
-Completed games: [(4,)]
-Observed decks: [(2,)]
-new keys: [('lea.lightning_bolt',)]      Island games: [(4,)]
-runs: [('local', 'local', 512, 'error', 11, 'current-self', 'self', 'both', 'fixed', None, None)]
-held one value in every game: [('decklists', None, 'open'), ('skip_trivial', None, 'true')]
-share: [('decklists', None, 'open', 4, 1.0), ('skip_trivial', None, 'true', 4, 1.0)]
-over which updates: [('local', 'local', 'decklists', None, 'open', 1, 2, 4), ('local', 'local', 'skip_trivial', None, 'true', 1, 2, 4)]
-statistics (list games, Island draws, Island choices): [(4, 11, 46)]</pre>
-<p>Every count equals the last pass's run form. The file records <code>{'commit': '6fa4efee…', 'dirty': False, 'etude_experiment': 'local', 'etude_run': 'local'}</code> and update 2.</p>
+<h2>1. New user</h2>
+<pre>ETUDE_HOME=.runs/qa4/fresh uv run --extra evaluation etude train manabot/recipes/local.py --experiment demo --config '{"record_games": 1, "statistics": true}' --until updates=2 --json
+{"run": "demo", "experiment": "demo", "outcome": "finished"}
+uv run python -m manabot.eval.local --checkpoint …/00000002-ema.safetensors --opponent heuristic --deal-seed 101 --out .runs/qa4/fresh-check --seconds 300
+completed: 1/1 complete deals; 4/4 games</pre>
+<p>Scanned every file both commands wrote (30 run files, 12 evaluation files) for a <code>world</code> or <code>world_version</code> key. No label anywhere. The policy's <code>world_binding</code> keys are <code>content_manifest, input_schema, learning_schema_sha256, naming_branching, naming_representation, naming_vocabulary, policy_input_version, rules, setups</code>; the manifest's are <code>content_digest, definitions, schema_version</code>. The remaining <code>world</code> keys are other things: <code>agent_hypers.world = "ur-lessons-vs-gw-allies"</code> (the match setup) and <code>players[].world = null</code> (a player's card pool) in recorded games.</p>
+<pre>managym.world_identity()  ->  {'card_digest': 'b9344ef3…'}</pre>
 
-<h2>2. Every policy file the runs wrote</h2>
-<p>Also trained a child from the local run's update-1 policy (decklists closed, 1 update) and a three-deck run with per-game disclosure (3 updates).</p>
-<table><thead><tr><th>File</th><th>Corpus it selects (run, update, games)</th></tr></thead><tbody>
-<tr><td>local <code>00000000</code> raw and ema</td><td>no games; one <code>runs</code> row</td></tr>
-<tr><td>local <code>00000001</code> raw and ema</td><td>local 1: 2</td></tr>
-<tr><td>local <code>00000002</code> raw and ema (written by the resumed attempt)</td><td>local 1: 2, local 2: 2</td></tr>
-<tr><td>child <code>00000000</code></td><td>local 1: 2; <code>runs</code> shows child with parent local at update 1</td></tr>
-<tr><td>child <code>00000001</code></td><td>child 1: 2, local 1: 2</td></tr>
-<tr><td>mixed <code>00000001</code>–<code>00000003</code></td><td>17; 17 + 19; 17 + 19 + 19. Closed/open per update 7/10, 8/11, 13/6, the same as the last pass.</td></tr>
-<tr><td>a copy of local <code>00000001-ema</code> renamed and moved elsewhere</td><td>local 1: 2</td></tr>
+<h2>2. Returning user: files written by main</h2>
+<p>Built main (<code>62c3338f0d</code>) in a detached worktree and, with it, trained one update with recorded games and left a four-deal local evaluation incomplete (<code>incomplete: 1/4 complete deals</code>). Its checkpoint records <code>world: "w17"</code> and <code>content_manifest.world_version: "w17"</code>; its game record <code>identities.world: "w17"</code>; its panel carries the label in its request, rows, game and failure files. Then, on this branch:</p>
+<table><thead><tr><th>What I did</th><th>Result</th></tr></thead><tbody>
+<tr><td><code>manabot.eval.local --status</code> on main's panel</td><td><code>incomplete: 1/4 complete deals; 4/16 games</code></td></tr>
+<tr><td><code>--continue … --seconds 400</code></td><td><code>completed: 4/4 complete deals; 16/16 games</code>. Deal 101's block is byte-identical to main's and <code>request.json</code> is unchanged; the three continued deals were written under the stored request, label included.</td></tr>
+<tr><td><code>etude train … --resume --until updates=2</code> on main's run</td><td><code>finished</code> in 16 s. Update 1's policy keeps its label; update 2's has none.</td></tr>
+<tr><td><code>managym academy replay</code> on the game file main recorded, and on the games directory with <code>--game 1</code></td><td>Both open; stepped 12 positions of 253 with values and recorded choices shown (below).</td></tr>
+<tr><td>Labelled update-1 policy against an unlabelled fresh policy, <code>manabot.eval.local --opponent &lt;file&gt;</code></td><td><code>completed: 1/1 complete deals; 4/4 games</code>, score 0.500; the new request has no <code>world</code>.</td></tr>
+<tr><td>A complete panel from the pass at <code>7273d2fd9c</code> (frontier u1952, labelled): <code>--status</code>, <code>--continue</code>, and <code>--request request.json --out NEW</code></td><td>All exit 0 with the retained score 0.750; the repeat's four legs give the same scores. Its request keeps the three <code>"world": "w17"</code> it was written with.</td></tr>
+<tr><td>Academy with main's labelled policy, the resumed and fresh ones, pinned v9 and v11 and frontier u1952 in <code>MANABOT_RUNS_DIR</code></td><td><code>/api/opponents</code>: all six <code>available: true</code>, no reason, no World detail row.</td></tr>
+<tr><td>Browser game against main's labelled policy</td><td>Started and played 134 of my choices to turn 36; the policy played lands and cast spells. No server traceback, no console error.</td></tr>
+<tr><td>Academy traces database written before the removal (12 games)</td><td>Listed; the completed game against frontier u1952 opens in Replay.</td></tr>
+<tr><td>Training corpus of main's run after the resume</td><td><code>UnknownCoverage: demo: resolved training decks are unknown</code>. Expected: main does not write the deck table this PR adds, so a run started on main has no corpus.</td></tr>
 </tbody></table>
+<p><img src="qa-shots/08-main-u1-labelled-setup.jpg" alt="Setup form with main's labelled checkpoint selected; details list no World row"></p>
+<p><img src="qa-shots/20-replay-main-record.jpg" alt="A game recorded by main replayed by this branch"></p>
+<p><img src="qa-shots/21-replay-old-trace.jpg" alt="A pre-removal Academy trace opened in Replay"></p>
 
-<h2>3. Seat spelling in stored rows</h2>
-<pre>new run   stored columns ['deck', 'draws', 'losses', 'opponent_deck', 'seat', 'wins']
-qa9 run   stored columns ['deck', 'draws', 'losses', 'opponent_deck', 'position', 'wins']
-both read as  {'deck': '7d66…', 'opponent_deck': 'fc94…', 'seat': 1, 'wins': 2, 'losses': 0, 'draws': 0}, {'deck': 'fc94…', …, 'seat': 0, 'wins': 0, 'losses': 2, 'draws': 0}
-frontier Small (scalar columns) reads with the same keys: 259 games, 134 deck entries, 262 card keys</pre>
-<p>All three stored forms give the counts they gave before the change. In the mixed run, update 1 stores 12 rows over seats 0 and 1, 17 games counted from either seat. The offline report projection (<code>updates_from_run</code>) still names its count keys <code>…/play/wins</code> and <code>…/draw/wins</code>, as existing reports read them.</p>
+<h2>3. A script that still reads the label</h2>
+<p>Installed the engine wheel built at the head commit alone in a fresh <code>/tmp</code> venv; <code>scripts/release/engine_smoke.py</code> passed (153 decisions). A script written before the change:</p>
+<pre>from managym import WORLD_VERSION
+user.py:2: DeprecationWarning: managym.WORLD_VERSION is deprecated and removed in 0.4.0; the engine has no world label, and managym.world_identity() names its cards
+label w17 identity {'card_digest': 'b9344ef3…'}
+"WORLD_VERSION" in dir(managym) -> False;  managym.NOPE -> AttributeError: module 'managym' has no attribute 'NOPE'</pre>
 
-<h2>4. A returning user's older files, and wrong input</h2>
-<table><thead><tr><th>Request</th><th>Answer</th></tr></thead><tbody>
-<tr><td>Policy written at <code>90df80d245</code> (records run and update, no experiment)</td><td><code>UnknownCoverage: …/00000002-raw.safetensors records no Etude experiment (pass experiment=)</code></td></tr>
-<tr><td>The same with <code>experiment="local"</code></td><td>local 1: 2, local 2: 2</td></tr>
-<tr><td>Older child file with <code>experiment="child"</code></td><td>child 1: 2 and its parent local 1: 2</td></tr>
-<tr><td>New file with <code>experiment="other"</code></td><td><code>ValueError: … records experiment 'local', not 'other'</code></td></tr>
-<tr><td>Fixture pilot that records nothing</td><td><code>UnknownCoverage: … records no Etude experiment (pass experiment=), no Etude run, no update</code></td></tr>
-<tr><td>A <code>.pt</code> file</td><td><code>NotAContainer: … is not a policy checkpoint container</code></td></tr>
-<tr><td>Missing file</td><td><code>FileNotFoundError</code> naming the path</td></tr>
-<tr><td>File with no <code>source</code>, or with <code>through=</code></td><td><code>ValueError: supply a checkpoint and its source</code></td></tr>
-<tr><td><code>experiment=</code> with an opened run</td><td><code>ValueError: experiment applies to a checkpoint file</code></td></tr>
-<tr><td>Storage one level too high (<code>.runs/qa10</code>, not <code>…/track</code>)</td><td>Works: 4 games.</td></tr>
-</tbody></table>
-
-<h2>5. Installed wheel, outside the checkout</h2>
-<p>Built the <code>manabot</code> wheel with the fixes, installed it with <code>[evaluation]</code> and the earlier engine wheel into a fresh <code>/tmp</code> venv, trained two updates with the installed <code>etude</code> and recipe, and ran the guide script with <code>python -I</code> from <code>/tmp</code>.</p>
-<pre>{"run": "local", "experiment": "local", "outcome": "finished"}
-Deck entries and distinct card keys: [(2, 29)]   Completed games: [(4,)]
-held one value: [('decklists', None, 'open'), ('skip_trivial', None, 'true')]
-modules /private/tmp/mtg353-qa10/venv/lib/python3.13/site-packages/manabot/eval/training_corpus.py …/site-packages/managym/__init__.py
-source {'commit': None, 'dirty': None, 'etude_experiment': 'local', 'etude_run': 'local'}
-str path [(4,)]
-UnknownCoverage /tmp/mtg353-qa10/elsewhere holds no run local/local</pre>
-<p>Outside a git checkout the file records no commit but still names its experiment and run, so the corpus is reachable.</p>
-
-<h2>6. Tests and CI</h2>
-<pre>uv run --extra dev --extra evaluation pytest tests/eval/test_training_corpus.py tests/training/test_self_play.py \
-    tests/training/test_outcome_tables.py tests/model/test_world.py -q
-36 passed
-uv run --extra dev pytest tests/test_package_boundaries.py -q
-37 passed</pre>
-<p>PR #558 at <code>6fa4efee06</code>, when last read: 21 jobs passed, none failed, 3 still pending (Academy UI, Engine Budget, Integration evaluation). The training job that failed at the last pass is green. Academy UI, red at an earlier head, has not been seen to finish.</p>
+<h2>4. Tests and CI</h2>
+<ul>
+<li>Hosted CI at <code>93f1f371c2</code>: 22 jobs passed, including Academy UI, Rust Tests, Engine Budget, Clean-machine Play and all four package builds; the two Integration jobs above failed, which fails <em>Tests Result</em>. The fixes are not pushed, so CI has not been seen green.</li>
+<li>Locally on the rebuilt extension: pinned pilots, world, checkpoint binding, the alias test, recording, engine recording, evaluation models, Academy checkpoint catalog, card evaluation, continuation input and head-to-head: 133 passed, 1 skipped.</li>
+<li>The three failures the plan left for gate are not in CI's file lists. <code>test_puct_compatibility</code> and <code>test_conditional_search</code> fail the same way on main's code with main's engine. <code>test_learning_regression</code> failed again here (241 s against its 180 s evaluation budget, load average 55–85); it was not run on main.</li>
+</ul>
 
 <h2>What works, what was not reached, what is still wrong</h2>
-<p><strong>Works:</strong> the guide's file example as written, from the checkout and from an installed wheel; every policy file of a resumed run, a child and a mixed run selects the run and update it was written at; raw and averaged files agree; older files take <code>experiment=</code>; stored rows carry <code>seat</code> and the two earlier forms read into the same rows with unchanged counts.</p>
+<p><strong>Works:</strong> fresh training, local evaluation and recording write no label; main's checkpoints, recorded games, incomplete and complete evaluations, a run resumed across the revision and old Academy traces all read; labelled and unlabelled checkpoints play each other; the deprecated alias warns and names 0.4.0.</p>
 <p><strong>Not reached:</strong></p>
 <ul>
-<li>Academy UI, Engine Budget and Integration (evaluation) finishing on the head commit, and any job on the fixes here, which are not pushed.</li>
-<li>A policy file from a rented or launched job, whose storage is remote; only local storage was used. No paid run was authorized.</li>
-<li>A file converted from a <code>.pt</code> checkpoint with <code>manabot.backends.convert</code>, as the guide suggests: no run in reach wrote a <code>.pt</code> policy that records its run.</li>
-<li>Interrupting a run with Ctrl-C and reading the files on both sides; the last pass did this for the run form and the writer is unchanged.</li>
-<li>The loader, the historical pilot's deal, Academy and a Python 3.12 or release-staged wheel: unchanged and not repeated.</li>
+<li>Question 59, an Etude tournament resumed across this revision. Only the local continuation was exercised; it reuses the stored request, so it does not answer whether Etude treats a re-registered player as new. From reading: the experiment callbacks build registrations inside <code>play</code>, and the frozen experiments still pass <code>world="w17"</code>, so their records should match; unverified with a real retained tournament.</li>
+<li>Stored decision captures (v3–v5) and sealed card-evaluation blocks from a real evaluation run; only their tests ran.</li>
+<li>The full debug Rust suite locally (hosted Rust Tests passed), the MLX backend, and a paid or rented run.</li>
+<li><code>test_learning_regression</code> on an idle machine or on main.</li>
 </ul>
 <p><strong>Still wrong, worst first:</strong></p>
 <ol>
-<li>A run written by an earlier commit of this branch (the unreleased <code>training_settings</code> table) still reads with every <code>runs</code> column NULL and no parent, without an error. Only local trial runs are affected; left as decided in question 49.</li>
-<li><code>test_resource_limit_replay_rejects_old_schema_and_reproduces_current_boundary</code> fails on main too, and no CI job runs <code>tests/training/test_game_errors.py</code>. Outside this change.</li>
-<li>A <code>.pt</code> file is refused as “not a policy checkpoint container” without naming <code>manabot.backends.convert</code>; the guide says it, the error does not.</li>
-<li><code>uv run python scripts/check_loopflow_workflows.py</code> was not rerun; it failed with an <code>AssertionError</code> in earlier passes, and this pass again edits only the QA skill text.</li>
+<li>CI is red at the pushed head until the two test fixes are committed and pushed.</li>
+<li><code>scripts/check_loopflow_workflows.py</code> fails with an <code>AssertionError</code> in its coverage-graph check, with and without this pass's skill edit. Not traced.</li>
+<li><code>manabot/eval/duel.py</code> names its environment <code>f"{key.world}-direct-development"</code>; a key without a label would read <code>None-direct-development</code>. Reached today only from retained records that carry the label.</li>
+<li>Academy's policy details show <code>Run: not recorded</code> and <code>Updates: not recorded</code> for a policy file that records its Etude run and update. Same on main's file; not part of this change.</li>
 </ol>
 </body></html>

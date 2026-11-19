@@ -120,6 +120,15 @@ Remaining, all gate's:
 3. Academy UI check/build and Playwright; hosted CI green on the head commit.
 4. Publish to #558 and stop at human review. Do not land.
 
+QA at `93f1f371c2` (`scratch/qa.html`): extension rebuilt at the head. Fresh
+files carry no label; main's checkpoint, recorded games, incomplete local
+evaluation, resumed run and old Academy traces all read. Hosted CI was red in
+Integration (evaluation-long) and (experiment): two tests still expected the
+removed label check. Both are repaired in the working tree, not committed or
+pushed. Of the three failures above, none is in CI's file lists; the first and
+third fail on main too; the second failed again under load and was not run on
+main. Gate still owes: push the test fixes and see CI green.
+
 For the person at review, not decided: question 59. A registration written
 now has no `world`, so it differs from the one a retained tournament holds
 for the same player; whether Etude then replays a resumed tournament's
