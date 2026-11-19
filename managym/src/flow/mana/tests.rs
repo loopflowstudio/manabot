@@ -457,10 +457,7 @@ fn forests(count: usize) -> PaymentModel<'static> {
 }
 
 fn pay(text: &str) -> Obligation {
-    Obligation::Pay {
-        cost: ManaCost::parse(text),
-        taps: Taps::None,
-    }
+    Obligation::mana(ManaCost::parse(text))
 }
 
 fn search_state(model: &PaymentModel, obligations: Vec<Obligation>) -> PaymentSearchState {
@@ -1145,10 +1142,7 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
         pool: Mana::default(),
         life: 20,
         obligations: vec![
-            Obligation::Pay {
-                cost: ManaCost::default(),
-                taps: Taps::None,
-            },
+            Obligation::mana(ManaCost::default()),
             Obligation::Pay {
                 cost: ManaCost::parse("5"),
                 taps: Taps::Any,
@@ -1201,10 +1195,7 @@ fn payment_bound_keeps_non_tapping_production_after_a_tap() {
     let path = model
         .plan(
             Mana::default(),
-            vec![Obligation::Pay {
-                cost: ManaCost::parse("GU"),
-                taps: Taps::None,
-            }],
+            vec![Obligation::mana(ManaCost::parse("GU"))],
             SourcePolicy::All,
         )
         .unwrap();
@@ -1225,12 +1216,11 @@ fn payment_bound_counts_restricted_mana_for_each_pending_purpose() {
         life: 20,
     };
     let obligations = ["Lesson", "Shrine"]
-        .map(|subtype| Obligation::Pay {
-            cost: ManaCost {
+        .map(|subtype| {
+            Obligation::mana(ManaCost {
                 purpose: SpendingContext::cast([subtype], []),
                 ..ManaCost::parse("U")
-            },
-            taps: Taps::None,
+            })
         })
         .to_vec();
     assert!(model.plan(pool, obligations, SourcePolicy::All).is_some());
@@ -1303,10 +1293,7 @@ fn payment_bound_allows_restricted_mana_to_fund_a_filter() {
     let path = model
         .plan(
             pool,
-            vec![Obligation::Pay {
-                cost: ManaCost::parse("U"),
-                taps: Taps::None,
-            }],
+            vec![Obligation::mana(ManaCost::parse("U"))],
             SourcePolicy::All,
         )
         .unwrap();
@@ -1568,12 +1555,11 @@ fn payment_color_bound_rejects_unpayable_colors_without_searching() {
 /// two-mana output and a paid filter.
 #[test]
 fn payment_color_bound_keeps_payable_costs_at_the_bound() {
-    let lesson = |text: &str| Obligation::Pay {
-        cost: ManaCost {
+    let lesson = |text: &str| {
+        Obligation::mana(ManaCost {
             purpose: SpendingContext::cast(["Lesson"], []),
             ..ManaCost::parse(text)
-        },
-        taps: Taps::None,
+        })
     };
     let mut herbalist = modal_source(9, &["U", "R"], "");
     Arc::make_mut(&mut herbalist.abilities[0].outputs).push(Mana::restricted_to(

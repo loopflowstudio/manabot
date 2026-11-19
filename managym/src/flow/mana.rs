@@ -72,6 +72,16 @@ enum Obligation {
     },
 }
 
+impl Obligation {
+    /// `cost`, paid only with mana.
+    fn mana(cost: ManaCost) -> Self {
+        Obligation::Pay {
+            cost,
+            taps: Taps::None,
+        }
+    }
+}
+
 /// Which untapped artifacts and creatures may pay a `Pay` obligation's
 /// generic mana by tapping, {1} each, instead of with mana.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1132,10 +1142,7 @@ impl PaymentModel<'_> {
                 remaining: ability.tap_count,
             });
         }
-        obligations.push(Obligation::Pay {
-            cost: ability.cost.clone(),
-            taps: Taps::None,
-        });
+        obligations.push(Obligation::mana(ability.cost.clone()));
         obligations.push(Obligation::Output {
             choices: ability.outputs.clone(),
             life_cost: ability.life_cost,
@@ -1221,10 +1228,7 @@ impl PaymentModel<'_> {
         if tail.is_empty() {
             return true;
         }
-        let mut obligations = vec![Obligation::Pay {
-            cost: cost.clone(),
-            taps: Taps::None,
-        }];
+        let mut obligations = vec![Obligation::mana(cost.clone())];
         obligations.extend_from_slice(tail);
         self.payable(remaining, obligations, SourcePolicy::All)
     }
@@ -1878,10 +1882,7 @@ impl Game {
                 Decision::ManaSpend {
                     cost, completion, ..
                 } => {
-                    result.push(Obligation::Pay {
-                        cost: cost.clone(),
-                        taps: Taps::None,
-                    });
+                    result.push(Obligation::mana(cost.clone()));
                     if let SpendCompletion::Upfront(next) = completion.as_ref() {
                         let mut saved = Vec::new();
                         append(next, game, &mut saved);
@@ -1912,10 +1913,7 @@ impl Game {
                             remaining: *tap_remaining,
                         });
                     }
-                    result.push(Obligation::Pay {
-                        cost: ability.mana_cost,
-                        taps: Taps::None,
-                    });
+                    result.push(Obligation::mana(ability.mana_cost));
                     result.push(Obligation::Output {
                         choices: outputs.into(),
                         life_cost: ability.life_cost,
@@ -2227,10 +2225,7 @@ impl Game {
         // that source's output into the pool. The aggregate resources do not
         // change, so every useful tap preserves affordability. Nested callers
         // and payments needing activated sources still use the exact model.
-        let obligations = vec![Obligation::Pay {
-            cost: cost.clone(),
-            taps: Taps::None,
-        }];
+        let obligations = vec![Obligation::mana(cost.clone())];
         let helped = payment.help().keyworded();
         let fixed_only = !helped
             && tail.is_empty()
@@ -2331,10 +2326,7 @@ impl Game {
     ) -> bool {
         self.payment_model(player, sacrifice).payable(
             self.pooled_mana(player),
-            vec![Obligation::Pay {
-                cost: cost.clone(),
-                taps: Taps::None,
-            }],
+            vec![Obligation::mana(cost.clone())],
             SourcePolicy::All,
         )
     }
@@ -2393,10 +2385,7 @@ impl Game {
         }
         model.payable(
             self.pooled_mana(player),
-            vec![Obligation::Pay {
-                cost: cost.clone(),
-                taps: Taps::None,
-            }],
+            vec![Obligation::mana(cost.clone())],
             SourcePolicy::All,
         )
     }
@@ -2838,10 +2827,7 @@ impl Game {
         let model = self.payment_model(player, None);
         model.payable(
             self.pooled_mana(player),
-            vec![Obligation::Pay {
-                cost: cost.clone(),
-                taps: Taps::None,
-            }],
+            vec![Obligation::mana(cost.clone())],
             SourcePolicy::FixedOnly,
         ) || self.automatic_choice_taps(player, cost, model).is_some()
     }
@@ -2881,10 +2867,7 @@ impl Game {
         let model = self.payment_model(player, None);
         let Some(path) = model.plan(
             self.pooled_mana(player),
-            vec![Obligation::Pay {
-                cost: cost.clone(),
-                taps: Taps::None,
-            }],
+            vec![Obligation::mana(cost.clone())],
             SourcePolicy::FixedOnly,
         ) else {
             return self
@@ -2945,10 +2928,7 @@ impl Game {
         }
         let path = model.plan(
             self.pooled_mana(player),
-            vec![Obligation::Pay {
-                cost: cost.clone(),
-                taps: Taps::None,
-            }],
+            vec![Obligation::mana(cost.clone())],
             SourcePolicy::All,
         )?;
         let mut taps = Vec::new();
@@ -3205,10 +3185,7 @@ impl Game {
                 let Some(model) = &model else {
                     return true;
                 };
-                let mut obligations = vec![Obligation::Pay {
-                    cost: choice.remaining.clone(),
-                    taps: Taps::None,
-                }];
+                let mut obligations = vec![Obligation::mana(choice.remaining.clone())];
                 obligations.extend(tail.clone());
                 model.payable(remaining, obligations, SourcePolicy::All)
             })
@@ -3483,10 +3460,7 @@ fn tap_obligations(cost: &ManaCost, keyword: u8, waterbend: u8) -> Vec<Obligatio
         }
         .with_generic(amount)
     };
-    let mut obligations = vec![Obligation::Pay {
-        cost: cost.reduced_generic(keyword + waterbend),
-        taps: Taps::None,
-    }];
+    let mut obligations = vec![Obligation::mana(cost.reduced_generic(keyword + waterbend))];
     for (amount, taps) in [(keyword, Taps::Keyword), (waterbend, Taps::Any)] {
         if amount > 0 {
             obligations.push(Obligation::Pay {

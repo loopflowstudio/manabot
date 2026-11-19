@@ -56,7 +56,7 @@ impl Game {
             None => cost.clone(),
         };
         let waterbend = waterbend.min(cost.generic());
-        let keyword = if help.taps_any_generic() {
+        let keyword = if help.convoke || help.improvise {
             cost.generic() - waterbend
         } else {
             0

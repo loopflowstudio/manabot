@@ -177,12 +177,6 @@ impl Help {
         let tapped = receipt.contributed(How::Tapped, Toward::Waterbend).count() as u8;
         self.waterbend.saturating_sub(tapped).min(cost.generic())
     }
-
-    /// Whether taps pay for any of the generic mana rather than only the
-    /// announced waterbend part.
-    pub fn taps_any_generic(self) -> bool {
-        self.convoke || self.improvise
-    }
 }
 
 /// What one direct tap of an artifact or creature pays of a mana cost: one
@@ -1336,16 +1330,13 @@ impl Game {
         receipt: &mut PaymentReceipt,
     ) -> Result<(), AgentError> {
         let waterbend = help.waterbend_left(cost, receipt);
-        let options = if self.waterbend_candidates(player).contains(&tapped) {
-            self.help_taps(player, cost, help, waterbend, &[tapped], None)
-        } else {
-            Vec::new()
-        };
-        let paid = match &options[..] {
-            [(_, paid)] => paid.as_slice(),
-            _ => &[],
-        };
-        let ([paid], Some(object)) = (paid, self.permanent_object(tapped)) else {
+        let paid = self
+            .waterbend_candidates(player)
+            .contains(&tapped)
+            .then(|| self.help_taps(player, cost, help, waterbend, &[tapped], None))
+            .and_then(|mut found| found.pop())
+            .and_then(|(_, options)| options.first().copied());
+        let (Some(paid), Some(object)) = (paid, self.permanent_object(tapped)) else {
             return Err(AgentError(
                 "permanent cannot be tapped for waterbend".to_string(),
             ));

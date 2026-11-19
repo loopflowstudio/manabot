@@ -1121,7 +1121,6 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> Ac
     }
 }
 
-/// A mana cost as its symbols: generic first, then colors.
 /// What a direct tap pays, as "{W} or {1} (convoke)", or "{1} (convoke)
 /// or {1} (waterbend)" when its reasons differ.
 fn tap_payments_text(options: &[TapPayment]) -> String {
@@ -1154,6 +1153,7 @@ fn toward_keyword(toward: Toward) -> &'static str {
     }
 }
 
+/// A mana cost as its symbols: generic first, then colors.
 pub(crate) fn cost_label(cost: &ManaCost) -> String {
     let mut label = String::new();
     if cost.generic() > 0 {
