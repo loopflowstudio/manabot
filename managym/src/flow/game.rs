@@ -24,6 +24,7 @@ use crate::{
         turn::TurnState,
     },
     state::{
+        ability::PaymentCost,
         card::{ActivatedAbilityDefinition, CardDefId, SacrificeCost, TapCost},
         game_object::{
             CardId, CardVec, IdGenerator, ObjectId, ObjectLkiLog, ObjectLookupError, ObjectVec,
@@ -331,6 +332,47 @@ pub enum CostComponent {
     Source(How),
 }
 
+impl CostComponent {
+    /// Mana owed with no help.
+    pub fn mana(cost: ManaCost) -> Self {
+        Self::Mana {
+            cost,
+            help: Help::default(),
+        }
+    }
+
+    /// What a resolving effect's `cost` owes as its payment decision is
+    /// made: the one place a definition's `PaymentCost` becomes a component.
+    /// A waterbend cost is its generic mana, all of which taps may pay.
+    pub fn resolving(cost: &PaymentCost) -> Self {
+        match cost {
+            PaymentCost::Mana(cost) => Self::mana(cost.clone()),
+            PaymentCost::Waterbend { generic } => Self::Mana {
+                cost: ManaCost::default().with_generic(*generic),
+                help: Help {
+                    waterbend: *generic,
+                    ..Help::default()
+                },
+            },
+            PaymentCost::Life(life) => Self::Life(*life),
+        }
+    }
+}
+
+/// `object` paid one pip of `cost` without mana, a pip of `color` or {1} for
+/// `Color::Generic`: the cost shrinks and `receipt` gains the contribution.
+pub(crate) fn pay_pip_with(
+    cost: &mut ManaCost,
+    receipt: &mut PaymentReceipt,
+    object: ObjectId,
+    how: How,
+    toward: Toward,
+    color: Color,
+) {
+    *cost = cost.less_pip(color);
+    receipt.contribute(object, how, toward);
+}
+
 /// The ways a payer may pay part of a mana cost with something other than
 /// mana, fixed as the cost is announced.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -359,6 +401,13 @@ impl Help {
     /// Whether any tap or exile may pay beside waterbend's.
     pub fn keyworded(self) -> bool {
         self.convoke || self.improvise || self.delve.is_some()
+    }
+
+    /// The generic part of `cost` that waterbend taps may still pay: what
+    /// was announced, less the taps already on `receipt`.
+    pub fn waterbend_left(self, cost: &ManaCost, receipt: &PaymentReceipt) -> u8 {
+        let tapped = receipt.contributed(How::Tapped, Toward::Waterbend).count() as u8;
+        self.waterbend.saturating_sub(tapped).min(cost.generic())
     }
 
     /// Whether taps pay for any of the generic mana rather than only the
@@ -431,14 +480,7 @@ impl Payment {
     /// may still pay.
     pub fn mana(&self) -> (&ManaCost, u8) {
         let (cost, help) = self.mana_component();
-        let tapped = self
-            .receipt
-            .contributed(How::Tapped, Toward::Waterbend)
-            .count() as u8;
-        (
-            cost,
-            help.waterbend.saturating_sub(tapped).min(cost.generic()),
-        )
+        (cost, help.waterbend_left(cost, &self.receipt))
     }
 
     /// How the mana owed may be paid without mana, as announced.
@@ -451,28 +493,31 @@ impl Payment {
         self.help().waterbend > 0
     }
 
-    fn mana_mut(&mut self) -> &mut ManaCost {
-        self.owed
+    /// The mana owed, its help and the receipt, for a step that pays part
+    /// of the mana.
+    pub(crate) fn mana_step(&mut self) -> (&mut ManaCost, Help, &mut PaymentReceipt) {
+        let (cost, help) = self
+            .owed
             .iter_mut()
             .find_map(|component| match component {
-                CostComponent::Mana { cost, .. } => Some(cost),
+                CostComponent::Mana { cost, help } => Some((cost, *help)),
                 _ => None,
             })
-            .expect("a payment has its mana component")
+            .expect("a payment has its mana component");
+        (cost, help, &mut self.receipt)
     }
 
     /// Owe `extra` mana as well (a sacrifice cost's "or pay" branch).
     pub(crate) fn owe_mana(&mut self, extra: &ManaCost) {
-        let cost = self.mana_mut();
+        let cost = self.mana_step().0;
         *cost = cost.plus(extra);
     }
 
     /// `object` paid one pip of the mana owed without mana: a pip of `color`,
     /// or {1} for `Color::Generic`.
     pub(crate) fn help_paid(&mut self, object: ObjectId, how: How, toward: Toward, color: Color) {
-        let cost = self.mana_mut();
-        *cost = cost.less_pip(color);
-        self.receipt.contribute(object, how, toward);
+        let (cost, _, receipt) = self.mana_step();
+        pay_pip_with(cost, receipt, object, how, toward, color);
     }
 }
 

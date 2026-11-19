@@ -178,7 +178,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "token definition",
     "triggering player",
     "turn action",
-    "waterbend contributions",
     "zone move",
 ];
 
@@ -1121,7 +1120,7 @@ pub(crate) fn project_decision(
                 }
                 SpendCompletion::Resolution(payment) => {
                     out.effects("if paid", &payment.if_paid);
-                    out.objects("waterbend contributions", &payment.waterbend_paid);
+                    out.receipt(&payment.receipt, None);
                     if let Some(key) = payment.spends {
                         out.object("once each turn source", key.0);
                         out.field("once each turn ability", &key.1);
@@ -1204,8 +1203,8 @@ pub(crate) fn project_decision(
             out.field("placement", &(random_order, reveal, to_battlefield));
         }
         Decision::Payment(progress) => {
-            out.field("remaining payment", &progress.remaining);
-            out.objects("waterbend contributions", &progress.waterbend_paid);
+            out.field("remaining payment", &progress.owed);
+            out.receipt(&progress.receipt, None);
             out.effects("if paid", &progress.if_paid);
             out.effects("if declined", &progress.if_declined);
             if let Some(key) = &progress.spends {

@@ -1186,7 +1186,10 @@ that needs more stays unsupported rather than approximated.
 **Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
 with a `PaymentCost` (mana, waterbend taps against a generic obligation, or
 life) and `if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
-remaining cost and the exact objects already contributed, and completion
+`CostComponent` still owed and a `PaymentReceipt` of what has paid, the same
+two records a cast or activation keeps: `CostComponent::resolving` is the one
+place the definition's cost becomes what is owed, and a waterbend tap or a
+life payment is the step an announced cost takes. Completion
 prepends exactly one branch to the effect frame; counter-unless-paid uses the
 same progress with the spell's controller as payer. A mana ability activated
 during payment stays committed if the payment is then declined, and waterbend

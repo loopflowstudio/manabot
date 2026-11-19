@@ -13,11 +13,11 @@
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
-        decision::{EffectFrame, FrameCompletion, SpendCompletion},
+        decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
         game::{
-            ActivationSource, CastChoices, CostComponent, Game, Help, Operation, Payment,
-            PendingChoice,
+            pay_pip_with, ActivationSource, CastChoices, CostComponent, Game, Help, Operation,
+            Payment, PendingChoice,
         },
         proposed_event::ProposedEvent,
         turn::{PhaseKind, StepKind},
@@ -1906,6 +1906,19 @@ impl Game {
         }
     }
 
+    /// The receipt of the cost being paid: an announced payment's, or that
+    /// of a payment suspended during resolution.
+    pub(crate) fn pending_receipt(&self) -> Option<&PaymentReceipt> {
+        match (&self.state.suspended_decision, &self.pending_choice) {
+            (Some(suspended), _) => match &suspended.decision {
+                Decision::Payment(payment) => Some(&payment.receipt),
+                _ => None,
+            },
+            (None, Some(PendingChoice::Pay { payment, .. })) => Some(&payment.receipt),
+            _ => None,
+        }
+    }
+
     fn pending_payment(&self, player: PlayerId) -> Result<Payment, AgentError> {
         match self.paying() {
             Some((payer, payment, _)) if payer == player => Ok(payment.clone()),
@@ -2175,8 +2188,7 @@ impl Game {
             self.record_bending(player, crate::flow::turn::Bending::Water);
         }
         let life = payment.life();
-        self.change_life(player, -(life as i32));
-        payment.receipt.pay_life(life);
+        self.pay_life_cost(player, life, &mut payment.receipt);
         // The source's own discard or exile; its sacrifice is on the receipt.
         let mut leaves = Vec::new();
         let activated = match &payment.operation {
@@ -2366,6 +2378,75 @@ impl Game {
         self.waterbend_payment_possible(player, cost, cost.generic())
     }
 
+    /// Tap `tapped`, one of `candidates`, to pay {1} of the waterbend part
+    /// of `cost` (CR 701.67): the one waterbend tap, for a cast, an
+    /// activation and a payment made during resolution. It pays without
+    /// activating a mana ability; `receipt` names the permanent tapped.
+    pub(crate) fn waterbend_tap(
+        &mut self,
+        tapped: PermanentId,
+        candidates: &[PermanentId],
+        cost: &mut ManaCost,
+        help: Help,
+        receipt: &mut PaymentReceipt,
+    ) -> Result<(), AgentError> {
+        if help.waterbend_left(cost, receipt) == 0 {
+            return Err(AgentError("waterbend cost is already paid".to_string()));
+        }
+        let object = self
+            .permanent_object(tapped)
+            .filter(|_| candidates.contains(&tapped))
+            .ok_or_else(|| AgentError("permanent cannot be tapped for waterbend".to_string()))?;
+        self.tap_permanent(tapped, false);
+        pay_pip_with(
+            cost,
+            receipt,
+            object,
+            How::Tapped,
+            Toward::Waterbend,
+            Color::Generic,
+        );
+        Ok(())
+    }
+
+    /// The waterbend taps among `candidates` that leave the rest of `cost`
+    /// payable, `waterbend` of its generic mana being payable by taps.
+    /// `also_tapped` is the source a cost taps as well.
+    pub(crate) fn waterbend_tap_offers(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        waterbend: u8,
+        candidates: Vec<PermanentId>,
+        also_tapped: Option<PermanentId>,
+    ) -> Vec<Action> {
+        if waterbend == 0 {
+            return Vec::new();
+        }
+        self.waterbend_taps_keeping_payable(
+            player,
+            &cost.reduced_generic(1),
+            waterbend - 1,
+            candidates,
+            also_tapped,
+        )
+        .into_iter()
+        .map(|permanent| Action::WaterbendTap { player, permanent })
+        .collect()
+    }
+
+    /// Pay `life` as a cost (CR 119.4) and record it on `receipt`. The
+    /// caller has offered it only to a player who can pay it.
+    pub(crate) fn pay_life_cost(
+        &mut self,
+        player: PlayerId,
+        life: u32,
+        receipt: &mut PaymentReceipt,
+    ) {
+        self.change_life(player, -(life as i32));
+        receipt.pay_life(life);
+    }
+
     /// Tap `tapped` to pay {1} of the pending waterbend cost.
     pub(crate) fn waterbend_tap_action(
         &mut self,
@@ -2379,20 +2460,9 @@ impl Game {
         if !payment.paying_mana() || !payment.waterbends() {
             return Err(AgentError("no waterbend payment is pending".to_string()));
         }
-        if payment.mana().1 == 0 {
-            return Err(AgentError("waterbend cost is already paid".to_string()));
-        }
-        let object = self
-            .permanent_object(tapped)
-            .filter(|_| {
-                self.waterbend_payment_candidates(player, &payment.operation)
-                    .contains(&tapped)
-            })
-            .ok_or_else(|| AgentError("permanent cannot be tapped for waterbend".to_string()))?;
-
-        // Waterbend pays a cost without activating a mana ability.
-        self.tap_permanent(tapped, false);
-        payment.help_paid(object, How::Tapped, Toward::Waterbend, Color::Generic);
+        let candidates = self.waterbend_payment_candidates(player, &payment.operation);
+        let (cost, help, receipt) = payment.mana_step();
+        self.waterbend_tap(tapped, &candidates, cost, help, receipt)?;
         let (owed, waterbend) = payment.mana();
         // A remaining colored cost can still need a mana ability such as
         // sacrificing Treasure. Leave the committed payment open for it.

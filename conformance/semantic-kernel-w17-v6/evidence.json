@@ -12,7 +12,7 @@
       "commands": 533,
       "outcome": "terminal",
       "final_state_hash": "v17:7af5745cac4db221f893f0164b5416eb61caf7a9d5407545970bfe40b2acaa75",
-      "trace_sha256": "0fec44c366749746388e7c9556662151cc6ddb983ce3714e0ebf832f1ae738c2"
+      "trace_sha256": "a14483d85dec344cb91ff96f4953c1b1de6016830e5bd58c3b72634b71de22e8"
     },
     {
       "case_id": "gw-vs-ur-5eee",
@@ -92,7 +92,7 @@
       "commands": 254,
       "outcome": "terminal",
       "final_state_hash": "v17:390a870c8ece566ac473149f0552223b3fffe569741a04d573f8aa9aef8e88fc",
-      "trace_sha256": "60093c674895c3676f4dbef26e33747aff5be9b0d116c902a7b9ec583aba8bf3"
+      "trace_sha256": "a7f74645ebdbe38872a3bae199f21e58dab728feacc2aa0e16b191000cfd1059"
     },
     {
       "case_id": "temur-164",
@@ -100,7 +100,7 @@
       "commands": 513,
       "outcome": "terminal",
       "final_state_hash": "v17:887efa9fd1f0c35560bbfd522b2ae4973abe7ae71e7a4881412614d191394c0a",
-      "trace_sha256": "10ce128b2f1221e0f9f5c16f51e0b4413e8e4dacb378256b734a38e12a07053e"
+      "trace_sha256": "ac98b54c236912c87c426bf4b499ab16e06168b6432a9056d518e220cf022c52"
     },
     {
       "case_id": "elemental-world-gr_vs_ug",

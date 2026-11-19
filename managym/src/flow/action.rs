@@ -909,21 +909,13 @@ impl Game {
                 let (owed, waterbend) = payment.mana();
                 let mut actions = self.mana_ability_actions(player);
                 if payment.waterbends() && !payment.help().taps_any_generic() {
-                    if waterbend > 0 {
-                        // Only offer taps that keep the rest of the cost payable.
-                        for candidate in self.waterbend_taps_keeping_payable(
-                            player,
-                            &owed.reduced_generic(1),
-                            waterbend - 1,
-                            self.waterbend_payment_candidates(player, &payment.operation),
-                            self.payment_tapped_source(&payment.operation),
-                        ) {
-                            actions.push(Action::WaterbendTap {
-                                player,
-                                permanent: candidate,
-                            });
-                        }
-                    }
+                    actions.extend(self.waterbend_tap_offers(
+                        player,
+                        owed,
+                        waterbend,
+                        self.waterbend_payment_candidates(player, &payment.operation),
+                        self.payment_tapped_source(&payment.operation),
+                    ));
                 } else {
                     actions.extend(self.useful_payment_taps(player));
                 }

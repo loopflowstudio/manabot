@@ -17,14 +17,14 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::{CastChoices, Game, Operation, Payment},
+        game::{CastChoices, CostComponent, Game, Operation, Payment},
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
         turn::OnceEachTurnKey,
     },
     state::{
-        ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
+        ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
         payment::PaymentReceipt,
@@ -344,19 +344,22 @@ impl EffectFrame {
     }
 }
 
-/// Remaining obligation and outcome branches of one optional payment.
-/// Mana activation costs commit immediately through the mana authority. Only
-/// a waterbend contribution closes the decline branch (the existing contract).
-/// Exact contributed objects are retained as evidence, never followed or untapped.
+/// What one payment made during resolution still owes, what has paid toward
+/// it and the branches its outcome selects. Mana activation costs commit
+/// immediately through the mana authority. Only a waterbend contribution
+/// closes the decline branch (the existing contract). The receipt names the
+/// exact objects that paid, as evidence; they are never followed or untapped.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PaymentProgress {
     /// Acceptance of an optional payment precedes choosing its sources in auto mode.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub committed: bool,
     pub player: PlayerId,
-    pub remaining: PaymentCost,
-    #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub waterbend_paid: Vec<ObjectId>,
+    /// `Mana`, whose help allows waterbend taps for a waterbend cost, or
+    /// `Life` (`CostComponent::resolving`).
+    pub owed: CostComponent,
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub receipt: PaymentReceipt,
     pub if_paid: Vec<Effect>,
     pub if_declined: Vec<Effect>,
     /// The once-each-turn option (exact source, ability index) paying
@@ -373,14 +376,14 @@ pub struct PaymentProgress {
 impl PaymentProgress {
     pub fn new(
         player: PlayerId,
-        cost: PaymentCost,
+        owed: CostComponent,
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     ) -> Self {
         Self {
             player,
-            remaining: cost,
-            waterbend_paid: Vec::new(),
+            owed,
+            receipt: PaymentReceipt::default(),
             committed: false,
             if_paid,
             if_declined,
@@ -390,7 +393,12 @@ impl PaymentProgress {
     }
 
     pub fn can_decline(&self) -> bool {
-        !self.committed && self.waterbend_paid.is_empty()
+        !self.committed && self.receipt.contributions().is_empty()
+    }
+
+    /// Whether the cost is a waterbend cost, however it is paid.
+    pub fn waterbends(&self) -> bool {
+        matches!(self.owed, CostComponent::Mana { help, .. } if help.waterbend > 0)
     }
 }
 
@@ -405,7 +413,7 @@ impl Game {
         if let Some(key) = payment.spends {
             self.spend_once_each_turn(key);
         }
-        if matches!(payment.remaining, PaymentCost::Waterbend { .. }) {
+        if payment.waterbends() {
             self.record_bending(payment.player, crate::flow::turn::Bending::Water);
         }
         frame.prepend_effects(payment.if_paid.into_iter());
@@ -1714,32 +1722,29 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
-                // Paying life is one action under manual and automatic
-                // payment alike; every other cost owes mana.
-                if let PaymentCost::Life(life) = payment.remaining {
-                    let mut actions = Vec::new();
-                    if self.can_pay_life(player, life) {
-                        actions.push(Action::PayCost { player });
+                let (cost, help) = match &payment.owed {
+                    // Paying life is one action under manual and automatic
+                    // payment alike.
+                    CostComponent::Life(life) => {
+                        let mut actions = Vec::new();
+                        if self.can_pay_life(player, *life) {
+                            actions.push(Action::PayCost { player });
+                        }
+                        actions.push(Action::Decline { player });
+                        return Some(ActionSpace {
+                            player: Some(player),
+                            kind: ActionSpaceKind::PayOrNot,
+                            actions,
+                            focus: source_focus,
+                        });
                     }
-                    actions.push(Action::Decline { player });
-                    return Some(ActionSpace {
-                        player: Some(player),
-                        kind: ActionSpaceKind::PayOrNot,
-                        actions,
-                        focus: source_focus,
-                    });
-                }
-                let cost = payment
-                    .remaining
-                    .mana()
-                    .expect("a life cost returned above");
+                    CostComponent::Mana { cost, help } => (cost, *help),
+                    _ => unreachable!("a resolution payment owes mana or life"),
+                };
+                let waterbend = help.waterbend_left(cost, &payment.receipt);
                 if self.automatic_mana_payment(player) && payment.can_decline() {
-                    let waterbend = match payment.remaining {
-                        PaymentCost::Waterbend { generic } => generic,
-                        PaymentCost::Mana(_) | PaymentCost::Life(_) => 0,
-                    };
                     let mut actions = Vec::new();
-                    if self.waterbend_payment_possible(player, &cost, waterbend) {
+                    if self.waterbend_payment_possible(player, cost, waterbend) {
                         actions.push(Action::PayCost { player });
                     }
                     actions.push(Action::Decline { player });
@@ -1751,23 +1756,14 @@ impl Game {
                     });
                 }
                 let mut actions = self.mana_ability_actions(player);
-                if let PaymentCost::Waterbend { generic } = payment.remaining {
-                    if generic > 0 {
-                        let rest =
-                            crate::state::mana::ManaCost::default().with_generic(generic - 1);
-                        // Only offer taps that keep the rest of the cost payable.
-                        for permanent in self.waterbend_taps_keeping_payable(
-                            player,
-                            &rest,
-                            generic - 1,
-                            self.waterbend_candidates(player),
-                            None,
-                        ) {
-                            actions.push(Action::WaterbendTap { player, permanent });
-                        }
-                    }
-                }
-                if self.can_pay_mana_cost(player, &cost) {
+                actions.extend(self.waterbend_tap_offers(
+                    player,
+                    cost,
+                    waterbend,
+                    self.waterbend_candidates(player),
+                    None,
+                ));
+                if self.can_pay_mana_cost(player, cost) {
                     actions.push(Action::PayCost { player });
                 }
                 if payment.can_decline() {
@@ -1776,9 +1772,10 @@ impl Game {
                 self.append_mana_floats(player, &mut actions);
                 ActionSpace {
                     player: Some(player),
-                    kind: match payment.remaining {
-                        PaymentCost::Mana(_) | PaymentCost::Life(_) => ActionSpaceKind::PayOrNot,
-                        PaymentCost::Waterbend { .. } => ActionSpaceKind::Waterbend,
+                    kind: if payment.waterbends() {
+                        ActionSpaceKind::Waterbend
+                    } else {
+                        ActionSpaceKind::PayOrNot
                     },
                     actions,
                     focus: source_focus,
@@ -2200,7 +2197,7 @@ impl Game {
                 suspended.frame.x = x;
                 let payment = PaymentProgress::new(
                     *player,
-                    PaymentCost::Mana(ManaCost::default().with_generic(x)),
+                    CostComponent::mana(ManaCost::default().with_generic(x)),
                     std::mem::take(if_paid),
                     Vec::new(),
                 );
@@ -2248,54 +2245,44 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (
-                Decision::Payment(PaymentProgress {
-                    player,
-                    remaining: PaymentCost::Waterbend { generic },
-                    waterbend_paid,
-                    ..
-                }),
-                Action::WaterbendTap { permanent, .. },
-            ) if *generic > 0 && self.waterbend_candidates(*player).contains(permanent) => {
-                let object = self
-                    .permanent_object(*permanent)
-                    .expect("waterbend candidate");
-                self.tap_permanent(*permanent, false);
-                *generic -= 1;
-                waterbend_paid.push(object);
-                *self.state.suspended_decision_mut() = Some(suspended);
-                Ok(())
-            }
-            (
-                Decision::Payment(PaymentProgress {
-                    player,
-                    remaining: PaymentCost::Life(life),
-                    ..
-                }),
-                Action::PayCost { .. },
-            ) => {
-                let (player, life) = (*player, *life);
-                if !self.can_pay_life(player, life) {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("cannot pay life cost".into()));
-                }
-                self.change_life(player, -(life as i32));
-                let Decision::Payment(payment) = suspended.decision else {
-                    unreachable!()
+            (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
+                let candidates = self.waterbend_candidates(payment.player);
+                let tapped = match &mut payment.owed {
+                    CostComponent::Mana { cost, help } => self.waterbend_tap(
+                        *permanent,
+                        &candidates,
+                        cost,
+                        *help,
+                        &mut payment.receipt,
+                    ),
+                    _ => Err(AgentError("no waterbend payment is pending".into())),
                 };
-                self.finish_resolution_payment(payment, suspended.frame);
-                Ok(())
+                *self.state.suspended_decision_mut() = Some(suspended);
+                tapped
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
+                let cost = match &payment.owed {
+                    CostComponent::Life(life) => {
+                        let (player, life) = (payment.player, *life);
+                        if !self.can_pay_life(player, life) {
+                            *self.state.suspended_decision_mut() = Some(suspended);
+                            return Err(AgentError("cannot pay life cost".into()));
+                        }
+                        self.pay_life_cost(player, life, &mut payment.receipt);
+                        let Decision::Payment(payment) = suspended.decision else {
+                            unreachable!()
+                        };
+                        self.finish_resolution_payment(payment, suspended.frame);
+                        return Ok(());
+                    }
+                    CostComponent::Mana { cost, .. } => cost.clone(),
+                    _ => unreachable!("a resolution payment owes mana or life"),
+                };
                 if self.automatic_mana_payment(payment.player) && payment.can_decline() {
                     payment.committed = true;
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Ok(());
                 }
-                let cost = payment
-                    .remaining
-                    .mana()
-                    .expect("a life cost is paid by the arm above");
                 if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
@@ -4295,7 +4282,8 @@ mod learn_tests {
 #[cfg(test)]
 mod payment_tests {
     use super::*;
-    use crate::state::ability::EffectValue;
+    use crate::state::ability::{EffectValue, PaymentCost};
+    use crate::state::payment::{How, Toward};
     use crate::{
         search_state::witness,
         state::{
@@ -4572,8 +4560,23 @@ mod payment_tests {
         let Decision::Payment(payment) = &partial_resolution.decision else {
             panic!("partial waterbend must retain its payment");
         };
-        assert_eq!(payment.remaining, PaymentCost::Waterbend { generic: 1 });
-        assert_eq!(payment.waterbend_paid, vec![sources[0]]);
+        assert_eq!(
+            payment.owed,
+            CostComponent::Mana {
+                cost: ManaCost::parse("{1}"),
+                help: crate::flow::game::Help {
+                    waterbend: 2,
+                    ..Default::default()
+                },
+            }
+        );
+        assert_eq!(
+            payment
+                .receipt
+                .contributed(How::Tapped, Toward::Waterbend)
+                .collect::<Vec<_>>(),
+            vec![sources[0]]
+        );
         assert!(!payment.can_decline());
         assert!(!branch
             .action_space()

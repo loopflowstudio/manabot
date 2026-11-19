@@ -6,7 +6,7 @@
 //! typed continuation projection is shared with tensor and text inputs; the
 //! frozen semantic observation/digest contract stays intact.
 
-use crate::state::ability::{LibraryEnd, PaymentCost};
+use crate::state::ability::LibraryEnd;
 use crate::{
     agent::{continuation::ContinuationFrame, effect_execution::contribution_phrase},
     experience::{
@@ -21,7 +21,7 @@ use crate::{
     state::{
         card::CastOption,
         game_object::{ObjectId, PlayerId, Target},
-        payment::{Contribution, How, Toward},
+        payment::{PaymentReceipt, Toward},
     },
 };
 
@@ -371,33 +371,11 @@ impl Game {
                 view.mana_cost = RequiredNullable(Some(symbols));
             }
         }
-        // What is committed to the pending cost. A resolving waterbend
-        // payment (CR 701.67) keeps its taps on its own progress, with no
-        // receipt; they read as the same taps do on a cast.
-        let committed: Vec<Contribution> = if let Some(Decision::Payment(PaymentProgress {
-            remaining: PaymentCost::Waterbend { .. },
-            waterbend_paid,
-            ..
-        })) = self
-            .state
-            .suspended_decision
-            .as_ref()
-            .map(|suspended| &suspended.decision)
-        {
-            waterbend_paid
-                .iter()
-                .map(|&object| Contribution {
-                    object,
-                    how: How::Tapped,
-                    toward: Toward::Waterbend,
-                })
-                .collect()
-        } else if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
-            payment.receipt.contributions().to_vec()
-        } else {
-            Vec::new()
-        };
-        view.paid = committed
+        // What is committed to the pending cost: the contributions on its
+        // receipt, for a cast, an activation and a resolving payment alike.
+        view.paid = self
+            .pending_receipt()
+            .map_or(&[][..], PaymentReceipt::contributions)
             .iter()
             .map(|paid| PaidView {
                 phrase: contribution_phrase(self, viewer, paid),
@@ -477,7 +455,7 @@ impl Game {
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
-                Decision::Payment(PaymentProgress { remaining: PaymentCost::Life(_), .. }) => ("resolution_payment", "Pay the stated life for the resolving effect, or decline. Paying is offered only when your life total is at least that amount, and the life is lost at once."),
+                Decision::Payment(PaymentProgress { owed: CostComponent::Life(_), .. }) => ("resolution_payment", "Pay the stated life for the resolving effect, or decline. Paying is offered only when your life total is at least that amount, and the life is lost at once."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::NameCard { scope, .. } if !scope.is_leaf() => ("name_card", "Choose the group of names containing the card name you want. Choosing a group names nothing and commits nothing; the next choice offers the group's names or smaller groups."),
                 Decision::NameCard { .. } => ("name_card", "Choose a card name from this group of the installed naming vocabulary."),

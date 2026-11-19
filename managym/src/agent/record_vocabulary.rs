@@ -165,6 +165,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "CastChoices",
         "EffectiveTrigger",
         "ManaSpent",
+        "Help",
     ] {
         add(TokenKind::Structure, name);
         add(TokenKind::Structure, &format!("/{name}"));
@@ -200,6 +201,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
             ][..],
         ),
         ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
+        // What a payment made during resolution still owes.
+        ("CostComponent", &["Mana", "Life"][..]),
         // What a payment's contributing objects did and paid for.
         ("How", &["Tapped", "Sacrificed", "Exiled", "Discarded"][..]),
         (
@@ -261,6 +264,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "combat",
         "definition",
         "name",
+        "cost",
+        "help",
+        "waterbend",
     ] {
         add(TokenKind::Field, field);
     }

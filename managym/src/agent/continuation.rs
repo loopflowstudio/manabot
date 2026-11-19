@@ -15,7 +15,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
+        ability::{DelayedExpiry, DelayedFrequency},
         game_object::{ObjectId, PlayerId, Target},
         mana::ManaCost,
         payment::{How, PaymentReceipt, Toward},
@@ -924,10 +924,10 @@ impl Game {
                 frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
             }
             Decision::Payment(progress) => {
-                if let Some(cost) = progress.remaining.mana() {
-                    frame.cost(&cost);
+                if let CostComponent::Mana { cost, .. } = &progress.owed {
+                    frame.cost(cost);
                 }
-                frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
+                frame.waterbend = progress.waterbends();
                 frame.can_decline = progress.can_decline();
             }
             Decision::ManaUpfront {
@@ -1300,7 +1300,9 @@ mod tests {
             },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 actor,
-                PaymentCost::Waterbend { generic: 2 },
+                CostComponent::resolving(&crate::state::ability::PaymentCost::Waterbend {
+                    generic: 2,
+                }),
                 vec![],
                 vec![],
             )))),
@@ -1359,7 +1361,9 @@ mod tests {
             },
             Decision::Payment(PaymentProgress::new(
                 player,
-                PaymentCost::Waterbend { generic: 1 },
+                CostComponent::resolving(&crate::state::ability::PaymentCost::Waterbend {
+                    generic: 1,
+                }),
                 vec![],
                 vec![],
             )),

@@ -10,7 +10,7 @@ use crate::{
             ResolutionTarget, TargetIteration,
         },
         event::GameEvent,
-        game::Game,
+        game::{CostComponent, Game},
         proposed_event::{
             EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
@@ -20,8 +20,8 @@ use crate::{
     state::{
         ability::{
             Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except,
-            LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
-            TargetRequirement, TargetSpec,
+            LinkedChooser, LinkedExile, ObjectSelector, PlayerSelector, Scope, TargetRequirement,
+            TargetSpec,
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
         effect::{Affected, EffectDuration, Modification},
@@ -1285,7 +1285,7 @@ impl Game {
                 let cost = (0..ages).fold(ManaCost::default(), |cost, _| cost.plus(each));
                 Some(Decision::Payment(PaymentProgress::new(
                     frame.controller,
-                    PaymentCost::Mana(cost),
+                    CostComponent::mana(cost),
                     Vec::new(),
                     vec![Effect::sacrifice_this()],
                 )))
@@ -1576,7 +1576,7 @@ impl Game {
                 if_declined,
             } => Some(Decision::Payment(PaymentProgress::new(
                 frame.controller,
-                cost.clone(),
+                CostComponent::resolving(cost),
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
@@ -1612,7 +1612,7 @@ impl Game {
                 }
                 let mut payment = PaymentProgress::new(
                     frame.controller,
-                    PaymentCost::Mana(Default::default()),
+                    CostComponent::mana(ManaCost::default()),
                     effects.clone(),
                     Vec::new(),
                 );
@@ -1956,8 +1956,12 @@ impl Game {
                     _ => return None,
                 };
                 let spell_controller = self.state.stack_objects[index].controller();
-                let mut payment =
-                    PaymentProgress::new(spell_controller, cost.clone(), Vec::new(), Vec::new());
+                let mut payment = PaymentProgress::new(
+                    spell_controller,
+                    CostComponent::resolving(cost),
+                    Vec::new(),
+                    Vec::new(),
+                );
                 payment.counters_on_decline = frame.primary_target();
                 Some(Decision::Payment(payment))
             }

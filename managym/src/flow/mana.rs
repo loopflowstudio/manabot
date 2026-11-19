@@ -1890,13 +1890,10 @@ impl Game {
                 // A life cost is paid or declined in one action: it never
                 // commits, so it never reaches the solver as an obligation.
                 Decision::Payment(progress) if !progress.can_decline() => {
-                    if let Some(cost) = progress.remaining.mana() {
+                    if let CostComponent::Mana { cost, .. } = &progress.owed {
                         result.push(Obligation::Pay {
-                            cost,
-                            waterbend: matches!(
-                                progress.remaining,
-                                crate::state::ability::PaymentCost::Waterbend { .. }
-                            ),
+                            cost: cost.clone(),
+                            waterbend: progress.waterbends(),
                         });
                     }
                 }
@@ -3486,7 +3483,8 @@ impl Game {
                         decision: *decision,
                     });
                 }
-                SpendCompletion::Resolution(payment) => {
+                SpendCompletion::Resolution(mut payment) => {
+                    payment.receipt.record_mana(spent.mana().iter().cloned());
                     self.finish_resolution_payment(payment, suspended.frame);
                 }
                 SpendCompletion::Foretell(card) => self.complete_foretell(player, card),

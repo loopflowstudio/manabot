@@ -240,15 +240,15 @@ impl Game {
                 // A cost paid in life has no mana route: `None` answers
                 // `not_applicable` below, as for any other decision.
                 match suspended.decision {
-                    Decision::Payment(payment) => match payment.remaining.mana() {
-                        Some(cost) => {
+                    Decision::Payment(payment) => match payment.owed.clone() {
+                        CostComponent::Mana { cost, .. } => {
                             sources.extend(
                                 offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)),
                             );
                             resolution = Some((payment, suspended.frame));
                             Some(cost)
                         }
-                        None => None,
+                        _ => None,
                     },
                     _ => None,
                 }
@@ -295,7 +295,7 @@ impl Game {
                     x: 0,
                 };
                 let owed = self.cost_components(player, &operation);
-                if ability.mana_cost.x > 0 || ability.waterbend || owes_a_choice(&owed) {
+                if ability.mana_cost.x > 0 || will_owe_a_choice(&owed) {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the activation's additional costs before previewing payment.",
