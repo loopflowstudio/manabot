@@ -6,7 +6,7 @@ use crate::support::{
         enters_battlefield_with_triggers, five_color_setup, five_color_unfunded_setup,
         force_new_card_in_hand,
     },
-    inspect::{card_of, tapped, top_spell},
+    inspect::{card_of, offer_labels, tapped, top_spell},
     play::{cast_card, choose, pass_until, pay_rest, resolve_everything},
 };
 use managym::{
@@ -109,14 +109,7 @@ fn guardian_of_vitu_ghazi_convoker_chooses_which_owed_color_it_pays() {
         assert!(tapped(&s, convoker));
         let paid = if plains {
             assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
-            let labels: Vec<_> = s
-                .game()
-                .semantic_decision_frame()
-                .unwrap()
-                .offers
-                .iter()
-                .map(|offer| offer.label.clone())
-                .collect();
+            let labels = offer_labels(&s);
             assert_eq!(
                 labels,
                 [

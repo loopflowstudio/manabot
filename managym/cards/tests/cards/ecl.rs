@@ -3,7 +3,8 @@
 use crate::support::{
     game::{five_color_unfunded_setup, force_new_card_in_hand},
     inspect::{
-        assert_choice_contract, can_cast, card_of, has_action, tap_pays_modes, tapped, top_spell,
+        assert_choice_contract, can_cast, card_of, has_action, offer_labels, tap_pays_modes,
+        tapped, top_spell,
     },
     play::{cast_card, choose, pass_until, settle, tap_for_mana},
 };
@@ -62,14 +63,7 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
         assert!(convokes(&s, creature));
     }
     assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
-    let labels: Vec<_> = s
-        .game()
-        .semantic_decision_frame()
-        .unwrap()
-        .offers
-        .iter()
-        .map(|offer| offer.label.clone())
-        .collect();
+    let labels = offer_labels(&s);
     assert!(
         labels.contains(&"Tap Savannah Lions to pay {W} (convoke)".to_string())
             && labels.contains(&"Tap Gray Ogre to pay {1} (convoke)".to_string()),
@@ -165,19 +159,10 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
     s.set_player_mana_pool(0, "W");
     cast_appeal(&mut s, ogre);
     assert!(convokes(&s, lions));
-    let labels = |s: &crate::support::game::Scenario| -> Vec<String> {
-        s.game()
-            .semantic_decision_frame()
-            .unwrap()
-            .offers
-            .iter()
-            .map(|offer| offer.label.clone())
-            .collect()
-    };
     assert!(
-        labels(&s).contains(&"Tap Savannah Lions to pay {W} or {1} (convoke)".to_string()),
+        offer_labels(&s).contains(&"Tap Savannah Lions to pay {W} or {1} (convoke)".to_string()),
         "{:?}",
-        labels(&s)
+        offer_labels(&s)
     );
     choose(
         &mut s,
@@ -185,7 +170,7 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
     );
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
     assert_eq!(
-        labels(&s),
+        offer_labels(&s),
         [
             "Savannah Lions pays {W} (convoke)",
             "Savannah Lions pays {1} (convoke)"

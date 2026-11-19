@@ -4,7 +4,7 @@
 //! end.
 
 use crate::support::game::move_card;
-use crate::support::inspect::{current_object, now, permanent_of, tap_pays_modes};
+use crate::support::inspect::{current_object, now, offer_labels, permanent_of, tap_pays_modes};
 use crate::support::{
     game::{
         animate, clear_hand, clear_summoning_sickness, deck, enter_battlefield,
@@ -1683,14 +1683,7 @@ fn hama_can_waterbend_for_a_spell_with_convoke() {
         if creature == ogres[0] {
             assert_choice_contract(&s);
         }
-        let labels: Vec<_> = s
-            .game()
-            .semantic_decision_frame()
-            .unwrap()
-            .offers
-            .iter()
-            .map(|offer| offer.label.clone())
-            .collect();
+        let labels = offer_labels(&s);
         assert_eq!(labels.len(), 2, "{labels:?}");
         assert!(labels[0].ends_with("pays {1} (convoke)"), "{labels:?}");
         assert!(labels[1].ends_with("pays {1} (waterbend)"), "{labels:?}");

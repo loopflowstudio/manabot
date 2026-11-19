@@ -68,7 +68,7 @@ fn diresight_surveils_two_draws_two_and_loses_two_life() {
 fn feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black() {
     use crate::support::{
         game::{five_color_unfunded_setup, force_new_card_in_hand, plant_in_graveyard},
-        inspect::{can_cast, has_action, now, offered_cards, top_spell},
+        inspect::{can_cast, has_action, now, offer_labels, offered_cards, top_spell},
         play::{
             cast_card, choose, fork_choosing, fork_selecting, pass_until, pay_rest, select_card,
             settle,
@@ -121,14 +121,7 @@ fn feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black() {
             expected.sort();
             assert_eq!(offered, expected);
             assert!(has_action(&s, |a| matches!(a, Action::PayCost { .. })));
-            let labels: Vec<_> = s
-                .game()
-                .semantic_decision_frame()
-                .unwrap()
-                .offers
-                .iter()
-                .map(|offer| offer.label.clone())
-                .collect();
+            let labels = offer_labels(&s);
             for label in [
                 "Sacrifice Food (forage)",
                 "Exile Hill Giant (forage)",

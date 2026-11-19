@@ -393,6 +393,17 @@ pub fn permanent_of(s: &Scenario, object: ObjectId) -> Option<PermanentId> {
     s.game().state.permanent_of(now(s, object))
 }
 
+/// The labels of the current decision's offers, in offer order.
+pub fn offer_labels(s: &Scenario) -> Vec<String> {
+    s.game()
+        .semantic_decision_frame()
+        .unwrap()
+        .offers
+        .into_iter()
+        .map(|offer| offer.label)
+        .collect()
+}
+
 /// The modes a tap-pays choice offers (`TapPayment::mode`), after checking
 /// that the choice and each of its offers focus the object of the permanent
 /// just tapped in the chooser's observation.

@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::{five_color_unfunded_setup, force_new_card_in_hand},
-    inspect::{card_of, permanent_named, tapped, top_spell},
+    inspect::{card_of, offer_labels, permanent_named, tapped, top_spell},
     play::{cast_card, choose, pay_rest, settle, tap_for_mana},
 };
 use managym::{
@@ -135,12 +135,7 @@ fn carnelian_orb_mana_floated_first_is_a_distinct_unit_the_player_may_keep() {
         |a| matches!(a, Action::TapForMana { permanent, .. } if *permanent == last),
     );
     while s.game().state.stack_objects.is_empty() {
-        let frame = s.game().semantic_decision_frame().unwrap();
-        let labels: Vec<_> = frame
-            .offers
-            .iter()
-            .map(|offer| offer.label.clone())
-            .collect();
+        let labels = offer_labels(&s);
         assert!(
             labels.iter().any(|label| label.contains("haste")),
             "{labels:?}"
