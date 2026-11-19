@@ -454,6 +454,9 @@ pub struct LegacyPermanentView {
     /// It has lost all abilities.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    /// Keywords it has after continuous effects, in keyword declaration order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
     /// Activated abilities (indices in its ability list) whose limit is spent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<u32>,
@@ -635,6 +638,12 @@ pub struct DecisionContextView {
     pub mana_cost: RequiredNullable<String>,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub chosen_mode: RequiredNullable<u32>,
+    /// `source` is a spell (`spell`) or an activated ability
+    /// (`activated_ability`) the actor is announcing. By the rules it is on
+    /// the stack (CR 601.2a, 602.2a); the engine holds it in its zone until
+    /// the announced costs are paid. Omitted otherwise and on older frames.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announcing: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -824,6 +833,24 @@ pub enum PresentationKind {
     TurnStarted {
         player: PlayerId,
         turn_number: u32,
+    },
+    /// A land played from hand (CR 305.1), named as the permanent it became.
+    LandPlayed {
+        object: ObjectRenderId,
+        player: PlayerId,
+    },
+    /// Cards a player discarded (CR 701.9a), named as the graveyard objects
+    /// they became.
+    Discarded {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
+    /// Cards a player revealed (CR 701.20a), by name in reveal order: a card
+    /// revealed into a hand or from outside the game has no public object, so
+    /// its name is all a viewer learns.
+    Revealed {
+        cards: Vec<String>,
+        player: PlayerId,
     },
 }
 

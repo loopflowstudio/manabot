@@ -6,7 +6,7 @@ import pytest
 
 import managym
 from managym.academy import server
-from managym.academy.server import GameSession
+from managym.academy.server import GameSession, LogEntry
 from managym.bots import BotDecision, BotPolicy
 from managym.experience import Command, ExperienceFrame
 
@@ -40,7 +40,7 @@ def test_forced_decisions_never_surface(
     frame = ExperienceFrame.model_validate(
         session.current_recovery("reconnect")["frame"]
     )
-    log: list[str] = []
+    log: list[LogEntry] = []
     for index in range(30):
         if frame.prompt is None:
             break
@@ -72,7 +72,9 @@ def test_forced_decisions_never_surface(
     assert all(len(event.actions) > 1 for event in session.trace.events)
     automatic = [row for row in session.authority_transitions if row.automatic]
     assert all(row.action_type == "PRIORITY_PASS_PRIORITY" for row in automatic)
-    assert log.count("Auto: Pass priority") == len(automatic)
+    assert [entry["text"] for entry in log if entry["actor"] == "auto"].count(
+        "Pass priority"
+    ) == len(automatic)
     assert policy_calls
 
 
@@ -90,7 +92,7 @@ def test_priority_automation_is_logged(tmp_path: Path) -> None:
     frame = ExperienceFrame.model_validate(
         session.current_recovery("reconnect")["frame"]
     )
-    log: list[str] = []
+    log: list[LogEntry] = []
     for index in range(6):
         assert frame.prompt is not None
         offer = next(
@@ -116,4 +118,8 @@ def test_priority_automation_is_logged(tmp_path: Path) -> None:
 
     automatic = [row for row in session.authority_transitions if row.automatic]
     assert automatic
-    assert log.count("Auto: Pass priority") == len(automatic)
+    # Each line names the turn its action was taken in, never a later one.
+    assert all(1 <= entry["turn"] <= frame.projection.turn.turn_number for entry in log)
+    assert [entry["text"] for entry in log if entry["actor"] == "auto"].count(
+        "Pass priority"
+    ) == len(automatic)

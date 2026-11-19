@@ -440,6 +440,14 @@ def test_unified_watch_reads_are_bounded_authorized_and_do_not_produce(
     assert all(event["seq"] < choice["cursor"] for event in choice["history"])
     assert len(choice["history"]) <= 100
     assert len(choice["history_labels"]) == len(choice["history"])
+    # The index names each position as its read does: a score needs no reads.
+    summary = index["positions"][0]
+    assert summary["label"] == choice["decision"]["offer"]["label"]
+    assert summary["revision"] == choice["decision"]["revision"]
+    assert summary["value"] == (choice["outputs"] or {}).get("value")
+    after = client.get(f"{url}/positions/after:0", headers=headers).json()
+    assert index["positions"][1]["label"] == after["description"]
+    assert isinstance(index["positions"][1]["revision"], int)
     source = client.get(f"{url}/positions/{key}?study=true", headers=headers).json()[
         "study_source"
     ]

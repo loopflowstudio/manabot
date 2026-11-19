@@ -118,6 +118,8 @@ export interface PermanentState {
   blocking?: number;
   /** It has lost all abilities. */
   abilities_lost?: boolean;
+  /** Keywords it has after continuous effects; absent when it has none. */
+  keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
   /** It was dealt damage this turn. */
@@ -229,6 +231,8 @@ export interface DecisionContextView {
   reserved_sacrifice: DecisionObjectView | null;
   mana_cost: string | null;
   chosen_mode: number | null;
+  /** `source` is being announced, so it is on the stack by the rules (CR 601.2a, 602.2a). */
+  announcing?: 'spell' | 'activated_ability';
 }
 
 export interface StackEntryView {
@@ -414,7 +418,7 @@ export interface ExperienceFrame {
   stops: StopsConfig;
   deck_names?: DeckNames;
   asset_pack?: AssetPackReference | null;
-  log?: string[];
+  log?: LogLine[];
   auto_passed?: number;
 }
 
@@ -465,6 +469,9 @@ export const PRESENTATION_KIND_NAMES = [
   'attack_group',
   'blocked',
   'turn_started',
+  'land_played',
+  'discarded',
+  'revealed',
 ] as const;
 
 /**
@@ -517,6 +524,22 @@ export type PresentationKind =
       kind: 'turn_started';
       player: number;
       turn_number: number;
+    }
+  | {
+      kind: 'land_played';
+      object: ObjectRenderId;
+      player: number;
+    }
+  | {
+      kind: 'discarded';
+      objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      /** Cards revealed to every player, by name: a reveal has no public object. */
+      kind: 'revealed';
+      cards: string[];
+      player: number;
     };
 
 export interface PresentationEvent {
@@ -537,8 +560,18 @@ export interface FrameUpdate {
   presentation: PresentationEvent[];
   receipt: CommandReceipt | null;
   /** Compatibility narration stays outside the immutable canonical frame. */
-  log?: string[];
+  log?: LogLine[];
   auto_passed?: number;
+  /** The person's board after each step of this batch, as patches back from the frame (`board/boards.ts`). */
+  boards?: StepBoardPatch[];
+}
+
+/** One step board on the wire: the board after presentation events `first`..`last`. */
+export interface StepBoardPatch {
+  first: number;
+  last: number;
+  /** A `PatchNode` (`board/boards.ts`) onto the board after this one, or the frame's. */
+  patch: unknown;
 }
 
 export interface RecoveryEnvelope {
@@ -581,9 +614,19 @@ export interface CommandRejection {
   current_prompt: number | null;
 }
 
+/** One line of the server's narration: either player's move or an automated action, in the turn it was taken. */
+export interface LogLine {
+  actor: 'hero' | 'villain' | 'auto';
+  turn: number;
+  text: string;
+}
+
+/** One move of the board's log; automation is its own actor, never the person's. */
 export interface GameLogEntry {
   id: string;
-  actor: 'hero' | 'villain' | 'system';
+  actor: 'hero' | 'villain' | 'auto' | 'system';
+  /** The turn the move was made in; null for notes outside any turn. */
+  turn: number | null;
   text: string;
 }
 
@@ -603,6 +646,8 @@ export interface RecordedPlayer {
   kind: 'human' | 'bot';
   name: string;
   deck: string;
+  /** The deck's display name ("GW Allies"); the recording index supplies it. */
+  deck_name?: string;
   version: string | null;
   inference: (Record<string, unknown> & { runtime?: PolicyRuntimeIdentity }) | null;
 }
@@ -639,6 +684,8 @@ export interface TrainedOpponent {
   policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
+  /** How it decides: "scripted", "checkpoint w17", "search". */
+  kind?: string;
   producer: string;
   group: string;
   details: { label: string; value: string }[];
@@ -782,11 +829,12 @@ export type ServerMessage = (
       // ActionSpaceEnum name (PRIORITY, SCRY, PAY_OR_NOT, MODAL, ...) — what
       // kind of decision the hero is being asked to make.
       action_space?: string;
-      log?: string[];
+      log?: LogLine[];
       stops?: StopsConfig;
       deck_names?: DeckNames;
       asset_pack?: AssetPackReference | null;
       auto_passed?: number;
+      boards?: StepBoardPatch[];
       session_id?: string;
       resume_token?: string;
       frame?: ExperienceFrame;
@@ -796,11 +844,12 @@ export type ServerMessage = (
       type: 'game_over';
       data: Observation;
       winner: number | null;
-      log?: string[];
+      log?: LogLine[];
       stops?: StopsConfig;
       deck_names?: DeckNames;
       asset_pack?: AssetPackReference | null;
       auto_passed?: number;
+      boards?: StepBoardPatch[];
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;
     }

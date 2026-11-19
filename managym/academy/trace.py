@@ -17,6 +17,7 @@ from typing import Any, Literal
 from pydantic import TypeAdapter
 
 import managym
+from managym.academy.append_json import encode_list, splice
 from managym.bots import BotDecision
 from managym.disclosure import DecklistDisclosure
 from managym.experience_projection import redact_observation
@@ -212,16 +213,41 @@ class Trace:
         else:
             record["recording_import"] = asdict(self.recording_import)
         record["config"] = asdict(self.config)
-        record["events"] = [
-            {
-                **{item.name: getattr(event, item.name) for item in fields(event)},
-                "bot_decision": (
-                    None if event.bot_decision is None else asdict(event.bot_decision)
-                ),
-            }
-            for event in self.events
-        ]
+        record["events"] = [event_record(event) for event in self.events]
         return record
+
+    def to_json(
+        self,
+        encoded: list[tuple[TraceEvent, str]],
+        canonical_replay: str | None = None,
+    ) -> str:
+        """`json.dumps(self.to_record())`, encoding only events that changed.
+
+        A live trace is saved after every step and holds a full observation
+        per event. `encoded` keeps each event's JSON (`append_json`); an event
+        is re-encoded only when appended or replaced (its presentation is
+        committed after the step). `canonical_replay`, when given, is that
+        field's own encoding, built the same way by the caller.
+        """
+        record = self.to_record()
+        parts = {
+            "events": encode_list(
+                self.events, encoded, lambda event: json.dumps(event_record(event))
+            )
+        }
+        if canonical_replay is not None:
+            parts["canonical_replay"] = canonical_replay
+        return splice(record, parts)
+
+
+def event_record(event: TraceEvent) -> dict[str, Any]:
+    """One event as its stored record (borrowed, like `Trace.to_record`)."""
+    return {
+        **{item.name: getattr(event, item.name) for item in fields(event)},
+        "bot_decision": (
+            None if event.bot_decision is None else asdict(event.bot_decision)
+        ),
+    }
 
 
 def utc_now_iso() -> str:

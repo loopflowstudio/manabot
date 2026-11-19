@@ -9,8 +9,10 @@ import {
   type DeckSelection,
 } from './decks';
 import { deriveObservationNotes } from './log';
+import { stepBoards, type StepBoard } from './board/boards';
 export { DECISION_PROMPTS } from './prompt-instructions';
-import { defaultStops, loadStoredStops, saveStoredStops, sanitizeStops } from './stops';
+import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
+import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
@@ -26,6 +28,8 @@ import type {
   Decklists,
   ExperienceFrame,
   GameLogEntry,
+  StepBoardPatch,
+  LogLine,
   Observation,
   OpponentConfig,
   StopsConfig,
@@ -115,13 +119,19 @@ export class GameStore {
   }
 
   table = $state<TableSnapshot | null>(null);
-  restoredDecision = $state<RestoredReplayDecision | null>(null);
+  // Frames and projections are the authority's immutable values, replaced
+  // whole on every update: raw state, so reading one is a plain property
+  // read rather than a deep proxy's (the board reads them thousands of times
+  // a frame, and the resume record serializes the frame on every update).
+  restoredDecision = $state.raw<RestoredReplayDecision | null>(null);
   branchAttemptId = $state<string | null>(null);
-  branchProjection = $state<Observation | null>(null);
+  branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
-  protocolFrame = $state<ExperienceFrame | null>(null);
+  protocolFrame = $state.raw<ExperienceFrame | null>(null);
+  /** The person's board after each step that led to `frameHash`'s frame (`board/boards.ts`). */
+  stepBoards = $state.raw<{ frameHash: string; boards: StepBoard[] } | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
-  observation = $state<Observation | null>(null);
+  observation = $state.raw<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
   // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
   actionSpaceKind = $state<string>('');
@@ -154,6 +164,9 @@ export class GameStore {
   // Priority stops (MTGO-style auto-pass). Loaded from localStorage, sent
   // with new_game, and overwritten by the server's effective-config echo.
   stops = $state<StopsConfig>(loadStoredStops());
+  // Stops set to hold once: still ordinary stops in `stops`, cleared by the
+  // client when the game stops there (`spendOnce`).
+  onceStops = $state<OnceStops>(loadStoredOnce());
   // True while a pass-turn (F6) request is in flight — the server is
   // fast-forwarding priority windows on our behalf.
   fastForwarding = $state(false);
@@ -171,8 +184,8 @@ export class GameStore {
     if (this.restoredDecision) return 'Study position — return to live to play.';
     if (this.gameOver) return 'Game over — no next decision.';
     if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
-    if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The table is working.' : 'The table is working.';
-    if (this.commandPending || this.fastForwarding) return 'Waiting for the table — your action is being processed.';
+    if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The game is working.' : 'The game is working.';
+    if (this.commandPending || this.fastForwarding) return 'Waiting for the game — your action is being processed.';
     const prompt = this.protocolFrame?.prompt;
     if (!prompt) return 'Waiting for the next decision.';
     const hero = prompt.actor === this.observation?.agent.player_index;
@@ -211,7 +224,7 @@ export class GameStore {
   applyBranchRetry(payload: BranchRetryPayload): void {
     this.branchAttemptId = payload.attempt_id;
     this.branchProjection = payload.retry.projection;
-    this.tableAnnouncement = 'Isolated line updated. The live table was not changed.';
+    this.tableAnnouncement = 'Isolated line updated. The live game was not changed.';
   }
 
   returnBranch(restored: RestoredReplayDecision): void {
@@ -225,7 +238,7 @@ export class GameStore {
     this.restoredDecision = null;
     this.branchAttemptId = null;
     this.branchProjection = null;
-    this.tableAnnouncement = 'Returned to the live table.';
+    this.tableAnnouncement = 'Returned to the live game.';
   }
 
   setConnection(next: ConnectionState): void {
@@ -288,6 +301,23 @@ export class GameStore {
     this.updateStops({ ...this.stops, [side]: steps });
   }
 
+  /** The stop bar's press: off → every time → once → off. */
+  cycleStop(side: StopSide, step: string): void {
+    const state = !this.stops[side].includes(step) ? 'off' : this.onceStops[side].includes(step) ? 'once' : 'every';
+    const next = withStopState(this.stops, this.onceStops, side, step, nextStopState(state));
+    this.updateOnce(next.once);
+    this.updateStops(next.stops);
+  }
+
+  /** The game stopped at a once stop: clear it, and say so as automation. */
+  spendOnce(side: StopSide, step: string): void {
+    const next = withStopState(this.stops, this.onceStops, side, step, 'off');
+    this.updateOnce(next.once);
+    this.updateStops(next.stops);
+    const whose = side === 'my' ? 'your turn' : "the opponent's turn";
+    this.actionLog = [...this.actionLog, this.createEntry('auto', this.observation?.turn.turn_number ?? null, `Stopped once at ${stopLabel(step)} on ${whose}; that stop is now off`)];
+  }
+
   setStopOnStack(value: boolean): void {
     this.updateStops({ ...this.stops, stop_on_stack: value });
   }
@@ -300,10 +330,27 @@ export class GameStore {
     this.updateStops(defaultStops());
   }
 
+  /**
+   * The server echoes its stop config on every frame, and answers each
+   * `set_stops` with one frame, in order. While stop changes are in flight,
+   * an echo that is not the last config sent predates it and is dropped;
+   * after as many echoes as sends the server's config holds again.
+   */
+  private stopsInFlight: { config: string; echoes: number } | null = null;
+
+  noteStopsSent(): void {
+    this.stopsInFlight = { config: stopsKey(this.stops), echoes: (this.stopsInFlight?.echoes ?? 0) + 1 };
+  }
+
   applyServerStops(stops: StopsConfig | undefined): void {
-    if (stops) {
-      this.updateStops(stops);
+    if (!stops) return;
+    const flight = this.stopsInFlight;
+    if (flight) {
+      const settled = stopsKey(stops) === flight.config || flight.echoes <= 1;
+      this.stopsInFlight = settled ? null : { ...flight, echoes: flight.echoes - 1 };
+      if (!settled) return;
     }
+    this.updateStops(stops);
   }
 
   beginFastForward(): void {
@@ -329,9 +376,8 @@ export class GameStore {
     actions: ActionOption[],
     sessionId?: string,
     resumeToken?: string,
-    log: string[] = [],
+    log: LogLine[] = [],
     stops?: StopsConfig,
-    autoPassed = 0,
     deckNames?: DeckNames,
     actionSpaceKind = '',
     deriveNotes = true,
@@ -360,11 +406,21 @@ export class GameStore {
       this.resumeToken = resumeToken;
     }
 
-    this.appendLogLines('villain', log);
-    this.appendAutoPassNote(autoPassed);
+    this.appendServerLog(log);
     if (deriveNotes) {
-      this.appendLogLines('system', deriveObservationNotes(previous, observation));
+      this.appendNotes(deriveObservationNotes(previous, observation));
     }
+  }
+
+  /** Keep the step boards that came with `frame`; boards that do not rebuild are dropped (beats then show the frame). */
+  applyStepBoards(frame: ExperienceFrame, patches: readonly StepBoardPatch[]): void {
+    let boards: StepBoard[] = [];
+    try {
+      boards = patches.length ? stepBoards(frame.projection, patches) : [];
+    } catch {
+      boards = [];
+    }
+    this.stepBoards = { frameHash: frame.frame_hash, boards };
   }
 
   applyFrame(
@@ -386,7 +442,6 @@ export class GameStore {
         frame.winner,
         frame.log ?? [],
         frame.stops,
-        frame.auto_passed ?? 0,
         frame.deck_names,
         false,
       );
@@ -398,7 +453,6 @@ export class GameStore {
         resumeToken,
         frame.log ?? [],
         frame.stops,
-        frame.auto_passed ?? 0,
         frame.deck_names,
         frame.action_space,
         false,
@@ -409,9 +463,8 @@ export class GameStore {
   applyGameOver(
     observation: Observation,
     winner: number | null,
-    log: string[] = [],
+    log: LogLine[] = [],
     stops?: StopsConfig,
-    autoPassed = 0,
     deckNames?: DeckNames,
     deriveNotes = true,
   ): void {
@@ -431,10 +484,9 @@ export class GameStore {
     this.applyServerStops(stops);
     this.applyDeckNames(deckNames);
 
-    this.appendLogLines('villain', log);
-    this.appendAutoPassNote(autoPassed);
+    this.appendServerLog(log);
     if (deriveNotes) {
-      this.appendLogLines('system', deriveObservationNotes(previous, observation));
+      this.appendNotes(deriveObservationNotes(previous, observation));
     }
   }
 
@@ -445,7 +497,7 @@ export class GameStore {
   }
 
   markResumeFailed(message: string): void {
-    // Keep the last confirmed table readable, but retire every input authority.
+    // Keep the last confirmed board readable, but retire every input authority.
     this.fastForwarding = false;
     this.commandPending = false;
     this.newGamePending = false;
@@ -464,10 +516,11 @@ export class GameStore {
     this.resumeToken = null;
   }
 
+  /** The person's own move, in the turn of the decision it answered. */
   appendHeroAction(description: string): void {
     this.actionLog = [
       ...this.actionLog,
-      this.createEntry('hero', `Hero: ${description}`),
+      this.createEntry('hero', this.observation?.turn.turn_number ?? null, description),
     ];
   }
 
@@ -490,6 +543,13 @@ export class GameStore {
   private updateStops(next: StopsConfig): void {
     this.stops = next;
     if (this.persistPreferences) saveStoredStops(next);
+    const once = pruneOnce(this.onceStops, next);
+    if (once.my.length !== this.onceStops.my.length || once.opponent.length !== this.onceStops.opponent.length) this.updateOnce(once);
+  }
+
+  private updateOnce(next: OnceStops): void {
+    this.onceStops = next;
+    if (this.persistPreferences) saveStoredOnce(next);
   }
 
   private updateDecks(next: DeckSelection): void {
@@ -503,16 +563,6 @@ export class GameStore {
     }
   }
 
-  private appendAutoPassNote(autoPassed: number): void {
-    if (autoPassed <= 0) {
-      return;
-    }
-    const windows = autoPassed === 1 ? 'window' : 'windows';
-    this.appendLogLines('system', [
-      `Auto-passed ${autoPassed} priority ${windows}.`,
-    ]);
-  }
-
   private resetMatchState(): void {
     this.interruptedIdentity = null;
     this.searchRetry = null;
@@ -520,6 +570,7 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.protocolFrame = null;
+    this.stepBoards = null;
     this.observation = null;
     this.actions = [];
     this.actionSpaceKind = '';
@@ -536,24 +587,26 @@ export class GameStore {
     this.branchProjection = null;
   }
 
-  private appendLogLines(actor: GameLogEntry['actor'], lines: string[]): void {
-    if (lines.length === 0) {
-      return;
-    }
-
-    this.actionLog = [
-      ...this.actionLog,
-      ...lines.map((line) => this.createEntry(line.startsWith('Auto: ') ? 'system' : actor, line)),
-    ];
+  /** Opponent and automated moves, each in the turn the server says it was taken. */
+  private appendServerLog(lines: LogLine[]): void {
+    if (lines.length === 0) return;
+    this.actionLog = [...this.actionLog, ...lines.map(line => this.createEntry(line.actor, line.turn, line.text))];
   }
 
-  private createEntry(
-    actor: GameLogEntry['actor'],
-    text: string,
-  ): GameLogEntry {
+  private appendNotes(notes: string[]): void {
+    if (notes.length === 0) return;
+    const turn = this.observation?.turn.turn_number ?? null;
+    this.actionLog = [...this.actionLog, ...notes.map(note => this.createEntry('system', turn, note))];
+  }
+
+  private createEntry(actor: GameLogEntry['actor'], turn: number | null, text: string): GameLogEntry {
     this.logSequence += 1;
-    return { id: `log-${this.logSequence}`, actor, text };
+    return { id: `log-${this.logSequence}`, actor, turn, text };
   }
+}
+
+function stopsKey(stops: StopsConfig): string {
+  return JSON.stringify([[...stops.my].sort(), [...stops.opponent].sort(), stops.stop_on_stack, stops.auto_pass]);
 }
 
 export function createGameStore(): GameStore {

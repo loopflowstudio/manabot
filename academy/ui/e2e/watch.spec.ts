@@ -1,25 +1,31 @@
 import { expect, test } from '@playwright/test';
 
-test('watch reads choices and consequences in the shared viewer, then returns from Study', async ({ page }) => {
+test('watch reads choices and consequences on the board, then returns from Study', async ({ page }) => {
   await page.goto('/replay?watch=1');
   await page.getByRole('button', { name: 'Start watching' }).click();
   await expect(page.getByRole('button', {name: 'Continue', exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Continue', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByTestId('recorded-decision-evidence')).toContainText('Recorded at this decision');
+  // The recorded choice: every offer is a row, the played one marked, evidence beside the prompt.
+  const rows = page.getByTestId('action-option');
+  await expect(rows.first()).toBeDisabled();
+  await expect(page.locator('[data-testid="action-option"][data-chosen="true"]')).toHaveCount(1);
+  await expect(page.getByTestId('recorded-decision-evidence')).toBeVisible();
   await page.getByRole('checkbox', {name: 'Show both hands'}).check();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
   await page.getByRole('button', {name: 'Next', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
-  await expect(page.getByTestId('replay-perspective')).toContainText('Recorded seat-0 view');
+  await expect(page.getByTestId('replay-perspective')).toContainText('Recorded seat-');
+  await expect(rows).toHaveCount(0);
   await page.getByRole('button', {name: 'Previous', exact: true}).click();
   await page.getByRole('button', {name: 'Try another line', exact: true}).click();
   await page.getByTestId('action-option').first().click();
   await expect(page.getByText('Your line is committed')).toBeVisible();
   await page.getByTestId('study-return').click();
+  await expect(page.getByRole('button', {name: 'Try another line', exact: true})).toBeFocused();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
   await expect(page.getByRole('checkbox', {name: 'Show both hands'})).not.toBeChecked();
-  await page.getByRole('button', {name: 'Next', exact: true}).click();
+  await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
   await page.reload();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');

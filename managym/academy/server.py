@@ -36,7 +36,9 @@ from starlette.websockets import WebSocketState
 
 import managym
 from managym.academy.card_art import card_art
+from managym.academy.card_faces import CardFace, card_faces
 from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
+from managym.combat import CombatPlan, preview_combat
 from managym.decision import (
     Command as SemanticCommand,
     DecisionFrame as SemanticDecisionFrame,
@@ -54,10 +56,13 @@ from managym.experience import (
     Command,
     ExperienceFrame,
     InteractionOffer,
+    LegacyHeroObservation,
+    PresentationEvent,
 )
 from managym.experience_projection import (
     HERO_PLAYER_INDEX,
     decision_surface_view,
+    definition_names,
     describe_actions,
     enum_name,
     object_records,
@@ -83,6 +88,7 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
+from .append_json import encode_list, splice
 from .attempts import (
     CLOSED_RECORD_ENDINGS,
     AttemptStore,
@@ -103,6 +109,7 @@ from .opponent import (
     Opponent,
     catalog_opponent,
     opponent_catalog,
+    opponent_kind,
     policy_registry,
 )
 from .play_session import (
@@ -113,7 +120,7 @@ from .play_session import (
     setup_draft,
 )
 from .presentation import PresentationProjector
-from .recording import Recording, read_cache
+from .recording import Recording, narrate_move, own_steps, person_board, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -161,6 +168,7 @@ from .shared_table_protocol import (
     ViewerIdentity,
     ViewerRole,
 )
+from .step_boards import MAX_STEP_BOARDS, StepBoard, wire_boards
 from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
 from .study_runtime import (
     HistoricalStudyEvidenceProvider,
@@ -539,7 +547,7 @@ def viewer_view(
 
 
 def hero_view(obs: managym.Observation) -> dict[str, Any]:
-    """Backwards-compatible player-0 projection for the live table."""
+    """Backwards-compatible player-0 projection for the live board."""
     return viewer_view(obs, HERO_PLAYER_INDEX)
 
 
@@ -853,6 +861,14 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
                 resources.callback(policy.close)
 
 
+class LogEntry(TypedDict):
+    """One line of narration: either player's move, or an automated action."""
+
+    actor: Literal["hero", "villain", "auto"]
+    turn: int
+    text: str
+
+
 class PendingBotDecision(TypedDict):
     code: str
     message: str
@@ -908,7 +924,21 @@ class GameSession:
         self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
-        self._pending_action_log: list[str] = []
+        # The (match, revision, events) last written while active: projecting
+        # the same frame again (recovery caches, the committed boundary, the
+        # settled reply) does not rewrite the whole trace.
+        self._persisted: tuple[str, int, int] | None = None
+        # Each trace event's, decision's and presentation event's JSON, so a
+        # save encodes only what the last step added (`append_json`).
+        self._encoded_events: list[tuple[TraceEvent, str]] = []
+        self._encoded_decisions: list[tuple[ReplayDecision, str]] = []
+        self._encoded_presentation: dict[int, list[tuple[dict[str, Any], str]]] = {
+            0: [],
+            1: [],
+        }
+        self._pending_action_log: list[LogEntry] = []
+        # The person's board after each step since the last surfaced message (`step_boards`).
+        self._step_boards: list[StepBoard] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
         self.stops: dict[str, list[str]] = {
             side: list(steps) for side, steps in DEFAULT_STOPS.items()
@@ -1116,6 +1146,7 @@ class GameSession:
         self._trace_saved = False
         self.trace_id = None
         self._pending_action_log = []
+        self._step_boards = []
         self.stops = {
             side: list(steps) for side, steps in (config.stops or DEFAULT_STOPS).items()
         }
@@ -1379,19 +1410,20 @@ class GameSession:
         The same envelope serves early commitment and the settled response;
         later frames never change the transition named by the receipt.
         """
+        frame = self._experience_frame()
         return {
             "type": "command_outcome",
             "status": "accepted",
             "update": {
                 "base_revision": base_revision,
-                "frame": self._experience_frame(),
+                "frame": frame,
                 "presentation": [
                     dict(event)
                     for event in self.presentation_events
                     if int(event["seq"]) >= cursor
                 ],
                 "receipt": deepcopy(receipt),
-                **self._drain_surface_metadata(),
+                **self._drain_surface_metadata(frame["projection"]),
             },
         }
 
@@ -1686,12 +1718,18 @@ class GameSession:
                 semantic_events,
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
-        self.presentation.observe(next_obs, event_subjects=event_subjects)
+        self.presentation.observe(
+            next_obs,
+            event_subjects=event_subjects,
+            definition_names=definition_names(self.env),
+        )
+        # The turn a logged move was made in is the one before the step.
+        turn = int(before_observation.turn.turn_number)
         if auto:
             # Priority-stop automation stays identifiable in the hero's log.
-            self._pending_action_log.append(f"Auto: {action_description}")
-        elif actor == "villain":
-            self._pending_action_log.append(f"Villain: {action_description}")
+            self._pending_action_log.append(
+                {"actor": "auto", "turn": turn, "text": action_description}
+            )
         self.trace.events.append(
             TraceEvent(
                 actor=actor,
@@ -1714,6 +1752,34 @@ class GameSession:
             actor=actor_index,
             caused_by=caused_by,
         )
+        if not auto:
+            # Either player's move as the person saw it, with Review's
+            # narration: never the opponent's private action.
+            after = decision_surface_view(
+                self.env,
+                self.human_seat
+                if next_obs.game_over
+                else int(next_obs.agent.player_index),
+            )
+            text = narrate_move(
+                person_board(observation, self.human_seat),
+                person_board(after, self.human_seat),
+                [event["kind"] for event in presentation_events],
+                own_steps(
+                    [vars(event) for event in self.trace.events],
+                    len(self.trace.events) - 1,
+                )
+                if actor == "hero"
+                else (),
+            )
+            if text is not None:
+                self._pending_action_log.append(
+                    {
+                        "actor": "hero" if actor == "hero" else "villain",
+                        "turn": turn,
+                        "text": text,
+                    }
+                )
         if self._capture_authority_evidence:
             assert state_before is not None and state_after is not None
             self.authority_transitions.append(
@@ -1937,21 +2003,29 @@ class GameSession:
             "auto_pass": self.auto_pass,
         }
 
-    def _drain_pending_action_log(self) -> list[str]:
+    def _drain_pending_action_log(self) -> list[LogEntry]:
         pending = list(self._pending_action_log)
         self._pending_action_log = []
         return pending
 
-    def _drain_surface_metadata(self) -> dict[str, Any]:
-        """Drain compatibility narration outside the canonical frame."""
+    def _drain_surface_metadata(self, projection: dict[str, Any]) -> dict[str, Any]:
+        """Drain compatibility narration and step boards outside the canonical frame.
+
+        `projection` is the frame these travel with; step boards are patches
+        back from it (`step_boards.wire_boards`).
+        """
         payload: dict[str, Any] = {}
         log = self._drain_pending_action_log()
         auto_passed = self._auto_passed_since_surface
         self._auto_passed_since_surface = 0
+        boards = wire_boards(self._step_boards, projection)
+        self._step_boards = []
         if log:
             payload["log"] = log
         if auto_passed:
             payload["auto_passed"] = auto_passed
+        if boards:
+            payload["boards"] = boards
         return payload
 
     def _advance_protocol_revision(self) -> None:
@@ -1987,6 +2061,8 @@ class GameSession:
 
         live_events = viewer_events[self.human_seat]
         self.presentation_events.extend(live_events)
+        if live_events:
+            self._keep_step_board(live_events)
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
                 -MAX_PRESENTATION_EVENTS:
@@ -1998,6 +2074,26 @@ class GameSession:
                 presentation=deepcopy(live_events),
             )
         return authority_events
+
+    def _keep_step_board(self, events: list[dict[str, Any]]) -> None:
+        """Keep the person's board after a step that added `events` to their track.
+
+        Live play only: Watch and Replay have their own transport.
+        """
+        if self.watch_mode or self.env is None:
+            return
+        # Validated as the frame's projection is, so it patches cleanly against it.
+        board = LegacyHeroObservation.model_validate(
+            decision_surface_view(self.env, self.human_seat)
+        ).model_dump(mode="json")
+        self._step_boards.append(
+            StepBoard(
+                first=int(events[0]["seq"]),
+                last=int(events[-1]["seq"]),
+                projection=board,
+            )
+        )
+        del self._step_boards[:-MAX_STEP_BOARDS]
 
     def _publish_current_prompt(self) -> PublishedPrompt | None:
         if self.obs is None or self.obs.game_over:
@@ -2269,7 +2365,7 @@ class GameSession:
         )
         frame = recovery["frame"]
         prompt = self.published_prompt
-        transient = self._drain_surface_metadata()
+        transient = self._drain_surface_metadata(frame["projection"])
         payload: dict[str, Any] = {
             "type": "game_over" if frame["projection"]["game_over"] else "observation",
             "data": frame["projection"],
@@ -2309,7 +2405,15 @@ class GameSession:
             payload["recovery"] = self.current_recovery("stale_command")
         return payload
 
-    def _persist_attempt(self, *, end_reason: str | None = None) -> None:
+    def _persist_attempt(
+        self, *, end_reason: str | None = None, config_changed: bool = False
+    ) -> None:
+        """Save the attempt once per committed change.
+
+        A live save is skipped when the revision and event count match the
+        last write; a caller that edits `trace.config` without stepping passes
+        `config_changed` so that edit still reaches the store.
+        """
         if self._preparing_demo and end_reason is None:
             return
         if self.trace is None or self.obs is None or self.env is None:
@@ -2319,6 +2423,9 @@ class GameSession:
             return
         if end_reason == "game_over" and not self.obs.game_over:
             raise ValueError("Only an authoritative terminal game can be completed.")
+        written = (self.match_id, self.revision, len(self.trace.events))
+        if not finished and not config_changed and written == self._persisted:
+            return
 
         canonical = self._canonical_replay_snapshot()
         study_provider = (
@@ -2329,7 +2436,8 @@ class GameSession:
             final_observation=decision_surface_view(self.env, self.human_seat),
             winner=self.env.winner_index() if self.obs.game_over else None,
             end_reason=end_reason if finished else self.trace.end_reason,
-            canonical_replay=canonical.model_dump(mode="json"),
+            # Only a finished trace is kept; a live save encodes the replay incrementally.
+            canonical_replay=canonical.model_dump(mode="json") if finished else None,
         )
         if finished:
             self.trace = retained
@@ -2343,6 +2451,9 @@ class GameSession:
                 "experience_source_sha256": PLAY_SOURCE_SHA256,
             },
             retained.to_record(),
+            trace_json=retained.to_json(
+                self._encoded_events, self._canonical_replay_json(canonical)
+            ),
             finished=finished,
             players=self.record_players,
             session_start=self._session_start,
@@ -2355,6 +2466,7 @@ class GameSession:
             ),
         )
         self._session_start = None
+        self._persisted = written
         if finished:
             self._study_provider = study_provider
             self._trace_saved = True
@@ -2388,6 +2500,46 @@ class GameSession:
                 )
                 for viewer, events in sorted(self.canonical_presentation.items())
             ],
+        )
+
+    def _canonical_replay_json(self, canonical: CanonicalReplayV1) -> str:
+        """`json.dumps(canonical.model_dump(mode="json"))`, encoding only new rows.
+
+        Decisions and presentation events are append-only, so each is encoded
+        once. Decision rows are the snapshot's own objects; a track's events
+        are validated from `canonical_presentation`'s dicts, so they are
+        encoded from those dicts through the same model.
+        """
+        head = canonical.model_dump(
+            mode="json", exclude={"decisions", "presentation_tracks"}
+        )
+        tracks = [
+            splice(
+                {"viewer": viewer, "head": len(events)},
+                {
+                    "events": encode_list(
+                        events,
+                        self._encoded_presentation.setdefault(viewer, []),
+                        lambda event: json.dumps(
+                            PresentationEvent.model_validate(event).model_dump(
+                                mode="json"
+                            )
+                        ),
+                    )
+                },
+            )
+            for viewer, events in sorted(self.canonical_presentation.items())
+        ]
+        return splice(
+            head,
+            {
+                "decisions": encode_list(
+                    canonical.decisions,
+                    self._encoded_decisions,
+                    lambda row: json.dumps(row.model_dump(mode="json")),
+                ),
+                "presentation_tracks": "[" + ", ".join(tracks) + "]",
+            },
         )
 
     def study_fork_provider(self) -> StudyForkProvider:
@@ -2616,7 +2768,11 @@ class GameSession:
         except (managym.AgentError, StudyBranchUnavailableError) as exc:
             raise StudyCommandUnavailableError("study_command_rejected") from exc
         event_subjects.update(branch.presentation_subjects())
-        projector.observe(observation, event_subjects=event_subjects)
+        projector.observe(
+            observation,
+            event_subjects=event_subjects,
+            definition_names=branch.definition_names(),
+        )
         presentation = projector.drain(
             from_revision=restored.revision,
             to_revision=restored.revision + 1,
@@ -2871,14 +3027,20 @@ def _live_decision_summaries(record: SessionRecord) -> list[dict[str, Any]]:
 
 
 def _table_opponent_label(record: SessionRecord) -> str | None:
+    """The opponent's name and how it decides: "Search 64 · search",
+    "Heuristic · scripted", "<checkpoint> · checkpoint w17"."""
     trace = record.game.trace
     if trace is None:
         return None
     config = trace.config
     if config.villain_type == "search":
-        return f"Search {config.villain_sims}"
+        return f"Search {config.villain_sims} · search"
     if config.opponent is not None:
-        return f"{config.opponent['name']} · {config.opponent['sha256'][:10]}"
+        policy = (config.opponent_checkpoint or {}).get("policy")
+        kind = opponent_kind(policy) if isinstance(policy, dict) else None
+        return " · ".join(filter(None, (config.opponent["name"], kind)))
+    if config.villain_type == "passive":
+        return "Passive · scripted"
     return config.villain_type.capitalize()
 
 
@@ -3601,6 +3763,12 @@ def _art_response(path: Path | None) -> Response:
     )
 
 
+@app.get("/api/card-faces")
+def get_card_faces(names: list[str] = Query(default=[])) -> dict[str, CardFace]:
+    """Printed cost, type line and keywords for names the viewer already sees."""
+    return card_faces(names[:1024])
+
+
 @app.get("/api/card-art/back.jpg")
 def card_back() -> Response:
     return _art_response(card_art().back())
@@ -4021,6 +4189,14 @@ def get_recording_index(
         for player in players:
             if player["seat"] == 1 - payload["config"].get("human_seat", 0):
                 player["deck"] = "closed"
+    for player in players:
+        deck = player.get("deck")
+        if isinstance(deck, str):
+            player["deck_name"] = (
+                CLOSED_DECK_NAME
+                if deck == "closed"
+                else DECK_DISPLAY_NAMES.get(deck, deck)
+            )
     return {
         "id": trace_id,
         "positions": [
@@ -4453,6 +4629,83 @@ async def get_payment_preview(
             raise HTTPException(409, "payment_preview_stale") from exc
         return {
             **payload.model_dump(),
+            "viewer": context.viewer,
+            "preview": preview.model_dump(mode="json"),
+        }
+
+
+class CombatPreviewRequest(BaseModel):
+    """A drafted declaration at the current combat prompt's authority address."""
+
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    revision: int
+    prompt_id: int
+    frame_hash: str
+    plan: CombatPlan
+
+
+@app.post("/api/sessions/{session_id}/combat-preview")
+async def get_combat_preview(
+    session_id: str,
+    payload: CombatPreviewRequest,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Preview a whole attack or block without committing any of it.
+
+    Each step names the Academy offer to send at the decision it predicts:
+    Academy offer ids enumerate the native actions in order
+    (`_build_decision_context`), so a step's native action index is its offer.
+    """
+    record = SESSION_REGISTRY.get(session_id)
+    if record is None:
+        raise HTTPException(404, "session_not_found")
+    async with record.lock:
+        participant = _rest_participant(record, x_etude_participant_token)
+        if (
+            TableCapability.SUBMIT_LIVE_COMMAND
+            not in ROLE_CAPABILITIES[participant.role]
+        ):
+            raise HTTPException(403, "combat_preview_forbidden")
+        game = record.game
+        context = game.published_prompt
+        pending = game._pending_decision
+        if context is None or pending is None or game.env is None:
+            raise HTTPException(409, "combat_preview_stale")
+        frame = pending.frame
+        if context.viewer != game.human_seat:
+            raise HTTPException(403, "combat_preview_forbidden")
+        if (
+            game.match_id != payload.match_id
+            or frame.revision != payload.revision
+            or frame.prompt is None
+            or frame.prompt.id != payload.prompt_id
+            or frame.frame_hash != payload.frame_hash
+            or frame.frame_hash != context.frame["frame_hash"]
+        ):
+            raise HTTPException(409, "combat_preview_stale")
+        if context.action_space not in {"DECLARE_ATTACKER", "DECLARE_BLOCKER"}:
+            raise HTTPException(409, "combat_preview_not_a_declaration")
+        native = SemanticDecisionFrame.from_json(
+            pending.root.semantic_decision_frame_json()
+        )
+        try:
+            preview = preview_combat(
+                game.env,
+                viewer=context.viewer,
+                revision=native.revision,
+                fingerprint=native.fingerprint,
+                plan=payload.plan,
+            )
+        except managym.AgentError as exc:
+            raise HTTPException(409, "combat_preview_stale") from exc
+        if preview.steps and (
+            context.action_by_offer.get(preview.steps[0].action_index)
+            != preview.steps[0].action_index
+        ):
+            raise RuntimeError("Academy combat offers no longer enumerate actions.")
+        return {
+            **payload.model_dump(mode="json"),
             "viewer": context.viewer,
             "preview": preview.model_dump(mode="json"),
         }

@@ -112,6 +112,7 @@ test('shared history identifies both players and preserves private prefixes and 
     await page.getByRole('button', { name: 'Save name', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved for your next game.' })).toBeVisible();
     await page.getByRole('link', { name: 'Play a game', exact: true }).click();
+    await page.getByTestId('home-setup').click();
     await page.getByTestId('opponent-select').selectOption('passive');
     await selectDeck(page, 'hero', 'gw_allies');
     await selectDeck(page, 'villain', 'ur_lessons');
@@ -120,7 +121,7 @@ test('shared history identifies both players and preserves private prefixes and 
   }
   try {
     await start(alice, aliceName);
-    const over = alice.getByText('Game Over', { exact: true });
+    const over = alice.getByTestId('result-card');
     const actions = alice.getByTestId('action-option');
     for (let step = 0; step < 600 && !(await over.isVisible()); step++) {
       await expect(actions.first().or(over)).toBeVisible();
@@ -136,6 +137,7 @@ test('shared history identifies both players and preserves private prefixes and 
       await expect.poll(async () => Number(await alice.locator('main').getAttribute('data-update-seq'))).toBeGreaterThan(before);
     }
     await expect(over).toBeVisible();
+    await alice.getByTestId('game-menu').click();
     await alice.getByRole('textbox', { name: /How did this game feel/ }).fill('Automated history check: private note, not human feedback.');
     await alice.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect(alice.getByRole('status').filter({ hasText: 'Feedback saved.' })).toBeVisible();
@@ -159,10 +161,10 @@ test('shared history identifies both players and preserves private prefixes and 
     // Trivial opening windows are skipped natively; the first frame is a real decision.
     await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByRole('textbox', { name: /How did this game feel/ })).toHaveCount(0);
-    await visitor.getByTestId('study-decision').first().click();
+    await visitor.getByTestId('game-log').locator('button[data-move]').first().click();
     await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await visitor.getByRole('link', { name: 'Back to games' }).focus();
+    await visitor.getByTestId('game').getByRole('link', { name: 'Games', exact: true }).focus();
     await visitor.keyboard.press('Enter');
     expect(failures).toEqual([]);
     await expect(visitor).toHaveURL(filtered);

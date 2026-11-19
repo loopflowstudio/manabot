@@ -48,15 +48,15 @@ async function choose(page: Page, label: string): Promise<void> {
 for (const first of ['Callous Inspector', 'Bastion of Remembrance']) {
   test(`controller chooses ${first} first and recovers the actual order decision`, async ({ page }) => {
     await track(page);
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
-    await expect(page.getByTestId('decision-surface')).toBeVisible();
+    await expect(page.getByTestId('game')).toBeVisible();
     // Callous Inspector is the only permanent Deadly Dispute can sacrifice, so
     // native skipping commits it and the cast arrives at the order decision.
     await choose(page, 'Cast Deadly Dispute');
     await expect.poll(() => page.evaluate(() => window.__triggerFrame?.action_space)).toBe('ORDER_TRIGGERS');
-    await expect(page.getByTestId('decision-context')).toContainText('Later placements resolve first');
+    await expect(page.getByTestId('action-panel')).toContainText('Later placements resolve first');
     const orderButtons = page.getByTestId('action-option');
     await expect(orderButtons.filter({ hasText: 'Callous Inspector' })).toContainText('Deal 1 damage to you. Create 1 Clue token');
     await expect(orderButtons.filter({ hasText: 'Callous Inspector' })).not.toContainText('Menace');

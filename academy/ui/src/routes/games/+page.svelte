@@ -153,7 +153,7 @@
 <main class="mx-auto max-w-[1400px] px-4 py-8">
   <header class="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
     <div>
-      <p class="type-rubric text-ink-2">The game archive</p>
+      <p class="type-label text-ink-2">The game archive</p>
       <h1 class="type-title text-4xl text-display">Games</h1>
       <p class="mt-2 text-ink-2">Every matchup has a story. Find a player, follow a bot, revisit a game.</p>
     </div>
