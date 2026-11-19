@@ -117,6 +117,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "library end",
     "library order",
     "life change",
+    "life paid",
     "linked exile",
     "linked return",
     "linked source",
@@ -513,11 +514,16 @@ impl<'a> Projection<'a> {
     /// What a payment took. Its mana is the amounts actually spent to cast
     /// (CR 601.2h) and the entry counters its spend effects add, the two mana
     /// facts a rule reads; which object produced each unit is in the text
-    /// only and adds no policy tokens. Each object that paid otherwise is a
-    /// reference, with what was done to it and the part of the cost it paid.
+    /// only and adds no policy tokens. Life paid is an amount. Each object
+    /// that paid otherwise is a reference, with what was done to it and the
+    /// part of the cost it paid.
     fn receipt(&mut self, spent: &PaymentReceipt) {
         if !spent.mana().is_empty() {
             self.mana_spent(spent);
+        }
+        if spent.life() > 0 {
+            self.field("life paid", &spent.life());
+            self.summary(|| format!("Life paid: {}.", spent.life()));
         }
         if spent.contributions().is_empty() {
             return;
@@ -924,7 +930,10 @@ pub(crate) fn receipt_matters(spent: &PaymentReceipt, definition: Option<CardDef
     if spent.is_empty() {
         return false;
     }
-    if spent.mana().iter().any(|unit| unit.effect.is_some()) || !spent.contributions().is_empty() {
+    if spent.mana().iter().any(|unit| unit.effect.is_some())
+        || !spent.contributions().is_empty()
+        || spent.life() > 0
+    {
         return true;
     }
     let reads = READS.get_or_init(|| {

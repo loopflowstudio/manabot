@@ -45,7 +45,9 @@ use managym::{
         effect::{CopyEffect, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
+        payment::{Contribution, How, Toward},
         permanent::CounterKind,
+        stack_object::StackObject,
         zone::ZoneType,
     },
     Game,
@@ -1111,7 +1113,18 @@ fn landcyclers_discard_for_two_and_find_their_basic_type() {
         activate_card(&mut s, object, index);
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard), "{name}");
-        assert_eq!(s.game().state.stack_objects.len(), 1);
+        // The receipt names the card as it was in hand when discarded.
+        let [StackObject::ActivatedAbility(cycling)] = s.game().state.stack_objects.as_slice()
+        else {
+            panic!("{name}: one cycling ability")
+        };
+        assert_eq!(
+            cycling
+                .paid
+                .contributed(How::Discarded, Toward::Printed)
+                .collect::<Vec<_>>(),
+            [object]
+        );
 
         let library = s.zone_size(0, ZoneType::Library);
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -13414,6 +13427,12 @@ fn redirect_lightning_moves_a_spell_to_another_target() {
         assert!(s.choose_target(Target::StackSpell(now(&s, strike))));
         assert_eq!(s.life(0), if pay_mana { life } else { life - 5 });
         spend_colorless(&mut s);
+        // The life is part of what was paid, beside the mana.
+        let Some(StackObject::Spell(redirect)) = s.game().state.stack_objects.last() else {
+            panic!("Redirect Lightning is on the stack")
+        };
+        assert_eq!(redirect.spent.life(), if pay_mana { 0 } else { 5 });
+        assert_eq!(redirect.spent.total(), if pay_mana { 3 } else { 1 });
         resolve_top(&mut s);
         assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
         assert!(
@@ -14681,6 +14700,59 @@ fn avatar_aang_draws_on_each_bending_and_transforms_after_all_four() {
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 4);
     assert_eq!(counters_of(&s, aang, CounterKind::PlusOnePlusOne), 4);
     s.assert_life(1, 16);
+}
+
+/// A source's own costs are part of the one receipt (CR 602.2b, 601.2h):
+/// Airship Engine Room's "{4}, {T}, Sacrifice this land" names the land as
+/// tapped and as sacrificed, read by what it was once it has left, and Koh's
+/// "Pay 1 life" is the life the activation paid.
+#[test]
+fn a_sources_own_tap_sacrifice_and_life_are_on_its_activation_receipt() {
+    let mut s = five_color_setup(&["Airship Engine Room", "Koh, the Face Stealer"]);
+    let room = s.force_permanent_on_battlefield(0, "Airship Engine Room");
+    let room_object = card_of(&s, room);
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, room, 0);
+    let Some(StackObject::ActivatedAbility(ability)) = s.game().state.stack_objects.last() else {
+        panic!("the draw ability is on the stack")
+    };
+    assert_eq!(
+        ability.paid.contributions(),
+        [How::Tapped, How::Sacrificed].map(|how| Contribution {
+            object: room_object,
+            how,
+            toward: Toward::Printed,
+        })
+    );
+    assert_eq!((ability.paid.total(), ability.paid.life()), (4, 0));
+    assert!(s.game().state.permanents[room].is_none());
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert!(
+        context
+            .pending
+            .iter()
+            .any(|line| line
+                == "Paid with: tapped Airship Engine Room; sacrificed Airship Engine Room."),
+        "{:?}",
+        context.pending
+    );
+    settle(&mut s);
+
+    let koh = s.force_permanent_on_battlefield(0, "Koh, the Face Stealer");
+    let life = s.life(0);
+    activate(&mut s, koh, 0);
+    let Some(StackObject::ActivatedAbility(ability)) = s.game().state.stack_objects.last() else {
+        panic!("Koh's ability is on the stack")
+    };
+    assert_eq!(ability.paid.life(), 1);
+    assert!(ability.paid.contributions().is_empty());
+    assert_eq!(s.life(0), life - 1);
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert!(
+        context.pending.iter().any(|line| line == "Life paid: 1."),
+        "{:?}",
+        context.pending
+    );
 }
 
 /// Koh exiles a creature as it enters and may exile each other nontoken

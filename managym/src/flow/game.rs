@@ -279,9 +279,10 @@ pub enum Operation {
     },
 }
 
-/// One part of a total cost that the payer chooses how to pay. A source's own
-/// {T}, sacrifice, discard and life costs have no choice and are paid as the
-/// payment completes.
+/// One part of a total cost. The payer chooses how to pay each component up
+/// to and including `Mana`; the ones after it (life and the source's own {T},
+/// sacrifice and discard) have no choice and are paid as the payment
+/// completes.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum CostComponent {
     /// Tap other untapped creatures until their total power reaches `power`
@@ -312,6 +313,15 @@ pub enum CostComponent {
         creature: ObjectId,
         colors: Vec<Color>,
     },
+    /// "Pay N life" (CR 119.4): an ability's life cost, or a spell's life
+    /// paid rather than its other cost.
+    Life(u32),
+    /// The source's own {T}.
+    TapSource,
+    /// "Sacrifice this".
+    SacrificeSource,
+    /// "Discard this card", of an ability that functions from hand.
+    DiscardSource,
 }
 
 /// The ways a payer may pay part of a mana cost with something other than
@@ -367,7 +377,8 @@ impl Help {
 /// operation, the cost components still owed in the order they are paid, and
 /// the receipt of what has been paid so far. The total cost is fixed when
 /// `Game::cost_components` builds `owed`; payment reads `owed`, never the
-/// definition again. `Mana` is always last, and stays until the mana is spent.
+/// definition again. There is exactly one `Mana` component: it stays until
+/// the mana is spent, and what follows it is paid as the payment completes.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Payment {
     pub operation: Operation,
@@ -378,10 +389,35 @@ pub struct Payment {
 
 impl Payment {
     fn mana_component(&self) -> (&ManaCost, Help) {
-        let Some(CostComponent::Mana { cost, help }) = self.owed.last() else {
-            unreachable!("a payment ends with its mana component")
-        };
-        (cost, *help)
+        self.owed
+            .iter()
+            .find_map(|component| match component {
+                CostComponent::Mana { cost, help } => Some((cost, *help)),
+                _ => None,
+            })
+            .expect("a payment has its mana component")
+    }
+
+    /// Whether every choice before the mana is made: the step is the mana.
+    pub fn paying_mana(&self) -> bool {
+        matches!(self.owed[0], CostComponent::Mana { .. })
+    }
+
+    /// The life this payment takes as it completes.
+    pub fn life(&self) -> u32 {
+        self.owed
+            .iter()
+            .map(|component| match component {
+                CostComponent::Life(life) => *life,
+                _ => 0,
+            })
+            .sum()
+    }
+
+    /// Whether completing this payment taps (`TapSource`) or sacrifices
+    /// (`SacrificeSource`) its source.
+    pub fn owes(&self, source_cost: &CostComponent) -> bool {
+        self.owed.contains(source_cost)
     }
 
     /// The mana still owed and the generic part of it that waterbend taps
@@ -409,10 +445,13 @@ impl Payment {
     }
 
     fn mana_mut(&mut self) -> &mut ManaCost {
-        let Some(CostComponent::Mana { cost, .. }) = self.owed.last_mut() else {
-            unreachable!("a payment ends with its mana component")
-        };
-        cost
+        self.owed
+            .iter_mut()
+            .find_map(|component| match component {
+                CostComponent::Mana { cost, .. } => Some(cost),
+                _ => None,
+            })
+            .expect("a payment has its mana component")
     }
 
     /// Owe `extra` mana as well (a sacrifice cost's "or pay" branch).

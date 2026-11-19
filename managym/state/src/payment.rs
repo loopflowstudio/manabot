@@ -91,15 +91,19 @@ struct Paid {
     mana: Vec<SpentMana>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     contributions: Vec<Contribution>,
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    life: u32,
 }
 
 static NOTHING: Paid = Paid {
     mana: Vec::new(),
     contributions: Vec::new(),
+    life: 0,
 };
 
-/// What one payment spent: one entry per unit of mana in spend order, and the
-/// objects that paid otherwise in the order they were chosen. A cast spell
+/// What one payment spent: one entry per unit of mana in spend order, the
+/// objects that paid otherwise in the order they were chosen, and the life
+/// paid. A cast spell
 /// keeps it for "mana spent to cast", converge and spend riders; it never
 /// reads the printed cost. Contributions are a separate list, so mana spent
 /// never counts a tapped or sacrificed object.
@@ -114,7 +118,7 @@ impl PaymentReceipt {
         self.0.as_deref().unwrap_or(&NOTHING)
     }
 
-    /// Nothing was paid: no mana and no contributing object.
+    /// Nothing was paid: no mana, no contributing object and no life.
     pub fn is_empty(&self) -> bool {
         self.0.is_none()
     }
@@ -164,6 +168,18 @@ impl PaymentReceipt {
                 how,
                 toward,
             });
+    }
+
+    /// The life paid as part of the cost (CR 119.4).
+    pub fn life(&self) -> u32 {
+        self.paid().life
+    }
+
+    /// Record `life` paid as part of the cost.
+    pub fn pay_life(&mut self, life: u32) {
+        if life > 0 {
+            Arc::make_mut(self.0.get_or_insert_with(Default::default)).life += life;
+        }
     }
 
     /// "The amount of mana spent to cast" it.

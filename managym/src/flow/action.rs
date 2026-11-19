@@ -251,7 +251,11 @@ impl Game {
                     }
                     CostComponent::Discard
                     | CostComponent::Mana { .. }
-                    | CostComponent::ConvokeColor { .. } => None,
+                    | CostComponent::ConvokeColor { .. }
+                    | CostComponent::Life(_)
+                    | CostComponent::TapSource
+                    | CostComponent::SacrificeSource
+                    | CostComponent::DiscardSource => None,
                 });
                 if paying.is_some() {
                     paying
@@ -950,6 +954,12 @@ impl Game {
                     .collect(),
                 source_focus(),
             ),
+            CostComponent::Life(_)
+            | CostComponent::TapSource
+            | CostComponent::SacrificeSource
+            | CostComponent::DiscardSource => {
+                unreachable!("paid as the payment completes, after its mana")
+            }
         };
         ActionSpace {
             player: Some(player),

@@ -223,11 +223,11 @@ impl Game {
             }
             Action::PayCost { .. } | Action::TapForMana { .. } => match &self.pending_choice {
                 Some(PendingChoice::Pay { payment, .. })
-                    if payment.owed.len() == 1 && payment.help().keyworded() =>
+                    if payment.paying_mana() && payment.help().keyworded() =>
                 {
                     return Ok(PaymentPreview::needs_additional_cost());
                 }
-                Some(PendingChoice::Pay { payment, .. }) if payment.owed.len() == 1 => {
+                Some(PendingChoice::Pay { payment, .. }) if payment.paying_mana() => {
                     sources
                         .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
                     if payment.waterbends() {

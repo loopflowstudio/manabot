@@ -865,7 +865,7 @@ impl Game {
     ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
         let Some((player, payment, _)) = self
             .paying()
-            .filter(|(_, payment, _)| payment.owed.len() == 1 && payment.waterbends())
+            .filter(|(_, payment, _)| payment.paying_mana() && payment.waterbends())
         else {
             return Err(StructuredOfferError::WrongDecision);
         };

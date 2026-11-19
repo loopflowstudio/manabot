@@ -1074,9 +1074,6 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        if let (false, Some(life)) = (cast.kicked, self.state[object].life_alternative()) {
-            self.change_life(player, -(life as i32));
-        }
         // Recorded before the move, so its invalidation precedes the move's
         // board reads; the move then names the stack appearance.
         self.state.turn.spells_cast[player.0].push(object);
@@ -1791,6 +1788,9 @@ impl Game {
                     .unwrap_or_default();
                 let help = self.spell_help(player, *object, *cast, &cost);
                 owed.push(CostComponent::Mana { cost, help });
+                if let (false, Some(life)) = (cast.kicked, self.state[*object].life_alternative()) {
+                    owed.push(CostComponent::Life(life));
+                }
             }
             Operation::Activation {
                 source,
@@ -1819,6 +1819,18 @@ impl Game {
                     ..Default::default()
                 };
                 owed.push(CostComponent::Mana { cost, help });
+                if ability.life_cost > 0 {
+                    owed.push(CostComponent::Life(ability.life_cost));
+                }
+                if ability.tap_source {
+                    owed.push(CostComponent::TapSource);
+                }
+                if ability.sacrifice_source {
+                    owed.push(CostComponent::SacrificeSource);
+                }
+                if ability.discard_source {
+                    owed.push(CostComponent::DiscardSource);
+                }
             }
         }
         owed
@@ -1851,7 +1863,7 @@ impl Game {
     /// or mana-ability choice remains, pay it and finish.
     fn advance_payment(&mut self, player: PlayerId, payment: Payment) -> Result<(), AgentError> {
         // A waterbend cost always offers its taps beside paying with mana.
-        let chooses = payment.owed.len() > 1 || payment.waterbends();
+        let chooses = !payment.paying_mana() || payment.waterbends();
         self.pending_choice = Some(PendingChoice::Pay {
             player,
             payment: Box::new(payment),
@@ -2082,6 +2094,12 @@ impl Game {
             CostComponent::ConvokeColor { .. } => {
                 return Err(AgentError("choose the color this creature pays".into()));
             }
+            CostComponent::Life(_)
+            | CostComponent::TapSource
+            | CostComponent::SacrificeSource
+            | CostComponent::DiscardSource => {
+                unreachable!("paid as the payment completes, after its mana")
+            }
         }
         self.advance_payment(player, payment)
     }
@@ -2107,7 +2125,7 @@ impl Game {
     /// activate the ability.
     pub(crate) fn finish_mana_payment(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let payment = self.pending_payment(player)?;
-        if payment.owed.len() > 1 {
+        if !payment.paying_mana() {
             return Err(AgentError("no mana payment pending".into()));
         }
         let cost = payment.mana().0.clone();
@@ -2123,50 +2141,81 @@ impl Game {
         )
     }
 
-    /// The whole announced cost is paid: sacrifice what was chosen for it,
-    /// pay the source's own costs, then cast the spell or put the ability on
-    /// the stack with the receipt.
+    /// The whole announced cost is paid: pay what `owed` holds after the
+    /// mana (life and the source's own costs), sacrifice what was chosen or
+    /// is owed, then cast the spell or put the ability on the stack with the
+    /// receipt. The ability is captured before its source taps or leaves.
     pub(crate) fn complete_announced_payment(
         &mut self,
         player: PlayerId,
-        payment: Payment,
+        mut payment: Payment,
     ) -> Result<(), AgentError> {
-        let mut events: Vec<_> = payment
-            .receipt
-            .sacrificed()
-            .filter(|object| self.state.permanent_of(*object).is_some())
-            .map(|target| ProposedEvent::Sacrifice { target })
-            .collect();
         if payment.waterbends() {
             self.record_bending(player, crate::flow::turn::Bending::Water);
         }
-        let completion = match payment.operation {
-            Operation::Spell { .. } => FrameCompletion::Paid { player, payment },
+        let life = payment.life();
+        self.change_life(player, -(life as i32));
+        payment.receipt.pay_life(life);
+        let mut discard = None;
+        let activated = match &payment.operation {
+            Operation::Spell { .. } => None,
             Operation::Activation {
                 source,
                 ability_index,
                 targets,
                 x,
             } => {
-                let life = self
-                    .activation_ability(source, ability_index)
-                    .ok_or_else(|| AgentError("missing activation source".into()))?
-                    .life_cost;
-                self.change_life(player, -(life as i32));
-                let (mut ability, cost) = match source {
+                let ability = match *source {
                     ActivationSource::Permanent(permanent) => self.prepare_activated_ability(
                         player,
                         permanent,
-                        ability_index,
-                        targets,
-                        x,
+                        *ability_index,
+                        targets.clone(),
+                        *x,
+                        payment.owes(&CostComponent::TapSource),
                     )?,
-                    ActivationSource::Card(card) => {
-                        self.prepare_card_activated_ability(player, card, ability_index, targets)?
-                    }
+                    ActivationSource::Card(card) => self.prepare_card_activated_ability(
+                        player,
+                        card,
+                        *ability_index,
+                        targets.clone(),
+                    )?,
                 };
+                let source_object = ability.source_object;
+                if payment.owes(&CostComponent::TapSource) {
+                    payment
+                        .receipt
+                        .contribute(source_object, How::Tapped, Toward::Printed);
+                }
+                if payment.owes(&CostComponent::SacrificeSource) {
+                    payment
+                        .receipt
+                        .contribute(source_object, How::Sacrificed, Toward::Printed);
+                }
+                if payment.owes(&CostComponent::DiscardSource) {
+                    payment
+                        .receipt
+                        .contribute(source_object, How::Discarded, Toward::Printed);
+                    discard = Some(self.zone_move_proposal(
+                        source_object,
+                        ZoneType::Graveyard,
+                        Default::default(),
+                    ));
+                }
+                Some((ability, *source))
+            }
+        };
+        let events: Vec<_> = payment
+            .receipt
+            .sacrificed()
+            .filter(|object| self.state.permanent_of(*object).is_some())
+            .map(|target| ProposedEvent::Sacrifice { target })
+            .chain(discard)
+            .collect();
+        let completion = match activated {
+            None => FrameCompletion::Paid { player, payment },
+            Some((mut ability, source)) => {
                 ability.paid = payment.receipt;
-                events.extend(cost);
                 FrameCompletion::Activated {
                     ability,
                     source_after_cost: match source {
@@ -2308,10 +2357,10 @@ impl Game {
         tapped: PermanentId,
     ) -> Result<(), AgentError> {
         let mut payment = self.pending_payment(player)?;
-        if payment.owed.len() == 1 && payment.help().taps_any_generic() {
+        if payment.paying_mana() && payment.help().taps_any_generic() {
             return self.help_tap_action(player, tapped, payment);
         }
-        if payment.owed.len() > 1 || !payment.waterbends() {
+        if !payment.paying_mana() || !payment.waterbends() {
             return Err(AgentError("no waterbend payment is pending".to_string()));
         }
         if payment.mana().1 == 0 {
@@ -2472,8 +2521,9 @@ impl Game {
         self.advance_payment(player, payment)
     }
 
-    /// Capture the ability before its source can leave, commit its tap cost,
-    /// and propose its sacrifice cost. Frame completion puts it on the stack.
+    /// Capture the ability before its source can leave, and tap the source
+    /// when its payment owes that (`tap`). Frame completion puts it on the
+    /// stack.
     fn prepare_activated_ability(
         &mut self,
         player: PlayerId,
@@ -2481,7 +2531,8 @@ impl Game {
         ability_index: usize,
         targets: Vec<Target>,
         x: u8,
-    ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
+        tap: bool,
+    ) -> Result<ActivatedAbilityOnStack, AgentError> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
         };
@@ -2509,88 +2560,70 @@ impl Game {
             ability.granted_by,
             &ability.effects,
         );
-        if ability.tap_source {
+        if tap {
             if !self.permanent_can_tap(permanent_id) {
                 return Err(AgentError("source cannot pay tap cost".into()));
             }
             self.tap_permanent(permanent_id, false);
         }
         self.record_activation(permanent_id, ability_index, &ability);
-        let cost = ability
-            .sacrifice_source
-            .then_some(ProposedEvent::Sacrifice {
-                target: source_object,
-            });
 
         let id = self.state.id_gen_mut().next_id();
-        Ok((
-            ActivatedAbilityOnStack {
-                target_req_indices: ability.target_clause_indices(targets.len()),
-                effects: ability.effects,
-                program,
-                source_transforms,
-                inherited_from,
-                id,
-                controller: player,
-                source_definition_id,
-                source_object,
-                ability_index,
-                targets,
-                attached,
-                x,
-                granted_by: ability.granted_by,
-                paid: PaymentReceipt::default(),
-            },
-            cost,
-        ))
+        Ok(ActivatedAbilityOnStack {
+            target_req_indices: ability.target_clause_indices(targets.len()),
+            effects: ability.effects,
+            program,
+            source_transforms,
+            inherited_from,
+            id,
+            controller: player,
+            source_definition_id,
+            source_object,
+            ability_index,
+            targets,
+            attached,
+            x,
+            granted_by: ability.granted_by,
+            paid: PaymentReceipt::default(),
+        })
     }
 
-    /// Capture an off-battlefield ability and propose its discard cost.
-    /// Frame completion binds the post-cost source identity (CR 602.2b, 113.7a)
-    /// before putting the ability on the stack.
+    /// Capture an off-battlefield ability. Frame completion binds the
+    /// post-cost source identity (CR 602.2b, 113.7a) before putting the
+    /// ability on the stack.
     fn prepare_card_activated_ability(
         &mut self,
         player: PlayerId,
         card: CardId,
         ability_index: usize,
         targets: Vec<Target>,
-    ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
+    ) -> Result<ActivatedAbilityOnStack, AgentError> {
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
             .ok_or_else(|| AgentError("activation source left its zone".into()))?;
-        let cost = ability.discard_source.then(|| {
-            self.zone_move_proposal(
-                self.state.object_of(card),
-                ZoneType::Graveyard,
-                Default::default(),
-            )
-        });
-        // The completion replaces this identity after the proposed cost commits.
+        // The completion replaces this identity after a discard cost commits.
         let source_object = self
             .state
             .live(self.state.object_of(card))
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let id = self.state.id_gen_mut().next_id();
-        Ok((
-            ActivatedAbilityOnStack {
-                target_req_indices: ability.target_clause_indices(targets.len()),
-                effects: ability.effects,
-                program: false,
-                source_transforms: 0,
-                inherited_from: None,
-                id,
-                controller: player,
-                source_definition_id: self.state[self.state.object_of(card)].definition_id,
-                source_object,
-                ability_index,
-                targets,
-                attached: None,
-                x: 0,
-                granted_by: None,
-                paid: PaymentReceipt::default(),
-            },
-            cost,
-        ))
+        Ok(ActivatedAbilityOnStack {
+            target_req_indices: ability.target_clause_indices(targets.len()),
+            effects: ability.effects,
+            program: false,
+            source_transforms: 0,
+            inherited_from: None,
+            id,
+            controller: player,
+            source_definition_id: self.state[self.state.object_of(card)].definition_id,
+            source_object,
+            ability_index,
+            targets,
+            attached: None,
+            x: 0,
+            granted_by: None,
+            paid: PaymentReceipt::default(),
+        })
     }
 
     /// Legal targets for one targeting requirement of `card`, cast by

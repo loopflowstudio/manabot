@@ -338,6 +338,8 @@ impl Game {
                     ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
                 CostComponent::ConvokeColor { .. } =>
                     ("payment", "Choose which color of mana the creature just tapped pays for (convoke)."),
+                CostComponent::Life(_) | CostComponent::TapSource | CostComponent::SacrificeSource | CostComponent::DiscardSource =>
+                    unreachable!("paid as the payment completes, after its mana"),
                 CostComponent::TapPower { .. } =>
                     ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             },

@@ -1542,6 +1542,23 @@ impl PaymentModel<'_> {
     }
 }
 
+/// A pending payment's hold on its own source, from what it still owes.
+fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
+    let Operation::Activation {
+        source: ActivationSource::Permanent(permanent),
+        ..
+    } = payment.operation
+    else {
+        return None;
+    };
+    let tap = payment.owes(&CostComponent::TapSource);
+    Some(SourceReservation {
+        permanent,
+        tap,
+        sacrifice: tap || payment.owes(&CostComponent::SacrificeSource),
+    })
+}
+
 impl Game {
     /// Mana abilities resolve at once (CR 605.3a), so an output that depends
     /// on the game is fixed when the ability is offered: a branch between two
@@ -1746,19 +1763,10 @@ impl Game {
     /// sacrificed as it completes. ManaUpfront's life fee instead lives on
     /// its Output obligation and must not be debited here.
     fn reserve_announced_payment(&self, payment: &Payment, model: &mut PaymentModel) {
-        if let Some(reservation) = self.payment_reservation(&payment.operation) {
+        if let Some(reservation) = owed_reservation(payment) {
             model.reserve(reservation);
         }
-        if let Operation::Activation {
-            source,
-            ability_index,
-            ..
-        } = &payment.operation
-        {
-            if let Some(ability) = self.activation_ability(*source, *ability_index) {
-                model.life = model.life.saturating_sub(ability.life_cost);
-            }
-        }
+        model.life = model.life.saturating_sub(payment.life());
         for object in payment.receipt.sacrificed() {
             if let Some(permanent) = self.state.permanent_of(object) {
                 model.reserve(SourceReservation {
@@ -1793,6 +1801,8 @@ impl Game {
         Some(model)
     }
 
+    /// The hold an activation only being considered at priority would place
+    /// on its own source; once announced, `owed_reservation` reads its cost.
     fn payment_reservation(&self, operation: &Operation) -> Option<SourceReservation> {
         match operation {
             Operation::Activation {
@@ -3682,8 +3692,8 @@ fn waterbend_obligations(cost: &ManaCost, waterbend: u8) -> Vec<Obligation> {
 #[cfg(test)]
 mod tests {
     use super::{
-        waterbend_obligations as waterbend, Help, ManaActivation, ManaSource, Obligation,
-        PaymentModel, PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy,
+        waterbend_obligations as waterbend, ManaActivation, ManaSource, Obligation, PaymentModel,
+        PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy,
     };
     use crate::cards::content_pack::ContentPack;
     use crate::state::{
@@ -3774,22 +3784,22 @@ mod tests {
             life_cost: 2,
             ..Default::default()
         }];
+        let operation = Operation::Activation {
+            source: ActivationSource::Permanent(source),
+            ability_index: 0,
+            targets: vec![],
+            x: 0,
+        };
         let payment = Payment {
-            operation: Operation::Activation {
-                source: ActivationSource::Permanent(source),
-                ability_index: 0,
-                targets: vec![],
-                x: 0,
-            },
-            owed: vec![CostComponent::Mana {
-                cost: ManaCost::parse("1"),
-                help: Help {
-                    waterbend: 1,
-                    ..Default::default()
-                },
-            }],
+            owed: game.cost_components(player, &operation),
+            operation,
             receipt: Default::default(),
         };
+        assert_eq!(payment.help().waterbend, 1);
+        assert_eq!(
+            payment.owed[1..],
+            [CostComponent::Life(2), CostComponent::TapSource]
+        );
         for life in [2, 4] {
             game.scenario_set_life(player, life);
             game.pending_choice = Some(PendingChoice::Pay {
