@@ -1,6 +1,6 @@
 # MTG-353 — checkpoint compatibility and the training corpus
 
-## Human review of 2026-11-18, fourth round — remove the world label (build this next)
+## Human review of 2026-11-18, fourth round — remove the world label (built; gate next)
 
 Jack Heart, on `WORLD_VERSION` staying as a fixed label: "Why do we still need
 it". On keeping a private literal where stored formats carry the field: "But
@@ -103,8 +103,27 @@ Three failures left for gate, none traced to the label:
 
 Not run: Academy UI check/build and Playwright, hosted CI.
 
-Next: gate (those three, the Academy UI job, hosted CI), publish to #558, stop
-at human review. Do not land.
+Realign at `dce50044ee` (pushed to #558; hosted CI just queued, nothing seen
+green or red): the code backs items 1-6. The only readers of the label left
+are the ones the plan names (the warning alias, the skipped keys in
+`current_binding_form` and `play_demo.py`, the optional unread
+`DecisionInput.world_version`); stored JSON keeps its label. `dce50044ee`
+merged main (`62c3338f0d`, the Academy interactive board) after the checks
+above; nothing was rerun on the merge and the extension was not rebuilt for it.
+
+Remaining, all gate's:
+
+1. Rebuild the extension at the merge and rerun the changed files' tests.
+2. The three failures above: run each at `62c3338f0d` (main) to show it is
+   already failing there, or fix it. Failure 1's test lost only its `world=`
+   argument in this change.
+3. Academy UI check/build and Playwright; hosted CI green on the head commit.
+4. Publish to #558 and stop at human review. Do not land.
+
+For the person at review, not decided: question 59. A registration written
+now has no `world`, so it differs from the one a retained tournament holds
+for the same player; whether Etude then replays a resumed tournament's
+matches is unchecked.
 
 ## Human review of 2026-11-18, third round — items 1 and 4 built, 5 next
 
@@ -143,9 +162,6 @@ policy is not registered); the evaluation card page still filters by
 `tests/eval/test_training_corpus.py`, `tests/training/test_outcome_tables.py`,
 `tests/training/test_self_play.py`, 17 passed. Hosted CI at that commit: 2
 passed, 17 pending, none failed when read.
-
-Next: item 5, the gate step: the red Academy UI job, then publish to #558 and
-stop at human review. Nothing else remains to implement.
 
 Jack Heart answered `scratch/concept-review.html` (the review written with a
 person; the graph's eighth review is in git at 309ed9febe): "1a 2a 3a 4 c:
@@ -189,7 +205,7 @@ The evaluation guide defines when measurements can be lined up.
   cover compatibility. Exact decks recorded in a binding still compare.
 - The evaluation participant records its writer revision and stored program
   count. Historical registrations retain their hashes. The world number
-  survives as a serialized historical label. The dedicated strength command
+  is gone from new files (fourth round, above); stored files keep theirs. The dedicated strength command
   is gone. The retained frontier evaluation used ordinary admission and both
   arms reproduced their cohorts. The original measurement covers 160 games.
 - The docs cover measurements within a revision and across revisions, early
