@@ -70,7 +70,9 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
   for (let i = 0; i < MAX_ACTIONS; i += 1) {
     await expect(actionButtons.first().or(gameOverOverlay)).toBeVisible({ timeout: 30_000 });
     await expect(gameOverOverlay).not.toBeVisible();
-    await expect(page.locator('[data-testid="action-option"]:enabled').first().or(gameOverOverlay)).toBeVisible();
+    // A choice held during the opponent's read-out is aria-disabled: an input
+    // then only ends the read-out and sends nothing, so wait for it to end.
+    await expect(page.locator('[data-testid="action-option"]:enabled:not([aria-disabled])').first().or(gameOverOverlay)).toBeVisible();
     await expect(gameOverOverlay).not.toBeVisible();
     if (await game.getAttribute('data-turn') === String(COMPARISON_TURN)
       && await game.getAttribute('data-turn-owner') === 'you'
