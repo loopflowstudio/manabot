@@ -354,20 +354,22 @@ against host deletion: collect private files before removing the machine.
 from pathlib import Path
 
 from managym.recording import read_records
-from managym.statistics import Behaviour, CardPerformance, reduce
+from managym.statistics import Behaviour, CardPerformance, Tempo, reduce
 
-cards, behaviour = reduce(
-    read_records(Path("games.jsonl")), [CardPerformance(), Behaviour()]
+cards, behaviour, tempo = reduce(
+    read_records(Path("games.jsonl")), [CardPerformance(), Behaviour(), Tempo()]
 )
 for row in cards[:3]:
     print(row)
 print(behaviour)
+print(tempo)
 ```
 
 ```text
 CardRow(seat=0, card='b9344ef3…:153', name='Fire Sages', games=1, wins=1, opening_hand=4, opening_won=4, drawn=0, drawn_won=0, gih=4, gih_won=4, not_seen=0, not_seen_won=0)
 …
 [BehaviourRow(seat=0, land_opportunities=15, lands_played=13, attack_opportunities=12, attacks=12), …]
+[TempoRow(seat=0, games=1, turns=9, spells_cast=8, damage_dealt=11, damage_taken=20, cards_drawn=12), …]
 ```
 
 Rows hold counts, so tables from different files add up; `row.gih_win_rate`
@@ -376,7 +378,7 @@ the card content digest and definition, unique within a world; `name` is for
 reading.
 
 `reduce` re-executes each record once and feeds every reducer the same
-verified decisions. Two reducers are built in:
+verified decisions. Three reducers are built in:
 
 - `CardPerformance`: per card, games played, opening-hand and drawn copies, and
   the win rate of games with the card in hand against games where it was never
@@ -385,6 +387,12 @@ verified decisions. Two reducers are built in:
   card values.
 - `Behaviour`: per seat, how often a land was played at a decision that offered
   one, and how often at least one attacker was declared when one could be.
+- `Tempo`: per seat, games, turns the game lasted, spells cast, damage dealt to
+  and taken from the opposing player, and cards drawn after the opening hand.
+  `turns` counts every turn of each game, whoever took it, so it is the same
+  in both seats' rows. Academy's
+  [game in numbers](academy.md#the-game-in-numbers) is `Behaviour` and `Tempo`
+  over one played game.
 
 A decision with one legal action is never shown to the chooser and so never
 counts as an opportunity.
