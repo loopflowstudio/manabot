@@ -123,14 +123,18 @@ impl Seat {
     }
     /// `size` permanents cycling `names`; a `token.` name is a token key.
     fn cycle(&mut self, names: &[&str], size: usize) {
-        for i in 0..size {
-            let name = names[i % names.len()];
+        for &name in names.iter().cycle().take(size) {
             if name.starts_with("token.") {
                 self.tokens.push(name.into());
             } else {
                 self.add(name, 1);
             }
         }
+    }
+    /// `size` graveyard cards cycling `GRAVEYARD`.
+    fn fill_graveyard(&mut self, size: usize) {
+        let cards = GRAVEYARD.iter().cycle().take(size);
+        self.graveyard.extend(cards.map(|name| name.to_string()));
     }
 }
 #[derive(Clone, Debug, Serialize)]
@@ -185,8 +189,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 seat.add(card, 1);
             }
             seat.hand.push("Sire of Seven Deaths".into());
-            seat.graveyard
-                .extend((0..size).map(|i| GRAVEYARD[i % GRAVEYARD.len()].to_string()));
+            seat.fill_graveyard(size);
         }
         "improvise-artifacts" => {
             let seat = &mut seats[0];
@@ -223,8 +226,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
             );
             seat.hand
                 .extend(["Archon's Glory".into(), "Feed the Cycle".into()]);
-            seat.graveyard
-                .extend((0..size).map(|i| GRAVEYARD[i % GRAVEYARD.len()].to_string()));
+            seat.fill_graveyard(size);
         }
         "diverse-mana" | "restricted-filter" | "distinct-restrictions" | "float-origins" => {
             let names = if matches!(name, "diverse-mana" | "float-origins") {

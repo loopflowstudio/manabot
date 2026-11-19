@@ -48,26 +48,18 @@ impl Game {
         (cost, split)
     }
 
-    /// The creatures that may convoke under `model`, each with its colors.
-    fn convokers(&self, model: &PaymentModel) -> Vec<(PermanentId, Vec<Color>)> {
+    /// The creatures that may pay colored pips under `help` and `model`,
+    /// each with its colors: none unless the cost has convoke.
+    fn convokers(&self, model: &PaymentModel, help: Help) -> Vec<(PermanentId, Vec<Color>)> {
         model
             .sources
             .iter()
-            .filter(|source| source.waterbend)
+            .filter(|source| help.convoke && source.waterbend)
             .map(|source| {
                 let colors = &self.characteristics(source.permanent).colors;
                 (source.permanent, colors.iter().copied().collect())
             })
             .collect()
-    }
-
-    /// The creatures that may pay colored pips under `help` and `model`.
-    fn help_convokers(&self, model: &PaymentModel, help: Help) -> Vec<(PermanentId, Vec<Color>)> {
-        if help.convoke {
-            self.convokers(model)
-        } else {
-            Vec::new()
-        }
     }
 
     /// Can `cost` be paid from `model` with mana and `help`? Delve and taps
@@ -99,7 +91,7 @@ impl Game {
     pub(crate) fn payable_with_help(&self, player: PlayerId, cost: &ManaCost, help: Help) -> bool {
         let mut model = self.payment_model(player, None);
         self.restrict_help_taps(&mut model, help);
-        let convokers = self.help_convokers(&model, help);
+        let convokers = self.convokers(&model, help);
         self.helped_payable(player, &mut model, &convokers, cost, help)
     }
 
@@ -120,66 +112,42 @@ impl Game {
         help: Help,
         candidates: &[PermanentId],
     ) -> Vec<(PermanentId, Vec<Color>)> {
-        let tap = |permanent| SourceReservation {
-            permanent,
-            tap: true,
-            sacrifice: false,
-        };
         let mut model = self.payment_model(player, None);
         self.restrict_help_taps(&mut model, help);
-        let mut convokers = self.help_convokers(&model, help);
+        let convokers = self.convokers(&model, help);
+        // The pips of `asked` that leave the rest payable from `model`.
+        let keeping_payable =
+            |model: &mut PaymentModel, convokers: &[(PermanentId, Vec<Color>)], asked: &[Color]| {
+                let mut options = asked.to_vec();
+                options.retain(|color| {
+                    self.helped_payable(player, model, convokers, &cost.less_pip(*color), help)
+                });
+                options
+            };
         candidates
             .iter()
             .filter_map(|&tapped| {
                 let convokes = self.help_tap_toward(help, tapped)? == Toward::Convoke;
-                let mut options: Vec<Color> = self
+                let mut asked: Vec<Color> = self
                     .characteristics(tapped)
                     .colors
                     .iter()
                     .copied()
                     .filter(|color| convokes && cost.cost[*color as usize] > 0)
                     .collect();
-                if options.is_empty() && cost.generic() > 0 {
-                    options.push(Color::Generic);
+                if asked.is_empty() && cost.generic() > 0 {
+                    asked.push(Color::Generic);
                 }
-                let asked = options.clone();
-                let index = model
-                    .sources
-                    .iter()
-                    .position(|source| source.permanent == tapped);
-                let untouched = index.map(|index| model.sources[index].clone());
-                // The tapped creature pays its own pip, not a second one.
-                let own = convokers
-                    .iter()
-                    .position(|(convoker, _)| *convoker == tapped)
-                    .map(|position| (position, convokers.remove(position)));
-                model.reserve(tap(tapped));
-                options.retain(|color| {
-                    self.helped_payable(
-                        player,
-                        &mut model,
-                        &convokers,
-                        &cost.less_pip(*color),
-                        help,
-                    )
-                });
-                if let (Some(index), Some(source)) = (index, untouched) {
-                    Arc::make_mut(&mut model.sources)[index] = source;
-                }
-                if let Some((position, convoker)) = own {
-                    convokers.insert(position, convoker);
-                }
+                // Tapped, the creature is no longer a convoker of the model,
+                // so it pays its own pip and not a second one.
+                let options =
+                    model.with_tapped(tapped, |model| keeping_payable(model, &convokers, &asked));
                 debug_assert_eq!(options, {
                     let mut alone = self.payment_model(player, None);
-                    alone.reserve(tap(tapped));
+                    alone.reserve(SourceReservation::tap(tapped));
                     self.restrict_help_taps(&mut alone, help);
-                    let convokers = self.help_convokers(&alone, help);
-                    let mut asked = asked;
-                    asked.retain(|color| {
-                        let rest = cost.less_pip(*color);
-                        self.helped_payable(player, &mut alone, &convokers, &rest, help)
-                    });
-                    asked
+                    let convokers = self.convokers(&alone, help);
+                    keeping_payable(&mut alone, &convokers, &asked)
                 });
                 (!options.is_empty()).then_some((tapped, options))
             })
@@ -200,7 +168,7 @@ impl Game {
             Some((payer, payment, CostComponent::Mana { .. }))
                 if payer == player && payment.help().convoke =>
             {
-                let convokers = self.convokers(model);
+                let convokers = self.convokers(model, payment.help());
                 let owed = payment.mana().0.clone();
                 self.convoke_search(model, &owed, &convokers, &mut |model, owed| {
                     attempt(model, self.payment_obligations_owing(player, Some(owed)))
@@ -211,10 +179,11 @@ impl Game {
     }
 
     /// `attempt` to pay `cost`, then `cost` less each set of colored pips
-    /// that `convokers` can pay, those creatures tapped. The search is
-    /// exhaustive over those assignments, so it grows with the number of
-    /// colored creatures when no attempt succeeds. Creatures are tried in
-    /// one order, so each set of taps is visited once.
+    /// that `convokers` can pay, those creatures tapped. A convoker the
+    /// model already has tapped pays nothing. The search is exhaustive over
+    /// those assignments, so it grows with the number of colored creatures
+    /// when no attempt succeeds. Creatures are tried in one order, so each
+    /// set of taps is visited once.
     fn convoke_search<T>(
         &self,
         model: &mut PaymentModel,
@@ -226,30 +195,25 @@ impl Game {
             return Some(found);
         }
         for (position, (permanent, colors)) in convokers.iter().enumerate() {
-            let Some(index) = model
+            if !model
                 .sources
                 .iter()
-                .position(|source| source.permanent == *permanent)
-            else {
+                .any(|source| source.permanent == *permanent && source.waterbend)
+            {
                 continue;
-            };
+            }
             for color in colors
                 .iter()
                 .filter(|color| cost.cost[**color as usize] > 0)
             {
-                let untouched = model.sources[index].clone();
-                model.reserve(SourceReservation {
-                    permanent: *permanent,
-                    tap: true,
-                    sacrifice: false,
+                let found = model.with_tapped(*permanent, |model| {
+                    self.convoke_search(
+                        model,
+                        &cost.less_pip(*color),
+                        &convokers[position + 1..],
+                        attempt,
+                    )
                 });
-                let found = self.convoke_search(
-                    model,
-                    &cost.less_pip(*color),
-                    &convokers[position + 1..],
-                    attempt,
-                );
-                Arc::make_mut(&mut model.sources)[index] = untouched;
                 if found.is_some() {
                     return found;
                 }
@@ -287,30 +251,18 @@ impl Game {
         candidates: Vec<PermanentId>,
         also_tapped: Option<PermanentId>,
     ) -> Vec<PermanentId> {
-        let tap = |permanent| SourceReservation {
-            permanent,
-            tap: true,
-            sacrifice: false,
-        };
         let mut model = self.payment_model(player, None);
         if let Some(permanent) = also_tapped {
-            model.reserve(tap(permanent));
+            model.reserve(SourceReservation::tap(permanent));
         }
         let pool = self.pooled_mana(player);
         let obligations = waterbend_obligations(cost, waterbend);
         candidates
             .into_iter()
             .filter(|&candidate| {
-                let index = model
-                    .sources
-                    .iter()
-                    .position(|source| source.permanent == candidate);
-                let untouched = index.map(|index| model.sources[index].clone());
-                model.reserve(tap(candidate));
-                let possible = model.payable(pool.clone(), obligations.clone(), SourcePolicy::All);
-                if let (Some(index), Some(source)) = (index, untouched) {
-                    Arc::make_mut(&mut model.sources)[index] = source;
-                }
+                let possible = model.with_tapped(candidate, |model| {
+                    model.payable(pool.clone(), obligations.clone(), SourcePolicy::All)
+                });
                 debug_assert_eq!(possible, {
                     let mut probe = self.clone();
                     for permanent in std::iter::once(candidate).chain(also_tapped) {
@@ -321,5 +273,23 @@ impl Game {
                 possible
             })
             .collect()
+    }
+}
+
+impl PaymentModel<'_> {
+    /// `ask` of this board with `permanent` tapped for something other than
+    /// mana; the board is as it was afterwards.
+    fn with_tapped<T>(&mut self, permanent: PermanentId, ask: impl FnOnce(&mut Self) -> T) -> T {
+        let index = self
+            .sources
+            .iter()
+            .position(|source| source.permanent == permanent);
+        let untouched = index.map(|index| self.sources[index].clone());
+        self.reserve(SourceReservation::tap(permanent));
+        let answer = ask(self);
+        if let (Some(index), Some(source)) = (index, untouched) {
+            Arc::make_mut(&mut self.sources)[index] = source;
+        }
+        answer
     }
 }

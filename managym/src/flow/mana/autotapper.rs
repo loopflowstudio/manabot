@@ -546,11 +546,7 @@ impl PaymentModel<'_> {
             cache: self.cache,
         };
         for index in taps {
-            after.reserve(SourceReservation {
-                permanent: self.sources[index].permanent,
-                tap: true,
-                sacrifice: false,
-            });
+            after.reserve(SourceReservation::tap(self.sources[index].permanent));
         }
         after
     }

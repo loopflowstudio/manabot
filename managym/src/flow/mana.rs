@@ -138,6 +138,17 @@ struct SourceReservation {
     sacrifice: bool,
 }
 
+impl SourceReservation {
+    /// `permanent` is tapped for something other than mana.
+    fn tap(permanent: PermanentId) -> Self {
+        Self {
+            permanent,
+            tap: true,
+            sacrifice: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "benchmark", derive(serde::Serialize))]
 enum PaymentStep {
@@ -1277,11 +1288,7 @@ impl PaymentModel<'_> {
             sources: self.sources.clone(),
             life: self.life,
         };
-        after.reserve(SourceReservation {
-            permanent,
-            tap: true,
-            sacrifice: false,
-        });
+        after.reserve(SourceReservation::tap(permanent));
         after
     }
 
