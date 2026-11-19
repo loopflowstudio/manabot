@@ -22,7 +22,13 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   page.on('response', response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
-  page.on('requestfailed', request => errors.push(`${request.url()}: ${request.failure()?.errorText}`));
+  page.on('requestfailed', request => {
+    // The board aborts a payment preview its next frame supersedes; that read
+    // commits nothing, so only its abort is expected here.
+    const text = request.failure()?.errorText;
+    if (text === 'net::ERR_ABORTED' && new URL(request.url()).pathname.endsWith('/payment-preview')) return;
+    errors.push(`${request.url()}: ${text}`);
+  });
   const catalog = await (await page.request.get('/api/opponents')).json();
   expect(catalog.extension).toBeNull();
   expect(catalog.watch_players).toEqual(['random', 'search']);

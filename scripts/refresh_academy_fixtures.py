@@ -123,7 +123,6 @@ def refresh_trigger_order() -> None:
     fixture = json.loads(path.read_text())
     env, _ = root()
     capture = json.loads(env.capture_decision(0).to_json())
-    fixture["world_version"] = capture["world_version"]
     fixture["content_digest"] = capture["content_digest"]
     fixture["root_digest"] = env.state_digest()
     _write(path, fixture)

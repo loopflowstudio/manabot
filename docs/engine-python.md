@@ -605,8 +605,7 @@ as `manabot.env.vector_env.VectorEnv` still require `manabot`; the native
 batch class is `managym.VectorEnv`.
 
 The two packages release together at the same version. Package upgrades do
-not change frozen observation layouts or make old checkpoints compatible
-with a new world. Retain the package versions, world identity, configuration
+not change frozen observation layouts. Retain the package versions, configuration
 and seeds with collected data, and reproduce old runs in their original
 environments.
 

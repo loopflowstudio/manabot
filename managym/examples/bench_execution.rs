@@ -25,7 +25,7 @@ fn main() {
     let mut retained_boundaries = 0;
     for seed in 0..32 {
         let mut env = Env::new(seed, true, false, false);
-        env.reset(curated::players()).unwrap();
+        env.reset(curated::setup(false)).unwrap();
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut count = 0;
         while !env.is_game_over() && count < 500 {
@@ -85,7 +85,7 @@ fn main() {
     );
     for seed in [1, 2] {
         let mut env = Env::new(seed, true, false, false);
-        env.reset(curated::players()).unwrap();
+        env.reset(curated::setup(false)).unwrap();
         let mut digest = blake3::Hasher::new();
         let mut times = Vec::new();
         let mut counts = Vec::new();

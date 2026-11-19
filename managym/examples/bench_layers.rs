@@ -27,7 +27,7 @@ use std::{sync::Arc, time::Instant};
 
 fn root() -> (Env, PermanentId) {
     let mut env = Env::new(244, true, false, false);
-    env.reset(curated::players()).unwrap();
+    env.reset(curated::setup(false)).unwrap();
     curated::add_layer_board(&mut env);
     // Urborg precedes Moon: timestamp order would incorrectly grant Swamp.
     // The fixture changes two existing physical cards, never the catalog.

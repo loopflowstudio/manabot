@@ -129,7 +129,7 @@ checkpoints or experiment evidence.
   `experiments/reports/<name>.md`. Do not add a protocol document, a serialized regime,
   a digest check or a test suite for one experiment's schedule; reusable
   machinery belongs in `manabot/` or Etude, tested once there.
-- Paired deals, replay verification, world-bound checkpoints and training
+- Paired deals, replay verification, checkpoint input compatibility and training
   seeds as the unit of evidence are measurement quality and stay as they are.
 
 ### Python structure and documentation
@@ -274,10 +274,27 @@ change already touches it; do not rewrite a module only for style. Rust in
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - A checkpoint records the revision and Etude run that wrote it
-  (`checkpoint_source`). The world binding compares every input buffer's shape,
-  so a layout change refuses older checkpoints, naming that revision and the
-  buffers that differ. Do not bump the input version for a layout change or add
-  a loading path for an older layout.
+  (`checkpoint_source`), its column names, definition keys and naming names.
+  `manabot.model.interface.model_interface` checks the recorded input contract.
+  The shared policy reader then binds the learned arrays by key. Academy uses
+  that reader when listing checkpoints. When the checkpoint records exact decks, compare its
+  whole binding. Otherwise the card and naming digests record what the writer used. Append
+  input columns to named buffers. Shared host preparation projects each buffer
+  to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
+  field or record name the token serializer hashes needs an entry in
+  `managym/src/cards/token_renames.rs`; a name is never reused with a new
+  meaning. Never learn a `CardDefId`: tables indexed by card or name bind by
+  definition key or name. A change that alters what a stored pilot computes
+  fails `tests/model/test_pinned_pilot.py` until it adds the rename or column
+  or declares the break with `scripts/pinned_pilot.py record --reason`. Do not
+  bump the input version for a layout change.
+- The engine has no world label. New checkpoints, recordings, decision captures
+  (v6) and evaluation records write none; a reader ignores one in an older file
+  (`manabot.model.world.current_binding_form`, optional `world` fields omitted
+  when absent) and never rewrites stored data. `managym.WORLD_VERSION` is a
+  warning alias until 0.4.0. Matchup ids keep `w17` as the plain string
+  `manabot.sim.matchup.SUITE_PREFIX`, and frozen experiment files write the
+  literal, so retained tournaments find their records. Add no new label.
 - Main carries policy input v11, the fresh default
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;
@@ -291,12 +308,12 @@ change already touches it; do not rewrite a module only for style. Rust in
   turn-state-free encoder refuses an observation that needs them
   (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
   deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
-  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed in 0.4.0,
-  MTG-353 owns portability across worlds); never extend it. A checkpoint,
+  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed once a v11 pilot is at least as strong as
+  the best v9 one, not before 0.4.0); never extend it. A checkpoint,
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
   (`ac601834d` is the last revision supporting v1-v8). Add no other version
-  branch; a new layout replaces these at a world freeze.
+  branch.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
@@ -788,7 +805,8 @@ namespace or a `python -m` invocation's `__main__`; the same holds for agent
 loaders. Exercise discovery with `etude.controller.declarations.read_experiment` in runner tests,
 or `etude.controller.declarations.read_training_jobs` for a file's `training_jobs()`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
-only launched jobs receive that directory automatically.
+create the directory before starting local evaluation because Etude writes progress
+there before calling the experiment. Launched jobs receive it automatically.
 Etude imports evaluation callbacks by module and qualified name, including local
 runs; callbacks take `play(match, agents)`. A closure or callable instance is
 not a portable entry point. Managed jobs share `manabot.eval.agents.AGENTS`;

@@ -53,7 +53,6 @@ class ScenarioLineEvidence:
 @dataclass(frozen=True)
 class ScenarioValidation:
     scenario: str
-    world: str
     content_sha256: str | None
     fixture_source_sha256: str
     validator_source_sha256: str
@@ -327,7 +326,6 @@ def validate_scenarios(
         records.append(
             ScenarioValidation(
                 scenario.name,
-                str(managym.WORLD_VERSION),
                 content,
                 fixture_digest,
                 validator_digest,
@@ -345,7 +343,6 @@ def validate_scenarios(
 class ScenarioIdentity(TypedDict):
     version: int
     name: str
-    world: str
     source_sha256: str
 
 
@@ -356,7 +353,6 @@ def scenario_identity(name: str) -> ScenarioIdentity:
     return {
         "version": 1,
         "name": name,
-        "world": str(managym.WORLD_VERSION),
         "source_sha256": hashlib.sha256(
             Path(__file__).with_name("competency.py").read_bytes()
         ).hexdigest(),

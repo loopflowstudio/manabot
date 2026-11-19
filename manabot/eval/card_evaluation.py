@@ -126,7 +126,6 @@ def verification_spec(games: int) -> CardEvaluationSpec:
             player_spec={"kind": "scripted_greedy"},
             compute_class_id="scripted-greedy-cpu-v1",
             information_boundary="acting-viewer",
-            world=runtime["world"],
             content_suite=matrix.content_suite,
             observation_abi_sha256=runtime["observation_abi_sha256"],
             action_abi_sha256=runtime["action_abi_sha256"],
@@ -140,7 +139,6 @@ def verification_spec(games: int) -> CardEvaluationSpec:
         experiment=VERIFY_EXPERIMENT,
         run=f"verify-{games}",
         key=EvaluationKey(
-            world=runtime["world"],
             content_suite=matrix.content_suite,
             viewer_boundary="acting-viewer",
             arena_version="card-evaluation-v1",

@@ -86,7 +86,7 @@ def test_divergence_and_world_admission(tmp_path: Path) -> None:
     replay = walk(record)
     assert list(replay) == []
     assert replay.stop is not None and replay.stop.status == "diverged"
-    record.identities["world"] = "another-world"
+    record.identities["card_digest"] = "other-cards"
     with pytest.raises(ValueError, match="recorded managym.*running managym"):
         walk(record)
 

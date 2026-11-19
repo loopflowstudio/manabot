@@ -1,7 +1,7 @@
 //! The Academy curated matchup (UR Lessons versus GW Allies main decks) as
 //! benchmark seats. Both engine benchmarks play exactly these lists so their
 //! baselines describe one workload; change the lists only with the baseline.
-use managym::state::player::PlayerConfig;
+use managym::state::player::{GameSetup, ManaFloats, PlayerConfig};
 use std::collections::BTreeMap;
 
 fn deck(objects: &[(&str, usize)]) -> BTreeMap<String, usize> {
@@ -11,7 +11,7 @@ fn deck(objects: &[(&str, usize)]) -> BTreeMap<String, usize> {
         .collect()
 }
 
-pub fn players() -> Vec<PlayerConfig> {
+fn players() -> Vec<PlayerConfig> {
     let lessons = deck(&[
         ("Island", 9),
         ("Mountain", 8),
@@ -49,6 +49,15 @@ pub fn players() -> Vec<PlayerConfig> {
         PlayerConfig::new("lessons", lessons),
         PlayerConfig::new("allies", allies),
     ]
+}
+
+/// Opt-in treatment for timing; the CI workload keeps ordinary payment offers.
+pub fn setup(usable_taps: bool) -> GameSetup {
+    let mut setup = GameSetup::from(players());
+    if usable_taps {
+        setup.mana_floats = [ManaFloats::Usable; 2];
+    }
+    setup
 }
 
 /// A bounded layer-rich position using the reference world's existing cards.

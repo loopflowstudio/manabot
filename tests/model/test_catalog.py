@@ -16,7 +16,6 @@ from manabot.model.catalog import (
     discover_checkpoints,
     inspect_checkpoint,
 )
-from manabot.model.world import WORLD
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -52,7 +51,6 @@ def test_current_checkpoint_is_admissible_with_its_identity(tmp_path: Path) -> N
     summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
 
     assert summary.compatible
-    assert summary.world == WORLD
     assert summary.sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
     assert summary.model == "width 8, 1 attention layer × 2 heads"
     assert summary.parameters > 0
@@ -74,12 +72,10 @@ def test_mismatches_are_named(tmp_path: Path) -> None:
     del unbound["world_binding"]
     write_checkpoint(unbound, tmp_path / "unbound.pt")
 
-    assert (
-        inspect_checkpoint(
-            tmp_path / "old-world.pt", backend=TORCH_BACKEND
-        ).incompatibility
-        == f"trained in w5, engine is {WORLD}"
-    )
+    # A world label from an earlier revision is not compared.
+    assert inspect_checkpoint(
+        tmp_path / "old-world.pt", backend=TORCH_BACKEND
+    ).compatible
     content = inspect_checkpoint(
         tmp_path / "old-content.pt", backend=TORCH_BACKEND
     ).incompatibility
@@ -88,7 +84,7 @@ def test_mismatches_are_named(tmp_path: Path) -> None:
         inspect_checkpoint(
             tmp_path / "unbound.pt", backend=TORCH_BACKEND
         ).incompatibility
-        == f"trained without a world binding; engine is {WORLD}"
+        == "trained without a world binding"
     )
 
 
@@ -114,7 +110,9 @@ def test_discovery_reads_runs_paths_and_tournaments(tmp_path: Path) -> None:
     torch.save({"state": {}}, runs / "self-play" / "optimizer.pt")
     models = tmp_path / "models"
     models.mkdir()
-    _rewrite(runs / "self-play" / "step_1.pt", models / "entrant.pt", world="w5")
+    _rewrite(
+        runs / "self-play" / "step_1.pt", models / "entrant.pt", policy_input_version=1
+    )
     entrant_sha = hashlib.sha256((models / "entrant.pt").read_bytes()).hexdigest()
     tournament = models / "grid.json"
     tournament.write_text(
@@ -151,5 +149,5 @@ def test_discovery_reads_runs_paths_and_tournaments(tmp_path: Path) -> None:
     entrant = by_label["width 8 entrant"]
     assert entrant.source == "tournament"
     assert entrant.producer == "Tournament grid: grid run final raw"
-    assert entrant.incompatibility == f"trained in w5, engine is {WORLD}"
+    assert "policy_input_version" in (entrant.incompatibility or "")
     assert [entry.label for entry in missing] == ["absent entrant"]

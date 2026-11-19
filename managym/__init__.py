@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 import sys
-from typing import ParamSpec, TypeVar, overload
+from typing import Literal, ParamSpec, TypeVar, overload
 import warnings
 
 from managym.disclosure import DecklistSampling
@@ -57,9 +57,36 @@ learning_record_names = _deprecated_alias(
 )
 
 
+ManaPayment = Literal["auto", "manual"]
+ManaFloats = Literal["off", "usable", "all"]
+
+
+def _seat_modes(
+    players: Sequence[_managym.PlayerConfig],
+    field: str,
+    value: Sequence[str] | None,
+    names: tuple[str, ...],
+) -> tuple[str, str]:
+    """One mode per native seat; omitted values copy a wrapped setup or default
+    to the first name."""
+    if value is None:
+        value = (
+            getattr(players, field)
+            if isinstance(players, GameSetup)
+            else (names[0],) * 2
+        )
+    if (
+        not isinstance(value, (tuple, list))
+        or len(value) != 2
+        or not all(mode in names for mode in value)
+    ):
+        raise ValueError(f"{field} must contain two seat modes ({', '.join(names)})")
+    return (value[0], value[1])
+
+
 @dataclass(frozen=True, init=False)
 class GameSetup(Sequence[_managym.PlayerConfig]):
-    """Read-only seats and one game disclosure; slices and re-wraps preserve it.
+    """Read-only seats, decklist disclosure and per-seat mana tap offers.
 
     Native reset resolves mixed 50/50 from the reset seed, independently of
     deck and shuffle draws. Iterating exposes seats, not a complete game setup.
@@ -67,17 +94,31 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
 
     players: tuple[_managym.PlayerConfig, ...]
     decklists: DecklistSampling
+    mana_floats: tuple[ManaFloats, ManaFloats]
+    mana_payment: tuple[ManaPayment, ManaPayment]
 
     def __init__(
         self,
         players: Sequence[_managym.PlayerConfig],
         *,
         decklists: DecklistSampling | None = None,
+        mana_floats: tuple[ManaFloats, ManaFloats] | None = None,
+        mana_payment: tuple[ManaPayment, ManaPayment] | None = None,
     ) -> None:
         if decklists is None:
             decklists = players.decklists if isinstance(players, GameSetup) else "open"
         if decklists not in ("open", "closed", "mixed"):
             raise ValueError("decklists must be open, closed or mixed")
+        object.__setattr__(
+            self,
+            "mana_payment",
+            _seat_modes(players, "mana_payment", mana_payment, ("manual", "auto")),
+        )
+        object.__setattr__(
+            self,
+            "mana_floats",
+            _seat_modes(players, "mana_floats", mana_floats, ("off", "usable", "all")),
+        )
         object.__setattr__(self, "players", tuple(players))
         object.__setattr__(self, "decklists", decklists)
 
@@ -92,5 +133,26 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
 
     def __getitem__(self, index: int | slice) -> _managym.PlayerConfig | "GameSetup":
         if isinstance(index, slice):
-            return GameSetup(self.players[index], decklists=self.decklists)
+            payments = self.mana_payment[: len(self.players)][index]
+            seats = self.mana_floats[: len(self.players)][index]
+            return GameSetup(
+                self.players[index],
+                decklists=self.decklists,
+                mana_payment=(payments + ("manual", "manual"))[:2],
+                mana_floats=(seats + ("off", "off"))[:2],
+            )
         return self.players[index]
+
+
+def __getattr__(name: str) -> str:
+    # The engine carries no world label; the last one it carried was w17.
+    if name == "WORLD_VERSION":
+        warnings.warn(
+            "managym.WORLD_VERSION is deprecated and removed in 0.4.0; the "
+            "engine has no world label, and managym.world_identity() names "
+            "its cards",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return "w17"
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

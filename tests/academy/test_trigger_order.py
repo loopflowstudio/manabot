@@ -143,7 +143,6 @@ def test_survival_orders_cross_consumers(
     )
     capture = json.loads(env.capture_decision(0).to_json())
     assert initial_digest == evidence["root_digest"]
-    assert capture["world_version"] == evidence["world_version"]
     assert capture["content_digest"] == evidence["content_digest"]
     assert DECK == evidence["hero_deck"] and SEED == evidence["seed"]
 

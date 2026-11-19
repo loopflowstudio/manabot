@@ -1,4 +1,4 @@
-//! Atomic, representation-neutral input for one acting decision. Capture v5
+//! Atomic, representation-neutral input for one acting decision. Capture v6
 //! combines schema-8 observations with native continuation, content and public-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
@@ -19,12 +19,12 @@ use crate::{
 
 /// Changes to capture field inclusion, ordering or digest semantics require a
 /// new version. Embedded Observation follows SEMANTIC_DECISION_VERSION.
-pub const DECISION_CAPTURE_VERSION: u16 = 5;
+/// Version 6 dropped the world label; the content digest identifies the cards.
+pub const DECISION_CAPTURE_VERSION: u16 = 6;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct DecisionCapture {
     pub capture_version: u16,
-    pub world_version: String,
     pub content_digest: String,
     pub observation: Observation,
     pub continuation: Option<DecisionContextView>,
@@ -202,7 +202,6 @@ impl Game {
         }
         let mut capture = DecisionCapture {
             capture_version: DECISION_CAPTURE_VERSION,
-            world_version: crate::WORLD_VERSION.into(),
             content_digest: default_content_pack().content_digest(),
             observation,
             objects,

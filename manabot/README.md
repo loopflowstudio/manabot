@@ -135,7 +135,7 @@ shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
 attempts and replays record the resolved setting. Both seats see the public
 `decklists_closed` observation flag, stated in the text observation. Its inverse
 (1 open, 0 closed) accompanies the other game facts on the player tokens.
-Older checkpoints with a different player-buffer shape fail normal world binding.
+A checkpoint trained before that column does not read it.
 
 An open source serializes without a `decklists` key, so earlier source
 digests are unchanged; closed and mixed sources have their own digests, so a run
@@ -190,8 +190,8 @@ The earlier trophy pilots execute from their pinned source; see the
 
 `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
-contract. Stable population entry IDs distinguish events even when lists match;
-checkpoints still bind the world, never the population.
+contract. Stable population entry IDs distinguish events even when lists match.
+A checkpoint can also play newly admitted decks.
 
 Run its local evaluation from the training run's pinned source and native world.
 Local Etude evaluation needs an explicit directory for its replay evidence
@@ -386,11 +386,12 @@ including the unresolved near-singleton latency target.
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
-This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
-content manifest and input schema. Deck-source runs bind the world itself
-(`deck_world`: version, card digest, rules and input contract), so the model
-plays any deck the world admits. Missing or mismatched bindings fail before
-weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
+When the binding records exact decks and sideboards, loading compares the
+whole binding, including the content manifest. Otherwise the model can play
+any admitted deck. The card digest describes the cards of the writing revision.
+Loading compares input columns, token names and action kinds by name
+([compatibility](../docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+A missing binding or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
@@ -414,10 +415,7 @@ Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.
 
-An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w15** (`managym.WORLD_VERSION`); its rules, tensor shape,
-and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w14 artifacts, are not compatible with w15. Elemental combat,
+Elemental combat,
 [sacrifice/landfall](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-sacrifice.md) and [Temur](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
@@ -588,6 +586,60 @@ reseeding flush exact totals, including zero-overflow runs. The approximation
 and its evaluation limits are specified in the
 [TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
 
+## Mana taps at priority and during payment
+
+A policy can be trained with fixed- and choice-output mana abilities offered
+as actions at priority and during cast, activation and resolution payments
+([what the seat is offered](../managym/README.md#mana-taps-at-priority-and-during-payment)). The
+option belongs to the policy's observation configuration, beside its action
+capacity:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+off = ObservationConfig(max_actions=64, action_overflow="first-legal")
+all_floats = off.model_copy(update={"mana_floats": "all"})
+
+"mana_floats" in off.model_dump()   # False
+all_floats.model_dump()["mana_floats"]  # "all"
+```
+
+Set `mana_floats="usable"` to limit priority floats to windows with a mana spend
+or to activations with side effects, such as sacrificing a Treasure or firing a tap trigger. Set `mana_payment="auto"` to let the engine fund accepted payments, including color selection and spending. The default `"manual"` exposes useful taps. With `"usable"` or `"all"` it also offers extra payment taps. Both fields follow the checkpoint independently.
+
+The default, `"off"`, is omitted from the dump, so existing
+configurations, checkpoints and digests keep their identity. It changes no
+buffer shape: a checkpoint trained with it and one trained without it are
+admitted to the same game.
+
+Self-play with `SelfPlay.observation = all_floats` offers the taps to both learning
+seats. The checkpoint saves the configuration, and evaluation seats each
+player in the space it trained in:
+
+| Seat holds | Receives the additional tap offers |
+| --- | --- |
+| a checkpoint saved with `mana_floats="all"` or `"usable"` | in its saved mode |
+| any other checkpoint | no |
+| heuristic, random, search or LLM player | no |
+
+The evaluation runner applies the saved settings to the checkpoint's seat
+and manual/off to its heuristic opponent. Swapping seats swaps the settings.
+Replay checks the recorded player settings against the evaluation record.
+
+A portable checkpoint records the levels in force at export for both native seats in
+`hypers.training_setup.mana_payment` and `hypers.training_setup.mana_floats`,
+including manual/off defaults, beside `skip_trivial`. Evaluation game
+metadata records both actual seats in `match_hypers`. Academy traces record
+the corresponding arrays in native seat order. These settings describe how
+the agent trained and played and do not participate in checkpoint admission.
+Earlier checkpoints without training setup metadata must be interpreted at
+their writer revision. Before the corrected default, choice-output mana
+abilities could appear at priority even with fixed-source floats disabled.
+
+An update is a fixed number of decisions. Enabling taps can change both the
+number of decisions in a turn and the length of a game. Compare runs by games
+and training hours as well as by updates.
+
 ## Research program
 
 [RESEARCH.md](RESEARCH.md) says what we are doing now, what the experiments
@@ -688,7 +740,7 @@ hash. Each reads the row of the card token for the same concept (a granted
 the card tokens. Captured program tokens read their card-token rows; integers
 and booleans read one row per kind plus their exact value. Fact and effect
 sources read the card encoder's row for that definition, and ability or frame
-ordinals are numbers. An id outside the vocabulary fails. World checkpoints
+ordinals are numbers. An id outside the vocabulary fails. Checkpoints with `world="world"`
 that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
 (elsewhere both values build the same model and omission reads as the default): 4096
 learned rows per id column, which held 80% of a w64 L2 model (1,958,402

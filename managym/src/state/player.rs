@@ -157,11 +157,73 @@ impl DecklistMode {
     }
 }
 
+/// Who chooses sources and colors after a seat commits to a mana payment.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ManaPayment {
+    Auto,
+    #[default]
+    Manual,
+}
+
+impl ManaPayment {
+    pub fn is_manual(&self) -> bool {
+        *self == Self::Manual
+    }
+
+    /// The serialized and Python name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Manual => "manual",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::Auto, Self::Manual]
+            .into_iter()
+            .find(|mode| mode.name() == name)
+    }
+}
+
+/// Priority float offers for the chooser.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ManaFloats {
+    #[default]
+    Off,
+    Usable,
+    All,
+}
+
+impl ManaFloats {
+    pub fn is_off(&self) -> bool {
+        *self == Self::Off
+    }
+
+    /// The serialized and Python name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Usable => "usable",
+            Self::All => "all",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::Off, Self::Usable, Self::All]
+            .into_iter()
+            .find(|mode| mode.name() == name)
+    }
+}
+
 /// Complete root setup; disclosure belongs to the game, never a seat.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameSetup {
     pub players: Vec<PlayerConfig>,
     pub decklists: DecklistMode,
+    pub mana_floats: [ManaFloats; 2],
+    pub mana_payment: [ManaPayment; 2],
 }
 
 impl From<Vec<PlayerConfig>> for GameSetup {
@@ -169,6 +231,8 @@ impl From<Vec<PlayerConfig>> for GameSetup {
         Self {
             players,
             decklists: DecklistMode::Open,
+            mana_floats: [ManaFloats::Off; 2],
+            mana_payment: [ManaPayment::Manual; 2],
         }
     }
 }

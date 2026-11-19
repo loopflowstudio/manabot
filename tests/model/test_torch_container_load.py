@@ -122,6 +122,11 @@ def test_container_preserves_general_policy_and_metadata(
     save_checkpoint(agent, space, path, player_configs=Match().to_rust(), extra=extra)
     loaded, loaded_space = load_checkpoint(str(path))
     metadata = read_metadata(path)
+    assert metadata["hypers"]["training_setup"] == {
+        "mana_payment": ["manual", "manual"],
+        "mana_floats": ["off", "off"],
+        "skip_trivial": True,
+    }
     assert metadata["bc"] == extra
     assert metadata["global_step"] == 0
     assert "converted_from" not in metadata

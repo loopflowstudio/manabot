@@ -296,3 +296,30 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
     expect(new URL(page.url()).searchParams.get('trace')).toBe(watchURL.searchParams.get('trace'));
   });
 }
+
+for (const [mode, deck] of [
+  ['All', '16 Island'],
+  ['Only when the mana could be used', '4 Island\n4 Consider'],
+]) {
+  test(`a human can float mana from the chosen land at priority with ${mode}`, async ({page}) => {
+    await page.goto('/?setup=1');
+    const taps = page.getByRole('combobox', {name: 'Mana floats'});
+    await expect(taps.locator('option:checked')).toHaveText('Off');
+    await taps.selectOption({label: mode});
+    const payment = page.getByRole('combobox', {name: 'Mana payment'});
+    await expect(payment.locator('option:checked')).toHaveText('Manual');
+    await payment.selectOption('auto');
+    await page.getByText('Import decklist files', {exact: true}).click();
+    await page.getByLabel('Use imported decks for the next game').check();
+    await page.getByLabel('Your deck source', {exact: true}).fill(deck);
+    await page.getByLabel('Opponent deck source', {exact: true}).fill('16 Mountain');
+    await page.getByRole('button', {name: 'Start game', exact: true}).click();
+    const actions = page.getByTestId('action-option');
+    await actions.filter({hasText: 'Play Island'}).first().click();
+    const tap = actions.filter({hasText: 'Tap Island for mana'});
+    await expect(tap).toBeEnabled();
+    await page.reload();
+    await tap.click();
+    await expect(tap).toHaveCount(0);
+  });
+}

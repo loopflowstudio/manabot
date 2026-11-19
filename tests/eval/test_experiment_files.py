@@ -35,6 +35,7 @@ from experiments import (
     belief,
     elemental,
     llm_claude,
+    mana_taps,
     opponent_memory,
     seat_comparison,
     tla_frontier,
@@ -59,6 +60,7 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
+    (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
 
@@ -81,6 +83,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "belief",
         "elemental",
         "etude_execution",
+        "mana_taps",
         "opponent_memory",
         "seat_comparison",
         "tla_frontier",

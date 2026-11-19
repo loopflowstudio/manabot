@@ -89,6 +89,9 @@ class TargetPracticeVector:
     to Collector. Paused rows neither advance seeds nor consume actions.
     """
 
+    # Every root is an `Env`, which always skips forced decisions.
+    skip_trivial = True
+
     def __init__(
         self, space: ObservationSpace, match: Match, count: int, seed: int
     ) -> None:

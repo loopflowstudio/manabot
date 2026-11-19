@@ -1195,12 +1195,15 @@ human-only payment flow.
 
 ## Worlds
 
-A world names rules meaning plus observation and action shape, and the running
-engine always knows its own: `managym.WORLD_VERSION`
-([`world.rs`](../managym/src/world.rs)). Checkpoints bind the world, the deck
-setup and the input schema, and load only where the digest matches. Main
-carries at most one open world; a rules or shape change extends it, and
-freezing it is a deliberate step with re-run baselines ([WORLDS.md](../WORLDS.md)).
+The engine has no world label. `managym.world_identity()`
+([`world.rs`](../managym/src/world.rs)) names the installed cards by their
+digest; checkpoints, recordings and evaluation records written before the
+label was removed still carry one, which nothing compares
+([history](../WORLDS.md)). `managym.WORLD_VERSION` is a deprecated alias,
+removed in 0.4.0. Which checkpoints load is
+[compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision);
+which measurements line up is
+[evaluation](evaluation.md#comparing-measurements-across-revisions).
 
 ## Decks
 
@@ -1245,8 +1248,9 @@ seats; the TLA pilot's source is the frozen trophy corpus
 admitted when the settings validate, and again natively at each game root.
 `UniformDecks(decklists="closed")` closes every game the source deals; each
 game has one setting shared by both seats. Use `decklists="mixed"` for a
-seeded, balanced per-game open/closed draw. A checkpoint from such a run binds the world and nothing about the decks, so it
-plays any deck the world admits, including ones it never saw. Checkpoints bound
+seeded, balanced per-game open/closed draw. A checkpoint from such a run binds nothing about the decks, so it
+plays any deck the pool admits, including ones it never saw and cards added
+after it was trained. Checkpoints bound
 to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through
 **Import decklist files**; the CLI takes `--hero-deck-file` and
@@ -1300,8 +1304,9 @@ Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
 actual counted decklist against the world to include its bonus-sheet cards.
 
 For unknown names in `DeckImportError`, check spelling and the installed
-engine's definitions. Engine and checkpoint worlds must remain compatible;
-keep frozen runs on their recorded world. New card support does not expand
+engine's definitions. A checkpoint loads when the engine still supplies its recorded input
+contract ([what a checkpoint is bound to](observation-and-model.md#what-a-checkpoint-is-bound-to));
+keep frozen runs on their recorded revision. New card support does not expand
 saved training corpora or change their split assignments.
 
 ## What we know

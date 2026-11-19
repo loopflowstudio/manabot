@@ -17,6 +17,7 @@ Every canonical parameter maps to MLX arrays or loading fails, naming the key.
 
 import importlib
 import json
+from pathlib import Path
 import re
 from types import ModuleType
 from typing import Any
@@ -200,11 +201,17 @@ class MLXBackend:
         self.precision = precision
 
     def load_policy(
-        self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+        self,
+        path: str | Path | PolicyCheckpoint,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
     ) -> tuple[MLXActorCritic, ObservationSpace]:
         if bucketed_shapes or live_tokens:
             raise ValueError("MLX does not support bucketed or live-token inference")
-        checkpoint = read_container(path)
+        checkpoint = (
+            path if isinstance(path, PolicyCheckpoint) else read_container(str(path))
+        )
         policy = assemble(checkpoint, precision=self.precision)
         # read_container has already validated the world. Keep it on the loaded
         # policy so simulation's common deck admission cannot silently bypass it.
@@ -215,6 +222,8 @@ class MLXBackend:
             raise ValueError("unsupported checkpoint value semantic")
         policy.value_semantic = semantic
         return policy, checkpoint.space
+
+    read_policy = staticmethod(read_container)
 
     @staticmethod
     def metadata(path: str) -> dict[str, Any]:

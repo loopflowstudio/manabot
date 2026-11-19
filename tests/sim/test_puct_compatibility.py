@@ -28,7 +28,6 @@ from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     puct_source_sha256,
 )
-import managym
 from tests.sim.test_local_update import small_match
 from tests.sim.test_mcts import _fresh_engine_and_observation
 
@@ -171,7 +170,6 @@ def test_registered_puct_completes_games_and_replays(tmp_path: Path) -> None:
         role="challenger",
         compute_class_id="bounded-fixture",
         information_boundary="acting-viewer-only-v1",
-        world=managym.WORLD_VERSION,
         content_suite="tiny-fixture",
         observation_abi_sha256=identity,
         action_abi_sha256=identity,

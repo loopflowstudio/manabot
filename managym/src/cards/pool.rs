@@ -32,7 +32,6 @@ pub struct PoolDefinition {
 
 #[derive(Clone, Debug)]
 pub struct ContentPool {
-    pub world_version: String,
     pub content_digest: String,
     /// Sorted by registry name.
     pub definitions: Vec<PoolDefinition>,
@@ -68,7 +67,6 @@ fn describe() -> ContentPool {
         .collect::<Vec<_>>();
     definitions.sort_by(|a, b| a.registry_name.cmp(&b.registry_name));
     ContentPool {
-        world_version: crate::WORLD_VERSION.to_owned(),
         content_digest: content.content_digest(),
         definitions,
     }
@@ -104,7 +102,6 @@ mod tests {
     fn descriptor_joins_catalog_ids_and_rejects_unknown_pool() {
         let pool = content_pool(crate::world::WORLD_POOL).unwrap();
         let content = default_content_pack();
-        assert_eq!(pool.world_version, crate::WORLD_VERSION);
         assert_eq!(pool.content_digest, content.content_digest());
         assert_eq!(pool.definitions.len(), content.len());
         let avatar = row(pool, "Avatar Enthusiasts");

@@ -1734,7 +1734,7 @@ impl Observation {
                 player_id: None,
                 permanent_id: None,
                 stack_object_id: None,
-                card_id: Some(game.state[object].id.0 as i32),
+                card_id: Some(game.state.object(object).ok()?.id.0 as i32),
             }),
             Target::StackSpell(object_id) => {
                 let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;

@@ -26,9 +26,14 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.run_settings import RunSettings
-from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
+from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_decks,
@@ -85,9 +90,16 @@ def _agent() -> ActorCritic:
     )
 
 
-def _collector(decks: UniformDecks) -> Collector:
+def _collector(
+    decks: UniformDecks,
+    *,
+    mana_floats: managym.ManaFloats = "off",
+    mana_payment: managym.ManaPayment = "manual",
+) -> Collector:
     return open_collector(
-        ObservationSpace(),
+        ObservationSpace(
+            ObservationConfig(mana_floats=mana_floats, mana_payment=mana_payment)
+        ),
         Match(decks.match_config()),
         Reward(RewardConfig()),
         num_envs=2,
@@ -237,7 +249,7 @@ def test_sampled_decks_agree_across_producer_counts(
         close_collector(many)
 
 
-def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
+def test_checkpoint_plays_unseen_admitted_decks(
     decks: UniformDecks, tmp_path: Path
 ) -> None:
     target = tmp_path / "policy.pt"
@@ -247,7 +259,6 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     binding = raw["world_binding"]
     assert "setups" not in binding and "content_manifest" not in binding
     assert set(binding) == {
-        "world",
         "world_digest",
         "policy_input_version",
         "rules",
@@ -257,17 +268,19 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "naming_branching",
         "naming_vocabulary",
     }
-    assert binding["world"] == managym.WORLD_VERSION
     assert inspect_checkpoint(target, backend=TORCH_BACKEND).compatible
     policy, _ = load_checkpoint(str(target))
 
     unseen = Deck({"Swamp": 10, "Forest": 4, "Accumulate Wisdom": 1}).player()
     validate_agent_setup(policy, [unseen, decks.players()[0]])
     unsupported = Deck({"Swamp": 9, "Ally": 1}).player()
-    with pytest.raises(ValueError, match="not admitted by"):
+    with pytest.raises(ValueError, match="is not admitted:"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
-    with pytest.raises(ValueError, match="not submitted to the world"):
+    with pytest.raises(
+        ValueError,
+        match="Supply a DeckMatchup with submitted decks",
+    ):
         validate_agent_setup(policy, [unseen, other_pack])
 
     for key, change in (
@@ -280,15 +293,15 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             changed["world_binding"][key] = change
         else:
             changed["world_binding"][key] = {**binding[key], **change}
-        assert checkpoint_incompatibility(changed) is not None
         path = tmp_path / f"changed-{key}.pt"
         write_checkpoint(changed, path)
+        assert not inspect_checkpoint(path, backend=TORCH_BACKEND).compatible
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
 
     # Producer admission for a deck run checks the world, not one pair.
     validate_agent_decks(policy, decks.players())
-    # A setup-bound checkpoint plays only its roster, under the shared rule.
+    # Recording exact decks restricts play to that roster.
     authored = deepcopy(policy)
     authored.world_binding = checkpoint_world(
         [
@@ -573,3 +586,28 @@ def test_mixed_training_games_export_the_resolved_disclosure(
         assert replay.game.setup().decklists == disclosure
         settings.add(disclosure)
     assert settings == {"open", "closed"}
+
+
+@pytest.mark.parametrize("mode", ["all", "usable"])
+def test_priority_taps_follow_sampled_self_play_roots(
+    decks: UniformDecks, mode: managym.ManaFloats
+) -> None:
+    collector = _collector(decks, mana_floats=mode, mana_payment="auto")
+    try:
+        collect(collector, _agent(), 1)
+        assert collector.stats.games > 0
+        assert collector.stats.skipped_decisions > 0
+        if mode == "usable":
+            # No spell, paid activation or tap trigger in these all-basic decks.
+            assert collector.stats.priority_taps == 0
+        else:
+            assert 0 < collector.stats.priority_taps < collector.stats.micro_steps
+        for match, setup in zip(
+            collector.stream_matches,
+            collector._env.current_player_configs(),
+            strict=True,
+        ):
+            assert setup.mana_payment == match.config.mana_payment == ("auto", "auto")
+            assert setup.mana_floats == match.config.mana_floats == (mode, mode)
+    finally:
+        close_collector(collector)

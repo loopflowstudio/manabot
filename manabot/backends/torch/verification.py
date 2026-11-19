@@ -23,7 +23,7 @@ import managym
 
 @torch.no_grad()
 def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapshot:
-    """Use the ordinary world-bound loader and exact setup; never refit weights."""
+    """Use the checkpoint loader and exact setup; never refit weights."""
     if not cases:
         raise ValueError("empty frozen choice corpus")
     if len(cases) > 32:

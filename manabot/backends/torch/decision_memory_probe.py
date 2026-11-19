@@ -402,7 +402,6 @@ def run_probe(
         "rows": len(corpus.rows),
         "overflows": corpus.overflows,
         "capped": corpus.capped,
-        "world": managym.WORLD_VERSION,
         "input_shapes": probe_space().shapes,
         "fit_seeds": FIT_SEEDS,
         "epochs": epochs,

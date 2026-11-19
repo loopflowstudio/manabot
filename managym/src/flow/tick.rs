@@ -102,6 +102,12 @@ impl Game {
             }
 
             if let Some(space) = action_space {
+                if let Some(action) = self.automatic_payment_action(&space) {
+                    self.execute_action(&action)
+                        .expect("automatic payment witness executes");
+                    self.skip_trivial_count += 1;
+                    continue;
+                }
                 if !self.skip_trivial || space.actions.len() > 1 {
                     self.publish_action_space(space);
                     return false;
@@ -530,6 +536,7 @@ impl Game {
             let player = self.state.priority.holder;
             let actions = self.compute_player_actions(player);
             if self.skip_trivial && actions.len() == 1 {
+                self.skipped_priority_passes += 1;
                 let next = self.next_player(player);
                 self.state.priority_mut().on_pass(next);
                 continue;

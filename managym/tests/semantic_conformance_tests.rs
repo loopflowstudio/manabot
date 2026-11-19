@@ -11,7 +11,7 @@ use managym::conformance::{
 
 const ROOT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../conformance/semantic-kernel-w17-v4"
+    "/../conformance/semantic-kernel-w17-v5"
 );
 
 // Each frozen game regenerates the reference/optimized lockstep once. Its
@@ -47,14 +47,14 @@ frozen_cases! {
 
 fn manifest() -> Manifest {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v4/manifest.json"
+        "../../conformance/semantic-kernel-w17-v5/manifest.json"
     ))
     .expect("pinned manifest")
 }
 
 fn evidence() -> Evidence {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v4/evidence.json"
+        "../../conformance/semantic-kernel-w17-v5/evidence.json"
     ))
     .expect("pinned evidence")
 }
