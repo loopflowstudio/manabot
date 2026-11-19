@@ -68,7 +68,6 @@ class PoolDefinition(TypedDict):
     reason: str | None
 
 class ContentPool(TypedDict):
-    world_version: str
     content_digest: str
     definitions: list[PoolDefinition]
 
@@ -76,11 +75,10 @@ def content_pool(name: str) -> ContentPool:
     """The world pool (``"world"``, the only pool): every catalog card and its support."""
 
 class WorldIdentity(TypedDict):
-    world_version: str
     card_digest: str
 
 def world_identity() -> WorldIdentity:
-    """The installed world's version and the digest of its cards."""
+    """The digest of the installed world's cards."""
 
 def set_cards(sets: list[str]) -> list[PoolDefinition]:
     """World pool rows for cards whose key prefix is in ``sets``."""
@@ -1048,6 +1046,7 @@ class Observation:
 
 class AgentError(RuntimeError): ...
 
+# Deprecated: the label of the last numbered world; removed in 0.4.0.
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int

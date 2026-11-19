@@ -1,5 +1,77 @@
 # MTG-353 — checkpoint compatibility and the training corpus
 
+## Human review of 2026-11-18, fourth round — remove the world label (build this next)
+
+Jack Heart, on `WORLD_VERSION` staying as a fixed label: "Why do we still need
+it". On keeping a private literal where stored formats carry the field: "But
+why should stored formats require it anymore? cant we just migrate old data in
+the data cache?". On doing the removal in this PR or its own Task: "do it here".
+
+Build: `WORLD_VERSION` goes away. New files stop writing a world label and
+readers ignore one in old files. No stored data is rewritten (artifacts and
+evaluation blocks are named by the hash of their bytes; frozen evidence keeps
+its spelling).
+
+1. Checkpoints: `current_binding_form` (`manabot/model/world.py`) drops
+   `world` from a retained binding and the expected binding omits it, so old
+   and new checkpoints compare equal. Remove the "trained in X, engine is Y"
+   check; an earlier-world checkpoint fails at the input-version or binding
+   check instead. The pinned pilots in CI must still load unchanged.
+2. Replays and recordings: stop writing the label; delete the label check in
+   `managym/replay.py`. The native-bytes check stays.
+3. Native: remove `crate::WORLD_VERSION` and the `world_version` fields of
+   the pack manifest, pool and decision capture, and the `world` context key,
+   where nothing stored is compared against them. Where a stored digest or id
+   does include the label, keep reading old data: prefer ignoring the field;
+   keep a local string only where the label is part of a stored name. Known
+   case: the matchup id `w17-authored-matrix-<hash>` in `manabot/sim/matchup.py`
+   keeps its prefix as a plain string so a resumed tournament sees its old
+   matchups. Record any other such case in `scratch/questions.md`.
+4. Python: remove the `world=` parameter from evaluation, provenance,
+   registration and experiment code where it is only compared with itself.
+   Frozen experiment files that write `"world": managym.WORLD_VERSION` into a
+   config write the string they always wrote.
+5. `managym.WORLD_VERSION` public export: a deprecated alias that warns and
+   names 0.4.0 as its removal, per the naming rule; nothing in the repository
+   reads it.
+6. Docs: `WORLDS.md`, `docs/engine.md`, `docs/evaluation.md`, the READMEs and
+   CLAUDE.md say there is no world label; `WORLDS.md` stays as history.
+7. Rebuild the extension, run the tests of the files changed (debug Rust for
+   the touched crates), publish and stop at human review. Do not land.
+
+Not in this round: policy input versions (v9/v10 retirement by distillation
+and "v11 is the last number" were discussed, nothing chosen).
+
+### Built in the implement pass of 2026-11-18 (questions 58-62)
+
+Items 1-6 are built; item 7 is partly run (below).
+
+- Native: `WORLD_VERSION` and the `world_version` fields of `WorldIdentity`,
+  the pool, the pack manifest and the conformance manifest are gone, with the
+  `world` key of the failure context. Decision capture is v6 without the label.
+- Checkpoints: `_input_binding` writes no `world`; `current_binding_form`
+  drops `world` and `content_manifest.world_version` from a retained binding;
+  the "trained in X, engine is Y" check is deleted. A relabelled checkpoint
+  loads; one with another input version or shapes is refused by those fields.
+- Replays and recordings write no label and compare cards and native bytes.
+- Evaluation: `runtime_fingerprints` has no `world`; `PlayerRegistration`,
+  `EvaluationKey`, `SelfPlay` and `BaselineReport` keep an optional `world`
+  that is omitted when absent. Matchup ids keep `SUITE_PREFIX = "w17"`.
+  Frozen experiment files write `"w17"`.
+- `managym.WORLD_VERSION` warns and names 0.4.0. Docs and AGENTS.md updated.
+
+What the slice taught:
+
+- The label sat inside three stored digests, not one: the decision capture's
+  own SHA-256, a card-evaluation environment's `files` hash, and every
+  registration hash. Each is read back with the label when the stored record
+  has it; none is rewritten.
+- A registration written now differs from a retained one of the same player
+  (question 59). Whether Etude then replays a resumed tournament's matches was
+  not checked.
+- Academy demo fixtures compare a stored pack manifest with the live one; the
+  comparison skips the old key and the fixtures were left as they are.
+
 ## Human review of 2026-11-18, third round — items 1 and 4 built, 5 next
 
 Built (questions 54-56): `training_corpus(file, source=storage)` selects the

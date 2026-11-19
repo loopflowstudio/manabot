@@ -126,7 +126,8 @@ class SelfPlay(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    world: str = Field(default_factory=lambda: managym.WORLD_VERSION)
+    # Settings recorded before the world label was removed carry it; ignored.
+    world: str | None = Field(default=None, exclude_if=lambda value: value is None)
     match: MatchConfig | None = None
     deck_source: UniformDecks | None = None
     observation: ObservationConfig = ObservationConfig()
@@ -180,8 +181,6 @@ class SelfPlay(BaseModel):
     def valid_settings(self) -> "SelfPlay":
         if isinstance(self.learning, Learning) and self.learning.horizon is None:
             raise ValueError("PPO self-play requires a learning horizon")
-        if self.world != managym.WORLD_VERSION:
-            raise ValueError("self-play world differs from native runtime")
         if (self.match is None) == (self.deck_source is None):
             raise ValueError("self-play needs exactly one match or deck source")
         if self.model.value_kind == "categorical_wdl" and not isinstance(

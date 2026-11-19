@@ -29,7 +29,6 @@ import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
-WORLD = managym.WORLD_VERSION
 # The authored setup whose decks form the Elemental roster (`elemental-world-v1`
 # names the same decks).
 _ROSTER_SETUP = "optional_payments"
@@ -123,7 +122,7 @@ def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
     for player, issues in zip(player_configs, checked, strict=True):
         if issues:
             raise ValueError(
-                f"deck {player.name} is not admitted by world {WORLD}: "
+                f"deck {player.name} is not admitted: "
                 + "; ".join(issue.message for issue in issues)
             )
 
@@ -136,7 +135,6 @@ def validate_policy_input(agent: Any, binding: dict) -> None:
 
 def _input_binding(observation_space: Any) -> dict:
     return {
-        "world": WORLD,
         "policy_input_version": observation_space.encoder.config.policy_input_version,
         # The input binds the native group partition through its branching
         # bound; changing it reinterprets every group route.
@@ -233,15 +231,22 @@ def expected_world(
 def current_binding_form(binding: Mapping[str, Any]) -> dict:
     """A retained binding in the form this runtime writes.
 
+    Earlier revisions recorded a world label (`world`, and `world_version` in
+    the content manifest); nothing compares it now, so an earlier-world
+    checkpoint is refused by its input version or by the fields that differ.
     Bindings of the world's catalog recorded `pack_key: None` in their content
     manifest before the catalog was the only pack; that field carries nothing
-    now. An authored pack's non-null key stays, so its binding never matches.
+    either. An authored pack's non-null key stays, so its binding never matches.
     """
-    manifest = binding.get("content_manifest")
-    if isinstance(manifest, Mapping) and manifest.get("pack_key", "") is None:
-        manifest = {key: value for key, value in manifest.items() if key != "pack_key"}
-        return {**binding, "content_manifest": manifest}
-    return dict(binding)
+    current = {key: value for key, value in binding.items() if key != "world"}
+    manifest = current.get("content_manifest")
+    if isinstance(manifest, Mapping):
+        current["content_manifest"] = {
+            key: value
+            for key, value in manifest.items()
+            if key != "world_version" and not (key == "pack_key" and value is None)
+        }
+    return current
 
 
 def validate_checkpoint_world(
@@ -249,11 +254,7 @@ def validate_checkpoint_world(
 ) -> dict:
     binding = checkpoint.get("world_binding")
     if not isinstance(binding, dict):
-        raise ValueError(
-            f"checkpoint requires an explicit compatible {WORLD} world binding"
-        )
-    if binding.get("world") != WORLD:
-        raise ValueError(f"trained in {binding.get('world')}, engine is {WORLD}")
+        raise ValueError("checkpoint requires an explicit world binding")
     try:
         expected = expected_world(binding, observation_space, player_configs)
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:

@@ -9,19 +9,21 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.guidance import build_registered_player
 from manabot.sim.registration import PlayerRegistration
-from managym import WORLD_VERSION
 from tests.eval.arena_fixture import ARENA_FIXTURE, arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize("label", [WORLD_VERSION, "w1"])
-def test_world_label_round_trips_arena_and_player_identities(label: str) -> None:
+@pytest.mark.parametrize("label", ["w17", "w1"])
+def test_retained_world_label_round_trips_and_new_records_omit_it(label: str) -> None:
     contract = arena_fixture()
     key = contract.key.model_dump() | {"world": label}
     player = contract.anchors[0].model_dump() | {"world": label}
-    assert EvaluationKey.model_validate(key).world == label
-    assert PlayerRegistration.model_validate(player).world == label
+    assert EvaluationKey.model_validate(key).model_dump() == key
+    assert PlayerRegistration.model_validate(player).model_dump() == player
+    del key["world"], player["world"]
+    assert "world" not in EvaluationKey.model_validate(key).model_dump()
+    assert "world" not in PlayerRegistration.model_validate(player).model_dump()
 
 
 def test_checked_contract_has_exact_code_only_base() -> None:

@@ -19,7 +19,7 @@ from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_json, canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
-from manabot.model.world import expected_world
+from manabot.model.world import current_binding_form, expected_world
 from manabot.sim.evaluation_records import (
     audit_view,
     evaluation_metadata,
@@ -123,8 +123,9 @@ def replay_environment(
             raise ValueError("card capture requires ordinary deck setup")
         root = game["scenario_root"]
         name = root["name"]
-        if root != scenario_identity(name):
-            raise ValueError("scenario root version/world/source mismatch")
+        # A root recorded before the world label was removed carries it.
+        if {k: v for k, v in root.items() if k != "world"} != scenario_identity(name):
+            raise ValueError("scenario root version/source mismatch")
         space = observation_space or ObservationSpace(
             ObservationConfig.from_checkpoint(game["observation_hypers"])
         )
@@ -132,13 +133,18 @@ def replay_environment(
             SCENARIOS[name], space, int(game["deal_seed"])
         )
         binding = game["world_binding"]
-        if expected_world(binding, space, env.match.to_rust()) != binding:
+        if expected_world(binding, space, env.match.to_rust()) != current_binding_form(
+            binding
+        ):
             env.close()
             raise ValueError("scenario world/setup/input mismatch")
         return env, observation
-    if "world" in game and game["world"] != managym.world_identity():
+    # A game recorded before the world label was removed carries it beside
+    # the card digest; only the cards are compared.
+    running = managym.world_identity()["card_digest"]
+    if "world" in game and game["world"].get("card_digest") != running:
         raise ValueError(
-            f"recorded world {game['world']} differs from running {managym.world_identity()}"
+            f"recorded cards {game['world'].get('card_digest')} differ from running {running}"
         )
     names = game["seat_players"]
     match = Match(

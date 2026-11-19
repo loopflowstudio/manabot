@@ -25,7 +25,6 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
-import managym
 
 
 def play_pairing(
@@ -67,7 +66,6 @@ def play_pairing(
         paths[name] = str(player.checkpoint.path)
     candidate, opponent = players
     key = EvaluationKey(
-        world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
         arena_version=arena,

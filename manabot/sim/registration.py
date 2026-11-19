@@ -22,9 +22,6 @@ ETUDE_SAMPLER_SPEC: dict[str, Any] = {
     "allow_deck_repetition": True,
 }
 
-# Retained provenance label carried by arena and participant records.
-type WorldVersion = str
-
 # The w2 interactive mirror: two legs and deterministic checkpoint inference.
 HISTORICAL_MIRROR_SUITE = "w2-interactive-mirror-v1"
 
@@ -43,7 +40,9 @@ class PlayerRegistration(StrictModel):
     player_spec: dict[str, Any]
     compute_class_id: str
     information_boundary: str
-    world: WorldVersion
+    # The world label of a registration written before the label was removed;
+    # kept so that record's hash is unchanged. New registrations omit it.
+    world: str | None = Field(default=None, exclude_if=lambda v: v is None)
     content_suite: str
     observation_abi_sha256: str = Field(pattern=SHA256_PATTERN)
     action_abi_sha256: str = Field(pattern=SHA256_PATTERN)

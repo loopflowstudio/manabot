@@ -4367,7 +4367,6 @@ impl PyEnv {
         let manifest = env.content_pack_manifest().map_err(map_agent_err)?;
 
         let out = PyDict::new_bound(py);
-        out.set_item("world_version", manifest.world_version)?;
         out.set_item("schema_version", manifest.schema_version)?;
         out.set_item("content_digest", manifest.content_digest)?;
         let definitions = PyList::empty_bound(py);
@@ -5327,19 +5326,17 @@ fn content_pool(py: Python<'_>, name: &str) -> PyResult<PyObject> {
     let pool =
         crate::cards::content_pool(name).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let out = PyDict::new_bound(py);
-    out.set_item("world_version", &pool.world_version)?;
     out.set_item("content_digest", &pool.content_digest)?;
     out.set_item("definitions", pool_rows(py, &pool.definitions)?)?;
     Ok(out.into())
 }
 
-/// The installed world's version and card digest.
+/// The installed world's card digest.
 #[cfg(feature = "python")]
 #[pyfunction]
 fn world_identity(py: Python<'_>) -> PyResult<PyObject> {
     let identity = crate::world::world_identity();
     let out = PyDict::new_bound(py);
-    out.set_item("world_version", identity.world_version)?;
     out.set_item("card_digest", identity.card_digest)?;
     Ok(out.into())
 }
@@ -5494,7 +5491,6 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
     m.add(
         "MAX_DECISION_CODE",
         crate::agent::continuation::MAX_DECISION_CODE,

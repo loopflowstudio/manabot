@@ -23,12 +23,12 @@ def test_imported_pair_swaps_decks_sideboards_policies_and_replays(
     )
     contract = arena_fixture()
     key = contract.key.model_copy(
-        update={"world": managym.WORLD_VERSION, "content_suite": matchup.content_suite}
+        update={"world": None, "content_suite": matchup.content_suite}
     )
     players = [
         p.model_copy(
             update={
-                "world": managym.WORLD_VERSION,
+                "world": None,
                 "content_suite": matchup.content_suite,
                 "matchup_sha256": canonical_sha256(matchup.match().model_dump()),
             }

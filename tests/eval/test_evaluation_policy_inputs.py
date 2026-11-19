@@ -17,7 +17,6 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.registration import PlayerRegistration
-from managym import WORLD_VERSION
 from tests.eval.arena_fixture import arena_fixture
 from tests.model.prepared_routes import host_inputs
 from tests.model.test_inference import _policy
@@ -41,14 +40,14 @@ def fixture_policy(
         agent, space, path, player_configs=Match(selected_match()).to_rust()
     )
     runtime = runtime_fingerprints(
-        match_config=selected_match(), observation_space=space, world=WORLD_VERSION
+        match_config=selected_match(), observation_space=space
     )
     key = contract.key.model_copy(
-        update={"world": WORLD_VERSION, "content_suite": SELECTED_SUITE}
+        update={"world": None, "content_suite": SELECTED_SUITE}
     )
     anchor = contract.anchors[0].model_copy(
         update={
-            "world": WORLD_VERSION,
+            "world": None,
             "content_suite": SELECTED_SUITE,
             "matchup_sha256": canonical_sha256(selected_match().model_dump()),
         }

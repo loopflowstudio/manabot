@@ -103,7 +103,6 @@ class BaselineFactory:
                 ("Weights", displayed.weights),
                 ("Updates", displayed.updates),
                 ("Transitions", displayed.transitions),
-                ("World", displayed.world),
                 ("Model", displayed.model),
                 ("Parameters", displayed.parameters),
                 ("Step", displayed.step),

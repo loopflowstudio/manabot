@@ -297,3 +297,33 @@ raises `UnknownCoverage: <source> holds no run <experiment>/<run>` instead of
 paths (`~/.etude/track/local/out/policies/...`) and its statistics example
 uses the same file; `etude_home` was undefined and frontier Small has no
 statistics.
+
+## Implement, human review fourth round (remove the world label), 2026-11-18
+
+58. Decision capture: the capture's SHA-256 covers every field, the label
+    included, so the field could not be dropped in place. New captures are
+    version 6 without `world_version`; `DecisionInput` reads v3-v6 and keeps
+    an optional, unread `world_version` so a stored v3-v5 capture validates
+    and its digest still recomputes from its own bytes. Reversible.
+59. Evaluation records: `PlayerRegistration.world` and `EvaluationKey.world`
+    are optional and omitted when absent, so a retained record validates and
+    hashes as before and a new one writes none. Consequence, not checked
+    against Etude: a registration made by this revision differs from the one a
+    retained tournament holds for the same player (no `world`), so a
+    tournament resumed across this revision may treat its participants as new.
+    Frozen experiment files that passed `world=managym.WORLD_VERSION` pass
+    `"w17"` and keep their old records. The same optional form is used for
+    `SelfPlay.world` (recorded settings) and `BaselineReport.world`.
+60. Other places the label was part of a stored id or digest, kept readable
+    without rewriting: `manabot.sim.matchup.SUITE_PREFIX = "w17"` (authored,
+    deck and selected suite ids); a card-evaluation `Environment` whose
+    `files` hash covered `world` (read back as one more identity field when
+    its config has it); a scenario root, game record `world` dict, receipt
+    identities and native failure context (the key is skipped); Academy demo
+    fixtures' `manifest.world_version` (skipped in the comparison; the
+    fixtures were not rewritten, and the next refresh drops it).
+61. Not read any more: `CheckpointSummary.world` and Academy's "World" detail
+    row are removed, since a current checkpoint has no label to show. The
+    browser still prints `provenance.world` of a recorded game when present.
+62. `experiments/protocols/mtg186-identity.json`, the conformance manifests and
+    every JSON fixture keep the label they were written with.

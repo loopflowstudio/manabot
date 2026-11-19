@@ -56,8 +56,7 @@ def register_checkpoint(
 ) -> CheckpointAdmission:
     """Admit local bytes; a missing producer seed remains unknown, never invented.
 
-    The runtime supplies the retained world label. Both ABI hashes describe
-    the checkpoint's own observation space.
+    Both ABI hashes describe the checkpoint's own observation space.
     Blanking registers the same bytes as a distinct memory-ablation player.
     """
     digest, size = file_sha256(path), path.stat().st_size
@@ -77,7 +76,6 @@ def register_checkpoint(
     )
     registration = PlayerRegistration(
         information_boundary="acting-viewer",
-        world=runtime["world"],
         content_suite=content_suite,
         observation_abi_sha256=runtime["observation_abi_sha256"],
         action_abi_sha256=runtime["action_abi_sha256"],
@@ -130,7 +128,6 @@ def register_anchor(
     common = candidate.model_dump(
         include={
             "information_boundary",
-            "world",
             "content_suite",
             "observation_abi_sha256",
             "action_abi_sha256",

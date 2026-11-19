@@ -1195,9 +1195,12 @@ human-only payment flow.
 
 ## Worlds
 
-`managym.WORLD_VERSION` ([`world.rs`](../managym/src/world.rs)) is a fixed
-label that existing records and bindings carry; no change moves it
-([history](../WORLDS.md)). Which checkpoints load is
+The engine has no world label. `managym.world_identity()`
+([`world.rs`](../managym/src/world.rs)) names the installed cards by their
+digest; checkpoints, recordings and evaluation records written before the
+label was removed still carry one, which nothing compares
+([history](../WORLDS.md)). `managym.WORLD_VERSION` is a deprecated alias,
+removed in 0.4.0. Which checkpoints load is
 [compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision);
 which measurements line up is
 [evaluation](evaluation.md#comparing-measurements-across-revisions).

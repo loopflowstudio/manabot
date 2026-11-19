@@ -40,10 +40,11 @@ def test_duel_rejects_unequal_updates_runtime_and_bytes(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="equal update"):
         duel.validate_inputs()
     duel.one_seat.coordinates.updates -= 1
-    duel.one_seat.evaluation_identities["world"] = "other"
+    same = duel.one_seat.evaluation_identities["matchup_sha256"]
+    duel.one_seat.evaluation_identities["matchup_sha256"] = "other"
     with pytest.raises(ValueError, match="runtime differs"):
         duel.validate_inputs()
-    duel.one_seat.evaluation_identities["world"] = "x"
+    duel.one_seat.evaluation_identities["matchup_sha256"] = same
     Path(duel.one_seat.artifact["path"]).write_bytes(b"tampered")
     with pytest.raises(ValueError, match="artifact bytes differ"):
         duel.validate_inputs()

@@ -73,7 +73,7 @@ class RecordedDecision:
 def _build_name(identities: Mapping[str, object]) -> str:
     return (
         f"managym {identities.get('managym_version', 'unknown')} "
-        f"world {identities.get('world')} cards {identities.get('card_digest', 'unknown')} "
+        f"cards {identities.get('card_digest', 'unknown')} "
         f"engine {identities.get('engine_recording_source_sha256', 'unknown')}"
     )
 
@@ -97,12 +97,12 @@ class RecordWalker:
         self.builds = (
             f"recorded {_build_name(record.identities)}; running {_build_name(current)}"
         )
-        if record.identities.get("world") != current["world"] or (
+        if (
             record.identities.get("card_digest") is not None
             and record.identities["card_digest"] != current["card_digest"]
         ):
             raise ValueError(
-                f"record world or cards differ: {self.builds}. Open it with managym "
+                f"record cards differ: {self.builds}. Open it with managym "
                 f"{record.identities.get('managym_version', 'unknown')}."
             )
         self.build_differs = any(
@@ -326,12 +326,10 @@ def require_replay_runtime(
 ) -> str:
     """Admit native bytes and require automatic capture's source digest on request.
 
-    Changed-runtime admission never permits another world. Historical arena and
-    tolerance receipts retain other source identities; their replay contract only
-    checks native bytes. Return the current native digest for diagnostic output.
+    Historical arena and tolerance receipts retain other source identities;
+    their replay contract only checks native bytes. Return the current native
+    digest for diagnostic output.
     """
-    if identities["world"] != managym.WORLD_VERSION:
-        raise ValueError("world differs from retained failure")
     native = hashlib.sha256(Path(managym._managym.__file__).read_bytes()).hexdigest()
     if not allow_changed_runtime:
         if native != identities["engine_extension_sha256"]:

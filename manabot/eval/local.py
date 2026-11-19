@@ -98,7 +98,6 @@ def checkpoint_request(
             heuristic_actions=heuristic_actions,
         )
     key = EvaluationKey(
-        world=candidate.world,
         content_suite=suite,
         viewer_boundary="acting-viewer",
         arena_version="local-evaluation-v1",

@@ -2,7 +2,7 @@
 
 The catalog answers "which bots could play here?" without constructing them.
 ``inspect_checkpoint`` reads container metadata or a legacy ``.pt`` with
-Torch's ``weights_only`` unpickler, and returns a ``CheckpointSummary``: exact bytes, world,
+Torch's ``weights_only`` unpickler, and returns a ``CheckpointSummary``: exact bytes,
 model shape, training step, producer and — when the checkpoint cannot play in
 this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
@@ -40,8 +40,6 @@ class CheckpointSummary:
     label: str
     source: CheckpointSource
     producer: str
-    # ``None`` when the checkpoint predates world binding.
-    world: str | None
     model: str
     parameters: int
     # Trainer ``global_step`` (environment steps) when it records one.
@@ -122,8 +120,6 @@ def _inspect_cached(
     ):
         return NotAPolicyCheckpoint(f"{path} holds no policy")
     config = checkpoint["hypers"]
-    binding = checkpoint.get("world_binding")
-    world = binding.get("world") if isinstance(binding, Mapping) else None
     step = checkpoint.get("global_step")
     search_reason = checkpoint_search_incompatibility(checkpoint)
     return CheckpointSummary(
@@ -133,7 +129,6 @@ def _inspect_cached(
         label=_default_label(Path(path)),
         source="path",
         producer=_producer(checkpoint),
-        world=world if isinstance(world, str) else None,
         model=_model_shape(config.get("agent_hypers")),
         parameters=(checkpoint.get("architecture") or {})
         .get("parameters", {})
@@ -142,7 +137,7 @@ def _inspect_cached(
         run_id=_text(checkpoint.get("bc"), "run_id"),
         stage=_text(checkpoint.get("bc"), "stage_id"),
         weights=_text(checkpoint.get("bc"), "weights"),
-        setups=_setups(binding),
+        setups=_setups(checkpoint.get("world_binding")),
         incompatibility=refusal(lambda: backend.read_policy(path)),
         policy_input_version=config.get("observation_hypers", {}).get(
             "policy_input_version", 1

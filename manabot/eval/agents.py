@@ -205,7 +205,6 @@ def registration(
         player_id=name,
         display_name=player.name,
         role=role,
-        world=runtime["world"],
         content_suite=content_suite,
         information_boundary="acting-viewer",
         observation_abi_sha256=runtime["observation_abi_sha256"],

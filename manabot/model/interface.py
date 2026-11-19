@@ -8,7 +8,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.world import (
-    WORLD,
     checkpoint_world,
     deck_world,
     validate_checkpoint_world,
@@ -67,7 +66,7 @@ def model_interface(
     that records exact decks."""
     saved = checkpoint.get("world_binding")
     if not isinstance(saved, dict):
-        raise ValueError(f"trained without a world binding; engine is {WORLD}")
+        raise ValueError("trained without a world binding")
     if "world_digest" in saved and ("setups" in saved or "content_manifest" in saved):
         raise ValueError("checkpoint binding mixes a world and a fixed setup")
     if "world_digest" not in saved:

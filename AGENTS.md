@@ -288,6 +288,13 @@ change already touches it; do not rewrite a module only for style. Rust in
   fails `tests/model/test_pinned_pilot.py` until it adds the rename or column
   or declares the break with `scripts/pinned_pilot.py record --reason`. Do not
   bump the input version for a layout change.
+- The engine has no world label. New checkpoints, recordings, decision captures
+  (v6) and evaluation records write none; a reader ignores one in an older file
+  (`manabot.model.world.current_binding_form`, optional `world` fields omitted
+  when absent) and never rewrites stored data. `managym.WORLD_VERSION` is a
+  warning alias until 0.4.0. Matchup ids keep `w17` as the plain string
+  `manabot.sim.matchup.SUITE_PREFIX`, and frozen experiment files write the
+  literal, so retained tournaments find their records. Add no new label.
 - Main carries policy input v11, the fresh default
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;

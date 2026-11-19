@@ -15,7 +15,7 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.world import WORLD, checkpoint_world
+from manabot.model.world import checkpoint_world
 from manabot.policy.prepare import reference_distribution
 from manabot.verify.action_cases import (
     DecisionCase,
@@ -91,7 +91,6 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
 ) -> None:
     space = ObservationSpace()
     binding = checkpoint_world(Match().to_rust(), space)
-    assert binding["world"] == WORLD
     binding["world"] = old_world
     binding["input_schema"]["actions"]["shape"][-1] = width
     path = tmp_path / "w4.pt"
@@ -106,5 +105,5 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
         },
         path,
     )
-    with pytest.raises(ValueError, match=f"trained in {old_world}, engine is {WORLD}"):
+    with pytest.raises(ValueError, match=f"actions 512x{width} -> 512x"):
         load_checkpoint(str(path))

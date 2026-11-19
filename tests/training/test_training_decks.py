@@ -247,7 +247,6 @@ def test_checkpoint_plays_unseen_admitted_decks(
     binding = raw["world_binding"]
     assert "setups" not in binding and "content_manifest" not in binding
     assert set(binding) == {
-        "world",
         "world_digest",
         "policy_input_version",
         "rules",
@@ -257,14 +256,13 @@ def test_checkpoint_plays_unseen_admitted_decks(
         "naming_branching",
         "naming_vocabulary",
     }
-    assert binding["world"] == managym.WORLD_VERSION
     assert inspect_checkpoint(target, backend=TORCH_BACKEND).compatible
     policy, _ = load_checkpoint(str(target))
 
     unseen = Deck({"Swamp": 10, "Forest": 4, "Accumulate Wisdom": 1}).player()
     validate_agent_setup(policy, [unseen, decks.players()[0]])
     unsupported = Deck({"Swamp": 9, "Ally": 1}).player()
-    with pytest.raises(ValueError, match="not admitted by"):
+    with pytest.raises(ValueError, match="is not admitted:"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
     with pytest.raises(

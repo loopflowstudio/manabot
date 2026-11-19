@@ -11,7 +11,7 @@ from manabot.eval.match import derive_seed, play_cell
 from manabot.eval.models import MatchRow
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_trace, replay_games
-from managym import WORLD_VERSION, AgentError
+from managym import AgentError
 from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -125,12 +125,12 @@ def selected_players():
 
     contract = arena_fixture()
     key = contract.key.model_copy(
-        update={"world": WORLD_VERSION, "content_suite": SELECTED_SUITE}
+        update={"world": None, "content_suite": SELECTED_SUITE}
     )
     players = [
         player.model_copy(
             update={
-                "world": WORLD_VERSION,
+                "world": None,
                 "content_suite": SELECTED_SUITE,
                 "matchup_sha256": canonical_sha256(selected_match().model_dump()),
             }
@@ -369,7 +369,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path: Path) -
         agent, space, path, player_configs=Match(selected_match()).to_rust()
     )
     runtime = runtime_fingerprints(
-        match_config=selected_match(), observation_space=space, world=WORLD_VERSION
+        match_config=selected_match(), observation_space=space
     )
     candidate = PlayerRegistration.model_validate(
         {

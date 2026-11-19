@@ -11,11 +11,12 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from manabot.infra.identity import SHA256_PATTERN, StrictModel
-from manabot.sim.registration import HISTORICAL_MIRROR_SUITE, WorldVersion
+from manabot.sim.registration import HISTORICAL_MIRROR_SUITE
 
 
 class EvaluationKey(StrictModel):
-    world: WorldVersion
+    # Arenas recorded before the world label was removed carry it; new keys omit it.
+    world: str | None = Field(default=None, exclude_if=lambda v: v is None)
     content_suite: str
     viewer_boundary: str
     arena_version: str

@@ -35,7 +35,6 @@ from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS
-from managym import WORLD_VERSION
 from managym.bots import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
 
 
@@ -252,11 +251,10 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     space = space or ObservationSpace()
     match = selected_match()
     runtime = evaluation_runtime_fingerprints(
-        match_config=match, observation_space=space, world=WORLD_VERSION
+        match_config=match, observation_space=space
     )
     common = dict(
         runner_kind="code",
-        world=WORLD_VERSION,
         content_suite=SELECTED_SUITE,
         information_boundary="acting-viewer-history-only-v1",
         observation_abi_sha256=runtime["observation_abi_sha256"],
@@ -305,7 +303,6 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     )
     source_sha256 = source_digest(source_paths)
     key = EvaluationKey(
-        world=WORLD_VERSION,
         content_suite=SELECTED_SUITE,
         viewer_boundary=common["information_boundary"],
         arena_version="allies-lessons-"

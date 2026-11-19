@@ -510,7 +510,6 @@ def test_original_failure_is_immutable_and_cli_replays(
         row,
         {
             "identities": {
-                "world": managym.WORLD_VERSION,
                 "engine_extension_sha256": file_sha256(Path(managym._managym.__file__)),
             }
         },

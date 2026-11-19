@@ -29,4 +29,3 @@ pub use agent::env::Env;
 pub use flow::game::Game;
 pub use state::hash::MATCH_STATE_HASH_VERSION;
 pub use state::player::PlayerConfig;
-pub use world::WORLD_VERSION;

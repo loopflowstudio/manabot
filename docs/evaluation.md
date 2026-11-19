@@ -116,7 +116,7 @@ and diagnostics, not as working anchors; `fit_population` still places
 against each other on shared deals.
 
 Ratings are a seat-aware Bradley-Terry fit expressed on the Elo scale
-(`eval.rating`). A rating belongs to one tuple of world, content suite,
+(`eval.rating`). A rating belongs to one tuple of content suite,
 information boundary, compute class and arena version, and never crosses those
 boundaries; one anchor fixes the origin, so differences carry meaning and the
 absolute number doesn't. The full contract, including why the payoff matrix

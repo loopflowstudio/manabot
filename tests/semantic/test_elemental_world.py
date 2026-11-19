@@ -116,10 +116,8 @@ def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
         validate_checkpoint_world({"world_binding": drifted}, space)
     stale = deepcopy(binding)
     stale["world"] = "w9"
-    with pytest.raises(
-        ValueError, match=f"trained in w9, engine is {managym.WORLD_VERSION}"
-    ):
-        validate_checkpoint_world({"world_binding": stale}, space)
+    # A world label from an earlier revision is not compared.
+    validate_checkpoint_world({"world_binding": stale}, space)
 
 
 def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(

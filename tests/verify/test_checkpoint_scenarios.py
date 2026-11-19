@@ -78,11 +78,11 @@ def test_wrong_world_setup_and_capacity_fail_admission(tmp_path: Path) -> None:
     assert score.status == "failed" and score.correct is None
     assert "setup differs" in (score.error or "")
     data = read_checkpoint(path, weights_only=False)
-    data["world_binding"]["world"] = "wrong-world"
+    data["world_binding"]["policy_input_version"] = 1
     write_checkpoint(data, path)
     score, game = score_checkpoint(name, path, backend=resolve("torch"))
     assert score.status == "failed" and game is None
-    assert "trained in wrong-world" in (score.error or "")
+    assert "policy_input_version" in (score.error or "")
     path = _checkpoint(tmp_path, name, max_actions=1)
     score, _ = score_checkpoint(name, path, backend=resolve("torch"))
     assert score.status == "failed" and score.correct is None

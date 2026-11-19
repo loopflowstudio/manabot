@@ -49,7 +49,7 @@ def _players(decks: list[str]) -> list[managym.PlayerConfig]:
 
 def test_native_heuristic_matches_retained_python_decisions() -> None:
     fixture = json.loads(PARITY.read_text())
-    assert fixture["world"] == managym.world_identity()
+    assert fixture["world"]["card_digest"] == managym.world_identity()["card_digest"]
     for case in fixture["cases"]:
         env = managym.Env(seed=case["seed"])
         raw, _ = env.reset(_players(case["decks"]))
