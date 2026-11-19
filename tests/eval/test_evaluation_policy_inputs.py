@@ -42,12 +42,9 @@ def fixture_policy(
     runtime = runtime_fingerprints(
         match_config=selected_match(), observation_space=space
     )
-    key = contract.key.model_copy(
-        update={"world": None, "content_suite": SELECTED_SUITE}
-    )
+    key = contract.key.model_copy(update={"content_suite": SELECTED_SUITE})
     anchor = contract.anchors[0].model_copy(
         update={
-            "world": None,
             "content_suite": SELECTED_SUITE,
             "matchup_sha256": canonical_sha256(selected_match().model_dump()),
         }

@@ -142,11 +142,11 @@ class TrainingGame:
         if not receipt.game.terminal:
             raise ValueError("game is cut off; export requires a complete game")
         capture = receipt.game.cards.capture
-        running = managym.world_identity()
-        if capture.content_digest != running["card_digest"]:
+        running = managym.world_identity()["card_digest"]
+        if capture.content_digest != running:
             raise ValueError(
                 f"receipt cards {capture.content_digest} differ from running "
-                f"cards {running['card_digest']}"
+                f"cards {running}"
             )
         assert capture.exposure is not None  # validated by the receipt model
         trace = receipt.game.trace

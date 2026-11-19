@@ -455,7 +455,7 @@ def aggregate_reports(
         len({(r.regime_digest, r.steps, r.source, r.corpus_sha256) for r in reports})
         != 1
     ):
-        errors.append("cohort recipe/world/horizon/source/corpus differs")
+        errors.append("cohort recipe/horizon/source/corpus differs")
     evidence = (
         LearningEvidence(
             verdict="error", seeds=len(reports), deals=0, reason="; ".join(errors)

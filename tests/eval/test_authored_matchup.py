@@ -101,13 +101,10 @@ def test_explicit_matrix_replays_all_cells_without_selected_world_alias(
 ) -> None:
     matrix = roster()
     contract = arena_fixture()
-    key = contract.key.model_copy(
-        update={"world": None, "content_suite": matrix.content_suite}
-    )
+    key = contract.key.model_copy(update={"content_suite": matrix.content_suite})
     players = [
         p.model_copy(
             update={
-                "world": None,
                 "content_suite": matrix.content_suite,
                 "matchup_sha256": canonical_sha256(matrix.match().model_dump()),
             }

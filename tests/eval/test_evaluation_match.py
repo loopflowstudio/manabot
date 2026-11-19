@@ -124,13 +124,10 @@ def selected_players():
     from manabot.sim.matchup import SELECTED_SUITE, selected_match
 
     contract = arena_fixture()
-    key = contract.key.model_copy(
-        update={"world": None, "content_suite": SELECTED_SUITE}
-    )
+    key = contract.key.model_copy(update={"content_suite": SELECTED_SUITE})
     players = [
         player.model_copy(
             update={
-                "world": None,
                 "content_suite": SELECTED_SUITE,
                 "matchup_sha256": canonical_sha256(selected_match().model_dump()),
             }
