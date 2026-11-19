@@ -44,6 +44,7 @@ const STATES: &[(&str, &str)] = &[
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
     ("names", "The Rise of Sozin chapter II; catalog-wide bounded naming groups beside a large graveyard"),
+    ("convoke-duplicates", "Guardian of Vitu-Ghazi + Appeal to Eirdu; N other Guardians and N Forests. Identical sources still yield one direct-tap offer per creature"),
     ("convoke-diverse", "Guardian of Vitu-Ghazi + Appeal to Eirdu; N creatures cycling eight color mixes (two are mana sources) and N lands cycling four kinds. The payment step grows with N squared and a search reply with N cubed: a step asks a number of payment plans that grows with N, each over the whole board, and search tries one tap per source. One payment model answers every tap offer of a decision"),
     ("delve-graveyard", "Teval, Sire of Seven Deaths, three lands and N graveyard cards cycling eight names; one exile offer per card, no payment search"),
     ("improvise-artifacts", "Ironheart, one Island and N artifacts cycling Treasure, Prism, Waterskin, Scarecrow Guide and Battle Fan; the payment step and search grow as in convoke-diverse, beside one plan per mana ability"),
@@ -176,10 +177,15 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 }
             }
         }
-        "convoke-diverse" => {
+        "convoke-duplicates" | "convoke-diverse" => {
             let seat = &mut seats[0];
-            seat.cycle(CREATURES, size);
-            seat.cycle(&["Forest", "Plains", "Airship Engine Room", "Island"], size);
+            if name == "convoke-duplicates" {
+                seat.add("Guardian of Vitu-Ghazi", size);
+                seat.add("Forest", size);
+            } else {
+                seat.cycle(CREATURES, size);
+                seat.cycle(&["Forest", "Plains", "Airship Engine Room", "Island"], size);
+            }
             seat.hand
                 .extend(["Guardian of Vitu-Ghazi".into(), "Appeal to Eirdu".into()]);
         }
@@ -1064,6 +1070,18 @@ mod tests {
             let mut first = root.fork().unwrap();
             assert_eq!(surface(&mut first), surface(&mut again), "{name}");
             let points = checkpoints(&root, &recipe);
+            if name == "convoke-duplicates" {
+                let (_, payment) = points
+                    .iter()
+                    .find(|(label, _)| label == "cast-choice")
+                    .expect("duplicate convoke reaches a payment choice");
+                let mut env = payment.fork().unwrap();
+                let taps = actions(&mut env)
+                    .into_iter()
+                    .filter(|action| matches!(action, Action::WaterbendTap { .. }))
+                    .count();
+                assert_eq!(taps, recipe.size);
+            }
             if name == "duplicate-creatures" {
                 assert!(points.iter().any(|(label, _)| label == "attack"));
                 assert!(points.iter().any(|(label, _)| label == "block"));
