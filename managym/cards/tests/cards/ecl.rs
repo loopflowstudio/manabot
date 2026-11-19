@@ -189,6 +189,12 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
             &s,
             |a| matches!(a, Action::ChooseMode { mode: m, .. } if *m == mode),
         );
+        // The Lions' tap is spent: neither payment is offered again.
+        assert!(!has_action(&fork, |a| matches!(
+            a,
+            Action::ChooseMode { .. }
+        )));
+        assert!(!convokes(&fork, lions));
         for creature in [ogre, other] {
             choose(
                 &mut fork,
