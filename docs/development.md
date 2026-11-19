@@ -117,8 +117,7 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   (its Learn fixture pins manifest and state digests) and
   `uv run --extra dev pytest tests/model/ -q` (checkpoint loading, the
   [pinned pilots](#pinned-pilots) and refusals by column, key and input
-  version). Tests constructing a current checkpoint use the runtime world
-  version. AGENTS.md lists the arena-admission and monitoring suite for world
+  version). AGENTS.md lists the arena-admission and monitoring suite for world
   or observation-shape changes.
 - Trigger-order browser cases need the test-only ASGI root in
   `academy/ui/playwright.release.config.ts`. After building the frontend, run

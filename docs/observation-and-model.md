@@ -669,7 +669,7 @@ A checkpoint records its naming names in row order with
 `naming_representation="public-groups-v1"` and `naming_branching`. A changed
 representation or branching bound refuses it. Added or reordered names do
 not: learned name rows bind by name, and a new name starts at the mean of the
-learned rows. The semantic observation/capture contracts are 8/5.
+learned rows. The semantic observation/capture contracts are 8/6.
 
 The default universe remains real non-token catalog names, including back faces.
 A separate immutable vocabulary can hold validated names without playable card
