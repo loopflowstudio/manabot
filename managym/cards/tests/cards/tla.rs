@@ -14703,9 +14703,9 @@ fn avatar_aang_draws_on_each_bending_and_transforms_after_all_four() {
 }
 
 /// A source's own costs are part of the one receipt (CR 602.2b, 601.2h):
-/// Airship Engine Room's "{4}, {T}, Sacrifice this land" names the land as
-/// tapped and as sacrificed, read by what it was once it has left, and Koh's
-/// "Pay 1 life" is the life the activation paid.
+/// Airship Engine Room's "{4}, {T}, Sacrifice this land" records the land as
+/// tapped and as sacrificed, and Koh's "Pay 1 life" is the life the
+/// activation paid.
 #[test]
 fn a_sources_own_tap_sacrifice_and_life_are_on_its_activation_receipt() {
     let mut s = five_color_setup(&["Airship Engine Room", "Koh, the Face Stealer"]);
@@ -14727,12 +14727,13 @@ fn a_sources_own_tap_sacrifice_and_life_are_on_its_activation_receipt() {
     assert_eq!((ability.paid.total(), ability.paid.life()), (4, 0));
     assert!(s.game().state.permanents[room].is_none());
     let context = s.game().decision_context(PlayerId(0)).unwrap();
+    // The stack frame already says whose ability it is and what it costs, so
+    // it does not repeat the source's own payment.
     assert!(
-        context
+        !context
             .pending
             .iter()
-            .any(|line| line
-                == "Paid with: tapped Airship Engine Room; sacrificed Airship Engine Room."),
+            .any(|line| line.starts_with("Paid with:")),
         "{:?}",
         context.pending
     );

@@ -30,7 +30,7 @@ use crate::{
         card::CardDefId,
         game_object::{ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
-        payment::{How, PaymentReceipt, Toward},
+        payment::{Contribution, How, PaymentReceipt, Toward},
     },
 };
 
@@ -434,8 +434,9 @@ impl<'a> Projection<'a> {
             }
             FrameCompletion::Paid { player, payment } => {
                 self.paid_summary();
+                // Unfinished: the source's own printed cost is paid last.
                 if !payment.receipt.is_empty() {
-                    self.receipt(&payment.receipt);
+                    self.receipt(&payment.receipt, None);
                 }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
@@ -511,13 +512,14 @@ impl<'a> Projection<'a> {
         }
     }
 
-    /// What a payment took. Its mana is the amounts actually spent to cast
-    /// (CR 601.2h) and the entry counters its spend effects add, the two mana
-    /// facts a rule reads; which object produced each unit is in the text
-    /// only and adds no policy tokens. Life paid is an amount. Each object
-    /// that paid otherwise is a reference, with what was done to it and the
-    /// part of the cost it paid.
-    fn receipt(&mut self, spent: &PaymentReceipt) {
+    /// What a payment took, less what the frame of `source` already says.
+    /// Its mana is the amounts actually spent to cast (CR 601.2h) and the
+    /// entry counters its spend effects add, the two mana facts a rule reads;
+    /// which object produced each unit is in the text only and adds no policy
+    /// tokens. Life paid is an amount. Each object that paid otherwise is a
+    /// reference, with what was done to it and the part of the cost it paid
+    /// (`shown_contributions`).
+    fn receipt(&mut self, spent: &PaymentReceipt, source: Option<ObjectId>) {
         if !spent.mana().is_empty() {
             self.mana_spent(spent);
         }
@@ -525,17 +527,17 @@ impl<'a> Projection<'a> {
             self.field("life paid", &spent.life());
             self.summary(|| format!("Life paid: {}.", spent.life()));
         }
-        if spent.contributions().is_empty() {
+        let shown: Vec<Contribution> = shown_contributions(spent, source).copied().collect();
+        if shown.is_empty() {
             return;
         }
-        for paid in spent.contributions() {
+        for paid in &shown {
             self.field("contribution", &(paid.how, paid.toward));
             self.object("paid by", paid.object);
         }
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
-            let paid: Vec<_> = spent
-                .contributions()
+            let paid: Vec<_> = shown
                 .iter()
                 .map(|paid| {
                     let how = match paid.how {
@@ -921,17 +923,39 @@ impl ManaSpent {
     }
 }
 
-/// Whether a rule still reads `spent`, the mana spent to cast the spell that
-/// is, or became the source of, the object defined by `definition`: its
-/// definition counts that mana (Toph, converge), or a spend effect applied
-/// (Animal Attendant's counter). Other receipts are not projected.
-pub(crate) fn receipt_matters(spent: &PaymentReceipt, definition: Option<CardDefId>) -> bool {
+/// The contributions a frame of `source` shows. The receipt keeps everything
+/// paid; the frame omits its own source paying its own printed cost (its
+/// {T}, "sacrifice this", "discard this"), which the frame's ability already
+/// states. Every other object is shown, and so is the source when it paid
+/// under a keyword.
+fn shown_contributions(
+    spent: &PaymentReceipt,
+    source: Option<ObjectId>,
+) -> impl Iterator<Item = &Contribution> {
+    spent
+        .contributions()
+        .iter()
+        .filter(move |paid| !(paid.toward == Toward::Printed && Some(paid.object) == source))
+}
+
+/// Whether the frame of `source`, an object defined by `definition`, shows
+/// anything of `spent`, what was paid for it or for the spell that became
+/// it. It does when the payment says something the frame does not: another
+/// object contributed (`shown_contributions`), life was paid, a spend effect
+/// applied (Animal Attendant's counter), or the definition counts the mana
+/// spent (Toph, converge). Mana that no rule reads, and the source's own
+/// printed cost, stay on the receipt and out of the observation.
+pub(crate) fn receipt_matters(
+    spent: &PaymentReceipt,
+    definition: Option<CardDefId>,
+    source: Option<ObjectId>,
+) -> bool {
     static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
     if spent.is_empty() {
         return false;
     }
     if spent.mana().iter().any(|unit| unit.effect.is_some())
-        || !spent.contributions().is_empty()
+        || shown_contributions(spent, source).next().is_some()
         || spent.life() > 0
     {
         return true;
@@ -949,17 +973,18 @@ pub(crate) fn receipt_matters(spent: &PaymentReceipt, definition: Option<CardDef
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }
 
-/// Project the cast receipt of a stack spell, or of the stack ability an
-/// entering permanent's own trigger became.
+/// Project the receipt of a stack spell or ability, or of the payment in
+/// progress, onto the frame of `source`.
 pub(crate) fn project_receipt(
     game: &Game,
     spent: &PaymentReceipt,
+    source: Option<ObjectId>,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
     text: bool,
 ) {
     let mut out = Projection::new(game, viewer, text);
-    out.receipt(spent);
+    out.receipt(spent, source);
     out.finish(frame);
 }
 
@@ -1011,8 +1036,8 @@ pub(crate) fn project_frame(
     let source_definition = effect
         .source()
         .map(|object| game.state.source_base(object).0);
-    if receipt_matters(&effect.spent, source_definition) {
-        out.receipt(&effect.spent);
+    if receipt_matters(&effect.spent, source_definition, effect.source()) {
+        out.receipt(&effect.spent, effect.source());
     }
     if let Some(player) = effect.triggering_player {
         out.field("triggering player", &player);

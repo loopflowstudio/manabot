@@ -199,7 +199,7 @@ impl ContinuationFrame {
     }
 }
 
-/// The cast receipt a stack object carries when a rule still reads it
+/// The receipt a stack object carries, when its frame shows any of it
 /// (`effect_execution::receipt_matters`).
 fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
     let spent = match object {
@@ -207,8 +207,12 @@ fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
         StackObject::TriggeredAbility(ability) => &ability.spent,
         StackObject::ActivatedAbility(ability) => &ability.paid,
     };
-    super::effect_execution::receipt_matters(spent, Some(object.source_definition_id()))
-        .then_some(spent)
+    super::effect_execution::receipt_matters(
+        spent,
+        Some(object.source_definition_id()),
+        Some(object.source_object()),
+    )
+    .then_some(spent)
 }
 
 impl Game {
@@ -656,7 +660,14 @@ impl Game {
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
         if let Some(spent) = stack_receipt(object) {
-            super::effect_execution::project_receipt(self, spent, viewer, &mut frame, false);
+            super::effect_execution::project_receipt(
+                self,
+                spent,
+                Some(object.source_object()),
+                viewer,
+                &mut frame,
+                false,
+            );
         }
         frame
     }
@@ -698,11 +709,13 @@ impl Game {
                     }
                     _ => {}
                 }
-                // What this payment has already committed, as references.
+                // What this payment has already committed, as references. The
+                // source's own printed cost is paid as the payment completes.
                 if !payment.receipt.contributions().is_empty() {
                     super::effect_execution::project_receipt(
                         self,
                         &payment.receipt,
+                        None,
                         viewer,
                         &mut frame,
                         false,
@@ -837,7 +850,14 @@ impl Game {
         for (frame, object) in frames.iter_mut().zip(self.state.stack_objects.iter().rev()) {
             debug_assert!(matches!(frame.kind, 1..=3));
             if let Some(spent) = stack_receipt(object) {
-                super::effect_execution::project_receipt(self, spent, viewer, frame, true);
+                super::effect_execution::project_receipt(
+                    self,
+                    spent,
+                    Some(object.source_object()),
+                    viewer,
+                    frame,
+                    true,
+                );
             }
         }
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
@@ -854,6 +874,7 @@ impl Game {
                 super::effect_execution::project_receipt(
                     self,
                     &payment.receipt,
+                    None,
                     viewer,
                     frame,
                     true,

@@ -4688,9 +4688,12 @@ fn pooled_mana_classes_are_programs_on_their_player() {
     }
 }
 
-/// The mana spent to cast a spell that counts it (converge) is an execution
-/// occurrence of its stack frame for both viewers, in registered tokens; a
-/// spell no rule reads the receipt of has none.
+/// A stack frame shows of its receipt only what it does not already say. The
+/// mana spent to cast a spell that counts it (converge) is an execution
+/// occurrence of the frame for both viewers, in registered tokens; mana no
+/// rule reads adds nothing, and neither does a source paying its own printed
+/// {T} or sacrifice. Another object that paid is shown
+/// (`payment_contributions_reach_the_stack_frame_as_references`).
 #[test]
 fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     let mut s = five_color_setup(&["Uncle's Musings", "Kyoshi Warrior Guard"]);
@@ -4717,6 +4720,26 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     let observation = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(observation.continuation[0].kind, 1);
     assert!(observation.continuation[0].effect_execution.is_empty());
+
+    // Airship Engine Room's "{4}, {T}, Sacrifice this land": the receipt holds
+    // the land's tap and sacrifice, and the frame repeats neither.
+    let mut s = five_color_setup(&["Airship Engine Room"]);
+    let room = s.force_permanent_on_battlefield(0, "Airship Engine Room");
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, room, 0);
+    let Some(managym::state::stack_object::StackObject::ActivatedAbility(ability)) =
+        s.game().state.stack_objects.last()
+    else {
+        panic!("the draw ability is on the stack")
+    };
+    assert_eq!(ability.paid.contributions().len(), 2);
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 2, "the activated ability's stack frame");
+        assert!(frame.effect_execution.is_empty());
+        assert!(frame.effect_execution_references.is_empty());
+    }
 }
 
 /// Every execution token of `frame` is a literal, a definition's token or a
