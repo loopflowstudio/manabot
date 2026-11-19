@@ -1304,8 +1304,9 @@ Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
 actual counted decklist against the world to include its bonus-sheet cards.
 
 For unknown names in `DeckImportError`, check spelling and the installed
-engine's definitions. Engine and checkpoint worlds must remain compatible;
-keep frozen runs on their recorded world. New card support does not expand
+engine's definitions. A checkpoint loads when the engine still supplies its recorded input
+contract ([what a checkpoint is bound to](observation-and-model.md#what-a-checkpoint-is-bound-to));
+keep frozen runs on their recorded revision. New card support does not expand
 saved training corpora or change their split assignments.
 
 ## What we know

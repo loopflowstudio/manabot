@@ -196,7 +196,7 @@ Self-play refuses belief inputs; the trained model sees the current
 observation only ([training](docs/training.md)).
 
 **Evaluation never promotes.** A player is an immutable `PlayerRegistration`;
-a rating belongs to one `EvaluationKey` (world, content suite, viewer
+a rating belongs to one `EvaluationKey` (content suite, viewer
 boundary, arena version, compute class) and never crosses it. Candidates play
 the same deals with seats and decks swapped, uncertainty resamples whole
 deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
@@ -281,8 +281,9 @@ of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe
 
 ## What we know
 
-All numbers belong to the world they were measured in, and most come from one
-training seed, so they guide the next experiment rather than settle a method.
+All numbers belong to the revision and decks they were measured on
+([comparing measurements](docs/evaluation.md#comparing-measurements-across-revisions)),
+and most come from one training seed, so they guide the next experiment rather than settle a method.
 Earlier findings are tabulated in the
 [research program](manabot/RESEARCH.md#what-we-know).
 
@@ -305,7 +306,7 @@ Earlier findings are tabulated in the
   and from 10.8% to 34.3% as each of the ten decks against its GW and UB seats,
   without slower decisions
   ([heuristic strength](experiments/reports/heuristic-strength.md)). Ratings are
-  pinned to an anchor version and a world, never compared across them.
+  pinned to an anchor version, never compared across versions.
 - **Learning from both seats replaced one-seat training.** The one-seat ladder
   reached 0.69 against the heuristic at $10
   ([scale ladder](experiments/reports/scale-ladder.md)); matched per learner decision
