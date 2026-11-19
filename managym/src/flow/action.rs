@@ -10,8 +10,9 @@ use crate::cards::names::NameOption;
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     cards::content_pack::default_content_pack,
-    flow::game::{
-        ActivationSource, CastChoices, CostComponent, Game, Operation, Payment, PendingChoice,
+    flow::{
+        game::{ActivationSource, CastChoices, Game, PendingChoice},
+        payment::{CostComponent, Operation, Payment},
     },
     state::{
         ability::Effect,

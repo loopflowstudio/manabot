@@ -6,11 +6,12 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{
         decision::{
-            Decision, EffectFrame, FrameCompletion, PaymentProgress, ResolutionCastOffer,
-            ResolutionTarget, TargetIteration,
+            Decision, EffectFrame, FrameCompletion, ResolutionCastOffer, ResolutionTarget,
+            TargetIteration,
         },
         event::GameEvent,
-        game::{CostComponent, Game},
+        game::Game,
+        payment::{CostComponent, PaymentProgress},
         proposed_event::{
             EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },

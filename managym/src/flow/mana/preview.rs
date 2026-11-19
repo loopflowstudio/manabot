@@ -3,7 +3,8 @@
 use super::*;
 use crate::agent::ability_description::cost_description;
 use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
-use crate::flow::game::{CastChoices, CostComponent};
+use crate::flow::game::CastChoices;
+use crate::flow::payment::CostComponent;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]

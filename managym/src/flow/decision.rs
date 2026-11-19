@@ -17,7 +17,8 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::{CastChoices, CostComponent, Game, Operation, Payment},
+        game::{CastChoices, Game},
+        payment::{CostComponent, Operation, Payment, PaymentProgress},
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
@@ -341,83 +342,6 @@ impl EffectFrame {
             .next()
             .map(|slot| slot.target)
             .or_else(|| self.context_target.filter(|_| self.targets.is_empty()))
-    }
-}
-
-/// What one payment made during resolution still owes, what has paid toward
-/// it and the branches its outcome selects. Mana activation costs commit
-/// immediately through the mana authority. Only a waterbend contribution
-/// closes the decline branch (the existing contract). The receipt names the
-/// exact objects that paid, as evidence; they are never followed or untapped.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct PaymentProgress {
-    /// Acceptance of an optional payment precedes choosing its sources in auto mode.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub committed: bool,
-    pub player: PlayerId,
-    /// `Mana`, whose help allows waterbend taps for a waterbend cost, or
-    /// `Life` (`CostComponent::resolving`).
-    pub owed: CostComponent,
-    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
-    pub receipt: PaymentReceipt,
-    pub if_paid: Vec<Effect>,
-    pub if_declined: Vec<Effect>,
-    /// The once-each-turn option (exact source, ability index) paying
-    /// spends ("Do this only once each turn").
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub spends: Option<OnceEachTurnKey>,
-    /// The spell or ability declining counters ("counter it unless that
-    /// player pays"): ward answers both.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub counters_on_decline: Option<Target>,
-}
-
-impl PaymentProgress {
-    pub fn new(
-        player: PlayerId,
-        owed: CostComponent,
-        if_paid: Vec<Effect>,
-        if_declined: Vec<Effect>,
-    ) -> Self {
-        Self {
-            player,
-            owed,
-            receipt: PaymentReceipt::default(),
-            committed: false,
-            if_paid,
-            if_declined,
-            spends: None,
-            counters_on_decline: None,
-        }
-    }
-
-    pub fn can_decline(&self) -> bool {
-        !self.committed && self.receipt.contributions().is_empty()
-    }
-
-    /// Whether the cost is a waterbend cost, however it is paid.
-    pub fn waterbends(&self) -> bool {
-        matches!(self.owed, CostComponent::Mana { help, .. } if help.waterbend > 0)
-    }
-}
-
-impl Game {
-    /// The cost of a resolution payment is paid: spend its once-each-turn
-    /// option, then run the "if paid" branch before the rest of `frame`.
-    pub(crate) fn finish_resolution_payment(
-        &mut self,
-        payment: PaymentProgress,
-        mut frame: EffectFrame,
-    ) {
-        if let Some(key) = payment.spends {
-            self.spend_once_each_turn(key);
-        }
-        if payment.waterbends() {
-            self.record_bending(payment.player, crate::flow::turn::Bending::Water);
-        }
-        frame.prepend_effects(payment.if_paid.into_iter());
-        self.run_frame(frame);
     }
 }
 
@@ -4567,7 +4491,7 @@ mod payment_tests {
             payment.owed,
             CostComponent::Mana {
                 cost: ManaCost::parse("{1}"),
-                help: crate::flow::game::Help {
+                help: crate::flow::payment::Help {
                     waterbend: 2,
                     ..Default::default()
                 },

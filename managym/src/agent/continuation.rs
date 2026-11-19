@@ -11,7 +11,8 @@ use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
         decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
-        game::{ActivationSource, CostComponent, Game, Operation, PendingChoice},
+        game::{ActivationSource, Game, PendingChoice},
+        payment::{CostComponent, Operation},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -1279,7 +1280,7 @@ mod tests {
     #[test]
     fn mana_output_is_a_child_of_the_payment_it_interrupts() {
         use crate::{
-            flow::decision::PaymentProgress,
+            flow::payment::PaymentProgress,
             state::{mana::Mana, player::PlayerConfig},
         };
         let mut game = Game::new(
@@ -1320,7 +1321,7 @@ mod tests {
     #[test]
     fn every_decision_code_is_within_the_validated_bound() {
         use crate::{
-            flow::decision::{PaymentProgress, ResolutionCastOffer},
+            flow::{decision::ResolutionCastOffer, payment::PaymentProgress},
             state::{
                 ability::LinkedGrant, game_object::PermanentId, permanent::CounterKind,
                 predicate::CardPredicate,

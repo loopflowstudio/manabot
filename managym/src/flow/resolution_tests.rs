@@ -1889,10 +1889,8 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
 
 #[test]
 fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
-    use crate::flow::decision::{
-        Decision, EffectFrame, ManaProduction, PaymentProgress, SuspendedResolution,
-    };
-    use crate::flow::game::CostComponent;
+    use crate::flow::decision::{Decision, EffectFrame, ManaProduction, SuspendedResolution};
+    use crate::flow::payment::{CostComponent, PaymentProgress};
     use crate::state::mana::{Mana, ManaCost};
 
     let player = PlayerId(0);
@@ -2765,8 +2763,8 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
 
 #[test]
 fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
-    use crate::flow::decision::{Decision, EffectFrame, PaymentProgress, SuspendedResolution};
-    use crate::flow::game::CostComponent;
+    use crate::flow::decision::{Decision, EffectFrame, SuspendedResolution};
+    use crate::flow::payment::{CostComponent, PaymentProgress};
     use crate::flow::trigger::ExileLink;
     use crate::state::mana::{Mana, ManaCost};
     let player = PlayerId(0);

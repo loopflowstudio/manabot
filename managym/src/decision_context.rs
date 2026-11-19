@@ -15,8 +15,9 @@ use crate::{
     },
     flow::{
         action::cost_label,
-        decision::{Decision, PaymentProgress},
-        game::{CostComponent, Game, PendingChoice},
+        decision::Decision,
+        game::{Game, PendingChoice},
+        payment::{CostComponent, PaymentProgress},
     },
     state::{
         card::CastOption,

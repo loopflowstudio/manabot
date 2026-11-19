@@ -399,7 +399,7 @@ mana only some costs can use, narrowest restriction first, or mana whose rider
 applies to this cost; then ordinary mana; last, mana whose rider this cost
 would waste. Manual payment offers every class in its usual order.
 
-A cast or activation is paid as one `Payment` (`flow/game.rs`): the announced
+A cast or activation is paid as one `Payment` (`flow/payment.rs`): the announced
 `Operation`, the `CostComponent`s still owed in the order they are paid, and
 the `PaymentReceipt` of what has been paid. `Game::cost_components` fixes the
 total cost once announcement ends; `PendingChoice::Pay` offers the component
