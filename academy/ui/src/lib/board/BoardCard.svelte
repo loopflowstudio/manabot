@@ -308,7 +308,8 @@
   .sliced:not(:hover, :focus-visible) :is(.title, .type) { max-width: var(--slice); }
   .sliced:not(:hover, :focus-visible) :is(.corner .cost, .on-type + .type), .sliced:is(:hover, :focus-visible) .bar-cost { display: none; }
   .bar-cost.on-type { height: 16px; align-items: center; }
-  /* A pile's count follows the name, in the interface face; the line breaks before it, never inside the name. */
+  /* A pile's count follows the top copy's name, in the interface face; the line breaks before it, never inside the
+     name. The copies beneath keep their bar's height but show no name. */
   .piled .title { visibility: hidden; }
   .count { font-family: var(--font-sans); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .type { font: 12px/16px var(--font-sans); color: inherit; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
