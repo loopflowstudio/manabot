@@ -173,14 +173,14 @@ pub enum SpendEffect {
     /// turn" (Carnelian Orb of Dragonkind). The permanent the spell becomes
     /// keeps the keyword for the turn.
     SpellGainsKeyword {
-        spell: CardPredicate,
+        spell: Arc<CardPredicate>,
         keyword: Keyword,
     },
     /// "When that mana is spent to cast a [spell], copy that spell and you
     /// may choose new targets for the copy" (Pyromancer's Goggles): a
     /// triggered ability of the object that produced the mana, one for each
     /// such unit spent.
-    CopySpell { spell: CardPredicate },
+    CopySpell { spell: Arc<CardPredicate> },
 }
 
 impl SpendEffect {

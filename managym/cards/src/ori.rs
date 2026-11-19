@@ -1,4 +1,6 @@
 //! Magic Origins.
+use std::sync::Arc;
+
 use managym_state::{
     ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
     card::{
@@ -65,11 +67,11 @@ fn elemental_bond() -> CardDefinition {
 fn pyromancers_goggles() -> CardDefinition {
     let text_box = "{T}: Add {R}. When that mana is spent to cast a red instant or sorcery spell, copy that spell and you may choose new targets for the copy.";
     let effect = SpendEffect::CopySpell {
-        spell: CardPredicate {
+        spell: Arc::new(CardPredicate {
             colors_any: vec![Color::Red],
             card_types_any: vec![CardType::Instant, CardType::Sorcery],
             ..Default::default()
-        },
+        }),
     };
     CardDefinition {
         key: "ori.pyromancers_goggles",

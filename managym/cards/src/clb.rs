@@ -1,4 +1,6 @@
 //! Commander Legends: Battle for Baldur's Gate.
+use std::sync::Arc;
+
 use managym_state::{
     ability::Effect,
     card::{
@@ -16,11 +18,11 @@ pub(super) fn cards() -> Vec<CardDefinition> {
 fn carnelian_orb_of_dragonkind() -> CardDefinition {
     let text_box = "{T}: Add {R}. If that mana is spent on a Dragon creature spell, it gains haste until end of turn.";
     let effect = SpendEffect::SpellGainsKeyword {
-        spell: CardPredicate {
+        spell: Arc::new(CardPredicate {
             card_type: Some(CardType::Creature),
             subtype: Some("Dragon".into()),
             ..Default::default()
-        },
+        }),
         keyword: Keyword::Haste,
     };
     CardDefinition {
