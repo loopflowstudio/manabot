@@ -20,7 +20,7 @@ use crate::{
         action::cost_label,
         decision::Decision,
         game::{Game, PendingChoice},
-        payment::{CostComponent, PaymentProgress},
+        payment::{CostComponent, Help, PaymentProgress},
     },
     state::{
         card::CastOption,
@@ -408,8 +408,8 @@ impl Game {
         };
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
-                CostComponent::Mana { help, .. } if help.keyworded() =>
-                    ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise, a creature or artifact tapped for waterbend, or a graveyard card exiled for delve pays {1}. Each such payment commits immediately. The payment ends once no mana is owed."),
+                CostComponent::Mana { help, .. } if *help != Help::default() =>
+                    ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise, a creature or artifact tapped for waterbend, or a graveyard card exiled for delve pays {1}. Each such payment commits immediately. The payment ends once no mana is owed."),
                 CostComponent::Mana { .. } =>
                     ("payment", "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed."),
                 CostComponent::ExileFromHand =>

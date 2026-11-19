@@ -9724,6 +9724,11 @@ fn waterbend_pays_entirely_with_creature_taps() {
     for expected_remaining in (0..5).rev() {
         let space = s.action_space().clone();
         assert_eq!(space.kind, ActionSpaceKind::Waterbend);
+        let instruction = s.game().decision_context(PlayerId(0)).unwrap().instruction;
+        assert!(
+            instruction.contains("a creature or artifact tapped for waterbend"),
+            "{instruction}"
+        );
         // No mana available: only tap actions.
         assert!(space
             .actions
