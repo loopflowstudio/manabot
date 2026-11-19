@@ -6,6 +6,7 @@
    * drawn, and never take pointer input. Each line is also said in words: the
    * stack entry, the blocker's accessible name and the log carry the same facts.
    */
+  import { LONGEST_TRAVEL_MS } from './motion';
   import type { Endpoint, BoardLine } from './recent';
 
   interface Props {
@@ -46,9 +47,6 @@
     });
   }
 
-  /** Longest card travel after a frame (a cast flying from the hand to the stack), in ms. */
-  const TRAVEL_MS = 400;
-
   // Remeasure every frame while cards travel, so a line follows its endpoints
   // instead of pointing from where a card was, then on any resize.
   $effect(() => {
@@ -59,7 +57,7 @@
     let frame = 0;
     const follow = (now: number): void => {
       measure();
-      if (now - start < TRAVEL_MS) frame = requestAnimationFrame(follow);
+      if (now - start <= LONGEST_TRAVEL_MS) frame = requestAnimationFrame(follow);
     };
     frame = requestAnimationFrame(follow);
     const observer = new ResizeObserver(() => measure());
