@@ -209,28 +209,13 @@ impl Game {
                 }
             }
             Action::PayCost { .. } | Action::TapForMana { .. } => match &self.pending_choice {
-                Some(PendingChoice::ManaPayment {
-                    payment,
-                    alternative,
-                    ..
-                }) => {
+                Some(PendingChoice::Pay { payment, .. }) if payment.owed.len() == 1 => {
                     sources
                         .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
-                    Some(position.payment_mana_cost(player, payment, alternative.as_ref()))
-                }
-                Some(PendingChoice::Waterbend {
-                    payment,
-                    remaining_generic,
-                    tapped,
-                    ..
-                }) => {
-                    sources
-                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
-                    position.to_mut().pending_choice = None;
-                    Some(
-                        self.waterbend_owed(player, payment, *remaining_generic, *tapped)
-                            .0,
-                    )
+                    if payment.waterbends() {
+                        position.to_mut().pending_choice = None;
+                    }
+                    Some(payment.mana().0.clone())
                 }
                 Some(_) => {
                     return Ok(PaymentPreview::message(
@@ -265,18 +250,22 @@ impl Game {
                         "Choose the activation's additional costs before previewing payment.",
                     ));
                 }
-                position.to_mut().pending_choice = Some(PendingChoice::ManaPayment {
+                let operation = Operation::Activation {
+                    source: ActivationSource::Permanent(*permanent),
+                    ability_index: *ability_index,
+                    targets: Vec::new(),
+                    x: 0,
+                };
+                let cost = ability.mana_cost.clone();
+                position.to_mut().pending_choice = Some(PendingChoice::Pay {
                     player,
-                    payment: Box::new(Payment::Activation {
-                        source: ActivationSource::Permanent(*permanent),
-                        ability_index: *ability_index,
-                        targets: Vec::new(),
-                        x: 0,
+                    payment: Box::new(Payment {
+                        owed: self.cost_components(player, &operation),
+                        operation,
+                        receipt: Default::default(),
                     }),
-                    sacrifice: None,
-                    alternative: None,
                 });
-                Some(ability.mana_cost.clone())
+                Some(cost)
             }
             _ => None,
         };

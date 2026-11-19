@@ -2135,46 +2135,28 @@ impl Observation {
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
-                            source: crate::flow::game::ActivationSource::Card(card),
-                            ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::TapPayment {
-                            source: crate::flow::game::ActivationSource::Card(card),
-                            ..
                         }) => Some(game.state.object_of(*card)),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })
-                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
-                            source: crate::flow::game::ActivationSource::Permanent(permanent),
-                            ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::TapPayment {
-                            source: crate::flow::game::ActivationSource::Permanent(permanent),
-                            ..
-                        })
                         | Some(crate::flow::game::PendingChoice::ActivationX {
                             permanent, ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::Crew { permanent, .. }) => {
-                            game.state.permanents[*permanent]
-                                .as_ref()
-                                .map(|perm| perm.object)
+                        }) => game.state.permanents[*permanent]
+                            .as_ref()
+                            .map(|perm| perm.object),
+                        // A sacrifice or plain mana step focuses nothing.
+                        Some(crate::flow::game::PendingChoice::Pay { payment, .. }) => {
+                            match &payment.owed[0] {
+                                crate::flow::game::CostComponent::Sacrifice(_) => None,
+                                crate::flow::game::CostComponent::Mana { .. }
+                                    if !payment.waterbends() =>
+                                {
+                                    None
+                                }
+                                _ => game.payment_source_object(&payment.operation),
+                            }
                         }
-                        Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
-                            game.payment_source_object(payment)
-                        }
-                        Some(crate::flow::game::PendingChoice::ExileFromHandPayment {
-                            payment,
-                            ..
-                        }) => game.payment_source_object(payment),
-                        Some(
-                            crate::flow::game::PendingChoice::SacrificePayment { .. }
-                            | crate::flow::game::PendingChoice::ManaPayment { .. },
-                        ) => None,
                         None => None,
                     });
                 object_id

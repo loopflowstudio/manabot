@@ -1,20 +1,61 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, ObjectSelector, Per, PlayWindow, TriggerCondition,
-        TriggerSubject,
+        Ability, Actor, Condition, Effect, ObjectSelector, Per, PlayWindow, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
     },
     effect::Modification,
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![kellan_planar_trailblazer()]
+    vec![
+        hungry_ghoul(),
+        kellan_planar_trailblazer(),
+        luminous_rebuke(),
+    ]
+}
+
+fn hungry_ghoul() -> CardDefinition {
+    let text_box = "{1}, Sacrifice another creature: Put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "fdn.hungry_ghoul",
+        scryfall_id: "790f9433-7565-4f7f-88e8-8af762ea0296",
+        printed: PrintedCharacteristics {
+            name: "Hungry Ghoul".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                sacrifice: Some(SacrificeCost {
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    },
+                    another: true,
+                    or_mana: None,
+                }),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn kellan_planar_trailblazer() -> CardDefinition {
@@ -91,6 +132,34 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                     ..Default::default()
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn luminous_rebuke() -> CardDefinition {
+    let text_box = "This spell costs {3} less to cast if it targets a tapped creature.\nDestroy target creature.";
+    CardDefinition {
+        key: "fdn.luminous_rebuke",
+        scryfall_id: "621839e1-2756-4cdc-a25c-5f76ea98dd87",
+        printed: PrintedCharacteristics {
+            name: "Luminous Rebuke".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Creature,
+            ))],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            statics: vec![StaticAbility::CostsLessIfTargets(TargetCostReduction {
+                predicate: CardPredicate {
+                    tapped: true,
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                },
+                generic: 3,
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

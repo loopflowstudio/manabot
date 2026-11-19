@@ -24,13 +24,14 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        card::{ActivatedAbilityDefinition, CardDefId},
+        card::{ActivatedAbilityDefinition, CardDefId, SacrificeCost, TapCost},
         game_object::{
             CardId, CardVec, IdGenerator, ObjectId, ObjectLkiLog, ObjectLookupError, ObjectVec,
             PermanentId, PermanentVec, PlayerId, Target,
         },
         knowledge::LibraryKnowledge,
-        mana::{Mana, ManaPool},
+        mana::{Mana, ManaCost, ManaPool},
+        payment::{How, PaymentReceipt, Toward},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::{ZoneManager, ZoneType},
@@ -256,9 +257,9 @@ pub struct CastChoices {
     pub resolving: bool,
 }
 
-/// A fully announced spell or activation waiting for selected costs.
+/// A fully announced spell or activation (CR 601.2a-e, 602.2).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum Payment {
+pub enum Operation {
     Spell {
         #[serde(rename = "card")]
         object: ObjectId,
@@ -278,21 +279,94 @@ pub enum Payment {
     },
 }
 
+/// One part of a total cost that the payer chooses how to pay. A source's own
+/// {T}, sacrifice, discard and life costs have no choice and are paid as the
+/// payment completes.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum CostComponent {
+    /// Tap other untapped creatures until their total power reaches `power`
+    /// (crew, CR 702.122a). `power` is what is still owed.
+    TapPower { power: i32, toward: Toward },
+    /// "Tap N untapped [predicate] you control"; `count` is what is still owed.
+    Tap(TapCost),
+    /// "Discard a card".
+    Discard,
+    /// Exile a matching card from hand rather than pay the mana cost
+    /// (`AdditionalCost::ExileFromHandAlternative`).
+    ExileFromHand,
+    /// Sacrifice a matching permanent, or pay its `or_mana` instead.
+    Sacrifice(SacrificeCost),
+    /// The mana still owed. Taps of untapped artifacts and creatures may pay
+    /// up to `waterbend` of its generic part as the cost was announced; each
+    /// tap is a `Toward::Waterbend` contribution and reduces `cost` by {1}.
+    Mana { cost: ManaCost, waterbend: u8 },
+}
+
+/// One cast or activation being paid for (CR 601.2f-h): the announced
+/// operation, the cost components still owed in the order they are paid, and
+/// the receipt of what has been paid so far. The total cost is fixed when
+/// `Game::cost_components` builds `owed`; payment reads `owed`, never the
+/// definition again. `Mana` is always last, and stays until the mana is spent.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Payment {
+    pub operation: Operation,
+    pub owed: Vec<CostComponent>,
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub receipt: PaymentReceipt,
+}
+
+impl Payment {
+    /// The mana still owed and the generic part of it that waterbend taps
+    /// may still pay.
+    pub fn mana(&self) -> (&ManaCost, u8) {
+        let Some(CostComponent::Mana { cost, waterbend }) = self.owed.last() else {
+            unreachable!("a payment ends with its mana component")
+        };
+        let tapped = self
+            .receipt
+            .contributed(How::Tapped, Toward::Waterbend)
+            .count() as u8;
+        (cost, waterbend.saturating_sub(tapped).min(cost.generic()))
+    }
+
+    /// Whether the cost being paid is a waterbend cost, however it is paid.
+    pub fn waterbends(&self) -> bool {
+        matches!(self.owed.last(), Some(CostComponent::Mana { waterbend, .. }) if *waterbend > 0)
+    }
+
+    fn mana_mut(&mut self) -> &mut ManaCost {
+        let Some(CostComponent::Mana { cost, .. }) = self.owed.last_mut() else {
+            unreachable!("a payment ends with its mana component")
+        };
+        cost
+    }
+
+    /// Owe `extra` mana as well (a sacrifice cost's "or pay" branch).
+    pub(crate) fn owe_mana(&mut self, extra: &ManaCost) {
+        let cost = self.mana_mut();
+        *cost = cost.plus(extra);
+    }
+
+    /// One waterbend tap paid {1} of the generic mana owed.
+    pub(crate) fn waterbend(&mut self, tapped: ObjectId) {
+        let cost = self.mana_mut();
+        *cost = cost.reduced_generic(1);
+        self.receipt
+            .contribute(tapped, How::Tapped, Toward::Waterbend);
+    }
+}
+
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
-/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> payment; activating a
-/// waterbend ability walks Waterbend until the cost is paid.
+/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> Pay; activating an
+/// ability walks ActivationX? -> ActivatedTarget? -> Pay.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
-    ManaPayment {
+    /// Paying the announced cost: the step is `payment.owed[0]`
+    /// (`Game::paying`). Choosing a payment for it shrinks or removes that
+    /// component and appends to `payment.receipt`.
+    Pay {
         player: PlayerId,
         payment: Box<Payment>,
-        sacrifice: Option<PermanentId>,
-        alternative: Option<crate::state::mana::ManaCost>,
-    },
-    SacrificePayment {
-        player: PlayerId,
-        payment: Box<Payment>,
-        cost: Box<crate::state::card::SacrificeCost>,
     },
     /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
     /// `chosen` holds those already selected, clause by clause, and
@@ -305,30 +379,6 @@ pub enum PendingChoice {
         chosen: Vec<Target>,
         #[serde(skip_serializing_if = "crate::state::is_zero")]
         requirement: usize,
-    },
-    /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
-    /// control" activation cost.
-    TapPayment {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
-        #[serde(skip_serializing_if = "is_single_tap")]
-        remaining: usize,
-    },
-    /// Choosing the card from hand to exile for a spell's alternative cost
-    /// (`AdditionalCost::ExileFromHandAlternative`), before the rest of its
-    /// payment.
-    ExileFromHandPayment {
-        player: PlayerId,
-        payment: Box<Payment>,
-    },
-    /// Choosing the card to discard for a "Discard a card" activation cost.
-    DiscardPayment {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
     },
     /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
     AnnounceX {
@@ -374,26 +424,6 @@ pub enum PendingChoice {
         chosen_req_indices: Vec<usize>,
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
-    },
-    /// Paying a crew cost (CR 702.122a): tap other untapped creatures one
-    /// at a time until their total power reaches the crew number.
-    Crew {
-        player: PlayerId,
-        permanent: PermanentId,
-        ability_index: usize,
-        /// Power still owed; the cost is paid once it reaches zero.
-        remaining_power: i32,
-    },
-    /// Paying a waterbend cost (an ability's, or a spell's additional or
-    /// alternative cost): tap artifacts/creatures for {1} each, then pay the
-    /// remainder with mana.
-    Waterbend {
-        player: PlayerId,
-        payment: Box<Payment>,
-        /// Generic mana further taps may still pay.
-        remaining_generic: u8,
-        /// Generic mana already paid by taps.
-        tapped: u8,
     },
 }
 
@@ -805,8 +835,4 @@ impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }
-}
-
-fn is_single_tap(remaining: &usize) -> bool {
-    *remaining == 1
 }

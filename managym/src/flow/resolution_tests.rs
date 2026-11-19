@@ -113,6 +113,7 @@ fn stack(
                 attached: None,
                 x: 0,
                 granted_by: None,
+                paid: Default::default(),
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {

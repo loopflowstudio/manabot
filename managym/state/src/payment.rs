@@ -2,7 +2,9 @@
 // What one cast or activation actually paid (CR 601.2h). `PaymentReceipt` is
 // the record a spell on the stack, the permanent it becomes and the frames
 // that resolve it share; `ManaOrigin` names the object that produced a unit
-// of mana, from the pool (`mana::ManaPool`) through to the receipt.
+// of mana, from the pool (`mana::ManaPool`) through to the receipt;
+// `Contribution` names an object that paid a cost with something other than
+// mana.
 
 use std::sync::Arc;
 
@@ -36,16 +38,57 @@ pub struct SpentMana {
     pub effect: Option<SpendEffect>,
 }
 
+/// What was done to an object to pay with it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum How {
+    Tapped,
+    Sacrificed,
+    Exiled,
+    Discarded,
+}
+
+/// The part of the cost an object paid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum Toward {
+    /// The spell's or ability's own stated cost.
+    Printed,
+    /// {1} of a waterbend cost.
+    Waterbend,
+    /// A crew cost (CR 702.122a).
+    Crew,
+    /// A cost paid rather than the mana cost (CR 118.9).
+    Alternative,
+}
+
+/// An object that paid part of a cost instead of, or beside, mana. `object`
+/// is the exact appearance that paid: the permanent tapped or sacrificed, the
+/// card in hand that was discarded or exiled. It may since have left; read
+/// what it was from last known information, never from a later appearance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub struct Contribution {
+    #[serde(serialize_with = "exact")]
+    pub object: ObjectId,
+    pub how: How,
+    pub toward: Toward,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 struct Paid {
     mana: Vec<SpentMana>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    contributions: Vec<Contribution>,
 }
 
-static NOTHING: Paid = Paid { mana: Vec::new() };
+static NOTHING: Paid = Paid {
+    mana: Vec::new(),
+    contributions: Vec::new(),
+};
 
-/// What one payment spent, one entry per unit of mana in spend order. A cast
-/// spell keeps it for "mana spent to cast", converge and spend riders; it
-/// never reads the printed cost.
+/// What one payment spent: one entry per unit of mana in spend order, and the
+/// objects that paid otherwise in the order they were chosen. A cast spell
+/// keeps it for "mana spent to cast", converge and spend riders; it never
+/// reads the printed cost. Contributions are a separate list, so mana spent
+/// never counts a tapped or sacrificed object.
 ///
 /// Its holders share one record: a clone is a reference, and an empty receipt
 /// allocates nothing. Only the payment in progress appends to it.
@@ -57,8 +100,9 @@ impl PaymentReceipt {
         self.0.as_deref().unwrap_or(&NOTHING)
     }
 
+    /// Nothing was paid: no mana and no contributing object.
     pub fn is_empty(&self) -> bool {
-        self.paid().mana.is_empty()
+        self.0.is_none()
     }
 
     /// The units spent, in spend order.
@@ -74,6 +118,38 @@ impl PaymentReceipt {
                 .mana
                 .extend(units);
         }
+    }
+
+    /// The objects that paid other than with mana, in the order chosen.
+    pub fn contributions(&self) -> &[Contribution] {
+        &self.paid().contributions
+    }
+
+    /// The objects that paid `toward` by being `how`, in the order chosen.
+    pub fn contributed(&self, how: How, toward: Toward) -> impl Iterator<Item = ObjectId> + '_ {
+        self.contributions()
+            .iter()
+            .filter(move |paid| paid.how == how && paid.toward == toward)
+            .map(|paid| paid.object)
+    }
+
+    /// The permanents this payment sacrifices as it completes.
+    pub fn sacrificed(&self) -> impl Iterator<Item = ObjectId> + '_ {
+        self.contributions()
+            .iter()
+            .filter(|paid| paid.how == How::Sacrificed)
+            .map(|paid| paid.object)
+    }
+
+    /// Record the object one payment choice committed.
+    pub fn contribute(&mut self, object: ObjectId, how: How, toward: Toward) {
+        Arc::make_mut(self.0.get_or_insert_with(Default::default))
+            .contributions
+            .push(Contribution {
+                object,
+                how,
+                toward,
+            });
     }
 
     /// "The amount of mana spent to cast" it.

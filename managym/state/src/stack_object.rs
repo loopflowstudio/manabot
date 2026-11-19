@@ -71,6 +71,10 @@ pub struct ActivatedAbilityOnStack {
     /// its grant, fixed at activation (`ability_index` names the grantee's list).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
+    /// What activating it paid (CR 602.2b): the mana spent and the objects
+    /// tapped, sacrificed, discarded or exiled for its cost.
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub paid: PaymentReceipt,
 }
 
 fn serialize_activation_source<S: serde::Serializer>(

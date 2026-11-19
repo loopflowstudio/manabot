@@ -197,6 +197,12 @@ fn execution_names(out: &mut Vec<RecordName>) {
             ][..],
         ),
         ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
+        // What a payment's contributing objects did and paid for.
+        ("How", &["Tapped", "Sacrificed", "Exiled", "Discarded"][..]),
+        (
+            "Toward",
+            &["Printed", "Waterbend", "Crew", "Alternative"][..],
+        ),
         (
             "Effect",
             &[

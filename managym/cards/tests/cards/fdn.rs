@@ -52,3 +52,219 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
         .triggered_abilities
         .is_empty());
 }
+
+/// CR 601.2h, 602.2b: the ability's receipt names the creature sacrificed
+/// for it, and what that creature was stays readable after it has left.
+/// The sacrifice is the player's choice under both payment settings; only
+/// the mana is paid for them under auto.
+#[test]
+fn hungry_ghoul_receipt_names_the_sacrificed_creature_after_it_has_left() {
+    use crate::support::{
+        game::five_color_unfunded_setup,
+        inspect::{counters, offered_cards, zone_of},
+        play::{choose, select_card},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        state::{
+            payment::{Contribution, How, Toward},
+            player::ManaPayment,
+            stack_object::StackObject,
+        },
+    };
+
+    for auto in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Hungry Ghoul", "Gray Ogre", "Hill Giant"]);
+        let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+        let swamp = s.force_permanent_on_battlefield(0, "Swamp");
+        let forest = s.force_permanent_on_battlefield(0, "Forest");
+        if auto {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
+        let (ogre_object, giant_object) = (card_of(&s, ogre), card_of(&s, giant));
+        activate(&mut s, ghoul, 0);
+
+        // "Another creature": each other creature is offered, never the Ghoul.
+        let mut offered = offered_cards(&s);
+        offered.sort();
+        let mut expected = vec![ogre_object, giant_object];
+        expected.sort();
+        assert_eq!(offered, expected, "auto={auto}");
+
+        // Either choice completes once in its own fork.
+        for (index, chosen) in [ogre_object, giant_object].into_iter().enumerate() {
+            let mut fork = s.game().clone();
+            fork.mana_payment[0] = ManaPayment::Auto;
+            let action = fork
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == chosen))
+                .unwrap();
+            fork.step(action).unwrap();
+            let [StackObject::ActivatedAbility(ability)] = fork.state.stack_objects.as_slice()
+            else {
+                panic!("fork {index}: one activation")
+            };
+            assert_eq!(ability.paid.sacrificed().collect::<Vec<_>>(), [chosen]);
+        }
+
+        select_card(&mut s, ogre_object);
+        if !auto {
+            // The chosen creature is committed, not yet gone, while the mana
+            // is paid: the acting player sees it as the reserved sacrifice.
+            assert_eq!(zone_of(&s, ogre_object), Some(ZoneType::Battlefield));
+            let frame = Observation::for_player(s.game(), PlayerId(0))
+                .continuation
+                .into_iter()
+                .find(|frame| frame.kind == 4)
+                .expect("the announcement being paid");
+            assert!(frame.sacrifice.is_some());
+            assert!(!frame.effect_execution.is_empty());
+            for land in [swamp, forest] {
+                assert!(crate::support::inspect::has_action(&s, |a| {
+                    matches!(a, Action::TapForMana { permanent, .. } if *permanent == land)
+                }));
+            }
+            choose(
+                &mut s,
+                |a| matches!(a, Action::TapForMana { permanent, .. } if *permanent == swamp),
+            );
+        }
+
+        let [StackObject::ActivatedAbility(ability)] = s.game().state.stack_objects.as_slice()
+        else {
+            panic!("the Ghoul's ability is on the stack")
+        };
+        assert_eq!(
+            ability.paid.contributions(),
+            [Contribution {
+                object: ogre_object,
+                how: How::Sacrificed,
+                toward: Toward::Printed,
+            }],
+            "auto={auto}"
+        );
+        let [unit] = ability.paid.mana() else {
+            panic!("one mana was spent")
+        };
+        let land = unit.source.expect("a land produced it").object;
+        if !auto {
+            assert_eq!(land, card_of(&s, swamp));
+        }
+        assert!(tapped_lands(&s, &[swamp, forest]) == 1);
+
+        // The Ogre is gone; the receipt still says what it was.
+        assert!(s.game().state.live(ogre_object).is_none());
+        assert_eq!(
+            zone_of(&s, crate::support::inspect::now(&s, ogre_object)),
+            Some(ZoneType::Graveyard)
+        );
+        let lki = s.game().object_lki(ogre_object).expect("last known Ogre");
+        assert_eq!((lki.power, lki.toughness), (2, 2));
+        assert_eq!(
+            s.game()
+                .object_lki_definition(ogre_object)
+                .unwrap()
+                .printed
+                .name,
+            "Gray Ogre"
+        );
+        assert_eq!(zone_of(&s, giant_object), Some(ZoneType::Battlefield));
+
+        // Both players read the same public fact in text.
+        let context = s.game().decision_context(PlayerId(0)).unwrap();
+        assert!(
+            context
+                .pending
+                .contains(&"Paid with: sacrificed Gray Ogre.".to_string()),
+            "{:?}",
+            context.pending
+        );
+
+        settle(&mut s);
+        assert_eq!(counters(&s, ghoul), 1);
+    }
+}
+
+fn tapped_lands(
+    s: &crate::support::game::Scenario,
+    lands: &[managym::state::game_object::PermanentId],
+) -> usize {
+    lands
+        .iter()
+        .filter(|land| crate::support::inspect::tapped(s, **land))
+        .count()
+}
+
+/// CR 601.2f: the announced target settles the total cost, and the receipt
+/// shows what was actually spent. Onto a tapped creature Luminous Rebuke
+/// costs {1}{W}: two units from two Plains, each named, under both payment
+/// settings. With two mana an untapped creature is not a legal choice.
+#[test]
+fn luminous_rebuke_cost_is_settled_by_its_target_and_the_receipt_shows_what_was_spent() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_to_hand},
+        inspect::{has_action, tapped, zone_of},
+        play::{choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, mana::Color, player::ManaPayment, stack_object::StackObject},
+    };
+
+    for auto in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Luminous Rebuke", "Gray Ogre", "Hill Giant"]);
+        let attacker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let untapped = s.force_permanent_on_battlefield(1, "Hill Giant");
+        s.game_mut().state.permanents[attacker]
+            .as_mut()
+            .unwrap()
+            .tapped = true;
+        let plains = [
+            s.force_permanent_on_battlefield(0, "Plains"),
+            s.force_permanent_on_battlefield(0, "Plains"),
+        ];
+        if auto {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
+        let rebuke = move_to_hand(&mut s, "Luminous Rebuke");
+        choose(
+            &mut s,
+            |a| matches!(a, Action::CastSpell { object, .. } if *object == rebuke),
+        );
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(!has_action(&s, |a| {
+            matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(untapped))
+        }));
+        assert!(s.choose_target(Target::Permanent(attacker)));
+
+        let Some(StackObject::Spell(spell)) = s.game().state.stack_objects.last() else {
+            panic!("Luminous Rebuke is on the stack, auto={auto}")
+        };
+        assert_eq!(spell.spent.total(), 2, "{{4}}{{W}} less {{3}}");
+        assert_eq!(spell.spent.amounts()[Color::White as usize], 2);
+        let mut sources: Vec<_> = spell
+            .spent
+            .mana()
+            .iter()
+            .map(|unit| unit.source.expect("a Plains").object)
+            .collect();
+        sources.sort();
+        let mut expected = plains.map(|land| card_of(&s, land)).to_vec();
+        expected.sort();
+        assert_eq!(sources, expected);
+        assert!(spell.spent.contributions().is_empty());
+        assert!(plains.iter().all(|land| tapped(&s, *land)));
+
+        settle(&mut s);
+        assert!(s.game().state.permanents[attacker].is_none());
+        assert_eq!(
+            zone_of(&s, card_of(&s, untapped)),
+            Some(ZoneType::Battlefield)
+        );
+    }
+}

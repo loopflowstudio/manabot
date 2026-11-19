@@ -17,7 +17,7 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::{CastChoices, Game, Payment},
+        game::{CastChoices, Game, Operation, Payment},
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
@@ -47,11 +47,11 @@ pub enum FrameCompletion {
         next: Box<FrameCompletion>,
     },
     CombatNormal,
-    /// `spent` is the mana the announced cost actually took (CR 601.2h).
+    /// The spell's whole cost is paid; `payment.receipt` is what it actually
+    /// took (CR 601.2h).
     Paid {
         player: PlayerId,
         payment: Payment,
-        spent: PaymentReceipt,
     },
     Activated {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
@@ -431,11 +431,9 @@ pub enum ResolutionCastOffer {
 /// nested fees cannot contribute to an outer spell's receipt.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum SpendCompletion {
-    Announced {
-        payment: Payment,
-        sacrifice: Option<PermanentId>,
-        waterbend: bool,
-    },
+    /// The mana of an announced spell or activation; its receipt gains the
+    /// units spent as the spend completes.
+    Announced(Payment),
     Upfront(Box<Decision>),
     Resolution(PaymentProgress),
     Foretell(CardId),
@@ -1341,18 +1339,14 @@ impl Game {
                         frame.completion = FrameCompletion::Continue;
                         continue;
                     }
-                    FrameCompletion::Paid {
-                        player,
-                        payment,
-                        spent,
-                    } => {
-                        let Payment::Spell {
+                    FrameCompletion::Paid { player, payment } => {
+                        let Operation::Spell {
                             object,
                             cast,
                             mode,
                             targets,
                             target_req_indices,
-                        } = payment
+                        } = payment.operation
                         else {
                             unreachable!("activation prepared before costs")
                         };
@@ -1362,7 +1356,7 @@ impl Game {
                             self.state.stack_objects_mut().last_mut()
                         {
                             spell.mode = mode;
-                            spell.spent = spent;
+                            spell.spent = payment.receipt;
                         }
                     }
                     FrameCompletion::Activated {
@@ -1635,7 +1629,7 @@ impl Game {
                         self.mana_tap_cost_actions(*player),
                     )
                 } else {
-                    let mut actions = self.mana_ability_actions(*player, None);
+                    let mut actions = self.mana_ability_actions(*player);
                     if self.offers_extra_payment_taps(*player) && self.can_pay_mana_upfront(*player)
                     {
                         actions.push(Action::PayCost { player: *player });
@@ -1670,7 +1664,7 @@ impl Game {
                         focus: source_focus,
                     });
                 }
-                let mut actions = self.mana_ability_actions(player, None);
+                let mut actions = self.mana_ability_actions(player);
                 if let PaymentCost::Waterbend { generic } = payment.remaining {
                     if generic > 0 {
                         let rest =

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     agent::action::{Action, ActionSpaceKind},
-    flow::game::{Game, PendingChoice},
+    flow::game::Game,
     state::{
         ability::TargetSpec,
         card::Restriction,
@@ -863,12 +863,9 @@ impl Game {
     fn structured_waterbend_offers(
         &self,
     ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
-        let Some(PendingChoice::Waterbend {
-            player,
-            payment,
-            remaining_generic,
-            tapped,
-        }) = &self.pending_choice
+        let Some((player, payment, _)) = self
+            .paying()
+            .filter(|(_, payment, _)| payment.owed.len() == 1 && payment.waterbends())
         else {
             return Err(StructuredOfferError::WrongDecision);
         };
@@ -880,8 +877,7 @@ impl Game {
         {
             return Ok(None);
         }
-        let player = *player;
-        let legal_taps = self.waterbend_payment_candidates(player, payment);
+        let legal_taps = self.waterbend_payment_candidates(player, &payment.operation);
         if legal_taps.iter().any(|id| {
             self.state.permanents[*id]
                 .as_ref()
@@ -889,8 +885,7 @@ impl Game {
         }) {
             return Ok(None);
         }
-        let (cost, remaining_generic) =
-            self.waterbend_owed(player, payment, *remaining_generic, *tapped);
+        let (cost, remaining_generic) = payment.mana();
         let max = legal_taps.len().min(usize::from(remaining_generic));
         let min = (0..=max)
             .find(|count| self.can_pay_mana_cost(player, &cost.reduced_generic(*count as u8)))
@@ -1480,10 +1475,9 @@ impl Game {
                                 continue
                             }
                             Action::PayCost { .. }
-                                if !matches!(
-                                    self.pending_choice,
-                                    Some(PendingChoice::Waterbend { .. })
-                                ) =>
+                                if !self
+                                    .paying()
+                                    .is_some_and(|(_, payment, _)| payment.waterbends()) =>
                             {
                                 continue
                             }

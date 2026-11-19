@@ -180,6 +180,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Wizard", Creature),
     ("Wolf", Creature),
     ("Wurm", Creature),
+    ("Zombie", Creature),
 ];
 
 /// Every subtype in the table, in name order.

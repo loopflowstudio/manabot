@@ -392,10 +392,21 @@ Mana feasibility and production share typed costs and pools. `ManaClass`
 retains each class's spending restriction and spend effect; `SpendingContext`
 distinguishes casting, activation and resolving costs. A player's `ManaPool`
 keeps, unit for unit, the object that produced its mana (`ManaOrigin`); units
-of one class and color are interchangeable, so the oldest is spent first. A
-spell's payment records a `PaymentReceipt`, one entry per unit spent with its
-origin and applied rider, shared by the stack object, its resolution and the
-entering permanent's own triggers.
+of one class and color are interchangeable, so the oldest is spent first.
+
+A cast or activation is paid as one `Payment` (`flow/game.rs`): the announced
+`Operation`, the `CostComponent`s still owed in the order they are paid, and
+the `PaymentReceipt` of what has been paid. `Game::cost_components` fixes the
+total cost once announcement ends; `PendingChoice::Pay` offers the component
+at the front of `owed`, and each choice shrinks or removes it and appends to
+the receipt. The receipt has one entry per unit of mana spent, with its origin
+and applied rider, and one `Contribution` per object tapped, sacrificed,
+discarded or exiled for the cost, naming what was done (`How`) and the part of
+the cost it paid (`Toward`). A chosen sacrifice is recorded at once and leaves
+as the whole cost completes. A spell's receipt is shared by the stack object,
+its resolution and the entering permanent's own triggers; an activated
+ability keeps its own as `paid`. A source's own {T}, sacrifice, discard and
+life costs are paid at completion and are not on the receipt.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation

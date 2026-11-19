@@ -4604,32 +4604,13 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     let mut s = five_color_setup(&["Uncle's Musings", "Kyoshi Warrior Guard"]);
     s.set_player_mana_pool(0, "WUGG");
     cast(&mut s, "Uncle's Musings");
-    // The policy's token vocabulary: every definition's tokens and the
-    // registered runtime names.
-    let vocabulary: std::collections::HashSet<(u16, i32)> =
-        managym::agent::record_vocabulary::record_names()
-            .into_iter()
-            .filter_map(|name| name.token)
-            .chain(
-                managym_cards::catalog()
-                    .iter()
-                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
-                    .map(|(kind, value)| (kind as u16, value)),
-            )
-            .collect();
-    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
     let marker = (TokenKind::Text as u16, name_value("mana spent"));
     for viewer in [0, 1] {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
         let frame = &observation.continuation[0];
         assert_eq!(frame.kind, 1);
         assert!(frame.effect_execution.contains(&marker));
-        for token in &frame.effect_execution {
-            assert!(
-                literal.contains(&token.0) || vocabulary.contains(token),
-                "unregistered execution token {token:?}"
-            );
-        }
+        assert_execution_tokens_registered(frame);
         let rows = encoded_default(&observation).facts;
         let programs = rows
             .chunks(FACT_DIM)
@@ -4644,6 +4625,64 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     let observation = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(observation.continuation[0].kind, 1);
     assert!(observation.continuation[0].effect_execution.is_empty());
+}
+
+/// Every execution token of `frame` is a literal, a definition's token or a
+/// registered runtime name: the policy's whole token vocabulary.
+fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
+    let vocabulary: std::collections::HashSet<(u16, i32)> =
+        managym::agent::record_vocabulary::record_names()
+            .into_iter()
+            .filter_map(|name| name.token)
+            .chain(
+                managym_cards::catalog()
+                    .iter()
+                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
+                    .map(|(kind, value)| (kind as u16, value)),
+            )
+            .collect();
+    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
+    for token in &frame.effect_execution {
+        assert!(
+            literal.contains(&token.0) || vocabulary.contains(token),
+            "unregistered execution token {token:?}"
+        );
+    }
+}
+
+/// An object that paid a cost other than with mana is a public fact of the
+/// receipt: the stack frame references it for both players, with what was
+/// done to it, and keeps naming what it was after it has left (Hungry Ghoul,
+/// `fdn::hungry_ghoul_receipt_names_the_sacrificed_creature_after_it_has_left`).
+/// A receipt of mana alone that no rule reads still adds nothing.
+#[test]
+fn payment_contributions_reach_the_stack_frame_as_references() {
+    let mut s = five_color_setup(&["Hungry Ghoul", "Gray Ogre"]);
+    let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_definition = s.game().state[card_of(&s, ogre)].definition_id.0;
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, ghoul, 0);
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    let sacrificed = (TokenKind::Variant as u16, name_value("How::Sacrificed"));
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 2, "the activated ability's stack frame");
+        assert!(frame.effect_execution.contains(&sacrificed));
+        assert_execution_tokens_registered(frame);
+        // The departed Ogre is referenced by what it last was.
+        assert!(frame
+            .effect_execution_references
+            .iter()
+            .any(|reference| reference.definition == Some(ogre_definition)));
+        let rows = encoded_default(&observation).facts;
+        let programs = rows
+            .chunks(FACT_DIM)
+            .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
+            .count();
+        assert_eq!(programs, frame.effect_execution.len());
+    }
 }
 
 /// A spell on the stack shows its announced X on its stack row, its one row.

@@ -15,7 +15,7 @@ use crate::{
     },
     flow::{
         decision::Decision,
-        game::{Game, PendingChoice},
+        game::{CostComponent, Game, PendingChoice},
     },
     state::game_object::{ObjectId, PlayerId, Target},
 };
@@ -321,20 +321,22 @@ impl Game {
             }
         }
         let (stage, instruction) = match &self.pending_choice {
-            Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
-                ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
-            Some(PendingChoice::ExileFromHandPayment { .. }) =>
-                ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
-            Some(PendingChoice::DiscardPayment { .. }) =>
-                ("additional_cost", "Choose a card to discard as an activation cost."),
-            Some(PendingChoice::TapPayment { .. }) =>
-                ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
-            Some(PendingChoice::SacrificePayment { .. }) =>
-                ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+            Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
+                CostComponent::Mana { .. } =>
+                    ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+                CostComponent::ExileFromHand =>
+                    ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
+                CostComponent::Discard =>
+                    ("additional_cost", "Choose a card to discard as an activation cost."),
+                CostComponent::Tap(_) =>
+                    ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
+                CostComponent::Sacrifice(_) =>
+                    ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+                CostComponent::TapPower { .. } =>
+                    ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
+            },
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
-            Some(PendingChoice::Crew { .. }) =>
-                ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { object: object_id, .. }) if self.state[*object_id].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),

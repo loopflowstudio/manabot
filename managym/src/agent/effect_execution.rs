@@ -20,7 +20,7 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
-        game::{ActivationSource, Game, Payment},
+        game::{ActivationSource, Game, Operation, Payment},
         proposed_event::{
             EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
@@ -30,7 +30,7 @@ use crate::{
         card::CardDefId,
         game_object::{ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
-        payment::PaymentReceipt,
+        payment::{How, PaymentReceipt, Toward},
     },
 };
 
@@ -60,6 +60,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "chosen object",
     "chosen to exile",
     "commit completion event",
+    "contribution",
     "controller",
     "copy definition",
     "copy exceptions",
@@ -134,6 +135,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "ordered prefix",
     "paid activation",
     "paid announcement",
+    "paid by",
     "paid source",
     "paid spell",
     "pay casting costs",
@@ -428,14 +430,10 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
-            FrameCompletion::Paid {
-                player,
-                payment,
-                spent,
-            } => {
+            FrameCompletion::Paid { player, payment } => {
                 self.paid_summary();
-                if !spent.is_empty() {
-                    self.receipt(spent);
+                if !payment.receipt.is_empty() {
+                    self.receipt(&payment.receipt);
                 }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
@@ -472,8 +470,8 @@ impl<'a> Projection<'a> {
     }
 
     fn payment(&mut self, payment: &Payment) {
-        match payment {
-            Payment::Spell {
+        match &payment.operation {
+            Operation::Spell {
                 object,
                 cast,
                 mode,
@@ -488,7 +486,7 @@ impl<'a> Projection<'a> {
                     self.target("target", *target);
                 }
             }
-            Payment::Activation {
+            Operation::Activation {
                 source,
                 ability_index,
                 targets,
@@ -511,11 +509,51 @@ impl<'a> Projection<'a> {
         }
     }
 
-    /// The mana actually spent to cast (CR 601.2h) and the entry counters
-    /// its spend effects add: the two facts a rule reads from the receipt.
-    /// Which object produced each unit is in the text only; no rule reads it
-    /// yet, so it adds no policy tokens.
+    /// What a payment took. Its mana is the amounts actually spent to cast
+    /// (CR 601.2h) and the entry counters its spend effects add, the two mana
+    /// facts a rule reads; which object produced each unit is in the text
+    /// only and adds no policy tokens. Each object that paid otherwise is a
+    /// reference, with what was done to it and the part of the cost it paid.
     fn receipt(&mut self, spent: &PaymentReceipt) {
+        if !spent.mana().is_empty() {
+            self.mana_spent(spent);
+        }
+        if spent.contributions().is_empty() {
+            return;
+        }
+        for paid in spent.contributions() {
+            self.field("contribution", &(paid.how, paid.toward));
+            self.object("paid by", paid.object);
+        }
+        let (game, viewer) = (self.game, self.viewer);
+        self.summary(|| {
+            let paid: Vec<_> = spent
+                .contributions()
+                .iter()
+                .map(|paid| {
+                    let how = match paid.how {
+                        How::Tapped => "tapped",
+                        How::Sacrificed => "sacrificed",
+                        How::Exiled => "exiled",
+                        How::Discarded => "discarded",
+                    };
+                    let toward = match paid.toward {
+                        Toward::Printed => "",
+                        Toward::Waterbend => " to waterbend",
+                        Toward::Crew => " to crew",
+                        Toward::Alternative => " instead of paying mana",
+                    };
+                    format!(
+                        "{how} {}{toward}",
+                        Self::label(game.visible_reference(paid.object, viewer))
+                    )
+                })
+                .collect();
+            format!("Paid with: {}.", paid.join("; "))
+        });
+    }
+
+    fn mana_spent(&mut self, spent: &PaymentReceipt) {
         /// The receipt's rule-read facts, under the names their tokens have.
         #[derive(Debug, Serialize)]
         struct ManaSpent {
@@ -854,7 +892,7 @@ pub(crate) fn receipt_matters(spent: &PaymentReceipt, definition: Option<CardDef
     if spent.is_empty() {
         return false;
     }
-    if spent.entry_counters() > 0 {
+    if spent.entry_counters() > 0 || !spent.contributions().is_empty() {
         return true;
     }
     let reads = READS.get_or_init(|| {
@@ -994,14 +1032,16 @@ pub(crate) fn project_decision(
                 out.field("spending option", &choice.unit);
             }
             match completion.as_ref() {
-                SpendCompletion::Announced {
-                    payment, sacrifice, ..
-                } => {
+                SpendCompletion::Announced(payment) => {
                     out.payment(payment);
-                    if let Some(permanent) = sacrifice {
+                    for permanent in payment
+                        .receipt
+                        .sacrificed()
+                        .filter_map(|object| game.state.permanent_of(object))
+                    {
                         out.target(
                             "cost sacrifice",
-                            crate::state::game_object::Target::Permanent(*permanent),
+                            crate::state::game_object::Target::Permanent(permanent),
                         );
                     }
                 }
