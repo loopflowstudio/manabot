@@ -74,7 +74,7 @@
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
-  const waiting = $derived(reading !== undefined);
+  const readingOut = $derived(reading !== undefined);
   const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
   const isChosen = (placed: PlacedOffer): boolean => evidence?.chosen === placed.offer.id;
 
@@ -185,7 +185,7 @@
     {/if}
   </section>
 
-  <section use:region={{ across: !onjump }} class="block prompt" class:waiting aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
+  <section use:region={{ across: !onjump }} class="block prompt" class:reading-out={readingOut} aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
     {#if reading}{@render reading()}{/if}
     <p class="type-heading whose" class:yours={live}>
       {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
@@ -228,20 +228,20 @@
       {:else}
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
-          disabled={!live} aria-disabled={waiting || undefined} onclick={() => onact(view.primary!)}>
+          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
           <span>{#if isChosen(view.primary)}✓ {/if}{primaryText?.text ?? view.primary.offer.label}</span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
-          disabled={!live} aria-disabled={waiting || undefined} onclick={() => onact(placed)}>
+          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}>
           <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}{placed.offer.label}{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {/if}
       {#if canPassTurn}
-        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" aria-disabled={waiting || undefined} onclick={onpassturn}
+        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" aria-disabled={readingOut || undefined} onclick={onpassturn}
           title="Pass every priority window until the turn ends">Pass turn <kbd>F6</kbd></button>
       {/if}
       <!-- The engine's own words stay one click away, under the answers. -->
@@ -268,7 +268,7 @@
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
             aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
-            disabled={!live} aria-disabled={waiting || undefined} onclick={() => onact(placed)}
+            disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
@@ -369,9 +369,9 @@
   }
   .row:hover:not(:disabled, [aria-disabled]) { border-color: var(--border-strong); background: var(--bg-field); }
   .row:disabled, .row[aria-disabled] { color: var(--text-secondary); cursor: default; }
-  /* Waiting for the read-out: the decision stays in place beneath the beat, quieter. */
-  .waiting [data-testid='decision-prompt'], .waiting .whose { color: var(--text-tertiary); }
-  .waiting .primary, .waiting .secondary, .waiting .pass-turn { opacity: 0.55; cursor: default; }
+  /* During the read-out: the decision stays in place beneath the beat, quieter. */
+  .reading-out [data-testid='decision-prompt'], .reading-out .whose { color: var(--text-tertiary); }
+  .reading-out .primary, .reading-out .secondary, .reading-out .pass-turn { opacity: 0.55; cursor: default; }
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   .hidden-key { visibility: hidden; }

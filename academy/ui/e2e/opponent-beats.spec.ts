@@ -2,8 +2,8 @@
  * The opponent's moves are read out one beat at a time before the decision:
  * each long enough to read, the decision's choices wait beneath it, the first
  * input ends the reading without acting, and reduced motion reads none (the
- * recap still lists every fact). A click on a waiting choice waits with it, as
- * Playwright treats `aria-disabled` as not yet enabled.
+ * recap still lists every fact). Playwright waits on a click at a held choice, as
+ * it treats `aria-disabled` as not yet enabled.
  */
 import { expect, test, type Page } from '@playwright/test';
 
@@ -37,7 +37,7 @@ async function playUntil(page: Page, until: () => Promise<boolean>, limit: numbe
 }
 
 /** What the page showed in the instant before a press during a beat. */
-interface Seen { text: string; inPanel: boolean; waiting: boolean; onStep: boolean; outlined: number }
+interface Seen { text: string; inPanel: boolean; held: boolean; onStep: boolean; outlined: number }
 
 /**
  * Press during a beat in one task, so the beat cannot end between reading the
@@ -53,7 +53,7 @@ async function pressDuringBeat(page: Page, how: 'key' | 'choice'): Promise<Seen 
     const seen = {
       text: beat.textContent ?? '',
       inPanel: beat.closest('[data-testid=action-panel]') !== null,
-      waiting: row.getAttribute('aria-disabled') === 'true',
+      held: row.getAttribute('aria-disabled') === 'true',
       onStep: board.getAttribute('data-board') === 'step',
       outlined: board.querySelectorAll('[data-testid=board-card][data-offer-count]:not([data-offer-count="0"])').length,
     };
@@ -92,7 +92,7 @@ test('the opponent\'s moves are read out before the decision, and the first pres
   expect(read!.text).toMatch(/\d+ of \d+ · Space to skip/);
   // The beat headed the decision block, and the choices beneath it waited, still listed.
   expect(read!.inPanel).toBe(true);
-  expect(read!.waiting).toBe(true);
+  expect(read!.held).toBe(true);
   // A beat is shown on the board it happened on, when that is not the frame's
   // own: a past board, with no card outlined (its offers belong to the frame).
   if (read!.onStep) expect(read!.outlined).toBe(0);
@@ -129,15 +129,15 @@ test('each beat is shown on its own board, and a press on the board or a choice 
   await expect(board).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('beat')).toHaveCount(0);
   expect(sent.count).toBe(before);
-  // At a later read-out, a click on a waiting choice ends it and commits nothing.
-  const waitingBefore = { count: 0 };
+  // At a later read-out, a click on a held choice ends it and commits nothing.
+  const heldBefore = { count: 0 };
   await playUntil(page, async () => {
-    waitingBefore.count = sent.count;
+    heldBefore.count = sent.count;
     return await pressDuringBeat(page, 'choice') !== null;
   }, 160);
   await expect(page.getByTestId('beat')).toHaveCount(0);
   await expect(board).toHaveAttribute('data-board', 'frame');
-  expect(sent.count).toBe(waitingBefore.count);
+  expect(sent.count).toBe(heldBefore.count);
 });
 
 test('reduced motion reads out no beats', async ({ page }) => {

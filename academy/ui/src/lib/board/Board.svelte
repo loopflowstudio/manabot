@@ -766,7 +766,7 @@
   <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
     data-board={beatBoard ? 'step' : 'frame'}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
-      <Plate player={boardProjection.opponent} name={said} deck={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
+      <Plate player={boardProjection.opponent} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
         <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -774,7 +774,7 @@
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
-      <Plate player={boardProjection.agent} name={you.name} deck={you.deck} offers={board.you.offers} {live} damage={recent.damage.players.get(boardProjection.agent.player_index) ?? 0}
+      <Plate player={boardProjection.agent} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={recent.damage.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
         <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -839,7 +839,7 @@
   </div>
 
   {#snippet combatControls()}
-    <div class="combat-draft" class:waiting={readingOut} data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
+    <div class="combat-draft" class:reading-out={readingOut} data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
       {#if running}
         <button type="button" class="btn btn-secondary" data-testid="combat-stop" aria-disabled={readingOut || undefined} onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
@@ -1031,7 +1031,7 @@
   .combat-draft .primary kbd { flex: none; opacity: 1; }
   .combat-draft .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   /* A read-out holds the draft's controls as Rail holds its own: listed, dimmed, a press only ends it. */
-  .combat-draft.waiting .btn, .combat-draft.waiting .step { opacity: 0.55; cursor: default; }
+  .combat-draft.reading-out .btn, .combat-draft.reading-out .step { opacity: 0.55; cursor: default; }
   .combat-draft .secondary { width: 100%; min-height: 32px; padding-block: 5px; justify-content: flex-start; }
   .pile-count { display: flex; align-items: center; gap: 6px; }
   .pile-count span { flex: 1; }

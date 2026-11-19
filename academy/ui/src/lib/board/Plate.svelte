@@ -12,7 +12,7 @@
   interface Props {
     player: PlayerState;
     name: string;
-    deck: string | null;
+    caption: string | null;
     offers: PlacedOffer[];
     live: boolean;
     /** Damage this player was dealt since your last move. */
@@ -24,7 +24,7 @@
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
   }
 
-  let { player, name, deck, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
+  let { player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
   const hand = $derived(player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length);
   const zones = $derived([
@@ -58,7 +58,7 @@
     onclick={event => onactivate(event.currentTarget)}
   >
     <span class="type-title text-display block truncate">{name}</span>
-    {#if deck}<span class="type-caption block truncate text-ink-2">{deck}</span>{/if}
+    {#if caption}<span class="type-caption block truncate text-ink-2">{caption}</span>{/if}
     {#if choosing}<span class="type-label choosing" data-testid="plate-choosing">Choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-caption text-ink-2">life</span>
       {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{/if}</span>
