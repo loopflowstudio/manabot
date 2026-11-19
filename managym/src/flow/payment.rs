@@ -1160,7 +1160,8 @@ impl Game {
         receipt.pay_life(life);
     }
 
-    /// Tap `tapped` to pay {1} of the pending waterbend cost.
+    /// Tap `tapped` to pay {1} of the pending cost: a waterbend tap, or a
+    /// convoke or improvise tap when the cost's help allows one.
     pub(crate) fn waterbend_tap_action(
         &mut self,
         player: PlayerId,
