@@ -8,7 +8,10 @@
 
 use crate::state::ability::LibraryEnd;
 use crate::{
-    agent::{continuation::ContinuationFrame, effect_execution::contribution_phrase},
+    agent::{
+        continuation::ContinuationFrame,
+        effect_execution::{contribution_phrase, spent_mana_phrase},
+    },
     experience::{
         DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
         OfferSubjectView, PaidView, RequiredNullable, SubjectRef,
@@ -373,15 +376,27 @@ impl Game {
             }
         }
         // What is committed to the pending cost: the contributions on its
-        // receipt, for a cast, an activation and a resolving payment alike.
-        view.paid = self
-            .pending_receipt()
+        // receipt, for a cast, an activation and a resolving payment alike,
+        // then each unit of mana spent toward it as it was produced.
+        let receipt = self.pending_receipt();
+        view.paid = receipt
             .map_or(&[][..], PaymentReceipt::contributions)
             .iter()
             .map(|paid| PaidView {
                 phrase: contribution_phrase(self, viewer, paid),
                 object: self.paid_object(paid.object, viewer),
             })
+            .chain(
+                receipt
+                    .map_or(&[][..], PaymentReceipt::mana)
+                    .iter()
+                    .map(|unit| PaidView {
+                        phrase: spent_mana_phrase(self, viewer, unit),
+                        object: unit
+                            .source
+                            .and_then(|origin| self.paid_object(origin.object, viewer)),
+                    }),
+            )
             .collect();
         // The one yes-or-no cost choice of a cast, named for what the card
         // offers: `KickerChoice` asks bargain and alternative costs too.

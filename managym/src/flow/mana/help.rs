@@ -65,15 +65,16 @@ impl Game {
     /// Can `cost` be paid from `model` with mana and `help`? Delve and taps
     /// for generic mana are part of the payment model's question; a
     /// convoking creature paying a colored pip is tried by `convoke_search`.
+    #[allow(clippy::too_many_arguments)]
     fn helped_payable(
         &self,
         player: PlayerId,
+        pool: &Mana,
         model: &mut PaymentModel,
         convokers: &[(PermanentId, Vec<Color>)],
         cost: &ManaCost,
         help: Help,
     ) -> bool {
-        let pool = self.pooled_mana(player);
         self.convoke_search(model, cost, convokers, &mut |model, cost| {
             let (relaxed, split) = self.helped_cost(player, cost, help, help.waterbend);
             model
@@ -87,12 +88,18 @@ impl Game {
         .is_some()
     }
 
-    /// Can `player` pay `cost` with mana and `help`?
-    pub(crate) fn payable_with_help(&self, player: PlayerId, cost: &ManaCost, help: Help) -> bool {
+    /// Can `player` pay `cost` with mana and `help`, `pool` in their pool?
+    pub(crate) fn payable_with_help(
+        &self,
+        player: PlayerId,
+        pool: &Mana,
+        cost: &ManaCost,
+        help: Help,
+    ) -> bool {
         let mut model = self.payment_model(player, None);
         self.restrict_help_taps(&mut model, help);
         let convokers = self.convokers(&model, help);
-        self.helped_payable(player, &mut model, &convokers, cost, help)
+        self.helped_payable(player, pool, &mut model, &convokers, cost, help)
     }
 
     /// The pips each of `candidates` may pay of `cost` by convoke or
@@ -115,12 +122,14 @@ impl Game {
         let mut model = self.payment_model(player, None);
         self.restrict_help_taps(&mut model, help);
         let convokers = self.convokers(&model, help);
+        let pool = self.pooled_mana(player);
         // The pips of `asked` that leave the rest payable from `model`.
         let keeping_payable =
             |model: &mut PaymentModel, convokers: &[(PermanentId, Vec<Color>)], asked: &[Color]| {
                 let mut options = asked.to_vec();
                 options.retain(|color| {
-                    self.helped_payable(player, model, convokers, &cost.less_pip(*color), help)
+                    let rest = cost.less_pip(*color);
+                    self.helped_payable(player, &pool, model, convokers, &rest, help)
                 });
                 options
             };

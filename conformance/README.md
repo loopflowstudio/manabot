@@ -51,5 +51,6 @@ The v4 corpus retains its original commands and evidence.
 
 Semantic-kernel w17-v6 hashes states under `MATCH_STATE_HASH_VERSION` 17,
 which adds the object that produced each pooled unit of mana and each unit a
-payment spent. Its commands, action spaces and pending choices equal v5's;
-the v5 corpus is retained unchanged.
+payment spent. Mana made while a cost is being paid pays toward it at once,
+so a pending payment's owed cost and receipt, and the offers after a tap made
+during it, differ from v5's; the v5 corpus is retained unchanged.

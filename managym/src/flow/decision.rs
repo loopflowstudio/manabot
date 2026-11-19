@@ -2260,6 +2260,11 @@ impl Game {
                     && self.pending_choice.is_none()
                     && self.mana_capture(player).is_some())
                 .then(|| self.state.players[player.0].mana_pool.total());
+                // Mana made for no nested cost pays toward an announced cost
+                // being paid as it is produced.
+                let start = resume
+                    .is_none()
+                    .then(|| self.state.players[player.0].mana_pool.unit_count());
                 let origin = match production {
                     ManaProduction::Output { source, .. } => *source,
                     ManaProduction::Bonus { source, .. } => Some(*source),
@@ -2293,6 +2298,9 @@ impl Game {
                 if let Some(before) = before {
                     let produced = self.state.players[player.0].mana_pool.total() - before;
                     self.mana_capture(player).unwrap().float(produced);
+                }
+                if let Some(start) = start {
+                    self.commit_produced_mana(player, start);
                 }
                 if let Some(next) = next {
                     suspended.decision = *next;

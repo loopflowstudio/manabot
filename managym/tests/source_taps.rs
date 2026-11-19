@@ -16,8 +16,13 @@ use managym::{
 };
 
 fn game(lands: &[&str]) -> Game {
-    let deck: BTreeMap<String, usize> = [("Mountain", 20), ("Forest", 12), ("Gray Ogre", 8)]
-        .into_iter()
+    game_with(lands, &[("Mountain", 20), ("Forest", 12), ("Gray Ogre", 8)])
+}
+
+fn game_with(lands: &[&str], deck: &[(&str, usize)]) -> Game {
+    let deck: BTreeMap<String, usize> = deck
+        .iter()
+        .copied()
         .map(|(name, count)| (name.to_string(), count))
         .collect();
     let mut game = Game::new(
@@ -198,7 +203,10 @@ fn funded_cast_can_tap_a_surplus_forest_before_paying() {
         .unwrap()
         .0;
     game.step(forest).unwrap();
-    assert_eq!(game.state.players[0].mana_pool, Mana::parse("2RG"));
+    // The Forest's {G} pays {1} as it is made; the floating mana waits for
+    // the spend choice.
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("2R"));
+    assert_eq!(owed(&game), "{1}{R}");
     pay_cost(&mut game);
     // Generic spending can ask which floating unit to keep.
     while game
@@ -213,6 +221,123 @@ fn funded_cast_can_tap_a_surplus_forest_before_paying() {
     assert!(game.pending_choice.is_none());
     assert_eq!(game.state.players[0].mana_pool.total(), 1);
     assert_eq!(untapped(&game), ["Mountain"]);
+}
+
+/// The mana the pending decision says is still owed.
+fn owed(game: &Game) -> String {
+    game.decision_context(PlayerId(0))
+        .and_then(|context| context.mana_cost.0)
+        .expect("a mana cost is being paid")
+}
+
+/// What the pending decision says is committed to the cost, in order.
+fn committed(game: &Game) -> Vec<String> {
+    game.decision_context(PlayerId(0))
+        .map(|context| context.paid.into_iter().map(|paid| paid.phrase).collect())
+        .unwrap_or_default()
+}
+
+fn tap(game: &mut Game, land: &str) {
+    let index = taps(game)
+        .into_iter()
+        .find(|(_, name)| name == land)
+        .unwrap_or_else(|| panic!("{land} is offered"))
+        .0;
+    game.step(index).unwrap();
+}
+
+/// CR 601.2g-h: mana a payer makes while paying a cost pays toward it as it
+/// is made. The owed cost ticks down, the unit joins the receipt with its
+/// source and the decision names it, as a convoke tap does.
+#[test]
+fn mana_made_while_paying_commits_to_the_cost() {
+    let mut game = game(&["Mountain", "Mountain", "Forest", "Forest"]);
+    cast(&mut game);
+    assert_eq!(owed(&game), "{2}{R}");
+    let labels: Vec<_> = game
+        .semantic_decision_frame()
+        .unwrap()
+        .offers
+        .iter()
+        .map(|offer| offer.label.clone())
+        .collect();
+    assert!(
+        labels.contains(&"Tap Forest for {G}".to_string()),
+        "{labels:?}"
+    );
+    tap(&mut game, "Forest");
+    assert_eq!(owed(&game), "{1}{R}");
+    assert_eq!(committed(&game), ["{G} from Forest"]);
+    assert_eq!(game.state.players[0].mana_pool, Mana::default());
+    // A red unit pays the red pip, which leaves the most that can pay the rest.
+    tap(&mut game, "Mountain");
+    assert_eq!(owed(&game), "{1}");
+    assert_eq!(committed(&game), ["{G} from Forest", "{R} from Mountain"]);
+
+    // A fork at the last tap finishes once each way.
+    for last in ["Mountain", "Forest"] {
+        let mut fork = game.clone();
+        tap(&mut fork, last);
+        assert!(fork.pending_choice.is_none());
+        let receipt = ogre_receipt(&fork);
+        let colors: Vec<u8> = receipt.mana().iter().map(|unit| unit.color).collect();
+        let third = if last == "Forest" { GREEN } else { RED };
+        assert_eq!(colors, [GREEN, RED, third]);
+        assert_eq!(untapped(&fork).len(), 1);
+        assert_eq!(fork.state.players[0].mana_pool, Mana::default());
+        assert_eq!(owed(&game), "{1}");
+    }
+}
+
+/// A source that makes more than is owed pays what is owed; the rest floats.
+#[test]
+fn surplus_of_mana_made_while_paying_floats() {
+    let deck = [
+        ("Mountain", 20),
+        ("Forest", 11),
+        ("Sol Ring", 1),
+        ("Gray Ogre", 8),
+    ];
+    let mut game = game_with(&["Mountain", "Forest", "Sol Ring", "Mountain"], &deck);
+    // Floats keep priority a real choice after the cast, so the pool is seen.
+    game.mana_floats = [ManaFloats::All, ManaFloats::Off];
+    game.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    tap(&mut game, "Mountain");
+    tap(&mut game, "Forest");
+    assert_eq!(owed(&game), "{1}");
+    tap(&mut game, "Sol Ring");
+    assert_eq!(owed(&game), "{0}");
+    pay_cost(&mut game);
+    assert!(game.pending_choice.is_none());
+    assert_eq!(untapped(&game), ["Mountain"]);
+    assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 1, 1]);
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("C"));
+}
+
+/// Mana that can pay nothing still owed stays in the pool, and the cost
+/// does not move.
+#[test]
+fn mana_made_while_paying_that_cannot_pay_floats() {
+    // A spare Mountain keeps priority a real choice after the cast.
+    let mut game = game(&["Mountain", "Mountain", "Forest", "Forest", "Forest"]);
+    game.mana_floats = [ManaFloats::All, ManaFloats::Off];
+    game.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    tap(&mut game, "Forest");
+    tap(&mut game, "Forest");
+    assert_eq!(owed(&game), "{R}");
+    tap(&mut game, "Forest");
+    assert_eq!(owed(&game), "{R}");
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
+    assert_eq!(committed(&game).len(), 2);
+    tap(&mut game, "Mountain");
+    if game.pending_choice.is_some() {
+        pay_cost(&mut game);
+    }
+    assert!(game.pending_choice.is_none());
+    assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 2, 0]);
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
 }
 
 fn pay_cost(game: &mut Game) {

@@ -31,7 +31,7 @@ use crate::{
         card::CardDefId,
         game_object::{ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
-        payment::{Contribution, How, PaymentReceipt, Toward},
+        payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
     },
 };
 
@@ -928,6 +928,24 @@ pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribu
         format!("{object}, sacrificed{toward} when the payment completes")
     } else {
         format!("{how} {object}{toward}")
+    }
+}
+
+/// One unit of mana spent toward a cost, as `viewer` may name its source:
+/// "{G} from Forest". A unit no object produced has no source to name.
+pub(crate) fn spent_mana_phrase(game: &Game, viewer: PlayerId, unit: &SpentMana) -> String {
+    let mut amounts = [0; 6];
+    amounts[unit.color as usize] = 1;
+    let mana = mana_description(&Mana {
+        mana: amounts,
+        ..Default::default()
+    });
+    match unit.source {
+        Some(origin) => format!(
+            "{mana} from {}",
+            Projection::label(game.visible_reference(origin.object, viewer))
+        ),
+        None => mana,
     }
 }
 

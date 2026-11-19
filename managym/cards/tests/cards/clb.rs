@@ -3,13 +3,16 @@
 use crate::support::{
     game::{five_color_unfunded_setup, force_new_card_in_hand},
     inspect::{card_of, permanent_named, tapped, top_spell},
-    play::{cast_card, pay_rest, settle, tap_for_mana},
+    play::{cast_card, choose, pay_rest, settle, tap_for_mana},
 };
-use managym::state::{
-    card::Keyword,
-    game_object::PlayerId,
-    mana::{Color, SpendEffect},
-    player::ManaPayment,
+use managym::{
+    agent::action::Action,
+    state::{
+        card::Keyword,
+        game_object::PlayerId,
+        mana::{Color, SpendEffect},
+        player::ManaPayment,
+    },
 };
 
 #[test]
@@ -111,16 +114,22 @@ fn carnelian_orb_mana_floated_first_is_a_distinct_unit_the_player_may_keep() {
     s.allow_priority_floats();
     tap_for_mana(&mut s, orb);
     assert!(tapped(&s, orb));
+    // A Mountain's unit floats beside it.
+    tap_for_mana(&mut s, mountains[0]);
 
-    // Gray Ogre costs three and four red are available. Manual payment taps
-    // the Mountains and never has to spend the Orb's unit.
+    // Gray Ogre costs three and four red are available. The other Mountains'
+    // mana pays as it is made; the floating units wait for "Pay the cost".
     let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
     cast_card(&mut s, ogre);
-    for land in &mountains {
-        tap_for_mana(&mut s, *land);
-    }
-    // No source is left to tap, so the cost is paid from the pool. Which red
-    // unit pays is the player's choice: the Orb's is its own class.
+    tap_for_mana(&mut s, mountains[1]);
+    // The last source tapped leaves only the pool, so the payment goes on to
+    // spending: which floating red unit pays the last {1} is the player's
+    // choice, and the Orb's is its own class.
+    let last = mountains[2];
+    choose(
+        &mut s,
+        |a| matches!(a, Action::TapForMana { permanent, .. } if *permanent == last),
+    );
     let frame = s.game().semantic_decision_frame().unwrap();
     let labels: Vec<_> = frame
         .offers
@@ -131,15 +140,11 @@ fn carnelian_orb_mana_floated_first_is_a_distinct_unit_the_player_may_keep() {
         labels.iter().any(|label| label.contains("haste")),
         "{labels:?}"
     );
-    while s.game().state.stack_objects.is_empty() {
-        let frame = s.game().semantic_decision_frame().unwrap();
-        let plain = frame
-            .offers
-            .iter()
-            .position(|offer| offer.label.starts_with("Spend") && !offer.label.contains("haste"))
-            .unwrap_or_else(|| panic!("an ordinary red unit is offered: {:?}", frame.offers));
-        s.step_action(plain);
-    }
+    let plain = labels
+        .iter()
+        .position(|label| label.starts_with("Spend") && !label.contains("haste"))
+        .unwrap_or_else(|| panic!("an ordinary red unit is offered: {labels:?}"));
+    s.step_action(plain);
     let spell = top_spell(&s);
     assert_eq!(spell.spent.total(), 3);
     assert!(spell

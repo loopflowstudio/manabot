@@ -551,6 +551,34 @@ impl ManaCost {
         out
     }
 
+    /// What is left of this cost once one unit of `color` (W/U/B/R/G/C, as
+    /// `Mana.mana` indexes it) pays a pip of it, one entry per pip it can
+    /// pay, most flexible remainder first: its own colored pip, then a
+    /// hybrid pip with its color, then {1}. Every unit that could pay the
+    /// pip a later entry leaves could pay the one an earlier entry leaves,
+    /// except between two hybrid pips, which the caller decides.
+    pub fn paid_with(&self, color: u8) -> Vec<ManaCost> {
+        let mut options = Vec::new();
+        if self.cost[color as usize] > 0 {
+            let mut out = self.clone();
+            out.cost[color as usize] -= 1;
+            out.update_mana_value();
+            options.push(out);
+        }
+        for (index, pip) in self.hybrid.iter().enumerate() {
+            if pip.iter().any(|c| *c as u8 == color) && !self.hybrid[..index].contains(pip) {
+                let mut out = self.clone();
+                out.hybrid.remove(index);
+                out.update_mana_value();
+                options.push(out);
+            }
+        }
+        if self.generic() > 0 {
+            options.push(self.less_pip(Color::Generic));
+        }
+        options
+    }
+
     /// This cost with X announced as `value` (CR 601.2b): each {X} becomes
     /// `value` generic mana.
     pub fn with_x(&self, value: u8) -> ManaCost {
@@ -1102,6 +1130,43 @@ impl ManaPool {
         }
         self.check();
         spent
+    }
+
+    /// How many units the pool holds. Units added later come after them, so
+    /// a count taken before a production marks where its mana begins.
+    pub fn unit_count(&self) -> usize {
+        self.units.len()
+    }
+
+    /// The pooled unit at `index`, as one unit of `Mana`.
+    pub fn unit(&self, index: usize) -> Mana {
+        let pooled = &self.units[index];
+        let mut amounts = [0; 6];
+        amounts[pooled.color as usize] = 1;
+        match &pooled.class {
+            Some(class) => Mana::of_class(class.clone(), amounts),
+            None => Mana {
+                mana: amounts,
+                ..Mana::default()
+            },
+        }
+    }
+
+    /// Spend exactly the unit at `index` toward `purpose`, keeping its
+    /// origin: the unit a production just added, not the oldest of its kind.
+    pub fn spend_at(&mut self, index: usize, purpose: &SpendingContext) -> SpentMana {
+        self.mana.spend(&self.unit(index));
+        let pooled = self.units.remove(index);
+        let effect = pooled
+            .class
+            .and_then(|class| class.effect)
+            .filter(|effect| effect.applies(purpose));
+        self.check();
+        SpentMana {
+            color: pooled.color,
+            source: pooled.origin,
+            effect,
+        }
     }
 
     /// All unspent mana becomes red, keeping its spending restrictions and

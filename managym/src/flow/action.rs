@@ -94,6 +94,16 @@ impl Game {
                     )),
                 }
             }
+            // A fixed source tapped while an announced cost is paid: its mana
+            // pays toward that cost as it is made (`commit_produced_mana`).
+            Action::TapForMana { permanent, .. }
+                if self.state.suspended_decision.is_none()
+                    && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))) =>
+            {
+                let name = &self.state[self.permanent_object(*permanent)?].name;
+                let output = crate::flow::mana::fixed_output(&self.characteristics(*permanent));
+                Some(format!("Tap {name} for {}", mana_description(&output)))
+            }
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),

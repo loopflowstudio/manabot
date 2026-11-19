@@ -1,6 +1,6 @@
 //! Supportive Parents consumes shared taps without summoning-sickness or
 //! mana-tap semantics.
-use crate::support::inspect::zone_of;
+use crate::support::inspect::{top_spell, zone_of};
 use crate::support::{
     game::{five_color_unfunded_setup, move_to_hand},
     play::command,
@@ -57,20 +57,18 @@ fn supportive_parents_repeats_only_with_distinct_shared_creatures() {
                 |action| matches!(action, Action::SelectCard { object: selected, .. } if *selected == object),
             );
         }
-        assert_eq!(
-            s.game().state.players[0].mana_pool.total(),
-            if color == 1 { 0 } else { 1 },
-            "costs do not produce mana"
-        );
+        // Costs produce no mana, and the first output already paid the spell.
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         command(
             &mut s,
             |action| matches!(action, Action::ChooseMode { mode, .. } if *mode == color),
         );
     }
-    // Both outputs pay the parent spell. Badgermole Cub adds no green mana.
-    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UR"));
-    command(&mut s, |action| matches!(action, Action::PayCost { .. }));
+    // Both outputs paid the parent spell as they were made. Badgermole Cub
+    // adds no green mana.
     assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
+    command(&mut s, |action| matches!(action, Action::PayCost { .. }));
+    assert_eq!(top_spell(&s).spent.amounts(), [0, 1, 0, 1, 0, 0]);
     assert_eq!(zone_of(&s, spell), Some(ZoneType::Stack));
     assert!([first, second, third, fourth]
         .iter()

@@ -477,7 +477,7 @@ impl Game {
         }
         let help = self.spell_help(player, object, cast, &cost);
         if help.keyworded() {
-            self.payable_with_help(player, &cost, help)
+            self.payable_with_help(player, &self.pooled_mana(player), &cost, help)
         } else if help.waterbend > 0 {
             self.waterbend_payment_possible(player, &cost, help.waterbend)
         } else {

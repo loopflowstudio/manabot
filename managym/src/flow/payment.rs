@@ -850,6 +850,59 @@ impl Game {
         self.advance_payment(player, payment)
     }
 
+    /// Mana `player` just produced while paying an announced cost's mana
+    /// pays toward it at once (CR 601.2g-h): the pool's units from `start`
+    /// on, in the order produced. Each unit is committed to the cost, not to
+    /// a chosen pip: it takes the most flexible pip it can pay whose rest
+    /// stays payable (`ManaCost::paid_with`), joins the receipt with its
+    /// origin and shrinks what is owed, as a convoke tap does. A unit stays
+    /// in the pool when its restriction forbids this cost or when no pip it
+    /// pays leaves the rest payable, so the surplus of a source that makes
+    /// more than is owed floats. Mana floating before the production is
+    /// untouched: the spend choice at "Pay the cost" decides it.
+    pub(crate) fn commit_produced_mana(&mut self, player: PlayerId, start: usize) {
+        let mut index = start;
+        loop {
+            let Some((payer, _, CostComponent::Mana { cost, help })) = self.paying() else {
+                return;
+            };
+            let pool = &self.state.players[player.0].mana_pool;
+            if payer != player || index >= pool.unit_count() || cost.mana_value == 0 {
+                return;
+            }
+            let unit = pool.unit(index);
+            let help = *help;
+            let rest = if unit.spendable_units(cost) == 0 {
+                None
+            } else {
+                let mut left = self.pooled_mana(player);
+                left.spend(&unit);
+                let color = (0..6)
+                    .find(|&c| unit.mana[c] > 0 || unit.classes().iter().any(|(_, a)| a[c] > 0))
+                    .expect("one unit has a color") as u8;
+                cost.paid_with(color)
+                    .into_iter()
+                    .find(|rest| self.payable_with_help(player, &left, rest, help))
+            };
+            let Some(rest) = rest else {
+                index += 1;
+                continue;
+            };
+            let purpose = cost.purpose.clone();
+            let spent = self.state.mana_pool_mut(player).spend_at(index, &purpose);
+            let pooled = self.state.players[player.0].mana_pool.total();
+            if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
+                exposure.mana[player.0].remove(1, pooled, false);
+            }
+            let Some(PendingChoice::Pay { payment, .. }) = &mut self.pending_choice else {
+                unreachable!("an announced payment is being paid")
+            };
+            let (cost, _, receipt) = payment.mana_step();
+            *cost = rest;
+            receipt.record_mana([spent]);
+        }
+    }
+
     /// `PayCost` while a cost is being paid: take a sacrifice cost's mana
     /// branch, or pay the mana still owed.
     pub(crate) fn pay_cost_action(&mut self, player: PlayerId) -> Result<(), AgentError> {

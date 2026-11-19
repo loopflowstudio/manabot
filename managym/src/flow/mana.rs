@@ -2266,6 +2266,7 @@ impl Game {
             && self.state.suspended_decision.is_none()
             && self.mana_capture(player).is_some())
         .then(|| self.state.players[player.0].mana_pool.total());
+        let start = self.state.players[player.0].mana_pool.unit_count();
         self.tap_fixed_mana_source(player, permanent);
         if let Some(before) = before {
             let produced = self.state.players[player.0].mana_pool.total() - before;
@@ -2274,6 +2275,7 @@ impl Game {
         if self.state.suspended_decision.is_some() {
             return self.advance_mana_upfront();
         }
+        self.commit_produced_mana(player, start);
         match self.paying() {
             Some((_, payment, CostComponent::Mana { .. }))
                 if !payment.waterbends()
@@ -3382,7 +3384,7 @@ fn bonus_alternatives(produced: &Mana, bonuses: &[TriggeredManaOutput]) -> Vec<M
 }
 
 /// The mana a fixed source adds when tapped: every fixed production at once.
-fn fixed_output(view: &Characteristics) -> Mana {
+pub(crate) fn fixed_output(view: &Characteristics) -> Mana {
     let mut output = Mana::default();
     for ability in &view.mana_abilities {
         output.add(&ability.mana);

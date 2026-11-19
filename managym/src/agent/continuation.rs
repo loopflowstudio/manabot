@@ -710,9 +710,10 @@ impl Game {
                     }
                     _ => {}
                 }
-                // What this payment has already committed, as references. The
+                // What this payment has already committed: mana as it was
+                // produced, and the objects that paid, as references. The
                 // source's own printed cost is paid as the payment completes.
-                if !payment.receipt.contributions().is_empty() {
+                if !payment.receipt.is_empty() {
                     super::effect_execution::project_receipt(
                         self,
                         &payment.receipt,
@@ -867,7 +868,7 @@ impl Game {
             return;
         }
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
-            if !payment.receipt.contributions().is_empty() {
+            if !payment.receipt.is_empty() {
                 let frame = frames
                     .iter_mut()
                     .find(|frame| frame.kind == 4)
