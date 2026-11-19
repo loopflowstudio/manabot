@@ -769,7 +769,9 @@ each land you may tap is raised.
 
 1. To accept the plan, press Space or the primary button.
 2. Point at another land to preview "tap this one, then pay the rest
-   automatically": that land becomes `1` and the marks move.
+   automatically": that land becomes `1` and the marks move. The prompt, the
+   **Pay** button and the line under it keep describing Pay's own plan, so the
+   rail holds still under the pointer.
 3. Click a land to tap it. It shows as tapped, its mana appears on your plate,
    and the plan for the rest is asked again and redrawn. Tap another land or
    press Space to finish. When your tap leaves no choice for the rest, the game

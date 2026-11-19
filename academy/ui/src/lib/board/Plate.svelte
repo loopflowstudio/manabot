@@ -101,8 +101,8 @@
   .numeral { font-family: var(--font-serif); font-size: 40px; font-weight: 600; line-height: 44px; color: var(--text); font-variant-numeric: lining-nums tabular-nums; }
   .zones { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
   .zones > li, .zone-open {
-    display: flex; justify-content: space-between; gap: 4px; padding: 0 4px; border-radius: var(--radius-sm);
-    font-family: var(--font-sans); font-size: 12px; line-height: 18px; color: var(--text-secondary); min-width: 0;
+    display: flex; justify-content: space-between; gap: 4px; padding: 1px 4px; border-radius: var(--radius-sm);
+    font-family: var(--font-sans); font-size: 12px; line-height: 16px; color: var(--text-secondary); min-width: 0;
   }
   .zones > li:has(.zone-open) { padding: 0; }
   .zone-open { width: 100%; height: 18px; min-height: 0; cursor: pointer; text-decoration: underline dotted color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }

@@ -88,9 +88,13 @@ publish, land or choose the next Graph step from here.
   too; the error must match, not be absent. `maturin build` without
   `--release` gives an extension with `debug_assert!` live, about 10x slower;
   unzip it to its own directory, never over `managym/`.
-- Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
-  (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
-  the panel is not an offer). Tapped lands show only in a `fullPage`
+- Academy browser scripts: offers are
+  `[data-testid=action-option]:not([disabled]):not([aria-disabled])`
+  (buttons are disabled while a Command is in flight and `aria-disabled` while
+  an opponent read-out plays, when a press only ends the read-out; `Pass Turn
+  (F6)` in the panel is not an offer). A Playwright click that times out with
+  "element is not stable" means the rail is reflowing under the pointer; treat
+  it as a finding, not script flake. Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use

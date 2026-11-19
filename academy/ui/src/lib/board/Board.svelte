@@ -320,22 +320,23 @@
   const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
   const payPlanned = $derived(paymentPlan(answered, frame));
   // Piles part around whatever plan is shown, so each planned land has its own
-  // outline and mark. While a payment is pending they keep its own plan's
-  // layout as a person points at other lands: that preview never moves a card
-  // from under the pointer.
-  let payPlan = $state.raw<{ revision: number; sources: ReadonlyMap<number, unknown> } | null>(null);
+  // outline and mark. The pending payment's own answer is kept for its
+  // revision: piles, prompt, Pay label and note read it while a person points
+  // at other choices, so pointing never reflows the rail or moves a card from
+  // under the pointer (which would change what is pointed at).
+  let payAnswer = $state.raw<{ revision: number; answered: NonNullable<typeof answered>; sources: ReadonlyMap<number, unknown> | null } | null>(null);
   $effect(() => {
-    if (payPlanned && previewing === payOffer) payPlan = { revision: frame.revision, sources: payPlanned.sources };
+    if (payOffer && previewing === payOffer && answered) payAnswer = { revision: frame.revision, answered, sources: payPlanned?.sources ?? null };
   });
-  const unpiled = $derived(payPlan && payPlan.revision === frame.revision ? payPlan.sources : payPlanned?.sources ?? null);
-  const primaryText = $derived(primaryLabel(frame, view, payOffer && previewing === payOffer ? answered : null));
+  const payKnown = $derived(payOffer && payAnswer?.revision === frame.revision ? payAnswer : null);
+  const unpiled = $derived(payKnown?.sources ?? payPlanned?.sources ?? null);
+  const primaryText = $derived(primaryLabel(frame, view, payKnown?.answered ?? null));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
-      : promptLine(frame, view, payPlanned !== null && previewing === payOffer && payPlanned.sources.size > 0));
-  const paymentNote = $derived(payOffer && previewing === payOffer
-    ? payment?.error ? 'The payment preview is unavailable; Pay still pays automatically.'
-      : answered && answered.state !== 'exact' && answered.state !== 'not_applicable' ? answered.explanation : null
-    : null);
+      : promptLine(frame, view, (payKnown?.sources?.size ?? 0) > 0));
+  const paymentNote = $derived(!payOffer ? null
+    : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
+      : payKnown && payKnown.answered.state !== 'exact' && payKnown.answered.state !== 'not_applicable' ? payKnown.answered.explanation : null);
   function point(offers: PlacedOffer[] | null): void {
     pointed = offers?.length === 1 ? offers[0] : null;
   }
@@ -838,26 +839,26 @@
   </div>
 
   {#snippet combatControls()}
-    <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
+    <div class="combat-draft" class:waiting={readingOut} data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
       {#if running}
-        <button type="button" class="btn btn-secondary" data-testid="combat-stop" onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
+        <button type="button" class="btn btn-secondary" data-testid="combat-stop" aria-disabled={readingOut || undefined} onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
         <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={exact !== null && !exact.refused}
           aria-label={`Confirm: ${exact?.refused ? exact.refused.reason : words.plan}`} title={words.plan}
-          disabled={!exact || exact.refused !== null} onclick={confirmDraft}>
+          disabled={!exact || exact.refused !== null} aria-disabled={readingOut || undefined} onclick={confirmDraft}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
         {#each counts as group (group.ids[0])}
           <div class="pile-count" data-testid="pile-count" role="group" aria-label={`${group.name}: ${group.drafted} of ${group.ids.length} attacking`}>
             <span class="type-caption"><b>{group.drafted}</b> of {group.ids.length} {group.name}</span>
-            <button type="button" class="step" aria-label={`One fewer ${group.name}`} disabled={group.drafted === 0}
+            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One fewer ${group.name}`} disabled={group.drafted === 0}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted - 1); }}>−</button>
-            <button type="button" class="step" aria-label={`One more ${group.name}`} disabled={group.drafted === group.ids.length}
+            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One more ${group.name}`} disabled={group.drafted === group.ids.length}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted + 1); }}>+</button>
           </div>
         {/each}
         {#if draft.attackers.length || draft.blocks.length}
-          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
+          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" aria-disabled={readingOut || undefined} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
         {/if}
         <p class="type-caption text-ink-3">Nothing is declared until you confirm{preview?.kind === 'blockers' ? '. Click a blocker, then the attacker it blocks' : ''}.</p>
       {/if}
@@ -1029,6 +1030,8 @@
   .combat-draft .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .combat-draft .primary kbd { flex: none; opacity: 1; }
   .combat-draft .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
+  /* A read-out holds the draft's controls as Rail holds its own: listed, dimmed, a press only ends it. */
+  .combat-draft.waiting .btn, .combat-draft.waiting .step { opacity: 0.55; cursor: default; }
   .combat-draft .secondary { width: 100%; min-height: 32px; padding-block: 5px; justify-content: flex-start; }
   .pile-count { display: flex; align-items: center; gap: 6px; }
   .pile-count span { flex: 1; }
