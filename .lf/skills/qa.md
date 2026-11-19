@@ -88,9 +88,13 @@ publish, land or choose the next Graph step from here.
   too; the error must match, not be absent. `maturin build` without
   `--release` gives an extension with `debug_assert!` live, about 10x slower;
   unzip it to its own directory, never over `managym/`.
-- Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
-  (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
-  the panel is not an offer). Tapped lands show only in a `fullPage`
+- Academy browser scripts: offers are
+  `[data-testid=action-option]:not([disabled]):not([aria-disabled])`
+  (buttons are disabled while a Command is in flight and `aria-disabled` while
+  an opponent read-out plays, when a press only ends the read-out; `Pass Turn
+  (F6)` in the panel is not an offer). A Playwright click that times out with
+  "element is not stable" means the rail is reflowing under the pointer; treat
+  it as a finding, not script flake. Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
@@ -480,6 +484,8 @@ publish, land or choose the next Graph step from here.
   Compare `[data-payment-source]` ids with the frame's tapped permanent ids
   after the commit. `trigger_order_server` with `payment_fixture: true` in the
   `new_game` config gives a ready Lightning Strike payment with nine offers.
+  `npx playwright test --config playwright.release.config.ts
+  e2e/mana-payment.spec.ts` (from `academy/ui`) starts that fixture server itself.
   Rebuilding the SPA stops running `npm run preview` servers; restart them.
   For a fixture-free game, `managym academy play --deck <f> --opponent-deck
   <f> --opponent passive --seed 7` with `18 Mountain / 18 Forest / 12

@@ -110,17 +110,18 @@ export function stopLabel(step: string): string {
   return STOP_STEPS.find(candidate => candidate.key === step)?.label ?? step;
 }
 
-export function phaseTrack(turn: Observation['turn'], stops: StopsConfig, yourTurn: boolean, once: OnceStops = emptyOnce()): PhaseTrack {
+/** The stop bar for a turn; `step` is the engine step the board shows, or null when the board is not at a step of this turn. */
+export function phaseTrack(step: string | null, stops: StopsConfig, yourTurn: boolean, once: OnceStops = emptyOnce()): PhaseTrack {
   return {
     active: yourTurn ? 'my' : 'opponent',
     every: !stops.auto_pass,
-    marks: STOP_STEPS.map(step => ({
-      key: step.key,
-      short: SHORT[step.key],
-      label: step.label,
-      current: ENGINE_STEPS[step.key].includes(turn.step),
-      phaseStart: PHASE_STARTS.has(step.key),
-      state: { my: stateOf(stops, once, 'my', step.key), opponent: stateOf(stops, once, 'opponent', step.key) },
+    marks: STOP_STEPS.map(stop => ({
+      key: stop.key,
+      short: SHORT[stop.key],
+      label: stop.label,
+      current: step !== null && ENGINE_STEPS[stop.key].includes(step),
+      phaseStart: PHASE_STARTS.has(stop.key),
+      state: { my: stateOf(stops, once, 'my', stop.key), opponent: stateOf(stops, once, 'opponent', stop.key) },
     })),
   };
 }

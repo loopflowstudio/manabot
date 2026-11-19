@@ -122,7 +122,8 @@ describe('primaryLabel', () => {
     const label = primaryLabel(pay, boardView(pay, PLAYERS), preview);
     expect(label?.text).toBe(`Pay ${cost}`);
     expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
-    expect(promptLine(pay, boardView(pay, PLAYERS), true)).toMatch(/Space taps the dashed lands/);
+    // The line does not change when the plan arrives: the dashes and the button name the lands.
+    expect(promptLine(pay, boardView(pay, PLAYERS))).toMatch(/Space pays automatically, or click lands/);
     // A preview that is not exact draws nothing; the button keeps the cost.
     expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
   });

@@ -25,7 +25,7 @@
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
   import { region } from './region';
-  import { BEAT_MS, beatsFor, type Beat, type BeatPace } from './beats';
+  import { BEAT_MS, beatsFor, turnAt, type Beat, type BeatPace } from './beats';
   import { boardAt, type StepBoard } from './boards';
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
@@ -33,15 +33,15 @@
   import { addressOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptLine } from './prompt';
-  import { nameBook, recentView, boardLines, turnOwners, visibleNames } from './recent';
+  import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
   import BoardCard from './BoardCard.svelte';
   import { phaseTrack, type OnceStops } from './phases';
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
-  import { shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { decidesBy, shortName } from '$lib/opponent-name';
+  import { CARD_RATIO, handFan, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -319,22 +319,25 @@
   $effect(() => { onpreview(previewing?.offer ?? null); });
   const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
   const payPlanned = $derived(paymentPlan(answered, frame));
-  // Piles part around the pending payment's own plan only, and keep that
-  // layout while a person points at other lands: a preview never moves a card
-  // from under the pointer.
-  let payPlan = $state.raw<{ revision: number; sources: ReadonlyMap<number, unknown> } | null>(null);
+  // Piles part around whatever plan is shown, so each planned land has its own
+  // outline and mark. The pending payment's own answer is kept for its
+  // revision: piles, Pay label and note read it while a person points
+  // at other choices, so pointing never reflows the rail or moves a card from
+  // under the pointer (which would change what is pointed at).
+  let payAnswer = $state.raw<{ revision: number; answered: NonNullable<typeof answered> } | null>(null);
   $effect(() => {
-    if (payPlanned && previewing === payOffer) payPlan = { revision: frame.revision, sources: payPlanned.sources };
+    if (payOffer && previewing === payOffer && answered) payAnswer = { revision: frame.revision, answered };
   });
-  const unpiled = $derived(payPlan && payPlan.revision === frame.revision ? payPlan.sources : null);
-  const primaryText = $derived(primaryLabel(frame, view, payOffer && previewing === payOffer ? answered : null));
+  const payKnown = $derived(payOffer && payAnswer?.revision === frame.revision ? payAnswer.answered : null);
+  const payKnownPlan = $derived(paymentPlan(payKnown, frame));
+  const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
+  const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
-      : promptLine(frame, view, payPlanned !== null && previewing === payOffer && payPlanned.sources.size > 0));
-  const paymentNote = $derived(payOffer && previewing === payOffer
-    ? payment?.error ? 'The payment preview is unavailable; Pay still pays automatically.'
-      : answered && answered.state !== 'exact' && answered.state !== 'not_applicable' ? answered.explanation : null
-    : null);
+      : promptLine(frame, view));
+  const paymentNote = $derived(!payOffer ? null
+    : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
+      : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
   function point(offers: PlacedOffer[] | null): void {
     pointed = offers?.length === 1 ? offers[0] : null;
   }
@@ -368,57 +371,74 @@
   });
   $effect(() => {
     if (!beat) return;
-    if (beatPace === 'off') { skipBeats(); return; }
+    if (beatPace === 'off') { endReadOut(); return; }
     const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS[beatPace]);
     return () => clearTimeout(timer);
   });
-  function skipBeats(): void { beats = []; beatAt = 0; }
+  /**
+   * The read-out holds the whole game surface: while a beat plays, the first
+   * press, click or acting key anywhere in the game ends it and does nothing
+   * else, so the live decision answers only once the board shows its own
+   * position. Focus keys (Tab, arrows) still move.
+   */
+  const readingOut = $derived(beat !== null);
+  function endReadOut(): void { beats = []; beatAt = 0; }
+  // Damage marks and the plate's badge add up the whole window since your last
+  // move; a beat's board may be from before that damage, so they wait with the
+  // decision. So does the result card: the game ends once its last beat is read.
+  const NO_DAMAGE: RecentView['damage'] = { objects: new Map(), players: new Map() };
+  const damage = $derived(readingOut ? NO_DAMAGE : recent.damage);
+  const finished = $derived(result !== undefined && !readingOut);
 
   // Each beat is shown on the board it happened on, when the authority sent
-  // it (`stepBoards`); else on the frame's. A past board has no offers: the
-  // rail stays live, and pressing the board skips to the frame's own.
+  // it (`stepBoards`); else on the frame's. A past board has no offers, and the
+  // rail's choices wait until the read-out ends.
   const beatBoard = $derived(beat ? boardAt(stepBoards, beat.seq) : null);
   const drawn = $derived(beatBoard ? { ...frame, projection: beatBoard, offers: [] } : drafted);
   const board = $derived(beatBoard ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
   const boardNames = $derived(beatBoard ? new Map([...beatBoard.agent.battlefield, ...beatBoard.opponent.battlefield]
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])) : names);
-  // The turn as the drawn board has it: a beat's board may be an earlier step.
-  const yourTurn = $derived(boardProjection.turn.active_player_id === boardProjection.agent.id);
-  const track = $derived(phaseTrack(boardProjection.turn, stops, yourTurn, onceStops));
+  const owners = $derived(turnOwners(frame, presentation.events));
+  // The turn the top bar and stop bar name: the beat's own while one plays. A
+  // beat's board may be a later turn's (one engine step can run from an attack
+  // into the next turn), and then no step of the beat's turn is current.
+  const turnNumber = $derived(beat ? turnAt(presentation.events, beat.seq) ?? boardProjection.turn.turn_number : boardProjection.turn.turn_number);
+  const turnStep = $derived(turnNumber === boardProjection.turn.turn_number ? boardProjection.turn.step : null);
+  const yourTurn = $derived(turnStep !== null ? boardProjection.turn.active_player_id === boardProjection.agent.id : owners.get(turnNumber) === 'you');
+  const track = $derived(phaseTrack(turnStep, stops, yourTurn, onceStops));
   const lines = $derived(boardLines(drawn, presentation.events, recent.resolved, sinceRevision));
   /** Permanents something on the stack targets: a dashed edge in the damage colour. */
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
   /** The person may act on the drawn board now: what they cannot act on steps back. */
   const acting = $derived(live && !beatBoard && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
-  /** The press that skipped to the frame's board acts on nothing: its card had no offer when pressed. */
-  let skipPress = false;
-  function onBoardPress(): void {
-    skipPress = beatBoard !== null;
-    if (skipPress) skipBeats();
+  /** The pointer press that ended a read-out; its click acts on nothing. */
+  let endedByPress = false;
+  function onPress(): void {
+    endedByPress = readingOut;
+    if (endedByPress) endReadOut();
   }
-  function onBoardClick(event: MouseEvent): void {
-    if (!skipPress) return;
-    skipPress = false;
+  function onClick(event: MouseEvent): void {
+    if (!endedByPress) return;
+    endedByPress = false;
     event.preventDefault();
     event.stopPropagation();
   }
-  // Listeners, not attributes: the board is a region of controls, not one control (Space and Esc skip by keyboard).
-  let boardElement = $state<HTMLElement | null>(null);
+  // Capturing listeners on the whole game: board, rail, tray and menus end a read-out alike.
   $effect(() => {
-    const element = boardElement;
+    const element = root;
     if (!element) return;
-    element.addEventListener('pointerdown', onBoardPress);
-    element.addEventListener('click', onBoardClick, { capture: true });
+    element.addEventListener('pointerdown', onPress, { capture: true });
+    element.addEventListener('click', onClick, { capture: true });
     return () => {
-      element.removeEventListener('pointerdown', onBoardPress);
-      element.removeEventListener('click', onBoardClick, { capture: true });
+      element.removeEventListener('pointerdown', onPress, { capture: true });
+      element.removeEventListener('click', onClick, { capture: true });
     };
   });
   // Both players' moves are narrated as Review narrates them, players named by seat.
   const seatName = (seat: 0 | 1): string => (seat === projection.agent.player_index ? 'You' : said);
   const named = $derived(log.map(entry => (entry.actor === 'villain' || entry.actor === 'hero' ? { ...entry, text: nameSeats(entry.text, seatName, entry.actor === 'hero') } : entry)));
-  const moves = $derived(movesGiven ?? moveList(named, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
+  const moves = $derived(movesGiven ?? moveList(named, players, owners, visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion
 
@@ -499,7 +519,7 @@
   }
   function send(offer: InteractionOffer): void {
     if (!live) return;
-    skipBeats();
+    endReadOut();
     menuAt = null;
     stopNote = null;
     hush();
@@ -610,7 +630,8 @@
   // Hand cards are large, 136 to 150 px wide (`HAND_MIN`, `HAND_MAX`): the
   // board gives the hand that height before its rows grow, and a crowded
   // board (24 permanents or more) may take it back down to `HAND_CROWDED`
-  // when its rows need it (`handStrip`). An empty hand is a label.
+  // when its rows need it (`handStrip`). A long hand's cards shrink before
+  // they overlap (`handFan`), and the strip shrinks with them. An empty hand is a label.
   /** Strip heights, px: the card is the strip less 22 px of lift and padding, at 63:88. */
   const HAND_MIN = 212;
   const HAND_MAX = 232;
@@ -619,20 +640,22 @@
   const HAND_SHARE = 0.35;
   const boardCount = $derived(boardProjection.agent.battlefield.length + boardProjection.opponent.battlefield.length);
   let boardHeight = $state(0);
-  const handTrack = $derived(board.hand.length === 0 ? '30px' : `${handStrip(boardHeight, [
+  const handHeight = $derived(handStrip(boardHeight, [
     { creatures: pileShapes(board.opponent.creatures), support: pileShapes(board.opponent.support), width: theirRows.width },
     { creatures: pileShapes(board.you.creatures), support: pileShapes(board.you.support), width: yourRows.width },
   ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
-  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * HAND_SHARE))), step: 8 })}px`);
+  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * HAND_SHARE))), step: 8 }));
   /** The players' plates' column. */
   const PLATE_WIDTH = 148;
   /** The hand's cards keep clear of its label at the left edge. */
   const HAND_LABEL_WIDTH = 80;
   let handWidth = $state(0);
-  let handHeight = $state(0);
-  const handCard = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
-  const handStep = $derived(board.hand.length <= 1 ? handCard + 10
-    : Math.min(handCard + 10, Math.max(24, (handWidth - HAND_LABEL_WIDTH - 24 - handCard) / (board.hand.length - 1))));
+  /** A crowded hand's cards shrink to the width of a card in the crowded strip before they overlap. */
+  const HAND_FLOOR = Math.floor((HAND_CROWDED - 22) * CARD_RATIO);
+  const handFull = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
+  const fan = $derived(handFan(board.hand.length, handWidth - HAND_LABEL_WIDTH - 24, { min: HAND_FLOOR, max: handFull }, 10));
+  // Shrunk cards give the strip's spare height back to the board.
+  const handTrack = $derived(board.hand.length === 0 ? '30px' : `${Math.min(handHeight, Math.ceil(fan.card / CARD_RATIO) + 22)}px`);
 
   // ———————————————— Keyboard
 
@@ -695,16 +718,20 @@
     (event.shiftKey ? stops.at(-1) : stops[0])?.focus();
   }
 
+  /** Keys that move focus or open help; every other key ends a read-out. */
+  const MOVES_FOCUS = new Set(['Tab', 'Shift', '?', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Tab' && !recording && !event.metaKey && !event.ctrlKey && !event.altKey) { wrapTab(event); return; }
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
+    // A key's own click (Enter on a button) is not the press that ended a read-out.
+    endedByPress = false;
+    // Enter on a focused choice, Space, Esc or a number key ends a read-out and acts on nothing.
+    if (readingOut && !MOVES_FOCUS.has(event.key)) { event.preventDefault(); endReadOut(); return; }
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
     if (event.key === 'Escape' && armed !== null) { armed = null; return; }
-    if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); skipBeats(); return; }
-    // While the opponent's moves are read out, Space ends the reading; the next Space acts.
-    if (event.key === ' ' && beat && !ownsSpace(event.target)) { event.preventDefault(); skipBeats(); return; }
+    if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
@@ -725,7 +752,7 @@
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
 <div class="game" data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
-  data-turn={boardProjection.turn.turn_number} data-step={boardProjection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
+  data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
@@ -733,7 +760,7 @@
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
-    <p class="turn" data-testid="turn-number">Turn {boardProjection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</p>
+    <p class="turn" data-testid="turn-number">Turn {turnNumber} · {yourTurn ? 'yours' : 'theirs'}</p>
     <div class="right">
       {#if connection}
         <!-- Connected says nothing: only a problem shows; the status stays for assistive technology. -->
@@ -750,29 +777,29 @@
   </header>
 
   <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
-    data-board={beatBoard ? 'step' : 'frame'} bind:this={boardElement}>
+    data-board={beatBoard ? 'step' : 'frame'}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
-      <Plate player={boardProjection.opponent} name={opponent.name} deck={opponent.deck} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
+      <Plate player={boardProjection.opponent} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
-      <Plate player={boardProjection.agent} name={you.name} deck={you.deck} offers={board.you.offers} {live} damage={recent.damage.players.get(boardProjection.agent.player_index) ?? 0}
+      <Plate player={boardProjection.agent} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
-    <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
+    <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
       <span class="type-heading hand-label text-ink-2">Hand · {board.hand.length}</span>
-      <div class="hand-cards" style:width={`${handCard + Math.max(0, board.hand.length - 1) * handStep}px`}>
+      <div class="hand-cards" style:width={`${fan.card + Math.max(0, board.hand.length - 1) * fan.step}px`}>
         {#each board.hand as item, index (item.card.id)}
-          <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * handStep}px`}>
-            <BoardCard name={item.card.name} width={handCard} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
+          <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * fan.step}px`}>
+            <BoardCard name={item.card.name} width={fan.card} slice={fan.covered && index < board.hand.length - 1 ? fan.step : null} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
               dim={acting && item.offers.length === 0 ? 'hand' : null}
               onactivate={element => activate(item.card.name, item.offers, element)}
               onpreview={element => previewCard(element ? item.card : null, element)} />
@@ -781,19 +808,19 @@
       </div>
     </section>
 
-    {#if result}
+    {#if finished}
       <!-- Over the board, not over the screen: the final position stays readable around it. -->
       <section class="result-card" class:folded={resultFolded} aria-label="Game result" data-testid="result-card">
         {#if resultFolded}
           <button type="button" class="btn btn-secondary btn-sm" onclick={() => (resultFolded = false)}>Show the result</button>
         {:else}
-          {@render result()}
+          {@render result?.()}
           <button type="button" class="fold type-caption" onclick={() => (resultFolded = true)}>Look at the board</button>
         {/if}
       </section>
     {/if}
 
-    {#if view.tray.length && !result}
+    {#if view.tray.length && !finished}
       <section class="tray" aria-label="Choices from outside the board" data-testid="tray">
         <h2 class="type-heading text-ink-2">{frame.prompt?.title ?? 'Choose'}</h2>
         <div class="tray-items">
@@ -817,34 +844,34 @@
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
+    <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
-      onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
-      {evidence} {recapTitle} {onjump} {currentMove} reading={beat && !result ? reading : undefined}
+      onstack={onStack} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
+      {evidence} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
       draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
   </div>
 
   {#snippet combatControls()}
     <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
       {#if running}
-        <button type="button" class="btn btn-secondary" data-testid="combat-stop" onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
+        <button type="button" class="btn btn-secondary" data-testid="combat-stop" aria-disabled={readingOut || undefined} onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
         <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={exact !== null && !exact.refused}
           aria-label={`Confirm: ${exact?.refused ? exact.refused.reason : words.plan}`} title={words.plan}
-          disabled={!exact || exact.refused !== null} onclick={confirmDraft}>
+          disabled={!exact || exact.refused !== null} aria-disabled={readingOut || undefined} onclick={confirmDraft}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
         {#each counts as group (group.ids[0])}
           <div class="pile-count" data-testid="pile-count" role="group" aria-label={`${group.name}: ${group.drafted} of ${group.ids.length} attacking`}>
             <span class="type-caption"><b>{group.drafted}</b> of {group.ids.length} {group.name}</span>
-            <button type="button" class="step" aria-label={`One fewer ${group.name}`} disabled={group.drafted === 0}
+            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One fewer ${group.name}`} disabled={group.drafted === 0}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted - 1); }}>−</button>
-            <button type="button" class="step" aria-label={`One more ${group.name}`} disabled={group.drafted === group.ids.length}
+            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One more ${group.name}`} disabled={group.drafted === group.ids.length}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted + 1); }}>+</button>
           </div>
         {/each}
         {#if draft.attackers.length || draft.blocks.length}
-          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
+          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" aria-disabled={readingOut || undefined} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
         {/if}
         <p class="type-caption text-ink-3">Nothing is declared until you confirm{preview?.kind === 'blockers' ? '. Click a blocker, then the attacker it blocks' : ''}.</p>
       {/if}
@@ -853,8 +880,8 @@
 
   {#snippet reading()}
     {#if beat}
-      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={skipBeats}
-        title="Skip (Space)">
+      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={endReadOut}
+        title="Show your decision (Space)">
         <span class="beat-text">{beat.text}</span>
         <span class="beat-count type-caption">{beatAt + 1} of {beats.length} · Space to skip</span>
       </button>
@@ -874,12 +901,11 @@
       {#if strip?.open}<Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} />{/if}
     </div>
   {/if}
-  <nav class="stops-slot" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
+  <nav class="stops-slot" aria-label={`Turn ${turnNumber}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
     <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
+  <Lines {lines} {root} revision={frame.revision} />
 </div>
-
-<Lines {lines} {root} revision={frame.revision} />
 
 {#if menuAt}
   <div class="menu" use:region role="menu" tabindex="-1" aria-label={`Choices for ${menuAt.title}`} bind:this={menuElement} data-testid="card-menu"
@@ -937,7 +963,16 @@
 {/if}
 
 <style>
+  /*
+   * The board's one layering order, lowest first: cards, the lines between
+   * cards and their targets, floating panels (the tray and the result card).
+   * Each row of permanents and the hand keep their own stacking, so a raised,
+   * attacking or lifted card orders only among its neighbours and never climbs
+   * over a line or a panel. Above the whole game (itself at 10) float the inspect
+   * preview (250), then card menus and the keys sheet (300). Add no other z-index.
+   */
   .game {
+    --layer-lines: 1; --layer-panel: 2;
     position: fixed; inset: 0; z-index: 10; display: grid;
     grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px);
     grid-template-rows: 40px minmax(0, 1fr) auto auto;
@@ -962,21 +997,21 @@
   /* One row the half's own height: a tall plate scrolls inside it rather than growing the rows past the half. */
   .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
-  .rows { display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
+  .rows { isolation: isolate; display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
   .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); }
   .you .rows { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); }
   .row { min-height: 0; min-width: 0; }
   .row.support { border-top: 1px dashed transparent; }
   .opponent .row.creatures, .you .row.support { padding-top: 4px; }
 
-  .hand { position: relative; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--hand-label); overflow: hidden; }
+  .hand { position: relative; isolation: isolate; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--hand-label); overflow: hidden; }
   .hand-label { position: absolute; left: 14px; bottom: 10px; }
   .hand-cards { position: relative; height: 100%; }
   .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }
   .hand-card:hover, .hand-card:focus-within { transform: translateY(-10px); z-index: 30; }
 
   .tray {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); z-index: 40;
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); z-index: var(--layer-panel);
     padding: 12px 16px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
     background: var(--bg-surface); box-shadow: var(--shadow-raised); max-width: 90%;
   }
@@ -984,16 +1019,16 @@
   .tray-card { display: grid; justify-items: center; gap: 6px; width: 120px; text-align: center; }
 
   .result-card {
-    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: 45; width: min(440px, 80%);
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: var(--layer-panel); width: min(440px, 80%);
     display: grid; gap: 10px; padding: 18px 20px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--bg-surface) 94%, transparent); box-shadow: var(--shadow-raised);
+    background: var(--bg-surface); box-shadow: var(--shadow-raised);
     animation: appear var(--motion-move) ease-out;
   }
   @keyframes appear { from { opacity: 0; } }
-  /* A beat reads out one of the opponent's moves over the rail's move list, where it covers no card or choice. */
+  /* A beat heads the rail's decision block, above the prompt that waits for it. */
   .beat {
-    display: grid; gap: 4px; align-content: center; justify-items: center; padding: 6px 12px; border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-raised); text-align: center; cursor: pointer;
+    display: grid; gap: 2px; justify-items: start; width: 100%; padding: 6px 10px; border: 1px solid var(--border-strong);
+    border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg-field); text-align: left; cursor: pointer;
     animation: appear var(--motion-fast) ease-out;
   }
   .beat-text { font-size: 14px; line-height: 20px; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
@@ -1008,6 +1043,8 @@
   .combat-draft .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .combat-draft .primary kbd { flex: none; opacity: 1; }
   .combat-draft .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
+  /* A read-out holds the draft's controls as Rail holds its own: listed, dimmed, a press only ends it. */
+  .combat-draft [aria-disabled] { opacity: 0.55; cursor: default; }
   .combat-draft .secondary { width: 100%; min-height: 32px; padding-block: 5px; justify-content: flex-start; }
   .pile-count { display: flex; align-items: center; gap: 6px; }
   .pile-count span { flex: 1; }

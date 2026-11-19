@@ -538,3 +538,31 @@ export function handStrip(
   }
   return range.min;
 }
+
+/** Cards in hand, laid out across the strip. */
+export interface HandFan {
+  /** Each card's width, px. */
+  card: number;
+  /** From one card's left edge to the next's, px. */
+  step: number;
+  /** Whether each card but the last is partly covered by the next. */
+  covered: boolean;
+}
+
+/** A covered card keeps at least this much of its left edge in view, px. */
+const HAND_MIN_SLICE = 24;
+
+/**
+ * Lay out `count` cards in hand within `width` px: as large as `card.max`
+ * while they fit side by side `gap` apart, then smaller, down to `card.min`,
+ * and only then overlapping, each later card over the one before, its left
+ * slice (name and cost) in view. A hand that fits keeps its cards apart.
+ */
+export function handFan(count: number, width: number, card: { min: number; max: number }, gap: number): HandFan {
+  if (count <= 1) return { card: card.max, step: card.max + gap, covered: false };
+  const side = Math.floor((width - gap * (count - 1)) / count);
+  // A short strip can make the full size smaller than the floor; the full size wins.
+  const size = Math.max(Math.min(card.min, card.max), Math.min(card.max, side));
+  if (size * count + gap * (count - 1) <= width) return { card: size, step: size + gap, covered: false };
+  return { card: size, step: Math.max(HAND_MIN_SLICE, (width - size) / (count - 1)), covered: true };
+}
