@@ -371,20 +371,10 @@ impl Game {
                 view.mana_cost = RequiredNullable(Some(symbols));
             }
         }
-        if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
-            view.paid = payment
-                .receipt
-                .contributions()
-                .iter()
-                .map(|paid| PaidView {
-                    phrase: contribution_phrase(self, viewer, paid),
-                    object: self.paid_object(paid.object, viewer),
-                })
-                .collect();
-        }
-        // A resolving waterbend payment (CR 701.67) keeps its taps on its own
-        // progress, with no receipt; they read as the same taps do on a cast.
-        if let Some(Decision::Payment(PaymentProgress {
+        // What is committed to the pending cost. A resolving waterbend
+        // payment (CR 701.67) keeps its taps on its own progress, with no
+        // receipt; they read as the same taps do on a cast.
+        let committed: Vec<Contribution> = if let Some(Decision::Payment(PaymentProgress {
             remaining: PaymentCost::Waterbend { .. },
             waterbend_paid,
             ..
@@ -394,22 +384,26 @@ impl Game {
             .as_ref()
             .map(|suspended| &suspended.decision)
         {
-            view.paid = waterbend_paid
+            waterbend_paid
                 .iter()
-                .map(|object| PaidView {
-                    phrase: contribution_phrase(
-                        self,
-                        viewer,
-                        &Contribution {
-                            object: *object,
-                            how: How::Tapped,
-                            toward: Toward::Waterbend,
-                        },
-                    ),
-                    object: self.paid_object(*object, viewer),
+                .map(|&object| Contribution {
+                    object,
+                    how: How::Tapped,
+                    toward: Toward::Waterbend,
                 })
-                .collect();
-        }
+                .collect()
+        } else if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
+            payment.receipt.contributions().to_vec()
+        } else {
+            Vec::new()
+        };
+        view.paid = committed
+            .iter()
+            .map(|paid| PaidView {
+                phrase: contribution_phrase(self, viewer, paid),
+                object: self.paid_object(paid.object, viewer),
+            })
+            .collect();
         // The one yes-or-no cost choice of a cast, named for what the card
         // offers: `KickerChoice` asks bargain and alternative costs too.
         let cast_option = match &self.pending_choice {

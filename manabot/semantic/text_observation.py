@@ -19,6 +19,7 @@ import managym
 from managym.decision import Command, SemanticContractError, SemanticTransition
 from managym.decision_capture import (
     CardReference,
+    CastOption,
     DecisionInput,
     DecisionObject,
     HistoryReference,
@@ -523,17 +524,14 @@ class _Renderer:
         except KeyError as error:
             raise TextEncodingError("unbound definition") from error
 
-    def taken_cost(self, definition: int | None) -> tuple[str, str]:
-        """How a set `kicked` flag reads for a spell of `definition`.
+    def taken_cost(self, definition: int | None) -> CastOption:
+        """The words for a set `kicked` flag on a spell of `definition`.
 
         The flag records every optional cast cost; the bound definition names
-        the ones that are not kicker. Returns the spell's participle and the
-        cost's noun: ("bargained", "bargain").
+        the ones that are not kicker.
         """
         bound = self.capture.definitions.get(str(definition))
-        if bound is None or bound.cast_option is None:
-            return "kicked", "kicker"
-        return bound.cast_option.taken, bound.cast_option.cost
+        return (bound and bound.cast_option) or _KICKER
 
     def decision_object(self, value: DecisionObject) -> str:
         if value.subject.kind == "player" and isinstance(value.subject.id, int):
@@ -702,7 +700,9 @@ class _Renderer:
         if relation.x:
             details.append(f"X = {relation.x}")
         if relation.kicked:
-            details.append(f"{self.taken_cost(relation.source.definition)[1]} included")
+            details.append(
+                f"{self.taken_cost(relation.source.definition).cost} included"
+            )
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
         if relation.decision and relation.kind != 13:
@@ -1213,7 +1213,7 @@ class _Renderer:
             ):
                 details.append(f"granted keywords {granted}")
             if item.kicked:
-                details.append(self.taken_cost(item.source_card_registry_key)[0])
+                details.append(self.taken_cost(item.source_card_registry_key).taken)
             if targets:
                 details.append("targets " + ", ".join(targets))
             spell = ""
@@ -1311,6 +1311,7 @@ class _Renderer:
 
 
 _MEMORY_ROLES = ("none", "You", "Opponent")
+_KICKER = CastOption(taken="kicked", cost="kicker")
 
 
 def _production(alternative: tuple[int, int, int, int, int, int]) -> str:
