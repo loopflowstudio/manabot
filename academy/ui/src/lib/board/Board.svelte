@@ -852,7 +852,7 @@
   </div>
 
   {#snippet combatControls()}
-    <div class="combat-draft" class:reading-out={readingOut} data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
+    <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
       {#if running}
         <button type="button" class="btn btn-secondary" data-testid="combat-stop" aria-disabled={readingOut || undefined} onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
@@ -1044,7 +1044,7 @@
   .combat-draft .primary kbd { flex: none; opacity: 1; }
   .combat-draft .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   /* A read-out holds the draft's controls as Rail holds its own: listed, dimmed, a press only ends it. */
-  .combat-draft.reading-out .btn, .combat-draft.reading-out .step { opacity: 0.55; cursor: default; }
+  .combat-draft [aria-disabled] { opacity: 0.55; cursor: default; }
   .combat-draft .secondary { width: 100%; min-height: 32px; padding-block: 5px; justify-content: flex-start; }
   .pile-count { display: flex; align-items: center; gap: 6px; }
   .pile-count span { flex: 1; }

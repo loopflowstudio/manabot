@@ -29,7 +29,7 @@
     /** "Search 64 is choosing" while someone else decides; the rail adds the seconds. */
     thinking: string | null;
     /** The opponent is the one deciding: an empty choice list waits for them by name. */
-    opponentChoosing?: boolean;
+    opponentChoosing: boolean;
     /** When the awaited work started, epoch seconds. */
     workStarted: number | null;
     interrupted: boolean;
@@ -70,7 +70,7 @@
   }
 
   let {
-    view, frame, live, line, primaryText, status, whose, thinking, opponentChoosing = false, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
+    view, frame, live, line, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
@@ -377,7 +377,7 @@
   .row:disabled, .row[aria-disabled] { color: var(--text-secondary); cursor: default; }
   /* During the read-out: the decision stays in place beneath the beat, quieter. */
   .reading-out [data-testid='decision-prompt'], .reading-out .whose { color: var(--text-tertiary); }
-  .reading-out .primary, .reading-out .secondary, .reading-out .pass-turn { opacity: 0.55; cursor: default; }
+  .prompt [aria-disabled] { opacity: 0.55; cursor: default; }
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   .hidden-key { visibility: hidden; }
