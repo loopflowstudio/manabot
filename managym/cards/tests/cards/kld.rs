@@ -200,3 +200,46 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
         assert!(s.game().characteristics(caravan).is_creature());
     }
 }
+
+/// Tapped at priority, the Caravan's chosen-colour unit waits in the pool and
+/// still names the Caravan on the spell it later pays for, under either
+/// payment setting.
+#[test]
+fn cultivators_caravan_mana_floated_first_still_names_the_caravan() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_new_card_in_hand},
+        inspect::{card_of, top_spell},
+        play::{cast_card, choose},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{mana::Color, player::ManaPayment},
+    };
+    for auto in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Cultivator's Caravan", "Llanowar Elves"]);
+        let caravan = s.force_permanent_on_battlefield(0, "Cultivator's Caravan");
+        let spell = force_new_card_in_hand(&mut s, 0, "Llanowar Elves");
+        if auto {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
+        s.allow_priority_floats();
+        choose(
+            &mut s,
+            |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == caravan),
+        );
+        choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
+        assert!(tapped(&s, caravan), "auto={auto}");
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
+
+        cast_card(&mut s, spell);
+        if s.game().state.stack_objects.is_empty() {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        }
+        let [unit] = top_spell(&s).spent.mana() else {
+            panic!("one mana was spent, auto={auto}")
+        };
+        assert_eq!(unit.color, Color::Green as u8);
+        assert_eq!(unit.source.unwrap().object, card_of(&s, caravan));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    }
+}
