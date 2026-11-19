@@ -12,6 +12,8 @@ mod support;
 mod aer;
 #[path = "cards/afr.rs"]
 mod afr;
+#[path = "cards/atq.rs"]
+mod atq;
 #[path = "cards/bfz.rs"]
 mod bfz;
 #[path = "cards/blb.rs"]

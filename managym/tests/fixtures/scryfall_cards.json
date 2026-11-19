@@ -6687,5 +6687,15 @@
     "colors": [
       "R"
     ]
+  },
+  "Feldon's Cane": {
+    "name": "Feldon's Cane",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}, Exile this artifact: Shuffle your graveyard into your library.",
+    "colors": []
   }
 }

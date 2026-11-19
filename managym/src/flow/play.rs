@@ -1842,14 +1842,15 @@ impl Game {
                 if ability.life_cost > 0 {
                     owed.push(CostComponent::Life(ability.life_cost));
                 }
-                if ability.tap_source {
-                    owed.push(CostComponent::TapSource);
-                }
-                if ability.sacrifice_source {
-                    owed.push(CostComponent::SacrificeSource);
-                }
-                if ability.discard_source {
-                    owed.push(CostComponent::DiscardSource);
+                for (owes, how) in [
+                    (ability.tap_source, How::Tapped),
+                    (ability.sacrifice_source, How::Sacrificed),
+                    (ability.exile_source, How::Exiled),
+                    (ability.discard_source, How::Discarded),
+                ] {
+                    if owes {
+                        owed.push(CostComponent::Source(how));
+                    }
                 }
             }
         }
@@ -2117,10 +2118,7 @@ impl Game {
             CostComponent::ConvokeColor { .. } => {
                 return Err(AgentError("choose the color this creature pays".into()));
             }
-            CostComponent::Life(_)
-            | CostComponent::TapSource
-            | CostComponent::SacrificeSource
-            | CostComponent::DiscardSource => {
+            CostComponent::Life(_) | CostComponent::Source(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         }
@@ -2179,7 +2177,8 @@ impl Game {
         let life = payment.life();
         self.change_life(player, -(life as i32));
         payment.receipt.pay_life(life);
-        let mut discard = None;
+        // The source's own discard or exile; its sacrifice is on the receipt.
+        let mut leaves = Vec::new();
         let activated = match &payment.operation {
             Operation::Spell { .. } => None,
             Operation::Activation {
@@ -2195,7 +2194,7 @@ impl Game {
                         *ability_index,
                         targets.clone(),
                         *x,
-                        payment.owes(&CostComponent::TapSource),
+                        payment.owes(&CostComponent::Source(How::Tapped)),
                     )?,
                     ActivationSource::Card(card) => self.prepare_card_activated_ability(
                         player,
@@ -2205,20 +2204,20 @@ impl Game {
                     )?,
                 };
                 let source_object = ability.source_object;
-                for (cost, how) in [
-                    (CostComponent::TapSource, How::Tapped),
-                    (CostComponent::SacrificeSource, How::Sacrificed),
-                    (CostComponent::DiscardSource, How::Discarded),
-                ] {
-                    if payment.owes(&cost) {
-                        payment
-                            .receipt
-                            .contribute(source_object, how, Toward::Printed);
-                    }
+                for component in &payment.owed {
+                    let CostComponent::Source(how) = *component else {
+                        continue;
+                    };
+                    payment
+                        .receipt
+                        .contribute(source_object, how, Toward::Printed);
+                    let to = match how {
+                        How::Tapped | How::Sacrificed => continue,
+                        How::Discarded => ZoneType::Graveyard,
+                        How::Exiled => ZoneType::Exile,
+                    };
+                    leaves.push(self.zone_move_proposal(source_object, to, Default::default()));
                 }
-                discard = payment.owes(&CostComponent::DiscardSource).then(|| {
-                    self.zone_move_proposal(source_object, ZoneType::Graveyard, Default::default())
-                });
                 Some((ability, *source))
             }
         };
@@ -2227,7 +2226,7 @@ impl Game {
             .sacrificed()
             .filter(|object| self.state.permanent_of(*object).is_some())
             .map(|target| ProposedEvent::Sacrifice { target })
-            .chain(discard)
+            .chain(leaves)
             .collect();
         let completion = match activated {
             None => FrameCompletion::Paid { player, payment },

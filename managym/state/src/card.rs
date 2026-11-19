@@ -612,11 +612,17 @@ impl ActivatedAbilityDefinition {
         self.tap_cost.clone().map(|cost| (cost, Toward::Printed))
     }
 
+    /// Whether paying the cost removes the source permanent from the
+    /// battlefield (sacrificed or exiled).
+    pub fn source_leaves(&self) -> bool {
+        self.sacrifice_source || self.exile_source
+    }
+
     /// For a known mana ability, does activation change anything besides
     /// paying mana, tapping its own source and producing its output?
     pub fn mana_activation_has_side_effects(&self) -> bool {
         self.life_cost > 0
-            || self.sacrifice_source
+            || self.source_leaves()
             || self.sacrifice.is_some()
             || self.discard_source
             || self.discard_card
@@ -780,6 +786,10 @@ pub struct ActivatedAbilityDefinition {
     /// Sacrifice the source permanent as an additional activation cost
     /// (e.g. Clue tokens' "{2}, Sacrifice this token: Draw a card.").
     pub sacrifice_source: bool,
+    /// Exile the source permanent as an activation cost ("{T}, Exile this
+    /// artifact: ...").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_source: bool,
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as

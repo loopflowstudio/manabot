@@ -326,12 +326,10 @@ pub enum CostComponent {
     /// "Pay N life" (CR 119.4): an ability's life cost, or a spell's life
     /// paid rather than its other cost.
     Life(u32),
-    /// The source's own {T}.
-    TapSource,
-    /// "Sacrifice this".
-    SacrificeSource,
-    /// "Discard this card", of an ability that functions from hand.
-    DiscardSource,
+    /// What the source itself pays: its own {T} (`Tapped`), "sacrifice this"
+    /// (`Sacrificed`), "exile this" (`Exiled`) or, for an ability that
+    /// functions from hand, "discard this card" (`Discarded`).
+    Source(How),
 }
 
 /// The ways a payer may pay part of a mana cost with something other than
@@ -424,8 +422,8 @@ impl Payment {
             .sum()
     }
 
-    /// Whether completing this payment pays `source_cost` (`TapSource`,
-    /// `SacrificeSource` or `DiscardSource`).
+    /// Whether completing this payment pays `source_cost` (a `Source`
+    /// component).
     pub fn owes(&self, source_cost: &CostComponent) -> bool {
         self.owed.contains(source_cost)
     }

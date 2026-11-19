@@ -1551,11 +1551,13 @@ fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
     else {
         return None;
     };
-    let tap = payment.owes(&CostComponent::TapSource);
+    use crate::state::payment::How;
+    let owes = |how| payment.owes(&CostComponent::Source(how));
+    let tap = owes(How::Tapped);
     Some(SourceReservation {
         permanent,
         tap,
-        sacrifice: tap || payment.owes(&CostComponent::SacrificeSource),
+        sacrifice: tap || owes(How::Sacrificed) || owes(How::Exiled),
     })
 }
 
@@ -1660,7 +1662,7 @@ impl Game {
                     model.reserve(SourceReservation {
                         permanent: *permanent,
                         tap: ability.tap_source,
-                        sacrifice: ability.tap_source || ability.sacrifice_source,
+                        sacrifice: ability.tap_source || ability.source_leaves(),
                     });
                     if let Some(next) = resume {
                         reserve(next, game, model);
@@ -1814,7 +1816,7 @@ impl Game {
                 Some(SourceReservation {
                     permanent: *permanent,
                     tap: ability.tap_source,
-                    sacrifice: ability.tap_source || ability.sacrifice_source,
+                    sacrifice: ability.tap_source || ability.source_leaves(),
                 })
             }
             _ => None,
@@ -3804,7 +3806,10 @@ mod tests {
         assert_eq!(payment.help().waterbend, 1);
         assert_eq!(
             payment.owed[1..],
-            [CostComponent::Life(2), CostComponent::TapSource]
+            [
+                CostComponent::Life(2),
+                CostComponent::Source(crate::state::payment::How::Tapped)
+            ]
         );
         for life in [2, 4] {
             game.scenario_set_life(player, life);

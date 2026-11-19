@@ -409,8 +409,8 @@ and applied rider, and one `Contribution` per object tapped, sacrificed,
 discarded or exiled for the cost, naming what was done (`How`) and the part of
 the cost it paid (`Toward`), and the life paid. A chosen sacrifice is recorded
 at once and leaves as the whole cost completes. The components after `Mana`
-have no choice (`Life`, and the source's own `TapSource`, `SacrificeSource`
-and `DiscardSource`): they are paid from `owed` as the payment completes and
+have no choice (`Life`, and `Source(How)`: the source's own tap, sacrifice, exile
+or discard): they are paid from `owed` as the payment completes and
 recorded on the same receipt, so a pending payment never reads the definition
 again. A spell's receipt is shared by the stack object,
 its resolution and the entering permanent's own triggers; an activated
