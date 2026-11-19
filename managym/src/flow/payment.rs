@@ -188,6 +188,25 @@ pub struct TapPayment {
     pub color: Color,
 }
 
+impl TapPayment {
+    /// The `ChooseMode` code naming this payment in a tap-pays choice, the
+    /// same in every decision: 0-4 one {W}/{U}/{B}/{R}/{G} pip by convoke,
+    /// 5 {1} by convoke, 6 {1} by improvise, 7 {1} of the waterbend part.
+    /// Only feasible payments are offered, so a choice's modes are sparse.
+    pub fn mode(self) -> usize {
+        match (self.toward, self.color) {
+            (Toward::Convoke, Color::Generic) => 5,
+            (Toward::Convoke, color) => {
+                debug_assert!((color as usize) < 5, "convoke pays a colored pip or {{1}}");
+                color as usize
+            }
+            (Toward::Improvise, _) => 6,
+            (Toward::Waterbend, _) => 7,
+            (toward, _) => unreachable!("a direct tap does not pay toward {toward:?}"),
+        }
+    }
+}
+
 /// One cast or activation being paid for (CR 601.2f-h): the announced
 /// operation, the cost components still owed in the order they are paid, and
 /// the receipt of what has been paid so far. The total cost is fixed when
@@ -1278,7 +1297,8 @@ impl Game {
         self.after_help_tap(player, payment)
     }
 
-    /// Choose what the permanent just tapped pays.
+    /// Choose what the permanent just tapped pays, by its mode
+    /// (`TapPayment::mode`); a mode not among its options is rejected.
     pub(crate) fn tap_pays_action(
         &mut self,
         player: PlayerId,
@@ -1289,7 +1309,8 @@ impl Game {
             return Err(AgentError("no tap payment is being chosen".into()));
         };
         let paid = *options
-            .get(mode)
+            .iter()
+            .find(|paid| paid.mode() == mode)
             .ok_or_else(|| AgentError("not something this tap can pay".into()))?;
         payment.owed.remove(0);
         payment.help_paid(tapped, How::Tapped, paid.toward, paid.color);

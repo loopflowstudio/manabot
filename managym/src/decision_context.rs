@@ -427,7 +427,7 @@ impl Game {
                 CostComponent::Forage { .. } =>
                     ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
                 CostComponent::TapPays { .. } =>
-                    ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost."),
+                    ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
                 CostComponent::Life(_) | CostComponent::Source(_) =>
                     unreachable!("paid as the payment completes, after its mana"),
                 CostComponent::TapPower { toward: Toward::Saddle, .. } =>

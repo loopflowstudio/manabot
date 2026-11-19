@@ -2175,6 +2175,10 @@ impl Observation {
                                 {
                                     None
                                 }
+                                // What a tap pays is about the permanent tapped.
+                                crate::flow::payment::CostComponent::TapPays { tapped, .. } => {
+                                    Some(*tapped)
+                                }
                                 _ => game.payment_source_object(&payment.operation),
                             }
                         }

@@ -393,6 +393,28 @@ pub fn permanent_of(s: &Scenario, object: ObjectId) -> Option<PermanentId> {
     s.game().state.permanent_of(now(s, object))
 }
 
+/// The modes a tap-pays choice offers (`TapPayment::mode`), after checking
+/// that the choice and each of its offers focus the object of the permanent
+/// just tapped in the chooser's observation.
+pub fn tap_pays_modes(s: &Scenario, tapped: PermanentId) -> Vec<usize> {
+    let space = s.action_space();
+    assert_eq!(space.kind, managym::agent::action::ActionSpaceKind::Modal);
+    let player = space.player.expect("a tap-pays choice has a chooser");
+    let observation = managym::agent::observation::Observation::for_player(s.game(), player);
+    // A payment focuses the permanent's object, as a ward payment does.
+    let id = s.game().state[card_of(s, tapped)].id.0 as i32;
+    assert_eq!(observation.action_space.focus, [id]);
+    observation
+        .action_space
+        .actions
+        .iter()
+        .map(|action| {
+            assert_eq!(action.focus, [id]);
+            action.mode_index.expect("a tap-pays offer has a mode")
+        })
+        .collect()
+}
+
 /// Exercise every offered atomic continuation through the real Command
 /// authority, with an independent replay; every legal action and a follow-up
 /// step run on exact forks that leave the source untouched.

@@ -552,6 +552,11 @@ Capacities are configuration; widths are the layout.
 Policy inputs v9 and v10 keep 22 action columns. In v11, column 22
 (`pays_directly`, zero-based) marks taps that directly pay a cost through
 convoke, improvise or waterbend.
+When such a tap could pay more than one thing, the next choice's `mode`
+column names what it pays, the same in every decision: the selector 0-4 is
+one {W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise
+and 7 {1} of the waterbend part (the column holds selector + 1). Only payable
+modes are offered, and the choice's focus is the permanent just tapped.
 
 The game-level `decklists_closed` flag is inverted in the `decklists_open`
 column (73) of each player row: 1

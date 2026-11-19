@@ -414,8 +414,7 @@ or discard): they are paid from `owed` as the payment completes and
 recorded on the same receipt, so a pending payment never reads the definition
 again. A spell's receipt is shared by the stack object,
 its resolution and the entering permanent's own triggers; an activated
-ability keeps its own as `paid`. A source's own {T}, sacrifice, discard and
-life costs are paid at completion and are not on the receipt.
+ability keeps its own as `paid`.
 Waterbend, convoke, improvise and delve pay part of a mana cost with something
 other than mana, so they are the `Help` of the `Mana` component and no step of
 their own: while it is owed the payer may tap a creature or artifact, or exile
@@ -426,7 +425,11 @@ and {1} of the announced waterbend part by any artifact or creature. Each
 payment that leaves the rest payable is offered, and the payer chooses
 (`CostComponent::TapPays`) when a tap has more than one: a white creature may
 convoke {W} or {1}, and under Hama's waterbend a creature may convoke or
-waterbend {1}; the receipt's `Toward` keeps which. The payment model splits
+waterbend {1}; the receipt's `Toward` keeps which. That choice's mode names
+the payment, the same in every decision (`TapPayment::mode`): 0-4 one
+{W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise and 7
+{1} of the waterbend part. Only payable modes are offered, so they are sparse,
+and the choice focuses the permanent just tapped. The payment model splits
 a cost's generic mana into what those taps may pay (`help_obligations`), so
 castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
 spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.

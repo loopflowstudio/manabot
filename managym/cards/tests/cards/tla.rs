@@ -4,7 +4,7 @@
 //! end.
 
 use crate::support::game::move_card;
-use crate::support::inspect::{current_object, now, permanent_of};
+use crate::support::inspect::{current_object, now, permanent_of, tap_pays_modes};
 use crate::support::{
     game::{
         animate, clear_hand, clear_summoning_sickness, deck, enter_battlefield,
@@ -1676,8 +1676,13 @@ fn hama_can_waterbend_for_a_spell_with_convoke() {
     tap(&mut s, prism);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
     // A creature convokes or waterbends.
-    for (creature, mode) in [(ogres[0], 0), (ogres[1], 1), (hama, 1)] {
+    // {1} by convoke is mode 5, {1} of the waterbend part mode 7.
+    for (creature, mode) in [(ogres[0], 5), (ogres[1], 7), (hama, 7)] {
         tap(&mut s, creature);
+        assert_eq!(tap_pays_modes(&s, creature), [5, 7]);
+        if creature == ogres[0] {
+            assert_choice_contract(&s);
+        }
         let labels: Vec<_> = s
             .game()
             .semantic_decision_frame()

@@ -12,6 +12,7 @@ from manabot.env.match import Match
 
 # Local imports
 from manabot.env.observation import (
+    ACTION_MODE_INDEX,
     ACTION_PAYS_DIRECTLY_INDEX,
     CARD_DIM,
     CARD_PERMISSION_INDEX,
@@ -849,6 +850,55 @@ def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
         assert committed in after.text.splitlines()
         assert not any("Llanowar Elves" in a.description for a in after.actions)
     assert env.state_digest() == root
+
+
+def test_tap_pays_choice_names_its_payment_and_focuses_the_tapped_creature() -> None:
+    """A tap-pays mode names the payment; its offers focus the creature tapped."""
+    env = priority_root(
+        ("Appeal to Eirdu",),
+        ("Savannah Lions", "Savannah Lions", "Gray Ogre", "Hill Giant"),
+    )
+    for chosen in (
+        "Cast C1 (Appeal to Eirdu)",
+        "Target P3 (Gray Ogre)",
+        "Decline",
+        "Tap for cost P1 (Savannah Lions)",
+    ):
+        decision = capture_text_decision(env)
+        action = next(a for a in decision.actions if a.description.startswith(chosen))
+        submit_response(env, decision, action.reference)
+    decision = capture_text_decision(env)
+    # Mode 0 is {W} by convoke and mode 5 {1} by convoke; text is one-based.
+    assert [action.description for action in decision.actions] == [
+        "Choose mode P1 (Savannah Lions); mode 1. Native description: "
+        "Savannah Lions pays {W} (convoke)",
+        "Choose mode P1 (Savannah Lions); mode 6. Native description: "
+        "Savannah Lions pays {1} (convoke)",
+    ]
+
+    actor = env.current_agent_index()
+    assert actor is not None
+    obs = env.observation_for_player(actor)
+    assert [action.mode_index for action in obs.action_space.actions] == [0, 5]
+    encoder = ObservationEncoder(ObservationConfig())
+    reference = encoder.encode(obs)
+    scalar = encoder.allocate()
+    env.encode_observation_into(obs, scalar)
+    batch = encoder.allocate(1)
+    assert managym.encode_observations_into([env], batch, 1) == [2]
+    for key, value in reference.items():
+        np.testing.assert_array_equal(scalar[key], value, err_msg=key)
+        np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
+    np.testing.assert_array_equal(reference["actions"][:2, ACTION_MODE_INDEX], [1, 6])
+    lions = next(
+        index
+        for index, permanent in enumerate(obs.agent_permanents)
+        if permanent.tapped
+    )
+    lions_row = 2 + 2 * encoder.config.max_cards_per_player + lions
+    np.testing.assert_array_equal(
+        reference["action_focus"][:2], [[lions_row, -1], [lions_row, -1]]
+    )
 
 
 def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_parity() -> (

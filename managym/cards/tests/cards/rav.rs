@@ -125,7 +125,8 @@ fn guardian_of_vitu_ghazi_convoker_chooses_which_owed_color_it_pays() {
                     "Guardian of Vitu-Ghazi pays {1} (convoke)"
                 ]
             );
-            choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+            // {G} by convoke is mode 4.
+            choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
             if !auto {
                 pay_rest(&mut s);
             }

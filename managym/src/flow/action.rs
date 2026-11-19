@@ -109,7 +109,9 @@ impl Game {
                 Some(format!(
                     "{} pays {}",
                     self.state[*tapped].name,
-                    tap_payments_text(std::slice::from_ref(options.get(*mode)?))
+                    tap_payments_text(std::slice::from_ref(
+                        options.iter().find(|paid| paid.mode() == *mode)?
+                    ))
                 ))
             }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
@@ -911,12 +913,18 @@ impl Game {
                     (ActionSpaceKind::PayOrNot, actions, Vec::new())
                 }
             }
-            CostComponent::TapPays { options, .. } => (
+            // The offers are about the permanent just tapped, so it is the
+            // focus; each mode names its payment (`TapPayment::mode`).
+            CostComponent::TapPays { tapped, options } => (
                 ActionSpaceKind::Modal,
-                (0..options.len())
-                    .map(|mode| Action::ChooseMode { player, mode })
+                options
+                    .iter()
+                    .map(|paid| Action::ChooseMode {
+                        player,
+                        mode: paid.mode(),
+                    })
                     .collect(),
-                source_focus(),
+                vec![self.state[*tapped].id],
             ),
             CostComponent::Life(_) | CostComponent::Source(_) => {
                 unreachable!("paid as the payment completes, after its mana")
