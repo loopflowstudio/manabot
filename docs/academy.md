@@ -647,9 +647,9 @@ Cards in hand are large, 136 to 150 px wide, and sit side by side while the
 strip has room; with 24 permanents or more on the battlefield the board may
 take the hand down to about 100 px wide. A hand too long for the strip first
 shrinks its cards toward that floor; only then do they overlap, left over
-right, and each covered card shows its cost beside its name in the slice
-that stays visible, so a nine-card hand reads "{2}{U} Pop Quiz" on every
-card. Pointing at or focusing a covered card lifts it whole. An empty hand is a
+right, and each covered card's visible slice gives its name the whole width,
+with its cost on the line beneath in place of the type line, so a nine-card
+hand reads every card's name and cost. Pointing at or focusing a covered card lifts it whole. An empty hand is a
 label.
 
 The rail holds:
@@ -668,8 +668,8 @@ The rail holds:
   and damage dealt since your last move shows on the card or the player's plate
   as it lands ("−2").
 - **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
-  Accumulate Wisdom. Space taps the dashed lands, or click lands to tap them
-  yourself"),
+  Accumulate Wisdom. Space pays automatically, or click lands to tap them
+  yourself"; it stays the same when the planned lands are dashed),
   and its buttons. **Rules detail** holds the engine's full instruction.
   Passing priority and paying a cost are the primary button (Space), labelled
   with what it does next: **Resolve** and the spell on top of the stack, the
@@ -946,11 +946,15 @@ events after your last commit, with the move list beneath grouped by turn.
 When the opponent moved, those facts are read out one at a time before your
 decision, with the cards each is about outlined on the
 board. The fact being read heads the decision block, above your dimmed prompt.
-Each fact is shown on the board it happened on: the server sends your view of
-the board after each step with the frame, so an attacker that died is seen
-attacking before it leaves, and cards travel from one board to the next. A past
-board outlines nothing. While the reading lasts, the top bar and step bar show
-that past board, and your decision's buttons and numbered choices stay in place
+Each fact is shown on the board after the engine step it happened in: the
+server sends your view of the board after each step with the frame, so an
+attacker that died is usually seen attacking before it leaves, and cards travel
+from one board to the next. One step can run from an attack through damage into
+the next turn, when nobody had a choice between; such a fact is shown on the
+board at that next turn. A past board outlines nothing. While the reading lasts,
+the top bar names the turn the fact happened in, and the step bar marks that
+turn's step when the board shows it and no step when the board is a later
+turn's. Your decision's buttons and numbered choices stay in place
 but wait: they are announced as unavailable and still take focus. The first
 input of any kind ends the reading and does nothing else: a click on the board,
 the rail, a button or a choice, Space, Enter, Escape or a number key. The

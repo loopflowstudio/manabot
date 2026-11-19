@@ -21,6 +21,7 @@
  * decision's controls wait, and the first input ends the read-out and does
  * nothing else, so a person never answers a board they have not been shown.
  */
+import type { PresentationEvent } from '$lib/types';
 import type { RecentFact, Side } from './recent';
 
 export interface Beat {
@@ -65,6 +66,21 @@ export function beatsFor(facts: readonly RecentFact[], shown: number, names: Rec
   const beats = unseen.length > GROUP_ABOVE ? grouped(unseen, names)
     : unseen.map(fact => ({ seq: fact.seq, by: fact.by, text: fact.text, subjects: fact.subjects }));
   return beats.slice(-BEAT_LIMIT);
+}
+
+/**
+ * The turn the event `seq` happened in: the last turn start at or before it,
+ * or null when none is retained. A beat can be drawn on a later turn's board,
+ * since one engine step may run from an attack through damage into the next
+ * turn, and the authority keeps a board only after each step.
+ */
+export function turnAt(events: readonly PresentationEvent[], seq: number): number | null {
+  let turn: number | null = null;
+  for (const event of events) {
+    if (event.seq > seq) break;
+    if (event.kind.kind === 'turn_started') turn = event.kind.turn_number;
+  }
+  return turn;
 }
 
 // ———————————————————————————————————————— Pace

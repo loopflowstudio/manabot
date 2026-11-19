@@ -228,10 +228,13 @@
   >
     <span class="bar" aria-hidden="true" style={barStyle} style:--slice={slice === null ? undefined : `${slice - 10}px`}>
       <span class="title">
-        {#if slice !== null && face?.cost}<span class="bar-cost" data-testid="slice-cost"><Pips cost={face.cost} size={pip} /></span>{/if}
+        {#if slice !== null && face?.cost && !showType}<span class="bar-cost" data-testid="slice-cost"><Pips cost={face.cost} size={pip} /></span>{/if}
         <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}{' '}<b class="count" data-testid="pile-count-badge">×{count}</b>{/if}</span>
       </span>
-      {#if showType && face}<span class="type">{face.type_line}</span>{/if}
+      {#if showType && face}
+        {#if slice !== null && face.cost}<span class="bar-cost on-type" data-testid="slice-cost"><Pips cost={face.cost} size={pip} /></span>{/if}
+        <span class="type">{face.type_line}</span>
+      {/if}
     </span>
     <span class="art" aria-hidden="true">
       <span class="picture" style:background-image={art ? `url('${art}')` : undefined}>
@@ -292,14 +295,16 @@
     overflow: hidden; overflow-wrap: break-word; hyphens: auto; text-wrap: balance;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   }
-  /* In hand a name holds one line, shortened (Inspect has it whole); a covered card fits cost and name in its slice. */
+  /* In hand a name holds one line, shortened (Inspect has it whole). A covered card's slice gives the name its
+     whole width and shows the cost in place of the type line; on a card too small for a type line the cost leads the name. */
   .title { display: flex; align-items: center; gap: 3px; min-width: 0; }
   .bar-cost { flex: none; display: flex; }
   .field .title { display: block; }
   .tcard:not(.field) .name { display: block; flex: 1 1 auto; min-width: 0; white-space: nowrap; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Lifted by pointer or focus, a covered card shows whole, as it is laid out uncovered. */
   .sliced:not(:hover, :focus-visible) :is(.title, .type) { max-width: var(--slice); }
-  .sliced:not(:hover, :focus-visible) .corner .cost, .sliced:is(:hover, :focus-visible) .bar-cost { display: none; }
+  .sliced:not(:hover, :focus-visible) :is(.corner .cost, .on-type + .type), .sliced:is(:hover, :focus-visible) .bar-cost { display: none; }
+  .bar-cost.on-type { height: 16px; align-items: center; }
   /* A pile's count follows the name, in the interface face; the line breaks before it, never inside the name. */
   .count { font-family: var(--font-sans); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .type { font: 12px/16px var(--font-sans); color: inherit; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

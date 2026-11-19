@@ -256,6 +256,8 @@
     <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
   </section>
 
+  <!-- A finished game has no choices to list; the result card says what happened. -->
+  {#if !over || frame.offers.length}
   <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
     <h2 class="heading type-heading text-ink-2">
       <span>{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
@@ -282,6 +284,7 @@
       {/each}
     </ol>
   </section>
+  {/if}
 
   <section use:region={{ across: !onjump }} class="block log" aria-label="Moves">
     <h2><span class="type-heading text-ink-2">Moves</span></h2>

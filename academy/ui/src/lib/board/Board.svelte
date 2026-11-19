@@ -25,7 +25,7 @@
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
   import { region } from './region';
-  import { BEAT_MS, beatsFor, type Beat, type BeatPace } from './beats';
+  import { BEAT_MS, beatsFor, turnAt, type Beat, type BeatPace } from './beats';
   import { boardAt, type StepBoard } from './boards';
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
@@ -321,7 +321,7 @@
   const payPlanned = $derived(paymentPlan(answered, frame));
   // Piles part around whatever plan is shown, so each planned land has its own
   // outline and mark. The pending payment's own answer is kept for its
-  // revision: piles, prompt, Pay label and note read it while a person points
+  // revision: piles, Pay label and note read it while a person points
   // at other choices, so pointing never reflows the rail or moves a card from
   // under the pointer (which would change what is pointed at).
   let payAnswer = $state.raw<{ revision: number; answered: NonNullable<typeof answered> } | null>(null);
@@ -334,7 +334,7 @@
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
-      : promptLine(frame, view, (payKnownPlan?.sources.size ?? 0) > 0));
+      : promptLine(frame, view));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
@@ -393,9 +393,14 @@
   const boardProjection = $derived(drawn.projection);
   const boardNames = $derived(beatBoard ? new Map([...beatBoard.agent.battlefield, ...beatBoard.opponent.battlefield]
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])) : names);
-  // The turn as the drawn board has it: a beat's board may be an earlier step.
-  const yourTurn = $derived(boardProjection.turn.active_player_id === boardProjection.agent.id);
-  const track = $derived(phaseTrack(boardProjection.turn, stops, yourTurn, onceStops));
+  const owners = $derived(turnOwners(frame, presentation.events));
+  // The turn the top bar and stop bar name: the beat's own while one plays. A
+  // beat's board may be a later turn's (one engine step can run from an attack
+  // into the next turn), and then no step of the beat's turn is current.
+  const turnNumber = $derived(beat ? turnAt(presentation.events, beat.seq) ?? boardProjection.turn.turn_number : boardProjection.turn.turn_number);
+  const turnStep = $derived(turnNumber === boardProjection.turn.turn_number ? boardProjection.turn.step : null);
+  const yourTurn = $derived(turnStep !== null ? boardProjection.turn.active_player_id === boardProjection.agent.id : owners.get(turnNumber) === 'you');
+  const track = $derived(phaseTrack(turnStep, stops, yourTurn, onceStops));
   const lines = $derived(boardLines(drawn, presentation.events, recent.resolved, sinceRevision));
   /** Permanents something on the stack targets: a dashed edge in the damage colour. */
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
@@ -427,7 +432,7 @@
   // Both players' moves are narrated as Review narrates them, players named by seat.
   const seatName = (seat: 0 | 1): string => (seat === projection.agent.player_index ? 'You' : said);
   const named = $derived(log.map(entry => (entry.actor === 'villain' || entry.actor === 'hero' ? { ...entry, text: nameSeats(entry.text, seatName, entry.actor === 'hero') } : entry)));
-  const moves = $derived(movesGiven ?? moveList(named, players, turnOwners(frame, presentation.events), visibleNames(frame, presentation.labels)));
+  const moves = $derived(movesGiven ?? moveList(named, players, owners, visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion
 
@@ -740,7 +745,7 @@
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
 <div class="game" data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
-  data-turn={boardProjection.turn.turn_number} data-step={boardProjection.turn.step} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
+  data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
@@ -748,7 +753,7 @@
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
-    <p class="turn" data-testid="turn-number">Turn {boardProjection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</p>
+    <p class="turn" data-testid="turn-number">Turn {turnNumber} · {yourTurn ? 'yours' : 'theirs'}</p>
     <div class="right">
       {#if connection}
         <!-- Connected says nothing: only a problem shows; the status stays for assistive technology. -->
@@ -889,7 +894,7 @@
       {#if strip?.open}<Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} />{/if}
     </div>
   {/if}
-  <nav class="stops-slot" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
+  <nav class="stops-slot" aria-label={`Turn ${turnNumber}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
     <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
   <Lines {lines} {root} revision={frame.revision} />

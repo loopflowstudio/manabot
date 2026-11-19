@@ -29,8 +29,7 @@ function askedCreature(frame: ExperienceFrame, view: BoardView): string | null {
   return asked.length === 1 ? asked[0].name ?? null : null;
 }
 
-/** `planned`: the board shows the automatic payer's taps for the primary payment. */
-export function promptLine(frame: ExperienceFrame, view: BoardView, planned = false): string {
+export function promptLine(frame: ExperienceFrame, view: BoardView): string {
   const context = frame.projection.decision_context;
   const creature = askedCreature(frame, view);
   const source = context?.source?.label ?? null;
@@ -42,7 +41,7 @@ export function promptLine(frame: ExperienceFrame, view: BoardView, planned = fa
       return yourMain(frame) ? 'Play a land or cast a spell, or Space to pass' : 'Cast or activate now, or Space to pass';
     case 'PAY_OR_NOT':
       return context?.mana_cost
-        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}. ${!view.primary ? 'Click' : planned ? 'Space taps the dashed lands, or click' : 'Space pays automatically, or click'} lands to tap them yourself`
+        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}. ${view.primary ? 'Space pays automatically, or click' : 'Click'} lands to tap them yourself`
         : `Pay the cost${source ? ` of ${source}` : ''}, or decline`;
     case 'CHOOSE_TARGET':
       return `Choose a target${source ? ` for ${source}` : ''}`;
