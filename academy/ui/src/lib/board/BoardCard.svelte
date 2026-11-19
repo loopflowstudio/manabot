@@ -63,6 +63,12 @@
     planned?: PlannedSource | null;
     /** Copies in this card's pile, shown after the top copy's name. */
     count?: number | null;
+    /**
+     * How much of a covered card in hand stays in view, from its left edge,
+     * px: its cost moves from the art into the name bar, before the name, so
+     * the visible slice reads both.
+     */
+    slice?: number | null;
     /** While the person may act, this card steps back: an uncastable hand card (`hand`) or an idle permanent (`idle`). */
     dim?: 'hand' | 'idle' | null;
     /** Something on the stack targets it. */
@@ -77,7 +83,7 @@
 
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
+    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, slice = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
   }: Props = $props();
 
   // At a recorded choice: the policy's mass on this card's offers, and whether one was played.
@@ -201,6 +207,7 @@
     class:touched
     class:beat
     class:planned={planned !== null}
+    class:sliced={slice !== null}
     data-testid="board-card"
     data-travel-id={permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
     data-travel-name={name}
@@ -219,8 +226,11 @@
     onfocus={event => onpreview?.(event.currentTarget)}
     onblur={() => onpreview?.(null)}
   >
-    <span class="bar" aria-hidden="true" style={barStyle}>
-      <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}{' '}<b class="count" data-testid="pile-count-badge">×{count}</b>{/if}</span>
+    <span class="bar" aria-hidden="true" style={barStyle} style:--slice={slice === null ? undefined : `${slice - 10}px`}>
+      <span class="title">
+        {#if slice !== null && face?.cost}<span class="bar-cost" data-testid="slice-cost"><Pips cost={face.cost} size={pip} /></span>{/if}
+        <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}{' '}<b class="count" data-testid="pile-count-badge">×{count}</b>{/if}</span>
+      </span>
       {#if showType && face}<span class="type">{face.type_line}</span>{/if}
     </span>
     <span class="art" aria-hidden="true">
@@ -282,6 +292,14 @@
     overflow: hidden; overflow-wrap: break-word; hyphens: auto; text-wrap: balance;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   }
+  /* In hand a name holds one line, shortened (Inspect has it whole); a covered card fits cost and name in its slice. */
+  .title { display: flex; align-items: center; gap: 3px; min-width: 0; }
+  .bar-cost { flex: none; display: flex; }
+  .field .title { display: block; }
+  .tcard:not(.field) .name { display: block; flex: 1 1 auto; min-width: 0; white-space: nowrap; text-overflow: ellipsis; text-wrap: nowrap; }
+  /* Lifted by pointer or focus, a covered card shows whole, as it is laid out uncovered. */
+  .sliced:not(:hover, :focus-visible) :is(.title, .type) { max-width: var(--slice); }
+  .sliced:not(:hover, :focus-visible) .corner .cost, .sliced:is(:hover, :focus-visible) .bar-cost { display: none; }
   /* A pile's count follows the name, in the interface face; the line breaks before it, never inside the name. */
   .count { font-family: var(--font-sans); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .type { font: 12px/16px var(--font-sans); color: inherit; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -365,6 +383,8 @@
     font-family: var(--font-sans); font-weight: 600; font-variant-numeric: tabular-nums;
     color: var(--text); background: var(--bg-surface); box-shadow: 0 0 0 1px var(--border);
   }
+  /* A covered card's power and toughness sit in the slice that shows. */
+  .sliced:not(:hover, :focus-visible) .pt { right: auto; left: 3px; }
   .pt.up { color: var(--gain); }
   .pt.hurt { color: var(--damage); }
   @media (prefers-reduced-motion: reduce) {

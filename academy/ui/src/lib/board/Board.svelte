@@ -41,7 +41,7 @@
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
   import { shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, handFan, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -616,7 +616,8 @@
   // Hand cards are large, 136 to 150 px wide (`HAND_MIN`, `HAND_MAX`): the
   // board gives the hand that height before its rows grow, and a crowded
   // board (24 permanents or more) may take it back down to `HAND_CROWDED`
-  // when its rows need it (`handStrip`). An empty hand is a label.
+  // when its rows need it (`handStrip`). A long hand's cards shrink before
+  // they overlap (`handFan`), and the strip shrinks with them. An empty hand is a label.
   /** Strip heights, px: the card is the strip less 22 px of lift and padding, at 63:88. */
   const HAND_MIN = 212;
   const HAND_MAX = 232;
@@ -625,20 +626,22 @@
   const HAND_SHARE = 0.35;
   const boardCount = $derived(boardProjection.agent.battlefield.length + boardProjection.opponent.battlefield.length);
   let boardHeight = $state(0);
-  const handTrack = $derived(board.hand.length === 0 ? '30px' : `${handStrip(boardHeight, [
+  const handHeight = $derived(handStrip(boardHeight, [
     { creatures: pileShapes(board.opponent.creatures), support: pileShapes(board.opponent.support), width: theirRows.width },
     { creatures: pileShapes(board.you.creatures), support: pileShapes(board.you.support), width: yourRows.width },
   ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
-  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * HAND_SHARE))), step: 8 })}px`);
+  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * HAND_SHARE))), step: 8 }));
   /** The players' plates' column. */
   const PLATE_WIDTH = 148;
   /** The hand's cards keep clear of its label at the left edge. */
   const HAND_LABEL_WIDTH = 80;
   let handWidth = $state(0);
-  let handHeight = $state(0);
-  const handCard = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
-  const handStep = $derived(board.hand.length <= 1 ? handCard + 10
-    : Math.min(handCard + 10, Math.max(24, (handWidth - HAND_LABEL_WIDTH - 24 - handCard) / (board.hand.length - 1))));
+  /** A crowded hand's cards shrink to the width of a card in the crowded strip before they overlap. */
+  const HAND_FLOOR = Math.floor((HAND_CROWDED - 22) * CARD_RATIO);
+  const handFull = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
+  const fan = $derived(handFan(board.hand.length, handWidth - HAND_LABEL_WIDTH - 24, { min: HAND_FLOOR, max: handFull }, 10));
+  // Shrunk cards give the strip's spare height back to the board.
+  const handTrack = $derived(board.hand.length === 0 ? '30px' : `${Math.min(handHeight, Math.ceil(fan.card / CARD_RATIO) + 22)}px`);
 
   // ———————————————— Keyboard
 
@@ -776,12 +779,12 @@
         <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={recent.damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
-    <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth} bind:clientHeight={handHeight}>
+    <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
       <span class="type-heading hand-label text-ink-2">Hand · {board.hand.length}</span>
-      <div class="hand-cards" style:width={`${handCard + Math.max(0, board.hand.length - 1) * handStep}px`}>
+      <div class="hand-cards" style:width={`${fan.card + Math.max(0, board.hand.length - 1) * fan.step}px`}>
         {#each board.hand as item, index (item.card.id)}
-          <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * handStep}px`}>
-            <BoardCard name={item.card.name} width={handCard} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
+          <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * fan.step}px`}>
+            <BoardCard name={item.card.name} width={fan.card} slice={fan.covered && index < board.hand.length - 1 ? fan.step : null} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
               dim={acting && item.offers.length === 0 ? 'hand' : null}
               onactivate={element => activate(item.card.name, item.offers, element)}
               onpreview={element => previewCard(element ? item.card : null, element)} />
