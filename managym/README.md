@@ -443,9 +443,12 @@ toward `Station` that never offers the source; an activated ability's
 resolving frame carries its receipt, and the station effect reads the tapped
 creature's power from it (`EffectValue::PowerTappedToPay`). A Spacecraft's
 "N+" lines are static abilities conditioned on its charge counters.
-The automatic payer pays only the mana component, with its help: which
-creatures crew, saddle or station, and every other object a cost takes, is
-the player's choice under either `mana_payment` setting.
+The automatic payer pays only the mana component, and pays it with mana:
+which creatures crew, saddle or station, every other object a cost takes, and
+each convoke or improvise tap or delve exile when mana alone cannot pay, is
+the player's choice under either `mana_payment` setting. With lands for the
+whole cost it asks nothing. Waterbend taps are the exception and are still
+made for the player.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation
@@ -827,16 +830,18 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `state` | Meaning |
 | --- | --- |
 | `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. `contributions` names what objects have already paid toward this cost, in the order paid ("sacrificed Gray Ogre to bargain"). |
-| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost. `explanation` names the choice; there are no sources. |
+| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
 | `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability with its own fee. |
 
 The preview reads the cost as the payment owes it (`Payment.owed`). While a
 sacrifice, discard, exile or forage is still the payer's to choose, the state
 is `needs_choice`; once those are paid and only mana is owed, the plan is
-exact and lists them. A cost with convoke, improvise or delve stays
-`needs_choice` throughout, because its taps and exiled cards pay part of the
-mana itself.
+exact and lists them. A cost with convoke, improvise or delve previews its
+mana route like any other: automatic payment pays mana with mana and never
+picks a creature, artifact or card. When mana alone cannot pay, the state is
+`needs_choice` ("Mana alone cannot pay this cost. Choose what to tap or
+exile.") until the payer's own taps and exiles leave a remainder mana covers.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending

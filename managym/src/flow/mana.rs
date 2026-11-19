@@ -2041,19 +2041,23 @@ impl Game {
             && self.mana_payment[self.decision_controller(player).0] == ManaPayment::Auto
     }
 
-    /// Follow one step of the live payment witness. Only the mana component is
-    /// paid for the player: units of one mana class are interchangeable, the
-    /// creatures and cards of every other component are not. Optional costs
-    /// still offer Pay/Decline, and a deliberate priority float still chooses
-    /// its output.
+    /// Follow one step of the live payment witness. The automatic payer pays
+    /// mana with mana and never picks an object: units of one mana class are
+    /// interchangeable, creatures and cards are not. Every other component is
+    /// the player's, and so is a convoke or improvise tap or a delve exile
+    /// when mana alone cannot pay; the payer resumes once it can. Waterbend
+    /// taps are the one exception and are still made for the player. Optional
+    /// costs still offer Pay/Decline, and a deliberate priority float still
+    /// chooses its output.
     pub(crate) fn automatic_payment_action(&self, space: &ActionSpace) -> Option<Action> {
         let player = space.player?;
         if !self.automatic_mana_payment(player) {
             return None;
         }
-        match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
-            Some(Decision::Payment(progress)) if !progress.can_decline() => {}
-            Some(Decision::ManaUpfront { .. }) => {}
+        // Whether convoke, improvise or delve may pay part of this mana step.
+        let helped = match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
+            Some(Decision::Payment(progress)) if !progress.can_decline() => false,
+            Some(Decision::ManaUpfront { .. }) => false,
             // The most specific unit that can pay goes first, so mana only
             // this kind of cost can use is not left floating beside
             // ordinary mana; a rider this cost would waste goes last. The
@@ -2090,14 +2094,11 @@ impl Game {
                     .cloned();
             }
             None => match self.paying() {
-                Some((_, _, CostComponent::Mana { .. })) => {}
-                Some((_, _, CostComponent::ConvokeColor { .. })) => {
-                    return space.actions.first().cloned();
-                }
+                Some((_, _, CostComponent::Mana { help, .. })) => help.keyworded(),
                 _ => return None,
             },
             _ => return None,
-        }
+        };
         if let Some(pay) = space
             .actions
             .iter()
@@ -2105,15 +2106,19 @@ impl Game {
         {
             return Some(pay.clone());
         }
+        // Mana alone cannot pay: which creature or artifact to tap, or card
+        // to exile, is the player's pick.
+        if helped {
+            return None;
+        }
         // The witness models the ordinary and waterbend portions as separate
         // spends, but the game charges their combined remainder only once.
         // Every offered waterbend tap preserves a witness for that remainder.
-        // The same holds for convoke and improvise taps and delve exiles,
-        // taken only once mana alone cannot pay.
-        if let Some(tap) = space.actions.iter().find(|a| {
-            matches!(a, Action::WaterbendTap { .. })
-                || matches!(a, Action::SelectCard { .. }) && self.state.suspended_decision.is_none()
-        }) {
+        if let Some(tap) = space
+            .actions
+            .iter()
+            .find(|a| matches!(a, Action::WaterbendTap { .. }))
+        {
             return Some(tap.clone());
         }
         let path = self
@@ -2124,9 +2129,10 @@ impl Game {
                 SourcePolicy::All,
             )
             .expect("committed cost has a payment witness");
-        let next = if self.paying().is_some_and(|(_, payment, _)| {
-            payment.waterbends() || payment.help().taps_any_generic()
-        }) && self.state.suspended_decision.is_none()
+        let next = if self
+            .paying()
+            .is_some_and(|(_, payment, _)| payment.waterbends())
+            && self.state.suspended_decision.is_none()
         {
             path.iter().find(|step| !matches!(step, PaymentStep::Spend))
         } else {

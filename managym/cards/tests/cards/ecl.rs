@@ -116,51 +116,72 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
 }
 
 /// Only a white creature (or white mana) pays the {W}: red creatures alone
-/// do not cast it. With a Plains, the automatic payer convokes just enough.
+/// do not cast it. The automatic payer pays mana with mana: short of mana,
+/// the player picks each creature to tap and the payer finishes once the
+/// lands cover the rest; with enough lands nothing is asked.
 #[test]
-fn appeal_to_eirdu_needs_white_and_auto_convokes_only_what_mana_cannot_pay() {
-    let mut s = five_color_unfunded_setup(&["Appeal to Eirdu", "Gray Ogre", "Hill Giant"]);
-    let ogres = [
-        s.force_permanent_on_battlefield(0, "Gray Ogre"),
-        s.force_permanent_on_battlefield(0, "Gray Ogre"),
-    ];
-    let giants = [
-        s.force_permanent_on_battlefield(0, "Hill Giant"),
-        s.force_permanent_on_battlefield(0, "Hill Giant"),
-    ];
-    let appeal = force_new_card_in_hand(&mut s, 0, "Appeal to Eirdu");
-    s.game_mut().scenario_refresh_priority().unwrap();
-    assert!(!can_cast(&s, appeal), "four red creatures pay no {{W}}");
+fn appeal_to_eirdu_needs_white_and_auto_leaves_convoke_to_the_player() {
+    for lands in [1, 4] {
+        let mut s = five_color_unfunded_setup(&["Appeal to Eirdu", "Gray Ogre", "Hill Giant"]);
+        let ogres = [
+            s.force_permanent_on_battlefield(0, "Gray Ogre"),
+            s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        ];
+        let giants = [
+            s.force_permanent_on_battlefield(0, "Hill Giant"),
+            s.force_permanent_on_battlefield(0, "Hill Giant"),
+        ];
+        let appeal = force_new_card_in_hand(&mut s, 0, "Appeal to Eirdu");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert!(!can_cast(&s, appeal), "four red creatures pay no {{W}}");
 
-    let plains = s.force_permanent_on_battlefield(0, "Plains");
-    s.game_mut().mana_payment[0] = ManaPayment::Auto;
-    s.game_mut().scenario_refresh_priority().unwrap();
-    assert!(can_cast(&s, appeal));
-    cast_card(&mut s, appeal);
-    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    assert!(s.choose_target(Target::Permanent(ogres[0])));
-    if s.action_space().kind == ActionSpaceKind::ChooseTarget {
-        choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        let plains: Vec<_> = (0..lands)
+            .map(|_| s.force_permanent_on_battlefield(0, "Plains"))
+            .collect();
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert!(can_cast(&s, appeal));
+        cast_card(&mut s, appeal);
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(s.choose_target(Target::Permanent(ogres[0])));
+        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        let picked = [ogres[1], giants[0], giants[1]];
+        if lands == 1 {
+            // One Plains pays the {W}; three of the four creatures must
+            // convoke, and which three is the player's pick.
+            for creature in picked {
+                assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
+                assert!(convokes(&s, ogres[0]));
+                choose(
+                    &mut s,
+                    |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == creature),
+                );
+            }
+        }
+        let spell = top_spell(&s);
+        assert_eq!(spell.spent.total(), lands);
+        for unit in spell.spent.mana() {
+            let source = unit.source.unwrap().object;
+            assert!(plains.iter().any(|land| card_of(&s, *land) == source));
+        }
+        assert_eq!(
+            spell
+                .spent
+                .contributed(How::Tapped, Toward::Convoke)
+                .collect::<Vec<_>>(),
+            if lands == 1 {
+                picked.map(|creature| card_of(&s, creature)).to_vec()
+            } else {
+                Vec::new()
+            }
+        );
+        assert!(!tapped(&s, ogres[0]));
+        for creature in picked {
+            assert_eq!(tapped(&s, creature), lands == 1);
+        }
     }
-    let spell = top_spell(&s);
-    assert_eq!(spell.spent.total(), 1);
-    assert_eq!(
-        spell.spent.mana()[0].source.unwrap().object,
-        card_of(&s, plains)
-    );
-    assert_eq!(
-        spell
-            .spent
-            .contributed(How::Tapped, Toward::Convoke)
-            .count(),
-        3
-    );
-    let untapped = ogres
-        .iter()
-        .chain(&giants)
-        .filter(|creature| !tapped(&s, **creature))
-        .count();
-    assert_eq!(untapped, 1);
 }
 
 /// Convoke taps creatures as the layers see them: an earthbent land is a

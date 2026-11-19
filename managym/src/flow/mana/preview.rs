@@ -71,14 +71,23 @@ impl From<&Mana> for PreviewPool {
 }
 
 /// Whether `owed` still asks its payer for something other than mana: a
-/// component ahead of the mana (a sacrifice, discard, exile or forage), or
-/// taps and exiled cards that may pay part of the mana itself. The preview
-/// does not make those choices for the player.
+/// component ahead of the mana (a sacrifice, discard, exile or forage). The
+/// preview does not make those choices for the player.
 fn owes_a_choice(owed: &[CostComponent]) -> bool {
-    match &owed[0] {
-        CostComponent::Mana { help, .. } => help.keyworded(),
-        _ => true,
-    }
+    !matches!(owed[0], CostComponent::Mana { .. })
+}
+
+/// Whether a cost not yet being paid would ask its payer for more than mana.
+/// Before the payment begins a waterbend cost's taps are such a choice too;
+/// once it is being paid, the preview shows its mana route.
+fn will_owe_a_choice(owed: &[CostComponent]) -> bool {
+    owes_a_choice(owed)
+        || matches!(&owed[0], CostComponent::Mana { help, .. } if help.waterbend > 0)
+}
+
+/// Whether convoke, improvise or delve may pay part of the mana `owed`.
+fn keyword_help(owed: &[CostComponent]) -> bool {
+    matches!(&owed[0], CostComponent::Mana { help, .. } if help.keyworded())
 }
 
 impl PaymentPreview {
@@ -103,11 +112,14 @@ impl PaymentPreview {
 }
 
 impl Game {
-    /// Whether casting `object` with `cast` would ask its payer for more than
-    /// mana. Before the payment begins a waterbend cost's taps are such a
-    /// choice too; once it is being paid, the preview shows its mana route.
-    fn spell_owes_a_choice(&self, player: PlayerId, object: ObjectId, cast: CastChoices) -> bool {
-        let owed = self.cost_components(
+    /// What casting `object` with `cast` would owe.
+    fn spell_owed(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> Vec<CostComponent> {
+        self.cost_components(
             player,
             &Operation::Spell {
                 object,
@@ -116,9 +128,7 @@ impl Game {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
             },
-        );
-        owes_a_choice(&owed)
-            || matches!(&owed[0], CostComponent::Mana { help, .. } if help.waterbend > 0)
+        )
     }
 
     /// Query one legal action at its exact semantic authority address.
@@ -153,6 +163,8 @@ impl Game {
         let mut sources = Vec::new();
         let mut contributions = Vec::new();
         let mut resolution = None;
+        // Whether convoke, improvise or delve may pay where mana cannot.
+        let mut helped = false;
         // A deliberate tap in a payment previews its own production first.
         let offered_tap = match action {
             Action::TapForMana { permanent, .. } => Some(AutomaticTap::fixed(*permanent)),
@@ -175,9 +187,11 @@ impl Game {
                         "Choose the optional or alternative cost before previewing payment.",
                     ));
                 };
-                if self.spell_owes_a_choice(player, *object, cast) {
+                let owed = self.spell_owed(player, *object, cast);
+                if will_owe_a_choice(&owed) {
                     return Ok(PaymentPreview::needs_additional_cost());
                 }
+                helped = keyword_help(&owed);
                 if card.cost_reduction_if_targets().is_some() {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
@@ -197,9 +211,11 @@ impl Game {
                     ..
                 }) => {
                     let card = &self.state[*object];
-                    if self.spell_owes_a_choice(player, *object, *cast) {
+                    let owed = self.spell_owed(player, *object, *cast);
+                    if will_owe_a_choice(&owed) {
                         return Ok(PaymentPreview::needs_additional_cost());
                     }
+                    helped = keyword_help(&owed);
                     let requirements = card.target_requirements_for_mode(*mode);
                     let completes = *requirement_index + 1 == requirements.len()
                         && chosen_req_indices
@@ -242,6 +258,7 @@ impl Game {
                     return Ok(PaymentPreview::needs_additional_cost());
                 }
                 Some(PendingChoice::Pay { payment, .. }) => {
+                    helped = keyword_help(&payment.owed);
                     contributions = payment
                         .receipt
                         .contributions()
@@ -310,10 +327,17 @@ impl Game {
             ));
         };
         let Ok(taps) = position.automatic_taps(player, &cost) else {
-            let mut preview = PaymentPreview::message(
-                PaymentPreviewState::Unavailable,
-                "No automatic route. Use a legal mana activation and choose its output first.",
-            );
+            let mut preview = if helped {
+                PaymentPreview::message(
+                    PaymentPreviewState::NeedsChoice,
+                    "Mana alone cannot pay this cost. Choose what to tap or exile.",
+                )
+            } else {
+                PaymentPreview::message(
+                    PaymentPreviewState::Unavailable,
+                    "No automatic route. Use a legal mana activation and choose its output first.",
+                )
+            };
             preview.cost = Some(cost_description(&cost));
             return Ok(preview);
         };
@@ -484,6 +508,62 @@ mod tests {
             result.pool_after_production.unwrap().amounts,
             PreviewPool::from(&game.pooled_mana(PlayerId(0))).amounts
         );
+    }
+
+    /// A convoke spell previews its mana route like any other cost. Short of
+    /// mana the convoker is the player's pick, never the preview's.
+    #[test]
+    fn payment_preview_pays_a_convoke_cost_with_mana_or_asks_for_the_pick() {
+        for (plains, state) in [
+            (true, PaymentPreviewState::Exact),
+            (false, PaymentPreviewState::NeedsChoice),
+        ] {
+            let lands = ["Mountain", "Forest", "Plains"];
+            let mut deck: BTreeMap<String, usize> =
+                lands.iter().map(|land| (land.to_string(), 10)).collect();
+            deck.insert("Guardian of Vitu-Ghazi".into(), 10);
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("payer", deck),
+                    PlayerConfig::new("other", BTreeMap::from([("Plains".into(), 40)])),
+                ],
+                165,
+                true,
+            );
+            let payer = PlayerId(0);
+            game.scenario_force_card_in_hand(payer, "Guardian of Vitu-Ghazi")
+                .unwrap();
+            game.scenario_force_battlefield(payer, "Guardian of Vitu-Ghazi", true)
+                .unwrap();
+            for land in lands.iter().take(if plains { 3 } else { 2 }) {
+                for _ in 0..if *land == "Mountain" { 6 } else { 1 } {
+                    game.scenario_force_battlefield(payer, land, true).unwrap();
+                }
+            }
+            game.scenario_refresh_priority().unwrap();
+            let cast = game
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|action| matches!(action, Action::CastSpell { .. }))
+                .unwrap();
+            let before = witness(&game);
+            let result = preview(&game, cast);
+            assert_eq!(before, witness(&game));
+            assert_eq!(result.state, state);
+            assert_eq!(result.cost.as_deref(), Some("{6}{W}{G}"));
+            if plains {
+                assert_eq!(result.sources.len(), 8);
+                assert_eq!(result.pool_after_spending.unwrap().amounts, [0; 6]);
+            } else {
+                assert_eq!(
+                    result.explanation,
+                    "Mana alone cannot pay this cost. Choose what to tap or exile."
+                );
+                assert!(result.sources.is_empty());
+            }
+        }
     }
 
     #[test]

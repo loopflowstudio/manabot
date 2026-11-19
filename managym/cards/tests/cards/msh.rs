@@ -39,39 +39,39 @@ fn ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells() {
         assert!(!can_cast(&s, ironheart), "auto={auto}");
         let island = s.force_permanent_on_battlefield(0, "Island");
         cast_card(&mut s, ironheart);
-        if !auto {
-            for staff in &staffs {
-                assert!(has_action(&s, |a| {
-                    matches!(a, Action::WaterbendTap { permanent, .. } if permanent == staff)
-                }));
-            }
-            assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
-            let frame = s.game().semantic_decision_frame().unwrap();
-            assert!(
-                frame
-                    .offers
-                    .iter()
-                    .any(|offer| offer.label == "Tap Glider Staff to pay {1} (improvise)"),
-                "{:?}",
-                frame.offers
+        // The Island pays only the {U}: which artifacts tap is the player's
+        // pick, with the automatic payer as by hand.
+        for staff in &staffs {
+            assert!(has_action(&s, |a| {
+                matches!(a, Action::WaterbendTap { permanent, .. } if permanent == staff)
+            }));
+        }
+        assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
+        let frame = s.game().semantic_decision_frame().unwrap();
+        assert!(
+            frame
+                .offers
+                .iter()
+                .any(|offer| offer.label == "Tap Glider Staff to pay {1} (improvise)"),
+            "{:?}",
+            frame.offers
+        );
+        // A fork at the first improvise tap: only the Staff chosen taps.
+        for chosen in &staffs[..2] {
+            let fork = crate::support::play::fork_choosing(
+                &s,
+                |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == chosen),
             );
-            // A fork at the first improvise tap: only the Staff chosen taps.
-            for chosen in &staffs[..2] {
-                let fork = crate::support::play::fork_choosing(
-                    &s,
-                    |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == chosen),
-                );
-                for staff in &staffs {
-                    assert_eq!(tapped(&fork, *staff), staff == chosen);
-                    assert!(!tapped(&s, *staff));
-                }
-            }
             for staff in &staffs {
-                choose(
-                    &mut s,
-                    |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == staff),
-                );
+                assert_eq!(tapped(&fork, *staff), staff == chosen);
+                assert!(!tapped(&s, *staff));
             }
+        }
+        for staff in &staffs {
+            choose(
+                &mut s,
+                |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == staff),
+            );
         }
         let spell = top_spell(&s);
         assert_eq!(spell.spent.total(), 1, "auto={auto}");
@@ -117,7 +117,7 @@ fn ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells() {
             );
         }
         // The Mountain could pay the {1}. By hand the player improvises
-        // instead; the automatic payer takes help only when mana cannot pay.
+        // instead; the automatic payer pays with mana and asks nothing.
         let spell = top_spell(&s);
         let improvised: Vec<_> = spell
             .spent
