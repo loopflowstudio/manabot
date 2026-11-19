@@ -1464,6 +1464,7 @@ mod tests {
             Decision::KeepCreatures {
                 player,
                 max_total_power: 0,
+                sacrifice: None,
                 kept: vec![],
             },
             Decision::ChooseToExile {

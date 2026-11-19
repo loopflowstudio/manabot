@@ -5,8 +5,8 @@ use managym_state::{
         TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        StaticAbility,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, StaticAbility,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -21,6 +21,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fabled_passage(),
         return_of_the_wildspeaker(),
         the_great_henge(),
+        wildborn_preserver(),
     ]
 }
 
@@ -154,7 +155,7 @@ fn the_great_henge() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::you_control(CardPredicate {
                         token: Some(false),
-                        ..creature()
+                        ..CardPredicate::creature()
                     }),
                 },
                 effects: vec![
@@ -167,6 +168,44 @@ fn the_great_henge() -> CardDefinition {
                         count: EffectValue::Fixed(1),
                     },
                 ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wildborn_preserver() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nReach (This creature can block creatures with flying.)\nWhenever another non-Human creature you control enters, you may pay {X}. When you do, put X +1/+1 counters on this creature.";
+    CardDefinition {
+        key: "eld.wildborn_preserver",
+        scryfall_id: "55f76830-369e-4224-9ded-7d1ce04c87e4",
+        printed: PrintedCharacteristics {
+            name: "Wildborn Preserver".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Archer".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Reach]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        not_subtypes: vec!["Human".into()],
+                        ..CardPredicate::creature()
+                    }),
+                },
+                effects: vec![Effect::OptionalManaPaymentX {
+                    if_paid: vec![Effect::WhenYouDo {
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            EffectValue::X,
+                        )],
+                    }],
+                }],
             }],
             text_box: text_box.into(),
             ..Default::default()

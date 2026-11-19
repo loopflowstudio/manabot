@@ -195,6 +195,12 @@ pub enum Condition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if there are `count` or more [predicate] permanents on the
+    /// battlefield", whoever controls them.
+    BattlefieldAtLeast {
+        count: usize,
+        predicate: CardPredicate,
+    },
     /// "if you control `count` or more permanents you don't own" (Agent of
     /// Treachery).
     ControlsUnownedAtLeast {
@@ -308,7 +314,8 @@ impl Condition {
             | Condition::SourceTapped
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters => true,
-            Condition::ControlsAtLeast { predicate, .. } => predicate.reads_source(),
+            Condition::ControlsAtLeast { predicate, .. }
+            | Condition::BattlefieldAtLeast { predicate, .. } => predicate.reads_source(),
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
             _ => false,
         }
@@ -347,6 +354,7 @@ impl Condition {
             | Condition::GraveyardAtLeast { .. }
             | Condition::AnyGraveyardAtLeast { .. }
             | Condition::ControlsAtLeast { .. }
+            | Condition::BattlefieldAtLeast { .. }
             | Condition::ControlsUnownedAtLeast { .. }
             | Condition::CardsInHandAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
@@ -1164,6 +1172,10 @@ pub enum Effect {
     /// they control": the active player chooses first (CR 101.4), and the
     /// sacrifices are one event.
     EachPlayerKeepsCreatures { max_total_power: i32 },
+    /// "Each player sacrifices `count` creatures of their choice": the active
+    /// player chooses first (CR 101.4), a player with no more than `count`
+    /// sacrifices them all, and the sacrifices are one event.
+    EachPlayerSacrificesCreatures { count: usize },
     /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
     /// `effects` trigger from this spell or ability's source. Their targets
     /// are chosen as the delayed ability is put on the stack.
@@ -1736,6 +1748,7 @@ impl Effect {
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
+            | Effect::EachPlayerSacrificesCreatures { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
             | Effect::FightLastTarget

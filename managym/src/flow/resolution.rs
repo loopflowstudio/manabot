@@ -1776,9 +1776,20 @@ impl Game {
                 Vec::new(),
                 frame,
             ),
-            Effect::EachPlayerKeepsCreatures { max_total_power } => {
-                self.keep_creatures(self.active_player(), *max_total_power, Vec::new(), frame)
-            }
+            Effect::EachPlayerKeepsCreatures { max_total_power } => self.keep_creatures(
+                self.active_player(),
+                *max_total_power,
+                None,
+                Vec::new(),
+                frame,
+            ),
+            Effect::EachPlayerSacrificesCreatures { count } => self.keep_creatures(
+                self.active_player(),
+                i32::MAX,
+                Some(*count),
+                Vec::new(),
+                frame,
+            ),
             Effect::CreateDelayedTrigger {
                 event,
                 frequency,

@@ -351,6 +351,10 @@ fn condition_text(condition: &Condition) -> String {
             "you control {count} or more {}s",
             predicate_description(predicate, "permanent")
         ),
+        Condition::BattlefieldAtLeast { count, predicate } => format!(
+            "there are {count} or more {}s on the battlefield",
+            predicate_description(predicate, "permanent")
+        ),
         Condition::ControlsUnownedAtLeast { count } => {
             format!("you control {count} or more permanents you don't own")
         }
@@ -1013,6 +1017,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ),
         RestoreController(_) => return None,
         EachPlayerKeepsCreatures { max_total_power } => format!("Each player chooses any number of creatures they control with total power {max_total_power} or less, then sacrifices all other creatures they control"),
+        EachPlayerSacrificesCreatures { count } => format!("Each player sacrifices {count} creatures of their choice"),
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),

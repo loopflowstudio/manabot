@@ -2151,7 +2151,7 @@ impl Observation {
                         // A sacrifice or plain mana step focuses nothing.
                         Some(crate::flow::game::PendingChoice::Pay { payment, .. }) => {
                             match &payment.owed[0] {
-                                crate::flow::game::CostComponent::Sacrifice(_) => None,
+                                crate::flow::game::CostComponent::Sacrifice(..) => None,
                                 crate::flow::game::CostComponent::Mana { .. }
                                     if !payment.waterbends() =>
                                 {

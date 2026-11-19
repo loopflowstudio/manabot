@@ -71,6 +71,8 @@ impl From<&Mana> for PreviewPool {
 /// preview does not make for the player.
 fn has_unannounced_cost(card: &Object, cast: CastChoices) -> bool {
     card.sacrifice_cost().is_some()
+        || card.forage_or().is_some()
+        || (cast.kicked && card.bargain())
         || card.required_waterbend().is_some()
         || (cast.kicked && card.exile_alternative().is_some())
 }

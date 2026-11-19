@@ -1,15 +1,16 @@
 //! Wilds of Eldraine.
 use managym_state::{
-    ability::Effect,
+    ability::{Condition, Effect, ObjectSelector, TargetSpec},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, PrintedCharacteristics,
     },
+    effect::Modification,
     mana::ManaCost,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![scarecrow_guide()]
+    vec![archons_glory(), scarecrow_guide()]
 }
 
 fn scarecrow_guide() -> CardDefinition {
@@ -31,6 +32,38 @@ fn scarecrow_guide() -> CardDefinition {
                 effects: vec![Effect::any_color_mana()],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn archons_glory() -> CardDefinition {
+    let text_box = "Bargain (You may sacrifice an artifact, enchantment, or token as you cast this spell.)\nTarget creature gets +2/+2 until end of turn. If this spell was bargained, that creature also gains flying and lifelink until end of turn.";
+    let creature = || ObjectSelector::Target(TargetSpec::Creature);
+    CardDefinition {
+        key: "woe.archons_glory",
+        scryfall_id: "e71768e7-4ef7-4fb2-838b-eb3a7f662d38",
+        printed: PrintedCharacteristics {
+            name: "Archon's Glory".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            additional_costs: vec![AdditionalCost::Bargain],
+            spell_effects: vec![
+                Effect::until_end_of_turn(creature(), Modification::pump(2, 2)),
+                Effect::If {
+                    condition: Condition::Kicked,
+                    then: vec![Effect::until_end_of_turn(
+                        creature(),
+                        Modification::AddKeywords(Keywords::of(&[
+                            Keyword::Flying,
+                            Keyword::Lifelink,
+                        ])),
+                    )],
+                    otherwise: vec![],
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

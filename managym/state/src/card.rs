@@ -987,6 +987,21 @@ pub enum AdditionalCost {
     /// Delve (CR 702.66): each card its caster exiles from their graveyard
     /// while casting it pays for {1}.
     Delve,
+    /// Bargain (CR 702.166): "You may sacrifice an artifact, enchantment, or
+    /// token as you cast this spell." Chosen like kicker, which marks the
+    /// spell kicked ("if this spell was bargained").
+    Bargain,
+    /// "As an additional cost to cast this spell, forage or pay [mana]." To
+    /// forage (CR 701.61) is to exile three cards from your graveyard or
+    /// sacrifice a Food; the caster chooses as the cost is paid.
+    ForageOr(ManaCost),
+    /// "You may pay [cost] rather than pay this spell's mana cost if
+    /// [condition]" (CR 118.9): chosen like kicker, which marks the spell
+    /// kicked. Its mana value is unchanged (CR 118.9c).
+    AlternativeMana {
+        cost: ManaCost,
+        condition: Condition,
+    },
 }
 
 /// An object as printed (CR 108.4, 111.3): what cards and tokens share,
@@ -1227,7 +1242,31 @@ impl PrintedCharacteristics {
             | AdditionalCost::Convoke
             | AdditionalCost::Improvise
             | AdditionalCost::Delve
+            | AdditionalCost::Bargain
+            | AdditionalCost::ForageOr(_)
+            | AdditionalCost::AlternativeMana { .. }
             | AdditionalCost::ExileFromHandAlternative { .. } => None,
+        })
+    }
+
+    /// Whether the spell has bargain.
+    pub fn bargain(&self) -> bool {
+        self.additional_costs.contains(&AdditionalCost::Bargain)
+    }
+
+    /// The mana that may be paid rather than foraging.
+    pub fn forage_or(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::ForageOr(mana) => Some(mana),
+            _ => None,
+        })
+    }
+
+    /// The mana that may be paid rather than the mana cost, and when.
+    pub fn alternative_mana(&self) -> Option<(&ManaCost, &Condition)> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::AlternativeMana { cost, condition } => Some((cost, condition)),
+            _ => None,
         })
     }
 

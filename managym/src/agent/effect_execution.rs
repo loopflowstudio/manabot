@@ -124,6 +124,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "spending option",
     "cost sacrifice",
     "maximum total power",
+    "creatures each player sacrifices",
     "may copy",
     "mode",
     "moved",
@@ -545,6 +546,8 @@ impl<'a> Projection<'a> {
                         Toward::Convoke => " to convoke",
                         Toward::Improvise => " to improvise",
                         Toward::Delve => " to delve",
+                        Toward::Bargain => " to bargain",
+                        Toward::Forage => " to forage",
                     };
                     format!(
                         "{how} {}{toward}",
@@ -1223,10 +1226,14 @@ pub(crate) fn project_decision(
         Decision::Discard { remaining, .. } => out.field("discards remaining", remaining),
         Decision::KeepCreatures {
             max_total_power,
+            sacrifice,
             kept,
             ..
         } => {
-            out.field("maximum total power", max_total_power);
+            match sacrifice {
+                Some(count) => out.field("creatures each player sacrifices", count),
+                None => out.field("maximum total power", max_total_power),
+            }
             for id in kept {
                 out.target("kept creature", Target::Permanent(*id));
             }

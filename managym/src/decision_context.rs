@@ -332,8 +332,10 @@ impl Game {
                     ("additional_cost", "Choose a card to discard as an activation cost."),
                 CostComponent::Tap(_) =>
                     ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
-                CostComponent::Sacrifice(_) =>
+                CostComponent::Sacrifice(..) =>
                     ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+                CostComponent::Forage { .. } =>
+                    ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
                 CostComponent::ConvokeColor { .. } =>
                     ("payment", "Choose which color of mana the creature just tapped pays for (convoke)."),
                 CostComponent::TapPower { .. } =>
@@ -388,6 +390,7 @@ impl Game {
                 Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
                 Decision::Retarget { .. } => ("retarget", "Choose a new target for the spell or ability on the stack, or keep its target when offered."),
                 Decision::ChooseToExile { .. } => ("choose_to_exile", "Choose up to one permanent from among those the resolving ability's controller's opponents control; every chosen permanent is then exiled."),
+                Decision::KeepCreatures { sacrifice: Some(_), .. } => ("keep_creatures", "Choose another creature you control to keep; you keep all but the stated number, and every creature not kept is then sacrificed."),
                 Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),

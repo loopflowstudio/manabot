@@ -755,6 +755,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
+        Effect::EachPlayerSacrificesCreatures { .. } => "Effect::EachPlayerSacrificesCreatures",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::CopyTriggeringSpellForEach { .. } => "Effect::CopyTriggeringSpellForEach",
@@ -768,7 +769,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 82;
+const EFFECT_VARIANTS: usize = 83;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -986,6 +987,7 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
+        Effect::EachPlayerSacrificesCreatures { count: 13 },
         Effect::TransformSource,
         Effect::ControlPlayer {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -1170,6 +1172,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::GraveyardAtLeast { .. } => "Condition::GraveyardAtLeast",
         Condition::AnyGraveyardAtLeast { .. } => "Condition::AnyGraveyardAtLeast",
         Condition::ControlsAtLeast { .. } => "Condition::ControlsAtLeast",
+        Condition::BattlefieldAtLeast { .. } => "Condition::BattlefieldAtLeast",
         Condition::ControlsUnownedAtLeast { .. } => "Condition::ControlsUnownedAtLeast",
         Condition::CardsInHandAtLeast { .. } => "Condition::CardsInHandAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
@@ -1209,6 +1212,10 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::AnyGraveyardAtLeast { count: 20 },
         Condition::ControlsAtLeast {
             count: 1,
+            predicate: CardPredicate::creature(),
+        },
+        Condition::BattlefieldAtLeast {
+            count: 13,
             predicate: CardPredicate::creature(),
         },
         Condition::ControlsUnownedAtLeast { count: 3 },
@@ -1626,6 +1633,27 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "tdm",
             "teval_grants_delve_and_takes_life_equal_to_mana_value",
         ),
+        AdditionalCost::Bargain => witnessed(
+            "AdditionalCost::Bargain",
+            Seen::Actions("bargain is a cast choice when a permanent can be sacrificed; the sacrifice is an action and a receipt reference"),
+            "Archon's Glory",
+            "woe",
+            "archons_glory_gains_flying_and_lifelink_only_when_bargained",
+        ),
+        AdditionalCost::ForageOr(_) => witnessed(
+            "AdditionalCost::ForageOr",
+            Seen::Actions("the Food, each graveyard card and the mana are actions of one cost step; what foraged is a receipt reference"),
+            "Feed the Cycle",
+            "blb",
+            "feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black",
+        ),
+        AdditionalCost::AlternativeMana { .. } => witnessed(
+            "AdditionalCost::AlternativeMana",
+            Seen::Actions("the alternative is a cast choice only while its condition holds; the receipt holds the mana paid"),
+            "Blasphemous Edict",
+            "fdn",
+            "blasphemous_edict_costs_one_black_at_thirteen_creatures",
+        ),
         AdditionalCost::RequiredWaterbend(_) => witnessed(
             "AdditionalCost::RequiredWaterbend",
             Seen::Actions("the cast is offered only while the waterbend total is payable"),
@@ -1773,6 +1801,12 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
         AdditionalCost::ExileFromHandAlternative {
             predicate: CardPredicate::default(),
             not_your_turn: true,
+        },
+        AdditionalCost::Bargain,
+        AdditionalCost::ForageOr(ManaCost::parse("{B}")),
+        AdditionalCost::AlternativeMana {
+            cost: ManaCost::parse("{B}"),
+            condition: Condition::Always,
         },
     ]
 }
@@ -4816,6 +4850,56 @@ fn help_paying_a_mana_cost_reaches_the_stack_frame_by_keyword() {
                 assert!(frame.effect_execution.contains(&token), "{spell}");
             }
             assert!(!frame.effect_execution_references.is_empty());
+            assert_execution_tokens_registered(frame);
+        }
+    }
+}
+
+/// A permanent sacrificed to bargain or to forage is a contribution toward
+/// that cost on the spell's stack frame, for both players
+/// (`woe::archons_glory_gains_flying_and_lifelink_only_when_bargained`,
+/// `blb::feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black`).
+#[test]
+fn bargain_and_forage_sacrifices_reach_the_stack_frame() {
+    for (spell, token, land, toward) in [
+        ("Archon's Glory", "token.treasure", "Plains", "Bargain"),
+        ("Feed the Cycle", "token.food", "Swamp", "Forage"),
+    ] {
+        let mut s = five_color_unfunded_setup(&[spell, "Gray Ogre"]);
+        s.force_permanent_on_battlefield(1, "Gray Ogre");
+        s.force_permanent_on_battlefield(0, land);
+        s.force_permanent_on_battlefield(0, "Mountain");
+        s.game_mut()
+            .create_token(token, PlayerId(0), false)
+            .unwrap();
+        let card = crate::support::game::force_new_card_in_hand(&mut s, 0, spell);
+        crate::support::play::cast_card(&mut s, card);
+        // Bargain, the target, the sacrifice, then whatever mana is left.
+        for _ in 0..8 {
+            if s.game().state.stack_objects.len() == 1
+                && s.action_space().kind == ActionSpaceKind::Priority
+            {
+                break;
+            }
+            let wanted = s
+                .action_space()
+                .actions
+                .iter()
+                .position(|a| matches!(a, Action::PayCost { .. } | Action::SelectCard { .. }));
+            s.step_action(wanted.unwrap_or(0));
+        }
+        let paid = (
+            TokenKind::Variant as u16,
+            name_value(&format!("Toward::{toward}")),
+        );
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let frame = observation
+                .continuation
+                .iter()
+                .find(|frame| frame.kind == 1)
+                .unwrap_or_else(|| panic!("{spell} is on the stack: {:?}", s.action_space()));
+            assert!(frame.effect_execution.contains(&paid), "{spell}");
             assert_execution_tokens_registered(frame);
         }
     }

@@ -166,3 +166,31 @@ fn the_great_henge_adds_gg_and_gains_two_life_once_per_activation() {
     settle(&mut s);
     assert_eq!(s.life(0), 24);
 }
+
+/// Wildborn Preserver's trigger asks for X as it resolves; paying puts X
+/// counters on it through the reflexive trigger. A Human does not trigger it.
+#[test]
+fn wildborn_preserver_pays_x_for_x_counters_when_a_non_human_creature_enters() {
+    let mut s =
+        five_color_unfunded_setup(&["Wildborn Preserver", "Gray Ogre", "Aang, at the Crossroads"]);
+    let preserver = s.force_permanent_on_battlefield(0, "Wildborn Preserver");
+    for _ in 0..3 {
+        s.force_permanent_on_battlefield(0, "Forest");
+    }
+    crate::support::game::enters_battlefield_with_triggers(&mut s, 0, "Aang, at the Crossroads");
+    settle(&mut s);
+    assert_eq!(counters_of(&s, preserver, CounterKind::PlusOnePlusOne), 0);
+
+    crate::support::game::enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.advance_until(
+        |sc| sc.action_space().kind == ActionSpaceKind::Modal,
+        "the Preserver asks for X".into(),
+    );
+    choose_mode(&mut s, 3);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, preserver, CounterKind::PlusOnePlusOne), 3);
+    assert_eq!(s.battlefield_permanents_named(0, "Forest").len(), 3);
+}

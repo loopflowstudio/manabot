@@ -724,6 +724,10 @@ pub enum Decision {
     KeepCreatures {
         player: PlayerId,
         max_total_power: i32,
+        /// "Sacrifices N creatures of their choice": the player keeps all
+        /// but this many and may not stop sooner.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
     },
     /// `player` chooses a new target for slot `slot` of the stack object
@@ -980,11 +984,29 @@ impl Game {
         let Decision::KeepCreatures {
             player,
             max_total_power,
+            sacrifice,
             kept,
         } = decision
         else {
             return Vec::new();
         };
+        let creatures: Vec<_> = self
+            .battlefield_permanents(*player)
+            .into_iter()
+            .filter(|id| self.characteristics(*id).is_creature())
+            .collect();
+        if let Some(count) = sacrifice {
+            let keeps = creatures.len().saturating_sub(*count);
+            let kept_own = creatures.iter().filter(|id| kept.contains(id)).count();
+            return if kept_own < keeps {
+                creatures
+                    .into_iter()
+                    .filter(|id| !kept.contains(id))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+        }
         let total: i32 = kept
             .iter()
             .filter(|id| {
@@ -1010,12 +1032,14 @@ impl Game {
         &mut self,
         player: PlayerId,
         max_total_power: i32,
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
         let decision = Decision::KeepCreatures {
             player,
             max_total_power,
+            sacrifice,
             kept,
         };
         if !self.keep_candidates(&decision).is_empty() {
@@ -1024,7 +1048,7 @@ impl Game {
         let Decision::KeepCreatures { kept, .. } = decision else {
             unreachable!()
         };
-        self.stop_keeping_creatures(player, max_total_power, kept, frame)
+        self.stop_keeping_creatures(player, max_total_power, sacrifice, kept, frame)
     }
 
     /// The permanents a `Decision::ChooseToExile` may add: matching, controlled
@@ -1102,11 +1126,18 @@ impl Game {
         &mut self,
         player: PlayerId,
         max_total_power: i32,
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
         if player == self.active_player() {
-            return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept, frame);
+            return self.keep_creatures(
+                PlayerId(1 - player.0),
+                max_total_power,
+                sacrifice,
+                kept,
+                frame,
+            );
         }
         let events = [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
@@ -1790,7 +1821,9 @@ impl Game {
                 ),
                 focus: source_focus,
             },
-            Decision::KeepCreatures { player, .. } => ActionSpace {
+            Decision::KeepCreatures {
+                player, sacrifice, ..
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_objects(
@@ -1798,7 +1831,7 @@ impl Game {
                     self.keep_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().object),
-                    true,
+                    sacrifice.is_none(),
                 ),
                 focus: source_focus,
             },
@@ -2379,15 +2412,22 @@ impl Game {
                 let Decision::KeepCreatures {
                     player,
                     max_total_power,
+                    sacrifice,
                     kept,
                 } = &mut suspended.decision
                 else {
                     unreachable!()
                 };
                 kept.push(selected);
-                let (player, max_total_power, kept) =
-                    (*player, *max_total_power, std::mem::take(kept));
-                let next = self.keep_creatures(player, max_total_power, kept, &mut suspended.frame);
+                let (player, max_total_power, sacrifice, kept) =
+                    (*player, *max_total_power, *sacrifice, std::mem::take(kept));
+                let next = self.keep_creatures(
+                    player,
+                    max_total_power,
+                    sacrifice,
+                    kept,
+                    &mut suspended.frame,
+                );
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
@@ -2432,6 +2472,7 @@ impl Game {
                 Decision::KeepCreatures {
                     player,
                     max_total_power,
+                    sacrifice: None,
                     kept,
                 },
                 Action::Decline { .. },
@@ -2440,6 +2481,7 @@ impl Game {
                 let next = self.stop_keeping_creatures(
                     *player,
                     *max_total_power,
+                    None,
                     kept,
                     &mut suspended.frame,
                 );

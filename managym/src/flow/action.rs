@@ -17,7 +17,7 @@ use crate::{
         ability::Effect,
         card::ActivationZone,
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId},
-        mana::{Color, Mana},
+        mana::{Color, Mana, ManaCost},
         player::ManaFloats,
         zone::ZoneType,
     },
@@ -193,25 +193,30 @@ impl Game {
                 }) if self.state[*object_id].exile_alternative().is_some() => {
                     Some("Exile a card from your hand instead of paying the mana cost".into())
                 }
+                Some(PendingChoice::KickerChoice {
+                    object: object_id, ..
+                }) if self.state[*object_id].alternative_mana().is_some() => {
+                    let (cost, _) = self.state[*object_id].alternative_mana()?;
+                    Some(format!("Pay {} instead of the mana cost", cost_label(cost)))
+                }
+                Some(PendingChoice::KickerChoice {
+                    object: object_id, ..
+                }) if self.state[*object_id].bargain() => {
+                    Some("Bargain: sacrifice an artifact, enchantment or token".into())
+                }
                 Some(PendingChoice::Pay { payment, .. })
-                    if matches!(payment.owed[0], CostComponent::Sacrifice(_)) =>
+                    if matches!(
+                        payment.owed[0],
+                        CostComponent::Sacrifice(..) | CostComponent::Forage { .. }
+                    ) =>
                 {
-                    let CostComponent::Sacrifice(cost) = &payment.owed[0] else {
-                        unreachable!()
+                    let (or_mana, instead) = match &payment.owed[0] {
+                        CostComponent::Sacrifice(cost, _) => (cost.or_mana.as_ref(), "sacrificing"),
+                        CostComponent::Forage { or_mana, .. } => (Some(or_mana), "foraging"),
+                        _ => unreachable!(),
                     };
-                    cost.or_mana.as_ref().map(|alternative| {
-                        let mut label = String::new();
-                        if alternative.generic() > 0 {
-                            label.push_str(&format!("{{{}}}", alternative.generic()));
-                        }
-                        let colored = Mana {
-                            mana: alternative.cost[..6]
-                                .try_into()
-                                .expect("six colored mana slots"),
-                            ..Default::default()
-                        };
-                        label.push_str(&mana_description(&colored));
-                        format!("Pay {label} instead of sacrificing")
+                    or_mana.map(|alternative| {
+                        format!("Pay {} instead of {instead}", cost_label(alternative))
                     })
                 }
                 _ => None,
@@ -224,7 +229,17 @@ impl Game {
                     CostComponent::ExileFromHand => Some(format!("Exile {name} to pay")),
                     CostComponent::TapPower { .. } => Some(format!("Tap {name} to crew")),
                     CostComponent::Tap(_) => Some(format!("Tap {name} to pay")),
-                    CostComponent::Sacrifice(_) => Some(format!("Sacrifice {name}")),
+                    CostComponent::Sacrifice(_, crate::state::payment::Toward::Bargain) => {
+                        Some(format!("Sacrifice {name} (bargain)"))
+                    }
+                    CostComponent::Sacrifice(..) => Some(format!("Sacrifice {name}")),
+                    CostComponent::Forage { .. } => {
+                        Some(if self.state.permanent_of(*object_id).is_some() {
+                            format!("Sacrifice {name} (forage)")
+                        } else {
+                            format!("Exile {name} (forage)")
+                        })
+                    }
                     CostComponent::Mana { help, .. }
                         if help.delve && self.state.suspended_decision.is_none() =>
                     {
@@ -628,7 +643,11 @@ impl Game {
             if self.can_pay_cast(player, self.state.object_of(card), cast) {
                 return Some(cost.mana_value);
             }
-            return (object.exile_alternative().is_some()
+            let alternative = object.exile_alternative().is_some()
+                || object
+                    .alternative_mana()
+                    .is_some_and(|(_, condition)| self.check_static_condition(condition, player));
+            return (alternative
                 && self.can_pay_cast(
                     player,
                     self.state.object_of(card),
@@ -864,7 +883,20 @@ impl Game {
                 ),
                 Vec::new(),
             ),
-            CostComponent::Sacrifice(cost) => {
+            CostComponent::Forage { or_mana, exiled } => {
+                let mut actions = select(self.forage_objects(player, payment));
+                if *exiled == 0
+                    && self.can_pay_with_mana_abilities(
+                        player,
+                        &payment.mana().0.plus(or_mana),
+                        None,
+                    )
+                {
+                    actions.push(Action::PayCost { player });
+                }
+                (ActionSpaceKind::LookAndSelect, actions, Vec::new())
+            }
+            CostComponent::Sacrifice(cost, _) => {
                 let mana = payment.mana().0;
                 let mut actions = select(permanents(
                     self.payment_candidates(player, &payment.operation, cost)
@@ -1120,6 +1152,20 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> Ac
             .collect(),
         focus,
     }
+}
+
+/// A mana cost as its symbols: generic first, then colors.
+fn cost_label(cost: &ManaCost) -> String {
+    let mut label = String::new();
+    if cost.generic() > 0 {
+        label.push_str(&format!("{{{}}}", cost.generic()));
+    }
+    let colored = Mana {
+        mana: cost.cost[..6].try_into().expect("six colored mana slots"),
+        ..Default::default()
+    };
+    label.push_str(&mana_description(&colored));
+    label
 }
 
 /// The word a `ChooseObject` action starts with: what the instruction does

@@ -209,6 +209,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Convoke",
                 "Improvise",
                 "Delve",
+                "Bargain",
+                "Forage",
             ][..],
         ),
         (

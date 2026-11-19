@@ -5,8 +5,8 @@ use managym_state::{
         TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
     },
     effect::Modification,
     mana::ManaCost,
@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        blasphemous_edict(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
@@ -160,6 +161,30 @@ fn luminous_rebuke() -> CardDefinition {
                 },
                 generic: 3,
             })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn blasphemous_edict() -> CardDefinition {
+    let text_box = "You may pay {B} rather than pay this spell's mana cost if there are thirteen or more creatures on the battlefield.\nEach player sacrifices thirteen creatures of their choice.";
+    CardDefinition {
+        key: "fdn.blasphemous_edict",
+        scryfall_id: "11040ecd-3153-4029-b42b-1441bc51ec34",
+        printed: PrintedCharacteristics {
+            name: "Blasphemous Edict".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::AlternativeMana {
+                cost: ManaCost::parse("{B}"),
+                condition: Condition::BattlefieldAtLeast {
+                    count: 13,
+                    predicate: CardPredicate::creature(),
+                },
+            }],
+            spell_effects: vec![Effect::EachPlayerSacrificesCreatures { count: 13 }],
             text_box: text_box.into(),
             ..Default::default()
         },

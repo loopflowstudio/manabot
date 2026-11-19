@@ -294,8 +294,13 @@ pub enum CostComponent {
     /// Exile a matching card from hand rather than pay the mana cost
     /// (`AdditionalCost::ExileFromHandAlternative`).
     ExileFromHand,
-    /// Sacrifice a matching permanent, or pay its `or_mana` instead.
-    Sacrifice(SacrificeCost),
+    /// Sacrifice a matching permanent, or pay its `or_mana` instead; the
+    /// second value is the part of the cost the sacrifice pays.
+    Sacrifice(SacrificeCost, Toward),
+    /// Forage (CR 701.61a) or pay `or_mana`: sacrifice a Food, or exile
+    /// three cards from the payer's graveyard, `exiled` of them so far. The
+    /// first card exiled commits to that branch.
+    Forage { or_mana: ManaCost, exiled: u8 },
     /// The mana still owed, and how its payer may pay part of it without
     /// mana. Each such payment is a contribution and reduces `cost`.
     Mana { cost: ManaCost, help: Help },

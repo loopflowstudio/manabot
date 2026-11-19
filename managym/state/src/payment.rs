@@ -64,6 +64,10 @@ pub enum Toward {
     Improvise,
     /// {1} for the card exiled from a graveyard (CR 702.66a).
     Delve,
+    /// The permanent sacrificed to bargain (CR 702.166a).
+    Bargain,
+    /// The Food sacrificed or the cards exiled to forage (CR 701.61a).
+    Forage,
 }
 
 /// An object that paid part of a cost instead of, or beside, mana. `object`

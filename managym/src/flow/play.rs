@@ -24,10 +24,13 @@ use crate::{
     },
     state::{
         ability::{EffectValue, TargetRequirement},
-        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
+        card::{
+            ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardType, StaticAbility,
+        },
         game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         payment::{How, PaymentReceipt, Toward},
+        predicate::CardPredicate,
         stack_object::ActivatedAbilityOnStack,
         zone::ZoneType,
     },
@@ -189,6 +192,9 @@ impl Game {
     ) -> Option<ManaCost> {
         if cast.free || self.uses_exile_alternative(object, cast) {
             Some(ManaCost::default())
+        } else if let (true, Some((cost, _))) = (cast.kicked, self.state[object].alternative_mana())
+        {
+            Some(cost.clone())
         } else if cast.resolving || self.state.zones.zone_of(object) == Some(ZoneType::Hand) {
             self.state[object].mana_cost.clone()
         } else {
@@ -460,6 +466,17 @@ impl Game {
         {
             return false;
         }
+        let card = &self.state[object];
+        if cast.kicked && card.bargain() {
+            return self
+                .sacrifice_candidates(player, &bargain_cost().predicate)
+                .into_iter()
+                .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)));
+        }
+        if let Some(or_mana) = card.forage_or() {
+            return self.can_forage(player, &cost)
+                || self.can_pay_with_mana_abilities(player, &cost.plus(or_mana), None);
+        }
         let help = self.spell_help(player, object, cast, &cost);
         if help.keyworded() {
             self.payable_with_help(player, &cost, help, None)
@@ -548,8 +565,13 @@ impl Game {
             ..cast
         };
         // CR 118.9a: a free cast cannot also take an alternative cost.
-        let alternative = !cast.free && self.state[object].exile_alternative().is_some();
-        let optional = self.state[object].optional_cost().is_some();
+        let card = &self.state[object];
+        let alternative = !cast.free
+            && (card.exile_alternative().is_some()
+                || card
+                    .alternative_mana()
+                    .is_some_and(|(_, condition)| self.check_static_condition(condition, player)));
+        let optional = card.optional_cost().is_some() || card.bargain();
         if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
             if self.can_pay_cast(player, object, cast) {
                 None
@@ -1670,6 +1692,43 @@ impl Game {
             .collect()
     }
 
+    /// What `player` may choose to forage with for `payment`: a Food to
+    /// sacrifice, or a graveyard card to exile while three can be. Once a
+    /// card is exiled only cards are offered. A Food whose mana the rest of
+    /// the cost needs is left out.
+    pub(crate) fn forage_objects(&self, player: PlayerId, payment: &Payment) -> Vec<ObjectId> {
+        let CostComponent::Forage { exiled, .. } = payment.owed[0] else {
+            return Vec::new();
+        };
+        let mana = payment.mana().0;
+        let mut objects = Vec::new();
+        if exiled == 0 {
+            objects.extend(
+                self.sacrifice_candidates(player, &food())
+                    .into_iter()
+                    .filter(|id| self.can_pay_with_mana_abilities(player, mana, Some(*id)))
+                    .filter_map(|id| self.permanent_object(id)),
+            );
+        }
+        let graveyard = self.selection_zone_objects(player, ZoneType::Graveyard);
+        if graveyard.len() >= usize::from(FORAGE_CARDS - exiled)
+            && self.can_pay_with_mana_abilities(player, mana, None)
+        {
+            objects.extend(graveyard);
+        }
+        objects
+    }
+
+    /// Whether `player` could forage beside paying `cost` in mana.
+    fn can_forage(&self, player: PlayerId, cost: &ManaCost) -> bool {
+        self.state.zones.size(ZoneType::Graveyard, player) >= usize::from(FORAGE_CARDS)
+            && self.can_pay_with_mana_abilities(player, cost, None)
+            || self
+                .sacrifice_candidates(player, &food())
+                .into_iter()
+                .any(|id| self.can_pay_with_mana_abilities(player, cost, Some(id)))
+    }
+
     /// The parts of `operation`'s total cost its payer chooses how to pay,
     /// in the order they are paid, ending with its mana. The total is fixed
     /// here, once announcement is over (CR 601.2f, 602.2b).
@@ -1689,8 +1748,18 @@ impl Game {
                 if self.uses_exile_alternative(*object, *cast) {
                     owed.push(CostComponent::ExileFromHand);
                 }
-                if let Some(cost) = self.state[*object].sacrifice_cost() {
-                    owed.push(CostComponent::Sacrifice(cost.clone()));
+                let card = &self.state[*object];
+                if let Some(cost) = card.sacrifice_cost() {
+                    owed.push(CostComponent::Sacrifice(cost.clone(), Toward::Printed));
+                }
+                if cast.kicked && card.bargain() {
+                    owed.push(CostComponent::Sacrifice(bargain_cost(), Toward::Bargain));
+                }
+                if let Some(or_mana) = card.forage_or() {
+                    owed.push(CostComponent::Forage {
+                        or_mana: or_mana.clone(),
+                        exiled: 0,
+                    });
                 }
                 let cost = self
                     .effective_spell_cost(player, *object, *cast, Some(targets))
@@ -1720,7 +1789,7 @@ impl Game {
                     owed.push(CostComponent::Discard);
                 }
                 if let Some(cost) = ability.sacrifice {
-                    owed.push(CostComponent::Sacrifice(cost));
+                    owed.push(CostComponent::Sacrifice(cost, Toward::Printed));
                 }
                 let cost = ability.mana_cost.with_x(*x);
                 let help = Help {
@@ -1910,17 +1979,42 @@ impl Game {
                     .contribute(exiled, How::Exiled, Toward::Alternative);
                 payment.owed.remove(0);
             }
-            CostComponent::Sacrifice(cost) => {
+            CostComponent::Sacrifice(cost, toward) => {
                 if !permanent.is_some_and(|id| {
                     self.payment_candidates(player, &payment.operation, &cost)
                         .contains(&id)
                 }) {
                     return Err(AgentError("illegal sacrifice cost".into()));
                 }
-                payment
-                    .receipt
-                    .contribute(object, How::Sacrificed, Toward::Printed);
+                payment.receipt.contribute(object, How::Sacrificed, toward);
                 payment.owed.remove(0);
+            }
+            CostComponent::Forage { or_mana, exiled } => {
+                if !self.forage_objects(player, &payment).contains(&object) {
+                    return Err(AgentError(
+                        "not a Food or graveyard card to forage with".into(),
+                    ));
+                }
+                if permanent.is_some() {
+                    payment
+                        .receipt
+                        .contribute(object, How::Sacrificed, Toward::Forage);
+                    payment.owed.remove(0);
+                } else {
+                    self.pending_choice = None;
+                    let card = self.move_object(object, ZoneType::Exile);
+                    payment
+                        .receipt
+                        .contribute(card, How::Exiled, Toward::Forage);
+                    if exiled + 1 < FORAGE_CARDS {
+                        payment.owed[0] = CostComponent::Forage {
+                            or_mana,
+                            exiled: exiled + 1,
+                        };
+                    } else {
+                        payment.owed.remove(0);
+                    }
+                }
             }
             CostComponent::Mana { cost, help } => {
                 // Delve: a card exiled from the payer's graveyard pays {1}.
@@ -1949,12 +2043,17 @@ impl Game {
     pub(crate) fn pay_cost_action(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let mut payment = self.pending_payment(player)?;
         match payment.owed[0].clone() {
-            CostComponent::Sacrifice(cost) => {
+            CostComponent::Sacrifice(cost, _) => {
                 let extra = cost
                     .or_mana
                     .ok_or_else(|| AgentError("sacrifice required".into()))?;
                 payment.owed.remove(0);
                 payment.owe_mana(&extra);
+                self.advance_payment(player, payment)
+            }
+            CostComponent::Forage { or_mana, exiled: 0 } => {
+                payment.owed.remove(0);
+                payment.owe_mana(&or_mana);
                 self.advance_payment(player, payment)
             }
             CostComponent::Mana { .. } => self.finish_mana_payment(player),
@@ -2468,5 +2567,36 @@ impl Game {
             .into_iter()
             .filter(|target| *target != Target::StackSpell(object))
             .collect()
+    }
+}
+
+/// The cards forage exiles from a graveyard (CR 701.61a).
+const FORAGE_CARDS: u8 = 3;
+
+fn food() -> CardPredicate {
+    CardPredicate {
+        subtype: Some("Food".into()),
+        ..Default::default()
+    }
+}
+
+/// What bargain sacrifices: an artifact, enchantment or token (CR 702.166a).
+fn bargain_cost() -> crate::state::card::SacrificeCost {
+    crate::state::card::SacrificeCost {
+        predicate: CardPredicate {
+            any_of: vec![
+                CardPredicate {
+                    card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                    ..Default::default()
+                },
+                CardPredicate {
+                    token: Some(true),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        },
+        another: false,
+        or_mana: None,
     }
 }

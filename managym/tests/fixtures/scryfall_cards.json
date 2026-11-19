@@ -6037,5 +6037,60 @@
       "G",
       "W"
     ]
+  },
+  "Archon's Glory": {
+    "name": "Archon's Glory",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Bargain"
+    ],
+    "oracle_text": "Bargain (You may sacrifice an artifact, enchantment, or token as you cast this spell.)\nTarget creature gets +2/+2 until end of turn. If this spell was bargained, that creature also gains flying and lifelink until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Feed the Cycle": {
+    "name": "Feed the Cycle",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Forage"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, forage or pay {B}. (To forage, exile three cards from your graveyard or sacrifice a Food.)\nDestroy target creature or planeswalker.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Blasphemous Edict": {
+    "name": "Blasphemous Edict",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "You may pay {B} rather than pay this spell's mana cost if there are thirteen or more creatures on the battlefield.\nEach player sacrifices thirteen creatures of their choice.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Wildborn Preserver": {
+    "name": "Wildborn Preserver",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Elf Archer",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Reach",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nReach (This creature can block creatures with flying.)\nWhenever another non-Human creature you control enters, you may pay {X}. When you do, put X +1/+1 counters on this creature.",
+    "colors": [
+      "G"
+    ]
   }
 }

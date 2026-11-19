@@ -268,3 +268,110 @@ fn luminous_rebuke_cost_is_settled_by_its_target_and_the_receipt_shows_what_was_
         );
     }
 }
+
+const CREATURES: [&str; 4] = [
+    "Gray Ogre",
+    "Hill Giant",
+    "Savannah Lions",
+    "Llanowar Elves",
+];
+
+fn creatures(s: &mut crate::support::game::Scenario, player: usize, count: usize) {
+    for index in 0..count {
+        s.force_permanent_on_battlefield(player, CREATURES[index / 4]);
+    }
+}
+
+fn creature_count(s: &crate::support::game::Scenario, player: usize) -> usize {
+    CREATURES
+        .iter()
+        .map(|name| s.battlefield_permanents_named(player, name).len())
+        .sum()
+}
+
+/// Blasphemous Edict costs {B} only while thirteen creatures are on the
+/// battlefield, whoever controls them, and its mana value stays five. A
+/// player with thirteen or fewer creatures sacrifices them all.
+#[test]
+fn blasphemous_edict_costs_one_black_at_thirteen_creatures() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_new_card_in_hand},
+        inspect::{can_cast, top_spell},
+        play::{cast_card, pay_rest, settle},
+    };
+    use managym::agent::action::ActionSpaceKind;
+    let mut names = vec!["Blasphemous Edict"];
+    names.extend(CREATURES);
+    let mut s = five_color_unfunded_setup(&names);
+    creatures(&mut s, 0, 7);
+    creatures(&mut s, 1, 5);
+    s.force_permanent_on_battlefield(0, "Swamp");
+    let edict = force_new_card_in_hand(&mut s, 0, "Blasphemous Edict");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, edict), "twelve creatures");
+    s.force_permanent_on_battlefield(1, CREATURES[1]);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, edict), "thirteen creatures");
+
+    // Only the alternative is payable, so it is not asked.
+    cast_card(&mut s, edict);
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        pay_rest(&mut s);
+    }
+    let spell = top_spell(&s);
+    assert_eq!(spell.spent.total(), 1);
+    let printed = s.game().state[spell.object].mana_cost.as_ref().unwrap();
+    assert_eq!(printed.mana_value, 5);
+    settle(&mut s);
+    assert_eq!((creature_count(&s, 0), creature_count(&s, 1)), (0, 0));
+}
+
+/// With the full cost payable too, the caster chooses; a player with
+/// more than thirteen creatures chooses which to keep and cannot keep
+/// more or fewer than the rest.
+#[test]
+fn blasphemous_edict_asks_for_its_cost_and_for_the_creatures_kept() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_new_card_in_hand},
+        inspect::{has_action, offered_cards, top_spell},
+        play::{cast_card, choose, pay_rest, settle},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+    let mut names = vec!["Blasphemous Edict"];
+    names.extend(CREATURES);
+    let mut s = five_color_unfunded_setup(&names);
+    creatures(&mut s, 0, 15);
+    creatures(&mut s, 1, 2);
+    for _ in 0..5 {
+        s.force_permanent_on_battlefield(0, "Swamp");
+    }
+    let edict = force_new_card_in_hand(&mut s, 0, "Blasphemous Edict");
+    cast_card(&mut s, edict);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    assert!(
+        frame
+            .offers
+            .iter()
+            .any(|offer| offer.label == "Pay {B} instead of the mana cost"),
+        "{:?}",
+        frame.offers
+    );
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        pay_rest(&mut s);
+    }
+    assert_eq!(top_spell(&s).spent.total(), 1);
+
+    s.advance_until(
+        |sc| sc.action_space().kind == ActionSpaceKind::LookAndSelect,
+        "the caster chooses creatures to keep".into(),
+    );
+    for remaining in [15, 14] {
+        assert_eq!(offered_cards(&s).len(), remaining);
+        assert!(!has_action(&s, |a| matches!(a, Action::Decline { .. })));
+        choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    }
+    settle(&mut s);
+    assert_eq!((creature_count(&s, 0), creature_count(&s, 1)), (2, 0));
+}

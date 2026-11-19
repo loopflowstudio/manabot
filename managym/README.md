@@ -420,6 +420,13 @@ Offers and affordability ask the payment model with the help included
 offered and a tap that would strand the cost is not; the automatic payer takes
 help only when mana alone cannot pay. A cost with waterbend and convoke or
 improvise offers only the keyword's taps.
+Costs chosen while casting use the kicker choice: bargain
+(`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
+marks the spell kicked, and a conditional alternative
+(`AdditionalCost::AlternativeMana`) replaces the mana cost while its condition
+holds. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
+whose step offers a Food to sacrifice, the graveyard cards to exile (the first
+commits to three) and the mana instead.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation

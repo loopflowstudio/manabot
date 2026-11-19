@@ -413,7 +413,9 @@ impl Game {
     ) -> bool {
         debug_assert!(!matches!(
             condition,
-            Condition::ControlsAtLeast { .. } | Condition::AnyOf(_)
+            Condition::ControlsAtLeast { .. }
+                | Condition::BattlefieldAtLeast { .. }
+                | Condition::AnyOf(_)
         ));
         self.condition_holds(
             condition,
@@ -774,6 +776,16 @@ impl Game {
             Condition::ControlsAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
                 self.iter_battlefield_permanents(controller)
+                    .filter(|&id| self.permanent_matches_with_source(id, predicate, source))
+                    .take(*count)
+                    .count()
+                    == *count
+            }
+            Condition::BattlefieldAtLeast { count, predicate } => {
+                let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
+                [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.iter_battlefield_permanents(player))
                     .filter(|&id| self.permanent_matches_with_source(id, predicate, source))
                     .take(*count)
                     .count()
