@@ -7,12 +7,25 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
-/** The region holding focus, by its accessible name, and the focused control's name. */
-async function focused(page: Page): Promise<{ region: string | null; label: string }> {
+/**
+ * The region holding focus, by its accessible name, and the focused control:
+ * its name and its position among the region's visible controls (the set the
+ * region roves over). Copies of one card share a name, so movement is judged
+ * by position.
+ */
+async function focused(page: Page): Promise<{ region: string | null; label: string; index: number }> {
   return page.evaluate(() => {
     const active = document.activeElement as HTMLElement | null;
     const region = active?.closest<HTMLElement>('[data-region]');
-    return { region: region?.getAttribute('aria-label') ?? null, label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '' };
+    const controls = region
+      ? [...region.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], summary, [tabindex]:not([data-region])')]
+        .filter(element => element.closest('[data-region]') === region && element.getClientRects().length > 0)
+      : [];
+    return {
+      region: region?.getAttribute('aria-label') ?? null,
+      label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '',
+      index: active ? controls.indexOf(active) : -1,
+    };
   });
 }
 
@@ -24,18 +37,18 @@ async function reach(page: Page, region: RegExp, control: RegExp): Promise<boole
   }
   if (!region.test((await focused(page)).region ?? '')) return false;
   await page.keyboard.press('Home');
-  const seen = new Set<string>();
+  const seen = new Set<number>();
   for (let steps = 0; steps < 40; steps += 1) {
     const now = await focused(page);
     if (control.test(now.label)) return true;
-    if (seen.has(now.label) && steps > 0) {
+    if (seen.has(now.index) && steps > 0) {
       // A row ends: try the next row down before giving up.
       await page.keyboard.press('ArrowDown');
       const below = await focused(page);
-      if (below.label === now.label || seen.has(below.label)) return false;
+      if (below.index === now.index || seen.has(below.index)) return false;
       continue;
     }
-    seen.add(now.label);
+    seen.add(now.index);
     await page.keyboard.press('ArrowRight');
   }
   return false;
@@ -79,11 +92,11 @@ test('a game is played from the keyboard alone', async ({ page }) => {
 
   // Arrows move within a region: the hand's cards one by one.
   expect(await reach(page, /^Your hand/, /./)).toBe(true);
-  const first = (await focused(page)).label;
+  const first = (await focused(page)).index;
   await page.keyboard.press('ArrowRight');
   const second = await focused(page);
   expect(second.region).toMatch(/^Your hand/);
-  expect(second.label).not.toBe(first);
+  expect(second.index).not.toBe(first);
 
   // Several decisions: a land from the hand, attacks on the field, Space for the rest.
   let byEnter = 0;
