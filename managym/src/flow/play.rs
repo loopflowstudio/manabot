@@ -4,11 +4,12 @@
 // Casting is a staged pipeline driven by `PendingChoice`:
 //   X (if any) -> kicker choice (optional) -> spell mode (if any) -> targets
 //   per clause -> payment.
-// Activations announce X (if any), choose targets, pay crew, then pay; a
-// waterbend cost runs its own payment sub-decision before the ability
-// reaches the stack. Activations name an `ActivationSource`: a
-// permanent, or a card whose ability functions from its owner's hand or
-// graveyard (cycling, "return this card from your graveyard").
+// Activations announce X (if any) and choose targets, then pay. Both
+// pipelines end in `PendingChoice::Pay`; every cost, crew and waterbend
+// included, is a component of that payment (`flow/payment.rs`).
+// Activations name an `ActivationSource`: a permanent, or a card whose
+// ability functions from its owner's hand or graveyard (cycling, "return
+// this card from your graveyard").
 
 use crate::{
     agent::action::AgentError,
@@ -476,7 +477,7 @@ impl Game {
         }
         let help = self.spell_help(player, object, cast, &cost);
         if help.keyworded() {
-            self.payable_with_help(player, &cost, help, None)
+            self.payable_with_help(player, &cost, help)
         } else if help.waterbend > 0 {
             self.waterbend_payment_possible(player, &cost, help.waterbend)
         } else {

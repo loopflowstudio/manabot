@@ -3,6 +3,7 @@
 // improvise, delve and waterbend taps beside the mana of `PaymentModel`.
 
 use super::*;
+use crate::state::payment::Toward;
 
 impl Game {
     /// Convoke and improvise name which taps may pay generic mana: creatures
@@ -60,33 +61,28 @@ impl Game {
             .collect()
     }
 
-    /// Can `player` pay `cost` with mana and `help`, once `tapped` is tapped
-    /// for something else? Delve and taps for generic mana are part of the
-    /// payment model's question; a convoking creature paying a colored pip
-    /// is tried by `convoke_search`.
-    pub(crate) fn payable_with_help(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        help: Help,
-        tapped: Option<PermanentId>,
-    ) -> bool {
-        let mut model = self.payment_model(player, None);
-        if let Some(permanent) = tapped {
-            model.reserve(SourceReservation {
-                permanent,
-                tap: true,
-                sacrifice: false,
-            });
-        }
-        self.restrict_help_taps(&mut model, help);
-        let convokers = if help.convoke {
-            self.convokers(&model)
+    /// The creatures that may pay colored pips under `help` and `model`.
+    fn help_convokers(&self, model: &PaymentModel, help: Help) -> Vec<(PermanentId, Vec<Color>)> {
+        if help.convoke {
+            self.convokers(model)
         } else {
             Vec::new()
-        };
+        }
+    }
+
+    /// Can `cost` be paid from `model` with mana and `help`? Delve and taps
+    /// for generic mana are part of the payment model's question; a
+    /// convoking creature paying a colored pip is tried by `convoke_search`.
+    fn helped_payable(
+        &self,
+        player: PlayerId,
+        model: &mut PaymentModel,
+        convokers: &[(PermanentId, Vec<Color>)],
+        cost: &ManaCost,
+        help: Help,
+    ) -> bool {
         let pool = self.pooled_mana(player);
-        self.convoke_search(&mut model, cost, &convokers, &mut |model, cost| {
+        self.convoke_search(model, cost, convokers, &mut |model, cost| {
             let (relaxed, split) = self.helped_cost(player, cost, help, help.waterbend);
             model
                 .payable(
@@ -97,6 +93,97 @@ impl Game {
                 .then_some(())
         })
         .is_some()
+    }
+
+    /// Can `player` pay `cost` with mana and `help`?
+    pub(crate) fn payable_with_help(&self, player: PlayerId, cost: &ManaCost, help: Help) -> bool {
+        let mut model = self.payment_model(player, None);
+        self.restrict_help_taps(&mut model, help);
+        let convokers = self.help_convokers(&model, help);
+        self.helped_payable(player, &mut model, &convokers, cost, help)
+    }
+
+    /// The pips each of `candidates` may pay of `cost` by convoke or
+    /// improvise such that the rest stays payable: each color it has that
+    /// the cost still owes, or {1} (`Color::Generic`) when it has none of
+    /// them. A colored pip is never worse for the payer than {1}: whatever
+    /// mana would have paid that pip can pay the {1} instead. A candidate
+    /// with no such pip is left out.
+    ///
+    /// One decision's candidates are judged against one model, each tap
+    /// reserved for its own question and then restored. The debug oracle
+    /// asks each question of a model built for it alone.
+    pub(crate) fn help_taps(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        help: Help,
+        candidates: &[PermanentId],
+    ) -> Vec<(PermanentId, Vec<Color>)> {
+        let tap = |permanent| SourceReservation {
+            permanent,
+            tap: true,
+            sacrifice: false,
+        };
+        let mut model = self.payment_model(player, None);
+        self.restrict_help_taps(&mut model, help);
+        let mut convokers = self.help_convokers(&model, help);
+        candidates
+            .iter()
+            .filter_map(|&tapped| {
+                let convokes = self.help_tap_toward(help, tapped)? == Toward::Convoke;
+                let mut options: Vec<Color> = self
+                    .characteristics(tapped)
+                    .colors
+                    .iter()
+                    .copied()
+                    .filter(|color| convokes && cost.cost[*color as usize] > 0)
+                    .collect();
+                if options.is_empty() && cost.generic() > 0 {
+                    options.push(Color::Generic);
+                }
+                let asked = options.clone();
+                let index = model
+                    .sources
+                    .iter()
+                    .position(|source| source.permanent == tapped);
+                let untouched = index.map(|index| model.sources[index].clone());
+                // The tapped creature pays its own pip, not a second one.
+                let own = convokers
+                    .iter()
+                    .position(|(convoker, _)| *convoker == tapped)
+                    .map(|position| (position, convokers.remove(position)));
+                model.reserve(tap(tapped));
+                options.retain(|color| {
+                    self.helped_payable(
+                        player,
+                        &mut model,
+                        &convokers,
+                        &cost.less_pip(*color),
+                        help,
+                    )
+                });
+                if let (Some(index), Some(source)) = (index, untouched) {
+                    Arc::make_mut(&mut model.sources)[index] = source;
+                }
+                if let Some((position, convoker)) = own {
+                    convokers.insert(position, convoker);
+                }
+                debug_assert_eq!(options, {
+                    let mut alone = self.payment_model(player, None);
+                    alone.reserve(tap(tapped));
+                    self.restrict_help_taps(&mut alone, help);
+                    let convokers = self.help_convokers(&alone, help);
+                    let mut asked = asked;
+                    asked.retain(|color| {
+                        let rest = cost.less_pip(*color);
+                        self.helped_payable(player, &mut alone, &convokers, &rest, help)
+                    });
+                    asked
+                });
+                (!options.is_empty()).then_some((tapped, options))
+            })
+            .collect()
     }
 
     /// `attempt` against the obligations `player` has pending. A convoke

@@ -877,7 +877,7 @@ impl Game {
         {
             return Ok(None);
         }
-        let legal_taps = self.waterbend_payment_candidates(player, &payment.operation);
+        let legal_taps = self.help_tap_candidates(player, &payment.operation);
         if legal_taps.iter().any(|id| {
             self.state.permanents[*id]
                 .as_ref()

@@ -914,7 +914,7 @@ impl Game {
                         player,
                         owed,
                         waterbend,
-                        self.waterbend_payment_candidates(player, &payment.operation),
+                        self.help_tap_candidates(player, &payment.operation),
                         self.payment_tapped_source(&payment.operation),
                     ));
                 } else {

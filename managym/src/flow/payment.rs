@@ -575,8 +575,11 @@ impl Game {
             player,
             payment: Box::new(payment),
         });
-        if chooses || self.has_mana_payment_choices(player) || !self.help_actions(player).is_empty()
-        {
+        let offers = chooses || {
+            let _payments = self.payment_scan();
+            self.has_mana_payment_choices(player) || !self.help_actions(player).is_empty()
+        };
+        if offers {
             return Ok(());
         }
         self.finish_mana_payment(player)
@@ -1051,8 +1054,9 @@ impl Game {
             .then_some(*source)
     }
 
-    /// Waterbend candidates for `payment`, less a source it taps anyway.
-    pub(crate) fn waterbend_payment_candidates(
+    /// The untapped artifacts and creatures a tap may pay `operation` with
+    /// (waterbend, convoke or improvise), less a source it taps anyway.
+    pub(crate) fn help_tap_candidates(
         &self,
         player: PlayerId,
         operation: &Operation,
@@ -1169,7 +1173,7 @@ impl Game {
         if !payment.paying_mana() || !payment.waterbends() {
             return Err(AgentError("no waterbend payment is pending".to_string()));
         }
-        let candidates = self.waterbend_payment_candidates(player, &payment.operation);
+        let candidates = self.help_tap_candidates(player, &payment.operation);
         let (cost, help, receipt) = payment.mana_step();
         self.waterbend_tap(tapped, &candidates, cost, help, receipt)?;
         let (owed, waterbend) = payment.mana();
@@ -1196,41 +1200,17 @@ impl Game {
         help.tap_toward(view.is_creature(), view.types.is_artifact())
     }
 
-    /// The pips `tapped` may pay of the pending cost by convoke or improvise
-    /// such that the rest stays payable: each color it has that the cost
-    /// still owes, or {1} (`Color::Generic`) when it has none of them. A
-    /// colored pip is never worse for the payer than {1}: whatever mana
-    /// would have paid that pip can pay the {1} instead.
+    /// The pips `tapped` may pay of the pending cost by convoke or
+    /// improvise; see `help_taps`. `tapped` is a tap the payment offers.
     pub(crate) fn help_tap_options(
         &self,
         player: PlayerId,
         payment: &Payment,
         tapped: PermanentId,
     ) -> Vec<Color> {
-        let (cost, help) = (payment.mana().0, payment.help());
-        let view = self.characteristics(tapped);
-        let toward = self.help_tap_toward(help, tapped);
-        if toward.is_none()
-            || !self
-                .waterbend_payment_candidates(player, &payment.operation)
-                .contains(&tapped)
-        {
-            return Vec::new();
-        }
-        let convokes = toward == Some(Toward::Convoke);
-        let mut options: Vec<Color> = view
-            .colors
-            .iter()
-            .copied()
-            .filter(|color| convokes && cost.cost[*color as usize] > 0)
-            .collect();
-        if options.is_empty() && cost.generic() > 0 {
-            options.push(Color::Generic);
-        }
-        options.retain(|color| {
-            self.payable_with_help(player, &cost.less_pip(*color), help, Some(tapped))
-        });
-        options
+        self.help_taps(player, payment.mana().0, payment.help(), &[tapped])
+            .pop()
+            .map_or_else(Vec::new, |(_, colors)| colors)
     }
 
     /// The taps and exiles that may pay part of the pending mana cost by
@@ -1244,15 +1224,11 @@ impl Game {
         }
         let mut actions = Vec::new();
         if help.taps_any_generic() {
+            let candidates = self.help_tap_candidates(player, &payment.operation);
             actions.extend(
-                self.waterbend_payment_candidates(player, &payment.operation)
+                self.help_taps(player, cost, *help, &candidates)
                     .into_iter()
-                    .filter(|permanent| {
-                        !self
-                            .help_tap_options(player, payment, *permanent)
-                            .is_empty()
-                    })
-                    .map(|permanent| Action::WaterbendTap { player, permanent }),
+                    .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
             );
         }
         if let Some(spell) = help.delve.filter(|_| cost.generic() > 0) {
@@ -1274,7 +1250,14 @@ impl Game {
         tapped: PermanentId,
         mut payment: Payment,
     ) -> Result<(), AgentError> {
-        let colors = self.help_tap_options(player, &payment, tapped);
+        let colors = if self
+            .help_tap_candidates(player, &payment.operation)
+            .contains(&tapped)
+        {
+            self.help_tap_options(player, &payment, tapped)
+        } else {
+            Vec::new()
+        };
         let object = self
             .permanent_object(tapped)
             .filter(|_| !colors.is_empty())

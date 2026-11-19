@@ -995,6 +995,8 @@ impl Observation {
             agent_player_id: game.state.players[agent_player.0].id.0 as i32,
         };
 
+        // Action descriptions ask payment questions of one board.
+        let _payments = game.payment_scan();
         let action_space = game
             .current_action_space
             .as_ref()
