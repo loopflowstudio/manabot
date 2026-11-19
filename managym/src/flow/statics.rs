@@ -575,6 +575,13 @@ impl Game {
     }
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state[object].keywords;
+        // Mana spent on the spell can give it a keyword (CR 106.6).
+        if let Some(crate::state::stack_object::StackObject::Spell(spell)) = self
+            .find_spell_on_stack_index(object)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            keywords = keywords.union(spell.spent.keywords_gained());
+        }
         for (_, owner, view) in self.static_sources() {
             for ability in &view.static_abilities {
                 if let StaticAbility::KeywordGrant(grant) = ability {

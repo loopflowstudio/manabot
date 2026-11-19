@@ -363,6 +363,40 @@ pub fn select_card(s: &mut Scenario, object: ObjectId) {
     );
 }
 
+/// Tap `source` for mana while a cost is being paid or at priority. A source
+/// whose mana carries a rider confirms its one output.
+pub fn tap_for_mana(s: &mut Scenario, source: PermanentId) {
+    choose(s, |a| {
+        matches!(
+            a,
+            Action::ActivateAbility { permanent, .. } | Action::TapForMana { permanent, .. }
+                if *permanent == source
+        )
+    });
+    if s.action_space().kind == ActionSpaceKind::Modal {
+        choose(s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    }
+}
+
+/// Finish a manual payment whose remaining choices do not matter: pay, then
+/// spend the first unit offered until the spell is cast.
+pub fn pay_rest(s: &mut Scenario) {
+    let stack = s.game().state.stack_objects.len();
+    for _ in 0..32 {
+        if s.game().state.stack_objects.len() > stack {
+            return;
+        }
+        let pay = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PayCost { .. }))
+            .unwrap_or(0);
+        s.step_action(pay);
+    }
+    panic!("the payment did not finish: {:?}", s.action_space());
+}
+
 pub fn target_opponent(s: &mut Scenario) {
     choose(s, |a| {
         matches!(

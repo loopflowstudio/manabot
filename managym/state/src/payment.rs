@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use crate::{
-    card::CardDefId,
+    card::{CardDefId, Keyword, Keywords},
     game_object::{exact, ObjectId},
     mana::{Color, SpendEffect},
 };
@@ -187,6 +187,29 @@ impl PaymentReceipt {
                 )
             })
             .count() as u8
+    }
+
+    /// Keywords the spell gained from the mana spent on it, which the
+    /// permanent it becomes keeps until end of turn (`SpellGainsKeyword`).
+    pub fn keywords_gained(&self) -> Keywords {
+        let gained: Vec<Keyword> = self
+            .mana()
+            .iter()
+            .filter_map(|unit| match unit.effect {
+                Some(SpendEffect::SpellGainsKeyword { keyword, .. }) => Some(keyword),
+                _ => None,
+            })
+            .collect();
+        Keywords::of(&gained)
+    }
+
+    /// The origin of each unit whose `CopySpell` rider applied: one copy
+    /// trigger apiece, controlled by the caster, from that object.
+    pub fn copy_triggers(&self) -> impl Iterator<Item = Option<ManaOrigin>> + '_ {
+        self.mana()
+            .iter()
+            .filter(|unit| matches!(unit.effect, Some(SpendEffect::CopySpell { .. })))
+            .map(|unit| unit.source)
     }
 
     /// The objects whose mana paid, in first-spent order, each once.

@@ -1498,6 +1498,24 @@ impl Game {
         for effects in fired {
             self.enqueue_inline_trigger(object, source_ref, caster, effects, None);
         }
+        // "When that mana is spent to cast [a spell], copy that spell": one
+        // trigger of the object that made each such unit.
+        let copy_sources: Vec<_> = match self
+            .find_spell_on_stack_index(object)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            Some(StackObject::Spell(spell)) => spell.spent.copy_triggers().flatten().collect(),
+            _ => Vec::new(),
+        };
+        for origin in copy_sources {
+            self.enqueue_inline_trigger(
+                origin.object,
+                Some(origin.object),
+                caster,
+                vec![Effect::CopyTriggeringObject],
+                Some(Target::StackSpell(object)),
+            );
+        }
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
         let replicated = match self

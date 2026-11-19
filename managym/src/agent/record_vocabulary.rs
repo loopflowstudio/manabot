@@ -241,6 +241,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "program",
         "amounts",
         "entry_counters",
+        "gains",
+        "copies",
         "combat",
         "definition",
         "name",

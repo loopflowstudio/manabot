@@ -57,7 +57,10 @@ impl From<&Mana> for PreviewPool {
                     mana: amounts.map(i32::from),
                     combat: class.combat,
                     restriction: class.restriction.as_ref().map(|r| r.describe()),
-                    effect: class.effect.as_ref().map(|e| e.describe()),
+                    effect: class
+                        .effect
+                        .as_ref()
+                        .map(crate::agent::ability_description::spend_effect_description),
                 })
                 .collect(),
         }

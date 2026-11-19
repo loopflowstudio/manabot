@@ -5953,5 +5953,27 @@
     "colors": [
       "W"
     ]
+  },
+  "Carnelian Orb of Dragonkind": {
+    "name": "Carnelian Orb of Dragonkind",
+    "mana_cost": "{2}{R}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {R}. If that mana is spent on a Dragon creature spell, it gains haste until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Pyromancer's Goggles": {
+    "name": "Pyromancer's Goggles",
+    "mana_cost": "{5}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {R}. When that mana is spent to cast a red instant or sorcery spell, copy that spell and you may choose new targets for the copy.",
+    "colors": []
   }
 }

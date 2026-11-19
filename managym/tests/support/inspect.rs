@@ -11,7 +11,7 @@ use managym::{
         effect::Modification,
         game_object::{Object, ObjectId, PermanentId, PlayerId},
         permanent::{CounterKind, Permanent},
-        stack_object::StackObject,
+        stack_object::{SpellOnStack, StackObject},
         target::Target,
         zone::ZoneType,
     },
@@ -230,6 +230,14 @@ pub fn stack_spell_card(s: &Scenario, name: &str) -> ObjectId {
 // ---------------------------------------------------------------------------
 // Permanents
 // ---------------------------------------------------------------------------
+
+/// The spell on top of the stack, with the receipt of what paid for it.
+pub fn top_spell(s: &Scenario) -> &SpellOnStack {
+    match s.game().state.stack_objects.last() {
+        Some(StackObject::Spell(spell)) => spell,
+        other => panic!("a spell is on the stack: {other:?}"),
+    }
+}
 
 /// Player 0's first battlefield permanent with this name.
 pub fn permanent_named(s: &Scenario, name: &str) -> PermanentId {

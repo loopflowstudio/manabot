@@ -1422,6 +1422,23 @@ impl Game {
                             .successor(object)
                             .and_then(|entered| self.state.permanent_of(entered))
                         {
+                            // A keyword the spell gained from mana spent
+                            // on it lasts the turn on the permanent.
+                            let gained = frame.spent.keywords_gained();
+                            if gained != crate::state::card::Keywords::default() {
+                                let entered = self.state.permanents[permanent_id]
+                                    .as_ref()
+                                    .expect("entered")
+                                    .object;
+                                self.record_continuous(
+                                    Some(entered),
+                                    None,
+                                    frame.controller,
+                                    [crate::state::effect::Affected::Object(entered)],
+                                    crate::state::effect::Modification::AddKeywords(gained),
+                                    crate::state::effect::EffectDuration::EndOfTurn,
+                                );
+                            }
                             if attach_to.is_some() {
                                 self.state.permanents[permanent_id]
                                     .as_mut()

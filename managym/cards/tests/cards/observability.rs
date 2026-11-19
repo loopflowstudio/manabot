@@ -20,7 +20,10 @@ use crate::support::{
         put_onto_battlefield, until_end_of_turn, ur_lessons_setup, Scenario,
     },
     inspect::{card_of, library_card},
-    play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle, spend_colorless},
+    play::{
+        activate, cast, choose, choose_mode, pass_until, resolve_top, settle, spend_colorless,
+        tap_for_mana, target_opponent,
+    },
 };
 use managym::agent::observation_layout::{
     action, card, fact, permanent, player, relation, stack, turn_state,
@@ -4683,6 +4686,106 @@ fn payment_contributions_reach_the_stack_frame_as_references() {
             .count();
         assert_eq!(programs, frame.effect_execution.len());
     }
+}
+
+/// A spend rider is visible before and after it applies: the pooled unit
+/// states it as a program in its definition's tokens, and the cast spell's
+/// stack frame states what it did (Carnelian Orb's haste,
+/// `clb::carnelian_orb_gives_haste_only_to_a_dragon_its_mana_paid_for`;
+/// Pyromancer's Goggles's copy,
+/// `ori::pyromancers_goggles_copies_a_red_instant_its_mana_paid_for`).
+#[test]
+fn spend_riders_reach_the_pool_program_and_the_cast_receipt() {
+    for (source, spell, rider, outcome) in [
+        (
+            "Carnelian Orb of Dragonkind",
+            "Shivan Dragon",
+            "SpellGainsKeyword",
+            "gains",
+        ),
+        (
+            "Pyromancer's Goggles",
+            "Lightning Bolt",
+            "CopySpell",
+            "copies",
+        ),
+    ] {
+        let mut s = five_color_setup(&[source, spell]);
+        let permanent = s.force_permanent_on_battlefield(0, source);
+        // Five ordinary red beside the rider unit: enough for the Dragon.
+        s.set_player_mana_pool(0, "RRRRR");
+        s.allow_priority_floats();
+        tap_for_mana(&mut s, permanent);
+        let definition = managym_cards::catalog()
+            .iter()
+            .find(|definition| definition.name == source)
+            .unwrap();
+        let tokens = tokens_of(&ObjectDefinition::card(definition));
+        let variant = (
+            TokenKind::Variant,
+            name_value(&format!("SpendEffect::{rider}")),
+        );
+        assert!(tokens.contains(&variant), "{source} spells {rider}");
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let owner = if viewer == 0 {
+                &observation.agent
+            } else {
+                &observation.opponent
+            };
+            let [class] = &owner.pooled_mana_classes[..] else {
+                panic!("{source}'s unit is its own class")
+            };
+            assert!(class.program.contains(&(variant.0 as u16, variant.1)));
+            assert_eq!(
+                managym::agent::observation_encoder::unrepresentable_state(&observation),
+                None
+            );
+        }
+
+        tap_for_mana_spent(&mut s, spell);
+        let field = (TokenKind::Field as u16, name_value(outcome));
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let frame = observation
+                .continuation
+                .iter()
+                .find(|frame| frame.kind == 1)
+                .expect("the spell's stack frame");
+            assert!(
+                frame.effect_execution.contains(&field),
+                "{spell}: {outcome}"
+            );
+            assert_execution_tokens_registered(frame);
+        }
+    }
+}
+
+/// Cast `spell`, spending the rider unit first whenever a unit is offered.
+fn tap_for_mana_spent(s: &mut Scenario, spell: &str) {
+    cast(s, spell);
+    for _ in 0..16 {
+        if s.game()
+            .state
+            .stack_objects
+            .iter()
+            .any(|object| matches!(object, managym::state::stack_object::StackObject::Spell(_)))
+        {
+            return;
+        }
+        if s.action_space().kind == managym::agent::action::ActionSpaceKind::ChooseTarget {
+            target_opponent(s);
+            continue;
+        }
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let rider = frame
+            .offers
+            .iter()
+            .position(|offer| offer.label.contains("(puts"))
+            .unwrap_or(0);
+        s.step_action(rider);
+    }
+    panic!("{spell} was not cast: {:?}", s.action_space());
 }
 
 /// A spell on the stack shows its announced X on its stack row, its one row.

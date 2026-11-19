@@ -554,16 +554,23 @@ impl<'a> Projection<'a> {
     }
 
     fn mana_spent(&mut self, spent: &PaymentReceipt) {
-        /// The receipt's rule-read facts, under the names their tokens have.
+        /// The receipt's rule-read facts, under the names their tokens have:
+        /// the amounts by color and what the units' spend riders did.
         #[derive(Debug, Serialize)]
         struct ManaSpent {
             amounts: [u8; 6],
             #[serde(skip_serializing_if = "crate::state::is_zero")]
             entry_counters: u8,
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            gains: Vec<crate::state::card::Keyword>,
+            #[serde(skip_serializing_if = "crate::state::is_zero")]
+            copies: u8,
         }
         let facts = ManaSpent {
             amounts: spent.amounts(),
             entry_counters: spent.entry_counters(),
+            gains: spent.keywords_gained().iter().collect(),
+            copies: spent.copy_triggers().count() as u8,
         };
         self.field("mana spent", &facts);
         self.summary(|| {
@@ -577,17 +584,26 @@ impl<'a> Projection<'a> {
                 .filter_map(|origin| default_content_pack().definition(origin.definition))
                 .map(|definition| definition.printed.name.as_str())
                 .collect::<Vec<_>>();
-            let from = if sources.is_empty() {
-                String::new()
-            } else {
-                format!(" (from {})", sources.join(", "))
-            };
-            match facts.entry_counters {
-                0 => format!("Mana spent to cast: {mana}{from}."),
-                counters => format!(
-                    "Mana spent to cast: {mana}{from}; it enters with {counters} additional +1/+1 counter(s)."
-                ),
+            let mut text = format!("Mana spent to cast: {mana}");
+            if !sources.is_empty() {
+                text.push_str(&format!(" (from {})", sources.join(", ")));
             }
+            if facts.entry_counters > 0 {
+                text.push_str(&format!(
+                    "; it enters with {} additional +1/+1 counter(s)",
+                    facts.entry_counters
+                ));
+            }
+            for keyword in &facts.gains {
+                text.push_str(&format!(
+                    "; it gains {} until end of turn",
+                    keyword.printed()
+                ));
+            }
+            if facts.copies > 0 {
+                text.push_str(&format!("; that mana copies it {} time(s)", facts.copies));
+            }
+            text + "."
         });
     }
 
@@ -892,7 +908,7 @@ pub(crate) fn receipt_matters(spent: &PaymentReceipt, definition: Option<CardDef
     if spent.is_empty() {
         return false;
     }
-    if spent.entry_counters() > 0 || !spent.contributions().is_empty() {
+    if spent.mana().iter().any(|unit| unit.effect.is_some()) || !spent.contributions().is_empty() {
         return true;
     }
     let reads = READS.get_or_init(|| {

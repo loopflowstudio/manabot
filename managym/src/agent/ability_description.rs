@@ -12,7 +12,7 @@ use crate::state::{
     },
     card::{CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
-    mana::{Color, Mana, ManaCost},
+    mana::{Color, Mana, ManaCost, SpendEffect},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -835,7 +835,7 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
             text.push_str(&format!(" ({} only)", restriction.describe()));
         }
         if let Some(effect) = &class.effect {
-            text.push_str(&format!(" (puts {})", effect.describe()));
+            text.push_str(&format!(" (puts {})", spend_effect_description(effect)));
         }
     }
     text
@@ -865,6 +865,25 @@ pub(crate) fn cost_description(cost: &ManaCost) -> String {
         text.push_str("{0}");
     }
     text
+}
+
+/// What spending a unit of mana adds, as the object of "puts": "a +1/+1
+/// counter on a non-Human creature spell it casts".
+pub(crate) fn spend_effect_description(effect: &SpendEffect) -> String {
+    match effect {
+        SpendEffect::CreatureEntersWithPlusOneCounter { without_subtype } => {
+            format!("a +1/+1 counter on a non-{without_subtype} creature spell it casts")
+        }
+        SpendEffect::SpellGainsKeyword { spell, keyword } => format!(
+            "{} until end of turn on {} it casts",
+            keyword.printed(),
+            predicate_description(spell, "spell").trim()
+        ),
+        SpendEffect::CopySpell { spell } => format!(
+            "a copy of {} it casts on the stack",
+            predicate_description(spell, "spell").trim()
+        ),
+    }
 }
 
 fn keywords_description(k: &Keywords) -> String {

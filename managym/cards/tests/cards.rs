@@ -24,6 +24,8 @@ mod c17;
 mod c19;
 #[path = "cards/chk.rs"]
 mod chk;
+#[path = "cards/clb.rs"]
+mod clb;
 #[path = "cards/cmr.rs"]
 mod cmr;
 #[path = "cards/csp.rs"]

@@ -6,8 +6,10 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-    card::{CardType, PrintedCharacteristics},
+    card::{CardType, Keyword, PrintedCharacteristics},
+    game_object::ObjectKind,
     payment::{ManaOrigin, SpentMana},
+    predicate::CardPredicate,
     zone::ZoneType,
 };
 
@@ -167,29 +169,42 @@ pub enum SpendEffect {
     /// creature enters with an additional +1/+1 counter on it" (Animal
     /// Attendant). One counter for each such mana spent.
     CreatureEntersWithPlusOneCounter { without_subtype: String },
+    /// "If that mana is spent on a [spell], it gains [keyword] until end of
+    /// turn" (Carnelian Orb of Dragonkind). The permanent the spell becomes
+    /// keeps the keyword for the turn.
+    SpellGainsKeyword {
+        spell: CardPredicate,
+        keyword: Keyword,
+    },
+    /// "When that mana is spent to cast a [spell], copy that spell and you
+    /// may choose new targets for the copy" (Pyromancer's Goggles): a
+    /// triggered ability of the object that produced the mana, one for each
+    /// such unit spent.
+    CopySpell { spell: CardPredicate },
 }
 
 impl SpendEffect {
     /// Whether spending this mana in `context` has its effect.
     pub fn applies(&self, context: &SpendingContext) -> bool {
-        match (self, context) {
-            (
-                Self::CreatureEntersWithPlusOneCounter { without_subtype },
-                SpendingContext::Cast(spell),
-            ) => {
-                spell.0.types.is_creature()
-                    && !spell.0.subtypes.iter().any(|name| name == without_subtype)
-            }
-            _ => false,
-        }
-    }
-
-    /// "a +1/+1 counter on a non-Human creature spell it casts".
-    pub fn describe(&self) -> String {
+        let SpendingContext::Cast(spell) = context else {
+            return false;
+        };
+        let spell = &*spell.0;
         match self {
             Self::CreatureEntersWithPlusOneCounter { without_subtype } => {
-                format!("a +1/+1 counter on a non-{without_subtype} creature spell it casts")
+                spell.types.is_creature()
+                    && !spell.subtypes.iter().any(|name| name == without_subtype)
             }
+            Self::SpellGainsKeyword {
+                spell: predicate, ..
+            }
+            | Self::CopySpell { spell: predicate } => predicate.matches_printing(
+                spell,
+                ObjectKind::Card,
+                spell.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
+                spell.power.unwrap_or(0),
+                &[],
+            ),
         }
     }
 }

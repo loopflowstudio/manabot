@@ -20,6 +20,7 @@ mod bro;
 mod c17;
 mod c19;
 mod chk;
+mod clb;
 mod cmr;
 mod csp;
 mod dft;
@@ -116,6 +117,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     c17::cards,
     chk::cards,
     c19::cards,
+    clb::cards,
     cmr::cards,
     csp::cards,
     dft::cards,
