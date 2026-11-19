@@ -4,7 +4,9 @@
 //! end.
 
 use crate::support::game::move_card;
-use crate::support::inspect::{current_object, now, offer_labels, permanent_of, tap_pays_modes};
+use crate::support::inspect::{
+    current_object, now, object_public_id, offer_labels, permanent_of, tap_pays_choice,
+};
 use crate::support::{
     game::{
         animate, clear_hand, clear_summoning_sickness, deck, enter_battlefield,
@@ -1679,7 +1681,9 @@ fn hama_can_waterbend_for_a_spell_with_convoke() {
     // {1} by convoke is mode 5, {1} of the waterbend part mode 7.
     for (creature, mode) in [(ogres[0], 5), (ogres[1], 7), (hama, 7)] {
         tap(&mut s, creature);
-        assert_eq!(tap_pays_modes(&s, creature), [5, 7]);
+        let choice = tap_pays_choice(&s);
+        assert_eq!(choice.focus, [object_public_id(&s, creature)]);
+        assert_eq!(choice.modes, [5, 7]);
         if creature == ogres[0] {
             assert_choice_contract(&s);
         }

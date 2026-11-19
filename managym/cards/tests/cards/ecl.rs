@@ -3,8 +3,8 @@
 use crate::support::{
     game::{five_color_unfunded_setup, force_new_card_in_hand},
     inspect::{
-        assert_choice_contract, can_cast, card_of, has_action, offer_labels, tap_pays_modes,
-        tapped, top_spell,
+        assert_choice_contract, can_cast, card_of, has_action, object_public_id, offer_labels,
+        tap_pays_choice, tapped, top_spell,
     },
     play::{cast_card, choose, pass_until, settle, tap_for_mana},
 };
@@ -180,9 +180,11 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
         ]
     );
     // The modes name the payments: {W} by convoke is 0, {1} by convoke 5.
-    // Both offers focus the Lions' object; each Command replays exactly, and
-    // once one commits the other is stale.
-    assert_eq!(tap_pays_modes(&s, lions), [0, 5]);
+    let choice = tap_pays_choice(&s);
+    assert_eq!(choice.focus, [object_public_id(&s, lions)]);
+    assert_eq!(choice.modes, [0, 5]);
+    // Replay each ChooseMode Command on two clones and reject every Command
+    // of this decision after one commits.
     assert_choice_contract(&s);
     for (mode, white_spent) in [(0, 0), (5, 1)] {
         let mut fork = crate::support::play::fork_choosing(

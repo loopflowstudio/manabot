@@ -3,7 +3,7 @@
 // offered actions, and the observation/command contract checks.
 
 use managym::{
-    agent::action::{Action, ActionSpace, ActionType},
+    agent::action::{Action, ActionSpace, ActionSpaceKind, ActionType},
     flow::event::GameEvent,
     flow::turn::{PhaseKind, StepKind},
     state::{
@@ -404,26 +404,34 @@ pub fn offer_labels(s: &Scenario) -> Vec<String> {
         .collect()
 }
 
-/// The modes a tap-pays choice offers (`TapPayment::mode`), after checking
-/// that the choice and each of its offers focus the object of the permanent
-/// just tapped in the chooser's observation.
-pub fn tap_pays_modes(s: &Scenario, tapped: PermanentId) -> Vec<usize> {
+/// The shared focus and mode codes of an observed tap payment choice.
+pub struct TapPaysChoice {
+    pub focus: Vec<i32>,
+    pub modes: Vec<usize>,
+}
+
+pub fn object_public_id(s: &Scenario, permanent: PermanentId) -> i32 {
+    s.game().state[card_of(s, permanent)].id.0 as i32
+}
+
+pub fn tap_pays_choice(s: &Scenario) -> TapPaysChoice {
     let space = s.action_space();
-    assert_eq!(space.kind, managym::agent::action::ActionSpaceKind::Modal);
+    assert_eq!(space.kind, ActionSpaceKind::Modal);
     let player = space.player.expect("a tap-pays choice has a chooser");
     let observation = managym::agent::observation::Observation::for_player(s.game(), player);
-    // A payment focuses the permanent's object, as a ward payment does.
-    let id = s.game().state[card_of(s, tapped)].id.0 as i32;
-    assert_eq!(observation.action_space.focus, [id]);
-    observation
-        .action_space
+    let observed_space = observation.action_space;
+    let modes = observed_space
         .actions
         .iter()
         .map(|action| {
-            assert_eq!(action.focus, [id]);
+            assert_eq!(action.focus, observed_space.focus);
             action.mode_index.expect("a tap-pays offer has a mode")
         })
-        .collect()
+        .collect();
+    TapPaysChoice {
+        focus: observed_space.focus,
+        modes,
+    }
 }
 
 /// Exercise every offered atomic continuation through the real Command
