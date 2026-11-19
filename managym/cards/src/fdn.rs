@@ -1,8 +1,8 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, ObjectSelector, Per, PlayWindow, TargetRequirement,
-        TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, ObjectSelector, PaymentCost, Per, PlayWindow,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -21,7 +21,36 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
+        sire_of_seven_deaths(),
     ]
+}
+
+fn sire_of_seven_deaths() -> CardDefinition {
+    let text_box = "Reach, first strike\nVigilance, menace\nTrample, lifelink\nWard—Pay 7 life.";
+    CardDefinition {
+        key: "fdn.sire_of_seven_deaths",
+        scryfall_id: "8d8432a7-1c8a-4cfb-947c-ecf9791063eb",
+        printed: PrintedCharacteristics {
+            name: "Sire of Seven Deaths".into(),
+            mana_cost: Some(ManaCost::parse("{7}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Eldrazi".into()],
+            power: Some(7),
+            toughness: Some(7),
+            keywords: Keywords::of(&[
+                Keyword::Reach,
+                Keyword::FirstStrike,
+                Keyword::Vigilance,
+                Keyword::Menace,
+                Keyword::Trample,
+                Keyword::Lifelink,
+            ]),
+            statics: vec![StaticAbility::Ward(PaymentCost::Life(7))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn hungry_ghoul() -> CardDefinition {

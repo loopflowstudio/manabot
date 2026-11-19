@@ -167,6 +167,9 @@ FACT_EFFECT_PROGRAM = 11
 # The id of an effect program that states a player's pooled mana with a
 # spend effect or combat expiry (native `observation_encoder::POOLED_MANA`).
 POOLED_MANA = "PooledMana"
+# The id of an effect program that states a permanent's ward price when the
+# ward-cost column cannot, as "Ward—Pay 7 life." (native `observation_encoder::WARD`).
+WARD = "Ward"
 FACT_EFFECTIVE_COLOR = 12
 FACT_KEYWORD_COUNTER_TIMESTAMP = 13
 FACT_CONTINUATION_PROGRAM = 14
@@ -853,6 +856,18 @@ class ObservationEncoder:
                     (0.0, 0.0),
                     provenance=(0.0, timestamp, None),
                 )
+        # A ward price that is not a mana value: one program on its permanent.
+        for perm in permanents:
+            for ordinal, (token_kind, token_value) in enumerate(
+                perm.characteristics.ward_program
+            ):
+                push(
+                    perm.id,
+                    FACT_EFFECT_PROGRAM,
+                    token(WARD),
+                    (float(token_kind), float(ordinal)),
+                    token_value,
+                )
         # Spend effects and combat expiry: one program per pooled class on its player.
         for player in (obs.agent, obs.opponent):
             for pooled in player.pooled_mana_classes:
@@ -1109,7 +1124,7 @@ class ObservationEncoder:
         i += 1
         arr[i] = float(characteristics.is_lesson)
         i += 1
-        arr[i] = float(characteristics.ward_cost > 0)
+        arr[i] = float(characteristics.ward_cost > 0 or characteristics.ward_life > 0)
         i += 1
         arr[i] = float(characteristics.ward_cost) / 10.0
         i += 1
@@ -1213,7 +1228,7 @@ class ObservationEncoder:
             arr[PERMANENT_TOKEN_INDEX] = float(perm.is_token)
             arr[PERMANENT_ALLY_INDEX] = float(card.is_ally)
             arr[PERMANENT_LESSON_INDEX] = float(card.is_lesson)
-            arr[PERMANENT_WARD_INDEX] = float(card.ward_cost > 0)
+            arr[PERMANENT_WARD_INDEX] = float(card.ward_cost > 0 or card.ward_life > 0)
             arr[PERMANENT_WARD_INDEX + 1] = card.ward_cost / 10.0
         # Set validity flag (permanent exists)
         arr[-1] = 1.0

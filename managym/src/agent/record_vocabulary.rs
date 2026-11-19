@@ -18,8 +18,10 @@
 
 use crate::{
     agent::{
-        ability_description::predicate_description, effect_execution::EXECUTION_TEXT,
-        observation::MODIFICATION_NAMES, observation_encoder::POOLED_MANA,
+        ability_description::predicate_description,
+        effect_execution::EXECUTION_TEXT,
+        observation::MODIFICATION_NAMES,
+        observation_encoder::{POOLED_MANA, WARD},
     },
     cards::{
         content_pack::default_content_pack,
@@ -117,6 +119,7 @@ pub fn record_names() -> Vec<RecordName> {
     }
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
+    out.push(record(Token, WARD, None));
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));

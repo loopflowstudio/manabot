@@ -297,8 +297,13 @@ pub struct CharacteristicsData {
     pub is_legendary: bool,
     pub is_ally: bool,
     pub is_lesson: bool,
-    /// Mana value of ward (zero without ward).
+    /// Mana value of ward (zero without ward and for a ward paid in life).
     pub ward_cost: i32,
+    /// The life ward costs ("Ward—Pay 7 life."); zero otherwise.
+    pub ward_life: i32,
+    /// A ward price `ward_cost` cannot state, in the learning-token
+    /// vocabulary its definition uses; empty otherwise.
+    pub ward_program: Vec<(u16, i32)>,
     /// Printed optional kicker cost; payment is stack state.
     pub kicker_cost: i32,
     pub card_types: CardTypeData,
@@ -1575,6 +1580,8 @@ impl Observation {
                 is_ally: characteristics.has_subtype("Ally"),
                 is_lesson: characteristics.has_subtype("Lesson"),
                 ward_cost: ward_value(characteristics.ward.as_ref()),
+                ward_life: ward_life(characteristics.ward.as_ref()),
+                ward_program: ward_program(characteristics.ward.as_ref()),
                 card_types: CardTypeData::from_types(&characteristics.types),
                 keywords: KeywordData::from_keywords(&characteristics.keywords),
                 ..Self::printed_characteristics_data(game, permanent.object)
@@ -1644,6 +1651,8 @@ impl Observation {
             is_ally: object.has_subtype("Ally"),
             is_lesson: object.has_subtype("Lesson"),
             ward_cost: ward_value(object.ward()),
+            ward_life: ward_life(object.ward()),
+            ward_program: ward_program(object.ward()),
             kicker_cost: object
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
@@ -2291,9 +2300,30 @@ impl Observation {
     }
 }
 
-/// A ward cost's mana value; 0 without ward.
+/// A ward cost's mana value; 0 without ward and for a ward paid in life.
 fn ward_value(cost: Option<&PaymentCost>) -> i32 {
-    cost.map_or(0, |cost| i32::from(cost.mana_cost().mana_value))
+    cost.and_then(PaymentCost::mana)
+        .map_or(0, |cost| i32::from(cost.mana_value))
+}
+
+/// The life a ward costs; 0 without ward and for a ward paid in mana.
+fn ward_life(cost: Option<&PaymentCost>) -> i32 {
+    match cost {
+        Some(PaymentCost::Life(life)) => *life as i32,
+        _ => 0,
+    }
+}
+
+/// A ward cost `ward_cost` cannot state, in learning tokens: empty without
+/// ward and for a ward whose price is its mana value.
+fn ward_program(cost: Option<&PaymentCost>) -> Vec<(u16, i32)> {
+    match cost {
+        Some(cost @ PaymentCost::Life(_)) => {
+            crate::cards::tokens::rules_tokens(cost, default_content_pack())
+                .expect("registered rules payload")
+        }
+        _ => Vec::new(),
+    }
 }
 
 #[cfg(test)]

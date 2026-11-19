@@ -1695,11 +1695,32 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
+                let cost = match payment.remaining {
+                    // CR 119.4: a player may pay life only with a life total
+                    // at least the amount (any player may pay 0). Paying is
+                    // one action under manual and automatic payment alike.
+                    PaymentCost::Life(life) => {
+                        let mut actions = Vec::new();
+                        if life == 0 || self.payable_life(player) >= life as i32 {
+                            actions.push(Action::PayCost { player });
+                        }
+                        actions.push(Action::Decline { player });
+                        return Some(ActionSpace {
+                            player: Some(player),
+                            kind: ActionSpaceKind::PayOrNot,
+                            actions,
+                            focus: source_focus,
+                        });
+                    }
+                    PaymentCost::Mana(ref cost) => cost.clone(),
+                    PaymentCost::Waterbend { generic } => {
+                        crate::state::mana::ManaCost::default().with_generic(generic)
+                    }
+                };
                 if self.automatic_mana_payment(player) && payment.can_decline() {
-                    let cost = payment.remaining.mana_cost();
                     let waterbend = match payment.remaining {
                         PaymentCost::Waterbend { generic } => generic,
-                        PaymentCost::Mana(_) => 0,
+                        PaymentCost::Mana(_) | PaymentCost::Life(_) => 0,
                     };
                     let mut actions = Vec::new();
                     if self.waterbend_payment_possible(player, &cost, waterbend) {
@@ -1730,7 +1751,7 @@ impl Game {
                         }
                     }
                 }
-                if self.can_pay_mana_cost(player, &payment.remaining.mana_cost()) {
+                if self.can_pay_mana_cost(player, &cost) {
                     actions.push(Action::PayCost { player });
                 }
                 if payment.can_decline() {
@@ -1740,7 +1761,7 @@ impl Game {
                 ActionSpace {
                     player: Some(player),
                     kind: match payment.remaining {
-                        PaymentCost::Mana(_) => ActionSpaceKind::PayOrNot,
+                        PaymentCost::Mana(_) | PaymentCost::Life(_) => ActionSpaceKind::PayOrNot,
                         PaymentCost::Waterbend { .. } => ActionSpaceKind::Waterbend,
                     },
                     actions,
@@ -2229,13 +2250,41 @@ impl Game {
                 *self.state.suspended_decision_mut() = Some(suspended);
                 Ok(())
             }
+            (
+                Decision::Payment(PaymentProgress {
+                    player,
+                    remaining: PaymentCost::Life(life),
+                    ..
+                }),
+                Action::PayCost { .. },
+            ) => {
+                let (player, life) = (*player, *life);
+                if life > 0 && self.payable_life(player) < life as i32 {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("cannot pay life cost".into()));
+                }
+                self.change_life(player, -(life as i32));
+                let Decision::Payment(payment) = suspended.decision else {
+                    unreachable!()
+                };
+                if let Some(key) = payment.spends {
+                    self.spend_once_each_turn(key);
+                }
+                let mut frame = suspended.frame;
+                frame.prepend_effects(payment.if_paid.into_iter());
+                self.run_frame(frame);
+                Ok(())
+            }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
                 if self.automatic_mana_payment(payment.player) && payment.can_decline() {
                     payment.committed = true;
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Ok(());
                 }
-                let cost = payment.remaining.mana_cost();
+                let cost = payment
+                    .remaining
+                    .mana()
+                    .expect("a life cost is paid by the arm above");
                 if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);

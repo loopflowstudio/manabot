@@ -294,16 +294,22 @@ impl ContentPack {
             .get_or_init(|| {
                 self.definitions()
                     .map(|card| {
-                        serde_json::json!({
+                        let mut public = serde_json::json!({
                             "name": card.name, "text_box": card.text_box,
                             "mana_cost": card.mana_cost, "types": card.types,
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": KeywordData::from_keywords(&card.keywords),
                             "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
-                            "ward": card.ward().map(PaymentCost::mana_cost),
+                            "ward": card.ward().and_then(PaymentCost::mana),
                             "is_token": card.is_token,
-                        })
+                        });
+                        // A ward paid in life has no mana cost to state; the
+                        // key is absent on every other definition.
+                        if let Some(PaymentCost::Life(life)) = card.ward() {
+                            public["ward_life"] = (*life).into();
+                        }
+                        public
                     })
                     .collect()
             })

@@ -444,6 +444,11 @@ once, 2 each matching event); column 48 retains cleanup expiry. Remembered
 objects are kind-8 reference rows, separate from event context. Ordered control
 schedules and delegated decisions use kinds 13 and 14.
 
+A ward that is not paid in mana ("Ward—Pay 7 life.") sets the ward flag with
+a ward cost of 0, and its price is an effect program on the permanent: fact
+kind 11 under the id `Ward`, in the tokens the card's definition uses
+(`PaymentCost::Life`, then the amount). The LLM text says "ward: pay 7 life".
+
 Pooled mana whose spending has an effect (Animal Attendant's "that creature
 enters with an additional +1/+1 counter") counts in its player's ordinary
 or restricted mana aggregate, according to its restriction, and is stated as

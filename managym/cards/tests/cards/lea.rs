@@ -311,7 +311,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     // newly defined card moves this value and nothing else does.
     assert_eq!(
         s.game().state.deterministic_hash().to_string(),
-        "v17:8dfc7454ff7a3cc664e840dcd7f68a33d804163b075aa680760ab2425c324506"
+        "v17:0cc1ef7408a5daa96ab5ebdcc1988601b10e10e6b8804406c67c50e0d377286b"
     );
     let pending = Observation::for_player(s.game(), PlayerId(0));
     let fork = s.game().clone();

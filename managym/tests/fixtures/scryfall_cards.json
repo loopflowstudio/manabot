@@ -6697,5 +6697,23 @@
     "keywords": [],
     "oracle_text": "{T}, Exile this artifact: Shuffle your graveyard into your library.",
     "colors": []
+  },
+  "Sire of Seven Deaths": {
+    "name": "Sire of Seven Deaths",
+    "mana_cost": "{7}",
+    "type_line": "Creature — Eldrazi",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Lifelink",
+      "Reach",
+      "Vigilance",
+      "First strike",
+      "Trample",
+      "Menace",
+      "Ward"
+    ],
+    "oracle_text": "Reach, first strike\nVigilance, menace\nTrample, lifelink\nWard—Pay 7 life.",
+    "colors": []
   }
 }

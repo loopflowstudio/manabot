@@ -181,6 +181,10 @@ impl Serialize for CardJson<'_> {
         map.serialize_entry("text_box", &value.text_box)?;
         map.serialize_entry("toughness", &value.toughness)?;
         map.serialize_entry("ward_cost", &value.ward_cost)?;
+        if value.ward_life > 0 {
+            map.serialize_entry("ward_life", &value.ward_life)?;
+            map.serialize_entry("ward_program", &value.ward_program)?;
+        }
         if let Some(x) = &value.x {
             map.serialize_entry("x", x)?;
         }
@@ -631,6 +635,12 @@ pub(super) struct WireCardData {
     pub is_lesson: bool,
     /// Ward cost (mana value; 0 = no ward).
     pub ward_cost: i32,
+    /// The life ward costs and that price in learning tokens; omitted
+    /// unless the ward is paid in life.
+    #[serde(default)]
+    pub ward_life: i32,
+    #[serde(default)]
+    pub ward_program: Vec<(u16, i32)>,
     /// Kicker cost (mana value; 0 = no kicker).
     pub kicker_cost: i32,
     pub card_types: CardTypeData,
@@ -809,6 +819,8 @@ impl From<WireCardData> for CardData {
                 is_ally: w.is_ally,
                 is_lesson: w.is_lesson,
                 ward_cost: w.ward_cost,
+                ward_life: w.ward_life,
+                ward_program: w.ward_program,
                 kicker_cost: w.kicker_cost,
                 card_types: w.card_types,
                 keywords: w.keywords,

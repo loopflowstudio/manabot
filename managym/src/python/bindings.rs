@@ -1950,6 +1950,14 @@ impl PyObservationCharacteristics {
         self.data.ward_cost
     }
     #[getter]
+    fn ward_life(&self) -> i32 {
+        self.data.ward_life
+    }
+    #[getter]
+    fn ward_program(&self) -> Vec<(u16, i32)> {
+        self.data.ward_program.clone()
+    }
+    #[getter]
     fn kicker_cost(&self) -> i32 {
         self.data.kicker_cost
     }

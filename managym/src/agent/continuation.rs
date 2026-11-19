@@ -924,7 +924,9 @@ impl Game {
                 frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
             }
             Decision::Payment(progress) => {
-                frame.cost(&progress.remaining.mana_cost());
+                if let Some(cost) = progress.remaining.mana() {
+                    frame.cost(&cost);
+                }
                 frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
                 frame.can_decline = progress.can_decline();
             }

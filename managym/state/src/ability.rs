@@ -611,17 +611,23 @@ pub enum EffectValue {
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
 /// Waterbend pays only generic mana; taps never count as mana production.
+/// Life is paid in one action by a player whose life total is at least the
+/// amount (CR 119.4); no mana is owed for it.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PaymentCost {
     Mana(ManaCost),
     Waterbend { generic: u8 },
+    Life(u32),
 }
 
 impl PaymentCost {
-    pub fn mana_cost(&self) -> ManaCost {
+    /// The mana this cost owes, or `None` for a cost paid in life: a life
+    /// cost is not {0}.
+    pub fn mana(&self) -> Option<ManaCost> {
         match self {
-            Self::Mana(cost) => cost.clone(),
-            Self::Waterbend { generic } => ManaCost::default().with_generic(*generic),
+            Self::Mana(cost) => Some(cost.clone()),
+            Self::Waterbend { generic } => Some(ManaCost::default().with_generic(*generic)),
+            Self::Life(_) => None,
         }
     }
 }

@@ -53,6 +53,124 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
         .is_empty());
 }
 
+/// "Ward—Pay 7 life." (CR 702.21a, 119.4): the opponent whose spell targets
+/// Sire of Seven Deaths pays 7 life in one action or the spell is countered.
+/// Paying is offered only at 7 life or more, and is the same single action
+/// under manual and automatic payment. Paying at exactly 7 is legal and
+/// leaves that player at 0.
+#[test]
+fn sire_of_seven_deaths_ward_is_paid_in_life_or_counters_the_spell() {
+    use crate::support::{
+        game::{clear_hand, five_color_unfunded_setup, force_lands},
+        inspect::permanent,
+        play::cast_only,
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind, ActionType},
+        flow::turn::StepKind,
+        state::player::ManaPayment,
+    };
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum Line {
+        Decline,
+        Pay,
+    }
+    for auto in [false, true] {
+        for (life, line) in [
+            (20, Line::Decline),
+            (20, Line::Pay),
+            (7, Line::Pay),
+            (6, Line::Decline),
+        ] {
+            let case = format!("auto={auto} life={life} {line:?}");
+            let mut s = five_color_unfunded_setup(&["Sire of Seven Deaths", "Lightning Strike"]);
+            let sire = s.force_permanent_on_battlefield(0, "Sire of Seven Deaths");
+            force_lands(&mut s, 1, "Mountain", 2);
+            clear_hand(&mut s, 0);
+            clear_hand(&mut s, 1);
+            s.force_card_in_hand(1, "Lightning Strike");
+            if auto {
+                s.game_mut().mana_payment[1] = ManaPayment::Auto;
+            }
+            s.game_mut().state.players[1].life = life;
+            s.advance_to_active_step(1, StepKind::Main);
+            cast_only(&mut s);
+            s.choose_target_named("Sire of Seven Deaths");
+            s.pass_priority();
+            s.pass_priority();
+
+            let space = s.action_space();
+            assert_eq!(space.kind, ActionSpaceKind::PayOrNot, "{case}");
+            assert_eq!(space.player, Some(PlayerId(1)), "{case}");
+            // Pay or decline and nothing else: no mana ability, no tap.
+            // Below 7 life paying is not offered (this fixture shows the
+            // forced decline; a game skips it).
+            if life >= 7 {
+                assert!(
+                    matches!(
+                        space.actions.as_slice(),
+                        [Action::PayCost { .. }, Action::Decline { .. }]
+                    ),
+                    "{case}: {:?}",
+                    space.actions
+                );
+            } else {
+                assert!(
+                    matches!(space.actions.as_slice(), [Action::Decline { .. }]),
+                    "{case}: {:?}",
+                    space.actions
+                );
+            }
+            // The payer's observation focuses the warded permanent, whose
+            // row states the price.
+            let observation =
+                managym::agent::observation::Observation::for_player(s.game(), PlayerId(1));
+            let [focus] = observation.action_space.focus.as_slice() else {
+                panic!("one focus, {case}: {:?}", observation.action_space.focus)
+            };
+            let warded = observation
+                .opponent_permanents
+                .iter()
+                .find(|permanent| permanent.object_id == Some(*focus))
+                .unwrap();
+            assert_eq!(warded.characteristics.ward_life, 7, "{case}");
+            let context = s.game().decision_context(PlayerId(1)).unwrap();
+            assert!(
+                context.instruction.contains("life"),
+                "{}",
+                context.instruction
+            );
+            assert!(context.mana_cost.0.is_none(), "a life cost owes no mana");
+            assert!(s.take_action_by_type(match line {
+                Line::Pay => ActionType::PayCost,
+                Line::Decline => ActionType::DeclineChoice,
+            }));
+            match line {
+                Line::Decline => {
+                    s.assert_life(1, life);
+                    s.pass_priority();
+                    s.pass_priority();
+                    assert_eq!(permanent(&s, sire).damage, 0, "countered, {case}");
+                }
+                Line::Pay if life == 7 => {
+                    // One action paid it: no mana step followed.
+                    s.assert_life(1, 0);
+                    assert!(s.game().is_game_over(), "0 life loses, {case}");
+                }
+                Line::Pay => {
+                    s.assert_life(1, life - 7);
+                    assert!(s.game().state.suspended_decision.is_none(), "{case}");
+                    s.pass_priority();
+                    s.pass_priority();
+                    assert_eq!(permanent(&s, sire).damage, 3, "resolved, {case}");
+                    s.assert_life(1, life - 7);
+                }
+            }
+        }
+    }
+}
+
 /// The payment preview reads the cost being paid. Hungry Ghoul's "{1},
 /// Sacrifice another creature" has no preview until the creature is chosen;
 /// at the mana it forecasts the land that would be tapped, and the pending

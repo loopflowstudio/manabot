@@ -1887,14 +1887,18 @@ impl Game {
                 Decision::ManaChoice {
                     resume: Some(next), ..
                 } => append(next, game, result),
+                // A life cost is paid or declined in one action: it never
+                // commits, so it never reaches the solver as an obligation.
                 Decision::Payment(progress) if !progress.can_decline() => {
-                    result.push(Obligation::Pay {
-                        cost: progress.remaining.mana_cost(),
-                        waterbend: matches!(
-                            progress.remaining,
-                            crate::state::ability::PaymentCost::Waterbend { .. }
-                        ),
-                    });
+                    if let Some(cost) = progress.remaining.mana() {
+                        result.push(Obligation::Pay {
+                            cost,
+                            waterbend: matches!(
+                                progress.remaining,
+                                crate::state::ability::PaymentCost::Waterbend { .. }
+                            ),
+                        });
+                    }
                 }
                 _ => {}
             }

@@ -378,7 +378,7 @@ Its rules are deliberately approximate:
   chump to prevent lethal damage.
 - Use its own pumps when they change a fight or make unblocked damage lethal;
   ignore hypothetical opposing combat tricks. Pay offered optional ward and
-  “unless pays” costs.
+  “unless pays” costs, except a ward paid in life that would leave it at 0.
 
 Choices are deterministic for the same visible state and decision history.
 Equal-value casts use the first legal offer; equal-ranked discard and
@@ -1184,13 +1184,16 @@ order is deterministic so replay, training and search stay exact, and a card
 that needs more stays unsupported rather than approximated.
 
 **Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
-with a `PaymentCost` (mana, or waterbend taps against a generic obligation) and
-`if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
+with a `PaymentCost` (mana, waterbend taps against a generic obligation, or
+life) and `if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
 remaining cost and the exact objects already contributed, and completion
 prepends exactly one branch to the effect frame; counter-unless-paid uses the
 same progress with the spell's controller as payer. A mana ability activated
 during payment stays committed if the payment is then declined, and waterbend
-taps are cost payment, never tapping for mana. People and policies see the same
+taps are cost payment, never tapping for mana. A life cost ("Ward—Pay 7
+life.") is one action: Pay is offered only to a player whose life total is at
+least the amount (CR 119.4) and loses the life at once, under manual and
+automatic payment alike; no mana ability is offered for it. People and policies see the same
 native offers (pay or not, waterbend, modal colors, discard), with no
 human-only payment flow.
 

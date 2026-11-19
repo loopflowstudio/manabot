@@ -69,6 +69,8 @@ class Definition(CaptureModel):
     toughness: int | None
     kicker: ManaCost | None
     ward: ManaCost | None
+    # The life a ward costs ("Ward—Pay 7 life."); absent for any other ward.
+    ward_life: int | None = Field(default=None, exclude_if=lambda value: value is None)
     is_token: bool
 
 

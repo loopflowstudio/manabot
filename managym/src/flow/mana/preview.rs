@@ -237,14 +237,20 @@ impl Game {
                     .suspended_decision_mut()
                     .take()
                     .unwrap();
-                if let Decision::Payment(payment) = suspended.decision {
-                    sources
-                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
-                    let cost = payment.remaining.mana_cost();
-                    resolution = Some((payment, suspended.frame));
-                    Some(cost)
-                } else {
-                    None
+                // A cost paid in life has no mana route: `None` answers
+                // `not_applicable` below, as for any other decision.
+                match suspended.decision {
+                    Decision::Payment(payment) => match payment.remaining.mana() {
+                        Some(cost) => {
+                            sources.extend(
+                                offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)),
+                            );
+                            resolution = Some((payment, suspended.frame));
+                            Some(cost)
+                        }
+                        None => None,
+                    },
+                    _ => None,
                 }
             }
             Action::PayCost { .. } | Action::TapForMana { .. } => match &self.pending_choice {

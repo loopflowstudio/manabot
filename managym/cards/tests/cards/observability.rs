@@ -3144,6 +3144,12 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_ally => [column(Card, card::IS_ALLY), column(Permanent, permanent::IS_ALLY)],
         is_lesson => [column(Card, card::IS_LESSON), column(Permanent, permanent::IS_LESSON)],
         ward_cost => [Columns(Card, card::HAS_WARD, 2), Columns(Permanent, permanent::HAS_WARD, 2)],
+        ward_life => [
+            column(Card, card::HAS_WARD),
+            column(Permanent, permanent::HAS_WARD),
+            FactOccurrence(FactKind::EffectProgram),
+        ],
+        ward_program => [FactOccurrence(FactKind::EffectProgram)],
         kicker_cost => [Columns(Card, card::HAS_KICKER, 2)],
         card_types => [Rows("card types below")],
         keywords => [Rows("keywords below")],
@@ -3556,6 +3562,8 @@ fn card_sources() -> Vec<(&'static str, CardSource)> {
         is_ally => Layered,
         is_lesson => Layered,
         ward_cost => Layered,
+        ward_life => Layered,
+        ward_program => Layered,
         kicker_cost => Printed("a cost paid when casting"),
         card_types => Layered,
         keywords => Layered,
@@ -3585,14 +3593,22 @@ fn card_json(s: &Scenario, viewer: usize, permanent: PermanentId) -> serde_json:
 /// Every layered card field moves under some continuous effect while its
 /// card is on the battlefield, and no printed field moves: records change
 /// Gran-Gran's supertype, P/T, keywords, subtypes and types, Dragonfly
-/// Swarm loses its ward, and Honest Work renames the Drake.
+/// Swarm loses its ward, Sire of Seven Deaths its ward paid in life, and
+/// Honest Work renames the Drake.
 #[test]
 fn layered_card_fields_read_characteristics_on_the_battlefield() {
-    let mut s = five_color_setup(&["Gran-Gran", "Dragonfly Swarm", "Honest Work", "Wind Drake"]);
+    let mut s = five_color_setup(&[
+        "Gran-Gran",
+        "Dragonfly Swarm",
+        "Honest Work",
+        "Wind Drake",
+        "Sire of Seven Deaths",
+    ]);
     let gran = s.force_permanent_on_battlefield(0, "Gran-Gran");
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
-    let witnesses = [gran, swarm, drake];
+    let sire = s.force_permanent_on_battlefield(1, "Sire of Seven Deaths");
+    let witnesses = [gran, swarm, drake, sire];
     let before = witnesses.map(|id| card_json(&s, 0, id));
     let gran_card = s.game().state.permanents[gran].as_ref().unwrap().object;
     s.game_mut().state[gran_card]
@@ -3616,6 +3632,7 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
         until_end_of_turn(&mut s, gran, modification);
     }
     until_end_of_turn(&mut s, swarm, Modification::LoseAllAbilities);
+    until_end_of_turn(&mut s, sire, Modification::LoseAllAbilities);
     until_end_of_turn(
         &mut s,
         swarm,
@@ -3652,6 +3669,8 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
         "ward is an ability the record removed"
     );
     assert_eq!(swarm_row["is_ally"], true);
+    assert_eq!(before[3]["ward_life"], 7);
+    assert!(after[3].get("ward_life").is_none());
     let drake_row = &after[2];
     assert_eq!(drake_row["name"], "Humble Merchant");
     assert_eq!(
@@ -4689,6 +4708,93 @@ fn pooled_mana_classes_are_programs_on_their_player() {
         for &(kind, value) in &classes[0].program {
             assert!(
                 literal.contains(&kind)
+                    || tokens.iter().any(|&(k, v)| k as u16 == kind && v == value),
+                "program token ({kind}, {value}) is outside the definition's vocabulary"
+            );
+        }
+    }
+}
+
+/// Sire of Seven Deaths' "Ward—Pay 7 life." is no mana value: the ward
+/// columns say it has ward at no mana, and the price is a program on the
+/// permanent in the tokens its definition spells, for both viewers.
+#[test]
+fn a_ward_paid_in_life_is_a_program_on_its_permanent() {
+    let mut s = five_color_setup(&["Sire of Seven Deaths", "Tolarian Terror"]);
+    s.force_permanent_on_battlefield(0, "Sire of Seven Deaths");
+    s.force_permanent_on_battlefield(0, "Tolarian Terror");
+    s.game_mut().scenario_refresh_priority().unwrap();
+
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let permanents = if viewer == 0 {
+            &observation.agent_permanents
+        } else {
+            &observation.opponent_permanents
+        };
+        let named = |name: &str| {
+            permanents
+                .iter()
+                .position(|permanent| permanent.characteristics.name == name)
+                .unwrap()
+        };
+        let sire = &permanents[named("Sire of Seven Deaths")].characteristics;
+        assert_eq!((sire.ward_cost, sire.ward_life), (0, 7));
+        // Variant, amount, close: the serialization of `PaymentCost::Life(7)`.
+        assert_eq!(
+            sire.ward_program[..2],
+            [
+                (TokenKind::Variant as u16, name_value("PaymentCost::Life")),
+                (TokenKind::Integer as u16, 7)
+            ]
+        );
+        // A mana ward stays in its column and states no program.
+        let terror = &permanents[named("Tolarian Terror")].characteristics;
+        assert_eq!((terror.ward_cost, terror.ward_life), (2, 0));
+        assert!(terror.ward_program.is_empty());
+
+        let encoded = encoded_default(&observation);
+        let rows: Vec<&[f32]> = encoded
+            .agent_permanents
+            .chunks(PERMANENT_DIM)
+            .chain(encoded.opponent_permanents.chunks(PERMANENT_DIM))
+            .filter(|row| row[permanent::HAS_WARD] == 1.0)
+            .collect();
+        let mut costs: Vec<f32> = rows.iter().map(|row| row[permanent::WARD_COST]).collect();
+        costs.sort_by(f32::total_cmp);
+        assert_eq!(
+            costs,
+            [0.0, 0.2],
+            "both have ward; only the Terror's is mana"
+        );
+
+        let ward = id_columns(name_value(managym::agent::observation_encoder::WARD));
+        let rows: Vec<&[f32]> = encoded
+            .facts
+            .chunks(FACT_DIM)
+            .filter(|row| {
+                row[fact::KIND] == FactKind::EffectProgram as u8 as f32
+                    && row[fact::ID_HIGH..fact::ID_HIGH + 2] == ward
+            })
+            .collect();
+        assert_eq!(rows.len(), sire.ward_program.len());
+        for (ordinal, (row, &(kind, value))) in rows.iter().zip(&sire.ward_program).enumerate() {
+            assert_eq!(row[fact::OBJECT], rows[0][fact::OBJECT]);
+            assert_eq!(row[fact::VALUE], f32::from(kind));
+            assert_eq!(row[fact::VALUE + 1], ordinal as f32);
+            assert_eq!(
+                row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2],
+                id_columns(value)
+            );
+        }
+        let definition = managym_cards::catalog()
+            .iter()
+            .find(|definition| definition.name == "Sire of Seven Deaths")
+            .unwrap();
+        let tokens = tokens_of(&ObjectDefinition::card(definition));
+        for &(kind, value) in &sire.ward_program {
+            assert!(
+                kind == TokenKind::Integer as u16
                     || tokens.iter().any(|&(k, v)| k as u16 == kind && v == value),
                 "program token ({kind}, {value}) is outside the definition's vocabulary"
             );

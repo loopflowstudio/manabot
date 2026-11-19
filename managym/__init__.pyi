@@ -802,6 +802,8 @@ class ObservationCharacteristics:
     is_ally: bool
     is_lesson: bool
     ward_cost: int
+    ward_life: int
+    ward_program: list[tuple[int, int]]
     kicker_cost: int
     card_types: CardTypes
     keywords: Keywords

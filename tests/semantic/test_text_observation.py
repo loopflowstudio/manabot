@@ -521,6 +521,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "is_ally": "Ally",
         "is_lesson": "Lesson",
         "ward_cost": "ward mana value",
+        "ward_life": "ward: pay N life",
+        "ward_program": "ward: pay N life (the same price in learning tokens)",
         "kicker_cost": "kicker mana value or the definition's kicker rule",
     },
     managym.Permanent: {
