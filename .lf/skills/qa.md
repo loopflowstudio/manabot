@@ -88,6 +88,15 @@ publish, land or choose the next Graph step from here.
   too; the error must match, not be absent. `maturin build` without
   `--release` gives an extension with `debug_assert!` live, about 10x slower;
   unzip it to its own directory, never over `managym/`.
+- Academy e2e specs (`academy/ui/e2e/*.spec.ts`, default config): set
+  unused `ACADEMY_API_PORT`/`ACADEMY_FRONTEND_PORT`, because the config reuses
+  any server already on 8011/5183, including one from another checkout, and
+  `VIRTUAL_ENV=<root>/.venv` for its `uv run --active` backend. A flake that
+  depends on the deal shows up with `--repeat-each 12` (about 30 s); log the
+  values an assertion reads with a temporary `console.log` and revert it. Board
+  regions handle only arrow keys (Home/End mean the start and end of a game),
+  and Tab enters a region on its first control with an offer, not its first
+  control.
 - Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
