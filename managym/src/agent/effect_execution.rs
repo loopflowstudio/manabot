@@ -554,24 +554,7 @@ impl<'a> Projection<'a> {
     }
 
     fn mana_spent(&mut self, spent: &PaymentReceipt) {
-        /// The receipt's rule-read facts, under the names their tokens have:
-        /// the amounts by color and what the units' spend riders did.
-        #[derive(Debug, Serialize)]
-        struct ManaSpent {
-            amounts: [u8; 6],
-            #[serde(skip_serializing_if = "crate::state::is_zero")]
-            entry_counters: u8,
-            #[serde(skip_serializing_if = "Vec::is_empty")]
-            gains: Vec<crate::state::card::Keyword>,
-            #[serde(skip_serializing_if = "crate::state::is_zero")]
-            copies: u8,
-        }
-        let facts = ManaSpent {
-            amounts: spent.amounts(),
-            entry_counters: spent.entry_counters(),
-            gains: spent.keywords_gained().iter().collect(),
-            copies: spent.copy_triggers().count() as u8,
-        };
+        let facts = ManaSpent::of(spent);
         self.field("mana spent", &facts);
         self.summary(|| {
             let mana = mana_description(&Mana {
@@ -899,6 +882,31 @@ impl<'a> Projection<'a> {
     }
 }
 
+/// A receipt's rule-read mana facts, under the names their tokens have: the
+/// amounts by color and what the units' spend riders did. Which object
+/// produced each unit is text only and adds no policy tokens.
+#[derive(Debug, Serialize)]
+struct ManaSpent {
+    amounts: [u8; 6],
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    entry_counters: u8,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    gains: Vec<crate::state::card::Keyword>,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    copies: u8,
+}
+
+impl ManaSpent {
+    fn of(spent: &PaymentReceipt) -> Self {
+        Self {
+            amounts: spent.amounts(),
+            entry_counters: spent.entry_counters(),
+            gains: spent.keywords_gained().iter().collect(),
+            copies: spent.copy_triggers().count() as u8,
+        }
+    }
+}
+
 /// Whether a rule still reads `spent`, the mana spent to cast the spell that
 /// is, or became the source of, the object defined by `definition`: its
 /// definition counts that mana (Toph, converge), or a spend effect applied
@@ -1033,7 +1041,7 @@ pub(crate) fn project_decision(
             spent,
             completion,
         } => {
-            out.field("mana spent", spent);
+            out.field("mana spent", &ManaSpent::of(spent));
             out.summary(|| {
                 format!(
                     "Mana already spent in this payment: {}.",

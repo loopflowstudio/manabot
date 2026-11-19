@@ -4777,6 +4777,11 @@ fn tap_for_mana_spent(s: &mut Scenario, spell: &str) {
             target_opponent(s);
             continue;
         }
+        // The spending decision's own frame, receipt so far included, stays
+        // inside the registered vocabulary.
+        for frame in &Observation::for_player(s.game(), PlayerId(0)).continuation {
+            assert_execution_tokens_registered(frame);
+        }
         let frame = s.game().semantic_decision_frame().unwrap();
         let rider = frame
             .offers
