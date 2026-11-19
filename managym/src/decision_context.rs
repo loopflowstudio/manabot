@@ -363,6 +363,8 @@ impl Game {
                     ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
                 CostComponent::ExileFromHand =>
                     ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
+                CostComponent::Discard if payment.operation.spell().is_some() =>
+                    ("additional_cost", "Choose another card in hand to discard as an additional cost to cast this spell."),
                 CostComponent::Discard =>
                     ("additional_cost", "Choose a card to discard as an activation cost."),
                 CostComponent::Tap(_, Toward::Station) =>

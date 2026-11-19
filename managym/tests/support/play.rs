@@ -577,6 +577,12 @@ pub fn cast_discarding_a_chosen_card(name: &str, mountains: usize, auto: bool) -
     expected.sort();
     assert_eq!(offered, expected);
     assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert!(
+        context.instruction.contains("to cast this spell"),
+        "{}",
+        context.instruction
+    );
     let fork = fork_selecting(&s, ogre);
     assert_eq!(zone_of(&fork, ogre), Some(ZoneType::Graveyard));
     assert_eq!(zone_of(&fork, giant), Some(ZoneType::Hand));
