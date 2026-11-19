@@ -183,8 +183,6 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
     let choice = tap_pays_choice(&s);
     assert_eq!(choice.focus, [object_public_id(&s, lions)]);
     assert_eq!(choice.modes, [0, 5]);
-    // Replay each ChooseMode Command on two clones and reject every Command
-    // of this decision after one commits.
     assert_choice_contract(&s);
     for (mode, white_spent) in [(0, 0), (5, 1)] {
         let mut fork = crate::support::play::fork_choosing(

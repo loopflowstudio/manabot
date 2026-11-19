@@ -410,10 +410,13 @@ pub struct TapPaysChoice {
     pub modes: Vec<usize>,
 }
 
+/// The public object id an observation uses for a permanent.
 pub fn object_public_id(s: &Scenario, permanent: PermanentId) -> i32 {
     s.game().state[card_of(s, permanent)].id.0 as i32
 }
 
+/// Read the current tap-pays choice from its chooser's observation, checking
+/// that every offer shares the choice's focus.
 pub fn tap_pays_choice(s: &Scenario) -> TapPaysChoice {
     let space = s.action_space();
     assert_eq!(space.kind, ActionSpaceKind::Modal);
@@ -435,11 +438,10 @@ pub fn tap_pays_choice(s: &Scenario) -> TapPaysChoice {
 }
 
 /// Exercise every offered atomic continuation through the real Command
-/// authority, with an independent replay; an unoffered Command, and once one
-/// commits every Command of the decision (itself included), is stale and
-/// changes nothing. Every legal
-/// action and a follow-up step run on exact forks that leave the source
-/// untouched.
+/// authority, with an independent replay. An unoffered Command, and every
+/// Command of the decision once one commits, is rejected and changes nothing.
+/// Every legal action and a follow-up step run on exact forks that leave the
+/// source untouched.
 pub fn assert_choice_contract(s: &Scenario) {
     use managym::{decision::Command, search_state::witness};
     let root = witness(s.game());
