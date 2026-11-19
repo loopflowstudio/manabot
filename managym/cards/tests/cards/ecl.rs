@@ -42,6 +42,9 @@ fn cast_appeal(s: &mut crate::support::game::Scenario, target: PermanentId) {
 
 /// Appeal to Eirdu ({3}{W}) with no lands: a white creature pays the {W},
 /// any creature pays {1}, and a creature tapped for mana cannot also convoke.
+/// With no white mana floating the Lions can only pay the {W}, so no tap-pays
+/// choice is published here; the next test checks that choice's modes, focus
+/// and Commands.
 #[test]
 fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
     let mut s = five_color_unfunded_setup(&[
