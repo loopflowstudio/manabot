@@ -5917,5 +5917,41 @@
     "colors": [
       "G"
     ]
+  },
+  "Cultivator's Caravan": {
+    "name": "Cultivator's Caravan",
+    "mana_cost": "{3}",
+    "type_line": "Artifact — Vehicle",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Crew"
+    ],
+    "oracle_text": "{T}: Add one mana of any color.\nCrew 3 (Tap any number of creatures you control with total power 3 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "colors": []
+  },
+  "Hungry Ghoul": {
+    "name": "Hungry Ghoul",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Zombie",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{1}, Sacrifice another creature: Put a +1/+1 counter on this creature.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Luminous Rebuke": {
+    "name": "Luminous Rebuke",
+    "mana_cost": "{4}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {3} less to cast if it targets a tapped creature.\nDestroy target creature.",
+    "colors": [
+      "W"
+    ]
   }
 }

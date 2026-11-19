@@ -2114,7 +2114,7 @@ impl Game {
         offers
             .iter()
             .enumerate()
-            .find(|(index, (power, _))| 1 + needed(owed - power, Some(*index)) <= fewest)
+            .find(|(index, (power, _))| needed(owed - power, Some(*index)) < fewest)
             .map(|(_, (_, action))| (*action).clone())
     }
 
@@ -2217,10 +2217,10 @@ impl Game {
             return self.advance_mana_upfront();
         }
         match self.paying() {
-            Some((_, payment, CostComponent::Mana { .. })) if !payment.waterbends() => {
-                if !self.has_mana_payment_choices(player) {
-                    return self.finish_mana_payment(player);
-                }
+            Some((_, payment, CostComponent::Mana { .. }))
+                if !payment.waterbends() && !self.has_mana_payment_choices(player) =>
+            {
+                return self.finish_mana_payment(player);
             }
             None => self.state.priority_mut().on_non_pass_action(player),
             _ => {}
