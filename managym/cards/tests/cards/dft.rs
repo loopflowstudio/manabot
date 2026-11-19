@@ -70,7 +70,7 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
     use crate::support::{
         game::{clear_summoning_sickness, five_color_unfunded_setup},
         inspect::{card_of, has_action, tapped},
-        play::{activate, attack_with},
+        play::{activate, attack_with, fork_selecting},
     };
     use managym::{
         agent::action::Action,
@@ -113,17 +113,7 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
             let rider = card_of(&s, elves);
             // Either creature saddles, each in its own line of play.
             for chosen in [rider, card_of(&s, ogre)] {
-                let mut fork = s.game().clone();
-                let action = fork
-                    .action_space()
-                    .unwrap()
-                    .actions
-                    .iter()
-                    .position(
-                        |a| matches!(a, Action::SelectCard { object, .. } if *object == chosen),
-                    )
-                    .unwrap();
-                fork.step(action).unwrap();
+                let fork = fork_selecting(&s, chosen);
                 let [StackObject::ActivatedAbility(ability)] = fork.state.stack_objects.as_slice()
                 else {
                     panic!("one saddle activation, auto={auto}")

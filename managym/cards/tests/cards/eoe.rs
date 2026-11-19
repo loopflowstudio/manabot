@@ -3,7 +3,7 @@
 use crate::support::{
     game::{five_color_unfunded_setup, set_counters},
     inspect::{card_of, counters_of, has_action, offered_cards, tapped},
-    play::{activate, select_card, settle},
+    play::{activate, fork_selecting, select_card, settle},
 };
 use managym::{
     agent::action::Action,
@@ -59,15 +59,7 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
         // A fork at the tap choice: the counters follow the creature chosen.
         for (creature, power) in creatures {
             let chosen = card_of(&s, creature);
-            let mut fork = s.game().clone();
-            let action = fork
-                .action_space()
-                .unwrap()
-                .actions
-                .iter()
-                .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == chosen))
-                .unwrap();
-            fork.step(action).unwrap();
+            let mut fork = fork_selecting(&s, chosen);
             let [StackObject::ActivatedAbility(ability)] = fork.state.stack_objects.as_slice()
             else {
                 panic!("one station activation, auto={auto}")

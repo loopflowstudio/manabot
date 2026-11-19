@@ -414,8 +414,8 @@ impl Payment {
             .sum()
     }
 
-    /// Whether completing this payment taps (`TapSource`) or sacrifices
-    /// (`SacrificeSource`) its source.
+    /// Whether completing this payment pays `source_cost` (`TapSource`,
+    /// `SacrificeSource` or `DiscardSource`).
     pub fn owes(&self, source_cost: &CostComponent) -> bool {
         self.owed.contains(source_cost)
     }

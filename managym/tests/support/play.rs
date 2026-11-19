@@ -19,6 +19,7 @@ use managym::{
         target::Target,
         zone::ZoneType,
     },
+    Game,
 };
 
 use crate::support::{
@@ -361,6 +362,20 @@ pub fn select_card(s: &mut Scenario, object: ObjectId) {
         s,
         |a| matches!(a,Action::SelectCard {object: selected,..} if *selected==object),
     );
+}
+
+/// A copy of the game in which the offered `object` was selected: one line
+/// of play from a choice, leaving `s` at the choice.
+pub fn fork_selecting(s: &Scenario, object: ObjectId) -> Game {
+    let mut fork = s.game().clone();
+    let action = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::SelectCard { object: offered, .. } if *offered == object))
+        .unwrap_or_else(|| panic!("{object:?} is not offered: {:?}", s.action_space()));
+    fork.step(action).unwrap();
+    fork
 }
 
 /// Tap `source` for mana while a cost is being paid or at priority. A source

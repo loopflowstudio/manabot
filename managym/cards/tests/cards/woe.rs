@@ -128,7 +128,7 @@ fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
     use crate::support::{
         game::{five_color_unfunded_setup, force_new_card_in_hand},
         inspect::offered_cards,
-        play::{cast_card, choose, pass_until},
+        play::{cast_card, choose, fork_selecting, pass_until},
     };
     use managym::{
         agent::action::{Action, ActionSpaceKind},
@@ -159,15 +159,7 @@ fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
     assert_eq!(offered, expected);
 
     for (chosen, kept) in [(tokens[0], tokens[1]), (tokens[1], tokens[0])] {
-        let mut fork = s.game().clone();
-        let action = fork
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == chosen))
-            .unwrap();
-        fork.step(action).unwrap();
+        let fork = fork_selecting(&s, chosen);
         let [StackObject::Spell(spell)] = fork.state.stack_objects.as_slice() else {
             panic!("the spell is cast once, its mana paid automatically")
         };

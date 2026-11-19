@@ -2182,26 +2182,20 @@ impl Game {
                     )?,
                 };
                 let source_object = ability.source_object;
-                if payment.owes(&CostComponent::TapSource) {
-                    payment
-                        .receipt
-                        .contribute(source_object, How::Tapped, Toward::Printed);
+                for (cost, how) in [
+                    (CostComponent::TapSource, How::Tapped),
+                    (CostComponent::SacrificeSource, How::Sacrificed),
+                    (CostComponent::DiscardSource, How::Discarded),
+                ] {
+                    if payment.owes(&cost) {
+                        payment
+                            .receipt
+                            .contribute(source_object, how, Toward::Printed);
+                    }
                 }
-                if payment.owes(&CostComponent::SacrificeSource) {
-                    payment
-                        .receipt
-                        .contribute(source_object, How::Sacrificed, Toward::Printed);
-                }
-                if payment.owes(&CostComponent::DiscardSource) {
-                    payment
-                        .receipt
-                        .contribute(source_object, How::Discarded, Toward::Printed);
-                    discard = Some(self.zone_move_proposal(
-                        source_object,
-                        ZoneType::Graveyard,
-                        Default::default(),
-                    ));
-                }
+                discard = payment.owes(&CostComponent::DiscardSource).then(|| {
+                    self.zone_move_proposal(source_object, ZoneType::Graveyard, Default::default())
+                });
                 Some((ability, *source))
             }
         };
