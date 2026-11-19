@@ -3,7 +3,10 @@
 // offered actions, and the observation/command contract checks.
 
 use managym::{
-    agent::action::{Action, ActionSpace, ActionSpaceKind, ActionType},
+    agent::{
+        action::{Action, ActionSpace, ActionSpaceKind, ActionType},
+        observation::Observation,
+    },
     flow::event::GameEvent,
     flow::turn::{PhaseKind, StepKind},
     state::{
@@ -421,7 +424,7 @@ pub fn tap_pays_choice(s: &Scenario) -> TapPaysChoice {
     let space = s.action_space();
     assert_eq!(space.kind, ActionSpaceKind::Modal);
     let player = space.player.expect("a tap-pays choice has a chooser");
-    let observation = managym::agent::observation::Observation::for_player(s.game(), player);
+    let observation = Observation::for_player(s.game(), player);
     let observed_space = observation.action_space;
     let modes = observed_space
         .actions
@@ -464,13 +467,7 @@ pub fn assert_choice_contract(s: &Scenario) {
     // An offer the frame does not publish is rejected and changes nothing.
     let unoffered = Command {
         command_id: "elemental-choice-unoffered".to_string(),
-        offer_id: frame
-            .offers
-            .iter()
-            .map(|offer| offer.id.0)
-            .max()
-            .unwrap_or(0)
-            + 1,
+        offer_id: commands.iter().map(|c| c.offer_id).max().unwrap() + 1,
         ..commands[0].clone()
     };
     let mut branch = s.game().clone();
