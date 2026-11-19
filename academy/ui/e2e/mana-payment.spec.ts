@@ -92,7 +92,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await expect(primary).toHaveText(/^Pay \{1\}\{R\}/);
     await expect(primary).toHaveAccessibleName(/\{1\}\{R\} · \S+/);
     await expect(planned(page)).toHaveCount(2);
-    await expect(page.getByTestId('decision-prompt')).toContainText('Space taps the dashed lands');
+    await expect(page.getByTestId('decision-hint')).toContainText('Space taps the dashed lands');
     await expect(page.getByTestId('action-option')).toHaveCount((await frame(page)).offers.length);
     for (const colorScheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });

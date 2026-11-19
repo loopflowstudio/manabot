@@ -32,7 +32,7 @@
   import { paymentPlan, previewable } from './payment';
   import { addressOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
-  import { primaryLabel, promptLine } from './prompt';
+  import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
@@ -330,7 +330,9 @@
   const primaryText = $derived(primaryLabel(frame, view, payOffer && previewing === payOffer ? answered : null));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
-      : promptLine(frame, view, payPlanned !== null && previewing === payOffer && payPlanned.sources.size > 0));
+      : promptLine(frame, view));
+  const hint = $derived(drafting || running ? null
+    : promptHint(frame, view, payPlanned !== null && previewing === payOffer && payPlanned.sources.size > 0));
   const paymentNote = $derived(payOffer && previewing === payOffer
     ? payment?.error ? 'The payment preview is unavailable; Pay still pays automatically.'
       : answered && answered.state !== 'exact' && answered.state !== 'not_applicable' ? answered.explanation : null
@@ -817,7 +819,7 @@
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
+    <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
       {evidence} {recapTitle} {onjump} {currentMove} reading={beat && !result ? reading : undefined}

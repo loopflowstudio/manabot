@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { primaryLabel, promptLine } from './prompt';
+import { committed, primaryLabel, promptHint, promptLine } from './prompt';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -31,21 +31,22 @@ describe('promptLine', () => {
     expect(line).not.toMatch(/offer|commit|clause|nonparticipation/i);
   });
 
-  it('names the cost and how Space pays it', () => {
+  it('asks for the cost in the line and says how Space pays it in the hint', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost);
     expect(pay).toBeDefined();
-    expect(promptLine(pay!, boardView(pay!, PLAYERS))).toMatch(/^Pay \{.*Space pays automatically/);
+    const view = boardView(pay!, PLAYERS);
+    expect(promptLine(pay!, view)).toMatch(/^Pay \{[^.]*$/);
+    expect(promptHint(pay!, view)).toMatch(/^Space pays automatically/);
+    expect(promptHint(pay!, view, true)).toMatch(/^Space taps the dashed lands/);
   });
 
-  it('lists what is committed to the cost, in order, after the decision', () => {
+  it('lists what is committed to the cost, in order, apart from the line', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
     const paying = { ...pay, projection: { ...pay.projection, decision_context: { ...pay.projection.decision_context!,
       paid: [{ phrase: 'Gray Ogre, sacrificed when the payment completes' }, { phrase: 'tapped Hill Giant to crew' }] } } };
-    const line = promptLine(paying, boardView(paying, PLAYERS));
-    expect(line).toMatch(/^Pay \{/);
-    expect(line.endsWith('. Committed to this cost: Gray Ogre, sacrificed when the payment completes; tapped Hill Giant to crew')).toBe(true);
-    expect(line).not.toContain('Already paid');
-    expect(promptLine(pay, boardView(pay, PLAYERS))).not.toContain('Committed to this cost');
+    expect(committed(paying)).toEqual(['Gray Ogre, sacrificed when the payment completes', 'tapped Hill Giant to crew']);
+    expect(promptLine(paying, boardView(paying, PLAYERS))).toBe(promptLine(pay, boardView(pay, PLAYERS)));
+    expect(committed(pay)).toEqual([]);
   });
 
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {
@@ -133,7 +134,6 @@ describe('primaryLabel', () => {
     const label = primaryLabel(pay, boardView(pay, PLAYERS), preview);
     expect(label?.text).toBe(`Pay ${cost}`);
     expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
-    expect(promptLine(pay, boardView(pay, PLAYERS), true)).toMatch(/Space taps the dashed lands/);
     // A preview that is not exact draws nothing; the button keeps the cost.
     expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
   });

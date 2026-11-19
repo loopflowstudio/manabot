@@ -29,20 +29,8 @@ function askedCreature(frame: ExperienceFrame, view: BoardView): string | null {
   return asked.length === 1 ? asked[0].name ?? null : null;
 }
 
-/**
- * `planned`: the board shows the automatic payer's taps for the primary
- * payment. While a cost is being paid, the line ends with what is committed
- * to it, in the engine's words and order: a chosen sacrifice has not left yet.
- */
-export function promptLine(frame: ExperienceFrame, view: BoardView, planned = false): string {
-  const line = decisionLine(frame, view, planned);
-  const paid = frame.projection.decision_context?.paid ?? [];
-  if (!paid.length) return line;
-  const committed = `Committed to this cost: ${paid.map(entry => entry.phrase).join('; ')}`;
-  return line ? `${line}. ${committed}` : committed;
-}
-
-function decisionLine(frame: ExperienceFrame, view: BoardView, planned: boolean): string {
+/** What the decision asks, in one stable line: hovering a choice never rewrites it. */
+export function promptLine(frame: ExperienceFrame, view: BoardView): string {
   const context = frame.projection.decision_context;
   const creature = askedCreature(frame, view);
   const source = context?.source?.label ?? null;
@@ -54,7 +42,7 @@ function decisionLine(frame: ExperienceFrame, view: BoardView, planned: boolean)
       return yourMain(frame) ? 'Play a land or cast a spell, or Space to pass' : 'Cast or activate now, or Space to pass';
     case 'PAY_OR_NOT':
       return context?.mana_cost
-        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}. ${!view.primary ? 'Click' : planned ? 'Space taps the dashed lands, or click' : 'Space pays automatically, or click'} lands to tap them yourself`
+        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}`
         : `Pay the cost${source ? ` of ${source}` : ''}, or decline`;
     case 'CHOOSE_TARGET':
       return `Choose a target${source ? ` for ${source}` : ''}`;
@@ -79,6 +67,24 @@ function decisionLine(frame: ExperienceFrame, view: BoardView, planned: boolean)
     default:
       return frame.prompt?.title ?? '';
   }
+}
+
+/**
+ * How to answer a mana payment, apart from what it asks. `planned`: the board
+ * shows the automatic payer's taps for the primary payment.
+ */
+export function promptHint(frame: ExperienceFrame, view: BoardView, planned = false): string | null {
+  if (frame.action_space !== 'PAY_OR_NOT' || !frame.projection.decision_context?.mana_cost) return null;
+  if (!view.primary) return 'Click lands to tap them yourself';
+  return `${planned ? 'Space taps the dashed lands' : 'Space pays automatically'}, or click lands to tap them yourself`;
+}
+
+/**
+ * What is committed to the cost being paid, in the engine's words and order:
+ * a chosen sacrifice has not left yet.
+ */
+export function committed(frame: ExperienceFrame): string[] {
+  return (frame.projection.decision_context?.paid ?? []).map(entry => entry.phrase);
 }
 
 /** Where passing priority on an empty stack leads: the next step, in words. */
