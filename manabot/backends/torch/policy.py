@@ -41,6 +41,7 @@ from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.belief.range import BeliefError
 from manabot.env.observation import (
+    PERMANENT_TIMESTAMP_INDEX,
     STACK_DEFINITION_INDEX,
     STACK_DIM,
     STACK_SOURCE_INDEX,
@@ -174,6 +175,15 @@ class ActorCritic(nn.Module):
         # numeric permanent features.
         columns = layout(observation_space, column_widths)
         perm_dim = len(columns.numeric_permanent_columns)
+        self.input_ablation = config.input_ablation
+        permanent_scale = torch.ones(perm_dim)
+        if (
+            config.input_ablation != "none"
+            and PERMANENT_TIMESTAMP_INDEX in columns.numeric_permanent_columns
+        ):
+            permanent_scale[
+                columns.numeric_permanent_columns.index(PERMANENT_TIMESTAMP_INDEX)
+            ] = 1 / 128
         action_dim = width("actions", enc.action_dim)
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
@@ -202,6 +212,7 @@ class ActorCritic(nn.Module):
         self.player_embedding = ProjectionLayer(player_dim, embed_dim)
         self.card_embedding = ProjectionLayer(card_dim, embed_dim)
         self.perm_embedding = ProjectionLayer(perm_dim, embed_dim)
+        self.register_buffer("permanent_scale", permanent_scale, persistent=False)
         # Embed policy features; validity only masks legal rows.
         self.action_embedding = ProjectionLayer(action_dim - 2, embed_dim)
 
@@ -985,6 +996,9 @@ class ActorCritic(nn.Module):
     def _gather_object_embeddings(
         self, obs: Prepared[torch.Tensor], programs: torch.Tensor | None = None
     ) -> EmbeddedObservation:
+        # `keep` zeroes the non-numeric additions under the bare ablation while
+        # leaving their parameters in the graph with zero gradients.
+        keep = 0.0 if self.input_ablation == "bare" else 1.0
         enc_agent_player = self.player_embedding(obs.agent_player)
         enc_opp_player = self.player_embedding(obs.opponent_player)
         enc_agent_cards = self.card_embedding(obs.agent_cards)
@@ -996,10 +1010,10 @@ class ActorCritic(nn.Module):
                 programs = self.semantic_cards.definitions(obs.programs)
             definitions = self.name_candidates.public_definitions(programs)
             cards, known = self.semantic_cards(obs, definitions)
-            enc_agent_cards = enc_agent_cards + cards[:, 0]
-            enc_opp_cards = enc_opp_cards + cards[:, 1]
-            enc_agent_player = enc_agent_player + known[:, 0, None]
-            enc_opp_player = enc_opp_player + known[:, 1, None]
+            enc_agent_cards = enc_agent_cards + keep * cards[:, 0]
+            enc_opp_cards = enc_opp_cards + keep * cards[:, 1]
+            enc_agent_player = enc_agent_player + keep * known[:, 0, None]
+            enc_opp_player = enc_opp_player + keep * known[:, 1, None]
             permanent_definitions = self.semantic_cards.lookup(
                 definitions, obs.permanent_rows
             )
@@ -1011,22 +1025,23 @@ class ActorCritic(nn.Module):
         else:
             assert self.card_definitions is not None
             cards = self.card_definitions(obs.card_rows)
-            enc_agent_cards = enc_agent_cards + cards[:, 0]
-            enc_opp_cards = enc_opp_cards + cards[:, 1]
+            enc_agent_cards = enc_agent_cards + keep * cards[:, 0]
+            enc_opp_cards = enc_opp_cards + keep * cards[:, 1]
             permanent_definitions = self.card_definitions(obs.permanent_rows)
             stack_definitions = (
                 None
                 if obs.stack_rows is None
                 else self.card_definitions(obs.stack_rows)
             )
+        permanents = obs.permanents * self.permanent_scale.to(obs.permanents.dtype)
         # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
-            self.perm_embedding(obs.permanents[:, 0].contiguous())
-            + permanent_definitions[:, 0]
+            self.perm_embedding(permanents[:, 0].contiguous())
+            + keep * permanent_definitions[:, 0]
         )
         enc_opp_perms = (
-            self.perm_embedding(obs.permanents[:, 1].contiguous())
-            + permanent_definitions[:, 1]
+            self.perm_embedding(permanents[:, 1].contiguous())
+            + keep * permanent_definitions[:, 1]
         )
         parts = [
             enc_agent_player,
@@ -1039,7 +1054,7 @@ class ActorCritic(nn.Module):
         if self.stack_tokens:
             assert self.stack_embedding is not None and obs.stack is not None
             assert stack_definitions is not None
-            parts.append(self.stack_embedding(obs.stack) + stack_definitions)
+            parts.append(self.stack_embedding(obs.stack) + keep * stack_definitions)
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
@@ -1051,10 +1066,12 @@ class ActorCritic(nn.Module):
             if self.semantic_cards is not None and self.semantic_cards.records
             else None
         )
+        plain = objects
         objects = self.facts(obs.facts, objects, token_embedding, definitions)
         objects = self.shared_effects(
             obs.effects, objects, token_embedding, definitions
         )
+        objects = plain + keep * (objects - plain)
         relation_definitions = (
             SemanticCardEncoder.lookup(definitions, obs.relation_rows)
             if definitions is not None
@@ -1072,7 +1089,7 @@ class ActorCritic(nn.Module):
             shared_context = (
                 self.recent_events(obs.events, objects, definitions) + shared_context
             )
-        objects = objects + shared_context.unsqueeze(1)
+        objects = objects + keep * shared_context.unsqueeze(1)
         return EmbeddedObservation(
             objects, obs.is_agent, obs.validity, shared_context, frame_context, programs
         )

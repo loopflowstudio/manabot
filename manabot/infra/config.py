@@ -372,6 +372,13 @@ class ModelConfig(BaseConfig):
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "semantic_pack")
     )
+    # Diagnostic input simplification for the attack-lock study: `timestamp`
+    # scales the permanent timestamp rank by 1/128; `bare` also removes
+    # definition embeddings, facts, shared effects and shared context from
+    # object tokens, leaving the numeric rows.
+    input_ablation: Literal["none", "timestamp", "bare"] = Field(
+        default="none", exclude_if=lambda value: value == "none"
+    )
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
     value_aggregation: ValueAggregation = "historical_mean"

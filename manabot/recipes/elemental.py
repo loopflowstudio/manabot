@@ -26,6 +26,10 @@ class ElementalConfig(RunSettings):
     # Run the CUDA numerics gate before the first update; refuse to train on failure.
     validate_numerics: bool = False
     streams: int = Field(default=256, ge=2)
+    # Attack-lock study: simplify the model's object tokens (ModelConfig.input_ablation).
+    input_ablation: Literal["none", "timestamp", "bare"] = "none"
+    # Attack-lock study: weight of the KL to the reference policy (default 0.05).
+    tau_scale: float | None = Field(default=None, ge=0)
 
 
 def gate(directory: Path) -> None:
@@ -43,8 +47,15 @@ def gate(directory: Path) -> None:
 
 
 def train(config: ElementalConfig) -> None:
-    settings = elemental_self_play().model_copy(
+    base = elemental_self_play()
+    settings = base.model_copy(
         update={
+            "model": base.model.model_copy(
+                update={"input_ablation": config.input_ablation}
+            ),
+            "learning": base.learning
+            if config.tau_scale is None
+            else base.learning.model_copy(update={"tau_scale": config.tau_scale}),
             "device": config.device,
             "streams": config.streams,
             "run_settings": config.run_settings,
