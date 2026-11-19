@@ -17,7 +17,7 @@ use crate::support::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
         counters_of, find_owned_card, find_owned_card_off_battlefield, hand, has_action, keywords,
         library, library_card, library_top, offered_cards, offered_targets, permanent,
-        permanent_named, pt_modifications, stack_spell_card, tapped, zone_of,
+        permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, zone_of,
     },
     play::{
         activate, activate_card, activate_first, activate_named, attack_with, cast,
@@ -14713,9 +14713,7 @@ fn a_sources_own_tap_sacrifice_and_life_are_on_its_activation_receipt() {
     let room_object = card_of(&s, room);
     s.set_player_mana_pool(0, "4");
     activate(&mut s, room, 0);
-    let Some(StackObject::ActivatedAbility(ability)) = s.game().state.stack_objects.last() else {
-        panic!("the draw ability is on the stack")
-    };
+    let ability = top_activation(&s);
     assert_eq!(
         ability.paid.contributions(),
         [How::Tapped, How::Sacrificed].map(|how| Contribution {
@@ -14742,9 +14740,7 @@ fn a_sources_own_tap_sacrifice_and_life_are_on_its_activation_receipt() {
     let koh = s.force_permanent_on_battlefield(0, "Koh, the Face Stealer");
     let life = s.life(0);
     activate(&mut s, koh, 0);
-    let Some(StackObject::ActivatedAbility(ability)) = s.game().state.stack_objects.last() else {
-        panic!("Koh's ability is on the stack")
-    };
+    let ability = top_activation(&s);
     assert_eq!(ability.paid.life(), 1);
     assert!(ability.paid.contributions().is_empty());
     assert_eq!(s.life(0), life - 1);

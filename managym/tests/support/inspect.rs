@@ -11,7 +11,7 @@ use managym::{
         effect::Modification,
         game_object::{Object, ObjectId, PermanentId, PlayerId},
         permanent::{CounterKind, Permanent},
-        stack_object::{SpellOnStack, StackObject},
+        stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject},
         target::Target,
         zone::ZoneType,
     },
@@ -243,6 +243,26 @@ pub fn top_spell(s: &Scenario) -> &SpellOnStack {
             _ => None,
         })
         .unwrap_or_else(|| panic!("a spell is on the stack: {:?}", s.action_space()))
+}
+
+/// The topmost activated ability on the stack, with the receipt of what paid
+/// for it.
+pub fn top_activation(s: &Scenario) -> &ActivatedAbilityOnStack {
+    s.game()
+        .state
+        .stack_objects
+        .iter()
+        .rev()
+        .find_map(|object| match object {
+            StackObject::ActivatedAbility(ability) => Some(ability),
+            _ => None,
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "an activated ability is on the stack: {:?}",
+                s.action_space()
+            )
+        })
 }
 
 /// Player 0's first battlefield permanent with this name.

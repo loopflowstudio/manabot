@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::{five_color_unfunded_setup, move_card, set_counters},
-    inspect::{card_of, counters_of, has_action, offered_cards, tapped},
+    inspect::{card_of, counters_of, has_action, offered_cards, tapped, top_activation},
     play::{activate, fork_selecting, select_card, settle},
 };
 use managym::{
@@ -14,7 +14,6 @@ use managym::{
         payment::{How, Toward},
         permanent::CounterKind,
         player::ManaPayment,
-        stack_object::StackObject,
         zone::ZoneType,
     },
 };
@@ -68,11 +67,7 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
         for (creature, power) in creatures {
             let chosen = card_of(&s, creature);
             let mut fork = fork_selecting(&s, chosen);
-            let [StackObject::ActivatedAbility(ability)] =
-                fork.game().state.stack_objects.as_slice()
-            else {
-                panic!("one station activation, auto={auto}")
-            };
+            let ability = top_activation(&fork);
             assert_eq!(
                 ability
                     .paid
@@ -91,18 +86,12 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
                 context.pending
             );
             settle(&mut fork);
-            let stationed = fork.game().state.permanents[frigate].as_ref().unwrap();
             assert_eq!(
-                stationed.counter_count(CounterKind::Charge),
+                counters_of(&fork, frigate, CounterKind::Charge),
                 power,
                 "auto={auto}"
             );
-            assert!(
-                fork.game().state.permanents[creature]
-                    .as_ref()
-                    .unwrap()
-                    .tapped
-            );
+            assert!(tapped(&fork, creature));
         }
 
         let giant_object = card_of(&s, giant);

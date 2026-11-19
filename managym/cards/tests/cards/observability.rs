@@ -4727,11 +4727,7 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     let room = s.force_permanent_on_battlefield(0, "Airship Engine Room");
     s.set_player_mana_pool(0, "4");
     activate(&mut s, room, 0);
-    let Some(managym::state::stack_object::StackObject::ActivatedAbility(ability)) =
-        s.game().state.stack_objects.last()
-    else {
-        panic!("the draw ability is on the stack")
-    };
+    let ability = crate::support::inspect::top_activation(&s);
     assert_eq!(ability.paid.contributions().len(), 2);
     for viewer in [0, 1] {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));

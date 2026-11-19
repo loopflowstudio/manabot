@@ -69,7 +69,7 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
 fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
     use crate::support::{
         game::{clear_summoning_sickness, five_color_unfunded_setup},
-        inspect::{card_of, has_action, tapped},
+        inspect::{card_of, has_action, tapped, top_activation},
         play::{activate, attack_with, fork_selecting},
     };
     use managym::{
@@ -78,7 +78,6 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
         state::{
             payment::{How, Toward},
             player::ManaPayment,
-            stack_object::StackObject,
         },
     };
     for (saddled, auto) in [(false, false), (true, false), (true, true)] {
@@ -120,11 +119,7 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
             // Either creature saddles, each in its own line of play.
             for chosen in [rider, card_of(&s, ogre)] {
                 let fork = fork_selecting(&s, chosen);
-                let [StackObject::ActivatedAbility(ability)] =
-                    fork.game().state.stack_objects.as_slice()
-                else {
-                    panic!("one saddle activation, auto={auto}")
-                };
+                let ability = top_activation(&fork);
                 assert_eq!(
                     ability
                         .paid
@@ -134,10 +129,7 @@ fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
                 );
             }
             select_card(&mut s, rider);
-            let Some(StackObject::ActivatedAbility(ability)) = s.game().state.stack_objects.last()
-            else {
-                panic!("the saddle ability is on the stack")
-            };
+            let ability = top_activation(&s);
             assert_eq!(
                 ability
                     .paid

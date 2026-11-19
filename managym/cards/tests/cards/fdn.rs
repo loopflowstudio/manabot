@@ -183,10 +183,7 @@ fn hungry_ghoul_receipt_names_the_sacrificed_creature_after_it_has_left() {
             );
         }
 
-        let [StackObject::ActivatedAbility(ability)] = s.game().state.stack_objects.as_slice()
-        else {
-            panic!("the Ghoul's ability is on the stack")
-        };
+        let ability = crate::support::inspect::top_activation(&s);
         assert_eq!(
             ability.paid.contributions(),
             [Contribution {

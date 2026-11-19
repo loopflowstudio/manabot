@@ -94,7 +94,7 @@ fn noxious_gearhulk_gains_the_destroyed_creatures_toughness_only_if_destroyed() 
 fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creatures() {
     use crate::support::{
         game::{five_color_unfunded_setup, force_new_card_in_hand},
-        inspect::{card_of, offered_cards},
+        inspect::{card_of, offered_cards, top_activation},
         play::{activate, cast_card, choose, select_card},
     };
     use managym::{
@@ -175,11 +175,7 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
         // A fork at the second crew choice: either creature left finishes it.
         for chosen in [card_of(&s, giant), elves_object] {
             let fork = crate::support::play::fork_selecting(&s, chosen);
-            let Some(StackObject::ActivatedAbility(ability)) =
-                fork.game().state.stack_objects.last()
-            else {
-                panic!("the crew ability is on the stack, auto={auto}")
-            };
+            let ability = top_activation(&fork);
             assert_eq!(
                 ability
                     .paid
@@ -191,10 +187,7 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
         }
         select_card(&mut s, elves_object);
         let crew = [ogre, elves];
-        let Some(StackObject::ActivatedAbility(ability)) = s.game().state.stack_objects.last()
-        else {
-            panic!("the crew ability is on the stack, auto={auto}")
-        };
+        let ability = top_activation(&s);
         assert_eq!(ability.paid.contributions(), tapped_by(&s, &crew));
         assert!(ability.paid.mana().is_empty());
         for creature in [ogre, giant, elves] {
