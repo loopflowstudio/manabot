@@ -66,7 +66,7 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
 
   // Deck names must render in the game header.
   await expect(page.getByTestId('deck-names')).toHaveText(
-    'You (UR Lessons) vs Random (GW Allies)',
+    'You · UR Lessons vs Random · GW Allies',
     { timeout: 15_000 },
   );
 

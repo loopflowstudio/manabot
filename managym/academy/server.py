@@ -2405,7 +2405,15 @@ class GameSession:
             payload["recovery"] = self.current_recovery("stale_command")
         return payload
 
-    def _persist_attempt(self, *, end_reason: str | None = None) -> None:
+    def _persist_attempt(
+        self, *, end_reason: str | None = None, config_changed: bool = False
+    ) -> None:
+        """Save the attempt once per committed change.
+
+        A live save is skipped when the revision and event count match the
+        last write; a caller that edits `trace.config` without stepping passes
+        `config_changed` so that edit still reaches the store.
+        """
         if self._preparing_demo and end_reason is None:
             return
         if self.trace is None or self.obs is None or self.env is None:
@@ -2416,7 +2424,7 @@ class GameSession:
         if end_reason == "game_over" and not self.obs.game_over:
             raise ValueError("Only an authoritative terminal game can be completed.")
         written = (self.match_id, self.revision, len(self.trace.events))
-        if not finished and written == self._persisted:
+        if not finished and not config_changed and written == self._persisted:
             return
 
         canonical = self._canonical_replay_snapshot()

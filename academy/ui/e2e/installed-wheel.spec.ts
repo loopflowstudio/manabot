@@ -41,7 +41,8 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await expect.poll(() => outcomes.some(row => row.status === 'accepted'), { timeout: 90_000 }).toBe(true);
   // Use the app's navigation: hard document loads cancel in-flight Image requests.
   await expect.poll(() => artRequested).toBe(true);
-  await page.getByRole('banner').getByRole('link', { name: 'Games', exact: true }).click();
+  // The board fills the window; its top bar is the way back to the games list.
+  await page.getByRole('link', { name: 'Academy · Games', exact: true }).click();
   releaseArt();
   await expect.poll(() => artFinished).toBe(true);
   await page.locator('a[aria-label^="Replay game"]').first().click();
@@ -51,6 +52,7 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   const initialPosition = Number(/Position (\d+)/.exec(await counter.innerText())![1]);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(counter).toHaveText(new RegExp(`Position ${initialPosition + 1} / \\d+`));
+  await page.getByRole('link', { name: 'Academy · Games', exact: true }).click();
   await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
   await page.getByRole('combobox', { name: 'Seat 1 controller', exact: true }).selectOption('bot');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();

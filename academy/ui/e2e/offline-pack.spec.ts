@@ -93,7 +93,7 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible({ timeout: 15_000 });
   expect(Date.now() - startedAt).toBeLessThan(60_000);
-  await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Random (GW Allies)');
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies');
 
   const initialTreatments = board.getByTestId('card-treatment');
   const initialTreatmentCount = await initialTreatments.count();

@@ -269,7 +269,7 @@ test('clean command reaches pinned play and reloads without public network', asy
   await page.getByRole('button', { name: 'Start game' }).first().click();
 
   const board = page.getByTestId('game-board');
-  await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Search 64 (GW Allies)', {
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Search 64 · GW Allies', {
     timeout: 15_000,
   });
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
@@ -291,7 +291,7 @@ test('clean command reaches pinned play and reloads without public network', asy
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Search 64 (GW Allies)');
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Search 64 · GW Allies');
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
   const credentialsAfter = await resumeIdentity(page);
   const signatureAfter = await visibleSignature(page);
