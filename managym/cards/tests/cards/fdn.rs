@@ -190,6 +190,36 @@ fn sire_of_seven_deaths_ward_is_paid_in_life_or_counters_the_spell() {
 /// at the mana it forecasts the land that would be tapped, and the pending
 /// decision names the creature already sacrificed and where it still is.
 #[test]
+fn hungry_ghoul_sacrifice_stays_named_while_a_mana_ability_is_being_paid() {
+    use crate::support::{
+        game::five_color_unfunded_setup,
+        play::{choose, select_card},
+    };
+    use managym::agent::action::Action;
+
+    let mut s = five_color_unfunded_setup(&["Hungry Ghoul", "Gray Ogre", "Prophetic Prism"]);
+    let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let prism = s.force_permanent_on_battlefield(0, "Prophetic Prism");
+    s.force_permanent_on_battlefield(0, "Swamp");
+    s.force_permanent_on_battlefield(0, "Forest");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let ogre_object = card_of(&s, ogre);
+
+    activate(&mut s, ghoul, 0);
+    select_card(&mut s, ogre_object);
+    // The Prism's own {1} is a decision inside the Ghoul's payment.
+    choose(
+        &mut s,
+        |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == prism),
+    );
+    assert!(s.game().state.suspended_decision.is_some());
+    let context = serde_json::to_value(s.game().decision_context(PlayerId(0)).unwrap()).unwrap();
+    assert_eq!(context["paid"].as_array().unwrap().len(), 1, "{context}");
+    assert_eq!(context["paid"][0]["object"]["label"], "Gray Ogre");
+}
+
+#[test]
 fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
     use crate::support::{
         game::{five_color_unfunded_setup, Scenario},

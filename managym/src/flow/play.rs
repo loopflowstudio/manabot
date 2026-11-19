@@ -13,7 +13,7 @@
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
-        decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
+        decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion, SuspendedResolution},
         event::GameEvent,
         game::{
             pay_pip_with, ActivationSource, CastChoices, CostComponent, Game, Help, Operation,
@@ -1906,15 +1906,18 @@ impl Game {
         }
     }
 
-    /// The receipt of the cost being paid: an announced payment's, or that
-    /// of a payment suspended during resolution.
+    /// The receipt of the cost being paid: that of a payment suspended
+    /// during resolution, else the announced payment's.
     pub(crate) fn pending_receipt(&self) -> Option<&PaymentReceipt> {
         match (&self.state.suspended_decision, &self.pending_choice) {
-            (Some(suspended), _) => match &suspended.decision {
-                Decision::Payment(payment) => Some(&payment.receipt),
-                _ => None,
-            },
-            (None, Some(PendingChoice::Pay { payment, .. })) => Some(&payment.receipt),
+            (
+                Some(SuspendedResolution {
+                    decision: Decision::Payment(payment),
+                    ..
+                }),
+                _,
+            ) => Some(&payment.receipt),
+            (_, Some(PendingChoice::Pay { payment, .. })) => Some(&payment.receipt),
             _ => None,
         }
     }

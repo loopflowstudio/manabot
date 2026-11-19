@@ -457,6 +457,9 @@ pub enum ResolutionCastOffer {
 
 /// The operation completed by a mana payment. It owns its saved caller;
 /// nested fees cannot contribute to an outer spell's receipt.
+// `Decision::ManaSpend` holds this in a `Box`, so the largest variant costs
+// nothing inline.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum SpendCompletion {
     /// The mana of an announced spell or activation; its receipt gains the
