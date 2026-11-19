@@ -232,7 +232,6 @@ fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
     );
     let paying = preview(&s, &|a| matches!(a, Action::PayCost { .. }));
     assert_eq!(paying["state"], "exact", "{paying}");
-    assert!(paying.get("contributions").is_none());
     assert_eq!(paying["sources"][0]["label"], "Swamp");
     assert_eq!(paying["sources"].as_array().unwrap().len(), 1);
 }

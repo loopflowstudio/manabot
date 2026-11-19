@@ -394,6 +394,25 @@ impl PaymentProgress {
     }
 }
 
+impl Game {
+    /// The cost of a resolution payment is paid: spend its once-each-turn
+    /// option, then run the "if paid" branch before the rest of `frame`.
+    pub(crate) fn finish_resolution_payment(
+        &mut self,
+        payment: PaymentProgress,
+        mut frame: EffectFrame,
+    ) {
+        if let Some(key) = payment.spends {
+            self.spend_once_each_turn(key);
+        }
+        if matches!(payment.remaining, PaymentCost::Waterbend { .. }) {
+            self.record_bending(payment.player, crate::flow::turn::Bending::Water);
+        }
+        frame.prepend_effects(payment.if_paid.into_iter());
+        self.run_frame(frame);
+    }
+}
+
 /// Where a `CastDuringResolution` decision's candidates come from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ResolutionCastOffer {
@@ -1695,28 +1714,25 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
-                let cost = match payment.remaining {
-                    // CR 119.4: a player may pay life only with a life total
-                    // at least the amount (any player may pay 0). Paying is
-                    // one action under manual and automatic payment alike.
-                    PaymentCost::Life(life) => {
-                        let mut actions = Vec::new();
-                        if life == 0 || self.payable_life(player) >= life as i32 {
-                            actions.push(Action::PayCost { player });
-                        }
-                        actions.push(Action::Decline { player });
-                        return Some(ActionSpace {
-                            player: Some(player),
-                            kind: ActionSpaceKind::PayOrNot,
-                            actions,
-                            focus: source_focus,
-                        });
+                // Paying life is one action under manual and automatic
+                // payment alike; every other cost owes mana.
+                if let PaymentCost::Life(life) = payment.remaining {
+                    let mut actions = Vec::new();
+                    if self.can_pay_life(player, life) {
+                        actions.push(Action::PayCost { player });
                     }
-                    PaymentCost::Mana(ref cost) => cost.clone(),
-                    PaymentCost::Waterbend { generic } => {
-                        crate::state::mana::ManaCost::default().with_generic(generic)
-                    }
-                };
+                    actions.push(Action::Decline { player });
+                    return Some(ActionSpace {
+                        player: Some(player),
+                        kind: ActionSpaceKind::PayOrNot,
+                        actions,
+                        focus: source_focus,
+                    });
+                }
+                let cost = payment
+                    .remaining
+                    .mana()
+                    .expect("a life cost returned above");
                 if self.automatic_mana_payment(player) && payment.can_decline() {
                     let waterbend = match payment.remaining {
                         PaymentCost::Waterbend { generic } => generic,
@@ -2259,7 +2275,7 @@ impl Game {
                 Action::PayCost { .. },
             ) => {
                 let (player, life) = (*player, *life);
-                if life > 0 && self.payable_life(player) < life as i32 {
+                if !self.can_pay_life(player, life) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("cannot pay life cost".into()));
                 }
@@ -2267,12 +2283,7 @@ impl Game {
                 let Decision::Payment(payment) = suspended.decision else {
                     unreachable!()
                 };
-                if let Some(key) = payment.spends {
-                    self.spend_once_each_turn(key);
-                }
-                let mut frame = suspended.frame;
-                frame.prepend_effects(payment.if_paid.into_iter());
-                self.run_frame(frame);
+                self.finish_resolution_payment(payment, suspended.frame);
                 Ok(())
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {

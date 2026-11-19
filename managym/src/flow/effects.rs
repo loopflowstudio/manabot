@@ -268,6 +268,12 @@ impl Game {
         }
     }
 
+    /// CR 119.4: a player may pay life only with a life total at least the
+    /// amount; any player may pay 0.
+    pub(crate) fn can_pay_life(&self, player: PlayerId, life: u32) -> bool {
+        life == 0 || self.payable_life(player) >= life as i32
+    }
+
     /// Whether the permanent is phased out (CR 702.26b): the one authority
     /// battlefield readers consult. `iter_battlefield_permanents`, the layer
     /// board's sources, the trigger index, targeting and combat skip it; the

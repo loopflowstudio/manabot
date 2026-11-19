@@ -3487,18 +3487,7 @@ impl Game {
                     });
                 }
                 SpendCompletion::Resolution(payment) => {
-                    if let Some(key) = payment.spends {
-                        self.spend_once_each_turn(key);
-                    }
-                    if matches!(
-                        payment.remaining,
-                        crate::state::ability::PaymentCost::Waterbend { .. }
-                    ) {
-                        self.record_bending(player, crate::flow::turn::Bending::Water);
-                    }
-                    let mut frame = suspended.frame;
-                    frame.prepend_effects(payment.if_paid.into_iter());
-                    self.run_frame(frame);
+                    self.finish_resolution_payment(payment, suspended.frame);
                 }
                 SpendCompletion::Foretell(card) => self.complete_foretell(player, card),
             }
