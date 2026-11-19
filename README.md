@@ -382,7 +382,7 @@ after an interruption.
 [docs/training.md](docs/training.md) covers running, monitoring and recovering
 runs, and [manabot/README.md](manabot/README.md) covers the package.
 
-There is also a local browser table, Academy, for playing one game against a
+There is also a local browser app, Academy, for playing one game against a
 bot or stepping through a replay. It is for inspecting what a bot does, not a
 way to play Magic. Outside a checkout, install and launch it with uv; it needs no manabot,
 Torch, Node or Rust:

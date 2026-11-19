@@ -133,7 +133,7 @@ def create_watch(
             }
             game.trace.config.seed_was_requested = requested_seed
             game.trace.config.watch_players = request.players
-            game._persist_attempt()
+            game._persist_attempt(config_changed=True)
         except BaseException:
             game.close("setup_failed")
             raise

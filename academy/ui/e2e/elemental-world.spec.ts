@@ -15,7 +15,7 @@ for (const [hero, villain] of [['elemental_ug', 'elemental_bg'], ['elemental_bg'
     page.on('websocket', socket => {
       socket.on('framereceived', event => observeFrame(JSON.parse(String(event.payload))));
     });
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByText('Browse decks and cards', { exact: true }).click();
     for (const deck of manifest.roster) {

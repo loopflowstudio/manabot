@@ -49,8 +49,8 @@
     <div class={stops.auto_pass ? '' : 'pointer-events-none opacity-50'}>
       <div class="grid grid-cols-[minmax(0,1fr)_5rem_6rem] items-center gap-y-1">
         <span></span>
-        <span class="type-rubric text-center text-ink-2">Your turn</span>
-        <span class="type-rubric text-center text-ink-2">Opponent turn</span>
+        <span class="type-label text-center text-ink-2">Your turn</span>
+        <span class="type-label text-center text-ink-2">Opponent turn</span>
         {#each STOP_STEPS as step}
           <span class="text-ink-2">{step.label}</span>
           {#each sides as side}

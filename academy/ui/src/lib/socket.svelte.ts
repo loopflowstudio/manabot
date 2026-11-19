@@ -1,6 +1,7 @@
 import { currentGame, rememberCurrentGame } from './current-game.svelte';
 import type { PlaySession } from './play-session';
 import type { PreviewAddress, PreviewResponse } from './payment-preview';
+import type { CombatAddress, CombatPlan, CombatResponse } from './board/combat';
 import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
@@ -23,6 +24,7 @@ import type {
 import type {
   ClientMessage,
   FrameUpdate,
+  LogLine,
   LaunchSetup,
   RecoveryEnvelope,
   ExperienceFrame,
@@ -381,7 +383,7 @@ export class GameSocketController {
       return false;
     }
     if (browser && !loadResumeCredentials()) {
-      gameStore.setError('This tab has no resume authority. Recover the table before choosing again.');
+      gameStore.setError('This tab has no resume authority. Recover the game before choosing again.');
       return false;
     }
     if (gameStore.table) request = {...request, grant_revision: gameStore.table.access.grant_revision};
@@ -410,6 +412,7 @@ export class GameSocketController {
 
   sendSetStops(): void {
     const stops = gameStore.stops;
+    gameStore.noteStopsSent();
     this.send({
       type: 'set_stops',
       ...(gameStore.table
@@ -575,7 +578,7 @@ export class GameSocketController {
       if (this.pendingCommand) {
         this.clearPendingCommand();
         gameStore.endCommand();
-        gameStore.setError('The unresolved submission has an unknown outcome; this table has no live decision.');
+        gameStore.setError('The unresolved submission has an unknown outcome; this game has no live decision.');
       }
       return;
     }
@@ -583,7 +586,7 @@ export class GameSocketController {
     if (message.type === 'belief_changed') {
       gameStore.tableAnnouncement = message.belief.audience.kind === 'personal'
         ? 'Your read is private.'
-        : 'A read was shared with the table.';
+        : 'A read was shared with the game.';
       return;
     }
 
@@ -653,8 +656,8 @@ export class GameSocketController {
           sessionId,
           resumeToken,
           message.log ?? [],
-          message.auto_passed ?? 0,
         );
+        gameStore.applyStepBoards(message.recovery.frame, message.boards ?? []);
         this.reconcileCommand(message.recovery);
       } else if (message.type === 'observation') {
         gameStore.applyObservation(
@@ -664,7 +667,6 @@ export class GameSocketController {
           message.resume_token,
           message.log ?? [],
           message.stops,
-          message.auto_passed ?? 0,
           message.deck_names,
           message.action_space ?? '',
         );
@@ -674,7 +676,6 @@ export class GameSocketController {
           message.winner,
           message.log ?? [],
           message.stops,
-          message.auto_passed ?? 0,
           message.deck_names,
         );
       }
@@ -832,8 +833,8 @@ export class GameSocketController {
     gameStore.applyFrame({
       ...update.frame,
       ...(update.log ? { log: update.log } : {}),
-      ...(update.auto_passed ? { auto_passed: update.auto_passed } : {}),
     });
+    gameStore.applyStepBoards(update.frame, update.boards ?? []);
     try {
       validatePresentationUpdate(
         update.presentation,
@@ -862,8 +863,7 @@ export class GameSocketController {
     recovery: RecoveryEnvelope,
     sessionId?: string,
     resumeToken?: string,
-    log: string[] = [],
-    autoPassed = 0,
+    log: LogLine[] = [],
   ): void {
     const current = gameStore.protocolFrame;
     const next = recovery.frame;
@@ -890,7 +890,6 @@ export class GameSocketController {
       {
         ...next,
         ...(log.length > 0 ? { log } : {}),
-        ...(autoPassed > 0 ? { auto_passed: autoPassed } : {}),
       },
       sessionId,
       resumeToken,
@@ -1043,6 +1042,18 @@ export async function fetchPaymentPreview(address: PreviewAddress, signal: Abort
     body: JSON.stringify(address),
   });
   if (!response.ok) throw new Error('Payment preview unavailable');
+  return response.json();
+}
+
+/** The native whole-declaration preview for a drafted attack or block; read-only. */
+export async function fetchCombatPreview(request: CombatAddress & { plan: CombatPlan }, signal: AbortSignal): Promise<CombatResponse> {
+  const credentials = loadResumeCredentials();
+  if (!credentials) throw new Error('No live session');
+  const response = await fetch(`/api/sessions/${encodeURIComponent(credentials.session_id)}/combat-preview`, {
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json', 'x-etude-participant-token': credentials.resume_token },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) throw new Error('Combat preview unavailable');
   return response.json();
 }
 

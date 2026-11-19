@@ -97,11 +97,10 @@ for (const [seed, width, height, motion] of [
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
     await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReturnAsStream' });
-    await page.goto('/');
+    await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
     for (let input = 0; input < 30; input += 1) {
       // The receipt can render before following bot work finishes. Keep that
       // render sample, but wait for settled authority before choosing again.
@@ -109,11 +108,10 @@ for (const [seed, width, height, motion] of [
         if (!window.academyTiming.working) resolve();
         else window.addEventListener('academy-timing-settled', () => resolve(), {once: true});
       }));
-      await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('learn-mode').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
+      await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
       const actions = page.getByTestId('action-option');
-      if (await actions.count() === 0) { await page.getByTestId('learn-mode').first().click(); continue; }
-      if (input === 15) await page.getByRole('button', { name: 'Inspect', exact: true }).click();
+      if (input === 15) await page.getByTestId('inspect-toggle').click();
       const labels = await actions.allTextContents();
       let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
       if (pick < 0) pick = input % labels.length;
@@ -176,7 +174,7 @@ test('cold visible-art delivery receipt', async ({ page, browser }, info) => {
     const start = started.get(request);
     if (start !== undefined) delivered.push({ url: request.url(), ms: performance.now() - start, status: request.failure()?.errorText ?? 'unknown' });
   });
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();

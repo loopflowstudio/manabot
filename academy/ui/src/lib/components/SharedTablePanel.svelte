@@ -48,7 +48,7 @@
 >
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <p class="type-rubric text-mountain-ink">Shared table · {table.mode}</p>
+      <p class="type-label text-mountain-ink">Shared game · {table.mode}</p>
       <h2 id="shared-table-heading" class="type-title mt-1 text-display">
         You are the {table.access.role}
       </h2>
@@ -102,14 +102,14 @@
           {/each}
         </div>
       {:else}
-        <p class="type-annotation mt-3 text-ink-2">Decisions appear after the pilot commits them.</p>
+        <p class="type-body mt-3 text-ink-2">Decisions appear after the pilot commits them.</p>
       {/if}
 
       {#if restored}
         <div class="mt-3 border-l-2 border-action pl-3" data-testid="participant-study-controls">
           <p class="font-medium text-ink">Decision {restored.ordinal + 1} · isolated Study</p>
           {#if branchAttemptId}
-            <p class="type-caption mt-1 text-ink-2">Branch board shown only to you. Live table truth is unchanged.</p>
+            <p class="type-caption mt-1 text-ink-2">Branch board shown only to you. The live game is unchanged.</p>
             <button
               type="button"
               data-testid="return-from-participant-branch"
@@ -125,7 +125,7 @@
             class="btn btn-secondary mt-2 min-h-11"
             onclick={() => onReturnToLive?.()}
           >
-            Live table
+            Live game
           </button>
         </div>
       {/if}

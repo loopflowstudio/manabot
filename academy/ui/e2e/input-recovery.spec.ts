@@ -148,7 +148,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto(play);
       await expect(page.getByTestId('action-option').first()).toBeEnabled();
       const frame = await retainedFrame(page);
-      const opponent = await page.locator('.player-status').first().textContent();
+      const opponent = await page.locator('[data-testid=player-plate][data-plate-side=opponent] [data-testid=player-target]').textContent();
       expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('etude.gui.resume')!).identity?.opponent?.name)).toContain('Independent');
       await stopChild(child);
       child = await childServer(port);
@@ -174,10 +174,12 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(frame!.revision));
         await expect(page.getByTestId('action-option').first()).toBeDisabled();
         expect(await retainedFrame(page)).toBeNull();
-        expect(await page.locator('.player-status').first().textContent()).toBe(opponent);
+        expect(await page.locator('[data-testid=player-plate][data-plate-side=opponent] [data-testid=player-target]').textContent()).toBe(opponent);
       }
       await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/interrupted-${theme}.png`, import.meta.url)) });
-      const setup = page.getByRole('banner').getByRole('link', {name: 'New game', exact: true});
+      // The site header is inert behind the full-window board; New game is in the board's menu.
+      await page.getByTestId('game-menu').click();
+      const setup = page.getByRole('region', {name: 'Session, stops and tools'}).getByRole('link', {name: 'New game', exact: true});
       await expect(setup).toBeVisible();
       await setup.focus();
       await page.keyboard.press('Enter');
@@ -323,14 +325,19 @@ test('historical positions stay separate from blocked frontier work and late sou
     await expect(page.getByRole('region', {name: 'Live frontier work'})).toContainText('Reading a saved position; bot work belongs to the frontier.');
     await expect.poll(() => releaseStatus !== null).toBe(true);
     await page.screenshot({path: fileURLToPath(new URL('../test-results/policy/historical-frontier.png', import.meta.url))});
-    await page.getByTestId('trace-select').selectOption(other.id);
-    await expect(page.getByTestId('trace-select')).toHaveValue(other.id);
+    // Open another recording in-app (a client navigation, as a link in Games is) while the step is pending.
+    await page.evaluate(id => {
+      const link = Object.assign(document.createElement('a'), {href: `/replay?trace=${id}`});
+      document.body.append(link);
+      link.click();
+    }, other.id);
+    await expect.poll(() => new URL(page.url()).searchParams.get('trace')).toBe(other.id);
     for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/release`);
     releaseStatus?.();
     await pendingStep;
     await expect.poll(() => delivered).toBe(true);
     await expect(page.getByTestId('work-status')).toHaveCount(0);
-    await expect(page.getByTestId('trace-select')).toHaveValue(other.id);
+    expect(new URL(page.url()).searchParams.get('trace')).toBe(other.id);
   } finally {
     releaseStatus?.();
     for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/release`);

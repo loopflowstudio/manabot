@@ -7,35 +7,27 @@
   import { onDestroy } from 'svelte';
   onDestroy(() => watchStart.cancel());
   import { watchStart } from '$lib/watch-start.svelte';
-  import { revealWithinScrollRegions } from '$lib/scroll-regions';
-  import { onMount, tick, untrack, setContext } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
-  import {
-    dragMoved, dragOffer, loadTableMode, saveTableMode, selectForPlay, selectedOffers,
-    selectionMatches, type HandDrag, type PlaySelection, type TableMode,
-  } from '$lib/play-selection';
-  import { visibleCardLabel } from '$lib/decision-labels';
-  import { offerFocus, offerTargets } from '$lib/offer-map';
-  import { PaymentPreviewController, PAYMENT_PREVIEW_CONTEXT, type PreviewState } from '$lib/payment-preview';
-  import PaymentPreview from '$lib/components/PaymentPreview.svelte';
-  import { fetchPaymentPreview } from '$lib/socket.svelte';
-  import DecisionSurface from '$lib/components/DecisionSurface.svelte';
-  import DecisionContext from '$lib/components/DecisionContext.svelte';
+  import Board from '$lib/board/Board.svelte';
+  import { PaymentPreviewController, type PreviewState } from '$lib/payment-preview';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
   import { recordFetch } from '$lib/records';
   import type { PlaySession } from '$lib/play-session';
-  import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
-  import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
-  import GameLog from '$lib/components/GameLog.svelte';
-  import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import WorkStatus from '$lib/components/WorkStatus.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
-  import { sanitizeDeckSelection } from '$lib/decks';
-  import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
+  import { presentationPlayer } from '$lib/presentation.svelte';
+  import { sanitizeDeckSelection, DECK_CHOICES } from '$lib/decks';
+  import { builtinOpponentName, shortName } from '$lib/opponent-name';
+  import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
+  import { gameResult } from '$lib/board/result';
+  import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
+  import { logMarks } from '$lib/board/replay';
+  import { spentOnce } from '$lib/board/phases';
   import {
     connect,
     disconnect,
@@ -50,20 +42,10 @@
     sendReturnToLive,
     sendSetStops,
     sendTransferPilot,
+    fetchPaymentPreview,
+    fetchCombatPreview,
   } from '$lib/socket.svelte';
-  import type { InteractionOffer, StopSide } from '$lib/types';
-
-  let paymentState = $state<PreviewState | null>(null);
-  // The decision whose payment slot is open. Only a proposal that concerns a
-  // payment opens it; it then stays until the decision changes, so the offer
-  // list above keeps its layout while the pointer moves.
-  let paymentSlotDecision = $state<string | null>(null);
-  const payments = new PaymentPreviewController(fetchPaymentPreview, state => {
-    paymentState = state;
-    if (state && !state.loading && state.preview?.state !== 'not_applicable') paymentSlotDecision = decisionKey;
-  });
-  setContext(PAYMENT_PREVIEW_CONTEXT, () => paymentState?.preview?.state === 'exact'
-    ? paymentState.preview.sources.flatMap((source, index) => source.source.kind === 'object' ? [{ id: source.source.id.entity, order: index + 1 }] : []) : []);
+  import type { ExperienceFrame, InteractionOffer, StopSide } from '$lib/types';
 
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
@@ -73,17 +55,9 @@
   let awaitingRecovery = $state(false);
   let setupStatus = $state('');
 
-  let tableMode = $state<TableMode>('inspect');
-  let selection = $state<PlaySelection | null>(null);
-  let drag = $state<HandDrag | null>(null);
-  let suppressClick = false;
   let stopsPending = $state<number | null>(null);
-  let stopsOpen = $state(false);
-  let stopsPanel: HTMLDetailsElement | null = $state(null);
-  let hoveredTargetId = $state<number | null>(null);
 
   onMount(() => {
-    tableMode = loadTableMode();
     const params = new URLSearchParams(window.location.search);
     demoName = params.get('demo');
     if (!demoName) {
@@ -102,34 +76,21 @@
     connect(params.get('launch'));
 
     return () => {
-      payments.invalidate();
       disconnect();
     };
   });
 
-  let secondaryOpen = $state(false);
+  const decisionFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
 
-  const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
-  const decisionKey = $derived(tableFrame ? `${tableFrame.match_id}:${tableFrame.revision}:${tableFrame.prompt?.id}` : null);
-  const offers = $derived(tableFrame?.offers ?? []);
-  const clickableTargets = $derived(offerTargets(offers));
-  const highlightedOfferIds = $derived(new Set(hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? []));
-
-  function focusIdsForOffers(ids: number[]): number[] {
-    return offers.filter(offer => ids.includes(offer.id)).flatMap(offerFocus);
-  }
-
-  function targetOfferIds(objectId: number): number[] {
-    return clickableTargets.get(objectId) ?? [];
-  }
-
-  function restoreFocus(): void {
-    if (gameStore.selectedTargetId !== null) {
-      const offerIds = targetOfferIds(gameStore.selectedTargetId);
-      gameStore.setFocus(focusIdsForOffers(offerIds));
-      return;
-    }
-    gameStore.clearFocus();
+  // The automatic payer's plan for the offer the board asks about: a
+  // read-only query bound to this exact decision. The controller drops an
+  // answer for any other frame, and the board asks for nothing while it
+  // cannot act, so a commit or a lost connection clears the plan.
+  let paymentState = $state<PreviewState | null>(null);
+  const payments = new PaymentPreviewController(fetchPaymentPreview, state => { paymentState = state; });
+  function previewPayment(offer: InteractionOffer | null): void {
+    if (offer && decisionFrame && canSubmitLive) void payments.select(decisionFrame, offer.id, offer.label);
+    else payments.clear();
   }
 
   function openEditor(kind: 'new' | 'next', opponentOnly = false): void {
@@ -202,10 +163,10 @@
   $effect(() => {
     if (awaitingRecovery && (gameStore.resumeToken || gameStore.resumeFailed || gameStore.tableUnavailable)) awaitingRecovery = false;
     if (!mounted || awaitingRecovery || demoName || page.url.searchParams.has('launch')) return;
-    const wantsNew = page.url.searchParams.has('setup');
+    // A setup address, or one naming decks or an opponent, opens setup; `/` alone is home.
+    const wantsNew = ['setup', 'hero', 'villain', 'opponent'].some(key => page.url.searchParams.has(key));
     untrack(() => {
       if (wantsNew) openEditor('new');
-      else if (!gameStore.observation && editor.kind === 'closed') openEditor('new');
       else if (editor.kind === 'new') editor = {kind:'closed'};
     });
   });
@@ -222,118 +183,65 @@
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.resumeFailed);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
   const participantStudying = $derived(gameStore.restoredDecision !== null);
-  const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
   const inputReady = $derived(!gameStore.commandPending && gameStore.work?.state !== 'running' && stopsPending === null && gameStore.connection === 'connected');
-  // Both table modes submit through the same live authority gate. Play only
-  // adds selection and gestures; Study retains its separate retry capability.
+  // Study retains its separate retry capability; live play is one authority gate.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
-  const paymentSlot = $derived(canSubmitLive && decisionKey !== null && paymentSlotDecision === decisionKey);
-  const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && offers.length > 0);
-  const boardObservation = $derived(
-    gameStore.branchProjection
-      ?? gameStore.restoredDecision?.frame.projection
-      ?? gameStore.observation,
-  );
+  const canPassTurn = $derived(canSubmitLive && decisionFrame?.action_space === 'PRIORITY' && (decisionFrame?.offers.length ?? 0) > 0);
+  const canStudyRetry = $derived(participantStudying && !gameStore.branchAttemptId && gameStore.hasCapability('explore_study') && inputReady);
+  // A Study branch shows its own projection with no live offers.
+  const boardFrame = $derived<ExperienceFrame | null>(decisionFrame && gameStore.branchProjection
+    ? { ...decisionFrame, projection: gameStore.branchProjection, offers: [], prompt: null } : decisionFrame);
+  // The boards the opponent's moves were made on, for the frame they came with.
+  const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.stepBoards?.frameHash === boardFrame.frame_hash
+    ? gameStore.stepBoards.boards : []);
 
-  const liveInput = $derived(tableMode === 'play' && canSubmitLive);
-  const draggingOffer = $derived(drag && tableFrame ? dragOffer(drag.selection, tableFrame) : null);
-
-  $effect(() => {
-    gameStore.updateSeq;
-    untrack(() => { payments.invalidate(); clearPlaySelection(); });
-  });
-  $effect(() => {
-    if (!liveInput || (selection && !selectionMatches(selection, tableFrame))) untrack(clearPlaySelection);
-  });
   $effect(() => {
     if (stopsPending !== null && (gameStore.updateSeq !== stopsPending || gameStore.connection !== 'connected')) stopsPending = null;
   });
 
-  function clearPlaySelection(): void {
-    payments.clear();
-    if (drag?.moved) suppressClick = true;
-    selection = null;
-    drag = null;
-    gameStore.clearSelectedTarget();
-    hoveredTargetId = null;
-    gameStore.clearFocus();
-  }
-  function cancelSelection(): void {
-    const object = selection?.object;
-    const restore = document.activeElement?.closest('.play-selection');
-    clearPlaySelection();
-    if (restore && object !== undefined) void tick().then(() => {
-      document.querySelector<HTMLElement>(`[data-object-id="${object}"]`)?.focus({ preventScroll: true });
-    });
-  }
-  function changeMode(mode: TableMode): void {
-    clearPlaySelection();
-    tableMode = mode;
-    saveTableMode(mode);
-  }
-  function suppressDragClick(event: MouseEvent): void {
-    if (suppressClick && event.detail > 0) {
-      event.preventDefault();
-      event.stopPropagation();
-      suppressClick = false;
-    }
-  }
-  function startHandDrag(event: PointerEvent): void {
-    suppressClick = false;
-    if (!liveInput || event.button !== 0 || !event.isPrimary || !(event.target instanceof Element) || !tableFrame) return;
-    const card = event.target.closest<HTMLElement>('[data-object-id]');
-    if (!card) return;
-    const bound = selectForPlay(tableFrame, Number(card.dataset.objectId));
-    if (!bound || !dragOffer(bound, tableFrame)) return;
-    drag = { selection: bound, pointer: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
-    card.setPointerCapture(event.pointerId);
-  }
-  function moveHandDrag(event: PointerEvent): void {
-    if (!drag || drag.pointer !== event.pointerId) return;
-    drag.moved = dragMoved(drag, event.clientX, event.clientY);
-    if (drag.moved) { event.preventDefault(); selection = drag.selection; }
-  }
-  function endHandDrag(event: PointerEvent): void {
-    const pending = drag;
-    if (!pending || pending.pointer !== event.pointerId) return;
-    const drop = document.querySelector('[data-testid="play-drop-area"]')?.getBoundingClientRect();
-    const offer = liveInput && tableFrame ? dragOffer(pending.selection, tableFrame) : null;
-    if (pending.moved) {
-      suppressClick = true;
-      if (drop && event.clientX >= drop.left && event.clientX <= drop.right && event.clientY >= drop.top && event.clientY <= drop.bottom && offer) handleActionSelect(offer);
-      else clearPlaySelection();
-    }
-    drag = null;
-  }
-  async function editStops(): Promise<void> {
-    secondaryOpen = true;
-    stopsOpen = true;
-    await tick();
-    stopsPanel?.querySelector('summary')?.focus({ preventScroll: true });
-    if (stopsPanel) revealWithinScrollRegions(stopsPanel);
-  }
-
-  // The matchup names the players: "You (UR Lessons) vs Search 64 (GW
-  // Allies)". Selectors hide while a game runs, so the choice is stable.
-  const OPPONENT_LABELS: Record<string, string> = {
-    'search-16': 'Search 16',
-    'search-64': 'Search 64',
-    'search-256': 'Search 256',
-    random: 'Random',
-    passive: 'Passive',
-  };
+  // The opponent is named with how it decides ("Heuristic · scripted",
+  // "Search 64 · search"): the server's label once a table exists, the
+  // built-in name before. The identity keeps the digest for its description.
   const tableIdentity = $derived(gameStore.table ?? gameStore.interruptedIdentity);
   const opponentIdentity = $derived(tableIdentity?.opponent
     ? checkpointIdentity(tableIdentity.opponent)
-    : playerIdentity({ name: tableIdentity?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
+    : playerIdentity({ name: tableIdentity?.opponent_label ?? builtinOpponentName(gameStore.opponentChoice) ?? 'Opponent' }));
+  const opponentName = $derived(tableIdentity?.opponent_label ?? opponentIdentity.compact);
+
+  // ———————————————— Home: play the last matchup again
+
+  let lastMatchup = $state<LastMatchup | null>(null);
+  onMount(() => { lastMatchup = loadLastMatchup(); });
+  // Each game this tab plays becomes the next "Play again", as the session echoed its setup.
+  $effect(() => {
+    const config = gameStore.playSession?.config;
+    if (!config || demoName || !gameStore.observation || !tableIdentity) return;
+    const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
+    untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
+  });
+  const deckLabel = (key: unknown): string => DECK_CHOICES.find(deck => deck.key === key)?.label ?? 'Imported deck';
+  const homeMatchup = $derived(lastMatchup ?? {
+    config: gameStore.setupConfig(),
+    opponent: builtinOpponentName(gameStore.opponentChoice) ?? 'Registered policy',
+    decks: { hero: deckLabel(gameStore.decks.hero), villain: deckLabel(gameStore.decks.villain) },
+  });
+  const atHome = $derived(mounted && !awaitingRecovery && !demoName && !page.url.searchParams.has('launch')
+    && !gameStore.observation && editor.kind === 'closed');
+
+  function playAgain(): void {
+    if (gameStore.newGamePending) return;
+    gameStore.watchMode = false;
+    gameStore.applySetupDraft(homeMatchup.config);
+    gameStore.setError(null);
+    sendNewGame(gameStore.newGameConfig());
+  }
 
   function syncStopsToServer(): void {
     if (!gameStore.observation && editor.kind !== 'closed') {
       editor.setup.applyServerStops({ ...gameStore.stops, my: [...gameStore.stops.my], opponent: [...gameStore.stops.opponent] });
     }
     if (gameStore.observation && gameStore.hasCapability('configure_match')) {
-      clearPlaySelection();
       stopsPending = gameStore.updateSeq;
       sendSetStops();
     }
@@ -343,6 +251,34 @@
     gameStore.toggleStop(side, step);
     syncStopsToServer();
   }
+
+  function handleCycleStop(side: StopSide, step: string): void {
+    gameStore.cycleStop(side, step);
+    syncStopsToServer();
+  }
+
+  // A stop set to hold once is spent when the game arrives at it for you: the
+  // client clears it and the move list says so (automation, not your move).
+  // Acting again within the step the game stopped at spends nothing.
+  let onceChecked = -1;
+  let arrivedAt = '';
+  $effect(() => {
+    const frame = gameStore.protocolFrame;
+    if (!frame || frame.revision === onceChecked) return;
+    onceChecked = frame.revision;
+    if (gameStore.watchMode || frame.status === 'game_over' || frame.prompt?.actor !== frame.projection.agent.player_index) return;
+    const turn = frame.projection.turn;
+    const at = `${frame.match_id}:${turn.turn_number}:${turn.step}`;
+    if (at === arrivedAt) return;
+    arrivedAt = at;
+    untrack(() => {
+      const yourTurn = turn.active_player_id === frame.projection.agent.id;
+      const spent = spentOnce(turn, yourTurn, gameStore.stops, gameStore.onceStops);
+      if (!spent) return;
+      gameStore.spendOnce(spent.side, spent.step);
+      syncStopsToServer();
+    });
+  });
 
   function handleStopOnStackChange(value: boolean): void {
     gameStore.setStopOnStack(value);
@@ -370,388 +306,265 @@
     gameStore.appendHeroAction('Pass turn');
   }
 
-  function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') cancelSelection();
-    if (event.key === 'F6') {
-      event.preventDefault();
-      handlePassTurn();
-    }
-  }
-
   function handleActionSelect(action: InteractionOffer): void {
     if (participantStudying) {
-      if (!gameStore.branchAttemptId && gameStore.hasCapability('explore_study')) sendRetryDecision(action.id);
+      if (canStudyRetry) sendRetryDecision(action.id);
       return;
     }
     if (!canSubmitLive) return;
-    if (tableMode === 'play' && selection
-      && !selectedOffers(selection, gameStore.protocolFrame).some(offer => offer.id === action.id)) return;
-
-    payments.invalidate();
-    if (!sendAction(action.id)) {
-      return;
-    }
-    gameStore.appendHeroAction(action.label);
-    clearPlaySelection();
+    // The move list names it when the server narrates the move.
+    sendAction(action.id);
   }
 
-  $effect(() => {
-    if (!canSubmitLive || gameStore.connection !== 'connected') untrack(() => payments.invalidate());
-  });
+  const inGame = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);
 
-  function dismissPaymentOnFocus(event: FocusEvent): void {
-    if (event.target instanceof Element && !event.target.closest('[data-offer-id], [data-testid="payment-preview"]')) {
-      payments.clear();
-    }
-  }
+  // Who is deciding while you wait: the opponent's search or policy, or the board itself.
+  const heroSeat = $derived(gameStore.observation?.agent.player_index ?? null);
+  const opponentChoosing = $derived(gameActive && heroSeat !== null && (
+    (gameStore.work?.state === 'running' && (gameStore.work.kind === 'choose' || gameStore.work.kind === 'search')
+      && gameStore.work.chooser !== null && gameStore.work.chooser !== heroSeat)
+    || (decisionFrame?.prompt != null && decisionFrame.prompt.actor !== heroSeat)));
+  const thinking = $derived(!gameActive ? null
+    : opponentChoosing ? `${shortName(opponentName)} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
+      : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The board is working…' : null);
 
-  function previewOffer(action: InteractionOffer): void {
-    if (canSubmitLive && tableFrame && ['PRIORITY_CAST_SPELL', 'PRIORITY_ACTIVATE_ABILITY', 'CHOOSE_TARGET', 'PAY_COST', 'TAP_FOR_COST'].includes(action.action_type ?? '')) {
-      void payments.select(tableFrame, action.id, action.label);
-    } else {
-      payments.clear();
-    }
-  }
+  const ending = $derived(gameStore.gameOver && boardFrame
+    ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
+  // The game so far as a strip of decisions, folded unless opened. Live play
+  // shows no past position yet: positions open in Review once the game ends.
+  let stripOpen = $state(false);
+  const liveMarks = $derived(logMarks(gameStore.actionLog));
+  const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
 
-  function handleActionHover(action: InteractionOffer | null): void {
-    if (action) {
-      previewOffer(action);
-      gameStore.setFocus(offerFocus(action));
-      return;
-    }
-    restoreFocus();
-  }
-
-  function handleBoardTargetSelect(objectId: number): void {
-    if (tableMode === 'play' && !participantStudying && pilotCanAct) {
-      if (!liveInput || !tableFrame) return;
-      selection = selectForPlay(tableFrame, objectId);
-    }
-    const offerIds = targetOfferIds(objectId);
-    if (canSubmitLive && tableFrame) {
-      const candidates = tableFrame.offers.filter(offer => offerIds.includes(offer.id));
-      if (candidates.length === 1) previewOffer(candidates[0]);
-      else payments.clear();
-    }
-    gameStore.selectTarget(objectId);
-    gameStore.setFocus(focusIdsForOffers(offerIds));
-  }
-
-  function handleBoardTargetHover(objectId: number | null): void {
-    hoveredTargetId = objectId;
-    if (objectId === null) {
-      restoreFocus();
-      return;
-    }
-
-    const offerIds = targetOfferIds(objectId);
-    gameStore.setFocus(focusIdsForOffers(offerIds));
-  }
+  // How the opponent's moves are read out, remembered per browser.
+  let beatPace = $state<BeatPace>(loadBeatPace());
+  const BEAT_PACE_LABELS: Record<BeatPace, string> = { off: 'Off', quick: 'Quick', slow: 'Slow' };
 </script>
 
+{#snippet notices()}
+  {#if gameStore.errorMessage}
+    <section role="alert" aria-atomic="true" class="notice error">
+      {#if gameStore.resumeFailed}<strong>Interrupted.</strong>{' '}{/if}{gameStore.errorMessage}
+      {#if gameStore.resumeFailed && gameStore.recordingId}
+        <a class="underline" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open saved recording</a>
+      {/if}
+    </section>
+  {/if}
+  {#if gameStore.searchRetry}
+    <section role="alert" class="notice">
+      <p>{gameStore.submissionAccepted ? 'Your choice was accepted. ' : ''}{gameStore.searchRetry.message}</p>
+      <button class="btn btn-secondary btn-sm mt-1" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
+    </section>
+  {/if}
+  {#if !inGame}<WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />{/if}
+  {#if gameStore.tableUnavailable}<p role="status" class="type-caption">The previous game is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
+  {#if gameStore.storageWarning}<p role="status" class="type-caption">{gameStore.storageWarning}</p>{/if}
+  {#if participantStudying}<p class="type-caption text-ink-2">Study position. {gameStore.branchProjection ? 'Alternate action played; return to the recorded decision to try another.' : 'Choosing an offer tries it in a separate branch.'}</p>{/if}
+{/snippet}
+
+{#snippet result()}
+  <div data-testid="game-result-dialog" class="result">
+    <p class="type-label text-ink-3">Game over</p>
+    <h2 data-testid="game-result" class="type-display text-display">{ending?.headline}</h2>
+    {#if ending}
+      <p class="text-ink-2" data-testid="game-result-how">{ending.how}</p>
+      <p class="type-caption text-ink-2">{ending.life}</p>
+      <p class="type-caption text-ink-3" data-testid="game-result-summary">{ending.summary}</p>
+    {/if}
+    <div class="result-actions">
+      {#if demoName}
+        <button data-testid="game-result-action" class="btn btn-primary" onclick={startNewGame}>Play again</button>
+      {:else}
+        <button data-testid="game-result-action" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
+        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendContinuation('swap_sides')}>Swap sides</button>
+        <button data-testid="game-result-change" class="btn btn-secondary" disabled={!canContinue} onclick={() => openEditor('next', true)}>Change opponent</button>
+      {/if}
+    </div>
+    <p class="type-caption result-links">
+      {#if gameStore.recordingId}<a class="underline" data-testid="game-result-recording" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}&review=1`}>Review this game</a> · {/if}
+      <a class="underline" href="/?setup=1">New game</a>
+    </p>
+    {#if gameStore.newGamePending}<p role="status" class="type-caption text-ink-2">Preparing the next game…</p>{/if}
+  </div>
+{/snippet}
+
+{#snippet menu()}
+  <a class="type-caption text-ink-2 hover:text-ink" href="/games">Games</a>
+  <details class="game-menu">
+    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Menu</summary>
+    <div class="menu-panel" role="region" aria-label="Session, stops and tools">
+      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+      <fieldset class="beat-pace" data-testid="beat-pace">
+        <legend class="type-caption text-ink-2">Opponent's moves</legend>
+        {#each BEAT_PACES as pace (pace)}
+          <label class="type-caption"><input type="radio" name="beat-pace" value={pace} checked={beatPace === pace}
+            onchange={() => { beatPace = pace; saveBeatPace(pace); }} />{BEAT_PACE_LABELS[pace]}</label>
+        {/each}
+      </fieldset>
+      {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+      <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
+      <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
+        <legend class="sr-only">Pilot stop controls</legend>
+        <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
+          onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
+      </fieldset>
+      {#if gameStore.table}
+        <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
+          <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
+            announcement={gameStore.tableAnnouncement} onTransferPilot={sendTransferPilot} onRestoreDecision={sendRestoreDecision}
+            onReturnFromBranch={sendReturnFromBranch} onReturnToLive={sendReturnToLive} />
+        </details>
+      {/if}
+      {#if gameStore.table?.attempt_id && gameStore.hasCapability('configure_match')}
+        {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
+      {/if}
+    </div>
+  </details>
+{/snippet}
+
 <main
-  class:table-active={gameStore.observation !== null && editor.kind === 'closed'}
   class="play-page mx-auto w-full max-w-[1600px] px-4 py-4"
   data-update-seq={gameStore.updateSeq}
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
   data-table-revision={gameStore.table?.table_revision ?? -1}
 >
-  <h1 class="sr-only">{!gameStore.observation || editor.kind !== 'closed' ? 'New game' : 'Current game'}</h1>
+  <h1 class="sr-only">{inGame ? 'Current game' : 'New game'}</h1>
 
-  {#if gameStore.errorMessage}
-    <section role="alert" aria-atomic="true" class="mb-4 rounded border border-mountain/50 bg-mountain/20 px-4 py-3 text-mountain-ink">
-      {#if gameStore.resumeFailed}<strong>Interrupted.</strong>{' '}{/if}{gameStore.errorMessage}
-      {#if gameStore.resumeFailed && gameStore.recordingId}
-        <a class="ml-2 underline" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open saved recording</a>
-      {/if}
+  {#if inGame && boardFrame}
+    <Board
+      frame={boardFrame}
+      live={participantStudying ? canStudyRetry : canSubmitLive}
+      status={gameStore.decisionStatus}
+      you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
+      opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
+      stops={gameStore.stops}
+      onceStops={gameStore.onceStops}
+      oncyclestop={handleCycleStop}
+      connection={gameStore.connection}
+      connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
+      log={gameStore.actionLog}
+      {canPassTurn}
+      presentation={presentationPlayer}
+      {thinking}
+      {opponentChoosing}
+      workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
+      interrupted={gameStore.resumeFailed}
+      payment={paymentState}
+      onpreview={previewPayment}
+      combatPreview={canSubmitLive && !participantStudying ? fetchCombatPreview : undefined}
+      onact={handleActionSelect}
+      onpassturn={handlePassTurn}
+      {notices}
+      strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
+        note: gameStore.gameOver ? null : 'Positions open in Review after the game' }}
+      result={gameStore.gameOver ? result : undefined}
+      {menu}
+      {beatPace}
+      {stepBoards}
+    />
+  {:else if atHome}
+    {@render notices()}
+    <section class="home" aria-label="Play" data-testid="home">
+      <p class="type-label text-ink-3">{lastMatchup ? 'Your last matchup' : 'Ready to play'}</p>
+      <p class="home-matchup type-title" data-testid="home-matchup">
+        <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
+        <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
+      </p>
+      <button class="btn btn-primary home-play" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
+        onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : lastMatchup ? 'Play again' : 'Play'}</button>
+      <p class="type-caption text-ink-2">
+        <a class="underline" data-testid="home-setup" href="/?setup=1">Set up a different game</a> ·
+        <a class="underline" href="/games">Games</a>
+        <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
+          aria-label={`Connection status: ${gameStore.connection}`} class="type-label uppercase text-ink-3"> · {gameStore.connection}</span>
+      </p>
     </section>
-  {/if}
-  {#if gameStore.searchRetry}
-    <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
-      <p>{gameStore.submissionAccepted ? 'Your choice was accepted. ' : ''}{gameStore.searchRetry.message}</p>
-      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
-    </section>
-  {/if}
-  <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
-  {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
-  {#if gameStore.observation && gameStore.activeSearchConfig}
-    <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
-  {/if}
-
-  <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
-  <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
-    <div class="sheet-content px-5 pb-4 pt-3">
-  <!-- The masthead, in levels: the matchup names the players, fields show
-       only while they matter, one red action, and the connection is a
-       whisper beside it. -->
-  <div
-    data-testid="game-header"
-    class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-line pb-4"
-  >
-    <div class="min-w-0 self-center">
-      {#if gameStore.deckNames && gameStore.observation}
-        <!-- The players live at their bars; this line is the summary for
-             assistive tech and the proof suite. -->
-        <span data-testid="deck-names" class="sr-only">
-          You ({gameStore.deckNames.hero}) vs {opponentIdentity.text} ({gameStore.deckNames.villain})
-        </span>
-      {:else}
-        <span class="type-annotation text-ink-2">No game in progress</span>
-      {/if}
-      <!-- Bot work shows in the masthead's free side, so the board never shifts while a bot thinks. -->
-      <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />
-    </div>
-
-    <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
-      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
-      {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. Start game repeats setup.</p>{/if}
-      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>{/if}
-      <div class="flex items-center gap-4">
-        <div role="group" aria-label="Table interaction mode" class="flex gap-1">
-          <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>
-          <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'inspect'} onclick={() => changeMode('inspect')}>Inspect</button>
-        </div>
-        <div data-testid="connection-summary" class="flex items-center gap-1.5">
-          <i
-            aria-hidden="true"
-            class={`inline-block h-1.5 w-1.5 rounded-full ${
-              gameStore.connection === 'connected'
-                ? 'bg-forest'
-                : gameStore.connection === 'reconnecting' || gameStore.connection === 'connecting'
-                  ? 'bg-plains'
-                  : 'bg-swamp'
-            }`}
-          ></i>
-          <span
-            data-testid="connection-badge"
-            data-connection-state={gameStore.connection}
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            aria-label={gameStore.resumeFailed ? 'Session status: interrupted' : `Connection status: ${gameStore.connection}`}
-            class="type-label uppercase text-ink-3"
-          >
-            {gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
-          </span>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  {#if gameStore.tableUnavailable}<p role="status" class="mt-2 text-sm">The previous table is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
-  {#if gameStore.storageWarning}<p role="status" class="mt-2 text-sm">{gameStore.storageWarning}</p>{/if}
-  {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
-  {#if !gameStore.observation}
-    <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
-  {/if}
-  {#if !demoName && editor.kind !== 'closed' && gameStore.hasCapability('configure_match')}
-    <section aria-label={editor.kind === 'new' ? 'New session setup' : 'Next game setup'} class="mt-4 border-b border-line pb-4">
-      <h2 class="type-title">{editor.kind === 'new' ? 'New session' : editor.opponentOnly ? 'Change opponent' : 'Edit next game'}</h2>
-      <p class="type-caption mt-2">{editor.kind === 'new'
-        ? gameStore.playSession
-          ? 'Start a separate session. These edits do not change your current session draft.'
-          : 'Choose your setup to start a new session.'
-        : 'Setup for the next game in this Play session. Earlier games keep their recorded configuration.'}</p>
-      {#key editor.setup}
-        <GameSetup setup={editor.setup} onStart={startNewGame} disabled={gameStore.newGamePending}
-          opponentOnly={editor.opponentOnly} showStart={editor.kind === 'new'} />
-      {/key}
-      {#if setupStatus}<p role="status" class="type-caption mt-2">{setupStatus}</p>{/if}
-      {#if editor.kind === 'next'}
-        {#if editor.setup.watchMode}
-          <p class="type-caption">Two bots start a separate watched game. Your Play session and its current game stay available in Games.</p>
-          <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={startNewGame}>Start new watched game</button>
-        {:else}
-          <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={saveNextSetup}>Save next setup</button>
-          <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={continueWithSetup}>Start next game</button>
-        {/if}
-      {/if}
-      <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={cancelEditor}>Cancel</button>
-    </section>
-  {/if}
-  {#if gameStore.observation && boardObservation}
-    <div class="play-workspace" class:with-payment={paymentSlot} data-testid="play-workspace">
-      <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
-      <GameBoard
-        workspace
-        playMode={tableMode === 'play' && !participantStudying}
-        canSelectForPlay={liveInput}
-        selectedId={selection?.object ?? null}
-        onHandClickCapture={suppressDragClick}
-        onHandPointerDown={startHandDrag}
-        onHandPointerMove={moveHandDrag}
-        onHandPointerUp={endHandDrag}
-        onHandPointerCancel={clearPlaySelection}
-        gestureActive={drag?.moved ?? false}
-        dragLabel={draggingOffer?.confirm_label ?? draggingOffer?.label ?? null}
-        observation={boardObservation}
-        focusedIds={gameStore.focusIds}
-        {clickableTargets}
-        onSelectTarget={handleBoardTargetSelect}
-        onHoverTarget={handleBoardTargetHover}
-        winner={gameStore.winner}
-        deckNames={gameStore.deckNames}
-        heroIdentity={playerIdentity({ name: 'You', kind: 'human' })}
-        villainIdentity={opponentIdentity}
-        overlayActionLabel={demoName ? 'Play Again' : 'Rematch'}
-        onOverlayAction={demoName ? startNewGame : () => sendContinuation('rematch')}
-        presentationPlayer={tablePresentation}
-      />
-      </div>
-
-      <!-- The margin column: actions, stops, and the log as annotations
-           beside the score, behind a single vertical rule. -->
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to the scrolling choices rail) -->
-      <div
-        id="table-choices" tabindex="0" role="region" aria-label="Current choices and game controls" class="choices-region"
-      >
-        <a href="#table-board" class="table-jump type-caption underline">Inspect board</a>
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to long decision status) -->
-        <p tabindex="0" data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
-          {gameStore.decisionStatus}
-        </p>
-        {#if tableMode === 'play' && selection && !participantStudying}
-          <div class="play-selection border-b border-line pb-2" role="region" aria-label="Selected card actions">
-            <p class="type-caption">Selected: {visibleCardLabel(boardObservation, selection.object) ?? 'player'}. Choose an action below.</p>
-            <button class="btn btn-ghost btn-sm" onclick={cancelSelection}>Cancel selection</button>
+  {:else}
+    {@render notices()}
+    <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
+    {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
+    <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
+      <div class="sheet-content px-5 pb-4 pt-3">
+        <div data-testid="game-header" class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-line pb-4">
+          <span class="type-body text-ink-2">{gameStore.observation ? 'A game is in progress' : 'No game in progress'}</span>
+          <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
+            {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
+            {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Start game repeats setup.</p>{/if}
+            {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>{/if}
+            <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
+              aria-label={gameStore.resumeFailed ? 'Session status: interrupted' : `Connection status: ${gameStore.connection}`}
+              class="type-label uppercase text-ink-3">{gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}</span>
           </div>
+        </div>
+        {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+        {#if !gameStore.observation}
+          <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
         {/if}
-        {#if gameStore.branchProjection}
-          <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
-          <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
-        {:else if tableFrame}
-        <DecisionSurface
-          workspace
-          interrupted={gameStore.resumeFailed}
-          frame={tableFrame}
-          navigationKey={String(gameStore.updateSeq)}
-          selectedTargetId={gameStore.selectedTargetId}
-          {highlightedOfferIds}
-          disabled={participantStudying ? !gameStore.hasCapability('explore_study') || !inputReady : !canSubmitLive}
-          fastForwarding={gameStore.fastForwarding}
-          {canPassTurn}
-          onHoverAction={handleActionHover}
-          onSelectAction={handleActionSelect}
-          onPassTurn={handlePassTurn}
-          onClearSelection={clearPlaySelection}
-        />
-        {#if paymentSlot}
-          <PaymentPreview
-            state={paymentState?.preview?.state === 'not_applicable' ? null : paymentState}
-            observation={tableFrame.projection}
-            chosenSourceFirst={tableFrame.offers.some(offer => offer.id === paymentState?.offer && offer.action_type === 'TAP_FOR_COST')}
-            onClear={() => payments.clear()}
-            onRetry={() => { if (tableFrame && paymentState) void payments.select(tableFrame, paymentState.offer, paymentState.label); }}
-          />
-        {/if}
-        {/if}
-
-        <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>
-        <details bind:open={secondaryOpen} class="secondary-panels">
-          <summary class="type-rubric cursor-pointer">History and settings</summary>
-          <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
-            <PresentationHistory player={tablePresentation} observation={boardObservation} />
-            {#if tableFrame && !gameStore.branchProjection}
-              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} interrupted={gameStore.resumeFailed} />
+        {#if !demoName && editor.kind !== 'closed' && gameStore.hasCapability('configure_match')}
+          <section aria-label={editor.kind === 'new' ? 'New session setup' : 'Next game setup'} class="mt-4 border-b border-line pb-4">
+            <h2 class="type-title">{editor.kind === 'new' ? 'New session' : editor.opponentOnly ? 'Change opponent' : 'Edit next game'}</h2>
+            <p class="type-caption mt-2">{editor.kind === 'new'
+              ? gameStore.playSession
+                ? 'Start a separate session. These edits do not change your current session draft.'
+                : 'Choose your setup to start a new session.'
+              : 'Setup for the next game in this Play session. Earlier games keep their recorded configuration.'}</p>
+            {#key editor.setup}
+              <GameSetup setup={editor.setup} onStart={startNewGame} disabled={gameStore.newGamePending}
+                opponentOnly={editor.opponentOnly} showStart={editor.kind === 'new'} />
+            {/key}
+            {#if setupStatus}<p role="status" class="type-caption mt-2">{setupStatus}</p>{/if}
+            {#if editor.kind === 'next'}
+              {#if editor.setup.watchMode}
+                <p class="type-caption">Two bots start a separate watched game. Your Play session and its current game stay available in Games.</p>
+                <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={startNewGame}>Start new watched game</button>
+              {:else}
+                <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={saveNextSetup}>Save next setup</button>
+                <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={continueWithSetup}>Start next game</button>
+              {/if}
             {/if}
-
-            <div class="border-t border-line pt-4">
-              <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
+            <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={cancelEditor}>{gameStore.observation ? 'Back to the game' : 'Cancel'}</button>
+          </section>
+        {/if}
+        {#if !gameStore.observation}
+          <div class="mx-auto max-w-xl py-12 text-center">
+            <p class="type-body mb-1 text-ink-2">The board is set.</p>
+            <p role="status" class="type-caption mb-5 text-ink-2">{gameStore.newGamePending ? 'Preparing the game. This may take a moment…' : 'Start a game to begin.'}</p>
+            <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
+              <fieldset disabled={!gameStore.hasCapability('configure_match')}>
                 <legend class="sr-only">Pilot stop controls</legend>
-                <StopsPanel
-                  bind:open={stopsOpen}
-                  bind:element={stopsPanel}
-                  stops={gameStore.stops}
-                  onToggleStop={handleToggleStop}
-                  onStopOnStackChange={handleStopOnStackChange}
-                  onAutoPassChange={handleAutoPassChange}
-                  onReset={handleResetStops}
-                />
+                <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
+                  onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
               </fieldset>
             </div>
-
-            <details class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Decision log</summary>
-              <GameLog entries={gameStore.actionLog} />
-            </details>
           </div>
-        </details>
+        {/if}
       </div>
     </div>
-  {:else}
-    <div class="mx-auto max-w-xl py-12 text-center">
-      <p class="type-annotation mb-1 text-ink-2">The table is set.</p>
-      <p role="status" class="type-caption mb-5 text-ink-2">{gameStore.newGamePending ? 'Preparing the checked demo position. This may take a moment…' : 'Start a game to begin.'}</p>
-      <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
-        <fieldset disabled={!gameStore.hasCapability('configure_match')}>
-          <legend class="sr-only">Pilot stop controls</legend>
-          <StopsPanel
-            stops={gameStore.stops}
-            onToggleStop={handleToggleStop}
-            onStopOnStackChange={handleStopOnStackChange}
-            onAutoPassChange={handleAutoPassChange}
-            onReset={handleResetStops}
-          />
-        </fieldset>
-      </div>
-    </div>
-  {/if}
-    </div>
-  </div>
-  {#if gameStore.table}
-    <details class="mt-4 border-t border-line pt-3">
-      <summary class="type-rubric cursor-pointer">Table and Study tools</summary>
-      <SharedTablePanel
-        table={gameStore.table}
-        restored={gameStore.restoredDecision}
-        branchAttemptId={gameStore.branchAttemptId}
-        announcement={gameStore.tableAnnouncement}
-        onTransferPilot={sendTransferPilot}
-        onRestoreDecision={sendRestoreDecision}
-        onReturnFromBranch={sendReturnFromBranch}
-        onReturnToLive={sendReturnToLive}
-      />
-    </details>
   {/if}
 </main>
 
-<svelte:window onkeydown={handleKeydown} onfocusin={dismissPaymentOnFocus} />
-
-{#if gameStore.table?.attempt_id && gameStore.hasCapability('configure_match')}
-  {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
-{/if}
-
-
 <style>
-  [aria-label="Table interaction mode"] button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-  .play-selection { max-height: 120px; overflow-y: auto; flex-shrink: 0; }
-  .play-workspace { display: grid; gap: 1rem; min-width: 0; }
-  .board-region { min-width: 0; }
-  .choices-region { display: flex; flex-direction: column; gap: 1rem; min-width: 0; border-top: 2px solid var(--accent); padding-top: 1rem; }
-  @media (min-width: 1024px) and (min-height: 650px) {
-    .table-active { height: calc(100dvh - 64px); display: flex; flex-direction: column; }
-    .table-active > :global(*) { flex-shrink: 0; }
-    .table-active .play-sheet { flex: 1; min-height: 0; }
-    .table-active .sheet-content { height: 100%; display: flex; flex-direction: column; }
-    .table-active .sheet-content > :global(*) { flex-shrink: 0; }
-    .table-active .play-workspace { flex: 1; min-height: 0; }
-    .play-workspace { --choices-width: clamp(19rem, 26vw, 23rem); grid-template-columns: minmax(0, 1fr) var(--choices-width); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
-    .with-payment { position: relative; --preview-width: clamp(13rem, 19vw, 17rem); }
-    .with-payment .board-region { margin-right: calc(var(--preview-width) + 1rem); }
-    .with-payment :global([data-testid="payment-preview"]) {
-      position: absolute; inset: .5rem calc(var(--choices-width) + 1rem) 0 auto;
-      width: var(--preview-width); height: auto;
-      border-top: 0; border-left: 1px solid var(--border); padding-left: .75rem;
-    }
-    .board-region { min-height: 0; display: flex; flex-direction: column; }
-    .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
-    .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
-    .choices-region > :global(*) { flex-shrink: 0; }
-    .choices-region > :global(.workspace-decision) { flex: 1; min-height: min-content; }
-    .secondary-panels { flex-shrink: 1; min-height: 2rem; overflow-y: auto; overscroll-behavior: contain; }
-    [data-testid="current-decision"] { max-height: 3rem; overflow-y: auto; overscroll-behavior: contain; }
-    .secondary-content { max-height: 32dvh; overflow-y: auto; overscroll-behavior: contain; }
-    .table-jump { position: absolute; width: 1px; height: 1px; overflow: hidden; }
-    .table-jump:focus { position: static; width: auto; height: auto; }
+  .notice { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-field); font-size: 13px; }
+  .notice.error { border-color: color-mix(in srgb, var(--error) 50%, transparent); background: var(--error-wash); color: var(--error-text); }
+  .result { display: grid; gap: 6px; justify-items: start; }
+  .result h2 { line-height: 1.1; }
+  .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .result-links { color: var(--text-secondary); }
+  .home { max-width: 640px; margin: 12vh auto 0; display: grid; gap: 14px; justify-items: start;
+    padding: 28px 30px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
+  .home-matchup { line-height: 1.35; }
+  .home-play { font-size: 16px; padding: 10px 22px; }
+  .game-menu { position: relative; }
+  .game-menu > summary { list-style: none; }
+  .game-menu > summary::-webkit-details-marker { display: none; }
+  .menu-panel {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 320; width: 360px; max-height: calc(100dvh - 64px); overflow-y: auto;
+    display: grid; gap: 12px; justify-items: start; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px;
+    background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
+  .menu-panel > :global(*) { width: 100%; }
+  .menu-panel > a { width: auto; }
+  .beat-pace { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; border: 0; padding: 0; margin: 0; }
+  .beat-pace legend { float: left; margin-right: 4px; padding: 0; }
+  .beat-pace label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 </style>

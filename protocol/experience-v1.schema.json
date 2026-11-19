@@ -722,6 +722,13 @@
           "maximum": 255,
           "minimum": 0
         },
+        "announcing": {
+          "description": "`source` is a spell (`spell`) or an activated ability\n(`activated_ability`) the actor is announcing. By the rules it is on\nthe stack (CR 601.2a, 602.2a); the engine holds it in its zone until\nthe announced costs are paid. Omitted otherwise and on older frames.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "chosen_mode": {
           "$ref": "#/$defs/RequiredNullable4"
         },
@@ -1370,6 +1377,13 @@
             "boolean",
             "null"
           ]
+        },
+        "keywords": {
+          "description": "Keywords it has after continuous effects, in keyword declaration order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "name": {
           "$ref": "#/$defs/RequiredNullable3"
@@ -2201,6 +2215,87 @@
             "kind",
             "player",
             "turn_number"
+          ]
+        },
+        {
+          "description": "A land played from hand (CR 305.1), named as the permanent it became.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "land_played"
+            },
+            "object": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "object",
+            "player"
+          ]
+        },
+        {
+          "description": "Cards a player discarded (CR 701.9a), named as the graveyard objects\nthey became.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "discarded"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "player"
+          ]
+        },
+        {
+          "description": "Cards a player revealed (CR 701.20a), by name in reveal order: a card\nrevealed into a hand or from outside the game has no public object, so\nits name is all a viewer learns.",
+          "type": "object",
+          "properties": {
+            "cards": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "revealed"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "cards",
+            "player"
           ]
         }
       ]

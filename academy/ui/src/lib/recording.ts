@@ -36,6 +36,12 @@ export interface Position {
   actor: number | null;
   automatic: boolean;
   can_reveal: boolean;
+  /** The revision the position's decision or transition starts at; null at the latest state. */
+  revision?: number | null;
+  /** The chosen offer's label at a choice, the transition's narration after one. */
+  label?: string | null;
+  /** The chooser's recorded value at a choice, when one was retained. */
+  value?: number | null;
 }
 export interface RecordingIndex {
   id: string;

@@ -105,6 +105,11 @@ class Continuation(CaptureModel):
     mana_cost: str | None
     chosen_mode: int | None
     pending: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
+    # `source` is a spell or activated ability being announced: on the stack by
+    # the rules (CR 601.2a, 602.2a) while its costs are paid. Omitted otherwise.
+    announcing: Literal["spell", "activated_ability"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class ObjectLink(CaptureModel):

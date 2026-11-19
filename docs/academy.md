@@ -12,8 +12,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
-- [Using the laptop table](#using-the-laptop-table)
-- [Play and Inspect modes](#play-and-inspect-modes)
+- [Playing on the board](#playing-on-the-board)
 - [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
@@ -29,7 +28,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 ## One game, from setup to its recorded decisions
 
 **New game** and **Games** are the main destinations. **Current game** returns
-this tab to its last table or watched game. Existing launch, replay and Watch
+this tab to its last live or watched game. Existing launch, replay and Watch
 links continue to open their intended games.
 
 **New game** opens setup for a separate session, starting from retained choices.
@@ -47,9 +46,8 @@ artifacts and runner remain available in details. **Browse decks and cards**
 opens the full deck browser; imported sources and disclosure use the same
 admission checks for played and watched games.
 
-Inspect a card through hover, focus or its **Inspect card** action without
-changing how you play. The Play/Inspect click preference controls gestures;
-it never gates reading. **Open a recorded game file** in Games opens any recorded game, from your own
+Hover or focus any visible card to read it; reading never sends an action.
+**Open a recorded game file** in Games opens any recorded game, from your own
 loop, training or evaluation, without changing its original evidence. Games links back to recorded positions, their legal
 choices and available recorded policy/search evidence. Trying another line
 creates a separate Study branch with an explicit return to the source decision.
@@ -75,7 +73,7 @@ ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000", "traces_dir": "/home/you/ac
   Ctrl-C stops the server
 ```
 
-Your browser opens on the table at `http://127.0.0.1:8000`, with a game ready
+Your browser opens on the board at `http://127.0.0.1:8000`, with a game ready
 against the Search 64 opponent. That is the whole installation: no manabot,
 Torch, Node or Rust, and no checkout of this repository. The wheel carries the
 compiled engine, the server and the built client. Cards show their Scryfall
@@ -90,7 +88,7 @@ uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-
 uv run --no-project managym academy replay .runs/demo/games --game 3
 ```
 
-The first opens the table already in that game; the second opens game 3 of the
+The first opens the board already in that game; the second opens game 3 of the
 games a training run recorded, at its first decision. See
 [Start in a chosen game](#start-in-a-chosen-game),
 [Open a replay directly](#open-a-replay-directly) and
@@ -179,7 +177,7 @@ setup screen is shown, and nothing is chosen for you beyond what you named.
 | `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
 | `--decklists` | `open` | `open` or `closed`: whether each player knows the other's list |
 
-A decklist file is the UTF-8 `.txt` or `.dek` format the table imports: one
+A decklist file is the UTF-8 `.txt` or `.dek` format Academy imports: one
 `count card name` per line, with optional `Main` and `Sideboard` headings.
 A bundled name always selects that deck, even if a file or directory has the
 same name. Use an explicit path such as `./ur_lessons` to select that file.
@@ -347,7 +345,7 @@ with serve(port=0) as academy:
   removed in 0.4.0.
 - `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
   game, setup or replay, subject to the recording access rules above. `academy.open(url)`
-  opens it in the default browser; `academy.open()` opens the bare table.
+  opens it in the default browser; `academy.open()` opens Academy with no game.
 
 Leaving the `with` block, or calling `academy.close()`, stops the server and
 frees the port; unfinished games are kept as interrupted, as with Ctrl-C.
@@ -419,7 +417,16 @@ exported games they already wrote keep opening.
 
 ### Play a game
 
-The table opens with UR Lessons (you) against GW Allies. Open **New game**
+Open Academy (`/`) in a tab with no game and it offers your last matchup:
+**Play again** starts the same opponent, decks, play/draw seat, deal mode and
+stops as the last game this browser started, in one click. The first time, it
+offers **Play** with the default matchup, UR Lessons (you) against Search 64 ·
+search with GW Allies. **Set up a different game** opens the setup. Play again
+always starts a new session; it never resumes another tab's game. The last
+matchup is a browser preference (`academy.last-matchup` in local storage) and
+holds no credential.
+
+Open **New game**
 to use the [two-seat setup](#one-game-from-setup-to-its-recorded-decisions):
 choose controllers, decks and bot players, then select **Start game** to start
 a separate session. Replacing an active game requires confirmation that it
@@ -439,10 +446,10 @@ the import option to return to bundled decks.
 `managym academy play` starts the same game from the command line
 ([Start in a chosen game](#start-in-a-chosen-game)).
 
-The table reads **Who decides / What is happening / Your choices**. It starts in
-**Inspect** mode: clicking a card inspects it and sends nothing; choosing one of
-the listed legal actions commits it. **Play** adds card selection and a hand-drag
-shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
+The game fills the window: the board in the centre, your hand along the
+bottom and a rail with the stack, the current decision and every legal choice.
+Cards a legal action applies to are raised off the board; clicking one with a
+single action commits it ([controls below](#playing-on-the-board)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
 
@@ -450,17 +457,28 @@ pending decision.
 
 Choose **Registered policy**, select the intended policy, and import your decks
 through **New game**. Check the matchup, decklist disclosure, priority stops
-and deal mode, then select **Start game**. After the game finishes, select
-**Rematch** to play again with that setup. After the next game, select
-**Swap sides**: you keep your deck and move from playing first to drawing first,
-or the reverse. Both games and the next one belong to the same session.
+and deal mode, then select **Start game**. When the game ends, a result card
+sits over the board, which stays visible around it (**Look at the board**
+folds the card to a corner). It says who won and how ("Heuristic · scripted
+went to −2 life on turn 9"), the final life totals, and one line from the move
+list: turns, and each player's spells cast and attacks. Select **Rematch** to
+play again with that setup. After the next game, select **Swap sides**: you
+keep your deck and move from playing first to drawing first, or the reverse.
+**Change opponent** opens only the opponent settings, and **Review this game**
+opens the game in Replay from its first position. Both games and the next one belong to the same
+session.
+
+Academy names every opponent with how it decides: **Search 64 · search**,
+**Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
+the world it was trained in (**<name> · checkpoint w17**). The setup picker,
+the board, the waiting line and the result card use the same name.
 
 A trained or independent policy must first be registered with this Academy
 server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
 The provider checks that it can play the selected decks and configuration.
 Built-in opponents need no registration.
 
-The session strip at the table shows the game number, matchup, your play/draw
+The session strip in the top bar's **Menu** shows the game number, matchup, your play/draw
 seat and deal mode. Open its configuration details with a pointer or Tab and
 Enter to check the full Policy ID, model artifacts, runner and available search
 configuration. A familiar model name alone does not identify the execution.
@@ -474,8 +492,7 @@ its admitted decks, disclosure, actual seed and native seats.
 | **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
 | **Start game** | Starts a separate session from setup |
 
-Your preferred **Play** or **Inspect** mode stays selected across games. To
-exchange decks within the series, choose **Edit next game** in the session strip.
+To exchange decks within the series, choose **Edit next game** in the session strip.
 **Change opponent** opens only the opponent settings. Both editors show that
 edits belong to this session's next game. **Save next setup** retains the draft
 without starting or admitting a game; **Start next game** admits it and starts
@@ -506,7 +523,7 @@ each seat's deal. These controls do not establish a paired evaluation.
 
 #### Read results and return from a recording
 
-Open session history from the table to see its games in **Games**. Each entry
+Open session history from the board to see its games in **Games**. Each entry
 links to its recording. Use Replay's return link to return to the filtered
 history, then return to Play in the same tab to continue the current game.
 Opening an earlier recording does not replace the live game.
@@ -555,122 +572,176 @@ start the next game explicitly rather than expecting its live state to resume.
 
 Session setup, imported source lists and seeds remain owner-private. Sharing a
 completed recording follows the existing replay rules; it grants neither session
-configuration access nor control of the live table. Earlier ungrouped games stay
+configuration access nor control of the live game. Earlier ungrouped games stay
 in **Games** without being assigned to a session retroactively.
 
-### Using the laptop table
+### Playing on the board
 
-Start a game, inspect a land in your hand, then choose its play action in
-**Your choices**. The board stays in view as the next prompt appears. Inspecting
-the card sends nothing; selecting the legal action commits the play. If a spell
-needs a target or payment choice, follow the next prompt before taking another
-action.
+Start a game and look at your hand: the cards you can play now are raised off
+the board with a soft shadow, and the ones you cannot are dimmed.
+Click a land to play it; click a spell to cast it, then follow its target and
+payment prompts. A card with exactly one legal action commits that action when
+clicked, and its accessible name says which action that is. A card
+with several actions opens them beside the card; choose one, or press Escape to
+close the list without acting. A card with no action sends nothing when
+clicked.
 
-At laptop widths and heights, the board and hand sit beside the current
-decision. Scroll the legal choices while the current instruction, legal count,
-**Show all** and filter controls remain available. Long instructions scroll
-independently. Open **History and settings** for decision details, recorded
-consequences and stop configuration without losing the pending decision. The current
-priority-stop automation setting and **Edit stops** remain visible beside the choices. At narrow or short windows, board and
-choices stack; use the board/choices jump links to move between them. Changing decisions
-moves focus within the choices region without pulling the page away from the
-board.
+The board is split at the centre line: the opponent's creatures face yours,
+with each side's lands and other permanents behind them. A plate at the left of
+each half shows the player, life, zone counts and floating mana as mana
+symbols, with any restriction or expiry written under them; open a graveyard or
+exile count to list its cards. A player who can be targeted has an
+outlined plate. Identical permanents with the same choices share a pile, its
+count after the name ("Forest ×4"), and each copy remains its own control. Crowded rows shrink their cards
+and wrap onto a further line before anything scrolls, and each half gives the
+crowded row more of its height.
 
-- **A crowded hand:** scroll the labeled hand region horizontally to reach
-  the remaining cards.
-- **A crowded battlefield:** use the previous/next controls beside each lane heading. Counts show
-  the size of each group; focusing an action reveals the page holding its
-  subject. Occupied lanes come first; empty groups retain compact counts. Scroll the labeled battlefield region to reach further groups and
-  secondary zones. Identical card copies keep their own choices.
-- **Other zones:** open their inspection controls to see viewer-permitted
-  contents. Empty zones keep their labels and counts; hidden cards remain
-  hidden.
-- **Card details:** hover or keyboard-focus a visible card to preview it, or
-  use **Inspect card** in Play; in Inspect, activate the card to open its details
-  and related choices. Inspection leaves the pending decision unchanged.
-  Use **Show all** to return from card-specific
-  choices to the complete list.
-- **Keyboard navigation:** Tab reaches the board, choices and inspection
-  controls, including labeled scrolling regions. Focus a region to scroll it
-  with the keyboard; activate a listed action only when ready to commit it.
+Every card has a printed card's proportions (63:88). A permanent's name is on
+a bar above its art, wrapping to a second line rather than being cut; its mana
+cost is left to the hand and the inspection. The name bar carries the card's
+colours: a pale tint in light mode and a solid bar in dark mode, white a
+neutral ivory-grey and colourless a cool grey, a land the colour of its basic
+land types, and a card of several colours blended left to right as printed
+hybrid frames are. Power and toughness sit on a plate at the lower right, and
+on a row above it the permanent's state: attacking, blocking, damage marked on
+it, summoning sickness, counters and the keywords it has now (one it was
+granted is edged in green). Mana symbols carry their letter, and ◇ for
+colourless. A tapped permanent turns a quarter onto its side, in room its row
+keeps for it so it never covers a neighbour; its name bar stays across the
+top. An attacker steps toward the player it attacks and tilts a few degrees:
+one that tapped lies just past the quarter, a vigilant one stays upright.
+Something a spell on the stack targets has a dashed red edge. Cards in hand
+have the type line under the name and the cost on the art.
 
-The total legal choice count remains visible when narrowing a list. If a text
-filter finds nothing, use **Clear filter** or Escape; neither chooses an action.
-See [Choice navigation](#choice-navigation) for searching larger lists.
+While you may act, what you can act on is raised and what you cannot steps
+back: a card in hand you cannot play now is dimmed most, a permanent of yours
+nothing acts on is slightly muted, and lands and the opponent's side are never
+dimmed. Summoning sickness is told by its label, not by more dimming. The
+selected card, such as the spell whose targets you are choosing, rises higher
+with a thin ink edge. In light mode the grounds are white and grey and what you
+act with is charcoal; in dark mode they are near-black and it is near-white.
+Academy follows the system setting. Card and player names, life, and the
+rail's moves and legal choices are set in Spectral; everything else is in Work
+Sans. The top bar shows the connection only when it has a problem.
+
+Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
+keywords with why it has each (printed, the effect that granted it, or
+"another ability" for a grant from another permanent's static ability), where its power and toughness come
+from (printed or set, counters, each effect by its source and duration, and
+whatever those do not explain as "other effects"), and its state. The
+inspection floats beside the card and closes when the pointer leaves, when you
+click or when the game moves on; a card you just clicked does not reopen it
+until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
+instead, showing the last card you inspected. The top bar shows the turn. Along
+the bottom of the screen runs the step bar: one cell per step, a line between
+phases, the current step shaded, and in each cell the stop for your turn above
+the step's name and the stop for the opponent's turn below it. Press a stop to
+change it (see [priority stops](#choosing-priority-stops)).
+Cards in hand are large, 136 to 150 px wide, and sit side by side while the
+strip has room; with 24 permanents or more on the battlefield the board may
+take the hand down to about 100 px wide. An empty hand is a label.
+
+The rail holds:
+
+- **Stack**, top first, each entry with its card and who controls it; a stack
+  entry an action applies to is outlined. A line joins a spell on the stack to
+  each of its targets. A spell you are casting, or an ability you are
+  activating, is on top of the stack with a dashed border (**casting**,
+  **activating**) from the moment you choose it, through its targets and
+  payment, with lines to the targets already chosen; the card leaves your hand.
+- **Since your last move**: what happened after your last choice, as the
+  server reports it: spells cast and what they targeted, attacks, blocks,
+  damage and deaths. The first three lines show; the rest open with **more**. A spell that already resolved keeps its card here, and its
+  line to a target that is still on the board, until your next move. Cards that
+  attacked, blocked, were targeted or were dealt damage are ringed on the board,
+  and damage dealt since your last move shows on the card or the player's plate
+  as it lands ("−2").
+- **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
+  Accumulate Wisdom. Space taps the dashed lands, or click lands to tap them
+  yourself"),
+  and its buttons. **Rules detail** holds the engine's full instruction.
+  Passing priority and paying a cost are the primary button (Space), labelled
+  with what it does next: **Resolve** and the spell on top of the stack, the
+  step it moves to ("To combat", "To blockers"), or the cost ("Pay {1}{U}",
+  with the lands it taps dashed on the board and named in the button's
+  accessible name; see [Previewing payments](#previewing-payments)). The label
+  stays on one line; a long one is shortened and its full text is the
+  button's accessible name and tooltip. Declining,
+  and a combat answer that does not name another creature, are separate
+  buttons, so a click on a card never declines.
+- **All legal choices**: every offer of the decision, numbered, with the total
+  count. It is the complete list; press a number key to choose one of the first
+  nine.
+- **Moves**: the game's moves grouped by turn, each turn headed by whose turn
+  it was. Each move names the player who made it; priority-stop automation is
+  marked **auto** and never counts as your move. A run of the opponent's and
+  automation's priority passes folds into one quiet **passed** line that counts
+  each one's passes; your own passes stay moves. Hover or focus a card name to
+  see the card.
+
+While the opponent decides, the rail and the opponent's plate say so, with
+the seconds it has taken ("Search 64 is searching… · 3 s"). An attacking creature steps toward the player it
+attacks, and a blocker is joined to the attacker it blocks by a line. Combat
+usually ends before your next decision, so the line stays after it, until your
+next move, while both creatures are on the board. Cards
+move between zones (hand to stack, stack to battlefield, an opponent's new
+card from their plate) instead of appearing; with reduced motion they appear
+in place and every fact above stays.
+
+Choices with no card on the board, such as Lessons outside the game, appear in
+a tray over the board.
+
+Combat is drafted whole. At an attack, every creature that can attack is
+outlined; click one (or focus it and press Enter) to add it to the attack or
+leave it out. Drafted attackers are ringed with a dashed line and lean in, and
+a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
+rail. At a block, click a blocker, then the attacker it blocks; a blocker
+that can block only one attacker takes it at once, and the block's line is
+drawn. The prompt reads the whole plan ("Attack with 3 · not with
+Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
+nothing is declared while drafting. The engine still asks about one creature
+at a time: Academy's read-only combat preview replays the draft on a copy of
+the game and returns the exact answers that declare it, or the first one it
+refuses and why (a lone blocker of a creature with menace, a creature that
+cannot attack). Confirm (Space) sends those answers one by one; if the game
+asks anything the preview did not predict, sending stops and the board shows
+where the game stands. Escape stops a confirmed plan between answers. A
+reload keeps the draft for the same decision in that tab. Each creature's own
+answers stay in the full list of legal choices. **Pass turn** (F6) passes
+priority until the turn ends.
+
+Keys: `1`–`9` choose a numbered choice, Space presses the primary button
+(unless a control with its own action has focus), F6 passes the turn and Escape
+closes an open list. **Menu** holds the session controls, priority stops, the
+sharing and Study tools and feedback.
 
 While disconnected or waiting for a submitted choice, the board remains
-readable and action submission is disabled. Reconnect or reload in the same
-tab to recover the actual pending decision. If a choice is rejected because
-the game has advanced, inspect the refreshed prompt and choose again. A
-submitted action cannot be cancelled by clearing inspection or going back.
-Reloading a configured launch in its tab resumes that game while its server
-session remains available; a separate tab or another launch has its own game.
-See [Pending input, waits and recovery](#pending-input-waits-and-recovery) if
-recovery fails.
+readable and actions are unavailable. Reconnect or reload in the same tab to
+recover the actual pending decision. If a choice is rejected because the game
+has advanced, read the refreshed prompt and choose again. A submitted action
+cannot be cancelled; after commitment, costs and revealed information remain
+committed. Reloading a configured launch in its tab resumes that game while its
+server session remains available; a separate tab or another launch has its own
+game. See [Pending input, waits and recovery](#pending-input-waits-and-recovery)
+if recovery fails.
 
-For bot inspection, open **Watch** or a recording in **Replay**. The shared
-decision surface shows the acting seat's permitted view and the complete legal
-choices for that decision. Recorded policy outputs appear only when available;
-missing outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
-
-### Play and Inspect modes
-
-In a live game, choose **Play**, click a land in your hand, then activate its
-labeled play action. The land enters play and the next decision appears on the
-same board. For a spell, read the cast label before committing, then follow any
-target or payment prompts. Selecting the card alone sends no action. Keyboard
-users can focus the card, press Enter to select it, then activate the labeled
-action control.
-
-For a hand card with exactly one current play or cast action, you can also drag
-it into the labeled play area. Move at least 8 CSS pixels to start the drag;
-read the action label and release inside the area to commit. Escape, pointer
-cancellation or releasing outside the area discards the drag. If the card has
-several actions, choose an explicit alternative from the list. A card with no
-current action remains available for inspection.
-
-Hover or focus previews the card; **Inspect card** opens its details without
-committing. Player targets have explicit named controls. During combat, choose
-for the creature named by the current prompt: attack or decline, or select one
-of its legal blocks or decline. Each choice commits separately before the next
-creature's prompt; there is no draft of a whole attack or block to edit and
-confirm. Mana-source choices likewise follow the offered decisions;
-dragging a spell does not configure manual tapping. See
-[Previewing payments](#previewing-payments).
-
-Choose **Inspect** to examine the acting viewer's observation and every legal
-offer. Card selection narrows navigation; **Show all** restores the full list.
-Both modes retain the legal count and complete choices. Switching modes clears
-uncommitted card selections. It sends no game action and leaves priority automation at
-its configured setting. Inspect is the initial default; an explicit mode
-preference is remembered in this browser.
-
-A new decision, a stop-setting change or connection recovery clears uncommitted
-selection and drags. Wait for the current prompt, then select again. Actions are
-unavailable while disconnected, awaiting a submitted action or changing settings.
-These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
-use their own decision controls. Cancellation only discards local selection:
-after commitment, costs and revealed information remain committed.
+For bot inspection, open **Watch** or a recording in **Replay**. Their decision
+surface shows the acting seat's permitted view and the complete legal choices
+for that decision. Recorded policy outputs appear only when available; missing
+outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 
 ### Previewing payments
 
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
-(`{1}{G}`). Hover its cast action in **Your choices**, or move keyboard
-focus to it. On a laptop, the **Payment preview** opens between the board and
-the choices. On smaller screens it appears below the choices:
+(`{1}{G}`). Point at the Cub in your hand, or focus it. The lands the
+automatic payer would tap get a dashed outline and a mark with their order and
+what each adds: the first Mountain `1 {R}`, the Forest `2 {G}`. Nothing has
+happened yet; pointing and focusing send no action. Pointing at a row of **All
+legal choices** previews that choice the same way.
 
-```text
-Payment preview
-Cast Badgermole Cub · Cost {1}{G}
-Would tap
-  1. Mountain · your battlefield · copy 1 of 2 → 1 {R}
-  2. Forest · your battlefield → 1 {G}
-Left over · nothing floating
-```
-
-The same Mountain and Forest carry a proposal mark on the board. Nothing has
-happened yet. Hovering and focusing send no action. Cast the spell and
-choose **Pay the cost** to tap the proposed lands.
+Cast the Cub. At the payment prompt the same lands stay dashed and the primary
+button reads **Pay {1}{G}**; its accessible name reads the plan, "Pay {1}{G} ·
+Mountain, Forest". Press Space or the button to tap exactly those lands.
 
 The preview is the automatic payer's own plan for the position in front of
 you. Academy asks the game for it; the browser never works one out. What it
@@ -678,59 +749,56 @@ shows is what **Pay the cost** does, including the lands it keeps back for other
 cards in your hand and any mana it would produce beyond the cost.
 
 **Choosing sources yourself.** When a cost leaves a real choice of sources,
-the payment prompt lists **Pay the cost** first, then each source you may tap.
-Focus arrives on **Pay the cost** and shows its proposal without paying.
+each land you may tap is raised.
 
-1. To accept the proposal, activate **Pay the cost**.
-2. To choose a source, activate its tap. Tab moves through the sources and
-   Shift+Tab moves back; each source is a separate choice even when several
-   produce the same color. Focusing a source previews "tap this one, then pay
-   the rest automatically", with your source listed first.
-3. After each tap the source shows as tapped, its mana appears in your
-   floating pool, and the proposal for the rest is requested again. Tap
-   another source or activate **Pay the cost** to finish. When your tap
-   leaves no choice for the rest, the game finishes the payment at once,
-   tapping what the focused preview listed.
+1. To accept the plan, press Space or the primary button.
+2. Point at another land to preview "tap this one, then pay the rest
+   automatically": that land becomes `1` and the marks move. A land the plan
+   picked out of a pile of identical lands stands on its own, so its mark is
+   never hidden.
+3. Click a land to tap it. It shows as tapped, its mana appears on your plate,
+   and the plan for the rest is asked again and redrawn. Tap another land or
+   press Space to finish. When your tap leaves no choice for the rest, the game
+   finishes the payment at once, tapping what the plan showed.
 
 A cost that every available source is needed for has no source choice. The
-game pays it as soon as you cast, with no payment prompt, so the preview on
-the cast action is where you see those taps beforehand.
+game pays it as soon as you cast, with no payment prompt, so the marks you see
+while pointing at the spell are where you see those taps beforehand.
 
-**Reading the preview.**
+**When there is no plan to draw.** The primary button then shows only the
+cost, and a line under it says why when the game does:
 
-| The preview says | Meaning |
+| The game says | Meaning |
 | --- | --- |
-| Sources and their output | The automatic plan for this cost, in tapping order. **Left over** is the pool after the cost when the spending is forced. When several spends are legal it shows the pool after production and says which choices you will be prompted for. |
-| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. The preview names the missing choice and marks no sources. The preview returns at the completing target or at the payment prompt when there is one; when the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
-| No sources needed | The cost is zero or your floating mana already covers it. |
+| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. Nothing is marked until that choice is made; the plan returns at the completing target or at the payment prompt when there is one. When the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
+| No sources needed | The cost is zero or your floating mana already covers it; the button reads "· floating mana". |
 | No automatic payment | The automatic payer cannot fund this cost from fixed sources. Use an offered mana ability and make its choices first. |
 | Nothing | There is no automatic payment to preview. When choosing which floating mana to spend, choose the unit directly. Mana abilities with their own fee also have no preview. |
 
 Mana with a spending restriction, an effect when spent or an end-of-combat
-expiry is labeled as such in the preview, as it is in the floating-mana
-readout. Restricted amounts are part of the pool totals, not extra mana.
+expiry is written under the pips on your plate. Restricted amounts are part of
+the pool, not extra mana.
 
-**Proposal and commitment.** A proposal mark means "would tap". A tapped
-source means "has tapped". The floating-mana readout beside the board is the
-only statement of mana you actually have. Clearing the preview, moving focus or
-clearing a selection dismisses a proposal and changes nothing in the game.
-A tapped source stays tapped and its mana stays in your pool until it is spent
-or empties; there is no undo and no refund for a tap you regret.
+**Proposal and commitment.** A dashed outline means "would tap". A tapped
+land means "has tapped". The pips on your plate are the only statement of mana
+you actually have. Moving the pointer away changes nothing in the game. A
+tapped source stays tapped and its mana stays in your pool until it is spent or
+empties; there is no undo and no refund for a tap you regret.
 
 Source taps are offered only while a cost is being paid. Academy has no action
 for tapping lands at priority to float mana before choosing a spell.
 
-**When a preview goes away.** A preview belongs to one decision. Submitting
-an action, a new decision, a change of viewed player or a lost connection
-clears it, and an answer that arrives late for an earlier decision is
-discarded. If the request fails, the panel says so and offers **Retry**; every
-legal choice stays usable without it. After a reload or reconnect in the same
-tab the pending payment is restored and its proposal is requested again.
-Nothing about a preview is saved in the recording or the browser.
+**When a plan goes away.** A plan belongs to one decision. Submitting an
+action, a new decision or a lost connection clears it, and an answer that
+arrives late for an earlier decision is discarded. If the request fails, the
+line under the button says so; **Pay** still pays automatically and every legal
+choice stays usable. After a reload or reconnect in the same tab the pending
+payment is restored and its plan is asked for again. Nothing about a plan is
+saved in the recording or the browser.
 
 Replay, Watch history and Study show the taps and spending that were recorded.
-They show no proposal: a preview was never part of the recording, and a live
-game is never consulted to decorate a recorded position.
+They show no plan: a preview was never part of the recording, and a live game
+is never consulted to decorate a recorded position.
 
 ### Pending input, waits and recovery
 
@@ -740,13 +808,13 @@ visible. Read the failure, then choose **Retry bot decision**, or **Retry search
 for a search failure, when offered. Retrying asks the same bot to finish its
 pending decision; it does not cast your spell again. Academy acknowledges your
 committed choice before starting the following bot work. Its receipt remains
-fixed while later bot actions advance the table.
+fixed while later bot actions advance the board.
 
 **Who chooses.** Read the chooser and requested input beside the current prompt.
 The player choosing can differ from the player whose turn it is. Target and
 cost prompts identify their source and required input. Finish a pending target
-or cost choice before trying another spell. Inspection and **Show all** keep
-the complete legal choices accessible. A pending cost can require a deliberate
+or cost choice before trying another spell. The rail's list keeps the complete
+legal choices accessible. A pending cost can require a deliberate
 mana activation before **Pay the cost** becomes available;
 [Previewing payments](#previewing-payments) covers what **Pay the cost** would tap. Mana you have produced
 and not yet spent appears as a floating-mana readout beside the board, by
@@ -786,7 +854,7 @@ Academy keeps the unresolved submission with that tab's game identity and
 checks whether it was accepted. If it must resend, it resends that exact
 submission so an accepted choice is not applied twice. If the decision or your
 permission changed, Academy reports the stale or unknown outcome and refreshes
-the table. Going back or clearing a selection cannot cancel a submission.
+the board. Going back or clearing a selection cannot cancel a submission.
 In live Watch, recovery checks the recorded position before another step;
 do not repeat a step just because its reply was lost. If that read fails,
 **Refresh saved head** must establish the frontier before production is available.
@@ -794,9 +862,9 @@ After a bot failure, recorded navigation remains available, but playback stops
 at the live edge. Only **Retry bot decision** or **Retry search** retries it.
 
 **When recovery is impossible.** A server restart or an expired live session
-shows **Interrupted**, retaining the last known table and a recording link
+shows **Interrupted**, retaining the last known board and a recording link
 when available. Saved recordings preserve available evidence; they cannot
-restore the live game. A read-only snapshot of the last published table,
+restore the live game. A read-only snapshot of the last published board,
 opponent identity and interruption reason survives further reloads in the same
 tab. The header reads **Interrupted** and the choices are labeled **Last recorded
 choices**; they do not invite live input, even when the server returns. The snapshot
@@ -813,10 +881,19 @@ it; there is no general browser undo.
 
 ### Choosing priority stops
 
-To hold up a response during the opponent's upkeep, choose **Edit stops**, keep
-**Use priority stops** checked and check **Upkeep** under **Opponent turn**.
-Academy pauses at a priority window there when you have a real choice. The
-automation summary beside the choices keeps the current setting visible.
+To hold up a response during the opponent's upkeep, press the lower stop in the
+**Upkeep** cell of the step bar, or open **Menu**, keep **Use priority stops**
+checked and check **Upkeep** under **Opponent turn**; the two are the same
+setting. Academy pauses at a priority window there when you have a real choice.
+
+Each stop on the step bar has three states, and a press moves to the next:
+**Off** (a hollow square), **Every time** (filled) and **Once** (a dot inside).
+A once stop pauses the next time the game arrives at that step on that turn and
+then turns itself off; the moves list says so ("Stopped once at Upkeep on the
+opponent's turn; that stop is now off"), marked as automation like the passes
+Academy makes for you. The Menu shows a once stop as checked. The stops are one
+Tab stop: arrow keys move between them, up and down between the two turns, and
+Space or Enter presses one. A recording's bar shows its stops read-only.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. A checked
 step stops automatic priority passing there; an unchecked step allows it unless
@@ -841,75 +918,46 @@ game's server settings.
 When **Pass Turn (F6)** is available, activating it yields through priority
 windows, including checked stops and stack responses, until the turn ends or
 a non-priority decision needs you. With **Use priority stops** off, priority
-windows continue to appear. Automatic passes retain **Auto** labels in the
-action log and recording. Switching Play/Inspect or pausing narration does not
-change these settings.
+windows continue to appear. Automatic passes are marked **auto** in the
+move list and recording. Pausing narration does not change these settings.
 
-### Reading consequences and controlling narration
+### Reading consequences
 
-After casting a targeted damage spell, finish its target and payment prompts,
-then open **History and settings**. Read the recorded cast, target, resolution
-and damage consequences as they occur; if a creature dies, its recorded death
-appears too. The board shows the current position, and **Your choices** remains
-available while narration describes what already happened.
+The rail tells what happened in prose. In live play it is **Since
+your last move**: spells cast and their targets, lands played, discards,
+reveals, attacks, blocks, damage and deaths, read from the authority's presentation
+events after your last commit, with the move list beneath grouped by turn.
+When the opponent moved, those facts are also read out one at a time over the
+move list, about a second each, with the cards each is about outlined on the
+board. Each fact is shown on the board it happened on: the server sends your
+view of the board after each step with the frame, so an attacker that died is
+seen attacking before it leaves, and cards travel from one board to the next.
+A past board outlines nothing. Space (when no control has focus), a click on
+the caption or on the board, or any action ends the reading and shows the
+current board; a click that ends it acts on nothing. The choices stay live
+throughout. Reduced motion reads out nothing and shows the current board; the
+recap lists every fact. Sentences name a player
+shortly ("Heuristic cast…"); the plate and top bar keep how it decides
+("Heuristic · scripted"). In Replay the same recap
+covers **This move** at a consequences position and **Since the last
+decision** at a choice (from the same chooser's previous decision); the move
+list jumps to any move.
 
-History groups consequences under recorded turns. Use the earlier/later page
-controls to browse up to 100 events at a time; the counts describe the available
-history. Scroll back to read an earlier event: incoming events leave your reading
-position and keyboard focus in place and increase the unread count. **Latest**
-returns to the newest page and resumes following events while you stay near the
-bottom. Browsing an older page also stops following. Recovered older events also count
-as unread and leave the event you are reading at the same position. Unavailable
-intervals appear where they occur; the turn after a gap stays unknown until a
-recorded turn change. Seeking before the event you are reading moves to the
-nearest earlier available event (or the first available event). A removed
-inspection closes and returns focus to history. Switching match, viewer or Study
-scope starts at Latest with a fresh unread count.
+Consequences describe recorded game events. The move list separately
+identifies submitted choices and **Auto** passes. An action alone is not
+evidence that a spell resolved or a creature died.
 
-When a consequence offers inspection of a card still available in your permitted
-view, select that subject to inspect the exact object without making a move.
-Departed or unavailable subjects keep their recorded text; another copy with the
-same name is not a substitute. Tab reaches history controls, turn headings and
-inspectable subjects; focus the scrolling region to read with the keyboard.
-
-Narration occupies the history area, leaving cards and choices accessible.
-Its controls affect presentation only:
-
-| Control | Result |
-|---|---|
-| **Pause narration** / **Resume narration** | Pause or resume the current narration; live play can continue. |
-| **Fast-forward** | Play narration at 4× speed; toggle again for normal speed. |
-| **Skip beat** | Move past the current narration beat. |
-| **Finish** | Finish the queued narration immediately. |
-| System reduced-motion preference | Remove movement while keeping consequence text and reading controls. |
-
-During live play, narration catches up automatically when its backlog grows;
-skipped motion keeps its history entries. Pausing narration does not pause the
-match or its configured priority-stop automation. Submitted actions, costs and
-revealed information are unaffected by narration controls.
-
-Consequences describe recorded game events. The action log separately identifies
-submitted choices and **Auto** passes; observed-state summaries describe changes
-visible in a frame. An action or a summary alone is not evidence that a spell
-resolved or a creature died.
-
-Reconnect preserves available history already held in this page and avoids
-repeating seen motion. A fresh reload can recover only the latest 256 events of
-an active match; earlier unavailable history and gaps are labeled explicitly.
-An unknown earlier turn stays unknown. To review the saved consequences of a
-completed game, open it from **Games** in **Replay**. History there follows the
-selected timeline position: stepping back and forward does not duplicate rows.
-**Try another line** has separate history, and **Return to recorded decision**
-restores the recording's history. Replay pages the selected perspective's
-recorded history; a choice shows only events preceding that choice.
-Spectator reveal does not add names to acting-view history.
-Older recordings without event data say **Consequences not recorded**; missing
-events do not mean that nothing happened. A presentation error leaves the
-current board usable and marks retained history incomplete.
+Reconnect preserves the history already held in this page. A fresh reload can
+recover only the latest 256 events of an active match. Replay reads the
+selected perspective's recorded history; a choice shows only events preceding
+that choice, and spectator reveal never adds names to it. **Try another line**
+has its own recap, and **Return to recorded decision** restores the
+recording's. Older recordings without event data say **Consequences not
+recorded**; missing events do not mean that nothing happened.
 
 ### Card art
 
-Cards on the table, in replays and in the deck browser show their Scryfall
+Cards on the board, in replays and in the deck browser show their Scryfall
 art. There is nothing to run first: the first time a card is shown, the
 Academy server fetches its image and artist credit from Scryfall, saves them
 and serves them to the browser itself. Later views, and later launches, read
@@ -941,81 +989,81 @@ deleting the cache directory is safe.
 
 ### Inspect a replay
 
-Open **Games**, choose a finished game, then use **Next** to move from a recorded
-choice to its consequences. The board shows the recorded state after the action
-while narration follows its events. Keep stepping to reach the final consequences
-and result board, including the last attack or spell. Human games, watched bot
-games and imported training or evaluation games use these same controls.
+A recording opens on the same board as live play, read-only. Open **Games**,
+choose a game, and step through it; human games, watched bot games and
+imported training or evaluation games all use these controls. At the end of a
+game you played, **Review this game** on the result card opens it from the
+first position.
 
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
 newest first, with filters for player, deck, status, result and date. **My games**
 narrows the list to this browser. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
 game file through **Watch → Open a game file**, or
-[launch a replay directly](#open-a-replay-directly).
+[launch a replay directly](#open-a-replay-directly). `/replay` alone lists
+recent recordings.
 
 #### Follow the timeline
 
-| Position | What appears |
+| Position | What the board shows |
 |---|---|
-| Choice | The permitted recorded board, legal offers and action taken, with the chooser identified and policy/search evidence if recorded. History stops before the choice. |
-| Consequences | The recorded post-action board and ordered event groups. Narration emphasizes events on that board; it does not reconstruct an intermediate board for each beat. An action with no recorded events still has a post-action position. |
-| Result or latest state | The saved final board and outcome, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
+| Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
+| Consequences | The recorded board after the action, with what it did in the rail's recap. |
+| Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
 
-**Previous** and **Next** move through positions. Select a score line, use the
-labeled scrubber, or jump to a recorded turn and phase to seek; seeking pauses
-playback. **Play** follows the recorded consequences before moving on, and
-**Pause** holds your place. Choose 1×, 2×, 4× or 16× playback speed. The system
-reduced-motion preference removes movement while keeping the ordered facts.
-Use Tab to reach these controls, Enter or Space to activate buttons, and arrow
-keys on the focused scrubber to seek. Shortcuts do not intercept text editing.
+The transport bar sits where live play has your hand's input:
 
-The replay address retains your selected position, information perspective and
-seat orientation. Reloading restores them, with a saved position in this tab as
-a fallback. A position that is invalid or no longer available is explained so
-you can select an available one. Opening a recording still requires its normal
-access permissions; copying an address does not copy a participant credential.
+| Control | Key | Result |
+|---|---|---|
+| **Previous** / **Next** | ← / → | One position back or on |
+| ⇤ / ⇥ | Shift+← / Shift+→ | The previous or next recorded choice |
+| **Play** / **Pause** | Space | Advance a position per beat, at 1×, 2×, 4× or 16× |
+| Scrubber | arrows when focused | Any position; turns are ticked and choices marked under it |
+| | Home / End | The first or last position |
 
-#### Keep your place and perspective
+Under it, the **Decisions** strip draws the game as one line: each choice is a
+tick, coloured by whose it was, or a point on that chooser's value line where
+a value was recorded; turns are ruled and numbered. Click it to jump. It is
+open in Replay and folded in live play, where it counts decisions but past
+positions open only in Review after the game. Moves in the rail jump to their
+positions too. Keys never act while you type in a field.
 
-Seat 0 stays near you by default, even when the chooser changes. **Swap seats**
-changes the table's orientation. The chooser and information perspective are
-labeled separately: swapping seats does not reveal a hand or change the recorded
-policy inputs.
+The replay address keeps the position, the perspective and the information
+view. Reloading restores them, with a saved position in this tab as a
+fallback. A position that is no longer available is explained so you can
+select another. Opening a recording still requires its normal access
+permissions; copying an address does not copy a participant credential.
+
+#### Perspective
+
+The **Perspective** control in the top bar chooses who sits at the bottom:
+**Follow the chooser** (the default for bot games: each choice is drawn from
+its chooser's seat, hand included, and the board stays turned through that
+choice's consequences), or a fixed seat (the default for a game you played).
+Turning the board never reveals a hand or changes the recorded policy inputs.
 
 At bot choices, the acting view shows what that bot was allowed to see.
-**Show both hands** is available only where spectator reveal is authorized;
-it does not enrich the bot's recorded evidence or acting-view history.
-Human/shared replays keep their recorded seat-0 information boundary.
-Consequences and result boards use the recorded seat-0 view when a private
-post-action view for the actor was not captured. Read the perspective label;
-unrecorded views are disabled with an explanation.
+**Show both hands** appears only where spectator reveal is authorized; it does
+not enrich the bot's recorded evidence or acting-view history. Consequences and
+result boards use the recorded view of the seat named in the menu's
+perspective line when a private post-action view was not captured.
 
-Scroll back in history to read without incoming events pulling you to the
-bottom; **Latest** resumes following. Earlier/later history pages keep long
-recordings manageable. Changing information perspective starts a separate
-history-reading scope; swapping physical seats keeps your place. Card inspection
-stays open only while that exact object remains visible and permitted. If it
-becomes unavailable, inspection closes with an explanation and focus returns
-to the control that opened it. A later copy with the same name cannot supply
-missing historical details. Older snapshots that cannot certify the same object
-appearance also close inspection.
+**Menu** holds the recording's kind and status, each seat's identity (policy
+ID, runner, provenance), **Refresh saved head**, a note for the position,
+**Watch another matchup** for a Watch, and feedback for your own games.
 
-Opening card details or reading earlier history pauses replay. Close the details
-when ready, then press **Play** to resume. Returning to **Latest** does not start
-playback. A live decision already being produced may finish saving while you read;
-your selected board stays put. A pending Search timeout is
-retained across reload and shown with its message. At the live edge, **Retry
-search** explicitly retries that decision; browsing saved positions never retries
-it. The exact selected position remains selected after reload.
+A live decision already being produced may finish saving while you read; your
+selected board stays put. A pending Search timeout is retained across reload
+and shown with its message. At the live edge, **Retry search** explicitly
+retries that decision; browsing saved positions never retries it.
 
 #### Continue a live Watch
 
 Open **Watch** (`/replay?watch=1`), select both seats, decks and a seed, then
 press **Start watching**. Each seat uses the same player menu as Play's **Opponent**.
 A managym-only install offers Random and Search; manabot adds Greedy, Heuristic
-and trained checkpoints. The game opens in the replay viewer and is saved in
-**Games**. **Watch another matchup** opens setup for another bot game.
+and trained checkpoints. The game opens on the replay board and is saved in
+**Games**. **Watch another matchup** in the menu opens setup for another bot game.
 
 Browsing earlier positions reads the recording. At the latest position of a live
 Watch, **Continue** requests the next bot decision; **Play** can keep producing
@@ -1033,7 +1081,8 @@ subject to its access rules, but the original live producer cannot be resumed.
 #### Study and older recordings
 
 At an eligible choice, **Try another line** pauses playback and live production
-and opens an isolated branch. **Return to recorded decision** restores that
+and opens an isolated branch on the same board: the historical offers become
+live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
 A fresh branch requires the server's retained Study state. If that state has
 expired, recorded playback remains available.
@@ -1110,7 +1159,7 @@ Independent Python policies work without manabot. A saved game that was played
 against a checkpoint still replays without its provider; continuing it needs
 the original admitted policy. Recorded policy and search evidence comes from
 the saved game and works in installed Academy; missing outputs stay unavailable.
-The live table does not load example analysis from a repository checkout.
+The live board does not load example analysis from a repository checkout.
 
 #### How a trained opponent is named
 
@@ -1118,7 +1167,7 @@ Academy shows the first and last parts of a long checkpoint name, followed by
 its identity's first ten characters. For example, `run/checkpoints/step_8`
 appears as `run/…/step_8 · 7ac5d442da`. Human names are never shortened this way.
 
-The same compact identity appears at the table, in Games, Replay and Watch.
+The same compact identity appears on the board, in Games, Replay and Watch.
 Open **status** on the player's bar with a mouse or Tab and Enter to
 read the full recorded name, identity, producer and available provenance.
 Registered policies also retain the runner, artifact digests and configuration.
@@ -1200,7 +1249,7 @@ Search-capable policies can use the shared composition below.
 Choose a registered policy, then change its **Search** control from **None
 (raw policy)** to **Search**. This works for the opponent in Play and
 for either Watch seat. Its configuration includes the exact budget; details retain the magnetic
-mirror update algorithm and recorded identities. While a decision is pending, the table shows
+mirror update algorithm and recorded identities. While a decision is pending, the board shows
 its search budget and elapsed waiting time. Reload preserves the configuration.
 
 | Setting | Default | Range |
@@ -1235,7 +1284,7 @@ and Watch, with search unavailable and a reason. Qwen v1 does not support search
 No missing capability is replaced by a synthetic distribution, terminal rollout,
 raw-policy fallback.
 
-On a timeout, no bot action commits. The pending decision remains on the table
+On a timeout, no bot action commits. The pending decision remains on the board
 with **Retry search**. Only an explicit retry tries it again; reconnecting or
 changing priority stops does not. The retry checks the match, revision and
 pilot authority. Other search failures report their reason without substituting
@@ -1427,22 +1476,15 @@ browser. The invariants that follow:
   source digest; frozen `erd1` evidence keeps its original bindings.
 
 The historical `/api/advice` fixture API remains available to conformance tools.
-The live table does not fetch or display that example as current-game analysis.
+The live board does not fetch or display that example as current-game analysis.
 
 ## Choice navigation
 
-`ActionPanel` offers **Find an action** when the current list has at least
-eight choices. It matches card/action label text case-insensitively; all
-offers remain visible until a filter is entered, and the complete offer count
-stays visible. **Clear filter** or Escape restores the list. Recovery, a new
-update, board selection and Learn-mode navigation clear the filter. Selecting a
-result sends its original offer through the revision-bound Command path;
-duplicate labels remain separate choices, and focusing a result highlights its
-exact board objects. Learn keeps its Take a Lesson / Discard and draw / Decline
-interaction with previews and Back; costs and other small choices stay direct.
-
-The eight-choice threshold and text filtering are reversible product
-hypotheses. Human usability acceptance (ETU-77) remains open.
+Academy numbers every choice in the rail and places it on its card, in
+live play, Replay, Watch and Study alike; there is no filter. Selecting a
+choice sends its original offer through the revision-bound Command path, and
+duplicate labels remain separate choices. Human usability acceptance (ETU-77)
+remains open.
 
 [managym/academy/fixtures/choice-navigation-w17-token-cards.json](../managym/academy/fixtures/choice-navigation-w17-token-cards.json)
 pins actual GameSession positions (UR Lessons versus GW Allies) for five

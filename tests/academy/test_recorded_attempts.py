@@ -1,5 +1,6 @@
 """Human-play attempt durability, safe replacement, and record authorization."""
 
+from dataclasses import replace
 import json
 import sqlite3
 
@@ -101,8 +102,10 @@ def test_explicit_deal_reproduces_and_recording_failure_is_visible(
         raise sqlite3.OperationalError("disk full")
 
     monkeypatch.setattr(game.attempt_store, "save", fail)
+    # Projecting the saved state again writes nothing; the next move must save.
+    game.current_recovery("explicit_resync")
     with pytest.raises(sqlite3.OperationalError, match="disk full"):
-        game.current_recovery("explicit_resync")
+        game.hero_action(0)
 
 
 def test_generated_deal_seed_reproduces_control_opponent_decisions(
@@ -165,3 +168,57 @@ def test_single_player_study_still_requires_participant_credential(tmp_path):
         server._rest_study_owner(record, None)
     assert error.value.status_code == 403
     assert server._rest_study_owner(record, "pilot-secret") is not None
+
+
+def test_live_saves_keep_the_whole_trace_as_one_encoding_would(tmp_path):
+    """Each save re-encodes only new events; the stored record stays exact."""
+    game = server.GameSession(trace_dir=tmp_path)
+    game.new_game({"villain_type": "passive", "seed": 79, "auto_pass": False})
+    for _ in range(12):
+        frame = game.current_recovery("explicit_resync")["frame"]
+        if frame["status"] != "ready":
+            break
+        offer = next(
+            (o for o in frame["offers"] if o["verb"] in ("play", "cast")),
+            next(
+                (o for o in frame["offers"] if o["verb"] == "pass_priority"),
+                frame["offers"][0],
+            ),
+        )
+        outcome = game.hero_command(
+            {
+                "command_id": f"save-{frame['prompt']['id']}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": offer["id"],
+                "answers": [],
+            }
+        )
+        assert outcome["status"] == "accepted", outcome
+        stored = json.loads(rows(tmp_path)[0]["trace_json"])
+        events = json.loads(json.dumps(game.trace.to_record()["events"]))
+        assert stored["events"] == events
+        replay = game._canonical_replay_snapshot().model_dump(mode="json")
+        assert stored["canonical_replay"] == json.loads(json.dumps(replay))
+    assert any(event["presentation"] for event in stored["events"])
+    assert len(stored["events"]) >= 12
+    assert rows(tmp_path)[0]["num_events"] == len(stored["events"])
+
+
+def test_trace_encoding_follows_appended_and_replaced_events():
+    config = trace.GameConfig(
+        hero_deck={"Island": 1}, villain_deck={"Island": 1}, villain_type="passive"
+    )
+    first = trace.TraceEvent("hero", {"turn": 1}, [], 0, "Pass", 0.0)
+    record = trace.Trace(
+        config, [first], {}, None, "active", "2026-11-18T00:00:00+00:00"
+    )
+    encoded: list[tuple[trace.TraceEvent, str]] = []
+    assert record.to_json(encoded) == json.dumps(record.to_record())
+    second = trace.TraceEvent("villain", {"turn": 1}, [], 1, "Cast", 0.0)
+    record.events.append(second)
+    record.events[0] = replace(first, presentation=[{"seq": 0}])
+    assert record.to_json(encoded) == json.dumps(record.to_record())
+    record.events.pop()
+    assert record.to_json(encoded) == json.dumps(record.to_record())
