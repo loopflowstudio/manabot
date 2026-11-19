@@ -392,6 +392,7 @@ fn condition_text(condition: &Condition) -> String {
             format!("this is {}", predicate_description(predicate, "permanent"))
         }
         Condition::SourceTapped => "this is tapped".into(),
+        Condition::SourceSaddled => "this is saddled".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
         Condition::CardsThisWayMatch(predicate) => format!(
             "a {} was milled or discarded this way",
@@ -1210,6 +1211,7 @@ pub(super) fn continuous_description(
         }
         Modification::CantBeBlocked => format!("{subject} can't be blocked{until}"),
         Modification::CantBlock => format!("{subject} can't block{until}"),
+        Modification::Saddled => format!("{subject} becomes saddled{until}"),
         Modification::DoesntUntap => {
             format!("{subject} doesn't untap during its controller's untap step{until}")
         }

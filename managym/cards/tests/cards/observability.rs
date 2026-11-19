@@ -317,6 +317,7 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::CantBlock",
             Seen::Via("the action tensor omits its blocks"),
         ),
+        Modification::Saddled => ("Modification::Saddled", Seen::Via("its effect fact row")),
         Modification::DoesntUntap => (
             "Modification::DoesntUntap",
             Seen::Via("its effect fact row and the tapped column after the untap step"),
@@ -434,6 +435,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::CantBeBlocked),
         permanent(Modification::CantBlock),
         permanent(Modification::DoesntUntap),
+        permanent(Modification::Saddled),
         permanent(Modification::CantActivateAbilities),
         permanent(Modification::MustBeBlockedByAllAble),
         permanent(Modification::LoseKeywords(Keywords::of(&[
@@ -456,7 +458,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 36;
+const MODIFICATION_VARIANTS: usize = 37;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -1190,6 +1192,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceMatches(_) => "Condition::SourceMatches",
         Condition::SourceTapped => "Condition::SourceTapped",
+        Condition::SourceSaddled => "Condition::SourceSaddled",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
         Condition::CardsThisWayMatch(_) => "Condition::CardsThisWayMatch",
@@ -1235,6 +1238,7 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 4,
         },
         Condition::SourceTapped,
+        Condition::SourceSaddled,
         Condition::SourceMatches(CardPredicate::subtype("Scout")),
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,

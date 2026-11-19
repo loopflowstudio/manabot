@@ -587,6 +587,15 @@ impl ActivatedAbilityDefinition {
 
     /// For a known mana ability, does activation change anything besides
     /// paying mana, tapping its own source and producing its output?
+    /// The total power of other creatures this ability taps as a cost, and
+    /// the keyword that asks for it.
+    pub fn tap_power(&self) -> Option<(i32, crate::payment::Toward)> {
+        use crate::payment::Toward;
+        self.crew
+            .map(|power| (power, Toward::Crew))
+            .or(self.saddle.map(|power| (power, Toward::Saddle)))
+    }
+
     pub fn mana_activation_has_side_effects(&self) -> bool {
         self.life_cost > 0
             || self.sacrifice_source
@@ -594,7 +603,7 @@ impl ActivatedAbilityDefinition {
             || self.discard_source
             || self.discard_card
             || self.tap_cost.is_some()
-            || self.crew.is_some()
+            || self.tap_power().is_some()
             || self.effects.len() > 1
     }
 
@@ -761,6 +770,9 @@ pub struct ActivatedAbilityDefinition {
     /// with total power N or greater (CR 702.122a).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crew: Option<i32>,
+    /// "Saddle N": the same cost as crew (CR 702.171a), toward saddling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saddle: Option<i32>,
     /// The least X the activation may announce ("X can't be 0", CR 107.3).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x_min: u8,

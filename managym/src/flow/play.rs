@@ -1182,10 +1182,10 @@ impl Game {
             return self.begin_activated_targets(player, source, ability_index, &ability);
         }
         if ability
-            .crew
-            .is_some_and(|power| self.crew_power_available(player, permanent_id) < power)
+            .tap_power()
+            .is_some_and(|(power, _)| self.crew_power_available(player, permanent_id) < power)
         {
-            return Err(AgentError("not enough power to crew".into()));
+            return Err(AgentError("not enough power to crew or saddle".into()));
         }
         self.begin_payment(
             player,
@@ -1776,11 +1776,8 @@ impl Game {
                 let ability = self
                     .activation_ability(*source, *ability_index)
                     .expect("announced activation source");
-                if let Some(power) = ability.crew.filter(|power| *power > 0) {
-                    owed.push(CostComponent::TapPower {
-                        power,
-                        toward: Toward::Crew,
-                    });
+                if let Some((power, toward)) = ability.tap_power().filter(|(power, _)| *power > 0) {
+                    owed.push(CostComponent::TapPower { power, toward });
                 }
                 if let Some(cost) = ability.tap_cost {
                     owed.push(CostComponent::Tap(cost));

@@ -1834,7 +1834,8 @@ impl Game {
                 },
                 _,
             ) => {
-                self.check_static_condition(active_if, source_controller)
+                // "While saddled" asks about the exact source.
+                self.check_intervening_if(active_if, source_controller, Some(source_object), None)
                     && self.trigger_condition_fires(
                         condition,
                         source_object,

@@ -56,6 +56,8 @@ pub enum Toward {
     Waterbend,
     /// A crew cost (CR 702.122a).
     Crew,
+    /// A saddle cost (CR 702.171a).
+    Saddle,
     /// A cost paid rather than the mana cost (CR 118.9).
     Alternative,
     /// {1} or one mana of the tapped creature's color (CR 702.51a).

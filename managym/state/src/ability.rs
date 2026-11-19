@@ -253,6 +253,8 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    /// "while saddled": the source Mount is saddled (CR 702.171b).
+    SourceSaddled,
     /// The exact ability source has these current characteristics.
     SourceMatches(CardPredicate),
     /// Triggering question: the permanent whose event fired the trigger has
@@ -312,6 +314,7 @@ impl Condition {
         match self {
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceSaddled
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters => true,
             Condition::ControlsAtLeast { predicate, .. }
@@ -346,6 +349,7 @@ impl Condition {
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceSaddled
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
             | Condition::YourTurn

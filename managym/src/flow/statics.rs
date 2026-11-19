@@ -835,6 +835,14 @@ impl Game {
                 .and_then(|r| self.lookup_current_permanent(r).ok())
                 .is_some_and(|id| self.permanent_matches_predicate(id, predicate)),
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
+            Condition::SourceSaddled => source
+                .and_then(|source| self.lookup_current_permanent(source).ok())
+                .is_some_and(|id| {
+                    self.permanent_has_modification(
+                        id,
+                        &crate::state::effect::Modification::Saddled,
+                    )
+                }),
             Condition::TriggeringHadCounters => match triggering {
                 Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
                     Some(permanent) => permanent.has_counters(),

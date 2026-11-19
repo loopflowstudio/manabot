@@ -6092,5 +6092,20 @@
     "colors": [
       "G"
     ]
+  },
+  "Alacrian Jaguar": {
+    "name": "Alacrian Jaguar",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Cat Mount",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Saddle",
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nWhenever this creature attacks while saddled, it gets +2/+2 until end of turn.\nSaddle 1 (Tap any number of other creatures you control with total power 1 or more: This Mount becomes saddled until end of turn. Saddle only as a sorcery.)",
+    "colors": [
+      "G"
+    ]
   }
 }

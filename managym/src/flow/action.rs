@@ -227,6 +227,10 @@ impl Game {
                 let name = &self.state[*object_id].name;
                 let paying = self.paying().and_then(|(_, _, component)| match component {
                     CostComponent::ExileFromHand => Some(format!("Exile {name} to pay")),
+                    CostComponent::TapPower {
+                        toward: crate::state::payment::Toward::Saddle,
+                        ..
+                    } => Some(format!("Tap {name} to saddle")),
                     CostComponent::TapPower { .. } => Some(format!("Tap {name} to crew")),
                     CostComponent::Tap(_) => Some(format!("Tap {name} to pay")),
                     CostComponent::Sacrifice(_, crate::state::payment::Toward::Bargain) => {
@@ -484,10 +488,9 @@ impl Game {
                 if ability.tap_source && !self.permanent_can_tap(permanent_id) {
                     continue;
                 }
-                if ability
-                    .crew
-                    .is_some_and(|power| self.crew_power_available(player, permanent_id) < power)
-                {
+                if ability.tap_power().is_some_and(|(power, _)| {
+                    self.crew_power_available(player, permanent_id) < power
+                }) {
                     continue;
                 }
                 let affordable = if ability.tap_cost.is_some() {

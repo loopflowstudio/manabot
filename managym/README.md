@@ -431,7 +431,9 @@ marks the spell kicked, and a conditional alternative
 (`AdditionalCost::AlternativeMana`) replaces the mana cost while its condition
 holds. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
 whose step offers a Food to sacrifice, the graveyard cards to exile (the first
-commits to three) and the mana instead.
+commits to three) and the mana instead. Crew and saddle are the same
+`TapPower` component, toward `Crew` or `Saddle`; a saddled Mount carries a
+`Modification::Saddled` record until end of turn.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation
