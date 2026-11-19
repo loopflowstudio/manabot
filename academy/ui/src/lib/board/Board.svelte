@@ -324,19 +324,20 @@
   // revision: piles, prompt, Pay label and note read it while a person points
   // at other choices, so pointing never reflows the rail or moves a card from
   // under the pointer (which would change what is pointed at).
-  let payAnswer = $state.raw<{ revision: number; answered: NonNullable<typeof answered>; sources: ReadonlyMap<number, unknown> | null } | null>(null);
+  let payAnswer = $state.raw<{ revision: number; answered: NonNullable<typeof answered> } | null>(null);
   $effect(() => {
-    if (payOffer && previewing === payOffer && answered) payAnswer = { revision: frame.revision, answered, sources: payPlanned?.sources ?? null };
+    if (payOffer && previewing === payOffer && answered) payAnswer = { revision: frame.revision, answered };
   });
-  const payKnown = $derived(payOffer && payAnswer?.revision === frame.revision ? payAnswer : null);
-  const unpiled = $derived(payKnown?.sources ?? payPlanned?.sources ?? null);
-  const primaryText = $derived(primaryLabel(frame, view, payKnown?.answered ?? null));
+  const payKnown = $derived(payOffer && payAnswer?.revision === frame.revision ? payAnswer.answered : null);
+  const payKnownPlan = $derived(paymentPlan(payKnown, frame));
+  const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
+  const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
-      : promptLine(frame, view, (payKnown?.sources?.size ?? 0) > 0));
+      : promptLine(frame, view, (payKnownPlan?.sources.size ?? 0) > 0));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
-      : payKnown && payKnown.answered.state !== 'exact' && payKnown.answered.state !== 'not_applicable' ? payKnown.answered.explanation : null);
+      : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
   function point(offers: PlacedOffer[] | null): void {
     pointed = offers?.length === 1 ? offers[0] : null;
   }
