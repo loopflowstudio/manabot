@@ -12,12 +12,14 @@
  * more than `GROUP_ABOVE` facts reads as sentences instead: one player's
  * consecutive moves become one ("Heuristic played Plains and attacked with
  * Ally"), as do consecutive consequences of one kind. The board plays them one
- * pace apart (`BeatPace`, a per-browser setting) and drops them all on Space, a
- * click, a commit or a new frame. Reduced motion, or the pace "off", plays
- * none: the recap already lists every fact.
+ * pace apart (`BeatPace`, a per-browser setting) and drops them all at the
+ * first input or a new frame. Reduced motion, or the pace "off", plays none:
+ * the recap already lists every fact.
  *
- * A beat is presentation only. It never holds or reorders a decision: the
- * rail stays live while beats play, and acting ends them.
+ * A beat is presentation only: it never reorders, hides or chooses a decision.
+ * The read-out comes before the decision, though: while a beat plays, the
+ * decision's controls wait, and the first input ends the read-out and does
+ * nothing else, so a person never answers a board they have not been shown.
  */
 import type { RecentFact, Side } from './recent';
 

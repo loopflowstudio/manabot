@@ -368,15 +368,22 @@
   });
   $effect(() => {
     if (!beat) return;
-    if (beatPace === 'off') { skipBeats(); return; }
+    if (beatPace === 'off') { endReadOut(); return; }
     const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS[beatPace]);
     return () => clearTimeout(timer);
   });
-  function skipBeats(): void { beats = []; beatAt = 0; }
+  /**
+   * The read-out holds the whole game surface: while a beat plays, the first
+   * press, click or acting key anywhere in the game ends it and does nothing
+   * else, so the live decision answers only once the board shows its own
+   * position. Focus keys (Tab, arrows) still move.
+   */
+  const readingOut = $derived(beat !== null);
+  function endReadOut(): void { beats = []; beatAt = 0; }
 
   // Each beat is shown on the board it happened on, when the authority sent
-  // it (`stepBoards`); else on the frame's. A past board has no offers: the
-  // rail stays live, and pressing the board skips to the frame's own.
+  // it (`stepBoards`); else on the frame's. A past board has no offers, and the
+  // rail's choices wait until the read-out ends.
   const beatBoard = $derived(beat ? boardAt(stepBoards, beat.seq) : null);
   const drawn = $derived(beatBoard ? { ...frame, projection: beatBoard, offers: [] } : drafted);
   const board = $derived(beatBoard ? boardView(drawn, players) : view);
@@ -391,28 +398,27 @@
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
   /** The person may act on the drawn board now: what they cannot act on steps back. */
   const acting = $derived(live && !beatBoard && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
-  /** The press that skipped to the frame's board acts on nothing: its card had no offer when pressed. */
-  let skipPress = false;
-  function onBoardPress(): void {
-    skipPress = beatBoard !== null;
-    if (skipPress) skipBeats();
+  /** The pointer press that ended a read-out; its click acts on nothing. */
+  let endedByPress = false;
+  function onPress(): void {
+    endedByPress = readingOut;
+    if (endedByPress) endReadOut();
   }
-  function onBoardClick(event: MouseEvent): void {
-    if (!skipPress) return;
-    skipPress = false;
+  function onClick(event: MouseEvent): void {
+    if (!endedByPress) return;
+    endedByPress = false;
     event.preventDefault();
     event.stopPropagation();
   }
-  // Listeners, not attributes: the board is a region of controls, not one control (Space and Esc skip by keyboard).
-  let boardElement = $state<HTMLElement | null>(null);
+  // Capturing listeners on the whole game: board, rail, tray and menus end a read-out alike.
   $effect(() => {
-    const element = boardElement;
+    const element = root;
     if (!element) return;
-    element.addEventListener('pointerdown', onBoardPress);
-    element.addEventListener('click', onBoardClick, { capture: true });
+    element.addEventListener('pointerdown', onPress, { capture: true });
+    element.addEventListener('click', onClick, { capture: true });
     return () => {
-      element.removeEventListener('pointerdown', onBoardPress);
-      element.removeEventListener('click', onBoardClick, { capture: true });
+      element.removeEventListener('pointerdown', onPress, { capture: true });
+      element.removeEventListener('click', onClick, { capture: true });
     };
   });
   // Both players' moves are narrated as Review narrates them, players named by seat.
@@ -499,7 +505,7 @@
   }
   function send(offer: InteractionOffer): void {
     if (!live) return;
-    skipBeats();
+    endReadOut();
     menuAt = null;
     stopNote = null;
     hush();
@@ -695,16 +701,19 @@
     (event.shiftKey ? stops.at(-1) : stops[0])?.focus();
   }
 
+  /** Keys that move focus or open help; every other key ends a read-out. */
+  const MOVES_FOCUS = new Set(['Tab', 'Shift', '?', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Tab' && !recording && !event.metaKey && !event.ctrlKey && !event.altKey) { wrapTab(event); return; }
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
+    endedByPress = false;
+    // Enter on a focused choice, Space, Esc or a number key ends a read-out and acts on nothing.
+    if (readingOut && !MOVES_FOCUS.has(event.key)) { event.preventDefault(); endReadOut(); return; }
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
     if (event.key === 'Escape' && armed !== null) { armed = null; return; }
-    if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); skipBeats(); return; }
-    // While the opponent's moves are read out, Space ends the reading; the next Space acts.
-    if (event.key === ' ' && beat && !ownsSpace(event.target)) { event.preventDefault(); skipBeats(); return; }
+    if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
@@ -750,7 +759,7 @@
   </header>
 
   <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
-    data-board={beatBoard ? 'step' : 'frame'} bind:this={boardElement}>
+    data-board={beatBoard ? 'step' : 'frame'}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} name={opponent.name} deck={opponent.deck} offers={board.opponent.offers} {live} damage={recent.damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
@@ -820,7 +829,7 @@
     <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
-      {evidence} {recapTitle} {onjump} {currentMove} reading={beat && !result ? reading : undefined}
+      {evidence} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
       draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
   </div>
 
@@ -853,8 +862,8 @@
 
   {#snippet reading()}
     {#if beat}
-      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={skipBeats}
-        title="Skip (Space)">
+      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={endReadOut}
+        title="Show your decision (Space)">
         <span class="beat-text">{beat.text}</span>
         <span class="beat-count type-caption">{beatAt + 1} of {beats.length} · Space to skip</span>
       </button>
@@ -990,10 +999,10 @@
     animation: appear var(--motion-move) ease-out;
   }
   @keyframes appear { from { opacity: 0; } }
-  /* A beat reads out one of the opponent's moves over the rail's move list, where it covers no card or choice. */
+  /* A beat heads the rail's decision block, above the prompt that waits for it. */
   .beat {
-    display: grid; gap: 4px; align-content: center; justify-items: center; padding: 6px 12px; border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-raised); text-align: center; cursor: pointer;
+    display: grid; gap: 2px; justify-items: start; width: 100%; padding: 6px 10px; border: 1px solid var(--border-strong);
+    border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg-field); text-align: left; cursor: pointer;
     animation: appear var(--motion-fast) ease-out;
   }
   .beat-text { font-size: 14px; line-height: 20px; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
