@@ -886,9 +886,8 @@
   <nav class="stops-slot" aria-label={`Turn ${boardProjection.turn.turn_number}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
     <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
+  <Lines {lines} {root} revision={frame.revision} />
 </div>
-
-<Lines {lines} {root} revision={frame.revision} />
 
 {#if menuAt}
   <div class="menu" use:region role="menu" tabindex="-1" aria-label={`Choices for ${menuAt.title}`} bind:this={menuElement} data-testid="card-menu"
@@ -946,7 +945,16 @@
 {/if}
 
 <style>
+  /*
+   * The board's one layering order, lowest first: cards, the lines between
+   * cards and their targets, floating panels (the tray and the result card).
+   * Each row of permanents and the hand keep their own stacking, so a raised,
+   * attacking or lifted card orders only among its neighbours and never climbs
+   * over a line or a panel. Above the whole game (itself at 10) float the inspect
+   * preview (250), then card menus and the keys sheet (300). Add no other z-index.
+   */
   .game {
+    --layer-lines: 1; --layer-panel: 2;
     position: fixed; inset: 0; z-index: 10; display: grid;
     grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px);
     grid-template-rows: 40px minmax(0, 1fr) auto auto;
@@ -971,21 +979,21 @@
   /* One row the half's own height: a tall plate scrolls inside it rather than growing the rows past the half. */
   .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
-  .rows { display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
+  .rows { isolation: isolate; display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
   .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); }
   .you .rows { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); }
   .row { min-height: 0; min-width: 0; }
   .row.support { border-top: 1px dashed transparent; }
   .opponent .row.creatures, .you .row.support { padding-top: 4px; }
 
-  .hand { position: relative; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--hand-label); overflow: hidden; }
+  .hand { position: relative; isolation: isolate; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--hand-label); overflow: hidden; }
   .hand-label { position: absolute; left: 14px; bottom: 10px; }
   .hand-cards { position: relative; height: 100%; }
   .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }
   .hand-card:hover, .hand-card:focus-within { transform: translateY(-10px); z-index: 30; }
 
   .tray {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); z-index: 40;
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); z-index: var(--layer-panel);
     padding: 12px 16px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
     background: var(--bg-surface); box-shadow: var(--shadow-raised); max-width: 90%;
   }
@@ -993,9 +1001,9 @@
   .tray-card { display: grid; justify-items: center; gap: 6px; width: 120px; text-align: center; }
 
   .result-card {
-    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: 45; width: min(440px, 80%);
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: var(--layer-panel); width: min(440px, 80%);
     display: grid; gap: 10px; padding: 18px 20px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--bg-surface) 94%, transparent); box-shadow: var(--shadow-raised);
+    background: var(--bg-surface); box-shadow: var(--shadow-raised);
     animation: appear var(--motion-move) ease-out;
   }
   @keyframes appear { from { opacity: 0; } }

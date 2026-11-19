@@ -79,7 +79,7 @@
 {/if}
 
 <style>
-  .lines { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 35; pointer-events: none; overflow: visible; }
+  .lines { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: var(--layer-lines); pointer-events: none; overflow: visible; }
   .line { fill: none; stroke-width: 2.25; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; animation: draw calc(var(--motion-move) * 2) var(--motion-move-ease); }
   .line.target { stroke: var(--accent); }
   .line.block { stroke: var(--text-secondary); stroke-dasharray: 0.02 0.018; animation: none; }
