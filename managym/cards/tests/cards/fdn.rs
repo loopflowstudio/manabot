@@ -217,6 +217,42 @@ fn hungry_ghoul_sacrifice_stays_named_while_a_mana_ability_is_being_paid() {
     assert_eq!(context["paid"][0]["object"]["label"], "Gray Ogre");
 }
 
+/// With nothing left to tap, the Ghoul's {1} is paid from the pool, and which
+/// floated unit pays is a choice. The sacrifice is already made at that
+/// choice and stays named.
+#[test]
+fn hungry_ghoul_sacrifice_stays_named_while_a_pooled_unit_is_chosen() {
+    use crate::support::{
+        game::five_color_unfunded_setup,
+        play::{select_card, tap_for_mana},
+    };
+
+    let mut s =
+        five_color_unfunded_setup(&["Hungry Ghoul", "Gray Ogre", "Carnelian Orb of Dragonkind"]);
+    let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let orb = s.force_permanent_on_battlefield(0, "Carnelian Orb of Dragonkind");
+    let mountain = s.force_permanent_on_battlefield(0, "Mountain");
+    let ogre_object = card_of(&s, ogre);
+    // The Orb's red carries a rider, so it is a unit apart from the land's.
+    s.allow_priority_floats();
+    tap_for_mana(&mut s, orb);
+    tap_for_mana(&mut s, mountain);
+
+    activate(&mut s, ghoul, 0);
+    select_card(&mut s, ogre_object);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let spends = frame
+        .offers
+        .iter()
+        .filter(|offer| offer.label.starts_with("Spend"))
+        .count();
+    assert_eq!(spends, 2, "{:?}", frame.offers);
+    let context = serde_json::to_value(s.game().decision_context(PlayerId(0)).unwrap()).unwrap();
+    assert_eq!(context["paid"].as_array().unwrap().len(), 1, "{context}");
+    assert_eq!(context["paid"][0]["object"]["label"], "Gray Ogre");
+}
+
 /// The payment preview reads the cost being paid. Hungry Ghoul's "{1},
 /// Sacrifice another creature" has no preview until the creature is chosen;
 /// at the mana it forecasts the land that would be tapped, and the pending

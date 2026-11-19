@@ -13,7 +13,7 @@
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
-        decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion, SuspendedResolution},
+        decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
         event::GameEvent,
         game::{
             pay_pip_with, ActivationSource, CastChoices, CostComponent, Game, Help, Operation,
@@ -1906,20 +1906,39 @@ impl Game {
         }
     }
 
-    /// The receipt of the cost being paid: that of a payment suspended
-    /// during resolution, else the announced payment's.
+    /// The receipt of the cost being paid. While a decision is suspended it
+    /// is the innermost payment's in that decision's caller chain: a spend
+    /// choice carries its payment, and a mana ability's own cost or output
+    /// choice returns to the payment that activated it. Otherwise it is the
+    /// announced payment's.
     pub(crate) fn pending_receipt(&self) -> Option<&PaymentReceipt> {
-        match (&self.state.suspended_decision, &self.pending_choice) {
-            (
-                Some(SuspendedResolution {
-                    decision: Decision::Payment(payment),
-                    ..
-                }),
-                _,
-            ) => Some(&payment.receipt),
-            (_, Some(PendingChoice::Pay { payment, .. })) => Some(&payment.receipt),
+        let suspended = self
+            .state
+            .suspended_decision
+            .as_ref()
+            .and_then(|suspended| {
+                suspended
+                    .continuation()
+                    .into_iter()
+                    .rev()
+                    .find_map(|caller| match caller {
+                        ResolutionRef::Decision(Decision::Payment(payment)) => {
+                            Some(&payment.receipt)
+                        }
+                        ResolutionRef::Decision(Decision::ManaSpend { completion, .. }) => {
+                            match completion.as_ref() {
+                                SpendCompletion::Announced(payment) => Some(&payment.receipt),
+                                SpendCompletion::Resolution(payment) => Some(&payment.receipt),
+                                SpendCompletion::Upfront(_) | SpendCompletion::Foretell(_) => None,
+                            }
+                        }
+                        _ => None,
+                    })
+            });
+        suspended.or(match &self.pending_choice {
+            Some(PendingChoice::Pay { payment, .. }) => Some(&payment.receipt),
             _ => None,
-        }
+        })
     }
 
     fn pending_payment(&self, player: PlayerId) -> Result<Payment, AgentError> {

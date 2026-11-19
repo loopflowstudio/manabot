@@ -10098,6 +10098,38 @@ fn waterbending_lesson_resolution_payment_names_the_creature_tapped() {
     assert_eq!(paid.object.as_ref().unwrap().label, "Gray Ogre");
 }
 
+/// A mana ability's own cost, paid inside Waterbending Lesson's resolving
+/// payment, suspends a decision of its own; the creature already tapped to
+/// waterbend is still what has paid.
+#[test]
+fn waterbending_lesson_tap_stays_named_while_a_mana_ability_is_being_paid() {
+    let (mut s, _, _) = lesson_payment(
+        &[
+            "Waterbending Lesson",
+            "Prophetic Prism",
+            "Callous Inspector",
+            "Tireless Provisioner",
+        ],
+        "0",
+    );
+    s.game_mut()
+        .create_token("token.treasure", PlayerId(0), false);
+    let creature = permanent_named(&s, "Callous Inspector");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == creature),
+    );
+    // The Prism's own {1} is a decision inside the Lesson's payment.
+    activate_named(&mut s, "Prophetic Prism", 0);
+    assert_ne!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    let [paid] = context.paid.as_slice() else {
+        panic!("one tap: {:?}", context.paid)
+    };
+    assert_eq!(paid.phrase, "tapped Callous Inspector to waterbend");
+    assert_eq!(paid.object.as_ref().unwrap().label, "Callous Inspector");
+}
+
 #[test]
 fn committed_optional_payment_resumes_after_two_nested_mana_decisions() {
     let (mut s, lesson, drawn) = lesson_payment(
