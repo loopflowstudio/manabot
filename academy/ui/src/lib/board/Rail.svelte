@@ -333,6 +333,10 @@
   .notices { padding: 8px 14px 0; display: grid; gap: 6px; }
   h2 { margin-bottom: 4px; line-height: 16px; }
   .stack { max-height: 34vh; overflow-y: auto; }
+  /* A crowded rail never cuts the top two stack entries (a spell and what it answers): the block keeps room for its
+     heading and one entry (88 px) or two (135 px); deeper entries and the recap below scroll. */
+  .stack:has(.stack-entry) { min-height: 88px; }
+  .stack:has(li + li .stack-entry) { min-height: 135px; }
   .stack ol { display: grid; gap: 3px; }
   .stack-entry {
     width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px; border-radius: var(--radius-sm);
