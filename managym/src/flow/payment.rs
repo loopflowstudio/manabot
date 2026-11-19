@@ -877,10 +877,7 @@ impl Game {
             } else {
                 let mut left = self.pooled_mana(player);
                 left.spend(&unit);
-                let color = (0..6)
-                    .find(|&c| unit.mana[c] > 0 || unit.classes().iter().any(|(_, a)| a[c] > 0))
-                    .expect("one unit has a color") as u8;
-                cost.paid_with(color)
+                cost.paid_with(pool.unit_color(index))
                     .into_iter()
                     .find(|rest| self.payable_with_help(player, &left, rest, help))
             };

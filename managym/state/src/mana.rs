@@ -1138,6 +1138,12 @@ impl ManaPool {
         self.units.len()
     }
 
+    /// The color of the pooled unit at `index` (W/U/B/R/G/C, as `Mana.mana`
+    /// indexes it).
+    pub fn unit_color(&self, index: usize) -> u8 {
+        self.units[index].color
+    }
+
     /// The pooled unit at `index`, as one unit of `Mana`.
     pub fn unit(&self, index: usize) -> Mana {
         let pooled = &self.units[index];

@@ -28,17 +28,20 @@ class PlayDemo(BaseModel):
     decision_kind: str = "LEARN"
 
 
+# Each play demo's fixture under `fixtures/`, by the name `?demo=` selects.
+DEMO_FILES: dict[str, str] = {
+    "learn": "learn-demo-w17-token-cards.json",
+    "precision": "precision-demo-w17-manual-payment.json",
+    "precision-mana": "precision-mana-demo-w17-manual-payment.json",
+    "convoke": "convoke-demo-w17-manual-payment.json",
+}
+
+
 def load_play_demo(name: str) -> PlayDemo:
-    filenames = {
-        "learn": "learn-demo-w17-token-cards.json",
-        "precision": "precision-demo-w17-manual-payment.json",
-        "precision-mana": "precision-mana-demo-w17-manual-payment.json",
-        "convoke": "convoke-demo-w17-manual-payment.json",
-    }
-    if name not in filenames:
+    if name not in DEMO_FILES:
         raise ValueError(f"Unknown play demo: {name}")
     return PlayDemo.model_validate_json(
-        (Path(__file__).parent / "fixtures" / filenames[name]).read_text()
+        (Path(__file__).parent / "fixtures" / DEMO_FILES[name]).read_text()
     )
 
 
