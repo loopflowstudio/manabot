@@ -2398,9 +2398,7 @@ impl Game {
             .iter_mut()
             .filter(|source| source.waterbend)
         {
-            let view = self.characteristics(source.permanent);
-            source.waterbend =
-                help.convoke && view.is_creature() || help.improvise && view.types.is_artifact();
+            source.waterbend = self.help_tap_toward(help, source.permanent).is_some();
         }
     }
 

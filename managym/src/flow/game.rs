@@ -343,6 +343,18 @@ impl Help {
     pub fn taps_any_generic(self) -> bool {
         self.convoke || self.improvise
     }
+
+    /// The keyword under which tapping a permanent pays part of the cost:
+    /// convoke for a creature, improvise for an artifact.
+    pub fn tap_toward(self, creature: bool, artifact: bool) -> Option<Toward> {
+        if self.convoke && creature {
+            Some(Toward::Convoke)
+        } else if self.improvise && artifact {
+            Some(Toward::Improvise)
+        } else {
+            None
+        }
+    }
 }
 
 /// One cast or activation being paid for (CR 601.2f-h): the announced
@@ -359,12 +371,17 @@ pub struct Payment {
 }
 
 impl Payment {
-    /// The mana still owed and the generic part of it that waterbend taps
-    /// may still pay.
-    pub fn mana(&self) -> (&ManaCost, u8) {
+    fn mana_component(&self) -> (&ManaCost, Help) {
         let Some(CostComponent::Mana { cost, help }) = self.owed.last() else {
             unreachable!("a payment ends with its mana component")
         };
+        (cost, *help)
+    }
+
+    /// The mana still owed and the generic part of it that waterbend taps
+    /// may still pay.
+    pub fn mana(&self) -> (&ManaCost, u8) {
+        let (cost, help) = self.mana_component();
         let tapped = self
             .receipt
             .contributed(How::Tapped, Toward::Waterbend)
@@ -377,10 +394,7 @@ impl Payment {
 
     /// How the mana owed may be paid without mana, as announced.
     pub fn help(&self) -> Help {
-        let Some(CostComponent::Mana { help, .. }) = self.owed.last() else {
-            unreachable!("a payment ends with its mana component")
-        };
-        *help
+        self.mana_component().1
     }
 
     /// Whether the cost being paid is a waterbend cost, however it is paid.
@@ -407,14 +421,6 @@ impl Payment {
         let cost = self.mana_mut();
         *cost = cost.less_pip(color);
         self.receipt.contribute(object, how, toward);
-    }
-
-    /// One waterbend tap paid {1} of the generic mana owed.
-    pub(crate) fn waterbend(&mut self, tapped: ObjectId) {
-        let cost = self.mana_mut();
-        *cost = cost.reduced_generic(1);
-        self.receipt
-            .contribute(tapped, How::Tapped, Toward::Waterbend);
     }
 }
 

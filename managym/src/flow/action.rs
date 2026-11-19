@@ -18,6 +18,7 @@ use crate::{
         card::ActivationZone,
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId},
         mana::{Color, Mana, ManaCost},
+        payment::Toward,
         player::ManaFloats,
         zone::ZoneType,
     },
@@ -71,9 +72,10 @@ impl Game {
                     .filter(|(_, payment, _)| payment.help().taps_any_generic())
                     .filter(|_| self.state.suspended_decision.is_none())?;
                 let name = &self.state[self.permanent_object(*permanent)?].name;
-                let convokes =
-                    payment.help().convoke && self.characteristics(*permanent).is_creature();
-                let keyword = if convokes { "convoke" } else { "improvise" };
+                let keyword = match self.help_tap_toward(payment.help(), *permanent)? {
+                    Toward::Convoke => "convoke",
+                    _ => "improvise",
+                };
                 let symbol = |color: &Color| ["W", "U", "B", "R", "G", "C", "1"][*color as usize];
                 match &self.help_tap_options(*player, payment, *permanent)[..] {
                     [] => None,
@@ -113,10 +115,10 @@ impl Game {
                 else {
                     unreachable!()
                 };
-                let color = ["W", "U", "B", "R", "G"].get(*colors.get(*mode)? as usize)?;
                 Some(format!(
-                    "{} pays {{{color}}} (convoke)",
-                    self.state[*creature].name
+                    "{} pays {{{}}} (convoke)",
+                    self.state[*creature].name,
+                    colors.get(*mode)?.symbol()
                 ))
             }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
@@ -204,20 +206,15 @@ impl Game {
                 }) if self.state[*object_id].bargain() => {
                     Some("Bargain: sacrifice an artifact, enchantment or token".into())
                 }
-                Some(PendingChoice::Pay { payment, .. })
-                    if matches!(
-                        payment.owed[0],
-                        CostComponent::Sacrifice(..) | CostComponent::Forage { .. }
-                    ) =>
-                {
+                Some(PendingChoice::Pay { payment, .. }) => {
                     let (or_mana, instead) = match &payment.owed[0] {
-                        CostComponent::Sacrifice(cost, _) => (cost.or_mana.as_ref(), "sacrificing"),
-                        CostComponent::Forage { or_mana, .. } => (Some(or_mana), "foraging"),
-                        _ => unreachable!(),
+                        CostComponent::Sacrifice(cost, _) => {
+                            (cost.or_mana.as_ref()?, "sacrificing")
+                        }
+                        CostComponent::Forage { or_mana, .. } => (or_mana, "foraging"),
+                        _ => return None,
                     };
-                    or_mana.map(|alternative| {
-                        format!("Pay {} instead of {instead}", cost_label(alternative))
-                    })
+                    Some(format!("Pay {} instead of {instead}", cost_label(or_mana)))
                 }
                 _ => None,
             },
@@ -228,12 +225,12 @@ impl Game {
                 let paying = self.paying().and_then(|(_, _, component)| match component {
                     CostComponent::ExileFromHand => Some(format!("Exile {name} to pay")),
                     CostComponent::TapPower {
-                        toward: crate::state::payment::Toward::Saddle,
+                        toward: Toward::Saddle,
                         ..
                     } => Some(format!("Tap {name} to saddle")),
                     CostComponent::TapPower { .. } => Some(format!("Tap {name} to crew")),
                     CostComponent::Tap(_) => Some(format!("Tap {name} to pay")),
-                    CostComponent::Sacrifice(_, crate::state::payment::Toward::Bargain) => {
+                    CostComponent::Sacrifice(_, Toward::Bargain) => {
                         Some(format!("Sacrifice {name} (bargain)"))
                     }
                     CostComponent::Sacrifice(..) => Some(format!("Sacrifice {name}")),
@@ -646,11 +643,7 @@ impl Game {
             if self.can_pay_cast(player, self.state.object_of(card), cast) {
                 return Some(cost.mana_value);
             }
-            let alternative = object.exile_alternative().is_some()
-                || object
-                    .alternative_mana()
-                    .is_some_and(|(_, condition)| self.check_static_condition(condition, player));
-            return (alternative
+            return (self.alternative_cost_available(player, self.state.object_of(card))
                 && self.can_pay_cast(
                     player,
                     self.state.object_of(card),

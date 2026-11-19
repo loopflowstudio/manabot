@@ -25,7 +25,8 @@ use crate::{
     state::{
         ability::{EffectValue, TargetRequirement},
         card::{
-            ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardType, StaticAbility,
+            ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardType, SacrificeCost,
+            StaticAbility, TapCost,
         },
         game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
@@ -566,11 +567,7 @@ impl Game {
         };
         // CR 118.9a: a free cast cannot also take an alternative cost.
         let card = &self.state[object];
-        let alternative = !cast.free
-            && (card.exile_alternative().is_some()
-                || card
-                    .alternative_mana()
-                    .is_some_and(|(_, condition)| self.check_static_condition(condition, player)));
+        let alternative = !cast.free && self.alternative_cost_available(player, object);
         let optional = card.optional_cost().is_some() || card.bargain();
         if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
             if self.can_pay_cast(player, object, cast) {
@@ -581,6 +578,16 @@ impl Game {
         } else {
             Some(cast)
         }
+    }
+
+    /// Whether `object` has an alternative cost `player` may choose now: an
+    /// exile alternative, or alternative mana whose condition holds.
+    pub(crate) fn alternative_cost_available(&self, player: PlayerId, object: ObjectId) -> bool {
+        let card = &self.state[object];
+        card.exile_alternative().is_some()
+            || card
+                .alternative_mana()
+                .is_some_and(|(_, condition)| self.check_static_condition(condition, player))
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -1681,7 +1688,7 @@ impl Game {
         &self,
         player: PlayerId,
         operation: &Operation,
-        cost: &crate::state::card::SacrificeCost,
+        cost: &SacrificeCost,
     ) -> Vec<PermanentId> {
         self.sacrifice_candidates(player, &cost.predicate)
             .into_iter()
@@ -1860,7 +1867,7 @@ impl Game {
     pub(crate) fn tap_candidates(
         &self,
         player: PlayerId,
-        predicate: &crate::state::predicate::CardPredicate,
+        predicate: &CardPredicate,
     ) -> Vec<PermanentId> {
         self.battlefield_permanents(player)
             .into_iter()
@@ -1937,7 +1944,7 @@ impl Game {
                     .receipt
                     .contribute(object, How::Tapped, Toward::Printed);
                 if cost.count > 1 {
-                    payment.owed[0] = CostComponent::Tap(crate::state::card::TapCost {
+                    payment.owed[0] = CostComponent::Tap(TapCost {
                         count: cost.count - 1,
                         ..cost
                     });
@@ -2039,23 +2046,17 @@ impl Game {
     /// branch, or pay the mana still owed.
     pub(crate) fn pay_cost_action(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let mut payment = self.pending_payment(player)?;
-        match payment.owed[0].clone() {
-            CostComponent::Sacrifice(cost, _) => {
-                let extra = cost
-                    .or_mana
-                    .ok_or_else(|| AgentError("sacrifice required".into()))?;
-                payment.owed.remove(0);
-                payment.owe_mana(&extra);
-                self.advance_payment(player, payment)
-            }
-            CostComponent::Forage { or_mana, exiled: 0 } => {
-                payment.owed.remove(0);
-                payment.owe_mana(&or_mana);
-                self.advance_payment(player, payment)
-            }
-            CostComponent::Mana { .. } => self.finish_mana_payment(player),
-            _ => Err(AgentError("this cost is not paid with mana".into())),
-        }
+        let extra = match payment.owed[0].clone() {
+            CostComponent::Sacrifice(cost, _) => cost
+                .or_mana
+                .ok_or_else(|| AgentError("sacrifice required".into()))?,
+            CostComponent::Forage { or_mana, exiled: 0 } => or_mana,
+            CostComponent::Mana { .. } => return self.finish_mana_payment(player),
+            _ => return Err(AgentError("this cost is not paid with mana".into())),
+        };
+        payment.owed.remove(0);
+        payment.owe_mana(&extra);
+        self.advance_payment(player, payment)
     }
 
     /// Pay the mana the pending payment still owes, then cast the spell or
@@ -2283,7 +2284,7 @@ impl Game {
 
         // Waterbend pays a cost without activating a mana ability.
         self.tap_permanent(tapped, false);
-        payment.waterbend(object);
+        payment.help_paid(object, How::Tapped, Toward::Waterbend, Color::Generic);
         let (owed, waterbend) = payment.mana();
         // A remaining colored cost can still need a mana ability such as
         // sacrificing Treasure. Leave the committed payment open for it.
@@ -2301,6 +2302,13 @@ impl Game {
         Ok(())
     }
 
+    /// The keyword under which tapping `tapped` pays part of a cost with
+    /// `help`: convoke for a creature, improvise for an artifact.
+    pub(crate) fn help_tap_toward(&self, help: Help, tapped: PermanentId) -> Option<Toward> {
+        let view = self.characteristics(tapped);
+        help.tap_toward(view.is_creature(), view.types.is_artifact())
+    }
+
     /// The pips `tapped` may pay of the pending cost by convoke or improvise
     /// such that the rest stays payable: each color it has that the cost
     /// still owes, or {1} (`Color::Generic`) when it has none of them. A
@@ -2314,14 +2322,15 @@ impl Game {
     ) -> Vec<Color> {
         let (cost, help) = (payment.mana().0, payment.help());
         let view = self.characteristics(tapped);
-        let convokes = help.convoke && view.is_creature();
-        if !(convokes || help.improvise && view.types.is_artifact())
+        let toward = self.help_tap_toward(help, tapped);
+        if toward.is_none()
             || !self
                 .waterbend_payment_candidates(player, &payment.operation)
                 .contains(&tapped)
         {
             return Vec::new();
         }
+        let convokes = toward == Some(Toward::Convoke);
         let mut options: Vec<Color> = view
             .colors
             .iter()
@@ -2388,19 +2397,14 @@ impl Game {
             .permanent_object(tapped)
             .filter(|_| !colors.is_empty())
             .ok_or_else(|| AgentError("permanent cannot help pay this cost".to_string()))?;
-        let convokes = payment.help().convoke && self.characteristics(tapped).is_creature();
+        let toward = self
+            .help_tap_toward(payment.help(), tapped)
+            .expect("a tap with options pays by a keyword");
         self.pending_choice = None;
         // Convoke and improvise pay a cost without activating a mana ability.
         self.tap_permanent(tapped, false);
         match colors[..] {
-            [color] => {
-                let toward = if convokes {
-                    Toward::Convoke
-                } else {
-                    Toward::Improvise
-                };
-                payment.help_paid(object, How::Tapped, toward, color);
-            }
+            [color] => payment.help_paid(object, How::Tapped, toward, color),
             _ => payment.owed.insert(
                 0,
                 CostComponent::ConvokeColor {
@@ -2578,8 +2582,8 @@ fn food() -> CardPredicate {
 }
 
 /// What bargain sacrifices: an artifact, enchantment or token (CR 702.166a).
-fn bargain_cost() -> crate::state::card::SacrificeCost {
-    crate::state::card::SacrificeCost {
+fn bargain_cost() -> SacrificeCost {
+    SacrificeCost {
         predicate: CardPredicate {
             any_of: vec![
                 CardPredicate {
