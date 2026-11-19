@@ -92,7 +92,7 @@
       "commands": 149,
       "outcome": "terminal",
       "final_state_hash": "v17:36c4fede1b0c13647564d75220a9fe0cc354302c7be13061d05d46b473d4083a",
-      "trace_sha256": "94bf5f723c0e78b0bddbf2c46a68ea3215e662e07be5e3a315234593b57d8dc9"
+      "trace_sha256": "530044c6fa48065acb881c6b073bc857f2aff323f4504b9a7e426aece0be94a0"
     },
     {
       "case_id": "temur-164",

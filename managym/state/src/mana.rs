@@ -735,16 +735,23 @@ impl Mana {
         self.classes.as_deref().map_or(&[], Vec::as_slice)
     }
 
-    /// This mana without any class `unit` holds (ordinary mana counting
-    /// as one): the mana that could pay in its place with different rules
-    /// consequences.
-    pub fn other_classes_than(&self, unit: &Mana) -> Mana {
+    /// This mana without `unit`'s own kind (its class and color): the mana
+    /// that could pay in its place with different consequences, whether a
+    /// rider, a restriction or the color spent and the color left over.
+    pub fn other_than(&self, unit: &Mana) -> Mana {
         let mut out = self.clone();
-        if unit.mana != [0; 6] {
-            out.mana = [0; 6];
+        for color in 0..6 {
+            if unit.mana[color] > 0 {
+                out.mana[color] = 0;
+            }
         }
-        for (class, _) in unit.classes() {
-            *out.class_mut(class) = [0; 6];
+        for (class, amounts) in unit.classes() {
+            let pooled = out.class_mut(class);
+            for color in 0..6 {
+                if amounts[color] > 0 {
+                    pooled[color] = 0;
+                }
+            }
         }
         out.prune();
         out

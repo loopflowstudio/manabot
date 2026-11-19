@@ -606,19 +606,26 @@ impl Game {
 
     /// The receipt of the cost being paid. While a decision is suspended it
     /// is the innermost payment's in that decision's caller chain: a spend
-    /// choice carries its payment, and a mana ability's own cost or output
-    /// choice returns to the payment that activated it. Otherwise it is the
-    /// announced payment's.
-    pub(crate) fn pending_receipt(&self) -> Option<&PaymentReceipt> {
-        fn receipt_of(caller: ResolutionRef<'_>) -> Option<&PaymentReceipt> {
+    /// choice carries its payment, with the units it has already spent
+    /// appended as completion appends them, and a mana ability's own cost or
+    /// output choice returns to the payment that activated it. Otherwise it
+    /// is the announced payment's.
+    pub(crate) fn pending_receipt(&self) -> Option<PaymentReceipt> {
+        fn receipt_of(caller: ResolutionRef<'_>) -> Option<PaymentReceipt> {
             let ResolutionRef::Decision(decision) = caller else {
                 return None;
             };
             match decision {
-                Decision::Payment(PaymentProgress { receipt, .. }) => Some(receipt),
-                Decision::ManaSpend { completion, .. } => match completion.as_ref() {
+                Decision::Payment(PaymentProgress { receipt, .. }) => Some(receipt.clone()),
+                Decision::ManaSpend {
+                    completion, spent, ..
+                } => match completion.as_ref() {
                     SpendCompletion::Announced(Payment { receipt, .. })
-                    | SpendCompletion::Resolution(PaymentProgress { receipt, .. }) => Some(receipt),
+                    | SpendCompletion::Resolution(PaymentProgress { receipt, .. }) => {
+                        let mut receipt = receipt.clone();
+                        receipt.record_mana(spent.mana().iter().cloned());
+                        Some(receipt)
+                    }
                     SpendCompletion::Upfront(_) | SpendCompletion::Foretell(_) => None,
                 },
                 _ => None,
@@ -634,8 +641,8 @@ impl Game {
                     .rev()
                     .find_map(receipt_of)
             })
-            .or(match &self.pending_choice {
-                Some(PendingChoice::Pay { payment, .. }) => Some(&payment.receipt),
+            .or_else(|| match &self.pending_choice {
+                Some(PendingChoice::Pay { payment, .. }) => Some(payment.receipt.clone()),
                 _ => None,
             })
     }
@@ -890,15 +897,12 @@ impl Game {
                 cost.paid_with(pool.unit_color(index))
                     .into_iter()
                     .find(|rest| self.payable_with_help(player, &left, rest, help))
-                    // Pooled mana of another class could pay this pip
-                    // instead, with other consequences (a rider applied or
-                    // kept, a restriction used up): the spend choice at
-                    // "Pay the cost" stays the payer's.
-                    .filter(|rest| {
-                        left.other_classes_than(&unit)
-                            .spendable_units(&cost.less(rest))
-                            == 0
-                    })
+                    // Pooled mana of another class or color could pay this
+                    // pip instead, with other consequences (a rider applied
+                    // or kept, a restriction used up, the colors spent and
+                    // left floating): the spend choice at "Pay the cost"
+                    // stays the payer's (CR 601.2h).
+                    .filter(|rest| left.other_than(&unit).spendable_units(&cost.less(rest)) == 0)
             };
             let Some(rest) = rest else {
                 index += 1;

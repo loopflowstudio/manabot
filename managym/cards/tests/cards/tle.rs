@@ -888,6 +888,96 @@ fn uncles_musings_same_pool_offers_different_converge_receipts() {
     }
 }
 
+/// The committed list includes mana spent while the payer chooses what pays:
+/// with {W}{U}{G}{G}{G}{G} pooled, green pays {G}{G}, and spending {W} for a
+/// generic pip lists it before the next choice. Only the payer sees it.
+#[test]
+fn uncles_musings_lists_mana_spent_during_the_spend_choice() {
+    use crate::support::play::fork_stepping;
+
+    let mut s = five_color_unfunded_setup(&["Uncle's Musings"]);
+    only_pool(&mut s, "WUGGGG");
+    cast_owned(&mut s, "Uncle's Musings");
+    let paid = |s: &Scenario, seat: usize| -> Vec<String> {
+        s.game()
+            .decision_context(PlayerId(seat))
+            .map(|context| context.paid.into_iter().map(|paid| paid.phrase).collect())
+            .unwrap_or_default()
+    };
+    let green = paid(&s, 0);
+    assert_eq!(green.len(), 2, "{green:?}");
+    assert!(
+        green.iter().all(|phrase| phrase.contains("{G}")),
+        "{green:?}"
+    );
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let white = frame
+        .offers
+        .iter()
+        .position(|offer| offer.label.contains("{W}"))
+        .unwrap();
+    let fork = fork_stepping(&s, white);
+    assert_choice_contract(&fork);
+    let listed = paid(&fork, 0);
+    assert_eq!(listed[..2], green[..], "{listed:?}");
+    assert!(
+        matches!(&listed[..], [_, _, white] if white.contains("{W}")),
+        "{listed:?}"
+    );
+    assert!(paid(&fork, 1).is_empty());
+    // The sibling choice is unchanged.
+    assert_eq!(paid(&s, 0), green);
+}
+
+/// Mana made during payment stays the payer's to spend when pooled mana of
+/// another color could pay the same pip: tapping a Plains for Musings with
+/// four green floating still lets the caster spend the green and keep the
+/// white (CR 601.2h).
+#[test]
+fn uncles_musings_mana_made_during_payment_keeps_the_color_choice() {
+    use crate::support::play::fork_stepping;
+    use managym::state::mana::Color;
+
+    let mut s = five_color_unfunded_setup(&["Uncle's Musings"]);
+    s.allow_priority_floats();
+    only_pool(&mut s, "GGGG");
+    let plains = s.force_permanent_on_battlefield(0, "Plains");
+    let card = cast_owned(&mut s, "Uncle's Musings");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::TapForMana { permanent, .. } if *permanent == plains),
+    );
+    // The {W} could pay a generic pip that green could pay instead, so it
+    // was not committed; with no source left, green pays {G}{G} and the
+    // payer chooses what pays the generic {2}.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert_eq!(
+        s.game().state.players[0].mana_pool.mana().mana,
+        [1, 0, 0, 0, 2, 0]
+    );
+    assert_choice_contract(&s);
+    for (first, colors, left) in [("{W}", 2, Color::Green), ("{G}", 1, Color::White)] {
+        // Spend offers are action-aligned: fork the first spend choice.
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let index = frame
+            .offers
+            .iter()
+            .position(|offer| offer.label.contains(first))
+            .unwrap();
+        let mut fork = fork_stepping(&s, index);
+        while fork.game().state.stack_objects.is_empty() {
+            spend_named(&mut fork, |label| label.contains("{G}"));
+        }
+        let spent = spell_spent(&fork, card);
+        assert_eq!((spent.total(), spent.colors()), (4, colors), "{first}");
+        let pool = fork.game().state.players[0].mana_pool.mana();
+        assert_eq!(pool.total(), 1, "{first}");
+        assert_eq!(pool.mana[left as usize], 1, "{first}");
+    }
+    // The forks left the spend choice untouched.
+    assert_eq!(s.game().state.players[0].mana_pool.mana().total(), 3);
+}
+
 #[test]
 fn toph_nested_filter_fee_is_not_part_of_the_cast_receipt() {
     let mut s = five_color_unfunded_setup(&["Toph, Greatest Earthbender", "Prophetic Prism"]);

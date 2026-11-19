@@ -203,10 +203,11 @@ fn funded_cast_can_tap_a_surplus_forest_before_paying() {
         .unwrap()
         .0;
     game.step(forest).unwrap();
-    // The Forest's {G} pays {1} as it is made; the floating mana waits for
-    // the spend choice.
-    assert_eq!(game.state.players[0].mana_pool, Mana::parse("2R"));
-    assert_eq!(owed(&game), "{1}{R}");
+    // The Forest's {G} could pay {1} that floating colorless could pay
+    // instead, so it waits with the floating mana for the spend choice.
+    assert_eq!(*game.state.players[0].mana_pool.mana(), Mana::parse("2RG"));
+    assert_eq!(owed(&game), "{2}{R}");
+    assert!(committed(&game).is_empty());
     pay_cost(&mut game);
     // Generic spending can ask which floating unit to keep.
     while game

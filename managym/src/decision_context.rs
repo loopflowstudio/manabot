@@ -380,7 +380,7 @@ impl Game {
         // spent toward it as it was produced, in the order paid.
         view.paid = self
             .pending_receipt()
-            .into_iter()
+            .iter()
             .flat_map(PaymentReceipt::in_order)
             .map(|paid| match paid {
                 PaidWith::Object(paid) => PaidView {
