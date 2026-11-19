@@ -4966,8 +4966,7 @@ fn help_paying_a_mana_cost_reaches_the_stack_frame_by_keyword() {
                 a,
                 Action::WaterbendTap { .. } | Action::SelectCard { .. } | Action::ChooseMode { .. }
             )
-        })
-        {
+        }) {
             s.step_action(help);
         }
         let paid = [

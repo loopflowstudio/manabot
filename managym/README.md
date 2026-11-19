@@ -420,16 +420,21 @@ Waterbend, convoke, improvise and delve pay part of a mana cost with something
 other than mana, so they are the `Help` of the `Mana` component and no step of
 their own: while it is owed the payer may tap a creature or artifact, or exile
 a card from their graveyard, each paying {1} and adding a contribution, or pay
-the rest with mana. A convoking creature pays an owed pip of its color when
-there is one, asking which (`CostComponent::ConvokeColor`) when more than one
-keeps the cost payable. `AdditionalCost::{Convoke, Improvise, Delve}` give a
+the rest with mana. One rule (`Game::help_taps`) says what a direct tap may
+pay: by convoke an owed pip of the creature's color or {1}, by improvise {1},
+and {1} of the announced waterbend part by any artifact or creature. Each
+payment that leaves the rest payable is offered, and the payer chooses
+(`CostComponent::TapPays`) when a tap has more than one: a white creature may
+convoke {W} or {1}, and under Hama's waterbend a creature may convoke or
+waterbend {1}; the receipt's `Toward` keeps which. The payment model splits
+a cost's generic mana into what those taps may pay (`help_obligations`), so
+castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
 spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
 Offers and affordability ask the payment model with the help included
 (`payable_with_help`, `while_paying`), so a spell castable only with help is
 offered and a tap that would strand the cost is not; the automatic payer never
 takes help, so when mana alone cannot pay the taps and exiles are the player's
-picks. A cost with waterbend and convoke or
-improvise offers only the keyword's taps.
+picks.
 Costs chosen while casting use the kicker choice: bargain
 (`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
 marks the spell kicked, and a conditional alternative
