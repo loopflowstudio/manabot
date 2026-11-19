@@ -606,12 +606,14 @@ increase a known expensive cell just to make it run longer.
 
 **States.** Each uses defined cards or registered tokens and is deterministic.
 `--list` names every state with its cards and known growth; the list lives in
-the harness, not here. They come in three families: many copies of one thing
+the harness, not here. They come in four families: many copies of one thing
 (`duplicate-lands`, `duplicate-creatures`, `duplicate-tokens`), many different
 things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
-`diverse-statics`, `attachments`, `mixed`) and one mechanic at size (`herbalist`,
+`diverse-statics`, `attachments`, `mixed`), one mechanic at size (`herbalist`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
-`names`). Combat states put
+`names`) and one way of paying at size (`convoke-diverse`, `delve-graveyard`,
+`improvise-artifacts`, `float-origins`, `crew-saddle`, `bargain-forage`), each
+measured again at the decision where its cost is chosen. Combat states put
 creatures on both sides and measure the pass that resolves damage; payment
 states isolate one player. Every state is constructed; none replays a recorded
 game ([the reported game](#the-reported-game) says why).
