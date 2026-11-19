@@ -1,5 +1,6 @@
 //! Batched games with native reset-seed ownership and admitted per-game roster sampling.
 
+use crate::state::player::{ManaFloats, ManaPayment};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -344,6 +345,14 @@ impl VectorEnv {
     /// Each current game's resolved disclosure, never mixed.
     pub fn current_decklists(&self) -> Vec<crate::state::player::DecklistDisclosure> {
         self.envs.iter().map(Env::decklists).collect()
+    }
+
+    pub fn current_mana_payment(&self) -> Vec<[ManaPayment; 2]> {
+        self.envs.iter().map(Env::mana_payment).collect()
+    }
+
+    pub fn current_mana_floats(&self) -> Vec<[ManaFloats; 2]> {
+        self.envs.iter().map(Env::mana_floats).collect()
     }
 
     /// The setups each game was actually reset with, in seat order.
@@ -997,6 +1006,12 @@ impl VectorEnv {
                 env.vector_failure_context(action)
             ))
         })?;
+        if terminated || truncated {
+            info.insert(
+                "skipped_decisions".into(),
+                InfoValue::Int(env.skip_trivial_count() as i64),
+            );
+        }
         if env.record_terminal && (terminated || truncated) {
             info.insert(
                 "record_terminal_digest".into(),
@@ -1029,6 +1044,8 @@ impl VectorEnv {
             GameSetup {
                 players: vec![roster.players[a].clone(), roster.players[b].clone()],
                 decklists: player_configs.decklists,
+                mana_floats: player_configs.mana_floats,
+                mana_payment: player_configs.mana_payment,
             }
         };
         env.reset(configs)

@@ -805,7 +805,8 @@ namespace or a `python -m` invocation's `__main__`; the same holds for agent
 loaders. Exercise discovery with `etude.controller.declarations.read_experiment` in runner tests,
 or `etude.controller.declarations.read_training_jobs` for a file's `training_jobs()`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
-only launched jobs receive that directory automatically.
+create the directory before starting local evaluation because Etude writes progress
+there before calling the experiment. Launched jobs receive it automatically.
 Etude imports evaluation callbacks by module and qualified name, including local
 runs; callbacks take `play(match, agents)`. A closure or callable instance is
 not a portable entry point. Managed jobs share `manabot.eval.agents.AGENTS`;

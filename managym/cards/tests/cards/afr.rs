@@ -21,6 +21,7 @@ use managym::{
 #[test]
 fn dispute_sacrifices_before_responses_draws_two_and_makes_live_treasure() {
     let mut s = five_color_setup(&["Deadly Dispute", "Unlucky Cabbage Merchant"]);
+    s.allow_priority_floats();
     play_and_settle(&mut s, "Unlucky Cabbage Merchant");
     let food = permanent_named(&s, "Food");
     let food_card = s.game().state.permanents[food].as_ref().unwrap().object;

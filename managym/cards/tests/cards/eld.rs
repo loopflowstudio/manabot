@@ -136,6 +136,7 @@ fn the_great_henge_costs_less_by_greatest_power_and_rewards_nontoken_creatures()
 #[test]
 fn the_great_henge_adds_gg_and_gains_two_life_once_per_activation() {
     let mut s = five_color_unfunded_setup(&["The Great Henge", "Heroic Intervention"]);
+    s.allow_priority_floats();
     let henge = s.force_permanent_on_battlefield(0, "The Great Henge");
     activate(&mut s, henge, 0);
     take_single_output(&mut s);

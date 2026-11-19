@@ -16,7 +16,15 @@ from pydantic import (
 )
 
 from manabot.env.legacy_input import warn_deprecated_input
-from managym import WORLD_SETUP, Deck, DeckImport, Decklist, PlayerConfig
+from managym import (
+    WORLD_SETUP,
+    Deck,
+    DeckImport,
+    Decklist,
+    ManaFloats,
+    ManaPayment,
+    PlayerConfig,
+)
 from managym.disclosure import DecklistDisclosure
 
 # The policy input a fresh configuration selects. Input v11 gives each game
@@ -106,6 +114,12 @@ class ObservationConfig(BaseConfig):
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
     )
+    mana_payment: ManaPayment = Field(
+        default="manual", exclude_if=lambda value: value == "manual"
+    )
+    mana_floats: ManaFloats = Field(
+        default="off", exclude_if=lambda value: value == "off"
+    )
     max_focus_objects: int = 2
     # Memory capacities are explicit until the replay census sizes the pilot.
     decision_memory_include_own: bool = Field(
@@ -185,6 +199,14 @@ class MatchConfig(BaseConfig):
         default="open", exclude_if=lambda value: value == "open"
     )
 
+    mana_payment: tuple[ManaPayment, ManaPayment] = Field(
+        default=("manual", "manual"),
+        exclude_if=lambda value: value == ("manual", "manual"),
+    )
+    mana_floats: tuple[ManaFloats, ManaFloats] = Field(
+        default=("off", "off"), exclude_if=lambda value: value == ("off", "off")
+    )
+
     @field_validator("world")
     @classmethod
     def validate_world(cls, value: str | None) -> str | None:
@@ -215,6 +237,8 @@ class MatchConfig(BaseConfig):
         second: PlayerConfig,
         *,
         decklists: DecklistDisclosure,
+        mana_floats: tuple[ManaFloats, ManaFloats] = ("off", "off"),
+        mana_payment: tuple[ManaPayment, ManaPayment] = ("manual", "manual"),
     ) -> "MatchConfig":
         """Record a native root in seat order, rejecting asymmetric match settings."""
         if first.world != second.world:
@@ -231,6 +255,8 @@ class MatchConfig(BaseConfig):
             villain_sideboard=second.sideboard,
             world=first.world,
             decklists=decklists,
+            mana_floats=mana_floats,
+            mana_payment=mana_payment,
         )
 
     @classmethod

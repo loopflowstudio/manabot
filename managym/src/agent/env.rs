@@ -1,5 +1,6 @@
 #[cfg(feature = "python")]
 use crate::search_state::{identity, SearchStateIdentity};
+use crate::state::player::{ManaFloats, ManaPayment};
 use crate::{
     agent::{
         action::AgentError,
@@ -127,6 +128,8 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
+    mana_floats: [ManaFloats; 2],
+    mana_payment: [ManaPayment; 2],
     decision_memory_enabled: bool,
     decision_memory_include_own: bool,
     disclosure: DecklistDisclosure,
@@ -142,13 +145,21 @@ impl serde::Serialize for NativeActionTrace {
         struct RetainedSeat<'a> {
             #[serde(flatten)]
             player: &'a PlayerConfig,
+            #[serde(skip_serializing_if = "ManaFloats::is_off")]
+            mana_floats: ManaFloats,
+            #[serde(skip_serializing_if = "ManaPayment::is_manual")]
+            mana_payment: ManaPayment,
             #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
             disclosure: DecklistDisclosure,
         }
         let players: Vec<_> = self
             .player_configs
             .iter()
-            .map(|player| RetainedSeat {
+            .zip(self.mana_floats)
+            .zip(self.mana_payment)
+            .map(|((player, mana_floats), mana_payment)| RetainedSeat {
+                mana_payment,
+                mana_floats,
                 player,
                 disclosure: self.disclosure,
             })
@@ -346,6 +357,8 @@ impl Env {
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
             disclosure: player_configs.decklists.resolve(self.seed),
+            mana_floats: player_configs.mana_floats,
+            mana_payment: player_configs.mana_payment,
             player_configs: Arc::from(player_configs.players.clone()),
             decision_memory_enabled: self.decision_memory_enabled
                 || self.decision_memory_include_own,
@@ -516,6 +529,18 @@ impl Env {
             .map_or(Default::default(), |game| game.state.disclosure)
     }
 
+    pub fn mana_payment(&self) -> [ManaPayment; 2] {
+        self.game
+            .as_ref()
+            .map_or([ManaPayment::Manual; 2], |game| game.mana_payment)
+    }
+
+    pub fn mana_floats(&self) -> [ManaFloats; 2] {
+        self.game
+            .as_ref()
+            .map_or([ManaFloats::Off; 2], |game| game.mana_floats)
+    }
+
     /// Setups this game was reset with; empty before the first reset.
     pub fn player_configs(&self) -> &[PlayerConfig] {
         self.action_trace
@@ -526,7 +551,9 @@ impl Env {
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
     /// since the current game began. Resets to zero on `reset`.
     pub fn skip_trivial_count(&self) -> usize {
-        self.game.as_ref().map_or(0, |game| game.skip_trivial_count)
+        self.game.as_ref().map_or(0, |game| {
+            game.skip_trivial_count + game.skipped_priority_passes
+        })
     }
 
     /// Training-only error context. Public scalar/API errors do not expose

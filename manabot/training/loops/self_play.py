@@ -603,6 +603,7 @@ def step(
     """
     device = settings.device
     stats = collector.stats
+    skipped, taps = stats.skipped_decisions, stats.priority_taps
     games, decisions, transitions, idle = (
         stats.games,
         stats.micro_steps,
@@ -645,15 +646,33 @@ def step(
     phases = time_since(before, phase_seconds(collector.profiler, learner.profiler))
     # The collector's totals are this attempt's; counts span every attempt.
     counts.updates += 1
-    counts.training_seconds += phases["time/collection"] + phases["time/learning"]
+    seconds = phases["time/collection"] + phases["time/learning"]
+    counts.training_seconds += seconds
     counts.games += stats.games - games
     counts.environment_decisions += stats.micro_steps - decisions
     counts.learner_transitions += stats.learner_transitions - transitions
     counts.idle_stream_steps += stats.idle_stream_steps - idle
     counts.optimizer_updates += metrics.get("numerical", {}).get("optimizer_steps", 0)
     counts.optimizer_exposures += metrics.get("optimizer_exposures", 0)
+    rates: dict[str, float] = {}
+    # With both seats learning complete games, retained rows count exactly
+    # the surfaced choices of the games that contributed terminal targets.
+    if settings.learning_seats == "both" and settings.batch_closure == "complete-games":
+        completed = stats.games - games
+        rows = batch.actions.size
+        skips = stats.skipped_decisions - skipped
+        rates = {
+            "decisions_per_game": rows / completed,
+            "skipped_share": skips / (skips + rows),
+            "priority_tap_rate": (stats.priority_taps - taps)
+            / (stats.micro_steps - decisions),
+            "rows_per_second": rows / seconds,
+            "updates_per_hour": 3600 / seconds,
+            "games_per_hour": completed * 3600 / seconds,
+        }
     return (
         metric_row(metrics)
+        | rates
         | {f"coordinates/{k}": v for k, v in counts.model_dump().items()}
         | phases
         | resource_metrics(device)

@@ -1,6 +1,7 @@
 // game.rs
 // Core game structs: GameState and Game.
 
+use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -750,6 +751,8 @@ pub struct Game {
     pub(crate) decision_memory: [crate::agent::decision_memory::DecisionLog; 2],
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
     pub skip_trivial: bool,
+    pub mana_floats: [ManaFloats; 2],
+    pub mana_payment: [ManaPayment; 2],
     pub current_action_space: Option<ActionSpace>,
     /// Monotonic identity for the currently published external decision.
     ///
@@ -763,7 +766,10 @@ pub struct Game {
     /// part of the rules-state witness or client wire representation.
     pub(crate) semantic_object_candidates: RefCell<BTreeMap<ObjectCandidateAddress, ObjectId>>,
     pub pending_choice: Option<PendingChoice>,
+    /// Collapsed action spaces. Historical replay digests include this count.
     pub skip_trivial_count: usize,
+    /// Forced passes consumed directly in tick_priority, before a space exists.
+    pub(crate) skipped_priority_passes: usize,
 }
 
 impl Clone for Game {
@@ -779,11 +785,14 @@ impl Clone for Game {
             decision_memory_enabled: false,
             decision_memory_include_own: self.decision_memory_include_own,
             skip_trivial: self.skip_trivial,
+            mana_floats: self.mana_floats,
+            mana_payment: self.mana_payment,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,
             semantic_object_candidates: self.semantic_object_candidates.clone(),
             pending_choice: self.pending_choice.clone(),
             skip_trivial_count: self.skip_trivial_count,
+            skipped_priority_passes: self.skipped_priority_passes,
             card_capture: None,
             statistics: None,
             capture_drawing: None,

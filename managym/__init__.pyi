@@ -23,6 +23,9 @@ from managym.disclosure import DecklistDisclosure, DecklistSampling
 from . import format as format
 from .statistics import GameStatistics
 
+ManaPayment = Literal["auto", "manual"]
+ManaFloats = Literal["off", "usable", "all"]
+
 class ObservationValueLayout(TypedDict):
     kind: Literal[
         "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
@@ -1164,11 +1167,17 @@ class GameSetup(Sequence[PlayerConfig]):
     def players(self) -> tuple[PlayerConfig, ...]: ...
     @property
     def decklists(self) -> DecklistSampling: ...
+    @property
+    def mana_payment(self) -> tuple[ManaPayment, ManaPayment]: ...
+    @property
+    def mana_floats(self) -> tuple[ManaFloats, ManaFloats]: ...
     def __init__(
         self,
         players: Sequence[PlayerConfig],
         *,
         decklists: DecklistSampling | None = None,
+        mana_floats: tuple[ManaFloats, ManaFloats] | None = None,
+        mana_payment: tuple[ManaPayment, ManaPayment] | None = None,
     ) -> None: ...
     def __len__(self) -> int: ...
     @overload

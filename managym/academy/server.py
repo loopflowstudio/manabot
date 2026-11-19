@@ -810,6 +810,8 @@ def _parse_game_config(config: Any) -> GameConfig:
         asset_pack=selected_pack.reference if selected_pack is not None else None,
         villain_type=villain_type,
         human_seat=data.get("human_seat", 0),
+        mana_floats=data.get("mana_floats", "off"),
+        mana_payment=data.get("mana_payment", "manual"),
         seed=seed,
         seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,
@@ -1080,7 +1082,7 @@ class GameSession:
             player_config = raw_config if isinstance(raw_config, dict) else {}
             players = self.attempt_store.players_for_game(
                 self.attempt_owner,
-                asdict(config),
+                config.to_record(),
                 player_config.get("player_token"),
                 player_config.get("player_name"),
             )
@@ -3118,7 +3120,7 @@ def _response_with_participant(
             payload["play_session"] = {
                 **session,
                 **membership,
-                "config": asdict(record.game.trace.config)
+                "config": record.game.trace.config.to_record()
                 if record.game.trace
                 else dict(record.game.interrupted_config or {}),
             }

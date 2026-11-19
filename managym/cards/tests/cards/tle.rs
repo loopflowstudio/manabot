@@ -357,6 +357,7 @@ fn create_foods(s: &mut Scenario, count: usize) -> Vec<PermanentId> {
 #[test]
 fn merchant_repeats_with_four_foods_and_preserves_exact_tap_commands() {
     let (mut s, source, foods) = merchant(4);
+    s.allow_priority_floats();
     // This ability has no source {T} cost; sickness and a tapped Merchant do not prevent it.
     s.game_mut().state.permanents[source]
         .as_mut()
@@ -394,6 +395,7 @@ fn merchant_repeats_with_four_foods_and_preserves_exact_tap_commands() {
 #[test]
 fn merchant_three_foods_fund_only_one_activation() {
     let (mut s, source, foods) = merchant(3);
+    s.allow_priority_floats();
     let prism = move_to_hand(&mut s, "Prophetic Prism");
     assert!(!can_cast(&s, prism));
     activate(&mut s, source, 0);
@@ -441,6 +443,7 @@ fn merchant_cannot_reuse_the_food_reserved_for_its_own_activation() {
 #[test]
 fn merchant_tap_count_reaches_the_acting_viewer_and_policy() {
     let (mut s, source, foods) = merchant(2);
+    s.allow_priority_floats();
     activate(&mut s, source, 0);
     for (index, food) in foods.iter().enumerate() {
         for viewer in [PlayerId(0), PlayerId(1)] {
@@ -687,6 +690,7 @@ fn attendant_mana(s: &mut Scenario, mana: &str, attendants: usize) -> Vec<Perman
 fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
     for attendants in [1, 2] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+        s.allow_priority_floats();
         attendant_mana(&mut s, if attendants == 1 { "1W" } else { "W" }, attendants);
         let pool = &s.game().state.players[0].mana_pool;
         assert_eq!(
@@ -709,6 +713,7 @@ fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
 #[test]
 fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() {
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+    s.allow_priority_floats();
     let attendant = attendant_mana(&mut s, "1W", 1)[0];
     let card = card_of(&s, attendant);
     move_card(&mut s, card, ZoneType::Graveyard);
@@ -718,6 +723,7 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     assert_eq!(counters(&s, permanent), 1);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
+    s.allow_priority_floats();
     attendant_mana(&mut s, "R", 1);
     let guard = cast_owned(&mut s, "Capital Guard");
     assert_eq!(spell_spent(&s, guard).entry_counters, 0);
@@ -726,6 +732,7 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     assert_eq!(counters(&s, permanent), 0);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Explosive Shot", "Craw Wurm"]);
+    s.allow_priority_floats();
     s.force_permanent_on_battlefield(1, "Craw Wurm");
     attendant_mana(&mut s, "R", 1);
     let shot = cast_owned(&mut s, "Explosive Shot");
@@ -739,6 +746,7 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
 #[test]
 fn animal_attendant_mana_is_kept_when_ordinary_mana_pays_a_human() {
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
+    s.allow_priority_floats();
     attendant_mana(&mut s, "RG", 1);
     cast_owned(&mut s, "Capital Guard");
     spend_named(&mut s, |label| label == "Spend {G} (expires at step end)");
@@ -752,6 +760,7 @@ fn animal_attendant_mana_is_kept_when_ordinary_mana_pays_a_human() {
 #[test]
 fn animal_attendant_counter_does_not_follow_the_card_to_a_later_entry() {
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+    s.allow_priority_floats();
     attendant_mana(&mut s, "1W", 1);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
     settle(&mut s);
@@ -815,6 +824,7 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
 fn animal_attendant_spending_can_keep_or_use_the_rider_for_the_same_creature() {
     for use_rider in [false, true] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+        s.allow_priority_floats();
         attendant_mana(&mut s, "1WG", 1);
         let sheep = cast_owned(&mut s, "Koala-Sheep");
         assert_choice_contract(&s);
@@ -897,6 +907,7 @@ fn toph_cast_receipt_includes_additional_mana_costs() {
 fn animal_attendant_and_toph_countered_then_reanimated_keep_no_cast_receipt() {
     for name in ["Koala-Sheep", "Toph, Greatest Earthbender"] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", name, "Counterspell"]);
+        s.allow_priority_floats();
         if name == "Koala-Sheep" {
             attendant_mana(&mut s, "1W", 1);
         } else {

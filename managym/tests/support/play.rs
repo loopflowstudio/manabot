@@ -47,11 +47,12 @@ impl Scenario {
 
     /// Complete a pending fixed-source payment automatically, then pass priority.
     pub fn pass_priority(&mut self) {
-        if self
-            .action_space()
-            .actions
-            .iter()
-            .any(|a| matches!(a, Action::TapForMana { .. }))
+        if self.action_space().kind == ActionSpaceKind::PayOrNot
+            && self
+                .action_space()
+                .actions
+                .iter()
+                .any(|a| matches!(a, Action::TapForMana { .. }))
         {
             assert!(self.take_action_by_type(ActionType::PayCost));
         }

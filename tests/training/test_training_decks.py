@@ -26,7 +26,12 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.run_settings import RunSettings
 from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
@@ -85,9 +90,16 @@ def _agent() -> ActorCritic:
     )
 
 
-def _collector(decks: UniformDecks) -> Collector:
+def _collector(
+    decks: UniformDecks,
+    *,
+    mana_floats: managym.ManaFloats = "off",
+    mana_payment: managym.ManaPayment = "manual",
+) -> Collector:
     return open_collector(
-        ObservationSpace(),
+        ObservationSpace(
+            ObservationConfig(mana_floats=mana_floats, mana_payment=mana_payment)
+        ),
         Match(decks.match_config()),
         Reward(RewardConfig()),
         num_envs=2,
@@ -574,3 +586,28 @@ def test_mixed_training_games_export_the_resolved_disclosure(
         assert replay.game.setup().decklists == disclosure
         settings.add(disclosure)
     assert settings == {"open", "closed"}
+
+
+@pytest.mark.parametrize("mode", ["all", "usable"])
+def test_priority_taps_follow_sampled_self_play_roots(
+    decks: UniformDecks, mode: managym.ManaFloats
+) -> None:
+    collector = _collector(decks, mana_floats=mode, mana_payment="auto")
+    try:
+        collect(collector, _agent(), 1)
+        assert collector.stats.games > 0
+        assert collector.stats.skipped_decisions > 0
+        if mode == "usable":
+            # No spell, paid activation or tap trigger in these all-basic decks.
+            assert collector.stats.priority_taps == 0
+        else:
+            assert 0 < collector.stats.priority_taps < collector.stats.micro_steps
+        for match, setup in zip(
+            collector.stream_matches,
+            collector._env.current_player_configs(),
+            strict=True,
+        ):
+            assert setup.mana_payment == match.config.mana_payment == ("auto", "auto")
+            assert setup.mana_floats == match.config.mana_floats == (mode, mode)
+    finally:
+        close_collector(collector)

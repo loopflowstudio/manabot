@@ -233,6 +233,12 @@ def _replay_record(
     original = audit_view(game["record"])
     if evaluation_metadata(game) != record.context.get("evaluation"):
         counts["trace_mismatches"] += 1
+    if "match_hypers" in game:
+        seats = record.games[0].players
+        for field, default in (("mana_payment", "manual"), ("mana_floats", "off")):
+            recorded = tuple(getattr(seat, field) for seat in seats)
+            if recorded != tuple(game["match_hypers"].get(field, (default, default))):
+                counts["trace_mismatches"] += 1
     if game["decisions"] != original["decisions"]:
         counts["trace_mismatches"] += 1
     if game.get("game_trace_sha256") != record.sha256:
@@ -405,6 +411,8 @@ def apply_game_event(
         game["initial_state_digest"] = value
     elif kind == "identities":
         game["runtime_identities"] = value
+    elif kind == "match":
+        game["match_hypers"] = value
     elif kind == "observation":
         game["observation_hypers"] = value
     elif kind == "pending":

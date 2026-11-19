@@ -2485,14 +2485,9 @@
       "offer_id": 0,
       "label": "Sacrifice Callous Inspector",
       "before_digest": "c986088a660cf5809fe94388fb302f0d0aa6afee4e2a6f08abf80eb402089e31"
-    },
-    {
-      "offer_id": 1,
-      "label": "Pass priority",
-      "before_digest": "8b5d5f144ca88d82050c643129bc5234b93c8302e4060309850076ca9a258470"
     }
   ],
-  "decision_digest": "e463e0eef669e7c5bf1fa3757b56952d42f01dbd8037163ebcec86acafc6912c",
-  "decision_revision": 33,
+  "decision_digest": "9d46a48cb54855e564a7071b27e636be1ba7a89e983bf9b7e8b20bd2f3673f26",
+  "decision_revision": 32,
   "decision_kind": "PRIORITY"
 }

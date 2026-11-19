@@ -665,8 +665,11 @@ Further ties prefer basic lands, other lands, lands with activated abilities,
 other permanents, then creatures; within those tiers, colorless output is
 preferred. The class search stops after 1024 arithmetic checks and keeps a
 payable candidate. Payments with saved obligations only receive surplus
-pruning. Activated mana abilities remain deliberate actions; native spending
-choices determine the exact mana receipt. Source preference has no setting.
+pruning. If fixed sources cannot pay, the planner may also select the color
+of a simple tap activation such as Kyoshi Village. The preview shows that
+source and its output. In manual payment mode, sacrifices, life payments and abilities with other
+effects remain explicit payment choices. Native spending choices determine
+the exact mana receipt. Source preference has no setting.
 
 ### Manual mana sources
 
@@ -677,7 +680,64 @@ payment; funded payments and payments needing every available source retain
 native trivial-decision skipping. These ordinary choices are on by default
 for every consumer. Source taps use the existing `TapForCost` policy action
 with the source as focus; the native Command verb is `tap_for_mana`, distinct
-from waterbend. They do not expose free-form production at priority or undo.
+from waterbend. They do not expose undo, or production at priority unless a
+seat [asks for it](#mana-taps-at-priority-and-during-payment).
+
+### Mana taps at priority and during payment
+
+The seat chooses when to offer mana abilities at priority, including sources
+with a choice of colors. With `off`, Kyoshi Village can pay for a green or
+white spell during payment and can activate its draw ability at priority.
+Two independent settings follow each seat. `mana_payment="manual"` offers useful source taps and automatic completion. With `"auto"`, the engine chooses how to fund each accepted cost, including sources, their colors and the units to spend. Optional costs still offer pay or decline. A deliberately floated source retains its output choice. Both payment modes support all three float levels.
+
+```python
+import managym
+
+setup = managym.GameSetup([first, second], mana_floats=("all", "off"), mana_payment=("auto", "manual"))
+```
+
+Use `mana_floats=("usable", "off")` to offer priority floats when a listed action can
+spend mana, the activation has additional costs or effects, or tapping that
+source can trigger an ability.
+The engine inspects the listed actions without checking individual mana colors.
+Manual payment with usable or all floats also offers extra payment-time taps.
+
+With two untapped Forests and a creature spell in hand, the first seat's
+priority space is what it was, followed by one tap per source:
+
+```text
+0  CastSpell     Badgermole Cub
+1  PassPriority
+2  TapForMana    Forest
+3  TapForMana    Forest
+```
+
+Taking action 2 taps that Forest and adds `{G}` to the seat's pool. The seat
+keeps priority and is offered the remaining Forest; casting then spends the
+floating mana first. Unspent mana empties with the pool at the end of the step
+or phase, as any floating mana does. There is no undo.
+
+- **The space only grows at its end.** Every action offered without the option
+  keeps its index, `PassPriority` included; taps follow in battlefield order,
+  one per source, identical sources included (eight Forests are eight
+  actions). Under `action_overflow="first-legal"` the taps are the first
+  actions dropped.
+- **Manual payments.** During cast, activation and resolution payments,
+  extra fixed-source taps follow the ordinary payment choices. A tap must
+  leave reserved resources available and the committed cost payable.
+- **Automatic payments.** Once the player accepts a cost, the engine selects
+  the sources, their outputs, any waterbend contributions and the units to
+  spend. The player still chooses X, optional costs and spell targets.
+- **Skipped decisions.** With floats off, a priority window offering only
+  a pass is skipped. With all floats, any legal mana activation can open the
+  window. With usable floats, a sacrifice or tap trigger can open it even
+  without a listed spend. `Env.skip_trivial_count()` includes forced passes,
+  other skipped single choices and internal automatic payment actions.
+- **Seat order and replay.** Both settings follow the chooser. Fixed-source
+  taps use the existing `TapForCost` policy action with source focus.
+  Choice-output abilities use their activation action. Omitting both fields
+  produces the same native setup, game digest and recording bytes as explicit
+  manual/off for both seats. Invalid values raise `ValueError`.
 
 ### Inspecting automatic payment
 

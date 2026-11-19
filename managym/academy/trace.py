@@ -73,20 +73,45 @@ class GameConfig:
     hero_source: dict[str, Any] | None = None
     villain_source: dict[str, Any] | None = None
 
+    # The human controller owns this mode, independent of the chosen seat.
+    mana_payment: managym.ManaPayment = "manual"
+    mana_floats: managym.ManaFloats = "off"
+
     def __post_init__(self) -> None:
         if type(self.human_seat) is not int or self.human_seat not in (0, 1):
             raise ValueError("human_seat must be 0 or 1.")
+        self.mana_payment = TypeAdapter(managym.ManaPayment).validate_python(
+            self.mana_payment
+        )
+        self.mana_floats = TypeAdapter(managym.ManaFloats).validate_python(
+            self.mana_floats
+        )
         self.mirror = TypeAdapter(SearchConfig | None).validate_python(self.mirror)
         if self.decklists == "closed" and self.mirror is not None:
             raise ValueError("Search requires open decklists.")
+
+    def to_record(self) -> dict[str, Any]:
+        """Omit default-off mana offers from retained game configuration."""
+        config = asdict(self)
+        if self.mana_payment == "manual":
+            del config["mana_payment"]
+        if self.mana_floats == "off":
+            del config["mana_floats"]
+        return config
 
     def to_rust(self) -> managym.GameSetup:
         """Order human/opponent setup roles by their recorded native seats."""
         configs = self._role_configs()
         return managym.GameSetup(
-            configs if self.human_seat == 0 else list(reversed(configs)),
+            list(self.by_seat(*configs)),
             decklists=self.decklists,
+            mana_payment=self.by_seat(self.mana_payment, "manual"),
+            mana_floats=self.by_seat(self.mana_floats, "off"),
         )
+
+    def by_seat[T](self, human: T, opponent: T) -> tuple[T, T]:
+        """Order a human/opponent pair by native seat."""
+        return (human, opponent) if self.human_seat == 0 else (opponent, human)
 
     def _role_configs(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
@@ -212,7 +237,13 @@ class Trace:
             record.pop("recording_import")
         else:
             record["recording_import"] = asdict(self.recording_import)
-        record["config"] = asdict(self.config)
+        record["config"] = self.config.to_record()
+        record["mana_payment"] = list(
+            self.config.by_seat(self.config.mana_payment, "manual")
+        )
+        record["mana_floats"] = list(
+            self.config.by_seat(self.config.mana_floats, "off")
+        )
         record["events"] = [event_record(event) for event in self.events]
         return record
 

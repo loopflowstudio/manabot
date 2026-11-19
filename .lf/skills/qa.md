@@ -373,6 +373,14 @@ publish, land or choose the next Graph step from here.
   When games diverge, replay one to the first differing decision on both
   engines and diff the parsed `toJSON()`; permanents' `attached_to`, `power`
   and the cast action's `focus` names locate the card.
+  Catch `BaseException` per game: `PanicException` is not an `Exception`.
+  Python action types print as `ActionEnum.PriorityPlayLand` (no int
+  constructor); compare `str(a.action_type)`. When a change deliberately alters
+  the default action space, play a canonical policy on both engines. That policy
+  drops the intended offers, draws `rng` only when two or more choices remain and
+  hashes `(chooser, space kind, [(type, focus, ability_index)], turn, step)`.
+  The remaining divergence is what the change did not mean to touch (MTG-385:
+  324/328 matched, and the rest were the same intended correction).
 - Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.
@@ -484,6 +492,11 @@ publish, land or choose the next Graph step from here.
   evidence folders can exceed 1 GB. Redraw twice and compare digests, because a
   figure that changes bytes on every redraw also changes its manifest entry.
   Render SVGs with `rsvg-convert -z 2 -b white` and look at them.
+  `fetch` skips files that already exist in the checkout ("already present"),
+  whatever the cache holds. In the authoring checkout, fetch in a `git worktree
+  add --detach /private/tmp/<x> HEAD` instead, running `uv run --project
+  <checkout>` there, then `cmp` its files with the checkout's. Recompute the
+  report's table cells from the fetched CSVs.
 
 - Combat drafts (`[data-testid=combat-draft]`, `POST
   /api/sessions/<id>/combat-preview`): the draft appears only after the
@@ -535,6 +548,16 @@ publish, land or choose the next Graph step from here.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
+  The dev `.venv` has no uvicorn/fastapi. Start the API with
+  `UV_PROJECT_ENVIRONMENT=<ignored .runs dir>/play-venv uv run --python 3.13
+  --locked --only-group play-runtime uvicorn …` from the root, which imports the
+  checkout's `managym`. Without `UV_PROJECT_ENVIRONMENT`, `--only-group` syncs the
+  shared `.venv` down to that group. Saved games are rows in
+  `<traces>/play.sqlite` `attempts.trace_json` (`config` omits default
+  settings). In zsh, pass multi-word script arguments explicitly, because
+  `set -- $m` does not split. After a deliberate float, if Pass is the only legal
+  action, forced-decision skipping passes it and the mana expires. To see a pool
+  in the table, float from one of two untapped sources.
   Run `ACADEMY_API_PORT=<api> npm run preview -- --host 127.0.0.1 --port <ui>
   --strictPort` from `academy/ui`. Browser frame probes must read accepted
   Commands from `message.update.frame` as well as `message.recovery.frame`;

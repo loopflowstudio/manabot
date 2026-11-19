@@ -4,6 +4,8 @@
 // action arrives. The suspended state (remaining effects + the pending
 // decision) lives on GameState so clones/forks carry it.
 
+#[cfg(test)]
+use crate::state::player::ManaFloats;
 use std::collections::VecDeque;
 
 use rand::seq::SliceRandom;
@@ -346,6 +348,9 @@ impl EffectFrame {
 /// Exact contributed objects are retained as evidence, never followed or untapped.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PaymentProgress {
+    /// Acceptance of an optional payment precedes choosing its sources in auto mode.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub committed: bool,
     pub player: PlayerId,
     pub remaining: PaymentCost,
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -374,6 +379,7 @@ impl PaymentProgress {
             player,
             remaining: cost,
             waterbend_paid: Vec::new(),
+            committed: false,
             if_paid,
             if_declined,
             spends: None,
@@ -382,7 +388,7 @@ impl PaymentProgress {
     }
 
     pub fn can_decline(&self) -> bool {
-        self.waterbend_paid.is_empty()
+        !self.committed && self.waterbend_paid.is_empty()
     }
 }
 
@@ -1628,10 +1634,13 @@ impl Game {
                         self.mana_tap_cost_actions(*player),
                     )
                 } else {
-                    (
-                        ActionSpaceKind::PayOrNot,
-                        self.mana_ability_actions(*player, None),
-                    )
+                    let mut actions = self.mana_ability_actions(*player, None);
+                    if self.offers_extra_payment_taps(*player) && self.can_pay_mana_upfront(*player)
+                    {
+                        actions.push(Action::PayCost { player: *player });
+                    }
+                    self.append_mana_floats(*player, &mut actions);
+                    (ActionSpaceKind::PayOrNot, actions)
                 };
                 ActionSpace {
                     player: Some(*player),
@@ -1642,6 +1651,24 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
+                if self.automatic_mana_payment(player) && payment.can_decline() {
+                    let cost = payment.remaining.mana_cost();
+                    let waterbend = match payment.remaining {
+                        PaymentCost::Waterbend { generic } => generic,
+                        PaymentCost::Mana(_) => 0,
+                    };
+                    let mut actions = Vec::new();
+                    if self.waterbend_payment_possible(player, &cost, waterbend) {
+                        actions.push(Action::PayCost { player });
+                    }
+                    actions.push(Action::Decline { player });
+                    return Some(ActionSpace {
+                        player: Some(player),
+                        kind: ActionSpaceKind::PayOrNot,
+                        actions,
+                        focus: source_focus,
+                    });
+                }
                 let mut actions = self.mana_ability_actions(player, None);
                 if let PaymentCost::Waterbend { generic } = payment.remaining {
                     if generic > 0 {
@@ -1665,6 +1692,7 @@ impl Game {
                 if payment.can_decline() {
                     actions.push(Action::Decline { player });
                 }
+                self.append_mana_floats(player, &mut actions);
                 ActionSpace {
                     player: Some(player),
                     kind: match payment.remaining {
@@ -2015,6 +2043,17 @@ impl Game {
             }
         }
         if let (
+            Decision::ManaUpfront {
+                player,
+                tap_remaining: 0,
+                ..
+            },
+            Action::PayCost { .. },
+        ) = (&suspended.decision, action)
+        {
+            return self.pay_mana_upfront(*player);
+        }
+        if let (
             Decision::ManaUpfront { tap_remaining, .. },
             Action::SelectCard {
                 player,
@@ -2145,6 +2184,11 @@ impl Game {
                 Ok(())
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
+                if self.automatic_mana_payment(payment.player) && payment.can_decline() {
+                    payment.committed = true;
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Ok(());
+                }
                 let cost = payment.remaining.mana_cost();
                 if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2189,8 +2233,14 @@ impl Game {
                 Action::ChooseMode { mode, .. },
             ) => {
                 let mana = &choices[*mode];
-                self.state.mana_pool_mut(*player).add(mana);
                 let player = *player;
+                // A priority activation has no enclosing payment or suspended
+                // caller. Each output choice also owns the fixed bonuses it adds.
+                let before = (resume.is_none()
+                    && self.pending_choice.is_none()
+                    && self.mana_capture(player).is_some())
+                .then(|| self.state.players[player.0].mana_pool.total());
+                self.state.mana_pool_mut(player).add(mana);
                 // The output is produced: its triggered mana abilities
                 // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
                 let next = match production {
@@ -2215,6 +2265,10 @@ impl Game {
                         resume.take(),
                     ),
                 };
+                if let Some(before) = before {
+                    let produced = self.state.players[player.0].mana_pool.total() - before;
+                    self.mana_capture(player).unwrap().float(produced);
+                }
                 if let Some(next) = next {
                     suspended.decision = *next;
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -3115,7 +3169,7 @@ impl Game {
                 .into_iter()
                 .collect(),
         };
-        cards.retain(|card| self.can_cast_with(*player, *card, free));
+        cards.retain(|card| self.castable_mana_value(*player, *card, free).is_some());
         cards.sort_unstable_by_key(|card| {
             (self.state[self.state.object_of(*card)].definition_id, *card)
         });
@@ -4251,6 +4305,101 @@ mod payment_tests {
             .position(predicate)
             .expect("payment action is legal");
         game.step(action_index).unwrap();
+    }
+
+    #[test]
+    fn resolution_payment_tap_retains_the_offer_and_pays_for_the_selected_effects() {
+        let player = PlayerId(0);
+        let mut game = payment_game(PaymentCost::Mana(ManaCost::parse("U")));
+        let island = game
+            .scenario_force_battlefield(player, "Island", true)
+            .unwrap();
+        let ordinary = game.suspended_decision_action_space().unwrap().actions;
+        game.mana_floats = [ManaFloats::All, ManaFloats::Off];
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let actions = &game.action_space().unwrap().actions;
+        assert_eq!(&actions[..ordinary.len()], ordinary);
+        assert_eq!(
+            actions[ordinary.len()..],
+            [Action::TapForMana {
+                player,
+                permanent: island
+            }]
+        );
+        let before = game.state.zones.size(ZoneType::Hand, player);
+        game.step(ordinary.len()).unwrap();
+        assert!(game.state.permanents[island].as_ref().unwrap().tapped);
+        assert_eq!(game.state.players[0].mana_pool, Mana::parse("U"));
+        assert_eq!(game.action_space().unwrap().actions, ordinary);
+        apply_payment_action(&mut game, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+        assert_eq!(game.state.zones.size(ZoneType::Hand, player), before + 5);
+    }
+
+    #[test]
+    fn auto_payment_keeps_optional_acceptance_and_funds_the_nested_color() {
+        let player = PlayerId(0);
+        for accept in [false, true] {
+            let mut game = payment_game_with_deck(
+                PaymentCost::Mana(ManaCost::parse("G")),
+                BTreeMap::from([("Island".into(), 40), ("Prophetic Prism".into(), 1)]),
+            );
+            let prism = game
+                .scenario_force_battlefield(player, "Prophetic Prism", true)
+                .unwrap();
+            let island = game
+                .scenario_force_battlefield(player, "Island", true)
+                .unwrap();
+            game.mana_payment[0] = crate::state::player::ManaPayment::Auto;
+            game.publish_action_space(game.suspended_decision_action_space().unwrap());
+            assert_eq!(
+                game.action_space().unwrap().actions,
+                [Action::PayCost { player }, Action::Decline { player }]
+            );
+            let before = game.state.zones.size(ZoneType::Hand, player);
+            game.step(usize::from(!accept)).unwrap();
+            assert_eq!(
+                game.state.zones.size(ZoneType::Hand, player),
+                before + if accept { 5 } else { 4 }
+            );
+            for id in [prism, island] {
+                assert_eq!(game.state.permanents[id].as_ref().unwrap().tapped, accept);
+            }
+            assert_eq!(game.state.players[0].mana_pool.total(), 0);
+        }
+    }
+
+    #[test]
+    fn nested_mana_activation_allows_surplus_before_paying_its_fee() {
+        let player = PlayerId(0);
+        let mut game = payment_game_with_deck(
+            PaymentCost::Mana(ManaCost::parse("G")),
+            BTreeMap::from([("Island".into(), 40), ("Prophetic Prism".into(), 1)]),
+        );
+        let prism = game
+            .scenario_force_battlefield(player, "Prophetic Prism", true)
+            .unwrap();
+        for _ in 0..2 {
+            game.scenario_force_battlefield(player, "Island", true)
+                .unwrap();
+        }
+        game.mana_floats = [ManaFloats::All, ManaFloats::Off];
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        apply_payment_action(
+            &mut game,
+            |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == prism),
+        );
+        apply_payment_action(&mut game, |a| matches!(a, Action::TapForMana { .. }));
+        apply_payment_action(&mut game, |a| matches!(a, Action::PayCost { .. }));
+        assert!(game.state.permanents[prism].as_ref().unwrap().tapped);
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+        // WUBRG order: select green, then spend it on the original effect.
+        apply_payment_action(&mut game, |a| {
+            matches!(a, Action::ChooseMode { mode: 4, .. })
+        });
+        assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
+        apply_payment_action(&mut game, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
     }
 
     #[test]

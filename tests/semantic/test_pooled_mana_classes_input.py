@@ -91,6 +91,7 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
     env = priority_root(
         ("Uncle's Musings",),
         ("Animal Attendant", "Forest", "Forest", "Island", "Plains"),
+        mana_floats="all",
     )
     owner = env.current_agent_index()
     assert owner is not None
@@ -148,7 +149,9 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
 
 
 def test_spending_choices_share_native_vector_text_and_academy_observations() -> None:
-    env = priority_root(("Uncle's Musings",), ("Animal Attendant",) * 5)
+    env = priority_root(
+        ("Uncle's Musings",), ("Animal Attendant",) * 5, mana_floats="all"
+    )
     for symbol in ("W", "U", "G", "G", "G"):
         decision = capture_text_decision(env)
         activate = next(
