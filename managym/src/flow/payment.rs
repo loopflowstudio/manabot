@@ -583,17 +583,15 @@ impl Game {
             player,
             payment: Box::new(payment),
         });
-        if paid {
+        let finishes = paid
+            || !chooses && {
+                let _payments = self.payment_scan();
+                !self.has_mana_payment_choices(player) && self.help_actions(player).is_empty()
+            };
+        if finishes {
             return self.finish_mana_payment(player);
         }
-        let offers = chooses || {
-            let _payments = self.payment_scan();
-            self.has_mana_payment_choices(player) || !self.help_actions(player).is_empty()
-        };
-        if offers {
-            return Ok(());
-        }
-        self.finish_mana_payment(player)
+        Ok(())
     }
 
     /// The payment in progress and the component being paid.
@@ -1249,10 +1247,12 @@ impl Game {
         let (cost, help, receipt) = payment.mana_step();
         self.waterbend_tap(tapped, &candidates, cost, help, receipt)?;
         let (owed, waterbend) = payment.mana();
-        // A remaining colored cost can still need a mana ability such as
-        // sacrificing Treasure. Leave the committed payment open for it.
+        // Once the waterbend taps are made, pay the rest from the pool when
+        // it can (`advance_payment` always leaves a waterbend cost's choice
+        // open). A remaining colored cost can still
+        // need a mana ability such as sacrificing Treasure: leave the
+        // committed payment open for it.
         if waterbend == 0
-            && owed.mana_value > 0
             && !self.offers_extra_payment_taps(player)
             && self.can_pay_mana_cost(player, owed)
         {

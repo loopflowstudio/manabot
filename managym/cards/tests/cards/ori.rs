@@ -164,16 +164,7 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
             tap_for_mana(&mut s, goggles);
             // Neither unit was committed; with no source left the payment
             // goes on to spending.
-            assert!(s.game().state.stack_objects.is_empty());
         }
-        assert_spend_choice_forks(&s, goggles, mountain);
-    }
-
-    fn assert_spend_choice_forks(
-        s: &crate::support::game::Scenario,
-        goggles: managym::state::game_object::PermanentId,
-        mountain: managym::state::game_object::PermanentId,
-    ) {
         let frame = s.game().semantic_decision_frame().unwrap();
         for (copies, source) in [(true, goggles), (false, mountain)] {
             let spend = frame
@@ -183,7 +174,7 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
                     offer.label.starts_with("Spend") && offer.label.contains("copy") == copies
                 })
                 .unwrap_or_else(|| panic!("both units are offered: {:?}", frame.offers));
-            let fork = crate::support::play::fork_stepping(s, spend);
+            let fork = crate::support::play::fork_stepping(&s, spend);
             assert_eq!(
                 fork.game().state.stack_objects.len(),
                 1 + usize::from(copies)

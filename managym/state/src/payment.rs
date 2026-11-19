@@ -188,15 +188,18 @@ impl PaymentReceipt {
     pub fn in_order(&self) -> impl Iterator<Item = PaidWith<'_>> + '_ {
         let paid = self.paid();
         let mut objects = paid.contributions.iter().peekable();
-        let mut mana = paid.mana.iter().enumerate().peekable();
+        let mut mana = paid.mana.iter();
+        let mut spent = 0u16;
         std::iter::from_fn(move || {
-            let next_unit = mana.peek().map(|(index, _)| *index as u16);
-            match (objects.peek(), next_unit) {
-                (Some(object), Some(unit)) if object.after_mana > unit => {
-                    mana.next().map(|(_, unit)| PaidWith::Mana(unit))
+            if let Some(object) = objects.next_if(|object| object.after_mana <= spent) {
+                return Some(PaidWith::Object(object));
+            }
+            match mana.next() {
+                Some(unit) => {
+                    spent += 1;
+                    Some(PaidWith::Mana(unit))
                 }
-                (Some(_), _) => objects.next().map(PaidWith::Object),
-                (None, _) => mana.next().map(|(_, unit)| PaidWith::Mana(unit)),
+                None => objects.next().map(PaidWith::Object),
             }
         })
     }
