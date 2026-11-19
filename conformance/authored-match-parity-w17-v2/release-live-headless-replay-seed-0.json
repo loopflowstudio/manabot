@@ -1,6 +1,6 @@
 {
   "identity": {
-    "authority_receipt_sha256": "a6596d8904a69c2f8794c0c3d3e187bede1b13140e4eeb7713809bfadc52cd4c",
+    "authority_receipt_sha256": "1e98ed450873c07696d11481356e1887a5b0e4d08932cf8789c03e57adb5d37f",
     "command_tape_sha256": "9b20ba2eba6aac0cf9ead450c821980cf95f9a21ace4f7960b46925a225f6937",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -8,11 +8,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "a6596d8904a69c2f8794c0c3d3e187bede1b13140e4eeb7713809bfadc52cd4c"
+          "sha256": "1e98ed450873c07696d11481356e1887a5b0e4d08932cf8789c03e57adb5d37f"
         },
         {
           "path": "conformance/authored_match_parity.py",
-          "sha256": "01ffd278459d1805d36f87aaa220e0645c211d2ab92688236ac791a7fe5de229"
+          "sha256": "0731310ef129ac0fe39f456299d4940c64678982692a3aa5936ccb50bae1d2d7"
         },
         {
           "path": "conformance/authored_match_receipt.py",
@@ -392,7 +392,7 @@
         },
         {
           "path": "managym/src/agent/ability_description.rs",
-          "sha256": "92154b2a02c192de43ab65f92d30ea5fec596b9c43d96f2a3f6b4d8b8656e6b4"
+          "sha256": "a3fe83ed619bfbbf8faa5d08eea80376a044a4011f94511f66e0f54bc24ee356"
         },
         {
           "path": "managym/src/agent/action.rs",
@@ -400,7 +400,7 @@
         },
         {
           "path": "managym/src/agent/continuation.rs",
-          "sha256": "05c700525c4f59b463ad842a7137d5bef6818c5cf02980dd125cfd5090584d06"
+          "sha256": "828145728554b1f381a5fb1e9fda5d7ad2489c2d49dfa3ff77f48816cba9f6fb"
         },
         {
           "path": "managym/src/agent/decision_memory.rs",
@@ -408,7 +408,7 @@
         },
         {
           "path": "managym/src/agent/effect_execution.rs",
-          "sha256": "0a629b9256442093362bc28746aebecff2e7b2a3db3132e8b3fa2784ee8e7057"
+          "sha256": "867c4afea2e5a669eacb47c9d65db2f3706d4e4f758ba24e67f62de9cd9c17b4"
         },
         {
           "path": "managym/src/agent/env.rs",
@@ -460,7 +460,7 @@
         },
         {
           "path": "managym/src/agent/record_vocabulary.rs",
-          "sha256": "7b1fad1e952ba9a418056ed64bb3363b929f8ca804c2a810b63ba509df17df4f"
+          "sha256": "d0327d31a504c9a0c7c2e0e0cfff3f72bfe7d3bb5e8e8eaee110f5ce7c7e3ada"
         },
         {
           "path": "managym/src/agent/rollout_pool.rs",
@@ -504,7 +504,7 @@
         },
         {
           "path": "managym/src/cards/content_pack.rs",
-          "sha256": "f67a155e9236533df2bc73d91ecc28253936a4567d8c44828d8e40800949d259"
+          "sha256": "2d017ef606828f7becee88fb9abbd71314b017807a41bfbf75befe433750ba00"
         },
         {
           "path": "managym/src/cards/deck_admission.rs",
@@ -552,7 +552,7 @@
         },
         {
           "path": "managym/src/decision_context.rs",
-          "sha256": "92af8f4d900a8423aa21fd6aa91e2958049ae658ce63e96b71c619ab91312934"
+          "sha256": "7bb96886ec10f71c91e94e9ec0359c6e31f9c48f37acc9a9cea6a5c23262cdcc"
         },
         {
           "path": "managym/src/experience.rs",
@@ -560,7 +560,7 @@
         },
         {
           "path": "managym/src/flow/action.rs",
-          "sha256": "c70b030b34149dd48c7ae3b197ae9374a492534c18c2f48afd31999022a4704d"
+          "sha256": "ceaca26a3e0183bfbe9d82026e3b68d257511477d750d76aeba0c4cbd9b97696"
         },
         {
           "path": "managym/src/flow/card_capture.rs",
@@ -588,11 +588,11 @@
         },
         {
           "path": "managym/src/flow/decision.rs",
-          "sha256": "fb0a68f232af8b81a6ab1b2c98a40bdad5731c96ac40ca58672a3051485590f1"
+          "sha256": "db30d3c508cb4659f5e4afdb318681e0571d804cf958594fbbbb04761c8238c7"
         },
         {
           "path": "managym/src/flow/effects.rs",
-          "sha256": "28a324224971b22be76778968caf0840507c4e8fa5d08051a36ce1ce36d899ce"
+          "sha256": "2f475371e361d98d942e9c8aff69cdaff2dc7a01db450b5a3fe58d0b2f07bc09"
         },
         {
           "path": "managym/src/flow/event.rs",
@@ -600,7 +600,7 @@
         },
         {
           "path": "managym/src/flow/game.rs",
-          "sha256": "695ec180940eaa8e16a5afe1476bc6e220e7afcf0aacedd86befc3d2a361eec2"
+          "sha256": "276fe868aab96fe6191a794ad4b9fd50deb302213ac9ae514d3d5b47706a5bc8"
         },
         {
           "path": "managym/src/flow/identity.rs",
@@ -616,7 +616,7 @@
         },
         {
           "path": "managym/src/flow/mana.rs",
-          "sha256": "fb1f63d08ccd738174456116fafe831d79312481a17a3cdf81dcbc03b2afa8b8"
+          "sha256": "43cbb21e76e6950ec20c719b35e1ea4aa6bfa4b420340aaad2c26da1b317bb62"
         },
         {
           "path": "managym/src/flow/mana/autotapper.rs",
@@ -624,7 +624,7 @@
         },
         {
           "path": "managym/src/flow/mana/preview.rs",
-          "sha256": "073d353c12a823834c7dac20df8556460457c261dcae0910891e7bee040f1efd"
+          "sha256": "37c14b1bfae1cfa1f8df45c4a982236d918828dc72824e4d66c6ca29e47e7c85"
         },
         {
           "path": "managym/src/flow/mod.rs",
@@ -636,7 +636,7 @@
         },
         {
           "path": "managym/src/flow/play.rs",
-          "sha256": "c31ed6fdd6a11f51520fbb782f7b6c58a3f21f4c8311e366de6fb83d735dbc92"
+          "sha256": "a1d938e99d1b6627719ba013ab290dc8b321f88c36244b65ca290718613ad7bc"
         },
         {
           "path": "managym/src/flow/priority.rs",
@@ -648,11 +648,11 @@
         },
         {
           "path": "managym/src/flow/resolution.rs",
-          "sha256": "ca2b0423c7015e0a0835bb55d42ac54b6f026a99988ec576095bd9a3e0b8aee4"
+          "sha256": "e6a291e9c8336886e57c1c7466c90b6d8888e1120a3ff9d9f0f337c4fbd69898"
         },
         {
           "path": "managym/src/flow/resolution_tests.rs",
-          "sha256": "b9d3aa1015839be1d9548fb8d99058a298ce8389bb22c5a20816d254bd9f062e"
+          "sha256": "02c32ae8cc823656195acfa9854874a42dd0599d1fe081ff370f0590ef07273c"
         },
         {
           "path": "managym/src/flow/retarget.rs",
@@ -808,7 +808,7 @@
         },
         {
           "path": "managym/state/src/ability.rs",
-          "sha256": "e50bbce69c70733d828b1799bf4bc4ff630307733c9e025cd662c916fd02d2dd"
+          "sha256": "dcc72593f35dc5d4aef7263e3b26f42227910c5b1da845bbdda20f157cb0b773"
         },
         {
           "path": "managym/state/src/binding.rs",
@@ -816,7 +816,7 @@
         },
         {
           "path": "managym/state/src/card.rs",
-          "sha256": "5b1260d5234967ca22b50124df37825cc5b77ebeb3ae77e6caaa8ab8588187d1"
+          "sha256": "35c60558f78ee4af3beb50dd1c1ee2c5500769ae9ad63de282553190d4923a05"
         },
         {
           "path": "managym/state/src/effect.rs",
@@ -832,7 +832,7 @@
         },
         {
           "path": "managym/state/src/mana.rs",
-          "sha256": "d85b0ab51301ccead73f50dd20a4d94d420ac74bfd412b362b8a085ed4733a1d"
+          "sha256": "ce7b56881d4fcf5db3aa05a3de313cc06edd177100d50794c640d83fb0c7b429"
         },
         {
           "path": "managym/state/src/payment.rs",
@@ -872,10 +872,10 @@
         },
         {
           "path": "tests/academy/test_authored_match_parity.py",
-          "sha256": "f8a799e88d904fecf337d5aac00d72fa1b3cb8a00756e3668024a79909ec2b25"
+          "sha256": "758abaeba2740bbd49e6f0db8ed231c002ccd1fec52f19b5ec45ce9fcc304965"
         }
       ],
-      "sha256": "52dc80bcedde14ef6008c68f0f87ceac4b7276900e9d15f6a33d2c2c1e166bbe"
+      "sha256": "87e8da3f5fb02187d81dbb941878f50c31927de67b7eb11823701097c20bcc34"
     },
     "seed": 0
   },
@@ -3048,7 +3048,7 @@
           "ordered_consequences_sha256": "6901ce380a104bb8f748d4075443c640d81a55ddbd69ffbaec9aca250428e8c0",
           "revision": 152,
           "semantic_event_cursor": 644,
-          "state_witness": "ef0115fcde4569c019ec7b8158c0778a42920c75cd613594ec25fdfd7ca0d749",
+          "state_witness": "38eed08456ef4944c0e4e0ac3a3e83d572afa7d4441256bf5c94935a39da4116",
           "viewer_observation_sha256": [
             "30402713cf92796b96b6234c74493a7957821f09750deaf4d8a3f6701fee4afe",
             "0a8459d219ac4960ccee720f70a798cc38dbba4c1515e1eee0c67fef451b83fc"
@@ -3398,7 +3398,7 @@
           "ordered_consequences_sha256": "f6bf79f5063aaa7f6c87180d6a8f688713fae184a0a9e04ced34f503db36c59d",
           "revision": 177,
           "semantic_event_cursor": 739,
-          "state_witness": "e1d3df3084279d5ddf58cfa64a04b08140da001fb5e40bc8de0e6c9469f9b546",
+          "state_witness": "f38775a803bcfad6b3382692b76448239fd72ae777d28318ceddaf652a532be5",
           "viewer_observation_sha256": [
             "4ac45250cd9e553e4f1ddb88c90b4792267971822e57e912015ddfa6c575d2de",
             "9d3827930f9fa52e52b4b494e61095c04f41b81531a3f5c87ceebe38f9d105b6"
@@ -5741,7 +5741,7 @@
           "ordered_consequences_sha256": "6901ce380a104bb8f748d4075443c640d81a55ddbd69ffbaec9aca250428e8c0",
           "revision": 152,
           "semantic_event_cursor": 644,
-          "state_witness": "ef0115fcde4569c019ec7b8158c0778a42920c75cd613594ec25fdfd7ca0d749",
+          "state_witness": "38eed08456ef4944c0e4e0ac3a3e83d572afa7d4441256bf5c94935a39da4116",
           "viewer_observation_sha256": [
             "93cd0514753fe2cab32bba3ba4cf22c4a272e6c6595ad3007257b6cb5505326a",
             "d4043109dcf548679e2406c4a78a44a051b710f9adb08f5a908685526baa6647"
@@ -6091,7 +6091,7 @@
           "ordered_consequences_sha256": "f6bf79f5063aaa7f6c87180d6a8f688713fae184a0a9e04ced34f503db36c59d",
           "revision": 177,
           "semantic_event_cursor": 739,
-          "state_witness": "e1d3df3084279d5ddf58cfa64a04b08140da001fb5e40bc8de0e6c9469f9b546",
+          "state_witness": "f38775a803bcfad6b3382692b76448239fd72ae777d28318ceddaf652a532be5",
           "viewer_observation_sha256": [
             "bfb921e4b9900d2f0e112cd9897cf35bf1c1561616217e43c3cdd54e382a9202",
             "637525786101c4a7c088b9c7adeabf3d7ba0f50c149e8fd74a6deea680356ad8"
@@ -8444,7 +8444,7 @@
           "ordered_consequences_sha256": "6901ce380a104bb8f748d4075443c640d81a55ddbd69ffbaec9aca250428e8c0",
           "revision": 152,
           "semantic_event_cursor": 644,
-          "state_witness": "ef0115fcde4569c019ec7b8158c0778a42920c75cd613594ec25fdfd7ca0d749",
+          "state_witness": "38eed08456ef4944c0e4e0ac3a3e83d572afa7d4441256bf5c94935a39da4116",
           "viewer_observation_sha256": [
             "30402713cf92796b96b6234c74493a7957821f09750deaf4d8a3f6701fee4afe",
             "0a8459d219ac4960ccee720f70a798cc38dbba4c1515e1eee0c67fef451b83fc"
@@ -8794,7 +8794,7 @@
           "ordered_consequences_sha256": "f6bf79f5063aaa7f6c87180d6a8f688713fae184a0a9e04ced34f503db36c59d",
           "revision": 177,
           "semantic_event_cursor": 739,
-          "state_witness": "e1d3df3084279d5ddf58cfa64a04b08140da001fb5e40bc8de0e6c9469f9b546",
+          "state_witness": "f38775a803bcfad6b3382692b76448239fd72ae777d28318ceddaf652a532be5",
           "viewer_observation_sha256": [
             "4ac45250cd9e553e4f1ddb88c90b4792267971822e57e912015ddfa6c575d2de",
             "9d3827930f9fa52e52b4b494e61095c04f41b81531a3f5c87ceebe38f9d105b6"

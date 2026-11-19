@@ -18137,7 +18137,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.72",
         "resulting_revision": 152,
-        "resulting_state_digest": "ef0115fcde4569c019ec7b8158c0778a42920c75cd613594ec25fdfd7ca0d749"
+        "resulting_state_digest": "38eed08456ef4944c0e4e0ac3a3e83d572afa7d4441256bf5c94935a39da4116"
       },
       "encountered_definition_ids": [
         179,
@@ -18228,7 +18228,7 @@
       ],
       "source": "client",
       "state": {
-        "after": "ef0115fcde4569c019ec7b8158c0778a42920c75cd613594ec25fdfd7ca0d749",
+        "after": "38eed08456ef4944c0e4e0ac3a3e83d572afa7d4441256bf5c94935a39da4116",
         "before": "3548864f4588039ab7b72e4bdcf654ca7aa0960cd0a1ab609fe6f74a84572841"
       },
       "to_revision": 152
@@ -18386,7 +18386,7 @@
       "source": "client",
       "state": {
         "after": "3f045febd6b8302c81c0884be2f0c9239d28d5658c066fe3211d1b72a8fd060d",
-        "before": "ef0115fcde4569c019ec7b8158c0778a42920c75cd613594ec25fdfd7ca0d749"
+        "before": "38eed08456ef4944c0e4e0ac3a3e83d572afa7d4441256bf5c94935a39da4116"
       },
       "to_revision": 153
     },
@@ -21347,7 +21347,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.91",
         "resulting_revision": 177,
-        "resulting_state_digest": "e1d3df3084279d5ddf58cfa64a04b08140da001fb5e40bc8de0e6c9469f9b546"
+        "resulting_state_digest": "f38775a803bcfad6b3382692b76448239fd72ae777d28318ceddaf652a532be5"
       },
       "encountered_definition_ids": [
         21,
@@ -21532,7 +21532,7 @@
       ],
       "source": "policy",
       "state": {
-        "after": "e1d3df3084279d5ddf58cfa64a04b08140da001fb5e40bc8de0e6c9469f9b546",
+        "after": "f38775a803bcfad6b3382692b76448239fd72ae777d28318ceddaf652a532be5",
         "before": "18541dbb4834c14f54c4f9944cd4c9519da843b62270c3d92d8bb2709ff338ba"
       },
       "to_revision": 177
@@ -21647,7 +21647,7 @@
       "source": "policy",
       "state": {
         "after": "6395fb6b1fe4ac5b0f3b567aae4400a32cc13e339ba1a3eb7129db0fcb3eaa8c",
-        "before": "e1d3df3084279d5ddf58cfa64a04b08140da001fb5e40bc8de0e6c9469f9b546"
+        "before": "f38775a803bcfad6b3382692b76448239fd72ae777d28318ceddaf652a532be5"
       },
       "to_revision": 178
     },
