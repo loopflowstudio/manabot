@@ -852,7 +852,8 @@ fn payment_description(cost: &PaymentCost) -> String {
     match cost {
         PaymentCost::Mana(cost) => cost_description(cost),
         PaymentCost::Waterbend { generic } => format!("waterbend {generic}"),
-        PaymentCost::Life(life) => format!("pay {life} life"),
+        // Read after "pays" and "You may pay": the amount only.
+        PaymentCost::Life(life) => format!("{life} life"),
     }
 }
 

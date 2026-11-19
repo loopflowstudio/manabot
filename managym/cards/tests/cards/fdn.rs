@@ -97,6 +97,20 @@ fn sire_of_seven_deaths_ward_is_paid_in_life_or_counters_the_spell() {
             s.advance_to_active_step(1, StepKind::Main);
             cast_only(&mut s);
             s.choose_target_named("Sire of Seven Deaths");
+            // The ward trigger on the stack states its price in words.
+            let stack = managym::agent::observation::Observation::for_player(s.game(), PlayerId(1))
+                .stack_objects;
+            assert!(
+                stack.iter().any(|object| object
+                    .description
+                    .as_deref()
+                    .is_some_and(|text| text.contains("unless its controller pays 7 life"))),
+                "{case}: {:?}",
+                stack
+                    .iter()
+                    .map(|object| &object.description)
+                    .collect::<Vec<_>>()
+            );
             s.pass_priority();
             s.pass_priority();
 
