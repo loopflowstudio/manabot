@@ -1,7 +1,8 @@
 /**
  * The opponent's moves are read out one beat at a time before the decision:
  * each long enough to read, the decision's choices wait beneath it, the first
- * input ends the reading without acting, and reduced motion reads none (the
+ * input ends the reading without acting; damage marks summing the window and
+ * the result card wait with it; and reduced motion reads none (the
  * recap still lists every fact). Playwright waits on a click at a held choice, as
  * it treats `aria-disabled` as not yet enabled.
  */
@@ -37,7 +38,7 @@ async function playUntil(page: Page, until: () => Promise<boolean>, limit: numbe
 }
 
 /** What the page showed in the instant before a press during a beat. */
-interface Seen { text: string; inPanel: boolean; held: boolean; onStep: boolean; outlined: number }
+interface Seen { text: string; inPanel: boolean; held: boolean; onStep: boolean; outlined: number; windowMarks: number }
 
 /**
  * Press during a beat in one task, so the beat cannot end between reading the
@@ -56,6 +57,7 @@ async function pressDuringBeat(page: Page, how: 'key' | 'choice'): Promise<Seen 
       held: row.getAttribute('aria-disabled') === 'true',
       onStep: board.getAttribute('data-board') === 'step',
       outlined: board.querySelectorAll('[data-testid=board-card][data-offer-count]:not([data-offer-count="0"])').length,
+      windowMarks: document.querySelectorAll('[data-testid=player-damage], [data-testid=damage-dealt], [data-testid=result-card]').length,
     };
     if (how === 'key') {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
@@ -96,6 +98,8 @@ test('the opponent\'s moves are read out before the decision, and the first pres
   // A beat is shown on the board it happened on, when that is not the frame's
   // own: a past board, with no card outlined (its offers belong to the frame).
   if (read!.onStep) expect(read!.outlined).toBe(0);
+  // Damage marks, which add up the whole window, and the result card wait with the decision.
+  expect(read!.windowMarks).toBe(0);
   const board = page.getByTestId('game-board');
   await expect(page.getByTestId('beat')).toHaveCount(0);
   // Ending the reading shows the frame's own board, with the live decision.

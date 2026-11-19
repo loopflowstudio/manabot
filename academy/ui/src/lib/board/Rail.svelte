@@ -12,6 +12,7 @@
   import type { PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
+  import ManaText from './ManaText.svelte';
   import Thumb from './Thumb.svelte';
   import { stackName, type PlacedOffer, type StackItem, type BoardView } from './view';
 
@@ -196,7 +197,7 @@
       {#if interrupted}
         <p class="type-body text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
       {:else if frame.prompt}
-        <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}>{line}</p>
+        <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}><ManaText text={line} size={16} /></p>
       {/if}
       {#if evidence}
         <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
@@ -231,14 +232,14 @@
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
-          <span>{#if isChosen(view.primary)}✓ {/if}{primaryText?.text ?? view.primary.offer.label}</span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
+          <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? view.primary.offer.label} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
           disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}>
-          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}{placed.offer.label}{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
+          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={placed.offer.label} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {/if}
@@ -254,8 +255,8 @@
         </details>
       {/if}
     {/if}
-    <!-- While you may act, the prompt above already says what the status would. -->
-    <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
+    <!-- While you may act, or once the game is over, the heading above already says what the status would. -->
+    <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over'} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
   </section>
 
   <!-- A finished game has no choices to list; the result card says what happened. -->
@@ -276,7 +277,7 @@
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}{placed.offer.label}</span>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} /></span>
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
             {/if}

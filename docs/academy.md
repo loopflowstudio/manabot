@@ -670,7 +670,8 @@ The rail holds:
 - **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
   Accumulate Wisdom. Space pays automatically, or click lands to tap them
   yourself"; it stays the same when the planned lands are dashed),
-  and its buttons. **Rules detail** holds the engine's full instruction.
+  and its buttons. Mana in the prompt, the buttons and the choices is drawn as
+  pips. **Rules detail** holds the engine's full instruction.
   Passing priority and paying a cost are the primary button (Space), labelled
   with what it does next: **Resolve** and the spell on top of the stack, the
   step it moves to ("To combat", "To blockers"), or the cost ("Pay {1}{U}",
@@ -960,7 +961,9 @@ input of any kind ends the reading and does nothing else: a click on the board,
 the rail, a button or a choice, Space, Enter, Escape or a number key. The
 current board and your live decision then answer the next input. So when
 Heuristic attacks, you watch the attack land before you are asked to block, and
-pressing `1` early shows the blocking board rather than declaring a block. A
+pressing `1` early shows the blocking board rather than declaring a block.
+Damage marks ("−2") and a finished game's result card wait with the decision,
+so a past board never shows damage it has not yet taken. A
 new frame or a reconnect ends the reading and shows the actual pending
 decision. **Opponent's moves** in **Menu** sets the pace: **Quick** (under a
 second a fact), **Slow** or **Off**. With **Off** or reduced motion nothing is
