@@ -579,6 +579,29 @@ impl ManaCost {
         options
     }
 
+    /// The pips of this cost that `rest`, a cost it was reduced to, no
+    /// longer holds: what was paid between the two.
+    pub fn less(&self, rest: &ManaCost) -> ManaCost {
+        let mut out = ManaCost {
+            purpose: self.purpose.clone(),
+            ..ManaCost::default()
+        };
+        for (slot, (all, left)) in out.cost.iter_mut().zip(self.cost.iter().zip(rest.cost)) {
+            *slot = all.saturating_sub(left);
+        }
+        let mut left = rest.hybrid.clone();
+        for pip in &self.hybrid {
+            match left.iter().position(|kept| kept == pip) {
+                Some(index) => {
+                    left.remove(index);
+                }
+                None => out.hybrid.push(*pip),
+            }
+        }
+        out.update_mana_value();
+        out
+    }
+
     /// This cost with X announced as `value` (CR 601.2b): each {X} becomes
     /// `value` generic mana.
     pub fn with_x(&self, value: u8) -> ManaCost {
@@ -710,6 +733,21 @@ impl Mana {
     /// Non-ordinary classes with their amounts by color, sorted by class.
     pub fn classes(&self) -> &[PooledClass] {
         self.classes.as_deref().map_or(&[], Vec::as_slice)
+    }
+
+    /// This mana without any class `unit` holds (ordinary mana counting
+    /// as one): the mana that could pay in its place with different rules
+    /// consequences.
+    pub fn other_classes_than(&self, unit: &Mana) -> Mana {
+        let mut out = self.clone();
+        if unit.mana != [0; 6] {
+            out.mana = [0; 6];
+        }
+        for (class, _) in unit.classes() {
+            *out.class_mut(class) = [0; 6];
+        }
+        out.prune();
+        out
     }
 
     /// One class's amounts, by color.

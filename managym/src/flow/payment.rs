@@ -856,9 +856,10 @@ impl Game {
     /// a chosen pip: it takes the most flexible pip it can pay whose rest
     /// stays payable (`ManaCost::paid_with`), joins the receipt with its
     /// origin and shrinks what is owed, as a convoke tap does. A unit stays
-    /// in the pool when its restriction forbids this cost or when no pip it
+    /// in the pool when its restriction forbids this cost, when no pip it
     /// pays leaves the rest payable, so the surplus of a source that makes
-    /// more than is owed floats. Mana floating before the production is
+    /// more than is owed floats, or when pooled mana of another class could
+    /// pay that pip instead. Mana floating before the production is
     /// untouched: the spend choice at "Pay the cost" decides it.
     pub(crate) fn commit_produced_mana(&mut self, player: PlayerId, start: usize) {
         let mut index = start;
@@ -880,6 +881,15 @@ impl Game {
                 cost.paid_with(pool.unit_color(index))
                     .into_iter()
                     .find(|rest| self.payable_with_help(player, &left, rest, help))
+                    // Pooled mana of another class could pay this pip
+                    // instead, with other consequences (a rider applied or
+                    // kept, a restriction used up): the spend choice at
+                    // "Pay the cost" stays the payer's.
+                    .filter(|rest| {
+                        left.other_classes_than(&unit)
+                            .spendable_units(&cost.less(rest))
+                            == 0
+                    })
             };
             let Some(rest) = rest else {
                 index += 1;
