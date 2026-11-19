@@ -46,6 +46,8 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return 'all creatures able to block it do so';
     case 'DoesntUntap':
       return "doesn't untap during its controller's untap step";
+    case 'Saddled':
+      return 'saddled';
     case 'LoseKeywords':
       return `loses ${(effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ')}`;
     case 'ExileIfWouldDie':

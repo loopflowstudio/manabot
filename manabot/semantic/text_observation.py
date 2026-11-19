@@ -410,6 +410,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "CantBeBlocked": "can't be blocked",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
+        "Saddled": "saddled",
         "CantActivateAbilities": "its activated abilities can't be activated",
         "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
