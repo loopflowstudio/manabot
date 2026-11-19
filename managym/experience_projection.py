@@ -725,7 +725,7 @@ def redact_observation(observation: dict[str, Any]) -> None:
     agent = observation.get("agent", {})
     if isinstance(context, dict) and context.get("actor") != agent.get("player_index"):
         observation["decision_context"] = {
-            **context,
+            **{key: value for key, value in context.items() if key != "paid"},
             "source": None,
             "targets": [],
             "reserved_sacrifice": None,

@@ -8,7 +8,7 @@
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace } from '$lib/card-faces.svelte';
   import type { CardState, PermanentState } from '$lib/types';
-  import { keywordsOf, labelText, ptProvenance, signed } from './inspect';
+  import { keywordsOf, labelText, ptProvenance, signed, statusesOf } from './inspect';
   import Pips from './Pips.svelte';
 
   interface Props {
@@ -26,6 +26,7 @@
 
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
   const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));
+  const statuses = $derived(permanent ? statusesOf(permanent) : []);
   const pt = $derived(permanent ? ptProvenance(permanent, face) : null);
   const plain = $derived(!permanent && card?.types.is_creature ? `${card.power}/${card.toughness}` : face?.power != null && !permanent ? `${face.power}/${face.toughness}` : null);
   const facts = $derived(permanent ? [
@@ -53,8 +54,9 @@
   <div class="art" style:height={`${art}px`} style:background-image={loaded === url ? `url('${url}')` : undefined}></div>
   <p class="name"><span>{name}</span>{#if face?.cost}<Pips cost={face.cost} size={14} />{/if}</p>
   {#if face}<p class="type">{face.type_line}</p>{/if}
-  {#if keywords.length}
+  {#if keywords.length || statuses.length}
     <p class="keywords">
+      {#each statuses as status (status)}<span class="granted">{status}</span>{/each}
       {#each keywords as fact (fact.keyword)}<span class:granted={fact.source !== null} title={fact.source ?? 'Printed'}>{labelText(fact.keyword)}{#if fact.source}<small> · {fact.source}</small>{/if}</span>{/each}
     </p>
   {/if}

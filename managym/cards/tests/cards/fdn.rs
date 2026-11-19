@@ -55,10 +55,10 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
 
 /// The payment preview reads the cost being paid. Hungry Ghoul's "{1},
 /// Sacrifice another creature" has no preview until the creature is chosen;
-/// at the mana it names the creature already sacrificed beside the land that
-/// would be tapped.
+/// at the mana it forecasts the land that would be tapped, and the pending
+/// decision names the creature already sacrificed and where it still is.
 #[test]
-fn hungry_ghoul_payment_preview_names_the_creature_already_sacrificed() {
+fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
     use crate::support::{
         game::{five_color_unfunded_setup, Scenario},
         play::select_card,
@@ -87,16 +87,34 @@ fn hungry_ghoul_payment_preview_names_the_creature_already_sacrificed() {
         &|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == ghoul),
     );
     assert_eq!(announced["state"], "needs_choice");
-    assert_eq!(announced["contributions"], serde_json::json!([]));
+    assert!(s
+        .game()
+        .decision_context(PlayerId(0))
+        .unwrap()
+        .paid
+        .is_empty());
 
     activate(&mut s, ghoul, 0);
+    assert!(s
+        .game()
+        .decision_context(PlayerId(0))
+        .unwrap()
+        .paid
+        .is_empty());
     select_card(&mut s, ogre_object);
+    let context = serde_json::to_value(s.game().decision_context(PlayerId(0)).unwrap()).unwrap();
+    assert_eq!(context["paid"].as_array().unwrap().len(), 1, "{context}");
+    assert_eq!(context["paid"][0]["phrase"], "sacrificed Gray Ogre");
+    // The sacrifice is reserved until the mana is paid: the Ogre is still
+    // the battlefield permanent the board draws.
+    assert_eq!(context["paid"][0]["object"]["label"], "Gray Ogre");
+    assert_eq!(
+        context["paid"][0]["object"]["display_id"],
+        s.game().state.permanents[ogre].as_ref().unwrap().id.0
+    );
     let paying = preview(&s, &|a| matches!(a, Action::PayCost { .. }));
     assert_eq!(paying["state"], "exact", "{paying}");
-    assert_eq!(
-        paying["contributions"],
-        serde_json::json!(["sacrificed Gray Ogre"])
-    );
+    assert!(paying.get("contributions").is_none());
     assert_eq!(paying["sources"][0]["label"], "Swamp");
     assert_eq!(paying["sources"].as_array().unwrap().len(), 1);
 }

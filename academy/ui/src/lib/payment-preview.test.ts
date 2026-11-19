@@ -3,7 +3,7 @@ import fixture from '../../../../protocol/fixtures/bolt-target.json';
 import { PaymentPreviewController, type PreviewAddress, type PreviewResponse, type PreviewState } from './payment-preview';
 import type { ExperienceFrame } from './types';
 
-const exact = { state: 'exact' as const, explanation: 'Exact', cost: '{U}', contributions: [], sources: [], pool_after_production: { amounts: [0, 1, 0, 0, 0, 0], classes: [] }, pool_after_spending: null };
+const exact = { state: 'exact' as const, explanation: 'Exact', cost: '{U}', sources: [], pool_after_production: { amounts: [0, 1, 0, 0, 0, 0], classes: [] }, pool_after_spending: null };
 function frame(): ExperienceFrame { return structuredClone(fixture.recovery.frame) as ExperienceFrame; }
 function deferred(): { promise: Promise<PreviewResponse>; resolve: (response: PreviewResponse) => void } {
   let resolve!: (response: PreviewResponse) => void;

@@ -1238,6 +1238,10 @@ class _Renderer:
             lines.append(
                 f"Reserved sacrifice: {self.decision_object(context.reserved_sacrifice)}."
             )
+        if context.paid:
+            lines.append(
+                "Already paid: " + "; ".join(paid.phrase for paid in context.paid) + "."
+            )
         if context.mana_cost is not None:
             lines.append(f"Outstanding mana cost: {context.mana_cost}.")
         lines += ["", "Bound public card definitions:"]

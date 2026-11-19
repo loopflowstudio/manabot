@@ -94,6 +94,15 @@ class DecisionTarget(CaptureModel):
     object: DecisionObject
 
 
+class Paid(CaptureModel):
+    """One object's payment toward the pending cost, and what remains of it."""
+
+    phrase: str
+    object: DecisionObject | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+
 class Continuation(CaptureModel):
     recent_facts: list[Literal["unsupported"]]
     actor: int
@@ -110,6 +119,8 @@ class Continuation(CaptureModel):
     announcing: Literal["spell", "activated_ability"] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    # What objects have already paid toward the cost being paid, in paid order.
+    paid: list[Paid] = Field(default_factory=list, exclude_if=lambda value: not value)
 
 
 class ObjectLink(CaptureModel):

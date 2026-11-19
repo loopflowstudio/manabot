@@ -9,8 +9,6 @@ export interface PaymentPreview {
   state: 'exact' | 'needs_choice' | 'not_applicable' | 'unavailable';
   explanation: string;
   cost: string | null;
-  /** What objects have already paid toward the cost, in the order paid. */
-  contributions: string[];
   sources: { source: SubjectRef; label: string; output: PreviewPool }[];
   pool_after_production: PreviewPool | null;
   pool_after_spending: PreviewPool | null;

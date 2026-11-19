@@ -14,7 +14,7 @@ const [mountain, island] = [88, 128];
 
 function preview(state: PaymentPreview['state'], sources: [number, number[]][], pool: number[] = [0, 0, 0, 0, 0, 0]): PaymentPreview {
   return {
-    state, explanation: '', cost: '{1}{U}', contributions: [],
+    state, explanation: '', cost: '{1}{U}',
     sources: sources.map(([id, amounts]) => ({ source: { kind: 'object', id: { entity: id, incarnation: 2 } }, label: 'Land', output: { amounts, classes: [] } })),
     pool_after_production: { amounts: pool, classes: [] }, pool_after_spending: null,
   };

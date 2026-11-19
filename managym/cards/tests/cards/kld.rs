@@ -172,6 +172,34 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
         let mut expected = vec![card_of(&s, giant), elves_object];
         expected.sort();
         assert_eq!(offered, expected, "auto={auto}");
+        // This step offers no payment to preview; the pending decision
+        // itself says what has paid, and names the creature still there.
+        assert!(!s
+            .action_space()
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::PayCost { .. })));
+        let context = s.game().decision_context(PlayerId(0)).unwrap();
+        let [paid] = context.paid.as_slice() else {
+            panic!("one creature has crewed, auto={auto}: {:?}", context.paid)
+        };
+        assert_eq!(paid.phrase, "tapped Gray Ogre to crew");
+        let seen = paid.object.as_ref().unwrap();
+        assert_eq!(
+            (seen.label.as_str(), seen.display_id),
+            (
+                "Gray Ogre",
+                s.game().state.permanents[ogre].as_ref().unwrap().id.0
+            )
+        );
+        assert!(
+            s.game()
+                .decision_context(PlayerId(1))
+                .unwrap()
+                .paid
+                .is_empty(),
+            "the opponent is not told the acting player's payment"
+        );
         // A fork at the second crew choice: either creature left finishes it.
         for chosen in [card_of(&s, giant), elves_object] {
             let fork = crate::support::play::fork_selecting(&s, chosen);

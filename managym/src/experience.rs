@@ -644,6 +644,22 @@ pub struct DecisionContextView {
     /// the announced costs are paid. Omitted otherwise and on older frames.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub announcing: Option<String>,
+    /// What objects have already paid toward the cost being paid, in the
+    /// order paid. Omitted when nothing has and on older frames.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paid: Vec<PaidView>,
+}
+
+/// One object's payment toward the pending cost: "sacrificed Gray Ogre to
+/// bargain". `object` is that object as it is now (a permanent still on the
+/// battlefield, the card in a graveyard or exile), absent when nothing the
+/// viewer can see remains of it.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaidView {
+    pub phrase: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object: Option<DecisionObjectView>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -721,6 +737,7 @@ impl LegacyHeroObservation {
                     || context.source.0.is_some()
                     || !context.targets.is_empty()
                     || context.reserved_sacrifice.0.is_some()
+                    || !context.paid.is_empty()
                     || context.mana_cost.0.is_some()
                     || context.chosen_mode.0.is_some())
         })

@@ -242,6 +242,7 @@ describe('experience protocol v1 conformance', () => {
       StackEntryView: 'StackEntryView',
       DecisionObjectView: 'DecisionObjectView',
       DecisionTargetView: 'DecisionTargetView',
+      PaidView: 'PaidView',
       OfferSubjectView: 'OfferSubjectView',
       LegacyCardTypesView: 'CardTypes',
       LegacyCardView: 'CardState',

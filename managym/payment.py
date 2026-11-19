@@ -30,8 +30,6 @@ class PaymentPreview(BaseModel):
     state: Literal["exact", "needs_choice", "not_applicable", "unavailable"]
     explanation: str
     cost: str | None
-    # What objects have already paid toward the cost, in the order paid.
-    contributions: list[str]
     sources: list[PaymentSourcePreview]
     pool_after_production: PreviewPool | None
     pool_after_spending: PreviewPool | None

@@ -2,7 +2,6 @@
 //! output or mana unit is committed by this query.
 use super::*;
 use crate::agent::ability_description::cost_description;
-use crate::agent::effect_execution::contribution_phrase;
 use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
 use crate::flow::game::{CastChoices, CostComponent};
 
@@ -27,9 +26,6 @@ pub struct PaymentPreview {
     pub state: PaymentPreviewState,
     pub explanation: String,
     pub cost: Option<String>,
-    /// What objects have already paid toward this cost, in the order paid:
-    /// "sacrificed Gray Ogre to bargain".
-    pub contributions: Vec<String>,
     pub sources: Vec<PaymentSourcePreview>,
     pub pool_after_production: Option<PreviewPool>,
     /// Absent if more than one legal unit can be spent at any point.
@@ -103,7 +99,6 @@ impl PaymentPreview {
             state,
             explanation: explanation.into(),
             cost: None,
-            contributions: Vec::new(),
             sources: Vec::new(),
             pool_after_production: None,
             pool_after_spending: None,
@@ -161,7 +156,6 @@ impl Game {
         // before cost completion can advance the spell or ability.
         let mut position = std::borrow::Cow::Borrowed(self);
         let mut sources = Vec::new();
-        let mut contributions = Vec::new();
         let mut resolution = None;
         // Whether convoke, improvise or delve may pay where mana cannot.
         let mut helped = false;
@@ -259,12 +253,6 @@ impl Game {
                 }
                 Some(PendingChoice::Pay { payment, .. }) => {
                     helped = keyword_help(&payment.owed);
-                    contributions = payment
-                        .receipt
-                        .contributions()
-                        .iter()
-                        .map(|paid| contribution_phrase(self, viewer, paid))
-                        .collect();
                     sources
                         .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
                     if payment.waterbends() {
@@ -381,7 +369,6 @@ impl Game {
             }
             .into(),
             cost: Some(cost_description(&cost)),
-            contributions,
             sources,
             pool_after_production: Some(PreviewPool::from(&pool)),
             pool_after_spending: final_pool.as_ref().map(PreviewPool::from),

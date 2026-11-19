@@ -37,6 +37,16 @@ describe('promptLine', () => {
     expect(promptLine(pay!, boardView(pay!, PLAYERS))).toMatch(/^Pay \{.*Space pays automatically/);
   });
 
+  it('lists what has already paid, in order, after the decision', () => {
+    const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
+    const paying = { ...pay, projection: { ...pay.projection, decision_context: { ...pay.projection.decision_context!,
+      paid: [{ phrase: 'sacrificed Gray Ogre' }, { phrase: 'tapped Hill Giant to crew' }] } } };
+    const line = promptLine(paying, boardView(paying, PLAYERS));
+    expect(line).toMatch(/^Pay \{/);
+    expect(line.endsWith('. Already paid: sacrificed Gray Ogre; tapped Hill Giant to crew')).toBe(true);
+    expect(promptLine(pay, boardView(pay, PLAYERS))).not.toContain('Already paid');
+  });
+
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {
     const frame = structuredClone(frames[0]);
     frame.action_space = 'PRIORITY';
@@ -112,7 +122,7 @@ describe('primaryLabel', () => {
     const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
     const lands = pay.projection.agent.battlefield.filter(permanent => permanent.types?.is_land).slice(0, 2);
     const preview = {
-      state: 'exact' as const, explanation: '', cost: pay.projection.decision_context!.mana_cost!, contributions: [],
+      state: 'exact' as const, explanation: '', cost: pay.projection.decision_context!.mana_cost!,
       sources: lands.map(land => ({ source: { kind: 'object' as const, id: { entity: land.id, incarnation: 0 } }, label: 'x', output: { amounts: [0, 1, 0, 0, 0, 0], classes: [] } })),
       pool_after_production: null, pool_after_spending: null,
     };

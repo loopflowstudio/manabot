@@ -8,10 +8,10 @@
 
 use crate::state::ability::LibraryEnd;
 use crate::{
-    agent::continuation::ContinuationFrame,
+    agent::{continuation::ContinuationFrame, effect_execution::contribution_phrase},
     experience::{
         DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
-        OfferSubjectView, RequiredNullable, SubjectRef,
+        OfferSubjectView, PaidView, RequiredNullable, SubjectRef,
     },
     flow::{
         decision::Decision,
@@ -44,6 +44,19 @@ impl Game {
             display_id,
             label: self.state[object].name.clone(),
         })
+    }
+
+    /// What `viewer` can see now of an object that paid toward a cost: the
+    /// appearance that paid, or the one it became by its one move since (the
+    /// exiled or discarded card).
+    fn paid_object(&self, paid: ObjectId, viewer: PlayerId) -> Option<DecisionObjectView> {
+        let now = if self.state.live(paid).is_some() {
+            paid
+        } else {
+            self.state.zones.successor(paid)?
+        };
+        self.visible_reference(now, viewer).object?;
+        self.decision_object(now)
     }
 
     fn decision_target(&self, target: &Target) -> Option<DecisionObjectView> {
@@ -280,6 +293,7 @@ impl Game {
             chosen_mode: RequiredNullable(None),
             recent_facts: Vec::new(),
             announcing: None,
+            paid: Vec::new(),
         };
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
@@ -354,6 +368,17 @@ impl Game {
                 }
                 view.mana_cost = RequiredNullable(Some(symbols));
             }
+        }
+        if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
+            view.paid = payment
+                .receipt
+                .contributions()
+                .iter()
+                .map(|paid| PaidView {
+                    phrase: contribution_phrase(self, viewer, paid),
+                    object: self.paid_object(paid.object, viewer),
+                })
+                .collect();
         }
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
