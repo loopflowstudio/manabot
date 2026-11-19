@@ -717,6 +717,7 @@
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Tab' && !recording && !event.metaKey && !event.ctrlKey && !event.altKey) { wrapTab(event); return; }
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
+    // A key's own click (Enter on a button) is not the press that ended a read-out.
     endedByPress = false;
     // Enter on a focused choice, Space, Esc or a number key ends a read-out and acts on nothing.
     if (readingOut && !MOVES_FOCUS.has(event.key)) { event.preventDefault(); endReadOut(); return; }

@@ -43,6 +43,7 @@
   ]);
   /** Floating mana no class line describes: plain mana, by colour. */
   const plain = $derived(total.map((amount, color) => Math.max(0, amount - special.reduce((sum, part) => sum + (part.mana[color] ?? 0), 0))));
+  const hasPlain = $derived(plain.some(Boolean));
   const label = $derived(`${name}, ${player.life} life${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
@@ -80,10 +81,10 @@
   <p class="type-caption pool" class:empty={!pool} data-testid="mana-pool">
     {#if pool}
       <span class="text-ink-3" aria-hidden="true">Floating</span><span class="sr-only">Floating: {pool}</span>
-      {#if plain.some(Boolean)}<span aria-hidden="true"> <Pips cost={poolSymbols(plain)} size={16} /></span>{/if}
+      {#if hasPlain}<span aria-hidden="true"> <Pips cost={poolSymbols(plain)} size={16} /></span>{/if}
       <!-- Each class of mana is its pips and what sets it apart; with no plain mana the first joins the Floating line. -->
       {#each special as part, index (index)}
-        <span class="pool-class" class:own-line={index > 0 || plain.some(Boolean)} data-testid="mana-pool-class">{' '}<span aria-hidden="true"><Pips cost={poolSymbols(part.mana)} size={14} /></span>{part.terms}</span>
+        <span class="pool-class" class:own-line={index > 0 || hasPlain} data-testid="mana-pool-class">{' '}<span aria-hidden="true"><Pips cost={poolSymbols(part.mana)} size={14} /></span>{part.terms}</span>
       {/each}
     {:else}No floating mana{/if}
   </p>

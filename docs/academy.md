@@ -965,7 +965,7 @@ new frame or a reconnect ends the reading and shows the actual pending
 decision. **Opponent's moves** in **Menu** sets the pace: **Quick** (under a
 second a fact), **Slow** or **Off**. With **Off** or reduced motion nothing is
 read out and the current board shows at once; the recap lists every fact. Sentences name a player
-shortly ("Heuristic cast…"); the plate and top bar keep how it decides
+shortly ("Heuristic cast…"); the top bar keeps how it decides
 ("Heuristic · scripted"). In Replay the same recap
 covers **This move** at a consequences position and **Since the last
 decision** at a choice (from the same chooser's previous decision); the move

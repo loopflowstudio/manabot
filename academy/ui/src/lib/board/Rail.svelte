@@ -75,6 +75,8 @@
   }: Props = $props();
 
   const readingOut = $derived(reading !== undefined);
+  /** No choices because the opponent is deciding: the list waits for them by name instead of counting 0. */
+  const waitingFor = $derived(frame.offers.length === 0 && opponentChoosing);
   const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
   const isChosen = (placed: PlacedOffer): boolean => evidence?.chosen === placed.offer.id;
 
@@ -261,9 +263,9 @@
   <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
     <h2 class="heading type-heading text-ink-2">
       <span>{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
-      {#if frame.offers.length || !opponentChoosing}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
+      {#if !waitingFor}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
     </h2>
-    {#if !frame.offers.length && opponentChoosing}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
+    {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
         <li>
