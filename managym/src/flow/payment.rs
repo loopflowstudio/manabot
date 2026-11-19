@@ -866,9 +866,10 @@ impl Game {
     /// origin and shrinks what is owed, as a convoke tap does. A unit stays
     /// in the pool when its restriction forbids this cost, when no pip it
     /// pays leaves the rest payable, so the surplus of a source that makes
-    /// more than is owed floats, or when pooled mana of another class could
-    /// pay that pip instead. Mana floating before the production is
-    /// untouched: the spend choice at "Pay the cost" decides it.
+    /// more than is owed floats, or when pooled mana of another class or
+    /// color could pay that pip instead. Mana floating before the
+    /// production is untouched: the spend choice at "Pay the cost" decides
+    /// it.
     pub(crate) fn commit_produced_mana(&mut self, player: PlayerId, start: usize) {
         let mut index = start;
         loop {

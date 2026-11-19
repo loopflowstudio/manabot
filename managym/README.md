@@ -746,8 +746,10 @@ A pending cast or activation payment offers useful fixed-source taps beside
 A tap must make progress and preserve the announced costs and every saved
 payment; funded payments and payments needing every available source retain
 native trivial-decision skipping. These ordinary choices are on by default
-for every consumer. Source taps use the existing `TapForCost` policy action
-with the source as focus; the native Command verb is `tap_for_mana`, distinct
+for every consumer. Source taps and direct taps (convoke, improvise, waterbend)
+share the `TapForCost` policy action with the permanent as focus; its
+`pays_directly` flag tells a tap that pays a pip itself from one that makes
+mana. The native Command verb for a source tap is `tap_for_mana`, distinct
 from waterbend. They do not expose undo, or production at priority unless a
 seat [asks for it](#mana-taps-at-priority-and-during-payment).
 
@@ -797,10 +799,11 @@ or phase, as any floating mana does. There is no undo.
   cost owed shrinks and the receipt names the unit's source, as a convoke tap
   does. Mana that was floating before, a source's surplus and mana that can
   pay nothing still owed stay in the pool for the spend choice, and so does
-  new mana when pooled mana of another class (a rider, a restriction) could
-  pay the same pip. A payment ends as soon as no mana is owed, whatever is
-  still untapped: surplus waits for the priority that follows, and a cost
-  whose mana is {0} from the start never opens its mana step.
+  new mana when pooled mana of another class (a rider, a restriction) or
+  another color could pay the same pip. A payment ends as soon as no mana
+  is owed, whatever is still untapped: surplus waits for the priority that
+  follows, and a cost whose mana is {0} from the start never opens its mana
+  step.
 - **Automatic payments.** Once the player accepts a cost, the engine selects
   the sources, their outputs, any waterbend contributions and the units to
   spend. The player still chooses X, optional costs and spell targets.
@@ -810,7 +813,8 @@ or phase, as any floating mana does. There is no undo.
   without a listed spend. `Env.skip_trivial_count()` includes forced passes,
   other skipped single choices and internal automatic payment actions.
 - **Seat order and replay.** Both settings follow the chooser. Fixed-source
-  taps use the existing `TapForCost` policy action with source focus.
+  taps and direct taps use the `TapForCost` policy action with the
+  permanent as focus, told apart by `pays_directly`.
   Choice-output abilities use their activation action. Omitting both fields
   produces the same native setup, game digest and recording bytes as explicit
   manual/off for both seats. Invalid values raise `ValueError`.
