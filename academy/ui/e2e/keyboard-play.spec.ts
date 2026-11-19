@@ -6,6 +6,7 @@
  * region it was made from rather than falling back to the top of the page.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { CONTROLS } from '../src/lib/board/region';
 
 /**
  * The region holding focus, by its accessible name, and the focused control:
@@ -14,11 +15,11 @@ import { expect, test, type Page } from '@playwright/test';
  * by position.
  */
 async function focused(page: Page): Promise<{ region: string | null; label: string; index: number }> {
-  return page.evaluate(() => {
+  return page.evaluate(selector => {
     const active = document.activeElement as HTMLElement | null;
     const region = active?.closest<HTMLElement>('[data-region]');
     const controls = region
-      ? [...region.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], summary, [tabindex]:not([data-region])')]
+      ? [...region.querySelectorAll<HTMLElement>(selector)]
         .filter(element => element.closest('[data-region]') === region && element.getClientRects().length > 0)
       : [];
     return {
@@ -26,7 +27,7 @@ async function focused(page: Page): Promise<{ region: string | null; label: stri
       label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '',
       index: active ? controls.indexOf(active) : -1,
     };
-  });
+  }, CONTROLS);
 }
 
 /** Tab to the region whose name matches, then arrow to a control whose name matches. */
