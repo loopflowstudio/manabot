@@ -6,7 +6,10 @@ use crate::support::{
     play::{cast_card, choose, pass_until, settle, tap_for_mana},
 };
 use managym::{
-    agent::action::{Action, ActionSpaceKind},
+    agent::{
+        action::{Action, ActionSpaceKind, ActionType},
+        observation::Observation,
+    },
     state::{
         game_object::{PermanentId, PlayerId, Target},
         mana::Color,
@@ -70,6 +73,20 @@ fn appeal_to_eirdu_convokes_for_generic_and_for_white() {
             && labels.contains(&"Tap Gray Ogre to pay {1} (convoke)".to_string()),
         "{labels:?}"
     );
+
+    // The Elves has two taps of one action type: the shared projection says
+    // which pays the cost itself.
+    let events = s.drain_events();
+    let obs = Observation::new(s.game(), &events);
+    let mut taps: Vec<_> = obs
+        .action_space
+        .actions
+        .iter()
+        .filter(|action| action.action_type == ActionType::TapForCost)
+        .map(|action| action.pays_directly)
+        .collect();
+    taps.sort();
+    assert_eq!(taps, [false, true, true, true, true]);
 
     // The Elves taps for {G} instead: it then cannot convoke as well.
     tap_for_mana(&mut s, elves);

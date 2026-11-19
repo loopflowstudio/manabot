@@ -782,6 +782,43 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
     assert len(capture_text_decision(env).actions) == 5
 
 
+def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps() -> None:
+    """Both taps share TAP_FOR_COST; the native flag names which pays directly."""
+    env = priority_root(
+        ("Appeal to Eirdu",),
+        ("Savannah Lions", "Gray Ogre", "Hill Giant", "Llanowar Elves"),
+    )
+    for chosen in ("Cast C1 (Appeal to Eirdu)", "Target P2 (Gray Ogre)", "Decline"):
+        decision = capture_text_decision(env)
+        action = next(a for a in decision.actions if a.description.startswith(chosen))
+        submit_response(env, decision, action.reference)
+    decision = capture_text_decision(env)
+    assert [action.description for action in decision.actions] == [
+        "Tap for mana P4 (Llanowar Elves). Native description: "
+        "Tap Llanowar Elves for {G}",
+        "Tap for cost P1 (Savannah Lions). Native description: "
+        "Tap Savannah Lions to pay {W} (convoke)",
+        "Tap for cost P2 (Gray Ogre). Native description: "
+        "Tap Gray Ogre to pay {1} (convoke)",
+        "Tap for cost P3 (Hill Giant). Native description: "
+        "Tap Hill Giant to pay {1} (convoke)",
+        "Tap for cost P4 (Llanowar Elves). Native description: "
+        "Tap Llanowar Elves to pay {1} (convoke)",
+    ]
+    root = env.state_digest()
+    for index, committed in (
+        (0, "Committed to this cost: {G} from Llanowar Elves."),
+        (4, "Committed to this cost: tapped Llanowar Elves to convoke."),
+    ):
+        fork = env.clone_env()
+        forked = capture_text_decision(fork)
+        submit_response(fork, forked, forked.actions[index].reference)
+        after = capture_text_decision(fork)
+        assert committed in after.text.splitlines()
+        assert not any("Llanowar Elves" in a.description for a in after.actions)
+    assert env.state_digest() == root
+
+
 def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_parity() -> (
     None
 ):

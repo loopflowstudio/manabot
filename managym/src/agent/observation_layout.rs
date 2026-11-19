@@ -375,6 +375,8 @@ columns! { action {
     19: ABILITY => ("ability", ValueLayout::SELECTOR),
     20: CONTINUATION => ("continuation", ValueLayout::SELECTOR),
     21: VALID => ("valid", ValueLayout::FLAG),
+    // Appended after `valid` so saved 22-column prefixes keep their meaning.
+    22: PAYS_DIRECTLY => ("pays_directly", ValueLayout::FLAG),
 } }
 
 columns! { name {
@@ -945,7 +947,7 @@ mod tests {
                     config.permanent_dim(),
                     if one_token { 51 } else { 38 },
                 ),
-                ("actions", action::WIDTH, 22),
+                ("actions", action::WIDTH, 23),
                 (
                     "events",
                     config.event_dim(),
@@ -985,15 +987,10 @@ mod tests {
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
-            for key in [
-                "agent_cards",
-                "agent_permanents",
-                "actions",
-                "facts",
-                "effects",
-            ] {
+            for key in ["agent_cards", "agent_permanents", "facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
+            assert_eq!(layout["actions"].columns[action::VALID].name, "valid");
         }
     }
 }

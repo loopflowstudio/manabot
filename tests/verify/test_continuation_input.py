@@ -11,7 +11,11 @@ import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import RELATION_ELIGIBILITY_INDEX, ObservationSpace
+from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
+    RELATION_ELIGIBILITY_INDEX,
+    ObservationSpace,
+)
 from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
@@ -332,8 +336,10 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
             rows[0, index + 2] = rows[0, index]
             rows[0, index + 2, 0] = 3
             rows[0, index + 2, 24:26] = index + 1
-    batch["actions"][0, 1, :-2] = batch["actions"][0, 0, :-2]
-    batch["actions"][0, :2, -2] = torch.tensor([1, 2])
+    batch["actions"][0, 1, :ACTION_CONTINUATION_INDEX] = batch["actions"][
+        0, 0, :ACTION_CONTINUATION_INDEX
+    ]
+    batch["actions"][0, :2, ACTION_CONTINUATION_INDEX] = torch.tensor([1, 2])
     batch["action_focus"].fill_(-1)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16))
     logits, _ = agent(device_input(agent, batch))
@@ -342,14 +348,14 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     reordered["relations"] = rows.flip(1)
     torch.testing.assert_close(agent(device_input(agent, reordered))[0], logits)
     swapped = {key: value.clone() for key, value in batch.items()}
-    swapped["actions"][0, :2, -2] = torch.tensor([2, 1])
+    swapped["actions"][0, :2, ACTION_CONTINUATION_INDEX] = torch.tensor([2, 1])
     torch.testing.assert_close(
         agent(device_input(agent, swapped))[0][0, :2], logits[0, :2].flip(0)
     )
-    batch["actions"][0, :2, -2] = 0
+    batch["actions"][0, :2, ACTION_CONTINUATION_INDEX] = 0
     ablated, _ = agent(device_input(agent, batch))
     torch.testing.assert_close(ablated[0, 0], ablated[0, 1])
-    batch["actions"][0, 0, -2] = 64
+    batch["actions"][0, 0, ACTION_CONTINUATION_INDEX] = 64
     with pytest.raises(ValueError, match="reference has no frame"):
         device_input(agent, batch)
 

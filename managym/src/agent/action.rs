@@ -125,7 +125,8 @@ pub enum Action {
         player: PlayerId,
         mode: usize,
     },
-    /// Tap `permanent` to pay {1} of a pending waterbend cost.
+    /// Tap `permanent` to pay {1} of a pending cost directly: convoke,
+    /// improvise or waterbend.
     WaterbendTap {
         player: PlayerId,
         permanent: PermanentId,

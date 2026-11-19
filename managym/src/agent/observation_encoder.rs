@@ -2099,6 +2099,7 @@ fn encode_actions(
             .continuation_index
             .map_or(0.0, |index| (index + 1) as f32);
         row[action::VALID] = 1.0;
+        row[action::PAYS_DIRECTLY] = f32::from(u8::from(action.pays_directly));
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;
@@ -2283,6 +2284,7 @@ mod tests {
                         name_group: None,
                         ability_index: None,
                         continuation_index: None,
+                        pays_directly: false,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
@@ -2295,6 +2297,7 @@ mod tests {
                         name_group: None,
                         ability_index: None,
                         continuation_index: None,
+                        pays_directly: false,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
@@ -2307,6 +2310,7 @@ mod tests {
                         name_group: None,
                         ability_index: None,
                         continuation_index: None,
+                        pays_directly: false,
                     },
                 ],
                 focus: Vec::new(),
@@ -2448,6 +2452,7 @@ mod tests {
                 name_group: None,
                 ability_index: None,
                 continuation_index: None,
+                pays_directly: false,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
@@ -2751,6 +2756,7 @@ mod tests {
                 name_group: None,
                 ability_index: None,
                 continuation_index: None,
+                pays_directly: false,
             })
             .collect();
         let config = ObservationEncoderConfig::default();

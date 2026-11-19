@@ -575,12 +575,9 @@ class _Renderer:
         return "unavailable or expired object"
 
     def action_verb(self, action: managym.Action) -> str:
-        if (
-            action.action_type == managym.ActionEnum.TAP_FOR_COST
-            and self.state.action_space.action_space_type
-            in (managym.ActionSpaceEnum.PRIORITY, managym.ActionSpaceEnum.PAY_OR_NOT)
-        ):
-            return "tap_for_mana"
+        # One action type covers both taps; the native flag says which.
+        if action.action_type == managym.ActionEnum.TAP_FOR_COST:
+            return "waterbend_tap" if action.pays_directly else "tap_for_mana"
         return _enum(_VERBS, int(action.action_type))
 
     def action(self, action: managym.Action) -> str:

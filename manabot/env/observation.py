@@ -50,12 +50,17 @@ from managym.enums import (  # noqa: F401
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
 
-# Native action tensor: family, declaration, mode/ability selectors, validity.
+# Native action tensor: family, declaration, mode/ability selectors,
+# continuation, validity, then appended columns.
 ACTION_TYPE_DIM = len(ActionEnum)
 ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
 ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
+ACTION_VALID_INDEX = ACTION_CONTINUATION_INDEX + 1
+# Appended after validity so saved prefixes keep their columns: the tap pays
+# part of the cost itself (convoke, improvise, waterbend), not with mana.
+ACTION_PAYS_DIRECTLY_INDEX = ACTION_VALID_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 # Name candidate columns: name row + 1, definition + 1, then the first and
 # last name rows (+ 1) of a naming group choice.
@@ -347,9 +352,8 @@ class ObservationEncoder:
             raise ValueError("decision memory requires policy input v11")
 
         # Preserve attack/decline independently of action family and focus.
-        self.action_dim = (
-            self.num_actions + 5
-        )  # declaration, mode, ability, continuation join, validity
+        # declaration, mode, ability, continuation join, validity, direct payment
+        self.action_dim = ACTION_PAYS_DIRECTLY_INDEX + 1
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -1281,7 +1285,8 @@ class ObservationEncoder:
         )
         candidates = np.zeros((self.max_actions, self.name_dim), dtype=np.float32)
         for idx, action in enumerate(actions):
-            arr[idx, -1] = 1.0
+            arr[idx, ACTION_VALID_INDEX] = 1.0
+            arr[idx, ACTION_PAYS_DIRECTLY_INDEX] = float(action.pays_directly)
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:
                 arr[idx, action_type] = 1.0
@@ -1336,7 +1341,7 @@ class ObservationEncoder:
         return {
             "actions": arr,
             "action_focus": action_focus,
-            "actions_valid": arr[..., -1].astype(np.float32),
+            "actions_valid": arr[..., ACTION_VALID_INDEX].astype(np.float32),
             "name_candidates": candidates,
         }
 

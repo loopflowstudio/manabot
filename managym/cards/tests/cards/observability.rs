@@ -2984,6 +2984,7 @@ impl Buffer {
             Buffer::Player | Buffer::PlayerTurnState | Buffer::CardTurnState => None,
             Buffer::Relation => Some(relation::VALID),
             Buffer::Facts => Some(fact::VALID),
+            Buffer::Action => Some(action::VALID),
             _ => Some(self.width() - 1),
         }
     }
@@ -3425,6 +3426,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         name_group => [Rows("name_candidates columns 2-3 (v9)")],
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
+        pays_directly => [column(Action, action::PAYS_DIRECTLY)],
     }));
     fields.extend(encoding!(EventData {
         event_type => [Rows("events")],

@@ -18,6 +18,7 @@ import torch
 
 from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
+    ACTION_VALID_INDEX,
     PERMANENT_DEFINITION_INDEX,
     STACK_DEFINITION_INDEX,
 )
@@ -359,7 +360,12 @@ def action_inputs(
         rows.append(ObjectInput("stack", "shared", tuple(stack_row)))
     result: list[ActionInput] = []
     for index in range(count):
-        action: list[float] = obs["actions"][0, index, :-1].tolist()
+        # Every action column except validity, which is 1 for every offer.
+        row = obs["actions"][0, index]
+        action: list[float] = [
+            *row[:ACTION_VALID_INDEX].tolist(),
+            *row[ACTION_VALID_INDEX + 1 :].tolist(),
+        ]
         if mutation == "without_declaration":
             action[ACTION_DECLARED_INDEX] = 0.0
         focus = tuple(

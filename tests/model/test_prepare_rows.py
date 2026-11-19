@@ -9,6 +9,8 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
+    ACTION_VALID_INDEX,
     FACT_CONTINUATION_PROGRAM,
     FACT_DETAIL_INDEX,
     FACT_KIND_INDEX,
@@ -133,7 +135,13 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     np.testing.assert_array_equal(prepared.known_counts, trimmed["known_hand"][..., 1])
     np.testing.assert_array_equal(prepared.legal, obs["actions_valid"].astype(bool))
     b, a = np.nonzero(prepared.legal)
-    np.testing.assert_array_equal(prepared.action_features, obs["actions"][b, a, :-2])
+    # Every action column but the continuation join and validity.
+    np.testing.assert_array_equal(
+        prepared.action_features,
+        np.delete(
+            obs["actions"][b, a], [ACTION_CONTINUATION_INDEX, ACTION_VALID_INDEX], -1
+        ),
+    )
     objects = prepared.validity.shape[1]
     focus = trimmed["action_focus"][b, a]
     np.testing.assert_array_equal(

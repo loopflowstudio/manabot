@@ -2696,6 +2696,9 @@ pub struct PyAction {
     pub ability_index: Option<usize>,
     #[pyo3(get)]
     pub continuation_index: Option<usize>,
+    /// The tap pays part of the cost itself rather than making mana.
+    #[pyo3(get)]
+    pub pays_directly: bool,
 }
 
 #[cfg(feature = "python")]
@@ -2809,6 +2812,7 @@ impl From<ActionOption> for PyAction {
             name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
+            pays_directly: value.pays_directly,
         }
     }
 }
@@ -2827,6 +2831,7 @@ impl From<PyAction> for ActionOption {
             name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
+            pays_directly: value.pays_directly,
         }
     }
 }

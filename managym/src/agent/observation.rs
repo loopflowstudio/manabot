@@ -900,6 +900,10 @@ pub struct ActionOption {
     pub ability_index: Option<usize>,
     /// Decision-local continuation frame; occurrence IDs never enter policy features.
     pub continuation_index: Option<usize>,
+    /// The tap pays part of the cost itself (convoke, improvise, waterbend)
+    /// rather than making mana; both share `ActionType::TapForCost`.
+    #[serde(default)]
+    pub pays_directly: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -1034,6 +1038,7 @@ impl Observation {
                                 description: game.action_description(action),
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
+                                pays_directly: matches!(action, Action::WaterbendTap { .. }),
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
                                     .map(|id| id.0 as i32)
@@ -2505,6 +2510,7 @@ mod characteristics_tests {
             name_group: None,
             ability_index: None,
             continuation_index: None,
+            pays_directly: false,
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();

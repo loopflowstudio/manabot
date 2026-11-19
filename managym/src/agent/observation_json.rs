@@ -130,6 +130,9 @@ impl Serialize for ActionJson<'_> {
         if let Some(name_index) = &value.name_index {
             map.serialize_entry("name_index", name_index)?;
         }
+        if value.pays_directly {
+            map.serialize_entry("pays_directly", &true)?;
+        }
         map.serialize_entry("type", &(value.action_type as i32))?;
         map.end()
     }

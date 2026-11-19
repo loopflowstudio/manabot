@@ -968,6 +968,9 @@ class Action:
     name_group: tuple[int, int] | None
     ability_index: int | None
     continuation_index: int | None
+    # The tap pays part of the cost itself (convoke, improvise, waterbend)
+    # rather than making mana; both are TAP_FOR_COST.
+    pays_directly: bool
 
 class ActionSpace:
     action_space_type: ActionSpaceEnum
