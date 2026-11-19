@@ -866,12 +866,7 @@ impl Game {
             ),
             CostComponent::Discard => (
                 ActionSpaceKind::Discard,
-                select(
-                    self.state
-                        .zone_cards(ZoneType::Hand, player)
-                        .map(|card| self.state.object_of(card))
-                        .collect(),
-                ),
+                select(self.discard_candidates(player, payment.operation.spell())),
                 Vec::new(),
             ),
             CostComponent::ExileFromHand => (

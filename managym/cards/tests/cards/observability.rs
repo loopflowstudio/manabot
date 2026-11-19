@@ -1651,6 +1651,13 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "blb",
             "feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black",
         ),
+        AdditionalCost::Discard => witnessed(
+            "AdditionalCost::Discard",
+            Seen::Actions("the cast is offered only with another card in hand; the discard is an action and a receipt reference"),
+            "Thrill of Possibility",
+            "eld",
+            "thrill_of_possibility_discards_a_chosen_card_as_it_is_cast",
+        ),
         AdditionalCost::AlternativeMana { .. } => witnessed(
             "AdditionalCost::AlternativeMana",
             Seen::Actions("the alternative is a cast choice only while its condition holds; the receipt holds the mana paid"),
@@ -1812,6 +1819,7 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
             cost: ManaCost::parse("{B}"),
             condition: Condition::Always,
         },
+        AdditionalCost::Discard,
     ]
 }
 

@@ -5,8 +5,8 @@ use managym_state::{
         TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, PrintedCharacteristics, StaticAbility,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -21,6 +21,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fabled_passage(),
         return_of_the_wildspeaker(),
         the_great_henge(),
+        thrill_of_possibility(),
         wildborn_preserver(),
     ]
 }
@@ -206,6 +207,26 @@ fn wildborn_preserver() -> CardDefinition {
                         )],
                     }],
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn thrill_of_possibility() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, discard a card.\nDraw two cards.";
+    CardDefinition {
+        key: "eld.thrill_of_possibility",
+        scryfall_id: "c9021f85-7ab4-4a78-a398-1611fe09cd14",
+        printed: PrintedCharacteristics {
+            name: "Thrill of Possibility".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            additional_costs: vec![AdditionalCost::Discard],
+            spell_effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(2),
             }],
             text_box: text_box.into(),
             ..Default::default()

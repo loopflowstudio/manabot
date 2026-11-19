@@ -6661,5 +6661,31 @@
     "colors": [
       "B"
     ]
+  },
+  "Thrill of Possibility": {
+    "name": "Thrill of Possibility",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Seize the Spoils": {
+    "name": "Seize the Spoils",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "R"
+    ]
   }
 }

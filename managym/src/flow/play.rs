@@ -468,6 +468,9 @@ impl Game {
             return false;
         }
         let card = &self.state[object];
+        if card.discard_cost() && self.discard_candidates(player, Some(object)).is_empty() {
+            return false;
+        }
         if cast.kicked && card.bargain() {
             return self
                 .sacrifice_candidates(player, &bargain_cost().predicate)
@@ -1741,6 +1744,20 @@ impl Game {
             .collect()
     }
 
+    /// The cards `player` may discard to pay a "discard a card" cost: the
+    /// hand, less the spell being cast from it (`casting`).
+    pub(crate) fn discard_candidates(
+        &self,
+        player: PlayerId,
+        casting: Option<ObjectId>,
+    ) -> Vec<ObjectId> {
+        self.state
+            .zone_cards(ZoneType::Hand, player)
+            .map(|card| self.state.object_of(card))
+            .filter(|object| Some(*object) != casting)
+            .collect()
+    }
+
     /// Whether `player` could forage for `spell` beside paying `cost` in mana.
     fn can_forage(&self, player: PlayerId, spell: ObjectId, cost: &ManaCost) -> bool {
         self.graveyard_payers(player, spell).len() >= usize::from(FORAGE_CARDS)
@@ -1782,6 +1799,9 @@ impl Game {
                         or_mana: or_mana.clone(),
                         exiled: 0,
                     });
+                }
+                if card.discard_cost() {
+                    owed.push(CostComponent::Discard);
                 }
                 let cost = self
                     .effective_spell_cost(player, *object, *cast, Some(targets))
@@ -2011,7 +2031,10 @@ impl Game {
                 }
             }
             CostComponent::Discard => {
-                if !self.state.zones.contains(object, ZoneType::Hand, player) {
+                if !self
+                    .discard_candidates(player, payment.operation.spell())
+                    .contains(&object)
+                {
                     return Err(AgentError("discard cost must be a card in hand".into()));
                 }
                 self.pending_choice = None;

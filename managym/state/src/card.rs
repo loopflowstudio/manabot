@@ -1038,6 +1038,9 @@ pub enum AdditionalCost {
         cost: ManaCost,
         condition: Condition,
     },
+    /// "As an additional cost to cast this spell, discard a card": another
+    /// card from its caster's hand, chosen as the cost is paid.
+    Discard,
 }
 
 /// An object as printed (CR 108.4, 111.3): what cards and tokens share,
@@ -1281,8 +1284,14 @@ impl PrintedCharacteristics {
             | AdditionalCost::Bargain
             | AdditionalCost::ForageOr(_)
             | AdditionalCost::AlternativeMana { .. }
+            | AdditionalCost::Discard
             | AdditionalCost::ExileFromHandAlternative { .. } => None,
         })
+    }
+
+    /// Whether casting this spell discards a card as an additional cost.
+    pub fn discard_cost(&self) -> bool {
+        self.additional_costs.contains(&AdditionalCost::Discard)
     }
 
     /// Whether the spell has bargain.

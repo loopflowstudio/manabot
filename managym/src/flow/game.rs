@@ -279,6 +279,16 @@ pub enum Operation {
     },
 }
 
+impl Operation {
+    /// The spell being cast, if this is a cast.
+    pub fn spell(&self) -> Option<ObjectId> {
+        match self {
+            Self::Spell { object, .. } => Some(*object),
+            Self::Activation { .. } => None,
+        }
+    }
+}
+
 /// One part of a total cost. The payer chooses how to pay each component up
 /// to and including `Mana`; the ones after it (life and the source's own {T},
 /// sacrifice and discard) have no choice and are paid as the payment

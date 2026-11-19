@@ -426,8 +426,9 @@ keeps the cost payable. `AdditionalCost::{Convoke, Improvise, Delve}` give a
 spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
 Offers and affordability ask the payment model with the help included
 (`payable_with_help`, `while_paying`), so a spell castable only with help is
-offered and a tap that would strand the cost is not; the automatic payer takes
-help only when mana alone cannot pay. A cost with waterbend and convoke or
+offered and a tap that would strand the cost is not; the automatic payer never
+takes help, so when mana alone cannot pay the taps and exiles are the player's
+picks. A cost with waterbend and convoke or
 improvise offers only the keyword's taps.
 Costs chosen while casting use the kicker choice: bargain
 (`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
@@ -435,7 +436,10 @@ marks the spell kicked, and a conditional alternative
 (`AdditionalCost::AlternativeMana`) replaces the mana cost while its condition
 holds. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
 whose step offers a Food to sacrifice, the graveyard cards to exile (the first
-commits to three) and the mana instead. Crew and saddle are the same
+commits to three) and the mana instead. "Discard a card" as a spell's
+additional cost (`AdditionalCost::Discard`) is the `Discard` component an
+ability's discard cost uses, offering every card in hand but the spell being
+cast. Crew and saddle are the same
 `TapPower` component, toward `Crew` or `Saddle`; a saddled Mount carries a
 `Modification::Saddled` record until end of turn. Station
 (`ActivatedAbilityDefinition.station`) is a one-creature `Tap` component
