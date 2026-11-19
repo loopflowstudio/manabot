@@ -11,7 +11,7 @@ Run from the repository root after rebuilding the extension:
     uv run --extra dev python scripts/refresh_academy_fixtures.py
 
 Refreshes `managym/academy/fixtures/learn-demo-w17-token-cards.json`,
-`{precision,precision-mana}-demo-w17-manual-payment.json`,
+`{precision,precision-mana,convoke}-demo-w17-manual-payment.json`,
 `choice-navigation-w17-smart-payment.json` and `trigger-order-w17-token-cards.json`. The conformance and
 parity receipts have their own writers (see `conformance/README.md`).
 """
@@ -33,6 +33,7 @@ DEMOS = {
     "learn": "learn-demo-w17-token-cards.json",
     "precision": "precision-demo-w17-manual-payment.json",
     "precision-mana": "precision-mana-demo-w17-manual-payment.json",
+    "convoke": "convoke-demo-w17-manual-payment.json",
 }
 
 

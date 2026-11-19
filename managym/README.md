@@ -787,7 +787,11 @@ or phase, as any floating mana does. There is no undo.
   actions dropped.
 - **Manual payments.** During cast, activation and resolution payments,
   extra fixed-source taps follow the ordinary payment choices. A tap must
-  leave reserved resources available and the committed cost payable.
+  leave reserved resources available and the committed cost payable. Mana
+  made while a cast or activation is being paid pays toward it at once: the
+  cost owed shrinks and the receipt names the unit's source, as a convoke tap
+  does. Mana that was floating before, a source's surplus and mana that can
+  pay nothing still owed stay in the pool for the spend choice.
 - **Automatic payments.** Once the player accepts a cost, the engine selects
   the sources, their outputs, any waterbend contributions and the units to
   spend. The player still chooses X, optional costs and spell targets.

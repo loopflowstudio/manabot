@@ -113,7 +113,7 @@ describe('where decisions land', () => {
     const view = boardView(navigation.PAY_OR_NOT.frame, PLAYERS);
     const lands = view.you.support.flatMap(pile => pile.items).filter(item => item.offers.length);
     expect(lands.flatMap(item => item.offers.map(placed => placed.offer.label)))
-      .toEqual(expect.arrayContaining(['Tap Mountain to help pay', 'Tap Island to help pay']));
+      .toEqual(expect.arrayContaining(['Tap Mountain for {R}', 'Tap Island for {U}']));
     expect(view.primary?.offer.label).toBe('Pay the cost');
   });
 

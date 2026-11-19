@@ -33,6 +33,7 @@ def load_play_demo(name: str) -> PlayDemo:
         "learn": "learn-demo-w17-token-cards.json",
         "precision": "precision-demo-w17-manual-payment.json",
         "precision-mana": "precision-mana-demo-w17-manual-payment.json",
+        "convoke": "convoke-demo-w17-manual-payment.json",
     }
     if name not in filenames:
         raise ValueError(f"Unknown play demo: {name}")
