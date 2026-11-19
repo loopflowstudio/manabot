@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 import managym
 from managym.decision import Command as SemanticCommand, DecisionFrame
 from managym.experience import Command
-from managym.experience_projection import decision_surface_view
+from managym.experience_projection import decision_surface_view, definition_names
 
 from .replay_index import (
     CanonicalReplayV1,
@@ -114,6 +114,11 @@ class StudyBranch:
         """Native public event-address map, captured at the transition boundary."""
         env, _ = self._require_open()
         return json.loads(env.presentation_subjects_json())
+
+    def definition_names(self) -> dict[int, str]:
+        """The branch game's card definitions by id (`definition_names`)."""
+        env, _ = self._require_open()
+        return definition_names(env)
 
     def current_projection(self) -> dict[str, Any]:
         """Project the isolated root with the same native explanation as play."""

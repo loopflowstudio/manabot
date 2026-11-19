@@ -1,6 +1,7 @@
 """Authority-side projection of committed engine facts into presentation events.
 
-The projector follows committed spells and combat-to-turn sequences. Meaning
+The projector follows committed spells, land plays, discards, reveals and
+combat-to-turn sequences. Meaning
 comes from server-authored interaction offers confirmed by
 ``recent_events``; observation snapshots are viewer-safe label catalogs only
 and are never diffed to invent game facts.
@@ -8,11 +9,12 @@ and are never diffed to invent game facts.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import managym
-from managym.enums import EventTypeEnum
+from managym.enums import EventTypeEnum, ZoneEnum
 from managym.experience import InteractionOffer, PresentationEvent
 
 
@@ -52,12 +54,14 @@ class PresentationProjector:
         self._facts: list[_PresentationFact] = []
         self._spell_stacks: dict[int, int] = {}
         self._pending_spell: _PendingSpell | None = None
+        self._pending_land = False
 
     def reset(self) -> None:
         self._next_seq = 0
         self._facts = []
         self._spell_stacks = {}
         self._pending_spell = None
+        self._pending_land = False
 
     @property
     def next_seq(self) -> int:
@@ -71,6 +75,7 @@ class PresentationProjector:
         the post-step stack cannot supply their identities. Historical offers
         without typed subjects provide no new presentation facts.
         """
+        self._pending_land = offer.action_type == "PRIORITY_PLAY_LAND"
         if offer.action_type == "PRIORITY_CAST_SPELL":
             source = offer.source
             self._pending_spell = (
@@ -95,8 +100,13 @@ class PresentationProjector:
         observation: managym.Observation,
         *,
         event_subjects: dict[str, dict[str, Any]],
+        definition_names: Mapping[int, str],
     ) -> None:
-        """Consume the committed semantic events produced by one engine step."""
+        """Consume the committed semantic events produced by one engine step.
+
+        ``definition_names`` names the game's card definitions by id
+        (``definition_names(env)``); a reveal reports only a definition.
+        """
 
         events = list(observation.recent_events)
         cast_events = [event for event in events if _event_type(event) == "SPELL_CAST"]
@@ -111,6 +121,8 @@ class PresentationProjector:
         ]
         for event in resolved_events:
             self._observe_resolution(event, events, event_subjects)
+        self._observe_moves(events, event_subjects)
+        self._observe_reveals(events, definition_names)
         self._observe_combat_death_and_turn(events)
 
     def drain(
@@ -222,6 +234,83 @@ class PresentationProjector:
                         "target": target,
                         "amount": int(damage.amount),
                     },
+                )
+            )
+
+    def _observe_moves(
+        self,
+        events: list[managym.EventData],
+        event_subjects: dict[str, dict[str, Any]],
+    ) -> None:
+        """Land plays and discards, named by the public objects they became.
+
+        A land played is the committed play-land offer confirmed by its move
+        from hand to the battlefield; any other arrival from hand (an effect
+        putting a land onto the battlefield) is not a land play. A card moved
+        from hand to its owner's graveyard is a discard (CR 701.9a); one
+        step's discards by one player form one event. ``event_subjects`` is
+        read after the step, where ``object:<slot>`` names each battlefield
+        and graveyard appearance.
+        """
+        played = self._pending_land
+        self._pending_land = False
+        discarded: dict[int, list[dict[str, int]]] = {}
+        for event in events:
+            if _event_type(event) != "CARD_MOVED" or int(event.source_id) < 0:
+                continue
+            subject = event_subjects.get(f"object:{int(event.source_id)}")
+            if subject is None or subject.get("kind") != "object":
+                continue
+            moved = (int(event.from_zone), int(event.to_zone))
+            if played and moved == (int(ZoneEnum.HAND), int(ZoneEnum.BATTLEFIELD)):
+                played = False
+                self._facts.append(
+                    _PresentationFact(
+                        importance="normal",
+                        suggested_ms=400,
+                        sound=None,
+                        kind={
+                            "kind": "land_played",
+                            "object": subject["id"],
+                            "player": int(event.controller_id),
+                        },
+                    )
+                )
+            elif moved == (int(ZoneEnum.HAND), int(ZoneEnum.GRAVEYARD)):
+                discarded.setdefault(int(event.controller_id), []).append(subject["id"])
+        for player, objects in discarded.items():
+            self._facts.append(
+                _PresentationFact(
+                    importance="normal",
+                    suggested_ms=450,
+                    sound=None,
+                    kind={"kind": "discarded", "objects": objects, "player": player},
+                )
+            )
+
+    def _observe_reveals(
+        self, events: list[managym.EventData], definition_names: Mapping[int, str]
+    ) -> None:
+        """Cards revealed to every player, one event per player and step.
+
+        A reveal (a hand revealed, a card revealed as it is put into a hand, a
+        Lesson revealed from outside the game) names a definition, never an
+        object, so the event carries the names themselves.
+        """
+        revealed: dict[int, list[str]] = {}
+        for event in events:
+            if _event_type(event) != "CARD_REVEALED":
+                continue
+            name = definition_names.get(int(event.source_id))
+            if name is not None:
+                revealed.setdefault(int(event.controller_id), []).append(name)
+        for player, cards in revealed.items():
+            self._facts.append(
+                _PresentationFact(
+                    importance="normal",
+                    suggested_ms=450,
+                    sound=None,
+                    kind={"kind": "revealed", "cards": cards, "player": player},
                 )
             )
 

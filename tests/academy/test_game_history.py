@@ -68,6 +68,7 @@ def history(tmp_path, monkeypatch):
             5,
             {"content_digest": "world"},
             retained(identifier, ended=ended),
+            trace_json=json.dumps(retained(identifier, ended=ended)),
             finished=ended,
             players=players,
             origin="automated_validation",

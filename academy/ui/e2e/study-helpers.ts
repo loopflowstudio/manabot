@@ -14,7 +14,7 @@ export function collectStudyConsoleErrors(page: Page): string[] {
 }
 
 export async function createCompletedStudyTrace(page: Page): Promise<string> {
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -114,4 +114,10 @@ export async function openPriorityStudyDecision(page: Page, traceId: string) {
   await expect(page.getByTestId('study-panel')).toBeVisible();
   await expect(page.getByTestId('study-reveal')).toHaveCount(0);
   return decision;
+}
+
+/** The objects the board draws, by id and name: the board a Study attempt must return to. */
+export async function boardObjects(page: Page): Promise<string> {
+  return page.getByTestId('game-board').evaluate(board => [...board.querySelectorAll<HTMLElement>('[data-object-id]')]
+    .map(card => `${card.dataset.objectId}:${card.dataset.cardName ?? ''}`).sort().join('|'));
 }

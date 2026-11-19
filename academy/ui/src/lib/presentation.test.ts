@@ -29,11 +29,11 @@ describe('Lightning Bolt presentation fixture', () => {
     ).toBe(true);
   });
 
-  it('projects table copy from the canonical events', () => {
-    const tableBeats = LIGHTNING_BOLT_PRESENTATION.events.map((event) =>
+  it('projects board copy from the canonical events', () => {
+    const boardBeats = LIGHTNING_BOLT_PRESENTATION.events.map((event) =>
       presentationBeat(event, LIGHTNING_BOLT_PRESENTATION.labels),
     );
-    expect(tableBeats.map((beat) => beat.detail)).toEqual([
+    expect(boardBeats.map((beat) => beat.detail)).toEqual([
       'Hero casts Lightning Bolt.',
       'Lightning Bolt targets Ally token.',
       'Lightning Bolt resolves.',
@@ -81,7 +81,7 @@ describe('Lightning Bolt presentation fixture', () => {
 });
 
 describe('curated combat-to-turn presentation fixture', () => {
-  it('keeps table and replay on the same ordered semantic facts', () => {
+  it('keeps the board and replay on the same ordered semantic facts', () => {
     const live = createPresentationPlayer();
     const replay = createPresentationPlayer();
     live.enqueue(COMBAT_TO_TURN_PRESENTATION.events, COMBAT_TO_TURN_PRESENTATION.labels);

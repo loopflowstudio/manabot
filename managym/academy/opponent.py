@@ -72,6 +72,25 @@ class Opponent:
         }
 
 
+def opponent_kind(policy: dict[str, Any]) -> str:
+    """How a recorded policy (`PolicyDescriptor.record()`) decides, for display:
+    "search" over another policy, "scripted" with no artifact, otherwise
+    "checkpoint" and the world it was trained in when its details name one."""
+    if policy.get("base_policy"):
+        return "search"
+    if not policy.get("artifacts"):
+        return "scripted"
+    world = next(
+        (
+            detail.get("value")
+            for detail in policy.get("details") or []
+            if detail.get("label") == "World" and detail.get("value") != "not recorded"
+        ),
+        None,
+    )
+    return f"checkpoint {world}" if world else "checkpoint"
+
+
 def opponent_catalog() -> dict[str, Any]:
     entries = []
     error = None
@@ -87,6 +106,7 @@ def opponent_catalog() -> dict[str, Any]:
                 {
                     "sha256": descriptor.id,
                     "name": Opponent(descriptor).name,
+                    "kind": opponent_kind(record),
                     "producer": descriptor.provider,
                     "group": descriptor.group or descriptor.provider,
                     "details": record["details"],

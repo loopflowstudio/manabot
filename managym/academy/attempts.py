@@ -297,6 +297,7 @@ class AttemptStore:
         world: dict[str, Any],
         trace: dict[str, Any],
         *,
+        trace_json: str,
         finished: bool,
         players: list[RecordedPlayer],
         origin: str | None = None,
@@ -314,9 +315,9 @@ class AttemptStore:
         origin = origin or os.getenv("ACADEMY_PLAY_RECORD_ORIGIN", "unknown")
         if origin not in ORIGINS:
             raise ValueError("Unknown game record origin.")
-        # Serialize the growing trace before taking the writer lock.
+        # `trace_json` encodes `trace`; a live game encodes it incrementally
+        # (`Trace.to_json`), before taking the writer lock.
         world_json = json.dumps(world)
-        trace_json = json.dumps(trace)
         with self.connect() as db:
             exists = db.execute(
                 "SELECT 1 FROM attempts WHERE id=?", (attempt,)

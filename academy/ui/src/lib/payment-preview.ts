@@ -1,7 +1,6 @@
 /** A single read-only query, cached only within the exact live decision. */
 import type { ExperienceFrame, PlayerState, SubjectRef } from './types';
 
-export const PAYMENT_PREVIEW_CONTEXT = Symbol('payment-preview');
 export interface PreviewPool {
   amounts: number[];
   classes: NonNullable<PlayerState['pooled_mana_classes']>;
