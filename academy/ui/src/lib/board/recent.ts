@@ -120,9 +120,14 @@ export function nameBook(frames: readonly ExperienceFrame[], moves: readonly Gam
       for (const permanent of player.battlefield) if (permanent.name) ids.set(permanent.id, permanent.name);
     }
   }
+  // A move narrates each spell as "Cast <name>[, targeting <targets>]",
+  // phrases joined by "; " (`narrate_move` in managym/academy/recording.py).
+  // The targets are presentation events of their own.
   const cast = (actor: GameLogEntry['actor']): string[] => moves
-    .filter(move => move.actor === actor && move.text.startsWith('Cast '))
-    .map(move => move.text.slice('Cast '.length));
+    .filter(move => move.actor === actor)
+    .flatMap(move => move.text.split('; '))
+    .filter(phrase => phrase.startsWith('Cast '))
+    .map(phrase => phrase.slice('Cast '.length).split(', targeting ')[0]);
   return { ids, casts: { you: cast('hero'), opponent: cast('villain') } };
 }
 
