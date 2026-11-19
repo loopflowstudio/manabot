@@ -56,8 +56,10 @@ pending choice with the same legal offers and permitted information.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
-- **`opponent.py`**: the server-scoped registered policy catalog
-  (`GET /api/opponents`), chosen by exact Policy ID and verified before play
+- **`opponent.py`**: the one catalog of players (`GET /api/opponents`):
+  built-in bots and every provider's policies, each with an `id`, and the one
+  function that resolves an id for the browser, the CLI and Python. A policy
+  is verified by its exact Policy ID before play
 
 Academy never imports manabot or Torch, eagerly or lazily. Direct Python factories
 and installed `managym.bots` providers supply playing policies, including manabot's
@@ -82,12 +84,14 @@ uv run --no-project managym academy
 [Running Academy](../../docs/academy.md#running-academy) is the guide: options,
 the URL, stopping, playing, replays, trained bots and troubleshooting.
 `managym academy play` and `managym academy replay` open a chosen game or a
-selected replay directly, and `managym.academy.launch` does the same from
-Python ([Launch from Python](../../docs/academy.md#launch-from-python)). The
+selected replay directly, `managym academy opponents` lists who can play, and
+`managym.academy.launch` does the same from Python ([Launch from Python](../../docs/academy.md#launch-from-python)). The
 commands below are for working on Academy from a checkout.
 
 ```bash
-./scripts/play          # certified one-command path from fresh checkout
+./scripts/play          # certified one-command path from fresh checkout; opens home
+./scripts/play play --opponent heuristic --deck elemental_ur --opponent-deck elemental_gw
+./scripts/play opponents     # the opponent ladder, with each id
 ./scripts/play --demo learn  # checked prefix into Learn, then ordinary play
 ./scripts/play --demo precision  # Treasure-funded Deadly Precision
 ./scripts/play --demo precision-mana  # the four-mana additional-cost alternative
@@ -184,7 +188,7 @@ uv run uvicorn managym.academy.server:app --port 8000
 The [local challenger workflow](../../docs/academy.md#playing-a-trained-challenger)
 covers the built same-origin server, feedback, and read-only SQL.
 
-Play and both Watch seats use the same registered policy picker and
+Play's opponent ladder and both Watch seats list the same catalog and use the
 `managym.policy` registry/session lifecycle
 ([provider and Python contract](../../docs/academy.md#play-and-watch-a-trained-checkpoint)).
 Direct factories need no manifest. Optional `PolicySpec` values name installed
@@ -311,8 +315,8 @@ in the additive `elemental-world-v2` pack, including mirrors. Browse the main
 lists and Lesson pools, click card artwork for a printed preview, then
 use the assignment buttons to choose each seat. During play, **Choose decks**
 prepares the next matchup; only **Start game** replaces the current attempt.
-The [local MTG-183 launcher](../../docs/academy.md#playing-a-trained-challenger)
-pins the latest published checkpoint for CPU play.
+[Playing a trained challenger](../../docs/academy.md#playing-a-trained-challenger)
+starts a game against a checkpoint from the checkout.
 The decks' 40-card main lists, Lesson pools, local treatments and retained card-identity
 provenance are in the schema-2 roster manifest at
 `managym/academy/packs/elemental-world/v2/manifest.json`. Native compiled setups

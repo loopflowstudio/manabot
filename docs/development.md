@@ -34,11 +34,13 @@ also use `uv run --extra play maturin develop --manifest-path managym/Cargo.toml
 changing Rust, rebuild as described in AGENTS.md and replace the `.so`
 atomically.
 
-- `./scripts/play` installs the locked play runtime and starts backend and
-  frontend; it is the only clean-machine-certified play command.
-  `uv run scripts/play.py` works in an already prepared environment but cannot
-  diagnose a missing `uv`. Development flags: `--port`, `--frontend-port`,
-  `--no-frontend`, `--demo learn`.
+- `./scripts/play` installs the locked play runtime with manabot and CPU
+  Torch, and starts the frontend and `managym academy`; it is the only
+  clean-machine-certified play command. Arguments after its own flags
+  (`--frontend-port`, `--no-frontend`, `--demo learn`, `--ready-timeout`) go
+  to `managym academy`: `./scripts/play play --opponent heuristic`,
+  `./scripts/play --port 8001`. `uv run scripts/play.py` works in an already
+  prepared environment but cannot diagnose a missing `uv`.
 - `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
 The `manabot` public dependency requirements are `etude-sdk>=0.4.1,<0.5`

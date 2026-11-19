@@ -10,7 +10,8 @@ the wire contract is
 [experience protocol v1](../protocol/experience-protocol-v1.md), with state
 digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
-- [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
+- [Running Academy](#running-academy): install, launch, the opponent ladder, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
+- [Play a game](#play-a-game): home, the play card, decks you keep
 - [Shared decision surface](#shared-decision-surface)
 - [Playing on the board](#playing-on-the-board)
 - [Previewing payments](#previewing-payments)
@@ -27,24 +28,33 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
 ## One game, from setup to its recorded decisions
 
-**New game** and **Games** are the main destinations. **Current game** returns
-this tab to its last live or watched game. Existing launch, replay and Watch
-links continue to open their intended games.
+The top bar holds **Play** and **Games**. **Play** is home: one card that names
+a matchup and one **Play** button that starts it. **Games** lists every
+recorded game. Existing launch, replay and Watch links continue to open their
+intended games.
 
-**New game** opens setup for a separate session, starting from retained choices.
-Edits here do not save into your current session; **Cancel** returns without
-committing them. Setup shows two native seats. For each seat, choose a **Controller** (**You**
-or **Bot**) and a **Deck**. A bot seat also has a player picker: choose a
-built-in bot or a **Registered policy**, with optional **Search** for a compatible
-policy. Built-in **Search 16/64/256** runs that many random playouts per
-legal action without a policy; **Random** chooses uniformly among legal actions;
-**Passive** passes when possible and otherwise takes the first legal action.
-One controller can be you; choosing bots in both seats starts a
-watched game through the same setup. Seat 1 plays first; seat 2 draws first.
-Policies are chosen directly by name and execution identity. Their provider,
-artifacts and runner remain available in details. **Browse decks and cards**
-opens the full deck browser; imported sources and disclosure use the same
-admission checks for played and watched games.
+A matchup is four choices, and each is the same value in the browser, on the
+command line and in Python:
+
+| Choice | What it is |
+|---|---|
+| **Opponent** | Who makes the other side's decisions: one row of the opponent ladder, named by one id (`heuristic`, `search-64`, a checkpoint's alias) |
+| **Decks** | One for each side: a bundled deck or a list you kept |
+| **Play / draw** | Who takes the first turn |
+| **Decklists** | Open or closed: whether each player knows the other's list |
+
+Home remembers the last matchup this browser started, so a returning visit is
+one click from its first decision. A first visit is too: the card opens on UR
+Lessons against Search 64 with GW Allies. When this browser has a live or
+interrupted game, a **Continue** line above the card returns to it.
+[Play a game](#play-a-game) covers the card,
+[The opponent ladder](#the-opponent-ladder) its rows, and
+[Start in a chosen game](#start-in-a-chosen-game) the same matchup from a
+terminal.
+
+Your side is a player too. Under **More**, **You** can be replaced by a bot;
+the button then reads **Watch** and the same matchup starts as a watched game.
+The side that plays first is native seat 1; the other draws first.
 
 Hover or focus any visible card to read it; reading never sends an action.
 **Open a recorded game file** in Games opens any recorded game, from your own
@@ -73,23 +83,27 @@ ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000", "traces_dir": "/home/you/ac
   Ctrl-C stops the server
 ```
 
-Your browser opens on the board at `http://127.0.0.1:8000`, with a game ready
-against the Search 64 opponent. That is the whole installation: no manabot,
+Your browser opens Academy's home at `http://127.0.0.1:8000`: a matchup, UR
+Lessons against Search 64 with GW Allies, and a **Play** button. Press it and
+your first decision is on the board. That is the whole installation: no manabot,
 Torch, Node or Rust, and no checkout of this repository. The wheel carries the
 compiled engine, the server and the built client. Cards show their Scryfall
 art, which the server fetches the first time a card is shown and keeps on
 disk ([Card art](#card-art)); it makes no other network requests while you
 play.
 
-To skip the setup screens, name the game or the replay on the command line:
+To skip home, name the game or the replay on the command line:
 
 ```bash
-uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt --seed 7
+uv run --no-project managym academy opponents
+uv run --no-project managym academy play --opponent search-256 --deck ./my-deck.txt --opponent-deck gw_allies --seed 7
 uv run --no-project managym academy replay .runs/demo/games --game 3
 ```
 
-The first opens the board already in that game; the second opens game 3 of the
+The first prints the opponents this installation can play and the id of each;
+the second opens the board already in that game; the third opens game 3 of the
 games a training run recorded, at its first decision. See
+[The opponent ladder](#the-opponent-ladder),
 [Start in a chosen game](#start-in-a-chosen-game),
 [Open a replay directly](#open-a-replay-directly) and
 [Launch from Python](#launch-from-python). To play against a model you
@@ -136,8 +150,8 @@ your default browser. `open` equals `url` for a plain launch and points into
 the game or replay for `play` and `replay`. On a machine without a desktop
 (SSH, a container) pass `--no-open` and reach the port yourself.
 
-These options go after `academy`, `academy play`, `academy watch` or
-`academy replay` alike. Policy specifications name installed providers
+These options go after `academy`, `academy play`, `academy watch`,
+`academy replay` or `academy opponents` alike. Policy specifications name installed providers
 ([registering policies](#play-and-watch-a-trained-checkpoint)).
 
 The default address is reachable only from your own machine. Academy has no
@@ -155,8 +169,8 @@ the same traces directory.
 ### Start in a chosen game
 
 ```bash
-uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt \
-    --opponent search --sims 64 --seed 7
+uv run --no-project managym academy play --deck ./my-deck.txt --opponent-deck gw_allies \
+    --opponent search-64 --seed 7
 ```
 
 ```text
@@ -165,17 +179,24 @@ ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000/?launch=3f9c2a7be1d04c58", "t
   Ctrl-C stops the server
 ```
 
-The browser opens with that game dealt and your first decision pending. No
-setup screen is shown, and nothing is chosen for you beyond what you named.
+The browser opens with that game dealt and your first decision pending. Home
+is not shown, and nothing is chosen for you beyond what you named.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `--deck` | `ur_lessons` | Your deck: a bundled deck name or the path of a decklist file |
 | `--opponent-deck` | `gw_allies` | The opponent's deck, named the same way |
-| `--opponent` | `search` | `search`, `random`, `passive`, a registered policy alias, or `policy:<id>` |
-| `--sims` | `64` | Random playouts per legal action for `search` |
+| `--opponent` | `search-64` | An id from [the opponent ladder](#the-opponent-ladder): `heuristic`, `search-64`, `random`, a registered policy's alias or its Policy ID |
 | `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
 | `--decklists` | `open` | `open` or `closed`: whether each player knows the other's list |
+| `--search` | none | Search over a trained policy, as JSON ([Search](#search)) |
+
+`managym academy opponents` prints every id `--opponent` accepts. An id that
+names nothing prints `ACADEMY_PLAY_ERROR` with code `opponent.unavailable`
+and the ids that exist, and exits with status 2. `search-<N>` takes any
+playout count, not only the three the ladder lists. The earlier spellings
+still start the same games: `--opponent search --sims 64` is `search-64`, and
+`policy:<id>` is that Policy ID.
 
 A decklist file is the UTF-8 `.txt` or `.dek` format Academy imports: one
 `count card name` per line, with optional `Main` and `Sideboard` headings.
@@ -196,11 +217,11 @@ Missing or changed policy artifacts are refused with the provider's reason.
 
 Reloading the page returns to the same game and its pending decision; it does
 not deal again. To continue the series, use
-[Rematch or Swap sides](#playing-a-series-against-a-model). **New game** opens a separate session setup with the launched decks, opponent
-and decklist mode selected.
-For imported matchups, setup shows
-both selected source files and their editable lists. Uncheck **Use imported
-decks for the next game** to choose bundled decks instead.
+[Rematch or Swap sides](#playing-a-series-against-a-model). **New game** in
+the board's menu opens the play card over the board with the launched decks,
+opponent and decklist mode selected. A decklist file you launched with is
+offered there as **Keep this list**, which adds it to **Yours** in the deck
+picker; unkept, it lasts for this session.
 
 The launch address is good for as long as that server runs. Opened in another
 browser it starts that browser's own game with the same decks and opponent.
@@ -208,8 +229,61 @@ With `--seed`, each opening deals the same game; without it, each opening
 deals afresh.
 After the server stops, the address cannot restore its live game. A tab that
 already started it shows **Interrupted**; choose **New game** explicitly to
-play again. Opening an unknown launch without a retained game shows ordinary
-setup; run the command again to create a new launch.
+play again. Opening an unknown launch without a retained game shows home; run
+the command again to create a new launch.
+
+### The opponent ladder
+
+```bash
+uv run --no-project managym academy opponents
+```
+
+```text
+id          name        driven by                          available
+heuristic   Heuristic   scripted                           yes
+greedy      Greedy      scripted                           yes
+search-256  Search 256  256 random playouts per action     yes
+search-64   Search 64   64 random playouts per action      yes
+search-16   Search 16   16 random playouts per action      yes
+random      Random      uniform over legal actions         yes
+passive     Passive     passes when it can                 yes
+challenger  challenger  checkpoint · w17 · 1,952 updates   yes
+old-final   old-final   checkpoint · w13 · 14,208 updates  no: trained in w13, engine is w17
+```
+
+That is an environment with manabot installed and two checkpoints found. It
+is the list home shows, from the same server function, and it starts no
+server. Each `id` is the exact string `--opponent`, `--player`,
+`Academy.new_game(opponent=)` and the HTTP API accept. `--json` prints the
+entries as a JSON array with `id`, `name`, `kind`, `group`, `world`,
+`available` and `reason`; `--policy` adds saved specifications as it does for
+a launch. The command exits with status 0 whether or not every entry is
+available.
+
+On home the ladder is grouped, each row one opponent:
+
+| Group | Rows | What decides |
+|---|---|---|
+| **Trained** | Every checkpoint an installed provider finds or you register | A trained policy. The row gives the world it was trained in and its update count |
+| **Search** | Search 16, 64, 256 | That many random playouts per legal action, with no policy. Needs open decklists |
+| **Scripted** | Heuristic, Greedy, Random, Passive | Fixed rules. Random chooses uniformly among legal actions; Passive passes when it can and otherwise takes the first legal action |
+
+A row shows its name, what drives it and, once you have finished a game
+against it, your wins and losses from this browser's recorded games. With no
+finished game the record is left out, never shown as 0–0. There is no rating:
+a number appears only when an evaluation in the engine's current world
+produced it, and its pool is named beside it.
+
+An opponent that cannot play is listed and disabled with the reason in words
+("trained in w13, engine is w17"); it is never hidden and never replaced by
+another. A trained policy that supports search carries that as a setting on
+its own row (**+ search · 4 worlds**), not as a second opponent
+([Search](#search)).
+
+Heuristic, Greedy and the Trained group come from manabot. Installed without
+it, the Trained group reads **Install manabot to play trained policies** and
+Search, Random and Passive play as before
+([Trained opponents and other bots](#trained-opponents-and-other-bots)).
 
 ### Open a replay directly
 
@@ -300,11 +374,12 @@ from pathlib import Path
 from managym.academy.launch import serve
 
 with serve(port=0) as academy:
+    for entry in academy.opponents():
+        print(entry.id, entry.name, entry.available, entry.reason)
     game = academy.new_game(
-        deck="ur_lessons",
-        opponent_deck=Path("my-deck.txt"),
-        opponent="search",
-        sims=64,
+        deck=Path("my-deck.txt"),
+        opponent_deck="gw_allies",
+        opponent="search-64",
         seed=7,
     )
     replay = academy.replay(Path(".runs/demo/games"), game=3)
@@ -322,10 +397,15 @@ with serve(port=0) as academy:
   given as `str` is a bundled deck name; a `pathlib.Path` is a decklist file.
   With `seed`, each opening of its address deals the same game; without it,
   each opening deals afresh. Reloading in the same tab resumes its game either way.
-  `opponent` also takes a policy specification JSON as a `pathlib.Path`.
+  `opponent` is an id from the ladder, or a policy specification JSON as a
+  `pathlib.Path`.
+- `academy.opponents()` returns [the opponent ladder](#the-opponent-ladder)
+  as `OpponentEntry` values (`id`, `name`, `kind`, `group`, `world`,
+  `available`, `reason`), the entries `managym academy opponents --json`
+  prints. Every `id` is accepted by `new_game` and `watch`.
 - `academy.watch(players=("challenger", "random"))` opens Watch setup with
-  exact seats selected and leaves **Start** to you. A string is a registered
-  alias, `policy:<id>` or a built-in player; a `Path` names a saved specification.
+  exact seats selected and leaves **Start** to you. A string is an id from the
+  ladder; a `Path` names a saved specification.
 - `serve(..., policies={"challenger": factory})` registers an already constructed
   policy factory directly. It needs no manifest or installed entry point.
   Each factory must create a fresh mutable session per game and seat.
@@ -417,33 +497,72 @@ exported games they already wrote keep opening.
 
 ### Play a game
 
-Open Academy (`/`) in a tab with no game and it offers your last matchup:
-**Play again** starts the same opponent, decks, play/draw seat, deal mode and
-stops as the last game this browser started, in one click. The first time, it
-offers **Play** with the default matchup, UR Lessons (you) against Search 64 ·
-search with GW Allies. **Set up a different game** opens the setup. Play again
-always starts a new session; it never resumes another tab's game. The last
-matchup is a browser preference (`academy.last-matchup` in local storage) and
-holds no credential.
+Open Academy (`/`) in a tab with no game. Home shows, top to bottom:
 
-Open **New game**
-to use the [two-seat setup](#one-game-from-setup-to-its-recorded-decisions):
-choose controllers, decks and bot players, then select **Start game** to start
-a separate session. Replacing an active game requires confirmation that it
-will be stopped. To keep games together, use
+1. **Continue**, only when this browser has a live or interrupted game:
+   "Continue — you · UR Lessons vs Heuristic · GW Allies". One click returns
+   to its pending decision.
+2. **The play card**, holding the last matchup this browser started: the
+   opponent, both decks, play or draw, open or closed decklists, and **Play**.
+   The first time it holds UR Lessons (you) against Search 64 with GW Allies.
+3. **Recent games**: your last eight with result, opponent, decks and turns.
+   **Review** opens one in Replay; **All games** opens **Games**. With no
+   recorded game this part is absent.
+
+Press **Play** and the game is dealt with your first decision pending. Play
+always starts a new session; it never resumes another tab's game. The matchup
+is a browser preference (`academy.last-matchup` in local storage) and holds no
+credential.
+
+To play something else, change the card before pressing Play:
+
+- **Opponent.** Choose a row of [the ladder](#the-opponent-ladder). A disabled
+  row says why it cannot play.
+- **You play** and **They play.** Each opens a deck picker with two groups:
+  **Bundled** (UR Lessons, GW Allies and the ten Elemental decks) and
+  **Yours**, the lists you kept. Each group puts the decks you played most
+  recently first. Choosing an Elemental deck limits the other side to Elemental
+  decks, and the picker says so. **Browse decks and cards** opens the full
+  deck browser.
+- **Play first / Draw first** and **Open / Closed** decklists.
+- **More**: the deal ([Fresh deal or a seed](#choose-the-deal-deliberately)),
+  search settings for a trained opponent, priority stops, and who plays your
+  side.
+
+The card checks the matchup with the server as you edit it. A matchup the
+server refuses (Search with closed decklists, a checkpoint bound to other
+decks) disables **Play** and puts the server's reason beside it; nothing is
+changed for you. While the server is unreachable, Play is disabled and the
+connection state is shown.
+
+#### Keep a decklist
+
+In either deck picker choose **Add a decklist**, then upload a UTF-8 `.txt` or
+`.dek` file or paste the list: one `count card name` per line, with optional
+`Main` and `Sideboard` headings. **Check** reports any refused lines by number;
+**Keep** adds the list to **Yours** under the name you give it. There is no
+deck builder: a list is edited as text.
+
+A kept list can sit on either side, against a bundled deck or another kept
+list. "My list against GW Allies" is your list in **You play** and GW Allies
+in **They play**. Such a game is recorded as an imported matchup, with the
+bundled deck admitted from its own list and no curated asset pack attached.
+
+Kept lists stay in this browser (`academy.imported-decks` in local storage,
+as the text you gave), not on the server, so another browser or machine does
+not have them. The server checks a list again each time it is used. A list the
+current engine refuses stays in **Yours**, disabled, with the refused lines;
+edit or remove it there. Kept lists use the development format and supported
+cards; this is not tournament legality validation. A trained opponent also
+checks the complete matchup, kept lists included, against its own admission
+requirements.
+
+Mid-game, **New game** in the board's menu opens the same card as a sheet over
+the board. Starting from it replaces the game in this tab after you confirm
+that the unfinished game will be stopped; **Cancel** closes the sheet and
+changes nothing. To keep games together, use
 [Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
-
-To use your own decks, open **New game**, expand **Import decklist files**
-and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
-`.dek` file for both **Your deck** and **Opponent deck**, or paste each list
-into its source box. Write one `count card name` per line, with optional
-`Main` and `Sideboard` headings. Select **Check decklists**, correct any
-reported lines, choose a built-in opponent such as **Search 64**, then select
-**Start game**. Imported decks use the development format and supported cards;
-this is not tournament legality validation. Registered policies check the complete
-setup, including imported lists, against their own admission requirements. Uncheck
-the import option to return to bundled decks.
-`managym academy play` starts the same game from the command line
+`managym academy play` starts the same matchup from the command line
 ([Start in a chosen game](#start-in-a-chosen-game)).
 
 The game fills the window: the board in the centre, your hand along the
@@ -455,9 +574,9 @@ pending decision.
 
 ### Playing a series against a model
 
-Choose **Registered policy**, select the intended policy, and import your decks
-through **New game**. Check the matchup, decklist disclosure, priority stops
-and deal mode, then select **Start game**. When the game ends, a result card
+On home, choose the model's row in the **Trained** group and the decks for
+both sides. Check the decklist disclosure, priority stops and deal mode, then
+select **Play**. When the game ends, a result card
 sits over the board, which stays visible around it (**Look at the board**
 folds the card to a corner). It says who won and how ("Heuristic · scripted
 went to −2 life on turn 9"), the final life totals, and one line from the move
@@ -470,8 +589,8 @@ session.
 
 Academy names every opponent with how it decides: **Search 64 · search**,
 **Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
-the world it was trained in (**<name> · checkpoint w17**). The setup picker,
-the board, the waiting line and the result card use the same name.
+the world it was trained in (**<name> · checkpoint w17**). The ladder, the
+board, the waiting line and the result card use the same name.
 
 A trained or independent policy must first be registered with this Academy
 server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
@@ -490,7 +609,7 @@ its admitted decks, disclosure, actual seed and native seats.
 | **Rematch** | Both decks and imported source lists, exact opponent configuration, disclosure, stops and your seat |
 | **Swap sides** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
 | **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
-| **Start game** | Starts a separate session from setup |
+| **Play** on home | Starts a separate session |
 
 To exchange decks within the series, choose **Edit next game** in the session strip.
 **Change opponent** opens only the opponent settings. Both editors show that
@@ -502,8 +621,9 @@ into the next game.
 
 If both controllers become bots in **Edit next game**, choose **Start new
 watched game**. This creates a separate Watch game and preserves the Play
-session and current attempt. **Current game** then returns to that watched game;
-reading another session's history does not change that destination.
+session and current attempt. Home's **Continue** line then returns to that
+watched game; reading another session's history does not change that
+destination.
 Admission refusal keeps the editor, edits, current game and saved draft usable.
 Reload discards unsaved edits and restores committed setup and the actual
 pending game; it never silently starts another game. Replacing an unfinished
@@ -869,7 +989,7 @@ opponent identity and interruption reason survives further reloads in the same
 tab. The header reads **Interrupted** and the choices are labeled **Last recorded
 choices**; they do not invite live input, even when the server returns. The snapshot
 contains no resume credential and cannot submit actions. Choose
-**New game** explicitly to return to setup and retire that snapshot.
+**New game** explicitly to open the play card and retire that snapshot.
 Academy never silently deals a replacement or replays your submissions into
 a new game. Keep the original tab open for temporary connection failures:
 resume credentials and unresolved input belong to that tab's session storage.
@@ -1060,7 +1180,7 @@ retries that decision; browsing saved positions never retries it.
 #### Continue a live Watch
 
 Open **Watch** (`/replay?watch=1`), select both seats, decks and a seed, then
-press **Start watching**. Each seat uses the same player menu as Play's **Opponent**.
+press **Start watching**. Each seat chooses from the same [ladder](#the-opponent-ladder) as Play's **Opponent**.
 A managym-only install offers Random and Search; manabot adds Greedy, Heuristic
 and trained checkpoints. The game opens on the replay board and is saved in
 **Games**. **Watch another matchup** in the menu opens setup for another bot game.
@@ -1149,9 +1269,10 @@ manabot brings Torch with it; see
 finds manabot through its installed entry point, with no setting to change.
 It adds:
 
-- **Registered policy** in Play's Opponent menu and in both Watch seats
+- The **Trained** group of [the opponent ladder](#the-opponent-ladder), for
+  Play and for both Watch seats
   ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
-- **Greedy** and **Heuristic** registered policies.
+- **Heuristic** and **Greedy** in the Scripted group.
 - Verification of earlier evaluation command traces and exported training
   games in **Open a game file**. Games recorded by managym open without it.
 
@@ -1194,11 +1315,10 @@ uv run --no-project managym academy --policy challenger.json watch \
 ```
 
 Watch opens at setup with both seats selected. Choose decks and press **Start watching**.
-Either seat can use a registered policy. **Registered policy** and **Policy**
-use the same direct selection in Play and Watch; provider and runner details
-remain available as provenance. They preserve an
-unavailable selection rather than substituting a newer model. Keyboard navigation
-uses the browser's select controls.
+Either seat can use a registered policy. Play's ladder and both Watch seats
+list the same entries; provider and runner details remain available as
+provenance. They preserve an unavailable selection rather than substituting a
+newer model. Every row is reachable with Tab and chosen with Enter or Space.
 
 With manabot installed, its provider discovers `.pt` and portable `.safetensors`
 checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`), explicit
@@ -1411,8 +1531,9 @@ and a message, and exits with status 2. From Python the same `code` and
 | `server.startup` / `server.shutdown` | The server could not start or finish stopping. The message names the failure. |
 | Cards show drawn plates instead of art | The server could not reach Scryfall, or `ACADEMY_CARD_ART=off` is set. Check the connection; a failed card is tried again after ten minutes. See [Card art](#card-art). |
 | No browser window opens | Open the printed `open` address yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
-| No policies are listed | Register a Python factory or a saved policy specification; check any provider discovery error shown below the picker. |
-| `No trained checkpoints found.` | Register a saved specification with `--policy <spec.json>` or supply provider-owned discovery sources through Python. |
+| `opponent.unavailable` naming an id | Nothing in the ladder has that id. The message lists the ids that exist; `managym academy opponents` prints them with their names. |
+| **Install manabot to play trained policies** | No provider is installed. Search, Random and Passive still play. Install manabot at the same version and restart ([Trained opponents and other bots](#trained-opponents-and-other-bots)). |
+| The Trained group is empty | A provider is installed and found no checkpoint. Register a saved specification with `--policy <spec.json>`, supply provider-owned discovery sources through Python, or check any discovery error shown under the group. |
 | A checkpoint is listed but disabled | It was trained in another world or on other card content; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
 | A checkpoint shows **not recorded** for its update | No `run.json` in the listed directories records those bytes. List the run directory rather than the file alone. A run that recorded no counts for its checkpoints stays **not recorded**. |
 | `The selected opponent checkpoint is unavailable.` | The file was moved or deleted after it was listed. Restore it or choose another; Academy does not pick a replacement. |
@@ -1426,14 +1547,28 @@ Working on Academy itself uses the development launcher, which needs uv, Rust
 and Node and serves the client with hot reload:
 
 ```bash
-./scripts/play                     # install locked dependencies, start backend + frontend; Ctrl-C stops both
+./scripts/play                     # install locked dependencies, start backend + frontend at home; Ctrl-C stops both
+./scripts/play play --opponent heuristic --deck elemental_ur --opponent-deck elemental_gw
+./scripts/play opponents           # the ladder this checkout can play
 ./scripts/play --demo learn        # checked prefix into Learn, then ordinary play
-uv run uvicorn managym.academy.server:app --port 8000   # development server without the launcher
 uv run --extra dev pytest tests/academy/test_server.py -q
 ```
 
-In a checkout the trained-bot features above are on, because manabot is
-installed in the development environment. `uv run --no-project managym academy` there reports
+`./scripts/play` is the checkout's `managym academy`. It builds the engine,
+installs the frontend and starts Vite, then runs the backend as `managym
+academy` with whatever follows its own flags (`--frontend-port`,
+`--no-frontend`, `--demo`, `--ready-timeout`). So `play`, `watch`, `replay`
+and `opponents`, and every option in
+[Start in a chosen game](#start-in-a-chosen-game), work there unchanged, and
+the printed `open` address is the hot-reloading frontend's. `./scripts/play
+opponents` prints the ladder and starts nothing.
+
+In a checkout the trained-bot features above are on, because the launcher
+installs manabot with CPU Torch beside the engine: Heuristic and Greedy are on
+the ladder, with every checkpoint under `MANABOT_RUNS_DIR`,
+`ACADEMY_PLAY_CHECKPOINTS` and `~/.etude/track`. A checkpoint written in
+another world is listed, disabled, with that reason.
+`uv run --no-project managym academy` there reports
 `site.missing` unless `ACADEMY_FRONTEND_BUILD` names a static build of
 `academy/ui` (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`); the
 released wheel is the one place that build is packaged.
@@ -1560,35 +1695,39 @@ for reading, inspection and recovery behavior.
 ### Ten-deck Elemental play
 
 ```sh
-doppler run --project manabot --config prd -- ./scripts/play-elemental
-./scripts/play-elemental --offline     # later runs, no credentials or network
+./scripts/play opponents
+./scripts/play play --opponent <id> --deck elemental_ur --opponent-deck elemental_gw
 ```
 
-`scripts/play_elemental.py` reads MTG-183's published checkpoints (default
-segment `f3748bcabac8`; `--run` selects another), picks the highest recorded
-training update, verifies SHA-256 and size, checks world admission and CPU
-placement, and pins those bytes for the server's lifetime. It never trains or
-swaps the opponent mid-match. `--prepare-only`
-downloads and verifies; `--port`/`--frontend-port` override 18479/18480.
-Checkpoint records live in `.runs/elemental-play/checkpoints/`, attempts in
-`.runs/elemental-play/human-play/play.sqlite` marked `human_exploratory`.
+The first command lists the checkpoints this checkout holds; the second starts
+in a game against one, on any of the ten `elemental-world-v2` decks (mirrors
+allowed). Its `traces_dir` holds the attempts. The checkpoint is pinned by its
+Policy ID for the game: the server never trains it or swaps it mid-match.
+**Edit next game** prepares the next matchup in the current session; starting
+it replaces the current attempt. **Play** on home starts a separate session.
 
-The printed **Elemental deck browser** link assigns either seat from the ten
-`elemental-world-v2` setups (mirrors allowed) with a deck assignment for each
-native seat. **Edit next game** prepares the next matchup in the current session;
-starting it replaces the current attempt. **New game** starts a separate session.
-On a scripted seed-0 game (2026-10-26), stop and forced-step automation cut deliberate inputs from 289 to 73.
+A checkpoint plays only in the world that trained it. MTG-183's published
+checkpoints were trained in w13 and are listed, disabled, as "trained in w13,
+engine is w17"; play them from the revision that wrote them.
 
-### Other checkpoints
+### One catalog
 
-Any trained checkpoint is selectable in Play and in either Watch seat
-([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
-manabot supplies the catalog (`GET /api/opponents`) and reads checkpoints with
-its provider-owned loader. The browser sends only an opaque runtime identity: `policy:<id>`
-as Play's opponent or in `POST /api/watch` `players`. The server re-hashes the
-bytes before play, refuses an incompatible or replaced file with the sentence
-the menu shows, and records the identity as the trace's `opponent_checkpoint`
-in Play and in each seat's recorded player in Watch.
+`GET /api/opponents` is the ladder: built-in players and every installed
+provider's policies, each with `id`, `name`, `kind`, `group`, `world`,
+`available` and `reason`. The browser renders the entries it is given and
+holds no list of its own. An entry's `id` is what a caller sends back:
+`opponent_id` in `new_game` and in `POST /api/policies/check`, and each string
+in `POST /api/watch` `players`. One server function resolves an id; the
+command line and Python call the same one. A recording keeps its spelling: the
+resolved `villain_type`, `villain_sims` and `opponent` fields are what
+`GameConfig` records, and a request that sends those three fields instead of
+`opponent_id` is still accepted.
+
+For a trained policy the id is an opaque runtime identity; the browser never
+submits an import path or model path. The server re-hashes the bytes before
+play, refuses an incompatible or replaced file with the sentence the ladder
+shows, and records the identity as the trace's `opponent_checkpoint` in Play
+and in each seat's recorded player in Watch.
 
 To serve the same SPA/ASGI entrypoint as the hosted app:
 

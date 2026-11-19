@@ -392,9 +392,19 @@ uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
 uv run --no-project managym academy                            # opens http://127.0.0.1:8000; Ctrl-C stops it
 ```
 
-From this checkout, `./scripts/play` runs it with hot reload and your trained
-checkpoints in the Opponent menu. [Running Academy](docs/academy.md#running-academy)
-covers both, with replays, trained bots and troubleshooting.
+It opens on one matchup and a **Play** button. To start in a game instead,
+name the opponent and the decks; `opponents` lists who can play:
+
+```bash
+uv run --no-project managym academy opponents
+uv run --no-project managym academy play --opponent search-256 --deck ur_lessons --opponent-deck gw_allies
+```
+
+From this checkout, `./scripts/play` runs the same command with hot reload
+and manabot installed, so the heuristic bot and your trained checkpoints are
+on the opponent ladder: `./scripts/play play --opponent heuristic`.
+[Running Academy](docs/academy.md#running-academy) covers both, with decks,
+replays, trained bots and troubleshooting.
 
 For an engine-only project, start with [installing managym](docs/engine-python.md).
 For training, see [installation and dependency choices](docs/development.md#install).
