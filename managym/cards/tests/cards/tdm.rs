@@ -117,3 +117,34 @@ fn teval_delve_never_pays_a_colored_pip() {
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_cast(&s, ogre));
 }
+
+/// A spell cast from the graveyard is not a card its own delve can exile
+/// (CR 601.2a: it is already on the stack as costs are paid).
+#[test]
+fn teval_delve_never_exiles_the_spell_being_cast_from_the_graveyard() {
+    let mut s = five_color_unfunded_setup(&[
+        "Teval, Arbiter of Virtue",
+        "Join the Dance",
+        "Hill Giant",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Teval, Arbiter of Virtue");
+    s.force_permanent_on_battlefield(0, "Forest");
+    s.force_permanent_on_battlefield(0, "Plains");
+    let dance = plant_in_graveyard(&mut s, 0, "Join the Dance");
+    plant_in_graveyard(&mut s, 0, "Hill Giant");
+    plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    // Flashback {3}{G}{W} with two lands and two other graveyard cards: one
+    // generic short.
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, dance));
+
+    let third = plant_in_graveyard(&mut s, 0, "Hill Giant");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, dance));
+    cast_card(&mut s, dance);
+    let offered = offered_cards(&s);
+    assert_eq!(offered.len(), 3, "{offered:?}");
+    assert!(!offered.contains(&now(&s, dance)));
+    assert!(offered.contains(&now(&s, third)));
+}

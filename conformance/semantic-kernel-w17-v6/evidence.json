@@ -9,10 +9,10 @@
     {
       "case_id": "ur-vs-gw-5eed",
       "orientation": "ur_lessons_vs_gw_allies",
-      "commands": 486,
+      "commands": 533,
       "outcome": "terminal",
-      "final_state_hash": "v17:a54f72c39623dc01055be167ceab442126e7b4153124bdf17632ee17bd8776c1",
-      "trace_sha256": "21918710b13177bc5981b1bd33a5913ca81a0ec23ee8f4b9419bcb0416a9ca82"
+      "final_state_hash": "v17:bfd94104b1c9c6090955a9cee36313a08a8ad815a0fc6907ce8196078a777cd2",
+      "trace_sha256": "d37fceb56331111f3a30c970876506c1dd23a34b4e20c97ca17c09b220259519"
     },
     {
       "case_id": "gw-vs-ur-5eee",

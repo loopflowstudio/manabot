@@ -328,14 +328,18 @@ pub struct Help {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub improvise: bool,
     /// Each card exiled from the payer's graveyard pays {1} (CR 702.66).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub delve: bool,
+    /// Holds the spell being cast, which its own delve cannot exile.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    pub delve: Option<ObjectId>,
 }
 
 impl Help {
     /// Whether any tap or exile may pay beside waterbend's.
     pub fn keyworded(self) -> bool {
-        self.convoke || self.improvise || self.delve
+        self.convoke || self.improvise || self.delve.is_some()
     }
 
     /// Whether taps pay for any of the generic mana rather than only the

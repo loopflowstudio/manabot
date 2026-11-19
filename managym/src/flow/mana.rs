@@ -2412,11 +2412,12 @@ impl Game {
         help: Help,
         waterbend: u8,
     ) -> (ManaCost, u8) {
-        let cost = if help.delve {
-            let cards = self.state.zones.size(ZoneType::Graveyard, player);
-            cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)
-        } else {
-            cost.clone()
+        let cost = match help.delve {
+            Some(spell) => {
+                let cards = self.graveyard_payers(player, spell).len();
+                cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)
+            }
+            None => cost.clone(),
         };
         let split = if help.taps_any_generic() {
             cost.generic()

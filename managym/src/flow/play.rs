@@ -475,7 +475,7 @@ impl Game {
                 .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)));
         }
         if let Some(or_mana) = card.forage_or() {
-            return self.can_forage(player, &cost)
+            return self.can_forage(player, object, &cost)
                 || self.can_pay_with_mana_abilities(player, &cost.plus(or_mana), None);
         }
         let help = self.spell_help(player, object, cast, &cost);
@@ -665,7 +665,7 @@ impl Game {
         let mut grant = |cost: &AdditionalCost| match cost {
             AdditionalCost::Convoke => help.convoke = true,
             AdditionalCost::Improvise => help.improvise = true,
-            AdditionalCost::Delve => help.delve = true,
+            AdditionalCost::Delve => help.delve = Some(object),
             _ => {}
         };
         self.state[object]
@@ -1717,7 +1717,11 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id)),
             );
         }
-        let graveyard = self.selection_zone_objects(player, ZoneType::Graveyard);
+        let Operation::Spell { object: spell, .. } = payment.operation else {
+            unreachable!("forage pays for a spell")
+        };
+        let mut graveyard = self.graveyard_payers(player, spell);
+        graveyard.sort_unstable_by_key(|object| (self.state[*object].definition_id, *object));
         if graveyard.len() >= usize::from(FORAGE_CARDS - exiled)
             && self.can_pay_with_mana_abilities(player, mana, None)
         {
@@ -1726,9 +1730,23 @@ impl Game {
         objects
     }
 
-    /// Whether `player` could forage beside paying `cost` in mana.
-    fn can_forage(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.state.zones.size(ZoneType::Graveyard, player) >= usize::from(FORAGE_CARDS)
+    /// The cards in `player`'s graveyard that may be exiled to pay for
+    /// `spell` (delve, forage), in graveyard order. A spell cast from the
+    /// graveyard waits there until it is paid for, but it is being cast and
+    /// is no card its own cost can exile (CR 601.2a).
+    pub(crate) fn graveyard_payers(&self, player: PlayerId, spell: ObjectId) -> Vec<ObjectId> {
+        self.state
+            .zones
+            .zone_objects(ZoneType::Graveyard, player)
+            .iter()
+            .copied()
+            .filter(|object| *object != spell)
+            .collect()
+    }
+
+    /// Whether `player` could forage for `spell` beside paying `cost` in mana.
+    fn can_forage(&self, player: PlayerId, spell: ObjectId, cost: &ManaCost) -> bool {
+        self.graveyard_payers(player, spell).len() >= usize::from(FORAGE_CARDS)
             && self.can_pay_with_mana_abilities(player, cost, None)
             || self
                 .sacrifice_candidates(player, &food())
@@ -2022,12 +2040,10 @@ impl Game {
             }
             CostComponent::Mana { cost, help } => {
                 // Delve: a card exiled from the payer's graveyard pays {1}.
-                if !(help.delve
-                    && cost.generic() > 0
-                    && self
-                        .state
-                        .zones
-                        .contains(object, ZoneType::Graveyard, player))
+                if !(cost.generic() > 0
+                    && help.delve.is_some_and(|spell| {
+                        self.graveyard_payers(player, spell).contains(&object)
+                    }))
                 {
                     return Err(AgentError("no object pays this cost".into()));
                 }
@@ -2169,20 +2185,19 @@ impl Game {
             .sum()
     }
 
-    /// Untapped artifacts/creatures `player` controls — the permanents that
-    /// can each pay {1} of a waterbend cost.
+    /// Untapped artifacts/creatures `player` controls, as the layers see
+    /// them — the permanents that can each pay {1} of a waterbend cost.
     pub(crate) fn waterbend_candidates(&self, player: PlayerId) -> Vec<PermanentId> {
         self.battlefield_permanents(player)
             .into_iter()
-            .filter(|permanent_id| {
-                let Some(permanent) = self.state.permanents[*permanent_id].as_ref() else {
-                    return false;
-                };
-                if permanent.tapped {
-                    return false;
-                }
-                let object = &self.state[permanent.object];
-                object.types.is_artifact() || object.types.is_creature()
+            .filter(|id| {
+                self.state.permanents[*id]
+                    .as_ref()
+                    .is_some_and(|permanent| !permanent.tapped)
+                    && {
+                        let view = self.characteristics(*id);
+                        view.types.is_artifact() || view.is_creature()
+                    }
             })
             .collect()
     }
@@ -2368,16 +2383,11 @@ impl Game {
                     .map(|permanent| Action::WaterbendTap { player, permanent }),
             );
         }
-        if help.delve && cost.generic() > 0 {
+        if let Some(spell) = help.delve.filter(|_| cost.generic() > 0) {
             actions.extend(
-                self.state
-                    .zones
-                    .zone_objects(ZoneType::Graveyard, player)
-                    .iter()
-                    .map(|object| Action::SelectCard {
-                        player,
-                        object: *object,
-                    }),
+                self.graveyard_payers(player, spell)
+                    .into_iter()
+                    .map(|object| Action::SelectCard { player, object }),
             );
         }
         actions

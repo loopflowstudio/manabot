@@ -242,7 +242,7 @@ impl Game {
                         })
                     }
                     CostComponent::Mana { help, .. }
-                        if help.delve && self.state.suspended_decision.is_none() =>
+                        if help.delve.is_some() && self.state.suspended_decision.is_none() =>
                     {
                         Some(format!("Exile {name} to pay {{1}} (delve)"))
                     }

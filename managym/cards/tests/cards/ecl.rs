@@ -152,3 +152,29 @@ fn appeal_to_eirdu_needs_white_and_auto_convokes_only_what_mana_cannot_pay() {
         .count();
     assert_eq!(untapped, 1);
 }
+
+/// Convoke taps creatures as the layers see them: an earthbent land is a
+/// creature and may convoke.
+#[test]
+fn appeal_to_eirdu_convokes_with_a_land_that_became_a_creature() {
+    let mut s = five_color_unfunded_setup(&[
+        "Appeal to Eirdu",
+        "Earthbending Lesson",
+        "Gray Ogre",
+        "Hill Giant",
+    ]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    s.force_permanent_on_battlefield(0, "Plains");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Hill Giant");
+    let lesson = force_new_card_in_hand(&mut s, 0, "Earthbending Lesson");
+    s.set_player_mana_pool(0, "20WWWWGGGG");
+    cast_card(&mut s, lesson);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert!(s.game().characteristics(forest).is_creature());
+    s.set_player_mana_pool(0, "0");
+    cast_appeal(&mut s, ogre);
+    assert!(convokes(&s, forest));
+    assert!(convokes(&s, ogre));
+}
