@@ -416,29 +416,39 @@ pub fn tap_pays_modes(s: &Scenario, tapped: PermanentId) -> Vec<usize> {
 }
 
 /// Exercise every offered atomic continuation through the real Command
-/// authority, with an independent replay; every legal action and a follow-up
-/// step run on exact forks that leave the source untouched.
+/// authority, with an independent replay; once one commits, every Command of
+/// the decision (itself included) is stale and changes nothing. Every legal
+/// action and a follow-up step run on exact forks that leave the source
+/// untouched.
 pub fn assert_choice_contract(s: &Scenario) {
     use managym::{decision::Command, search_state::witness};
     let root = witness(s.game());
     let frame = s.game().semantic_decision_frame().unwrap();
     assert_eq!(frame.offers.len(), s.action_space().actions.len());
-    for offer in &frame.offers {
-        assert!(offer.choices.is_empty());
-        let command = Command {
-            command_id: format!("elemental-choice-{}", offer.id.0),
-            expected_revision: frame.revision,
-            offer_id: offer.id.0,
-            answers: vec![],
-            object_preconditions: vec![],
-        };
+    let commands: Vec<Command> = frame
+        .offers
+        .iter()
+        .map(|offer| {
+            assert!(offer.choices.is_empty());
+            Command {
+                command_id: format!("elemental-choice-{}", offer.id.0),
+                expected_revision: frame.revision,
+                offer_id: offer.id.0,
+                answers: vec![],
+                object_preconditions: vec![],
+            }
+        })
+        .collect();
+    for command in &commands {
         let mut branch = s.game().clone();
         let mut replay = s.game().clone();
-        branch.execute_semantic_command(&command).unwrap();
-        replay.execute_semantic_command(&command).unwrap();
+        branch.execute_semantic_command(command).unwrap();
+        replay.execute_semantic_command(command).unwrap();
         assert_eq!(witness(&branch), witness(&replay));
         let after = witness(&branch);
-        assert!(branch.execute_semantic_command(&command).is_err());
+        for stale in &commands {
+            assert!(branch.execute_semantic_command(stale).is_err());
+        }
         assert_eq!(witness(&branch), after);
     }
     for index in 0..s.action_space().actions.len() {

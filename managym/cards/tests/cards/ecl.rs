@@ -12,8 +12,6 @@ use managym::{
         action::{Action, ActionSpaceKind, ActionType},
         observation::Observation,
     },
-    decision::Command,
-    search_state::witness,
     state::{
         game_object::{PermanentId, PlayerId, Target},
         mana::Color,
@@ -194,28 +192,10 @@ fn appeal_to_eirdu_can_convoke_a_white_creature_for_generic() {
         ]
     );
     // The modes name the payments: {W} by convoke is 0, {1} by convoke 5.
-    // Both offers focus the Lions' object; each Command replays exactly.
+    // Both offers focus the Lions' object; each Command replays exactly, and
+    // once one commits the other is stale.
     assert_eq!(tap_pays_modes(&s, lions), [0, 5]);
     assert_choice_contract(&s);
-    // Once one payment is chosen, the other mode's Command is stale and
-    // changes nothing.
-    let frame = s.game().semantic_decision_frame().unwrap();
-    let commands: Vec<Command> = frame
-        .offers
-        .iter()
-        .map(|offer| Command {
-            command_id: format!("appeal-tap-pays-{}", offer.id.0),
-            expected_revision: frame.revision,
-            offer_id: offer.id.0,
-            answers: vec![],
-            object_preconditions: vec![],
-        })
-        .collect();
-    let mut branch = s.game().clone();
-    branch.execute_semantic_command(&commands[0]).unwrap();
-    let after = witness(&branch);
-    assert!(branch.execute_semantic_command(&commands[1]).is_err());
-    assert_eq!(witness(&branch), after);
     for (mode, white_spent) in [(0, 0), (5, 1)] {
         let mut fork = crate::support::play::fork_choosing(
             &s,
