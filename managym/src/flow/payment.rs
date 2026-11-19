@@ -598,8 +598,21 @@ impl Game {
     /// choice returns to the payment that activated it. Otherwise it is the
     /// announced payment's.
     pub(crate) fn pending_receipt(&self) -> Option<&PaymentReceipt> {
-        let suspended = self
-            .state
+        fn receipt_of(caller: ResolutionRef<'_>) -> Option<&PaymentReceipt> {
+            let ResolutionRef::Decision(decision) = caller else {
+                return None;
+            };
+            match decision {
+                Decision::Payment(PaymentProgress { receipt, .. }) => Some(receipt),
+                Decision::ManaSpend { completion, .. } => match completion.as_ref() {
+                    SpendCompletion::Announced(Payment { receipt, .. })
+                    | SpendCompletion::Resolution(PaymentProgress { receipt, .. }) => Some(receipt),
+                    SpendCompletion::Upfront(_) | SpendCompletion::Foretell(_) => None,
+                },
+                _ => None,
+            }
+        }
+        self.state
             .suspended_decision
             .as_ref()
             .and_then(|suspended| {
@@ -607,24 +620,12 @@ impl Game {
                     .continuation()
                     .into_iter()
                     .rev()
-                    .find_map(|caller| match caller {
-                        ResolutionRef::Decision(Decision::Payment(payment)) => {
-                            Some(&payment.receipt)
-                        }
-                        ResolutionRef::Decision(Decision::ManaSpend { completion, .. }) => {
-                            match completion.as_ref() {
-                                SpendCompletion::Announced(payment) => Some(&payment.receipt),
-                                SpendCompletion::Resolution(payment) => Some(&payment.receipt),
-                                SpendCompletion::Upfront(_) | SpendCompletion::Foretell(_) => None,
-                            }
-                        }
-                        _ => None,
-                    })
-            });
-        suspended.or(match &self.pending_choice {
-            Some(PendingChoice::Pay { payment, .. }) => Some(&payment.receipt),
-            _ => None,
-        })
+                    .find_map(receipt_of)
+            })
+            .or(match &self.pending_choice {
+                Some(PendingChoice::Pay { payment, .. }) => Some(&payment.receipt),
+                _ => None,
+            })
     }
 
     fn pending_payment(&self, player: PlayerId) -> Result<Payment, AgentError> {
