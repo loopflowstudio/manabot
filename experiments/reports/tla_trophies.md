@@ -195,6 +195,15 @@ Queued attempts also use the whole-machine rate to bound their duration.
 The rental itself is budgeted from the pooled caps, and runtime charges
 are split by occupancy.
 
+A local Etude 0.4.2 fake-provider check changed the new-rental admission
+price to one third of the machine rate. At USD0.69/hour with zero setup,
+each seed requested one hour for USD0.23. Three seeds received the full
+hour together. A lone seed was also admitted, but received only 20 minutes.
+With four seeds and two available machines, the first three received 40
+minutes together and the fourth received 20 minutes. The scheduler divided
+the pending dollars evenly between machines. Admission must check that the
+seeds placed together fund the rental window it promises them.
+
 The long run awaits the Etude fix. The local smoke registered two
 checkpoints, and the resolved schedule test covers all 32 held-out deals
 per raw checkpoint per seed. The pilot graphs above are the latest
