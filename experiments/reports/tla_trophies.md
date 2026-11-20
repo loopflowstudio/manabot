@@ -138,3 +138,28 @@ records with these commands.
 uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg409/report
 uv run --extra artifacts --extra evaluation etude report experiments/tla_trophies.py --source r2://manabot/jobs/tla_trophies --out scratch/qa/tla-trophies
 ```
+
+## Thread and batch calibration
+
+On the six-vCPU L4, native game stepping took about 2 seconds of a
+32–43 second update. Collection's rollout recording rose from about 0.6 s
+with two seeds to 17.7 s with three, at a one-minute host load of 20.
+This motivates testing CPU contention and larger policy and learner batches.
+
+Both calibration arms request six updates on two slots, with three Torch,
+OpenMP and MKL threads per seed. Arm A uses 64 streams and 64 rows per
+learner and bootstrap call. Arm B uses 256 streams and 512 rows per call.
+The comparison uses aggregate learner decisions per dollar over updates
+2–6, peak allocated and reserved CUDA memory, and rollout recording time.
+
+The local training smoke registered two checkpoints. At 20:32 UTC on
+November 20, Etude quoted USD0.28 for both arm A seeds together on one L4
+at USD0.69/hour, including startup. The experiment cap was USD0.58.
+
+Arm A (`tla-trophies-cal-a`, seeds 40901 and 40902) finished six updates
+per seed. It delivered 177,025 learner decisions for USD0.1089 including
+setup and delivery. Over updates 2–6 the seeds averaged 53.9 and 50.9
+seconds per update, or 562 decisions/s together (2.93 million decisions/USD
+at the rental rate). Median rollout recording took 8.40 and 5.01 seconds,
+with median host load 9.06 and 8.58. Peak allocated/reserved CUDA memory
+was 0.182/0.242 GiB and 0.190/0.250 GiB per process.
