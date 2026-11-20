@@ -196,21 +196,21 @@ def play(match: Match, agents: Sequence[object]) -> Tables:
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    checkpoints = [
-        c for run in state.runs if run.launch == RAW_JOB for c in run.checkpoints
-    ]
+    runs = [run for run in state.runs if run.launch == RAW_JOB]
+    checkpoints = [c for run in runs for c in run.checkpoints]
     if not checkpoints:
         return []
     heuristic = Code(
         name="heuristic", source=heuristic_source_paths(), config=HEURISTIC
     )
+    # Etude divides each seating's games among the learner lines at an update.
+    seeds = len({run.line for run in runs})
     seatings = tuple(
         Seating(
             name=f"Held-out pair {i + 1}",
             players=(CheckpointSlot(), heuristic),
             config=Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i),
-            games=1,
-            seeds="one",
+            games=seeds,
         )
         for i in range(32)
     )

@@ -16,7 +16,7 @@ from types import ModuleType
 from etude.checkpoints import CheckpointRecord
 from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
-from etude.eval.records import Match
+from etude.eval.records import Match, Tournament
 from etude.experiment_file import defined_functions
 from etude.jobs import (
     Checkpoints,
@@ -266,10 +266,21 @@ def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
     }
     pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
     raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
-    (evaluation,) = tla_trophies.eval_jobs(
-        ExperimentState(experiment="fixture", runs=(pilot, raw))
+    second = replace(
+        _finished_run(tmp_path, range(0, 201, 100), name="raw-2", job=train.name),
+        seed=1,
     )
-    assert list(evaluation.checkpoints) == list(raw.checkpoints)
+    state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
+    (evaluation,) = tla_trophies.eval_jobs(state)
+    assert list(evaluation.checkpoints) == [*raw.checkpoints, *second.checkpoints]
+    tournament, gaps = Tournament(
+        definition=evaluation.tournament,
+        checkpoints=evaluation.recorded().checkpoints,
+    ).resolve(state.lines)
+    assert not gaps
+    assert Counter(m.checkpoint for m in tournament.schedule()) == {
+        checkpoint.key: 32 for checkpoint in evaluation.checkpoints
+    }
     assert tla_trophies.report().evals[0].matches == Matches(tournament=evaluation.name)
     assert [
         tla_trophies.Deal.model_validate(s.config)
