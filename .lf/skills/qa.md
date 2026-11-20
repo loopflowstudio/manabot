@@ -228,7 +228,7 @@ publish, land or choose the next Graph step from here.
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
   seconds that receipts still equal main's, field for field; the
   `--rollout-evidence`/`--native-encoder` arms check that full evidence and
-  the Python encoder still match the compact, native defaults. To play
+  per-row encoding still match the compact, batched defaults. To play
   games, build two players per arm with `make_player` and drive `act`,
   `prepare_step`, `env.step_semantic` and `observe_step` as
   `manabot/sim/native_game.py` does; the default `decision_seconds=1` times

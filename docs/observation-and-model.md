@@ -565,7 +565,7 @@ typed Capacity error, never truncation; the one declared exception is the TLA
 pilot's first-64 action prefix.
 `agent/continuation.rs` projects the relation frames and
 `agent/observation_encoder.rs` the fact rows once per observation;
-`manabot/env/observation.py` is the matching reference encoder. A buffer that
+`manabot/env/observation.py` describes their layout and writes nothing. A buffer that
 is missing or has the wrong shape fails before any write. Column names and
 value encodings for every buffer come from `managym.observation_layout()`
 ([reading arrays by name](engine.md#reading-arrays-by-name)).
@@ -1208,7 +1208,7 @@ this proof first.
 | --- | --- |
 | Network | `ActorCritic` in [`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py) |
 | Observation admission and host preparation | [`manabot/policy/admission.py`](../manabot/policy/admission.py), [`prepare.py`](../manabot/policy/prepare.py) |
-| Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
+| Observation space and layout | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |
 | Recent events | [`manabot/backends/torch/_recent_events.py`](../manabot/backends/torch/_recent_events.py) |

@@ -475,9 +475,11 @@ admission. Admission-rejection fixtures must mark the config as submitted
   full vector diagnostic payloads in evidence.
 - An observation that does not fit its buffers raises
   `managym.ObservationCapacity` (a `ValueError`, message
-  `observation capacity exceeded: …`) on the scalar, batch and vector paths.
-  Collectors that count capacity failures catch that type, never a message
-  prefix, and propagate other failures.
+  `observation capacity exceeded: …`) from `encode_observation_into` and
+  `encode_observations_into`. Collectors that count capacity failures catch
+  that type, never a message prefix, and propagate other failures. Vector
+  steps keep raising `AgentError` for an unrecovered one (retained evidence
+  names `PyAgentError`) and record `ObservationCapacity` when they recover.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never

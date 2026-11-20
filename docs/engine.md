@@ -680,12 +680,16 @@ except managym.ObservationCapacity as error:
 # observation capacity exceeded: agent_cards plus sideboard 7 > 4
 ```
 
-Catch that type to count or recover from a game that outgrew its buffers; the
-scalar, batch and vector paths all raise it. Any other `ValueError` means the
-buffers or the request are wrong: malformed arrays, state the selected input
-version cannot hold (`managym.input_v10_state(obs)` and
-`managym.unrepresentable_state(obs)` name it), or more legal actions than
-slots without `action_overflow="first-legal"`. Nothing is truncated to fit.
+Catch that type to count or recover from a game that outgrew its buffers;
+`encode_observation_into` and the batch `encode_observations_into` raise it,
+including for more legal actions than slots without
+`action_overflow="first-legal"`. A vector environment's step raises
+`managym.AgentError` with the same message for an unrecovered failure (its
+retained evidence names that class) and records `ObservationCapacity` as the
+failure class when it recovers the game. Any other `ValueError` means the
+buffers or the request are wrong: malformed arrays, or state the selected
+input version cannot hold (`managym.input_v10_state(obs)` and
+`managym.unrepresentable_state(obs)` name it). Nothing is truncated to fit.
 Discard the arrays after a failure.
 
 `Env.encode_observation` and `Env.encode_observation_into` are deprecated
