@@ -349,8 +349,8 @@ change already touches it; do not rewrite a module only for style. Rust in
   (`input_readings`) and never consults the rule; one without the record gets
   `legacy_readings`, which is never extended. The native kinds of buffers with
   their own preparation (decision memory, history events) are not used. A
-  run's saved state records its model's readings, and a resume whose model
-  reads differently is refused.
+  run's saved state records its model settings and readings. Resume checks both before
+  restoring weights. Older runs supply their model settings from the initial raw policy.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; the policy input never silently falls behind.

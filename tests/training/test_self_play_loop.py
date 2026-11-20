@@ -141,6 +141,45 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert reported.active_seconds is not None and reported.active_seconds > 0
 
 
+@pytest.mark.parametrize(
+    ("field", "legacy_state"), [("focus_film", False), ("stream_norm", True)]
+)
+def test_resume_refuses_changed_model_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, legacy_state: bool
+) -> None:
+    settings = gray_ogre_self_play(horizon=2)
+    out = tmp_path / "out"
+    monkeypatch.setenv("ETUDE_OUT", str(out))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(settings, run, updates=1)
+    (state,) = (out / "state").glob("save-*/state.json")
+    saved = json.loads(state.read_text())
+    assert saved["extra"]["model"] == settings.model.checkpoint_payload()
+    initial = out / "policies/00000000-raw.safetensors"
+    assert "model" not in loop.load_metadata(initial)["bc"]["counts"]
+    if legacy_state:
+        del saved["extra"]["model"]
+        state.write_text(json.dumps(saved))
+    else:
+        initial.unlink()  # A run with recorded settings is self-contained.
+    changed = settings.model_copy(
+        update={"model": settings.model.model_copy(update={field: True})}
+    )
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(ValueError, match=f"{field}: False -> True"):
+            self_play(changed, run, updates=2)
+        if legacy_state:
+            assert self_play(settings, run, updates=2).is_file()
+
+
 def test_resume_refuses_a_model_that_reads_its_inputs_differently(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -246,6 +285,7 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
         row = original_step(settings, learner, ema, collector, counts, rng, out=out)
         coordinates = {k: v for k, v in row.items() if k.startswith("coordinates/")}
         assert coordinates["coordinates/updates"] == 1
+        assert "coordinates/model" not in coordinates
         assert "coordinates/readings" not in coordinates
         assert all(isinstance(v, (int, float)) for v in coordinates.values())
         stop.touch()
