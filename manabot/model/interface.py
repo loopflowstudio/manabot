@@ -10,7 +10,9 @@ from manabot.infra.identity import canonical_sha256
 from manabot.model.world import (
     checkpoint_world,
     deck_world,
+    input_columns,
     validate_checkpoint_world,
+    validate_saved_columns,
     written_at,
 )
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
@@ -19,17 +21,9 @@ from manabot.policy.readings import (
     Readings,
     fresh_readings,
     legacy_readings,
-    published_columns,
     recorded_readings,
 )
 import managym
-
-
-def input_columns(space: ObservationSpace) -> dict[str, list[str]]:
-    return {
-        key: [column.name for column in columns]
-        for key, columns in published_columns(space).items()
-    }
 
 
 def world_fields(
@@ -130,7 +124,7 @@ def model_interface(
                 f"incompatible checkpoint rules binding for {key}; {location}"
             )
 
-    validate_saved_columns(checkpoint, expected, space, location)
+    validate_saved_columns(checkpoint, expected["input_schema"], space, location)
     current = writer_catalog()
     writer = checkpoint.get("writer_catalog")
     if writer is None:
@@ -159,55 +153,6 @@ def model_interface(
             f"belief card embedding requires a bound belief vocabulary; {location}"
         )
     return ModelInterface(writer, current)
-
-
-def validate_saved_columns(
-    checkpoint: Mapping[str, Any],
-    expected: Mapping[str, Any],
-    space: ObservationSpace,
-    location: str,
-) -> None:
-    """Check each saved array against the runtime's.
-
-    Columns are only appended, so a checkpoint reads the runtime's first N
-    columns; recorded names, when present, must equal that prefix."""
-    schema = checkpoint["world_binding"].get("input_schema")
-    if not isinstance(schema, dict) or schema.keys() != expected["input_schema"].keys():
-        raise ValueError(f"checkpoint input buffers differ; {location}")
-    columns = input_columns(space)
-    recorded = checkpoint.get("input_columns")
-    if recorded is not None and (
-        not isinstance(recorded, dict) or recorded.keys() != columns.keys()
-    ):
-        raise ValueError(f"checkpoint input column declarations differ; {location}")
-    widths: dict[str, int] = {}
-    for key, actual in expected["input_schema"].items():
-        entry = schema[key]
-        if not isinstance(entry, dict) or entry.get("dtype") != actual["dtype"]:
-            raise ValueError(f"incompatible {key} dtype; {location}")
-        shape = entry.get("shape")
-        current_shape = actual["shape"]
-        if key in columns:
-            if (
-                not isinstance(shape, list)
-                or shape[:-1] != current_shape[:-1]
-                or not shape
-                or type(shape[-1]) is not int
-                or not 0 < shape[-1] <= current_shape[-1]
-            ):
-                raise ValueError(f"incompatible {key} columns {shape}; {location}")
-            width = shape[-1]
-            wanted = columns[key][:width]
-            if recorded is not None and recorded[key] != wanted:
-                raise ValueError(
-                    f"incompatible {key} columns: checkpoint {recorded[key]}, runtime {wanted}; {location}"
-                )
-            widths[key] = width
-        elif shape != current_shape:
-            raise ValueError(f"incompatible {key} shape {shape}; {location}")
-    for group in ("player", "cards", "permanents"):
-        if widths.get(f"agent_{group}") != widths.get(f"opponent_{group}"):
-            raise ValueError(f"{group} column counts differ between seats; {location}")
 
 
 def recorded_writer(

@@ -424,8 +424,9 @@ can use an expanded card set on a later revision.
 | Engine rules changed | Loads. Play uses the current rules. An evaluation measures the effect on strength. |
 
 If the checkpoint recorded exact decks (`setups` and `content_manifest`), the
-loader compares its whole binding. When adding cards changes the manifest,
-the loader refuses the checkpoint.
+loader checks the saved column prefixes in the same way, including for the
+Elemental roster. All other binding fields must match exactly. When adding
+cards changes the manifest, the loader refuses the checkpoint.
 
 The terms:
 

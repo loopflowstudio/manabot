@@ -440,8 +440,6 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     interface = model_interface(record, checkpoint.space)
     if record.get("architecture") is not None:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
-    if interface is None:
-        return checkpoint
     columns = Layout(checkpoint.readings)
     width = len(checkpoint.readings["agent_player"])
     projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
@@ -452,6 +450,8 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     )
     if projected != columns.numeric_width("agent_player") + extra:
         raise ValueError("checkpoint player columns differ from its projection")
+    if interface is None:
+        return checkpoint
     if not checkpoint.model.catalog_records() and interface.writer == interface.current:
         return checkpoint
     try:

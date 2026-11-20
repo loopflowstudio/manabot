@@ -9,6 +9,7 @@ import torch
 
 from manabot.backends.torch.checkpoint import BACKEND, load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
+from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
@@ -16,7 +17,14 @@ from manabot.model.catalog import inspect_checkpoint
 from manabot.policy import buckets
 from manabot.policy.binding import packed
 from manabot.policy.checkpoint import read_container, write_container
-from manabot.policy.readings import input_width, parse_reading, read_numeric
+from manabot.policy.readings import (
+    fresh_readings,
+    input_width,
+    legacy_readings,
+    parse_reading,
+    read_numeric,
+)
+from manabot.recipes.builders import elemental_self_play, gray_ogre_self_play
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -250,3 +258,31 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
     write_checkpoint(record, path)
     with pytest.raises(ValueError, match="agent_cards columns:.*lost_column"):
         load_checkpoint(str(path))
+
+
+@pytest.mark.parametrize("elemental", [False, True])
+@pytest.mark.parametrize("recorded", [False, True])
+def test_setup_policy_keeps_its_pre_x_action_scores(
+    tmp_path: Path, elemental: bool, recorded: bool
+) -> None:
+    settings = elemental_self_play() if elemental else gray_ogre_self_play(horizon=2)
+    space = ObservationSpace(settings.observation)
+    readings = (fresh_readings if recorded else legacy_readings)(space)
+    readings["actions"] = readings["actions"][:23]
+    writer = ActorCritic(space, settings.model, readings=readings).eval()
+    players = Match(settings.match).to_rust()
+    path = tmp_path / "earlier.safetensors"
+    save_checkpoint(writer, space, path, player_configs=players)
+    if not recorded:
+        record = read_checkpoint(path)
+        del record["input_readings"]
+        write_checkpoint(record, path)
+    loaded, runtime = load_checkpoint(str(path))
+    env = managym.Env(seed=17)
+    obs, _ = env.reset(players)
+    batch = {key: value[None] for key, value in runtime.encode(obs).items()}
+    expected = writer.evaluate(writer.prepare(batch))
+    batch["actions"][..., 23:] = 1
+    actual = loaded.evaluate(loaded.prepare(batch))
+    for before, after in zip(expected, actual, strict=True):
+        np.testing.assert_array_equal(before, after)

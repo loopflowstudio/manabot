@@ -277,8 +277,9 @@ change already touches it; do not rewrite a module only for style. Rust in
   (`checkpoint_source`), its column names, definition keys and naming names.
   `manabot.model.interface.model_interface` checks the recorded input contract.
   The shared policy reader then binds the learned arrays by key. Academy uses
-  that reader when listing checkpoints. When the checkpoint records exact decks, compare its
-  whole binding. Otherwise the card and naming digests record what the writer used. Append
+  that reader when listing checkpoints. When the checkpoint records exact decks,
+  compare its non-schema binding fields exactly and admit its saved column prefixes.
+  Otherwise the card and naming digests record what the writer used. Append
   input columns to named buffers. Shared host preparation projects each buffer
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in
