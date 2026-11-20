@@ -3348,27 +3348,8 @@ impl PyObservation {
         serde_json::to_string(&self.continuation).expect("continuation serializes")
     }
 
-    /// Public history v1 rows, whose contexts are the zero-based object-table
-    /// indexes `object_indexes` gives object ids (input v11's one row each).
-    fn encode_policy_history(
-        &self,
-        capacity: usize,
-        object_indexes: std::collections::HashMap<i32, i32>,
-    ) -> Vec<Vec<f32>> {
-        crate::agent::policy_history::encode(
-            &Observation::from(self.clone()),
-            capacity,
-            &object_indexes,
-        )
-        .into_iter()
-        .map(|row| row.to_vec())
-        .collect()
-    }
-
-    /// Deprecated input v9/v10 rows (removed in 0.4.0): the observation with
-    /// battlefield objects and stack spells listed as cards again, and its
-    /// public history v1 rows over those card rows. Only the v9/v10 encoders
-    /// read them.
+    /// Deprecated input v9/v10 card rows (removed in 0.4.0): the observation's
+    /// cards with battlefield objects and stack spells listed as cards again.
     fn legacy_card_lists(&self) -> (Vec<PyCard>, Vec<PyCard>) {
         let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
         (
@@ -3381,17 +3362,6 @@ impl PyObservation {
         )
     }
 
-    fn encode_legacy_policy_history(
-        &self,
-        capacity: usize,
-        cards_per_player: usize,
-    ) -> Vec<Vec<f32>> {
-        let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
-        crate::agent::legacy_input::history(&legacy, capacity, cards_per_player)
-            .into_iter()
-            .map(|row| row.to_vec())
-            .collect()
-    }
     fn validate(&self) -> bool {
         Observation::from(self.clone()).validate()
     }

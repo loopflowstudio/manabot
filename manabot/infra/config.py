@@ -69,30 +69,20 @@ class BaseConfig(BaseModel):
 
 
 class UnsupportedPolicyInput(ValueError):
-    """A checkpoint, replay or saved configuration bound to another policy
-    input, or an observation the configured input cannot hold.
+    """A checkpoint, replay or saved configuration bound to another policy input.
 
-    `version` is the saved or required version; a saved configuration that
-    omits it was written for policy input v1. `state` names what a v9
-    observation needed when turn state (v10 or v11) is required.
+    `version` is the saved version; a saved configuration that omits it was
+    written for policy input v1.
     """
 
-    def __init__(self, version: object, state: str | None = None) -> None:
+    def __init__(self, version: object) -> None:
         self.version = version
-        self.state = state
-        if state is not None:
-            message = (
-                f"policy input v{version} required: this observation needs "
-                f"{state}, which v9 cannot hold"
-            )
-        else:
-            message = (
-                f"the checkpoint was written for policy input v{version} and must "
-                "be run from the revision that recorded it; this revision supports "
-                f"policy inputs {' and '.join(f'v{v}' for v in SUPPORTED_POLICY_INPUTS)}, "
-                f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
-            )
-        super().__init__(message)
+        super().__init__(
+            f"the checkpoint was written for policy input v{version} and must "
+            "be run from the revision that recorded it; this revision supports "
+            f"policy inputs {' and '.join(f'v{v}' for v in SUPPORTED_POLICY_INPUTS)}, "
+            f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
+        )
 
 
 class ObservationConfig(BaseConfig):
