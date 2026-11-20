@@ -129,10 +129,11 @@ return self.action_layer(torch.cat((actions, focused), dim=-1))
 
 The difference between "attack" and "leave it back" on one creature is then a
 function of that creature from the first update, rather than something the
-head has to grow. On the constructed attack decision
-(`decision_case("attack")`), setting the attacker to 9/9 at initialization
-moves the gap between the two logits at least twice as far as it does without
-the field.
+head has to grow. At initialization the effect is modest: on the constructed
+attack decision (`decision_case("attack")`), setting the attacker to 9/9 moves
+the gap between the two logits further with the field than without on about
+two seeds in three, and the median move is 1.25 to 2.2 times as large across
+windows of 32 seeds. The larger effect is on learning (below).
 
 - The layer starts at ordinary initialization, not zero. A zero start would
   leave the gap blind to the creature until the weights move, which is what
@@ -175,10 +176,12 @@ bindings that can change future behavior.
 An object token is a sum: a projection of its numeric row, the encoding of its
 card definition and name, its links, its facts, the effects on it and the
 shared context of the decision. Without normalization, whichever stream is
-largest sets the scale of the token. At initialization a card's name vector is
-about seven times its numeric row, so a creature growing from 2/2 to 9/9
-moves its whole token by under a tenth, and a token creature, which has no
-name, enters attention at a different scale from a card.
+largest sets the scale of the token. At initialization a card's definition
+encoding is up to twice its numeric row, so a creature growing from 2/2 to 9/9
+moves its whole token by about a fifth. With names on definitions
+(`definition_names`) the name vector is about seven times the numeric row: the
+same creature moves its token by under a tenth, and a token creature, which
+has no name, enters attention at under half a card's scale.
 
 ```python
 model = ModelConfig(stream_norm=True, ...)
@@ -221,10 +224,11 @@ are unchanged. [MLX](../manabot/backends/mlx.md#what-the-backend-covers)
 refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 
 On one constructed attack decision, fitting "attack if and only if power is
-at least 3" from initialization takes about half as many updates with
-`stream_norm`, `focus_film` and the [stat readings](#how-the-network-reads-a-column)
-together as with none of them. That is a supervised fit of one decision: it
-shows the mechanisms work, not that self-play learns to attack sooner.
+at least 3" from initialization takes about 0.7 times as many updates with
+`stream_norm` and `focus_film` as with neither (three seeds: 91, 98 and 90
+against 131, 125 and 145), and about 0.8 times with the Elemental world's
+definitions (95, 93 and 108 against 121, 138 and 122). That is a supervised
+fit of one decision: it shows the mechanisms work, not that self-play learns to attack sooner.
 
 ### Bucketed padding
 

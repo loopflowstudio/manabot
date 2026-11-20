@@ -1,8 +1,10 @@
 """Streams summed into an object token start at one scale with `stream_norm`.
 
-Measured at initialization on objects of sampled Elemental games, with names
-enabled. Each threshold is also asserted to fail on the historical layout, so
-it would notice the norms disappearing.
+Measured at initialization on objects of sampled Elemental games. Each
+threshold is also asserted to fail on the historical layout where that layout
+still misses it, so it would notice the norms disappearing. Fresh models keep
+names off definitions (`definition_names`); names on are the case where a card
+and a token permanent drift furthest apart.
 """
 
 from functools import cache
@@ -23,7 +25,9 @@ SPACE = ObservationSpace()
 COLUMNS = [column.name for column in published_columns(SPACE)["agent_permanents"]]
 
 
-def _agent(stream_norm: bool, seed: int = 0) -> ActorCritic:
+def _agent(
+    stream_norm: bool, seed: int = 0, definition_names: bool = False
+) -> ActorCritic:
     torch.manual_seed(seed)
     return ActorCritic(
         SPACE,
@@ -34,6 +38,7 @@ def _agent(stream_norm: bool, seed: int = 0) -> ActorCritic:
             policy_film=True,
             value_aggregation="masked_mean",
             stream_norm=stream_norm,
+            definition_names=definition_names,
         ),
     )
 
@@ -86,22 +91,37 @@ def _permanent_norms(agent: ActorCritic) -> dict[str, np.ndarray]:
 
 
 @pytest.mark.parametrize("stream_norm", [True, False])
-def test_numeric_definition_and_token_streams_share_a_scale(stream_norm: bool) -> None:
-    """Without the norms a card's definition is several times its numeric
-    row and a token permanent (no name) enters at under half a card's size."""
+def test_numeric_and_definition_streams_share_a_scale(stream_norm: bool) -> None:
+    """Without the norms a card's definition reaches several times its numeric
+    row (measured ratio 0.44-1.08); with them each is one LayerNorm's size."""
     norms = _permanent_norms(_agent(stream_norm))
     ratio = norms["numeric"] / norms["definition"]
-    assert len(norms["tokens"]) and len(norms["cards"])
-    size = norms["tokens"].mean() / norms["cards"].mean()
     balanced = bool((ratio > 0.5).all() and (ratio < 2).all())
     assert balanced == stream_norm, (ratio.min(), ratio.max())
-    assert (2 / 3 < size < 1.5) == stream_norm, size
+
+
+@pytest.mark.parametrize(
+    ("stream_norm", "definition_names", "balanced"),
+    [(True, False, True), (True, True, True), (False, True, False)],
+)
+def test_token_and_card_permanents_enter_at_one_scale(
+    stream_norm: bool, definition_names: bool, balanced: bool
+) -> None:
+    """With names on definitions and no norms, a token permanent (no name)
+    enters at under half a card's size (measured 3.3 against 8.6). Without
+    names the historical layout is balanced too (2.9 against 2.7), so only
+    its names-on case is asserted to miss."""
+    norms = _permanent_norms(_agent(stream_norm, definition_names=definition_names))
+    assert len(norms["tokens"]) and len(norms["cards"])
+    size = norms["tokens"].mean() / norms["cards"].mean()
+    assert (2 / 3 < size < 1.5) == balanced, size
 
 
 @pytest.mark.parametrize(("stream_norm", "moves"), [(True, True), (False, False)])
 def test_combat_stats_move_the_whole_token(stream_norm: bool, moves: bool) -> None:
     """2/2 to 9/9 moves the attacker's whole pre-attention token by at least
-    a quarter; summed with an unnormalized name it moves under a tenth."""
+    a quarter (measured 34%); summed with the unnormalized program it moves
+    about a fifth (22%), and with a name on the definition under a tenth."""
     agent = _agent(stream_norm)
     case = decision_case("attack").observation
     big = {key: value.clone() for key, value in case.items()}
