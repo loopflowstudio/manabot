@@ -155,10 +155,8 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             strength claim. Scalar and vector encodings must agree first.
             """
             assert game.env is not None and game.obs is not None
-            values = space.encoder.allocate()
-            game.env.encode_observation_into(game.obs, values)
-            for key, expected in space.encode(game.obs).items():
-                np.testing.assert_array_equal(values[key], expected, err_msg=key)
+            values = space.encode(game.obs)
+            for key, expected in values.items():
                 np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 game.env.semantic_decision_frame_json()

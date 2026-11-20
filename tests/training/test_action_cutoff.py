@@ -57,7 +57,7 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
             for _ in range(6):
                 engine.scenario_force_battlefield(actor, "Mountain")
             raw = env._last_obs = engine.scenario_refresh()
-            obs = space.encoder.encode(raw)
+            obs = space.encode(raw)
             assert len(raw.action_space.actions) == 67
             assert obs["actions_valid"].sum() == 64
             frame = json.loads(engine.semantic_decision_frame_json())

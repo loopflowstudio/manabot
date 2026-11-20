@@ -126,19 +126,11 @@ def _command(frame: dict, offer: int, tag: str) -> str:
     )
 
 
-def _assert_scalar_parity(env: managym.Env, space: ObservationSpace) -> dict:
-    raw = env.observation_for_player(env.current_agent_index())
-    reference = space.encode(raw)
-    native = env.encode_observation(raw)
-    into = space.encoder.allocate()
-    env.encode_observation_into(raw, into)
-    for key in reference:
-        np.testing.assert_allclose(native[key], reference[key], atol=1e-6, err_msg=key)
-        np.testing.assert_array_equal(into[key], native[key], err_msg=key)
-    return reference
+def _acting_input(env: managym.Env, space: ObservationSpace) -> dict:
+    return space.encode(env.observation_for_player(env.current_agent_index()))
 
 
-def test_catalog_naming_groups_then_names_with_scalar_parity_and_private_text(
+def test_catalog_naming_groups_then_names_with_private_text(
     naming_root: managym.Env,
 ) -> None:
     space = ObservationSpace()
@@ -146,7 +138,7 @@ def test_catalog_naming_groups_then_names_with_scalar_parity_and_private_text(
     # Ordinary capacity, independent of the vocabulary.
     assert space.shapes["name_candidates"] == (512, NAME_DIM)
     raw = naming_root.observation_for_player(naming_root.current_agent_index())
-    reference = _assert_scalar_parity(naming_root, space)
+    reference = _acting_input(naming_root, space)
     groups = [action.name_group for action in raw.action_space.actions]
     assert all(group is not None for group in groups)
     assert 2 <= len(groups) <= managym.NAME_BRANCHING
@@ -170,7 +162,7 @@ def test_catalog_naming_groups_then_names_with_scalar_parity_and_private_text(
     path = _name_path(leaf, "Fire Lord Sozin")
     assert len(path) == 1
     raw = leaf.observation_for_player(0)
-    reference = _assert_scalar_parity(leaf, space)
+    reference = _acting_input(leaf, space)
     first, last = groups[path[0]]
     assert [a.name_index for a in raw.action_space.actions] == list(
         range(first, last + 1)
@@ -222,7 +214,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     monkeypatch.setattr(managym, "naming_catalog", lambda: catalog)
     space = ObservationSpace()
     assert space.shapes["actions"][0] == 512
-    values = _assert_scalar_parity(root, space)
+    values = _acting_input(root, space)
     raw = root.observation_for_player(0)
     groups = [action.name_group for action in raw.action_space.actions]
     assert len(groups) == -(-len(catalog) // managym.NAME_BRANCHING)
@@ -272,7 +264,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     vector.step_into_buffers([target])
     leaf_frame = json.loads(leaf.semantic_decision_frame_json())
     assert json.loads(vector.semantic_decision_frames_json()[0]) == leaf_frame
-    leaf_values = _assert_scalar_parity(leaf, space)
+    leaf_values = _acting_input(leaf, space)
     for key, expected in leaf_values.items():
         np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
     with pytest.raises(Exception, match="revision|stale"):

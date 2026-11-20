@@ -302,16 +302,11 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
 
 
 def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_root):
-    import numpy as np
-
-    from manabot.env.observation import ObservationEncoder
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
-    scalar = ObservationEncoder(ObservationConfig()).encode(obs)
-    native = learn_root.encode_observation(obs)
-    for key in scalar:
-        np.testing.assert_array_equal(scalar[key], native[key], err_msg=key)
+    scalar = ObservationSpace(ObservationConfig()).encode(obs)
     retrievals = 0
     for index, action in enumerate(obs.action_space.actions):
         kind = int(action.action_type)
@@ -336,20 +331,22 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     for config in (
         ObservationConfig(max_actions=2),
         ObservationConfig(max_cards_per_player=len(obs.agent_cards)),
-        ObservationConfig(max_focus_objects=0),
     ):
-        with pytest.raises(ValueError, match="capacity exceeded"):
-            ObservationEncoder(config).encode(obs)
+        with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
+            ObservationSpace(config).encode(obs)
+    # A focus width of zero cannot hold the focused object at all.
+    with pytest.raises(ValueError, match="action_focus buffer shape"):
+        ObservationSpace(ObservationConfig(max_focus_objects=0)).encode(obs)
 
 
 def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     import numpy as np
 
-    from manabot.env.observation import ObservationEncoder
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ObservationConfig
 
-    encoder = ObservationEncoder(ObservationConfig())
-    buffers = encoder.allocate(1)
+    space = ObservationSpace(ObservationConfig())
+    buffers = space.encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
         terminated=np.zeros(1, dtype=np.uint8),
@@ -366,7 +363,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     obs, _ = scalar.reset(configs)
     rng = random.Random(0)
     for _ in range(2000):
-        encoded = encoder.encode(obs)
+        encoded = space.encode(obs)
         for key, value in encoded.items():
             np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
         retrievals = [
@@ -378,7 +375,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
             selected = retrievals[-1]
             after, *_ = scalar.step(selected)
             vector.step_into_buffers([selected])
-            for key, value in encoder.encode(after).items():
+            for key, value in space.encode(after).items():
                 np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
             return
         assert not obs.game_over

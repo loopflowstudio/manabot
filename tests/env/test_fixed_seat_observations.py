@@ -44,15 +44,10 @@ def _assert_rows(
     for slot, (scalar, player) in enumerate(zip(scalars, players, strict=True)):
         observation = scalar.observation_for_player(player)
         expected = space.encode(observation)
-        native = space.encoder.allocate()
-        scalar.encode_observation_into(
-            observation, native, space.encoder.config.action_overflow
-        )
         for key in expected:
             np.testing.assert_array_equal(
                 buffers[key][slot], expected[key], err_msg=key
             )
-            np.testing.assert_array_equal(buffers[key][slot], native[key], err_msg=key)
         if scalar.current_agent_index() != player:
             assert not buffers["actions_valid"][slot].any()
         if observation.opponent.main_counts is None:

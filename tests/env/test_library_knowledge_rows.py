@@ -25,19 +25,14 @@ def _root(owner: int) -> managym.Env:
 
 
 @pytest.mark.parametrize("owner", [0, 1])
-def test_library_facts_match_native_buffers_and_remain_private(owner: int) -> None:
+def test_library_facts_encode_for_their_owner_and_remain_private(owner: int) -> None:
     env = _root(owner)
     space = ObservationSpace()
     own = env.observation_for_player(owner)
     other = env.observation_for_player(1 - owner)
     assert set(own.agent.known_library) == {0}
     assert not other.opponent.known_library
-    for observation in (own, other):
-        expected = space.encode(observation)
-        actual = env.encode_observation(observation)
-        assert actual.keys() == expected.keys()
-        for key in expected:
-            np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+    assert not space.encode(other)["known_library"][1].any()
     definition = own.agent.known_library[0]
     encoded = space.encode(own)["known_library"]
     np.testing.assert_array_equal(encoded[0, 0], [definition + 1, 1])
@@ -88,19 +83,13 @@ def test_legacy_inputs_omit_library_positions(version: int) -> None:
     observation = managym.Observation.from_json(json.dumps(source))
     space = ObservationSpace(ObservationConfig(policy_input_version=version))
     expected = space.encode(observation)
-    native = space.encoder.allocate()
-    env.encode_observation_into(observation, native)
     source["agent"].pop("known_library", None)
     source["opponent"].pop("known_library", None)
     observation = managym.Observation.from_json(json.dumps(source))
     assert not observation.agent.known_library
     without = space.encode(observation)
-    native_without = space.encoder.allocate()
-    env.encode_observation_into(observation, native_without)
     for key in without:
         np.testing.assert_array_equal(expected[key], without[key], err_msg=key)
-        np.testing.assert_array_equal(native[key], native_without[key], err_msg=key)
-        np.testing.assert_array_equal(native[key], expected[key], err_msg=key)
 
 
 @pytest.mark.parametrize("owner", [0, 1])

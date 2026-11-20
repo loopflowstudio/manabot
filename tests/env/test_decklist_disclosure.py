@@ -85,23 +85,18 @@ def test_opponent_lists_appear_exactly_when_open(decklists: DecklistDisclosure) 
     else:
         assert fields == (None, None, None, None)
 
-    # Python reference and native encoders agree.
+    # The policy input flags disclosure for both viewers and encodes open lists.
     space = ObservationSpace(ObservationConfig())
     assert obs.decklists_closed == (decklists == "closed")
     for viewer in (0, 1):
-        view = env.observation_for_player(viewer)
-        encoded = space.encode(view)
-        native_buffers = env.encode_observation(view)
+        encoded = space.encode(env.observation_for_player(viewer))
         for key in ("agent_player", "opponent_player"):
             assert encoded[key][0, -1] == float(decklists == "open")
-            np.testing.assert_array_equal(encoded[key], native_buffers[key])
-    python = space.encode(obs)["decklists"]
-    native = env.encode_observation(obs)["decklists"]
-    assert python.shape == native.shape == (2, 60, DECKLIST_DIM)
-    np.testing.assert_array_equal(python, native)
-    assert python[0, :, 1].sum() == 41
-    assert python[1, :, 1].sum() == (40 if decklists == "open" else 0)
-    assert not python[1].any() if decklists == "closed" else python[1].any()
+    lists = space.encode(obs)["decklists"]
+    assert lists.shape == (2, 60, DECKLIST_DIM)
+    assert lists[0, :, 1].sum() == 41
+    assert lists[1, :, 1].sum() == (40 if decklists == "open" else 0)
+    assert not lists[1].any() if decklists == "closed" else lists[1].any()
 
     # LLM text and the Academy projection carry the same disclosure.
     text = capture_text_decision(env).text

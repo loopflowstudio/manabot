@@ -193,10 +193,11 @@ def test_survival_orders_cross_consumers(
         == managym.ActionSpaceEnum.ORDER_TRIGGERS
     )
     session.auto_pass = False
-    scalar = ObservationSpace().encode(obs)
-    native = env.encode_observation(obs)
-    for key in native:
-        np.testing.assert_array_equal(native[key], scalar[key], err_msg=key)
+    encoded = ObservationSpace().encode(obs)
+    np.testing.assert_array_equal(
+        encoded["actions_valid"][:3],
+        np.array([1, 1, 0], dtype=encoded["actions_valid"].dtype),
+    )
     assert (
         obs.action_space.actions[0].continuation_index
         != obs.action_space.actions[1].continuation_index

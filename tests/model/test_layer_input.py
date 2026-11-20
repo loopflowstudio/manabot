@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
 import pytest
 import torch
 
@@ -92,19 +91,7 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
         close_collector(collector)
 
 
-def _assert_encoder_parity(
-    env: managym.Env, obs: managym.Observation, space: ObservationSpace
-) -> dict[str, NDArray[np.float32]]:
-    config = space.encoder.config
-    reference = space.encode(obs)
-    native = env.encode_observation(obs, config.max_facts)
-    assert reference.keys() == native.keys()
-    for key, value in reference.items():
-        np.testing.assert_array_equal(value, native[key], err_msg=key)
-    return reference
-
-
-def test_layer_input_native_python_text_forward_backward_and_reload(
+def test_layer_input_text_forward_backward_and_reload(
     tmp_path: Path,
 ) -> None:
     torch.set_num_threads(1)
@@ -116,7 +103,7 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
     )
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = _assert_encoder_parity(env, obs, space)
+    reference = space.encode(obs)
     assert reference["effect_details"].shape == (4096, 3)
     assert (reference["effect_details"][:, 0] >= 11).any()
     assert "exile" in capture_text_decision(env).text.lower()
@@ -143,7 +130,7 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
         torch.testing.assert_close(expected, actual)
 
 
-def test_layer_colors_counter_order_and_signed_program_payload_parity() -> None:
+def test_layer_colors_counter_order_and_signed_program_payload_encode() -> None:
     env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     payload = json.loads(obs.toJSON())
@@ -154,21 +141,13 @@ def test_layer_colors_counter_order_and_signed_program_payload_parity() -> None:
     payload["shared_effects"][0]["effect"]["program"] = [[4, -17], [4, 2**31 - 1]]
     observed = managym.Observation.from_json(json.dumps(payload))
     config = ObservationConfig()
-    encoded = _assert_encoder_parity(env, observed, ObservationSpace(config))
+    encoded = ObservationSpace(config).encode(observed)
     assert set(encoded["facts"][:, 1]) >= {12, 13}
     assert encoded["facts"][encoded["facts"][:, 1] == 13, 9].min() > 0
 
 
-def test_scalar_and_vector_buffers_match_python_encoding() -> None:
-    config = ObservationConfig()
-    space = ObservationSpace(config)
-    env = kellan_upgrade_root()
-    obs = env.observation_for_player(env.current_agent_index())
-    buffers = space.encoder.allocate()
-    env.encode_observation_into(obs, buffers)
-    expected = space.encode(obs)
-    for key in expected:
-        np.testing.assert_array_equal(buffers[key], expected[key])
+def test_vector_buffers_match_scalar_encoding() -> None:
+    space = ObservationSpace(ObservationConfig())
     vector_buffers = space.encoder.allocate(1)
     vector_buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
@@ -193,7 +172,7 @@ def test_scalar_and_vector_buffers_match_python_encoding() -> None:
         )
 
 
-def test_captured_continuation_program_reaches_native_python_and_policy() -> None:
+def test_captured_continuation_program_reaches_input_and_policy() -> None:
     torch.set_num_threads(1)
     env = kellan_trigger_root(("Lightning Bolt",))
     for prefix, name in (("Cast ", "Lightning Bolt"), ("Target ", "Kellan")):
@@ -221,7 +200,7 @@ def test_captured_continuation_program_reaches_native_python_and_policy() -> Non
     assert "captured program" in capture_text_decision(env).text.lower()
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = _assert_encoder_parity(env, obs, space)
+    reference = space.encode(obs)
     assert (reference["facts"][:, 1] == 14).sum() > 0
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16))

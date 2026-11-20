@@ -48,11 +48,9 @@ def test_priority_tap_encodes_and_replays(tmp_path: Path) -> None:
     ]
     assert len(taps) == 1 and obs.action_space.actions[taps[0]].focus
     space = ObservationSpace(ObservationConfig())
-    reference = space.encode(obs)
-    native = space.encoder.allocate()
-    env.encode_observation_into(obs, native)
-    for key in reference:
-        np.testing.assert_array_equal(reference[key], native[key], err_msg=key)
+    valid = space.encode(obs)["actions_valid"]
+    assert valid[taps[0]]
+    assert int(np.count_nonzero(valid)) == len(obs.action_space.actions)
     after, *_ = capture.step(env, taps[0])
     capture.close()
     (record,) = GameRecord.model_validate_json(

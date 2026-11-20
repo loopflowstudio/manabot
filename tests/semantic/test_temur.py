@@ -7,7 +7,6 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     CARD_DIM,
     PLAYER_DIM,
-    ObservationEncoder,
     ObservationSpace,
 )
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
@@ -49,7 +48,7 @@ def test_temur_finishes_through_the_production_training_observation_path() -> No
     raise AssertionError("Temur game did not terminate")
 
 
-def test_temur_restricted_mana_and_legendary_flags_encode_identically() -> None:
+def test_temur_restricted_mana_and_legendary_flags_encode() -> None:
     env = managym.Env(seed=163, skip_trivial=False)
     env.reset(
         [
@@ -74,8 +73,5 @@ def test_temur_restricted_mana_and_legendary_flags_encode_identically() -> None:
     observation = env.step(red_pair)[0]
     assert observation.agent.lesson_mana[3] == 2
     assert any(card.is_legendary for card in observation.agent_cards)
-    expected = ObservationEncoder(ObservationConfig()).encode(observation)
-    actual = env.encode_observation(observation)
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
-    assert actual["agent_player"][0, 37] == np.float32(0.2)
+    encoded = ObservationSpace(ObservationConfig()).encode(observation)
+    assert encoded["agent_player"][0, 37] == np.float32(0.2)
