@@ -53,6 +53,7 @@ from manabot.env.observation import (
     column,
     columns,
 )
+from manabot.env.shared_effects import NUMBER_TOKEN_KINDS, PROGRAM_TOKEN_KIND
 from manabot.policy.buckets import has_history_events
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
 from manabot.policy.readings import (
@@ -77,8 +78,6 @@ class RecordNamespace(IntEnum):
     RESTRICTION = 3
 
 
-# Learning token kinds whose value is a number, not an id.
-NUMBER_TOKEN_KINDS = (4, 5)
 # Fact kinds by how admission and preparation read their id and detail words.
 ORDINAL_ID_KINDS = (
     FACT_TRANSFORMS,
@@ -1022,7 +1021,7 @@ def _effects(
     numeric = read_numeric(selected, tables.layout.readings["effects"])
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
-    program = kinds > 10
+    program = PROGRAM_TOKEN_KIND[kinds] != 0
     detail_embedding_rows = np.zeros(len(kinds), dtype=np.int64)
     if (~program).any():
         detail_embedding_rows[~program] = tables.names(
@@ -1030,7 +1029,7 @@ def _effects(
         )
     if program.any():
         detail_embedding_rows[program] = tables.tokens(
-            kinds[program] - 10, unsigned[program]
+            PROGRAM_TOKEN_KIND[kinds[program]], unsigned[program]
         )
     signed = np.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
     return EffectRoutes(
@@ -1048,7 +1047,9 @@ def _effects(
         detail_rows=detail_embedding_rows,
         detail_kinds=kinds,
         detail_numbers=signed.astype(np.float32),
-        detail_is_number=((kinds == 14) | (kinds == 15)).astype(np.float32),
+        detail_is_number=np.isin(PROGRAM_TOKEN_KIND[kinds], NUMBER_TOKEN_KINDS).astype(
+            np.float32
+        ),
         token_indexes=np.asarray(token_indexes, dtype=np.int64),
         schedule=pack(lengths),
         routes=live_batches[records] * objects + targets - 1,

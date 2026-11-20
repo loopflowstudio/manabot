@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.policy.prepare import NUMBER_TOKEN_KINDS, RecordNamespace, record_key
+from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
+from manabot.policy.prepare import RecordNamespace, record_key
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 

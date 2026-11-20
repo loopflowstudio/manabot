@@ -302,3 +302,15 @@ def test_layoutless_vector_registration_warns_and_preserves_memory_configuration
         pytest.raises(ValueError, match="decision memory"),
     ):
         memory.set_buffers(buffers)
+
+
+def test_effect_detail_kinds_publish_the_catalog_token_the_encoder_writes() -> None:
+    details = managym.observation_layout()["effect_details"]
+    names = details["row_kind_names"]
+    assert set(names.values()) == details["row_kinds"].keys()
+    tokens = details["program_token_kinds"]
+    assert tokens.keys() == {
+        value for name, value in names.items() if name.startswith("program_")
+    }
+    assert tokens[names["program_integer"]] == 4
+    assert tokens[names["program_boolean"]] == 5

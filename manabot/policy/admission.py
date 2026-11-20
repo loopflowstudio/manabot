@@ -39,11 +39,14 @@ from manabot.env.observation import (
 )
 from manabot.env.shared_effects import (
     DETAIL_DIM,
+    DETAIL_KINDS,
     DETAIL_ROWS,
     EFFECT_DIM,
     EFFECT_ROWS,
     MEMBER_DIM,
     MEMBER_ROWS,
+    NUMBER_TOKEN_KINDS,
+    PROGRAM_TOKEN_KIND,
 )
 from manabot.infra.config import ModelConfig
 from manabot.policy.decision_memory import (
@@ -54,7 +57,6 @@ from manabot.policy.decision_memory import (
 )
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
-    NUMBER_TOKEN_KINDS,
     ORDINAL_ID_KINDS,
     RecordNamespace,
     Tables,
@@ -453,9 +455,11 @@ def shared_effects(
         member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
         member_records.extend([i] * targets)
     detail = details.reshape(-1, DETAIL_DIM)[detail_indexes]
-    kinds = _indexes(detail[:, _EFFECT_DETAIL_KIND], 19, "effect detail kind")
+    kinds = _indexes(
+        detail[:, _EFFECT_DETAIL_KIND], max(DETAIL_KINDS), "effect detail kind"
+    )
     ids = _indexes(detail[:, _EFFECT_DETAIL_VALUE], 65535, "effect detail half")
-    if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
+    if not np.isin(kinds, DETAIL_KINDS).all():
         raise ValueError("live effect detail has no kind")
     member = members.reshape(-1, MEMBER_DIM)[member_indexes]
     _indexes(member[:, _MEMBER_OBJECT], objects, "effect member")
@@ -472,9 +476,12 @@ def shared_effects(
             RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
         )
         definition_ids(source, len(catalog.definitions), catalog.definitions)
-        unsigned, program = (ids[:, 0] << 16) | ids[:, 1], kinds > 10
+        unsigned, program = (
+            (ids[:, 0] << 16) | ids[:, 1],
+            PROGRAM_TOKEN_KIND[kinds] != 0,
+        )
         catalog.require_names(RecordNamespace.TOKEN, unsigned[~program])
-        catalog.require_tokens(kinds[program] - 10, unsigned[program])
+        catalog.require_tokens(PROGRAM_TOKEN_KIND[kinds[program]], unsigned[program])
 
 
 def relations(rows: np.ndarray, width: int, objects: int) -> None:

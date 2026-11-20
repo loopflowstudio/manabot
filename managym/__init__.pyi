@@ -54,6 +54,7 @@ class ObservationArrayLayout(TypedDict):
     row_kinds: dict[int, str]
     # Each row kind's name (facts), for readers that look kinds up by name.
     row_kind_names: dict[str, int]
+    program_token_kinds: NotRequired[dict[int, int]]
     element: NotRequired[ObservationValueLayout]
 
 class ObservationLayout:

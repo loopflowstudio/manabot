@@ -1009,7 +1009,10 @@ pub fn observation_layout(
         (2, "Subtype token in value_high/value_low"),
         (3, "Color token in value_high/value_low"),
     ]);
-    for kind in 11..=19 {
+    details.row_kind_names = BTreeMap::from([("keyword", 1), ("subtype", 2), ("color", 3)]);
+    for (name, token) in super::shared_effects::PROGRAM_DETAIL_KINDS {
+        let kind = super::shared_effects::program_detail_kind(token as u16) as u8;
+        details.row_kind_names.insert(name, kind);
         details.row_kinds.insert(kind, "Catalog token: TokenKind = kind - 10; exact signed i32 value in value_high/value_low; row order is program order");
     }
     layout.insert("effect_details".into(), details);

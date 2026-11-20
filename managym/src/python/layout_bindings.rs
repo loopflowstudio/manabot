@@ -74,6 +74,13 @@ fn arrays_dict(py: Python<'_>, arrays: &BTreeMap<String, ArrayLayout>) -> PyResu
         value.set_item("columns", columns)?;
         value.set_item("row_kinds", &array.row_kinds)?;
         value.set_item("row_kind_names", &array.row_kind_names)?;
+        if key == "effect_details" {
+            let tokens: BTreeMap<_, _> = crate::agent::shared_effects::PROGRAM_DETAIL_KINDS
+                .into_iter()
+                .map(|(name, token)| (array.row_kind_names[name], token as u16))
+                .collect();
+            value.set_item("program_token_kinds", tokens)?;
+        }
         if let Some(element) = &array.element {
             value.set_item("element", value_dict(py, element)?)?;
         }

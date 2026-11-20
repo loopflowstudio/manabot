@@ -14,6 +14,7 @@ import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
 from manabot.env.observation import column, column_names
+from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
 from manabot.policy.readings import signed_log
 from managym.decision_memory import (
     DefinitionProgram,
@@ -1031,7 +1032,7 @@ def prepare_memory(
 def _prepare_dense_memory(
     obs: "ObservationBuffers", tables: "Tables"
 ) -> MemoryRows[np.ndarray] | None:
-    from manabot.policy.prepare import NUMBER_TOKEN_KINDS, pack, record_word
+    from manabot.policy.prepare import pack, record_word
 
     if _RECORDS not in obs:
         return None
