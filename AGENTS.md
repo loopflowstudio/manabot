@@ -471,12 +471,13 @@ benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
-**No test runs for five minutes.** `tests/conftest.py` ends the run when a
-single test reaches 300 seconds, with every thread's stack and exit status 1.
-Fix or split a test that times out. Run targeted tests of the changed
-behavior, including existing consumers whose files did not change. When input
-scaling changes, check numeric assertions against the new scale and keep the
-control case that proves the behavior. CI runs the suite.
+**No test runs for five minutes.** Keep learning tests bounded under CI's
+parallel workers. Use bucketed shapes for small boards when they preserve the
+comparison, and restore any Torch thread limit changed by the test.
+Run targeted tests of the change and its existing consumers.
+When policy input width or scale changes, include model tests that call
+projections directly. Dense reference tests should apply the model's saved
+readings before projection and keep the control that proves the behavior.
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.

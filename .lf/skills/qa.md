@@ -635,13 +635,11 @@ publish, land or choose the next Graph step from here.
   always writes a container); convert the pinned pilots and u1952, then load
   each `.safetensors`.
   `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
-  Returning users hold checkpoints written on `main`, not on earlier commits
-  of the branch (those can carry parameters the branch later removed and
-  refuse with `container tensors with no policy parameter`, while the
-  listing still shows them available). Write them in a `main` worktree as
-  in "Files a returning user wrote", then score the same seeded random games
-  under both trees: equal decision counts and logits within 1e-5 show the
-  saved column prefix reads as before. Open one as a Seat 2 opponent with
+  Write returning-user checkpoints on `main` as in "Files a returning user
+  wrote". For a column append, cover both `deck_world` and `checkpoint_world`
+  bindings. The Elemental recipe writes `checkpoint_world`. Score the same
+  seeded games on both trees and compare decision counts and logits within
+  1e-5 to verify saved-prefix compatibility. Open one as a Seat 2 opponent with
   `/?hero=ur_lessons&villain=gw_allies&opponent=<sha256>` and press Start
   game. Admission changes also reach `tests/model/test_attack_choice.py`
   (old-world fixtures with an empty state dict), which CI's model job runs.
