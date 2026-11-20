@@ -28,10 +28,20 @@ ManaFloats = Literal["off", "usable", "all"]
 
 class ObservationValueLayout(TypedDict):
     kind: Literal[
-        "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
+        "id",
+        "reference",
+        "category",
+        "selector",
+        "position",
+        "flag",
+        "count",
+        "number",
+        "rank",
+        "tagged",
     ]
     encoding: str
     range: str
+    scale: NotRequired[int]
 
 class ObservationColumnLayout(ObservationValueLayout):
     index: int

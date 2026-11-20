@@ -67,6 +67,7 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
             space.config,
             state,
             parameter_names=dict(model.named_parameters()),
+            readings=model.readings,
         )
     )
     obs = _batch(space, 6)

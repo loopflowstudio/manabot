@@ -14,48 +14,84 @@ from manabot.model.world import (
     written_at,
 )
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
+from manabot.policy.readings import (
+    Reading,
+    Readings,
+    fresh_readings,
+    legacy_readings,
+    published_columns,
+    recorded_readings,
+)
 import managym
 
 
 def input_columns(space: ObservationSpace) -> dict[str, list[str]]:
-    layout = managym.observation_layout(
-        policy_history=bool(space.config.policy_history_version),
-        turn_state=space.turn_state,
-        legacy=not space.one_token,
-    )
     return {
-        key: sorted(row["columns"], key=lambda name: row["columns"][name]["index"])
-        for key, row in layout.items()
-        if row["columns"]
+        key: [column.name for column in columns]
+        for key, columns in published_columns(space).items()
     }
 
 
 def world_fields(
     space: ObservationSpace,
-    widths: Mapping[str, int],
+    readings: Readings,
     setups: Sequence[managym.PlayerConfig] | None = None,
 ) -> dict[str, Any]:
-    """Record the named input prefixes and catalog rows used by the saved policy."""
+    """Record the named input prefixes, their readings and the catalog rows
+    used by the saved policy. Each buffer's saved width is its readings' length."""
     binding = deck_world(space) if setups is None else checkpoint_world(setups, space)
     columns = input_columns(space)
-    for key, width in widths.items():
-        binding["input_schema"][key]["shape"][-1] = width
-        columns[key] = columns[key][:width]
+    for key, values in readings.items():
+        binding["input_schema"][key]["shape"][-1] = len(values)
+        columns[key] = columns[key][: len(values)]
     return {
         "world_binding": binding,
         "writer_catalog": writer_catalog(),
         "input_columns": columns,
+        "input_readings": {
+            key: [value.value for value in values] for key, values in readings.items()
+        },
+    }
+
+
+def saved_readings(
+    checkpoint: Mapping[str, Any], space: ObservationSpace
+) -> dict[str, tuple[Reading, ...]]:
+    """The readings a checkpoint record was written with.
+
+    A record without `input_readings` predates them and gets
+    `legacy_readings`, cut to its saved column prefixes. A record without a
+    world binding is a model never saved, which reads as a fresh one.
+    """
+    binding = checkpoint.get("world_binding")
+    recorded = checkpoint.get("input_readings")
+    if recorded is not None:
+        columns = checkpoint.get("input_columns")
+        if not isinstance(columns, dict):
+            raise ValueError(
+                f"checkpoint input readings have no columns; {written_at(checkpoint)}"
+            )
+        return recorded_readings(recorded, columns, written_at(checkpoint))
+    if not isinstance(binding, dict):
+        return fresh_readings(space)
+    schema = binding.get("input_schema")
+    widths = {
+        key: entry["shape"][-1]
+        for key, entry in (schema if isinstance(schema, dict) else {}).items()
+        if isinstance(entry, dict) and isinstance(entry.get("shape"), list)
+    }
+    return {
+        key: values[: widths.get(key)] for key, values in legacy_readings(space).items()
     }
 
 
 @dataclass(frozen=True)
 class ModelInterface:
-    """A checkpoint's writer vocabulary, the running one, and its saved column
-    prefixes (only the arrays narrower than the runtime's)."""
+    """A checkpoint's writer vocabulary and the running one. Its saved column
+    prefixes are the lengths of its readings (`saved_readings`)."""
 
     writer: WriterCatalog
     current: WriterCatalog
-    widths: dict[str, int]
 
 
 def model_interface(
@@ -94,7 +130,7 @@ def model_interface(
                 f"incompatible checkpoint rules binding for {key}; {location}"
             )
 
-    widths = saved_widths(checkpoint, expected, space, location)
+    validate_saved_columns(checkpoint, expected, space, location)
     current = writer_catalog()
     writer = checkpoint.get("writer_catalog")
     if writer is None:
@@ -122,16 +158,16 @@ def model_interface(
         raise ValueError(
             f"belief card embedding requires a bound belief vocabulary; {location}"
         )
-    return ModelInterface(writer, current, widths)
+    return ModelInterface(writer, current)
 
 
-def saved_widths(
+def validate_saved_columns(
     checkpoint: Mapping[str, Any],
     expected: Mapping[str, Any],
     space: ObservationSpace,
     location: str,
-) -> dict[str, int]:
-    """The saved width of each named array narrower than the runtime's.
+) -> None:
+    """Check each saved array against the runtime's.
 
     Columns are only appended, so a checkpoint reads the runtime's first N
     columns; recorded names, when present, must equal that prefix."""
@@ -166,14 +202,12 @@ def saved_widths(
                 raise ValueError(
                     f"incompatible {key} columns: checkpoint {recorded[key]}, runtime {wanted}; {location}"
                 )
-            if width != current_shape[-1]:
-                widths[key] = width
+            widths[key] = width
         elif shape != current_shape:
             raise ValueError(f"incompatible {key} shape {shape}; {location}")
     for group in ("player", "cards", "permanents"):
         if widths.get(f"agent_{group}") != widths.get(f"opponent_{group}"):
             raise ValueError(f"{group} column counts differ between seats; {location}")
-    return widths
 
 
 def recorded_writer(

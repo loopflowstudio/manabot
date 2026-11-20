@@ -666,7 +666,9 @@ def test_equal_rule_names_learn_opposite_public_preferences(
 
     Supervised targets name the publicly disclosed card. Equalize two installed
     programs at the encoder boundary: the names, native admission and real game
-    definitions are untouched. A program-only state cannot solve this pair.
+    definitions are untouched. A program-only state cannot solve this pair, so
+    this holds for models that add names onto definitions (checkpoints written
+    before `definition_names`); fresh models keep names on candidates only.
     """
     torch.set_num_threads(1)
     torch.manual_seed(243)
@@ -682,6 +684,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
             world=managym.WORLD_SETUP,
             attention_on=False,
             policy_film=True,
+            definition_names=True,
         ),
     ).eval()
     # Both names share one leaf prompt; choices are its offer rows.

@@ -171,6 +171,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         space.config,
         state,
         parameter_names=dict(agent.named_parameters()),
+        readings=agent.readings,
     ), batch
 
 

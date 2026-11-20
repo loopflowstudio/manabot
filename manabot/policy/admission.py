@@ -56,12 +56,12 @@ from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     NUMBER_TOKEN_KINDS,
     ORDINAL_ID_KINDS,
-    PROGRAM_KINDS,
     RecordNamespace,
     Tables,
     record_key,
     record_word,
 )
+from manabot.policy.readings import PROGRAM_KINDS, Readings
 
 # Native columns these checks read, by name.
 _FACT_ORDINAL = column("facts", "value_2")  # a program row's ordinal
@@ -92,16 +92,13 @@ _EVENT_KIND = column("events", "kind")
 _EVENT_SUBJECTS = columns("events", "source_definition", "target_definition")
 
 
-def binding(
-    model: ModelConfig,
-    space: ObservationSpace,
-    column_widths: dict[str, int] | None = None,
-) -> str:
-    """The configuration a prepared batch belongs to, independent of weights."""
+def binding(model: ModelConfig, space: ObservationSpace, readings: Readings) -> str:
+    """The configuration a prepared batch belongs to, independent of weights.
+
+    Compared in process and stored nowhere; the readings (and so the saved
+    widths) are part of it, since they decide every prepared number."""
     key = model.model_dump_json() + "\n" + space.config.model_dump_json()
-    if column_widths:
-        key += f"\ncolumn_widths={sorted(column_widths.items())}"
-    return key
+    return key + f"\nreadings={sorted(readings.items())}"
 
 
 @dataclass(frozen=True)
@@ -115,7 +112,7 @@ class Spec:
 
     @property
     def binding(self) -> str:
-        return binding(self.model, self.space, self.tables.layout.column_widths)
+        return binding(self.model, self.space, self.tables.layout.readings)
 
 
 def legal_mask(mask: np.ndarray) -> np.ndarray:

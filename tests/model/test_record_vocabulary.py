@@ -77,7 +77,7 @@ def _granted_keyword(name: str, source: int = 0) -> torch.Tensor:
 
 
 def _fact_encoder() -> FactEncoder:
-    encoder = FactEncoder(WIDTH, vocabulary="catalog")
+    encoder = FactEncoder(WIDTH, numeric=6, vocabulary="catalog")
     # A fresh fact output is zero; expose the representation and its gradients.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(WIDTH))
@@ -367,3 +367,15 @@ def test_checkpoints_without_the_field_read_hashed_only_with_a_world() -> None:
     assert ModelConfig.from_checkpoint({}) == ModelConfig()
     explicit = ModelConfig(**world).checkpoint_payload()
     assert ModelConfig.from_checkpoint(explicit).record_vocabulary == "catalog"
+
+
+def test_checkpoints_without_definition_names_add_them_only_with_a_world() -> None:
+    world = {"world": managym.WORLD_SETUP}
+    assert ModelConfig.from_checkpoint(world).definition_names
+    assert ModelConfig.from_checkpoint({}) == ModelConfig()
+    fresh = ModelConfig(**world)
+    assert "definition_names" not in fresh.model_dump()
+    assert not ModelConfig.from_checkpoint(fresh.checkpoint_payload()).definition_names
+    assert architecture_identity(
+        ModelConfig(**world, definition_names=True), ObservationSpace()
+    ) != architecture_identity(fresh, ObservationSpace())

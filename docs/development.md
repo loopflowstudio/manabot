@@ -419,7 +419,10 @@ equality across Linux and macOS is not claimed.
 
 There are two ways to pass. If the change forgot something, add it: the
 [rename table](observation-and-model.md#the-rename-table) entry, or append the
-new column instead of inserting it. If the change means to alter what stored
+new column instead of inserting it. A change to how the model reads a column
+belongs in the rule for fresh models
+([how the network reads a column](observation-and-model.md#how-the-network-reads-a-column));
+the pilots record no readings, so they replay unchanged. If the change means to alter what stored
 players compute (a rules fix reaching the recorded game, a corrected encoder
 column), declare it:
 

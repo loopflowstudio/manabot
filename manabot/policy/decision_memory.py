@@ -14,6 +14,7 @@ import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
 from manabot.env.observation import column, column_names
+from manabot.policy.readings import signed_log
 from managym.decision_memory import (
     DefinitionProgram,
     decision_name_values,
@@ -490,11 +491,6 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
         named = record_word(headers, _RECORD_NAME)
         if (named < 0).any() or (named >= len(tables.name_definitions)).any():
             raise ValueError("invalid decision-memory name row")
-
-
-def _scaled(values: np.ndarray) -> np.ndarray:
-    values = values.astype(np.float64)
-    return (np.sign(values) * np.log1p(np.abs(values)) / 10).astype(np.float32)
 
 
 @dataclass(frozen=True)
@@ -1055,14 +1051,14 @@ def _prepare_dense_memory(
     for index, offset in enumerate(_RECORD_SELECTORS):
         selectors[:, index * 2] = selected[:, offset]
         if offset in _RECORD_NUMBERED_SELECTORS:
-            selectors[:, index * 2 + 1] = _scaled(record_word(selected, offset + 1))
+            selectors[:, index * 2 + 1] = signed_log(record_word(selected, offset + 1))
     selectors[:, 8:] = selected[:, _RECORD_DECLARATION]
     numbers = np.concatenate(
         (
-            _scaled(temporal),
+            signed_log(temporal),
             selected[:, _RECORD_PHASE_STEP] / [4, 12],
             selected[:, _RECORD_CHOOSER, None] / 2,
-            _scaled(context),
+            signed_log(context),
             selectors,
         ),
         -1,
@@ -1114,7 +1110,7 @@ def _prepare_dense_memory(
     reference_numbers = np.concatenate(
         (
             references[:, _REFERENCE_ROLE, None] / 2,
-            _scaled(numeric),
+            signed_log(numeric),
             references[:, _REFERENCE_FLAGS],
             (references[:, _REFERENCE_DEFINITION, None] > 0).astype(np.float32),
         ),
@@ -1128,7 +1124,7 @@ def _prepare_dense_memory(
     signed = payloads.astype(np.uint32).view(np.int32)
     numeric_values = np.where(
         (token_kinds == -1) | np.isin(token_kinds, NUMBER_TOKEN_KINDS),
-        _scaled(np.where(program, signed, payloads)),
+        signed_log(np.where(program, signed, payloads)),
         0,
     )
     # Field labels have one owner in the native vocabulary. No table indexes

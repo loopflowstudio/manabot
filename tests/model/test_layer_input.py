@@ -235,7 +235,7 @@ def test_fact_inference_preserves_sparse_rows_and_fresh_state(
 ) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(268)
-    encoder = FactEncoder(8)
+    encoder = FactEncoder(8, numeric=5)
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(8))
         encoder.output.bias.fill_(0.2)
@@ -297,7 +297,7 @@ def test_fact_admission_rejects_malformed_rows(column: int, value: float) -> Non
 def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(244)
-    encoder = FactEncoder(8)
+    encoder = FactEncoder(8, numeric=5)
     # A trained output must expose the representation; fresh fact output is zero.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(8))

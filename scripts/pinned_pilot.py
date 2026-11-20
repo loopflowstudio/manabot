@@ -67,7 +67,7 @@ def play(
         pilot, space = load_checkpoint(str(path))
     except ValueError as exc:
         raise ValueError(f"the loader refused {path.name}: {exc}") from exc
-    width = pilot.column_widths.get("agent_player", space.shapes["agent_player"][-1])
+    width = len(pilot.readings["agent_player"])
     columns = input_columns(space)["agent_player"][:width]
     env = managym.Env(seed=seed)
     obs, _ = env.reset(

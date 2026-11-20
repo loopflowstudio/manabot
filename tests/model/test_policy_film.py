@@ -13,7 +13,12 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.recipes.local import LocalConfig
-from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
+from manabot.verify.action_cases import (
+    decision_case,
+    identity_removed,
+    reorder_objects,
+    reorder_offers,
+)
 from tests.model.prepared_routes import device_input
 
 SPEC = {"hidden_dim": 32, "num_attention_heads": 2, "attention_feedforward_dim": 64}
@@ -60,18 +65,24 @@ def test_film_starts_as_the_additive_policy() -> None:
         )
 
 
-def test_film_gradient_couples_offer_and_state() -> None:
+@pytest.mark.parametrize("distinct_modes", [True, False])
+def test_film_gradient_couples_offer_and_state(distinct_modes: bool) -> None:
     """Opposite labels on two states give the state code a nonzero gradient."""
     film = _agent(4, True)
     cases = [decision_case("mode", preference=p) for p in (0, 1)]
-    batch = {
-        k: torch.cat([c.observation[k] for c in cases]) for k in cases[0].observation
-    }
+    observations = [
+        c.observation if distinct_modes else identity_removed(c) for c in cases
+    ]
+    batch = {k: torch.cat([obs[k] for obs in observations]) for k in observations[0]}
     labels = torch.tensor([c.preferred for c in cases])
     logits, _ = film(device_input(film, batch))
     torch.nn.functional.cross_entropy(logits, labels).backward()
     assert film.policy_film is not None and film.policy_film.weight.grad is not None
-    assert film.policy_film.weight.grad.abs().max() > 1e-6
+    gradient = film.policy_film.weight.grad.abs().max()
+    if distinct_modes:
+        assert gradient > 1e-7
+    else:
+        assert gradient == 0
 
 
 def test_film_preserves_offer_and_object_order_invariance() -> None:

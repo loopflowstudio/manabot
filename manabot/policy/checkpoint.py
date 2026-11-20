@@ -31,22 +31,18 @@ from typing import Any
 
 import numpy as np
 
-from manabot.env.observation import (
-    FACT_KINDS,
-    PERMANENT_DEFINITION_INDEX,
-    PERMANENT_LINK_INDEXES,
-    ObservationSpace,
-)
+from manabot.env.observation import FACT_KINDS, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.architecture import (
     ArchitectureReceipt,
     architecture_receipt,
     validate_architecture_receipt,
 )
-from manabot.model.interface import model_interface, world_fields
+from manabot.model.interface import model_interface, saved_readings, world_fields
 from manabot.model.world import checkpoint_source, written_at
 from manabot.policy.binding import BindingReport, bind_catalog
 from manabot.policy.prepare import Layout, Tables
+from manabot.policy.readings import Readings
 
 type ParameterArrays = Mapping[str, np.ndarray]
 
@@ -76,6 +72,7 @@ _OPTIONAL_METADATA_KEYS = (
     "global_step",
     "writer_catalog",
     "input_columns",
+    "input_readings",
     "belief_schema_identity",
     "belief_content_manifest_identity",
 )
@@ -107,12 +104,23 @@ def pretrained_memory_branch(
         "decision_memory_summaries",
         "decision_memory_gate_scale",
     }
-    if (
-        source.decision_memory != "none"
-        or target.decision_memory == "none"
-        or source.model_dump(exclude=excluded) != target.model_dump(exclude=excluded)
-    ):
-        raise ValueError("pretrained model settings differ from requested arm")
+    branch = source.decision_memory == "none" and target.decision_memory != "none"
+    differ = [
+        f"{key}: {getattr(source, key)!r} -> {getattr(target, key)!r}"
+        for key in type(source).model_fields
+        if not (branch and key in excluded)
+        and getattr(source, key) != getattr(target, key)
+    ]
+    if differ or not branch:
+        raise ValueError(
+            "pretrained model settings differ from requested arm"
+            + (
+                f" ({', '.join(differ)}); set the requested model to the "
+                "pretrained policy's values"
+                if differ
+                else ""
+            )
+        )
     if not all(
         (
             observation.max_decision_records,
@@ -132,7 +140,8 @@ def pretrained_memory_branch(
 
 @dataclass(frozen=True)
 class Dimensions:
-    """Input widths and architecture of one checkpoint."""
+    """Numeric input widths (columns each projection receives) and architecture
+    of one checkpoint."""
 
     hidden: int
     heads: int
@@ -144,25 +153,11 @@ class Dimensions:
     action: int
     focus: int
     relation: int
+    fact: int
     fact_kinds: int
     token_rows: int
     name_rows: int
     links: int
-
-
-def layout(
-    space: ObservationSpace, column_widths: dict[str, int] | None = None
-) -> Layout:
-    width = (column_widths or {}).get(
-        "agent_permanents", space.shapes["agent_permanents"][-1]
-    )
-    links = tuple(c for c in PERMANENT_LINK_INDEXES if c < width)
-    joins = (PERMANENT_DEFINITION_INDEX, *links)
-    return Layout(
-        numeric_permanent_columns=tuple(c for c in range(width) if c not in joins),
-        link_columns=links,
-        column_widths=column_widths,
-    )
 
 
 # -- canonical names -----------------------------------------------------------------
@@ -217,7 +212,9 @@ class PolicyCheckpoint:
     parameters: ParameterArrays
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
-    column_widths: dict[str, int] | None = None
+    # The readings the checkpoint was written with (`saved_readings`), one per
+    # column of each buffer's saved prefix.
+    readings: Readings
     report: BindingReport | None = None
 
     def receipt(self) -> ArchitectureReceipt:
@@ -249,24 +246,24 @@ class PolicyCheckpoint:
         return len(programs) if programs is not None else 0
 
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, layout(self.space, self.column_widths))
+        return Tables.from_buffers(self.buffers, Layout(self.readings))
 
     def dimensions(self) -> Dimensions:
         model = self.model
-        width = (self.column_widths or {}).get
-        columns = layout(self.space, self.column_widths)
+        columns = Layout(self.readings)
         return Dimensions(
             hidden=model.hidden_dim,
             heads=model.num_attention_heads,
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=width("agent_player", self.space.shapes["agent_player"][-1]),
-            card=width("agent_cards", self.space.shapes["agent_cards"][-1]),
-            permanent=len(columns.numeric_permanent_columns),
-            action=width("actions", self.space.shapes["actions"][-1]),
+            player=columns.numeric_width("agent_player"),
+            card=columns.numeric_width("agent_cards"),
+            permanent=columns.numeric_width("agent_permanents"),
+            action=columns.numeric_width("actions"),
             focus=self.space.config.max_focus_objects,
-            relation=width("relations", self.space.shapes["relations"][-1]),
+            relation=columns.numeric_width("relations"),
+            fact=columns.fact_width(catalog_ids=True),
             fact_kinds=FACT_KINDS,
             token_rows=int(
                 self.parameters["semantic_cards.token_embedding.weight"].shape[0]
@@ -283,9 +280,11 @@ def from_torch_state(
     metadata: Mapping[str, str] | None = None,
     *,
     parameter_names: Iterable[str],
+    readings: Readings,
 ) -> PolicyCheckpoint:
     """The container contents of a PyTorch state dict (as NumPy arrays).
-    Every tensor becomes one canonical parameter or one lookup buffer."""
+    Every tensor becomes one canonical parameter or one lookup buffer;
+    `readings` are the policy's input readings."""
     names = tuple(parameter_names)
     missing = sorted(set(names) - set(state))
     if missing:
@@ -316,6 +315,7 @@ def from_torch_state(
             if name not in parameter_set
         },
         metadata=meta,
+        readings=readings,
     )
 
 
@@ -343,11 +343,11 @@ def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
     arrays = dict(checkpoint.parameters)
     arrays.update({_BUFFER + k: v for k, v in checkpoint.buffers.items()})
     metadata = dict(checkpoint.metadata)
-    if checkpoint.column_widths is not None:
+    if checkpoint.report is not None:
         # read_container returns runtime-bound arrays. Serializing those arrays
         # makes this runtime their writer, while conversion uses the originals.
         record = {
-            **world_fields(checkpoint.space, checkpoint.column_widths),
+            **world_fields(checkpoint.space, checkpoint.readings),
             "architecture": checkpoint.receipt().model_dump(mode="json"),
             "source": checkpoint_source(),
         }
@@ -405,7 +405,11 @@ def read_saved_container(path: str | Path) -> PolicyCheckpoint:
             f"{path} has no {', '.join(missing)} metadata, so it is not a policy "
             f"checkpoint container; {remedy}"
         )
-    meta = {key: json.loads(metadata[key]) for key in _METADATA_KEYS}
+    meta = {
+        key: json.loads(value)
+        for key, value in metadata.items()
+        if key != "converted_from"
+    }
     hypers = meta["hypers"]
     space = ObservationSpace(
         ObservationConfig.from_checkpoint(hypers["observation_hypers"])
@@ -423,6 +427,7 @@ def read_saved_container(path: str | Path) -> PolicyCheckpoint:
             k[len(_BUFFER) :]: v for k, v in arrays.items() if k.startswith(_BUFFER)
         },
         metadata=metadata,
+        readings=saved_readings(meta, space),
     )
 
 
@@ -434,21 +439,16 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
     if interface is None:
         return checkpoint
-    width = interface.widths.get(
-        "agent_player", checkpoint.space.shapes["agent_player"][-1]
-    )
+    columns = Layout(checkpoint.readings)
+    width = len(checkpoint.readings["agent_player"])
     projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
     extra = (
-        interface.widths.get(
-            "player_turn_state", checkpoint.space.shapes["player_turn_state"][-1]
-        )
-        if checkpoint.space.turn_state
-        else 0
+        columns.numeric_width("player_turn_state") if checkpoint.space.turn_state else 0
     )
-    if projected != width + extra:
+    if projected != columns.numeric_width("agent_player") + extra:
         raise ValueError("checkpoint player columns differ from its projection")
     if not checkpoint.model.catalog_records() and interface.writer == interface.current:
-        return replace(checkpoint, column_widths=interface.widths)
+        return checkpoint
     try:
         bound, report = bind_catalog(checkpoint, interface.writer, interface.current)
     except ValueError as error:
@@ -461,7 +461,7 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         checkpoint.space.shapes["agent_player"][-1],
         report.summary(),
     )
-    return replace(bound, column_widths=interface.widths, report=report)
+    return replace(bound, report=report)
 
 
 # safetensors: an 8-byte little-endian header length, a JSON header naming each

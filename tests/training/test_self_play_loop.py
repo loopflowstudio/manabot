@@ -9,10 +9,13 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch import policy as policy_module
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
+from manabot.env.observation import ObservationSpace
+from manabot.policy.readings import Reading, fresh_readings, legacy_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
 from manabot.training.learning import DampedPolicyLearning, Learning
@@ -138,6 +141,89 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert reported.active_seconds is not None and reported.active_seconds > 0
 
 
+def test_resume_refuses_a_model_that_reads_its_inputs_differently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={"learning": Learning(horizon=2, epochs=1, minibatches=1)}
+    )
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(settings, run, updates=1)
+
+    # The rule changes between the start and the resume: timestamps read as stored.
+    def changed(space: ObservationSpace) -> dict[str, tuple[Reading, ...]]:
+        readings = fresh_readings(space)
+        return {
+            key: tuple(
+                Reading.AS_IS if value is Reading.RANK else value for value in values
+            )
+            for key, values in readings.items()
+        }
+
+    monkeypatch.setattr(policy_module, "fresh_readings", changed)
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(
+            ValueError, match=r"agent_permanents\.timestamp: rank -> as_is"
+        ):
+            self_play(settings, run, updates=2)
+
+
+def test_resume_refuses_a_state_saved_before_readings_were_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={"learning": Learning(horizon=2, epochs=1, minibatches=1)}
+    )
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(settings, run, updates=1)
+    # As written before readings were recorded: the model read legacy readings.
+    (state,) = (tmp_path / "out" / "state").glob("save-*/state.json")
+    saved = json.loads(state.read_text())
+    del saved["extra"]["readings"]
+    state.write_text(json.dumps(saved))
+
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(
+            ValueError,
+            match=r"written before input readings were recorded.*"
+            r"agent_permanents\.timestamp: as_is -> rank",
+        ):
+            self_play(settings, run, updates=2)
+
+
+def test_resume_readings_records_a_new_run_and_accepts_a_legacy_state() -> None:
+    space = ObservationSpace(gray_ogre_self_play(horizon=2).observation)
+    fresh, legacy = fresh_readings(space), legacy_readings(space)
+    assert loop.resume_readings(Counts(), fresh, space) == {
+        key: [str(value) for value in values] for key, values in fresh.items()
+    }
+    # A run warm-started from a legacy policy was built with legacy readings.
+    resumed = Counts.model_validate({"updates": 3})
+    assert loop.resume_readings(resumed, legacy, space) == {
+        key: [str(value) for value in values] for key, values in legacy.items()
+    }
+
+
 def test_stop_keeps_registered_counts_at_the_completed_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -158,6 +244,10 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
         out: Path,
     ) -> dict[str, object]:
         row = original_step(settings, learner, ema, collector, counts, rng, out=out)
+        coordinates = {k: v for k, v in row.items() if k.startswith("coordinates/")}
+        assert coordinates["coordinates/updates"] == 1
+        assert "coordinates/readings" not in coordinates
+        assert all(isinstance(v, (int, float)) for v in coordinates.values())
         stop.touch()
         return row
 

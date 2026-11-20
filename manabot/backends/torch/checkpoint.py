@@ -37,7 +37,7 @@ from manabot.infra.artifacts import (
     materialize_artifact,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.interface import world_fields
+from manabot.model.interface import saved_readings, world_fields
 from manabot.model.world import (
     checkpoint_source,
     validate_policy_input,
@@ -179,6 +179,7 @@ def read_written(path: Path) -> PolicyCheckpoint:
         {name: tensor.detach().numpy() for name, tensor in state.items()},
         checkpoint_metadata(record),
         parameter_names=[name for name in state if name not in buffers],
+        readings=saved_readings(record, ObservationSpace(observation)),
     )
 
 
@@ -220,12 +221,12 @@ def assemble(
     agent = ActorCritic(
         checkpoint.space,
         checkpoint.model,
-        column_widths=checkpoint.column_widths,
+        readings=checkpoint.readings,
         bucketed_shapes=bucketed_shapes,
         live_tokens=live_tokens,
     )
     cards = agent.semantic_cards
-    if cards is not None and checkpoint.column_widths is not None:
+    if cards is not None and checkpoint.report is not None:
         weight = checkpoint.parameters["semantic_cards.token_embedding.weight"]
         if cards.token_embedding.num_embeddings != weight.shape[0]:
             cards.token_embedding = torch.nn.Embedding(
@@ -266,7 +267,7 @@ def save_checkpoint(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
-        **world_fields(obs_space, agent.column_widths, player_configs),
+        **world_fields(obs_space, agent.readings, player_configs),
         "source": checkpoint_source(),
         "architecture": agent.architecture_receipt().model_dump(mode="json"),
         "global_step": 0,
@@ -307,6 +308,7 @@ def save_checkpoint(
         },
         checkpoint_metadata(checkpoint),
         parameter_names=dict(agent.named_parameters()),
+        readings=agent.readings,
     )
     write_container(path, container)
 

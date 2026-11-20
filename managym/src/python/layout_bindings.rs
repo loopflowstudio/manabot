@@ -9,7 +9,10 @@ use pyo3::{prelude::*, types::PyDict};
 
 fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py, PyDict>> {
     let value = PyDict::new_bound(py);
-    value.set_item("kind", layout.kind)?;
+    value.set_item("kind", layout.kind.name())?;
+    if let Some(scale) = layout.kind.scale() {
+        value.set_item("scale", scale)?;
+    }
     value.set_item("encoding", layout.encoding)?;
     value.set_item("range", layout.range)?;
     Ok(value)

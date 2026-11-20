@@ -140,7 +140,8 @@ FACT_ID_INDEX = column("facts", "id_high")  # high, low
 FACT_DETAIL_INDEX = column("facts", "detail_high")
 # Amounts / 10: count, power or N; then toughness.
 FACT_VALUE_INDEX = column("facts", "value")
-# 1 until end of turn, 2 indefinite, 3 while controlling source.
+# 1 until end of turn, 2 indefinite, 3 while controlling source, 4 until your
+# next turn.
 FACT_DURATION_INDEX = column("facts", "duration")
 FACT_ORDER_INDEX = column("facts", "timestamp")  # timestamp rank (1-based)
 FACT_SOURCE_INDEX = column("facts", "source_definition")  # definition + 1

@@ -17,7 +17,7 @@ from manabot.belief.runtime import ManabotPlayer
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.world import checkpoint_world
+from manabot.model.interface import world_fields
 from manabot.sim.search.flat_mc import make_player
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
@@ -192,9 +192,7 @@ def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:
     checkpoint_path = tmp_path / "unbound-belief.pt"
     torch.save(
         {
-            "world_binding": checkpoint_world(
-                Match().to_rust(), agent.observation_space
-            ),
+            **world_fields(agent.observation_space, agent.readings, Match().to_rust()),
             "hypers": {
                 "observation_hypers": (agent.observation_space.config.model_dump()),
                 "agent_hypers": agent.config.model_dump(),
@@ -215,9 +213,7 @@ def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
     checkpoint_path = tmp_path / "removed-agent-field.pt"
     torch.save(
         {
-            "world_binding": checkpoint_world(
-                Match().to_rust(), agent.observation_space
-            ),
+            **world_fields(agent.observation_space, agent.readings, Match().to_rust()),
             "hypers": {
                 "observation_hypers": (agent.observation_space.config.model_dump()),
                 "agent_hypers": {

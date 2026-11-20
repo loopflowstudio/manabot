@@ -370,6 +370,7 @@ def check(
         space.config,
         state,
         parameter_names=dict(agent.named_parameters()),
+        readings=agent.readings,
     )
     port = resolve(backend_name, precision=precision)
     policy, learner = port.load(weights)

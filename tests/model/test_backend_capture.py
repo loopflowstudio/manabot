@@ -62,6 +62,7 @@ def test_capture_replays_both_seat_update(
         space.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
         parameter_names=dict(agent.named_parameters()),
+        readings=agent.readings,
     )
     policy, learner = resolve("torch").load(weights)
     rows = 0
