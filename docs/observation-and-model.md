@@ -665,8 +665,13 @@ A stored checkpoint never consults the rule. It reads each column the way
 rule changes fresh models only
 ([what a checkpoint is bound to](#what-a-checkpoint-is-bound-to)). A training
 run's saved state records the readings its model was built with, and a resume
-whose model would read a column differently is refused: resume from the
-revision that started the run, or warm start from its last published policy.
+whose model would read a column differently is refused before any weights
+load: resume from the revision that started the run, or warm start from its
+last published policy. A state saved before readings were recorded read
+`legacy_readings`, so resuming such a run with a fresh model is refused too.
+A warm start keeps the policy's readings but builds the requested
+`ModelConfig`; a policy written before `definition_names` was recorded needs
+`definition_names=True`, and the refusal names each differing setting.
 
 ### Relations and facts
 
