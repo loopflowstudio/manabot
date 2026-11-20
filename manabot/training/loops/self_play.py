@@ -181,6 +181,9 @@ class SelfPlay(BaseModel):
         default=None, ge=1, exclude_if=lambda value: value is None
     )
     # Checkpoint at absolute updates 0, n, 2n, …; a continued run keeps the grid.
+    checkpoint_weights: Literal["ema", "raw"] = Field(
+        default="ema", exclude_if=lambda value: value == "ema"
+    )
     checkpoint_every: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
@@ -620,7 +623,7 @@ def publish(
         seed=run.seed,
     )
     if ema is not None:
-        path = write_policy(
+        ema_path = write_policy(
             ema,
             settings,
             counts,
@@ -628,6 +631,8 @@ def publish(
             "ema",
             seed=run.seed,
         )
+        if settings.checkpoint_weights == "ema":
+            path = ema_path
     run.checkpoint(path, updates=counts.updates, **clocks(counts))
     return path
 

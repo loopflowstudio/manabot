@@ -1,7 +1,9 @@
 """Self-play uses real Etude saves and preserves published policy evidence."""
 
+import hashlib
 import json
 from pathlib import Path
+from typing import Literal
 
 from etude.train.read import read
 from etude.train.tracking import Stopped
@@ -62,13 +64,19 @@ def test_settings_refuse_what_the_loop_cannot_run(
         SelfPlay.model_validate({**values, **fields})
 
 
-@pytest.mark.parametrize("averaging", [None, 0.9])
+@pytest.mark.parametrize(
+    ("averaging", "weights"), [(None, "ema"), (0.9, "ema"), (0.9, "raw")]
+)
 def test_resume_keeps_adam_ema_counts_and_immutable_policies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, averaging: float | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    averaging: float | None,
+    weights: Literal["raw", "ema"],
 ) -> None:
     settings = gray_ogre_self_play(horizon=2).model_copy(
         update={
             "checkpoint_every": 1,
+            "checkpoint_weights": weights,
             "learning": Learning(horizon=2, epochs=1, minibatches=1, ema=averaging),
         }
     )
@@ -88,9 +96,8 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     ) as run:
         final = self_play(settings, run, updates=2)
     assert earlier.read_bytes() == before
-    assert final.name == (
-        "00000002-raw.safetensors" if averaging is None else "00000002-ema.safetensors"
-    )
+    selected = "raw" if averaging is None else weights
+    assert final.name == f"00000002-{selected}.safetensors"
     (reported,) = load_time_sources([str(tmp_path / "track")]).runs
     with recording(
         experiment="test",
@@ -115,7 +122,9 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         for name, value in learner.agent.state_dict().items():
             torch.testing.assert_close(value, saved[name], rtol=0, atol=0)
     if ema is not None:
-        averaged = load_checkpoint(final)[0].state_dict()
+        averaged = load_checkpoint(final.with_name("00000002-ema.safetensors"))[
+            0
+        ].state_dict()
         for name, value in ema.state_dict().items():
             torch.testing.assert_close(value, averaged[name], rtol=0, atol=0)
     recorded = read(tmp_path / "track", "test", "policy")
@@ -138,6 +147,13 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert any("observed attempts only" in w for w in after_inspection.warnings)
     assert list(recorded.points("coordinates/updates", "updates").x) == [1, 2]
     assert {cp.at["updates"] for cp in recorded.checkpoints} == {0, 1, 2}
+    for checkpoint in recorded.checkpoints:
+        update = int(checkpoint.at["updates"])
+        export = final.with_name(f"{update:08d}-{selected}.safetensors")
+        assert (
+            checkpoint.artifact.sha256
+            == hashlib.sha256(export.read_bytes()).hexdigest()
+        )
     # The training-time report reads work and active time from the loop's clocks.
     assert reported.updates == 2
     assert reported.learner_transitions == counts.learner_transitions > 0

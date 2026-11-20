@@ -370,8 +370,9 @@ Report labels are optional: without them or Etude declaration labels, the
 training-time report shows the run as `unclassified`; the local recipe supplies
 `kind="smoke"` and `recipe="manabot.recipes.local"` so it is excluded by default.
 
-It returns the policy it trained: the EMA checkpoint of its last update when
-the learning record keeps an EMA, the raw one otherwise. There is no resume
+The loop records and returns the EMA checkpoint by default when averaging is
+enabled. Set `checkpoint_weights="raw"` to evaluate the raw learner while
+keeping both exports. Without averaging, the loop always records the raw learner. There is no resume
 branch, stop check or state file in it. Those are the run's:
 
 | From Etude | What the loop gets |
