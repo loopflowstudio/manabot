@@ -15,7 +15,8 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import ObservationSpace
-from manabot.policy.readings import Reading, fresh_readings
+from manabot.model.interface import input_columns
+from manabot.policy.readings import Reading, fresh_readings, legacy_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
 from manabot.training.learning import DampedPolicyLearning, Learning
@@ -172,19 +173,60 @@ def test_resume_refuses_a_model_that_reads_its_inputs_differently(
         directory=tmp_path / "track",
         resume=True,
     ) as run:
-        with pytest.raises(ValueError, match=r"agent_permanents\[\d+\]: rank -> as_is"):
+        with pytest.raises(
+            ValueError, match=r"agent_permanents\.timestamp: rank -> as_is"
+        ):
             self_play(settings, run, updates=2)
 
 
-def test_state_saved_before_readings_resumes_and_records_them() -> None:
+def test_resume_refuses_a_state_saved_before_readings_were_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={"learning": Learning(horizon=2, epochs=1, minibatches=1)}
+    )
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(settings, run, updates=1)
+    # As written before readings were recorded: the model read legacy readings.
+    (state,) = (tmp_path / "out" / "state").glob("save-*/state.json")
+    saved = json.loads(state.read_text())
+    del saved["extra"]["readings"]
+    state.write_text(json.dumps(saved))
+
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(
+            ValueError,
+            match=r"written before input readings were recorded.*"
+            r"agent_permanents\.timestamp: as_is -> rank",
+        ):
+            self_play(settings, run, updates=2)
+
+
+def test_keep_readings_records_a_new_run_and_accepts_a_legacy_state() -> None:
     space = ObservationSpace(gray_ogre_self_play(horizon=2).observation)
-    readings = fresh_readings(space)
-    counts = Counts.model_validate({"updates": 3})
-    loop.keep_readings(counts, readings)
-    assert counts.readings == {
-        key: [str(value) for value in values] for key, values in readings.items()
+    fresh, legacy = fresh_readings(space), legacy_readings(space)
+    columns = input_columns(space)
+    started = Counts()
+    loop.keep_readings(started, fresh, columns, legacy)
+    assert started.readings == {
+        key: [str(value) for value in values] for key, values in fresh.items()
     }
-    loop.keep_readings(counts, readings)
+    # A run warm-started from a legacy policy was built with legacy readings.
+    resumed = Counts.model_validate({"updates": 3})
+    loop.keep_readings(resumed, legacy, columns, legacy)
+    assert resumed.readings == {
+        key: [str(value) for value in values] for key, values in legacy.items()
+    }
 
 
 def test_stop_keeps_registered_counts_at_the_completed_boundary(

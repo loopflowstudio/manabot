@@ -104,12 +104,23 @@ def pretrained_memory_branch(
         "decision_memory_summaries",
         "decision_memory_gate_scale",
     }
-    if (
-        source.decision_memory != "none"
-        or target.decision_memory == "none"
-        or source.model_dump(exclude=excluded) != target.model_dump(exclude=excluded)
-    ):
-        raise ValueError("pretrained model settings differ from requested arm")
+    branch = source.decision_memory == "none" and target.decision_memory != "none"
+    differ = [
+        f"{key}: {getattr(source, key)!r} -> {getattr(target, key)!r}"
+        for key in type(source).model_fields
+        if not (branch and key in excluded)
+        and getattr(source, key) != getattr(target, key)
+    ]
+    if differ or not branch:
+        raise ValueError(
+            "pretrained model settings differ from requested arm"
+            + (
+                f" ({', '.join(differ)}); set the requested model to the "
+                "pretrained policy's values"
+                if differ
+                else ""
+            )
+        )
     if not all(
         (
             observation.max_decision_records,
