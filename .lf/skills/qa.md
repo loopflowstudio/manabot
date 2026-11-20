@@ -254,9 +254,9 @@ publish, land or choose the next Graph step from here.
   elemental_gw`, otherwise `setup.invalid` names the roster decks. Offer
   texts carry a number prefix (`1 Play Plains`), so match offers without `^`.
   X offers read `X = n`: `24 Plains / 16 United Front` against `40 Forest`
-  with `--opponent passive` reaches one after four lands. A checkpoint with
-  exact decks written before an appended input column is listed unavailable
-  with `binding differs … actions 512x23 -> 512x25`; world-bound ones load.
+  with `--opponent passive` reaches one after four lands. Checkpoints with
+  world or exact-deck bindings written before an appended input column load
+  on their saved prefix.
 - Model or training-path changes: use `uv run etude train manabot/recipes/local.py`
   for the local CPU smoke. Inspect update rows for per-phase collection and
   learning seconds. When saved training state gains a field, check that

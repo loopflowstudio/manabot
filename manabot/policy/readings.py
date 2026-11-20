@@ -245,7 +245,7 @@ OWN_PREPARATION: Mapping[str, str] = {
     "card_turn_state": "prepare: one flag appended to each card row",
     "semantic_cards": "prepare: catalog rows",
     "known_hand": "prepare: catalog rows; the backend scales a definition "
-    "embedding by the count, then divides by 60",
+    "embedding by the count (normalized under stream_norm, / 60 otherwise)",
     "known_library": "prepare: catalog rows and 1 / count weights",
     "decklists": "prepare: catalog rows and counts / 60",
     "name_candidates": "prepare: name rows and group bounds",
