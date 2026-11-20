@@ -102,11 +102,6 @@ type ColumnReading = Reading | Sized
 type Readings = Mapping[str, tuple[ColumnReading, ...]]
 
 
-def method(reading: ColumnReading) -> Reading:
-    """The reading's name without its size."""
-    return reading.reading if isinstance(reading, Sized) else reading
-
-
 def parse_reading(text: str) -> ColumnReading:
     """A stored reading name (`as_is`, `one_hot:14`). Raises ValueError for an
     unknown name, a sized reading without its size or an unsized one with one."""
@@ -123,8 +118,8 @@ RANK_SCALE = 128
 SELECTOR_SIZE = 15
 # Threshold flags of a column stored in tenths: at least 1..8.
 TENTHS_STEPS = 8
-# Readings `read_numeric` applies; the others are joins or belong to their
-# buffer's own code.
+# Unsized readings `read_numeric` applies, one input each; the others are
+# joins or belong to their buffer's own code.
 NUMERIC = frozenset(
     {
         Reading.AS_IS,
@@ -132,7 +127,6 @@ NUMERIC = frozenset(
         Reading.RANK,
         Reading.FACT_VALUE,
         Reading.FACT_VALUE_RAW,
-        *SIZED,
     }
 )
 # Fact kinds whose payload `fact_value` reads as zero (their content is a
@@ -405,11 +399,6 @@ def input_width(reading: ColumnReading) -> int:
     return int(reading in NUMERIC)
 
 
-def numeric_columns(readings: Sequence[ColumnReading]) -> tuple[int, ...]:
-    """Indexes of the columns a numeric projection receives."""
-    return tuple(i for i, reading in enumerate(readings) if input_width(reading))
-
-
 @cache
 def numeric_offsets(readings: tuple[ColumnReading, ...]) -> dict[int, int]:
     """Each numeric column's first position among the projection inputs, by
@@ -442,39 +431,36 @@ def read_numeric(
     readings = tuple(readings)
     offsets = numeric_offsets(readings)
     width = sum(input_width(reading) for reading in readings)
-    out = np.zeros((*values.shape[:-1], width), dtype=np.float32)
-    scalars = [index for index in offsets if not isinstance(readings[index], Sized)]
-    out[..., [offsets[index] for index in scalars]] = values[..., scalars]
     rows = values.reshape(-1, values.shape[-1])
-    block, flat = out.reshape(len(rows), width), out.reshape(-1)
-    starts = np.arange(len(rows)) * width
+    out = np.zeros((len(rows), width), dtype=np.float32)
+    scalars = [index for index in offsets if not isinstance(readings[index], Sized)]
+    out[:, [offsets[index] for index in scalars]] = rows[:, scalars]
+    kinds = None if fact_kinds is None else np.asarray(fact_kinds).reshape(-1)
     for index, at in offsets.items():
         reading = readings[index]
+        column = out[:, at]
         if isinstance(reading, Sized):
             stored = rows[:, index]
             if reading.reading is Reading.ONE_HOT:
-                # One write per present row: code k at flag k - 1, any code
-                # above the size at the last flag.
+                # Code k at flag k - 1, any code above the size at the last.
                 present = np.nonzero(stored > 0)[0]
                 codes = np.minimum(stored[present], reading.size + 1).astype(np.int64)
-                flat[starts[present] + at + codes - 1] = 1
+                out[present, at + codes - 1] = 1
             else:
                 # Stored in tenths: the true value is an integer.
                 true = np.rint(stored.astype(np.float64) * 10)
-                block[:, at] = stored
-                block[:, at + 1 : at + 1 + reading.size] = true[:, None] >= np.arange(
+                column[:] = stored
+                out[:, at + 1 : at + 1 + reading.size] = true[:, None] >= np.arange(
                     1, reading.size + 1
                 )
-            continue
-        column = out[..., at]
-        if reading is Reading.LOG:
-            out[..., at] = signed_log(column)
+        elif reading is Reading.LOG:
+            column[:] = signed_log(column)
         elif reading is Reading.RANK:
             column /= np.float32(RANK_SCALE)
         elif reading is Reading.FACT_VALUE:
-            if fact_kinds is None:
+            if kinds is None:
                 raise ValueError("fact_value needs each row's fact kind")
-            counts = np.isin(fact_kinds, FACT_COUNT_KINDS)
+            counts = np.isin(kinds, FACT_COUNT_KINDS)
             column[counts] = signed_log(column[counts])
-            column[np.isin(fact_kinds, PROGRAM_KINDS)] = 0
-    return out
+            column[np.isin(kinds, PROGRAM_KINDS)] = 0
+    return out.reshape(*values.shape[:-1], width)

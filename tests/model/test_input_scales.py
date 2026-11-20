@@ -19,11 +19,9 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.prepare import Prepared
 from manabot.policy.readings import (
     READ_BY_READINGS,
-    Reading,
     fresh_readings,
     input_width,
     legacy_readings,
-    method,
     published_columns,
 )
 import managym
@@ -168,9 +166,7 @@ def test_no_category_or_selector_is_a_magnitude() -> None:
         for key, columns in published_columns(space).items()
         if key in READ_BY_READINGS
         for column, reading in zip(columns, readings[key], strict=True)
-        if column.kind in ("category", "selector")
-        and input_width(reading) == 1
-        and method(reading) is not Reading.ONE_HOT
+        if column.kind in ("category", "selector") and input_width(reading) == 1
     ]
     assert scalar == []
 
