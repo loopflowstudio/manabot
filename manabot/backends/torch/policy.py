@@ -41,10 +41,6 @@ from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.belief.range import BeliefError
 from manabot.env.observation import (
-    STACK_DEFINITION_INDEX,
-    STACK_DIM,
-    STACK_SOURCE_INDEX,
-    TURN_STATE_DIM,
     ObservationBuffers,
     ObservationSpace,
 )
@@ -166,19 +162,19 @@ class ActorCritic(nn.Module):
         )
         columns = layout(self.readings)
         width = columns.widths.get
-        player_dim = width("agent_player", enc.player_dim)
-        card_dim = width("agent_cards", enc.card_dim)
+        player_dim = columns.numeric_width("agent_player")
+        card_dim = columns.numeric_width("agent_cards")
         # Inputs v10/v11 append each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
         self.turn_state = enc.turn_state
         self.stack_tokens = enc.one_token
         if self.turn_state:
-            player_dim += width("player_turn_state", TURN_STATE_DIM)
+            player_dim += columns.numeric_width("player_turn_state")
             card_dim += 1
-        # Definition IDs and permanent links are categorical joins, never
-        # numeric permanent features.
+        # Joins (definitions, links, action continuations) and validity
+        # columns the mask carries are never numeric features.
         perm_dim = len(columns.numeric_permanent_columns)
-        action_dim = width("actions", enc.action_dim)
+        action_dim = columns.numeric_width("actions")
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
 
@@ -207,12 +203,12 @@ class ActorCritic(nn.Module):
         self.card_embedding = ProjectionLayer(card_dim, embed_dim)
         self.perm_embedding = ProjectionLayer(perm_dim, embed_dim)
         # Embed policy features; validity only masks legal rows.
-        self.action_embedding = ProjectionLayer(action_dim - 2, embed_dim)
+        self.action_embedding = ProjectionLayer(action_dim, embed_dim)
 
         self.logger.info(f"Player embedding: ({player_dim} -> {embed_dim})")
         self.logger.info(f"Card embedding: ({card_dim} -> {embed_dim})")
         self.logger.info(f"Permanent embedding: ({perm_dim} -> {embed_dim})")
-        self.logger.info(f"Action embedding: ({action_dim - 2} -> {embed_dim})")
+        self.logger.info(f"Action embedding: ({action_dim} -> {embed_dim})")
 
         # Global game state processor via attention.
         if self.config.attention_on:
@@ -396,25 +392,17 @@ class ActorCritic(nn.Module):
         # link (one-based object index) adds the source's pre-attention
         # embedding through a zero-initialized layer, so the initial function
         # ignores it.
-        self._numeric_stack_columns = [
-            column
-            for column in range(width("stack", STACK_DIM))
-            if column not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
-        ]
         self.stack_embedding: ProjectionLayer | None = None
         self.stack_source: nn.Linear | None = None
         if self.stack_tokens:
-            self.stack_embedding = ProjectionLayer(
-                len(self._numeric_stack_columns), embed_dim
-            )
+            stack_dim = columns.numeric_width("stack")
+            self.stack_embedding = ProjectionLayer(stack_dim, embed_dim)
             self.stack_source = torch.nn.utils.skip_init(
                 nn.Linear, embed_dim, embed_dim
             )
             nn.init.zeros_(self.stack_source.weight)
             nn.init.zeros_(self.stack_source.bias)
-            self.logger.info(
-                f"Stack embedding: ({len(self._numeric_stack_columns)} -> {embed_dim})"
-            )
+            self.logger.info(f"Stack embedding: ({stack_dim} -> {embed_dim})")
 
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.

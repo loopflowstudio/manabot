@@ -82,6 +82,8 @@ PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
 NAMED_DETAIL_KINDS = (FACT_EFFECT, FACT_COPY_EXCEPTION)
 # One-based object joins of a relation row.
 _RELATION_OBJECT_COLUMNS = (6, 24)
+# Viewer-relative seat prefixes of the per-seat buffers.
+SEATS = ("agent", "opponent")
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
 # Validity of the visible object table, in its concatenation order.
 OBJECT_VALIDITY_KEYS = (
@@ -105,12 +107,18 @@ class Layout:
     readings: Readings
 
     def __post_init__(self) -> None:
-        if self.readings["agent_permanents"] != self.readings["opponent_permanents"]:
-            raise ValueError("permanent readings differ between seats")
+        for buffer in ("player", "cards", "permanents"):
+            agent, opponent = (self.readings.get(f"{seat}_{buffer}") for seat in SEATS)
+            if agent != opponent:
+                raise ValueError(f"{buffer} readings differ between seats")
 
     @cached_property
     def widths(self) -> dict[str, int]:
         return {key: len(values) for key, values in self.readings.items()}
+
+    def numeric_width(self, key: str) -> int:
+        """How many of a buffer's columns its projection receives."""
+        return len(numeric_columns(self.readings[key]))
 
     @cached_property
     def numeric_permanent_columns(self) -> tuple[int, ...]:
@@ -495,7 +503,7 @@ class Prepared[A]:
     legal_batches: A  # [K]
     legal_slots: A  # [K] original action coordinates
     logit_positions: A  # [B,A] index into K (0 where illegal)
-    action_features: A  # [K, action_dim - 2]
+    action_features: A  # [K, numeric action columns]
     action_frames: A  # [K] flat frame slot
     action_frame_mask: A  # [K] float
     name_rows: A  # [K]
@@ -637,11 +645,7 @@ def prepare(
     positions = np.zeros(legal.shape, dtype=np.int64)
     positions[legal_batches, legal_slots] = np.arange(len(legal_batches))
     action_rows = obs["actions"][legal_batches, legal_slots]
-    action_features = action_rows[:, :ACTION_CONTINUATION_INDEX]
-    # Continuation and validity keep their published positions when features grow.
-    suffix = action_rows[:, ACTION_CONTINUATION_INDEX + 2 :]
-    if suffix.shape[1]:
-        action_features = np.concatenate((action_features, suffix), axis=1)
+    action_features = read_numeric(action_rows, layout.readings["actions"])
     frames = action_rows[:, ACTION_CONTINUATION_INDEX].astype(np.int64)
     candidates = obs["name_candidates"][legal_batches, legal_slots].astype(np.int64)
     focus = obs["action_focus"][legal_batches, legal_slots].astype(np.int64)
@@ -650,11 +654,20 @@ def prepare(
     else:
         first = last = np.zeros(len(candidates), np.int64)
 
-    players = [obs[key].astype(f32) for key in ("agent_player", "opponent_player")]
-    cards = [obs[key].astype(f32) for key in ("agent_cards", "opponent_cards")]
+    players = [
+        read_numeric(obs[f"{seat}_player"], layout.readings[f"{seat}_player"])
+        for seat in SEATS
+    ]
+    cards = [
+        read_numeric(obs[f"{seat}_cards"], layout.readings[f"{seat}_cards"])
+        for seat in SEATS
+    ]
     if "player_turn_state" in obs:
+        turn_state = read_numeric(
+            obs["player_turn_state"], layout.readings["player_turn_state"]
+        )
         players = [
-            np.concatenate((row, obs["player_turn_state"][:, seat : seat + 1]), -1)
+            np.concatenate((row, turn_state[:, seat : seat + 1]), -1)
             for seat, row in enumerate(players)
         ]
         cards = [
@@ -697,14 +710,7 @@ def prepare(
         deck_rows=tables.rows(decklists[..., 0]),
         deck_counts=(decklists[..., 1:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
-        stack=stack[
-            ...,
-            [
-                c
-                for c in range(stack.shape[-1])
-                if c not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
-            ],
-        ].astype(f32)
+        stack=read_numeric(stack, layout.readings["stack"])
         if stack is not None
         else None,
         stack_rows=tables.rows(stack[..., STACK_DEFINITION_INDEX])

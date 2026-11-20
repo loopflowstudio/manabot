@@ -631,6 +631,10 @@ sampled Elemental games every number a fresh model receives stays within
 ±4. Life and turn are divided by 20 and have no fixed bound, so a very long
 game or a life-gain deck can exceed that.
 
+One column takes its reading from its place rather than its kind: an action
+row's `valid` flag reads `mask`. The legal-action mask already carries it, so
+the action projection never receives it, as it never has.
+
 A column whose kind has no reading stops the model from building, and so does
 a `gather` or `lookup` column asked for as a number. A new column therefore
 needs only its native declaration: give it the kind that says what it holds,

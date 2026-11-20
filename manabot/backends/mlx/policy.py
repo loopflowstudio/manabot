@@ -274,7 +274,7 @@ class MLXActorCritic(nn.Module):
         self.player_embedding = Projection(dims.player, hidden)
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
-        self.action_embedding = Projection(dims.action - 2, hidden)
+        self.action_embedding = Projection(dims.action, hidden)
         self.attention = ObjectAttention(
             hidden, dims.heads, dims.feedforward, ownership=True
         )

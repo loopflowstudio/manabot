@@ -700,7 +700,7 @@ columns! { relation {
     26: HYBRID_FIRST => ("hybrid_first", ValueLayout::new(ValueKind::Category, "Color index + 1; 0 absent", "0..6")),
     27: HYBRID_SECOND => ("hybrid_second", ValueLayout::new(ValueKind::Category, "Color index + 1; 0 absent", "0..6")),
     28: DECISION => ("decision", ValueLayout::new(ValueKind::Category, "Frame decision code. Kind-9 rows: delayed frequency 1 once / 2 each match", "nonnegative integer codes")),
-    29: ORDINAL => ("ordinal", ValueLayout::new(ValueKind::Reference, "Reference ordinal + 1; kind 10 is effect-execution reference slot", "nonnegative integers; 0 absent")),
+    29: ORDINAL => ("ordinal", ValueLayout::new(ValueKind::Selector, "Reference ordinal + 1; kind 10 is effect-execution reference slot", "nonnegative integers; 0 absent")),
     30: RESOLUTIONS_THIS_TURN => ("resolutions_this_turn", ValueLayout::COUNT),
     31: VALID => ("valid", ValueLayout::FLAG),
     32: LEGAL_AT_RESOLUTION_START => ("legal_at_resolution_start", ValueLayout::new(ValueKind::Category, "0 unknown, 1 legal, 2 illegal", "0..2")),

@@ -40,6 +40,7 @@ class Reading(StrEnum):
     RANK = "rank"  # rank / 128, independent of any row capacity
     GATHER = "gather"  # an object join; never a number
     LOOKUP = "lookup"  # an embedding row; never a number
+    MASK = "mask"  # the row's validity, which the legal mask carries; never a number
     # Stored checkpoints only; the rule never chooses these.
     FACT_VALUE_RAW = "fact_value_raw"  # a fact payload as stored, whatever its kind
     RANK_BY_EFFECT_ROWS = "rank_by_effect_rows"  # rank / EFFECT_ROWS
@@ -50,7 +51,9 @@ type Readings = Mapping[str, tuple[Reading, ...]]
 # Every rank divides by this, whatever the capacity of its rows.
 RANK_SCALE = 128
 # Readings a numeric projection may receive; the others are joins.
-NUMERIC = frozenset(Reading) - {Reading.GATHER, Reading.LOOKUP}
+NUMERIC = frozenset(Reading) - {Reading.GATHER, Reading.LOOKUP, Reading.MASK}
+# Validity flags no projection has received: the buffer's own mask carries them.
+MASK_COLUMNS = frozenset({("actions", "valid")})
 
 
 @dataclass(frozen=True)
@@ -106,7 +109,17 @@ def kind_reading(kind: str, scale: int | None) -> Reading:
 
 # Buffers whose fresh readings come from `kind_reading`; the others keep
 # `legacy_readings` until their preparation reads by reading.
-RULED_BUFFERS = ("agent_permanents", "opponent_permanents")
+RULED_BUFFERS = (
+    "agent_player",
+    "opponent_player",
+    "player_turn_state",
+    "agent_cards",
+    "opponent_cards",
+    "agent_permanents",
+    "opponent_permanents",
+    "stack",
+    "actions",
+)
 
 
 def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
@@ -114,7 +127,13 @@ def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
     readings = legacy_readings(space)
     columns = published_columns(space)
     for key in RULED_BUFFERS:
-        readings[key] = tuple(kind_reading(c.kind, c.scale) for c in columns[key])
+        if key in columns:
+            readings[key] = tuple(
+                Reading.MASK
+                if (key, c.name) in MASK_COLUMNS
+                else kind_reading(c.kind, c.scale)
+                for c in columns[key]
+            )
     return readings
 
 
@@ -128,6 +147,8 @@ def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]
 
 
 def _legacy_reading(key: str, column: ColumnKind) -> Reading:
+    if (key, column.name) in MASK_COLUMNS:
+        return Reading.MASK
     if column.kind == "reference":
         return Reading.GATHER
     if column.kind == "id":

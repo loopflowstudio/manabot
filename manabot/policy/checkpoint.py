@@ -129,7 +129,8 @@ def pretrained_memory_branch(
 
 @dataclass(frozen=True)
 class Dimensions:
-    """Input widths and architecture of one checkpoint."""
+    """Numeric input widths (columns each projection receives) and architecture
+    of one checkpoint."""
 
     hidden: int
     heads: int
@@ -250,10 +251,10 @@ class PolicyCheckpoint:
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=width("agent_player", encoder.player_dim),
-            card=width("agent_cards", encoder.card_dim),
+            player=columns.numeric_width("agent_player"),
+            card=columns.numeric_width("agent_cards"),
             permanent=len(columns.numeric_permanent_columns),
-            action=width("actions", encoder.action_dim),
+            action=columns.numeric_width("actions"),
             focus=encoder.max_focus_objects,
             relation=width("relations", encoder.relation_dim),
             fact_kinds=FACT_KINDS,
