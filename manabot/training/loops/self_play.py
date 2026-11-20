@@ -181,10 +181,10 @@ class SelfPlay(BaseModel):
         default=None, ge=1, exclude_if=lambda value: value is None
     )
     # Checkpoint at absolute updates 0, n, 2n, …; a continued run keeps the grid.
+    checkpoint_every: int | None = Field(default=None, ge=1)
     checkpoint_weights: Literal["ema", "raw"] = Field(
         default="ema", exclude_if=lambda value: value == "ema"
     )
-    checkpoint_every: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def valid_settings(self) -> "SelfPlay":
