@@ -304,11 +304,14 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     assert!(s.choose_target(Target::Permanent(villager)));
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
     assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
-    // Recorded before the mint change: the pending entry's prospective copy
-    // and replacement continuation must retain their v16 bytes.
+    // The pending entry's prospective copy and replacement continuation
+    // keep their recorded bytes. Recorded at hash version 17, whose only
+    // difference here is the receipt of the spell's payment. The hash holds
+    // definition ids, which are positions in the name-ordered catalog, so a
+    // newly defined card moves this value and nothing else does.
     assert_eq!(
         s.game().state.deterministic_hash().to_string(),
-        "v16:109204c452b21643354cfda10ad17b17ca215c2d10e497496b60cb5de22029a4"
+        "v17:0cc1ef7408a5daa96ab5ebdcc1988601b10e10e6b8804406c67c50e0d377286b"
     );
     let pending = Observation::for_player(s.game(), PlayerId(0));
     let fork = s.game().clone();

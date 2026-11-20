@@ -747,6 +747,13 @@
         "mana_cost": {
           "$ref": "#/$defs/RequiredNullable3"
         },
+        "paid": {
+          "description": "What objects have already paid toward the cost being paid, in the\norder paid. Omitted when nothing has and on older frames.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PaidView"
+          }
+        },
         "pending": {
           "description": "Native pending execution, omitted on older recorded projections.",
           "type": "array",
@@ -1839,6 +1846,29 @@
         "choose",
         "pay",
         "special"
+      ]
+    },
+    "PaidView": {
+      "description": "One object's payment toward the pending cost: \"sacrificed Gray Ogre to\nbargain\". `object` is that object as it is now (a permanent still on the\nbattlefield, the card in a graveyard or exile), absent when nothing the\nviewer can see remains of it.",
+      "type": "object",
+      "properties": {
+        "object": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionObjectView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phrase": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "phrase"
       ]
     },
     "PlayerControlView": {

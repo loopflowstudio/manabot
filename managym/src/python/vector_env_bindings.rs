@@ -20,7 +20,7 @@ use crate::{
         observation::Observation,
         observation_encoder::{
             encode, encode_into, encode_into_incremental, EncodedObservationMut,
-            ObservationEncoderConfig, ACTION_DIM,
+            ObservationEncoderConfig,
         },
         rollout_pool::RolloutPool,
         vector_env::{ObservationRead, ObservationWriteError, VectorEnv},
@@ -891,7 +891,7 @@ fn read_observation_buffers(
         actions: require_numpy_array(
             buffers,
             "actions",
-            &[n, c.max_actions, ACTION_DIM],
+            &[n, c.max_actions, c.action_dim()],
             "float32",
         )?
         .unbind(),

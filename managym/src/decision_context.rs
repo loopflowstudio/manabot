@@ -8,16 +8,25 @@
 
 use crate::state::ability::LibraryEnd;
 use crate::{
-    agent::continuation::ContinuationFrame,
+    agent::{
+        continuation::ContinuationFrame,
+        effect_execution::{contribution_phrase, spent_mana_phrase},
+    },
     experience::{
         DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
-        OfferSubjectView, RequiredNullable, SubjectRef,
+        OfferSubjectView, PaidView, RequiredNullable, SubjectRef,
     },
     flow::{
+        action::cost_label,
         decision::Decision,
         game::{Game, PendingChoice},
+        payment::{CostComponent, Help, PaymentProgress},
     },
-    state::game_object::{ObjectId, PlayerId, Target},
+    state::{
+        card::CastOption,
+        game_object::{ObjectId, PlayerId, Target},
+        payment::{PaidWith, PaymentReceipt, Toward},
+    },
 };
 
 impl Game {
@@ -41,6 +50,19 @@ impl Game {
             display_id,
             label: self.state[object].name.clone(),
         })
+    }
+
+    /// What `viewer` can see now of an object that paid toward a cost: the
+    /// appearance that paid, or the one it became by its one move since (the
+    /// exiled or discarded card).
+    fn paid_object(&self, paid: ObjectId, viewer: PlayerId) -> Option<DecisionObjectView> {
+        let now = if self.state.live(paid).is_some() {
+            paid
+        } else {
+            self.state.zones.successor(paid)?
+        };
+        self.visible_reference(now, viewer).object?;
+        self.decision_object(now)
     }
 
     fn decision_target(&self, target: &Target) -> Option<DecisionObjectView> {
@@ -277,6 +299,7 @@ impl Game {
             chosen_mode: RequiredNullable(None),
             recent_facts: Vec::new(),
             announcing: None,
+            paid: Vec::new(),
         };
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
@@ -352,25 +375,71 @@ impl Game {
                 view.mana_cost = RequiredNullable(Some(symbols));
             }
         }
+        // What is committed to the pending cost, for a cast, an activation
+        // and a resolving payment alike: each object and each unit of mana
+        // spent toward it as it was produced, in the order paid.
+        view.paid = self
+            .pending_receipt()
+            .iter()
+            .flat_map(PaymentReceipt::in_order)
+            .map(|paid| match paid {
+                PaidWith::Object(paid) => PaidView {
+                    phrase: contribution_phrase(self, viewer, paid),
+                    object: self.paid_object(paid.object, viewer),
+                },
+                PaidWith::Mana(unit) => PaidView {
+                    phrase: spent_mana_phrase(self, viewer, unit),
+                    object: unit
+                        .source
+                        .and_then(|origin| self.paid_object(origin.object, viewer)),
+                },
+            })
+            .collect();
+        // The one yes-or-no cost choice of a cast, named for what the card
+        // offers: `KickerChoice` asks bargain and alternative costs too.
+        let cast_option = match &self.pending_choice {
+            Some(PendingChoice::KickerChoice { object, .. }) => match self.state[*object].cast_option() {
+                Some(CastOption::ExileFromHand) => "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative.".into(),
+                Some(CastOption::AlternativeMana(cost)) => format!("Choose whether to pay {} rather than the mana cost.", cost_label(cost)),
+                Some(CastOption::Bargain) => "Choose whether to bargain: sacrifice an artifact, enchantment or token as you cast this spell.".into(),
+                Some(CastOption::Kicker) | None => "Choose whether to pay the kicker cost.".into(),
+            },
+            _ => String::new(),
+        };
         let (stage, instruction) = match &self.pending_choice {
-            Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
-                ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
-            Some(PendingChoice::ExileFromHandPayment { .. }) =>
-                ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
-            Some(PendingChoice::DiscardPayment { .. }) =>
-                ("additional_cost", "Choose a card to discard as an activation cost."),
-            Some(PendingChoice::TapPayment { .. }) =>
-                ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
-            Some(PendingChoice::SacrificePayment { .. }) =>
-                ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+            Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
+                CostComponent::Mana { help, .. } if *help != Help::default() =>
+                    ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise, a creature or artifact tapped for waterbend, or a graveyard card exiled for delve pays {1}. Each such payment commits immediately. The payment ends once no mana is owed."),
+                CostComponent::Mana { .. } =>
+                    ("payment", "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed."),
+                CostComponent::ExileFromHand =>
+                    ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
+                CostComponent::Discard if payment.operation.spell().is_some() =>
+                    ("additional_cost", "Choose another card in hand to discard as an additional cost to cast this spell."),
+                CostComponent::Discard =>
+                    ("additional_cost", "Choose a card to discard as an activation cost."),
+                CostComponent::Tap(_, Toward::Station) =>
+                    ("additional_cost", "Choose another untapped creature to tap to station. The ability puts charge counters equal to that creature's power on its source as it resolves."),
+                CostComponent::Tap(..) =>
+                    ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
+                CostComponent::Sacrifice(..) =>
+                    ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+                CostComponent::Forage { .. } =>
+                    ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
+                CostComponent::TapPays { .. } =>
+                    ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
+                CostComponent::Life(_) | CostComponent::Source(_) =>
+                    unreachable!("paid as the payment completes, after its mana"),
+                CostComponent::TapPower { toward: Toward::Saddle, .. } =>
+                    ("additional_cost", "Choose a creature to tap to saddle. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the saddle number."),
+                CostComponent::TapPower { .. } =>
+                    ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
+            },
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
-            Some(PendingChoice::Crew { .. }) =>
-                ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
-            Some(PendingChoice::KickerChoice { object: object_id, .. }) if self.state[*object_id].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
-            Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
+            Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),
             Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
@@ -399,6 +468,7 @@ impl Game {
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
+                Decision::Payment(PaymentProgress { owed: CostComponent::Life(_), .. }) => ("resolution_payment", "Pay the stated life for the resolving effect, or decline. Paying is offered only when your life total is at least that amount, and the life is lost at once."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::NameCard { scope, .. } if !scope.is_leaf() => ("name_card", "Choose the group of names containing the card name you want. Choosing a group names nothing and commits nothing; the next choice offers the group's names or smaller groups."),
                 Decision::NameCard { .. } => ("name_card", "Choose a card name from this group of the installed naming vocabulary."),
@@ -414,6 +484,7 @@ impl Game {
                 Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
                 Decision::Retarget { .. } => ("retarget", "Choose a new target for the spell or ability on the stack, or keep its target when offered."),
                 Decision::ChooseToExile { .. } => ("choose_to_exile", "Choose up to one permanent from among those the resolving ability's controller's opponents control; every chosen permanent is then exiled."),
+                Decision::KeepCreatures { sacrifice: Some(_), .. } => ("keep_creatures", "Choose another creature you control to keep; you keep all but the stated number, and every creature not kept is then sacrificed."),
                 Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),

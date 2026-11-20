@@ -5,8 +5,11 @@ produces: behavior findings in the existing scratch design
 Review whether the batch implements its intended rules for every shared consumer.
 
 1. Trace representative card interactions through definitions, rules decisions,
-   complete offers, tensor/text observations and tokens. Inspect the actual tests
-   and results; agreement between two consumers alone is not rules correctness.
+   complete offers, tensor/text observations and tokens. Check the tested
+   outcomes against the rules. When payment changes, exercise competing legal
+   spends. Verify that auto spends the most restricted applicable pooled mana
+   before ordinary mana, that manual retains meaningful pip and spend choices,
+   and that the receipt distinguishes committed contributions from floating mana.
 2. Check debug invariants, Commands, stale rejection, replay/forks and privacy.
    Ensure required behavior survived deletions and no card-specific parallel
    authority or silent choice truncation replaced it.

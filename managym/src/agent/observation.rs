@@ -297,8 +297,13 @@ pub struct CharacteristicsData {
     pub is_legendary: bool,
     pub is_ally: bool,
     pub is_lesson: bool,
-    /// Mana value of ward (zero without ward).
+    /// Mana value of ward (zero without ward and for a ward paid in life).
     pub ward_cost: i32,
+    /// The life ward costs ("Ward—Pay 7 life."); zero otherwise.
+    pub ward_life: i32,
+    /// A ward price `ward_cost` cannot state, in the learning-token
+    /// vocabulary its definition uses; empty otherwise.
+    pub ward_program: Vec<(u16, i32)>,
     /// Printed optional kicker cost; payment is stack state.
     pub kicker_cost: i32,
     pub card_types: CardTypeData,
@@ -571,7 +576,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 36] = [
+pub const MODIFICATION_NAMES: [&str; 37] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -608,6 +613,7 @@ pub const MODIFICATION_NAMES: [&str; 36] = [
     "ControlChanged",
     "ModeChosen",
     "HasAbilitiesOfSource",
+    "Saddled",
 ];
 
 impl ContinuousEffectData {
@@ -697,6 +703,7 @@ impl ContinuousEffectData {
             Modification::CantBeBlocked => "CantBeBlocked",
             Modification::CantBlock => "CantBlock",
             Modification::DoesntUntap => "DoesntUntap",
+            Modification::Saddled => "Saddled",
             Modification::CantActivateAbilities => "CantActivateAbilities",
             Modification::MustBeBlockedByAllAble => "MustBeBlockedByAllAble",
             Modification::LoseKeywords(keywords) => {
@@ -893,6 +900,10 @@ pub struct ActionOption {
     pub ability_index: Option<usize>,
     /// Decision-local continuation frame; occurrence IDs never enter policy features.
     pub continuation_index: Option<usize>,
+    /// The tap pays part of the cost itself (convoke, improvise, waterbend)
+    /// rather than making mana; both share `ActionType::TapForCost`.
+    #[serde(default)]
+    pub pays_directly: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -988,6 +999,8 @@ impl Observation {
             agent_player_id: game.state.players[agent_player.0].id.0 as i32,
         };
 
+        // Action descriptions ask payment questions of one board.
+        let _payments = game.payment_scan();
         let action_space = game
             .current_action_space
             .as_ref()
@@ -1025,6 +1038,7 @@ impl Observation {
                                 description: game.action_description(action),
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
+                                pays_directly: matches!(action, Action::WaterbendTap { .. }),
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
                                     .map(|id| id.0 as i32)
@@ -1188,7 +1202,7 @@ impl Observation {
             };
 
         // Regular and combat mana together, as the player may spend it.
-        let mut pool = p.mana_pool.clone();
+        let mut pool = p.mana_pool.mana().clone();
         pool.add_combat(&p.combat_mana_pool);
         // Individual class counts are u8; public totals may exceed one class's
         // capacity when regular and combat mana have the same color.
@@ -1240,7 +1254,10 @@ impl Observation {
                     Some(PooledManaClassData {
                         combat: class.combat,
                         restriction: class.restriction.as_ref().map(|r| r.describe()),
-                        effect: class.effect.as_ref().map(|e| e.describe()),
+                        effect: class
+                            .effect
+                            .as_ref()
+                            .map(crate::agent::ability_description::spend_effect_description),
                         mana: amounts.map(i32::from),
                         program: crate::cards::tokens::rules_tokens(
                             &Mana::of_class(class.clone(), *amounts),
@@ -1570,6 +1587,8 @@ impl Observation {
                 is_ally: characteristics.has_subtype("Ally"),
                 is_lesson: characteristics.has_subtype("Lesson"),
                 ward_cost: ward_value(characteristics.ward.as_ref()),
+                ward_life: ward_life(characteristics.ward.as_ref()),
+                ward_program: ward_program(characteristics.ward.as_ref()),
                 card_types: CardTypeData::from_types(&characteristics.types),
                 keywords: KeywordData::from_keywords(&characteristics.keywords),
                 ..Self::printed_characteristics_data(game, permanent.object)
@@ -1639,6 +1658,8 @@ impl Observation {
             is_ally: object.has_subtype("Ally"),
             is_lesson: object.has_subtype("Lesson"),
             ward_cost: ward_value(object.ward()),
+            ward_life: ward_life(object.ward()),
+            ward_program: ward_program(object.ward()),
             kicker_cost: object
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
@@ -2135,46 +2156,32 @@ impl Observation {
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
-                            source: crate::flow::game::ActivationSource::Card(card),
-                            ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::TapPayment {
-                            source: crate::flow::game::ActivationSource::Card(card),
-                            ..
                         }) => Some(game.state.object_of(*card)),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })
-                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
-                            source: crate::flow::game::ActivationSource::Permanent(permanent),
-                            ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::TapPayment {
-                            source: crate::flow::game::ActivationSource::Permanent(permanent),
-                            ..
-                        })
                         | Some(crate::flow::game::PendingChoice::ActivationX {
                             permanent, ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::Crew { permanent, .. }) => {
-                            game.state.permanents[*permanent]
-                                .as_ref()
-                                .map(|perm| perm.object)
+                        }) => game.state.permanents[*permanent]
+                            .as_ref()
+                            .map(|perm| perm.object),
+                        // A sacrifice or plain mana step focuses nothing.
+                        Some(crate::flow::game::PendingChoice::Pay { payment, .. }) => {
+                            match &payment.owed[0] {
+                                crate::flow::payment::CostComponent::Sacrifice(..) => None,
+                                crate::flow::payment::CostComponent::Mana { .. }
+                                    if !payment.waterbends() =>
+                                {
+                                    None
+                                }
+                                // What a tap pays is about the permanent tapped.
+                                crate::flow::payment::CostComponent::TapPays { tapped, .. } => {
+                                    Some(*tapped)
+                                }
+                                _ => game.payment_source_object(&payment.operation),
+                            }
                         }
-                        Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
-                            game.payment_source_object(payment)
-                        }
-                        Some(crate::flow::game::PendingChoice::ExileFromHandPayment {
-                            payment,
-                            ..
-                        }) => game.payment_source_object(payment),
-                        Some(
-                            crate::flow::game::PendingChoice::SacrificePayment { .. }
-                            | crate::flow::game::PendingChoice::ManaPayment { .. },
-                        ) => None,
                         None => None,
                     });
                 object_id
@@ -2304,9 +2311,30 @@ impl Observation {
     }
 }
 
-/// A ward cost's mana value; 0 without ward.
+/// A ward cost's mana value; 0 without ward and for a ward paid in life.
 fn ward_value(cost: Option<&PaymentCost>) -> i32 {
-    cost.map_or(0, |cost| i32::from(cost.mana_cost().mana_value))
+    cost.and_then(PaymentCost::mana)
+        .map_or(0, |cost| i32::from(cost.mana_value))
+}
+
+/// The life a ward costs; 0 without ward and for a ward paid in mana.
+fn ward_life(cost: Option<&PaymentCost>) -> i32 {
+    match cost {
+        Some(PaymentCost::Life(life)) => *life as i32,
+        _ => 0,
+    }
+}
+
+/// A ward cost `ward_cost` cannot state, in learning tokens: empty without
+/// ward and for a ward whose price is its mana value.
+fn ward_program(cost: Option<&PaymentCost>) -> Vec<(u16, i32)> {
+    match cost {
+        Some(cost @ PaymentCost::Life(_)) => {
+            crate::cards::tokens::rules_tokens(cost, default_content_pack())
+                .expect("registered rules payload")
+        }
+        _ => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -2486,6 +2514,7 @@ mod characteristics_tests {
             name_group: None,
             ability_index: None,
             continuation_index: None,
+            pays_directly: false,
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();

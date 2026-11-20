@@ -585,16 +585,50 @@ impl ActivatedAbilityDefinition {
         }
     }
 
+    /// The total power of other creatures this ability taps as a cost, and
+    /// the keyword that asks for it.
+    pub fn tap_power(&self) -> Option<(i32, crate::payment::Toward)> {
+        use crate::payment::Toward;
+        self.crew
+            .map(|power| (power, Toward::Crew))
+            .or(self.saddle.map(|power| (power, Toward::Saddle)))
+    }
+
+    /// The permanents this ability taps as a chosen cost and the part of the
+    /// cost they pay: its printed tap cost, or station's one creature. The
+    /// station creature is another than the source, which the predicate
+    /// cannot say; the payment's candidates exclude it.
+    pub fn chosen_tap(&self) -> Option<(TapCost, crate::payment::Toward)> {
+        use crate::payment::Toward;
+        if self.station {
+            return Some((
+                TapCost {
+                    predicate: CardPredicate::creature(),
+                    count: 1,
+                },
+                Toward::Station,
+            ));
+        }
+        self.tap_cost.clone().map(|cost| (cost, Toward::Printed))
+    }
+
+    /// Whether paying the cost removes the source permanent from the
+    /// battlefield (sacrificed or exiled).
+    pub fn source_leaves(&self) -> bool {
+        self.sacrifice_source || self.exile_source
+    }
+
     /// For a known mana ability, does activation change anything besides
     /// paying mana, tapping its own source and producing its output?
     pub fn mana_activation_has_side_effects(&self) -> bool {
         self.life_cost > 0
-            || self.sacrifice_source
+            || self.source_leaves()
             || self.sacrifice.is_some()
             || self.discard_source
             || self.discard_card
             || self.tap_cost.is_some()
-            || self.crew.is_some()
+            || self.tap_power().is_some()
+            || self.station
             || self.effects.len() > 1
     }
 
@@ -752,6 +786,10 @@ pub struct ActivatedAbilityDefinition {
     /// Sacrifice the source permanent as an additional activation cost
     /// (e.g. Clue tokens' "{2}, Sacrifice this token: Draw a card.").
     pub sacrifice_source: bool,
+    /// Exile the source permanent as an activation cost ("{T}, Exile this
+    /// artifact: ...").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_source: bool,
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as
@@ -761,6 +799,14 @@ pub struct ActivatedAbilityDefinition {
     /// with total power N or greater (CR 702.122a).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crew: Option<i32>,
+    /// "Saddle N": the same cost as crew (CR 702.171a), toward saddling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saddle: Option<i32>,
+    /// "Station": tap another untapped creature you control (CR 702.184a).
+    /// The effects read that creature's power from the activation's receipt
+    /// (`EffectValue::PowerTappedToPay`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub station: bool,
     /// The least X the activation may announce ("X can't be 0", CR 107.3).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x_min: u8,
@@ -924,6 +970,12 @@ pub enum StaticAbility {
     /// "Untap this during each other player's untap step" (CR 502.3): it
     /// untaps in its controller's opponents' untap steps as well as theirs.
     UntapsDuringOtherUntapSteps,
+    /// "[Predicate] spells you cast have [convoke, improvise or delve]": the
+    /// spell is paid as though it printed `cost`.
+    SpellsHave {
+        predicate: crate::predicate::CardPredicate,
+        cost: AdditionalCost,
+    },
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -972,6 +1024,33 @@ pub enum AdditionalCost {
     /// spell is cast, a trigger copies it once per payment; each copy may
     /// take new targets. Payments add to the total cost, not the mana value.
     Replicate(ManaCost),
+    /// Convoke (CR 702.51): each creature its caster taps while casting it
+    /// pays for {1} or one mana of that creature's color.
+    Convoke,
+    /// Improvise (CR 702.126): each artifact its caster taps while casting
+    /// it pays for {1}.
+    Improvise,
+    /// Delve (CR 702.66): each card its caster exiles from their graveyard
+    /// while casting it pays for {1}.
+    Delve,
+    /// Bargain (CR 702.166): "You may sacrifice an artifact, enchantment, or
+    /// token as you cast this spell." Chosen like kicker, which marks the
+    /// spell kicked ("if this spell was bargained").
+    Bargain,
+    /// "As an additional cost to cast this spell, forage or pay [mana]." To
+    /// forage (CR 701.61) is to exile three cards from your graveyard or
+    /// sacrifice a Food; the caster chooses as the cost is paid.
+    ForageOr(ManaCost),
+    /// "You may pay [cost] rather than pay this spell's mana cost if
+    /// [condition]" (CR 118.9): chosen like kicker, which marks the spell
+    /// kicked. Its mana value is unchanged (CR 118.9c).
+    AlternativeMana {
+        cost: ManaCost,
+        condition: Condition,
+    },
+    /// "As an additional cost to cast this spell, discard a card": another
+    /// card from its caster's hand, chosen as the cost is paid.
+    Discard,
 }
 
 /// An object as printed (CR 108.4, 111.3): what cards and tokens share,
@@ -1193,6 +1272,35 @@ impl std::ops::Deref for ObjectDefinition {
     }
 }
 
+/// The cost a spell's caster may choose to pay as it is cast. One choice
+/// (`PendingChoice::KickerChoice`) and one flag (`kicked`) record the answer
+/// for every kind, so a reader names the taken cost from this, not the flag.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CastOption<'a> {
+    /// Kicker, an optional waterbend or "pay life or mana": more mana.
+    Kicker,
+    /// Bargain (CR 702.166): sacrifice an artifact, enchantment or token.
+    Bargain,
+    /// This mana rather than the mana cost, while a condition holds.
+    AlternativeMana(&'a ManaCost),
+    /// Exile a card from hand rather than pay the mana cost.
+    ExileFromHand,
+}
+
+impl CastOption<'_> {
+    /// The word for a spell cast with this cost taken, as a participle
+    /// ("kicked") and as the cost itself ("kicker").
+    pub fn words(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Kicker => ("kicked", "kicker"),
+            Self::Bargain => ("bargained", "bargain"),
+            Self::AlternativeMana(_) | Self::ExileFromHand => {
+                ("cast for its alternative cost", "alternative cost")
+            }
+        }
+    }
+}
+
 impl PrintedCharacteristics {
     /// A Saga (CR 714.1): an enchantment with the Saga subtype.
     pub fn is_saga(&self) -> bool {
@@ -1209,7 +1317,55 @@ impl PrintedCharacteristics {
             AdditionalCost::Sacrifice(_)
             | AdditionalCost::RequiredWaterbend(_)
             | AdditionalCost::Replicate(_)
+            | AdditionalCost::Convoke
+            | AdditionalCost::Improvise
+            | AdditionalCost::Delve
+            | AdditionalCost::Bargain
+            | AdditionalCost::ForageOr(_)
+            | AdditionalCost::AlternativeMana { .. }
+            | AdditionalCost::Discard
             | AdditionalCost::ExileFromHandAlternative { .. } => None,
+        })
+    }
+
+    /// What this card's one yes-or-no cost choice asks as it is cast (CR
+    /// 601.2b); see [`CastOption`]. An alternative cost is asked before an
+    /// optional additional one.
+    pub fn cast_option(&self) -> Option<CastOption<'_>> {
+        if self.exile_alternative().is_some() {
+            Some(CastOption::ExileFromHand)
+        } else if let Some((cost, _)) = self.alternative_mana() {
+            Some(CastOption::AlternativeMana(cost))
+        } else if self.bargain() {
+            Some(CastOption::Bargain)
+        } else {
+            self.optional_cost().map(|_| CastOption::Kicker)
+        }
+    }
+
+    /// Whether casting this spell discards a card as an additional cost.
+    pub fn discard_cost(&self) -> bool {
+        self.additional_costs.contains(&AdditionalCost::Discard)
+    }
+
+    /// Whether the spell has bargain.
+    pub fn bargain(&self) -> bool {
+        self.additional_costs.contains(&AdditionalCost::Bargain)
+    }
+
+    /// The mana that may be paid rather than foraging.
+    pub fn forage_or(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::ForageOr(mana) => Some(mana),
+            _ => None,
+        })
+    }
+
+    /// The mana that may be paid rather than the mana cost, and when.
+    pub fn alternative_mana(&self) -> Option<(&ManaCost, &Condition)> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::AlternativeMana { cost, condition } => Some((cost, condition)),
+            _ => None,
         })
     }
 

@@ -772,7 +772,7 @@ impl Game {
             context: trigger.context,
             player: trigger.player,
             x: trigger.x,
-            spent: trigger.spent,
+            spent: trigger.spent.clone(),
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
@@ -1105,7 +1105,7 @@ impl Game {
                     .permanent_of(*object)
                     .and_then(|id| self.state.permanents[id].as_ref())
                     .map_or(Default::default(), |permanent| {
-                        (permanent.cast_x, permanent.cast_spent)
+                        (permanent.cast_x, permanent.cast_spent.clone())
                     }),
                 _ => Default::default(),
             };
@@ -1498,6 +1498,24 @@ impl Game {
         for effects in fired {
             self.enqueue_inline_trigger(object, source_ref, caster, effects, None);
         }
+        // "When that mana is spent to cast [a spell], copy that spell": one
+        // trigger of the object that made each such unit.
+        let copy_sources: Vec<_> = match self
+            .find_spell_on_stack_index(object)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            Some(StackObject::Spell(spell)) => spell.spent.copy_triggers().flatten().collect(),
+            _ => Vec::new(),
+        };
+        for origin in copy_sources {
+            self.enqueue_inline_trigger(
+                origin.object,
+                Some(origin.object),
+                caster,
+                vec![Effect::CopyTriggeringObject],
+                Some(Target::StackSpell(object)),
+            );
+        }
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
         let replicated = match self
@@ -1816,7 +1834,8 @@ impl Game {
                 },
                 _,
             ) => {
-                self.check_static_condition(active_if, source_controller)
+                // "While saddled" asks about the exact source.
+                self.check_intervening_if(active_if, source_controller, Some(source_object), None)
                     && self.trigger_condition_fires(
                         condition,
                         source_object,

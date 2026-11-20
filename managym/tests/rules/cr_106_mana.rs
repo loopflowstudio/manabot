@@ -137,7 +137,7 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
                         // This fixture chooses one valid path; the engine offers
                         // every distinct unit instead of preferring a color.
                         let choice = remaining.spending_choices(&owed).remove(0);
-                        remaining.spend(&choice.unit, &owed.purpose);
+                        remaining.spend(&choice.unit);
                         owed = choice.remaining;
                     }
                     assert_eq!(remaining.total(), pool.total() - generic as u16 - 1);
@@ -173,7 +173,7 @@ fn audit_restricted_mana_never_pays_unrelated_costs() {
             let choices = pool.spending_choices(&cost);
             assert_eq!(choices.len(), usize::from(eligible));
             if eligible {
-                pool.spend(&choices[0].unit, &cost.purpose);
+                pool.spend(&choices[0].unit);
                 assert_eq!(pool.total(), 0);
             }
             pool.clear();
@@ -209,7 +209,7 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
     let ogre = move_to_hand(&mut s, "Gray Ogre");
     let strike = move_to_hand(&mut s, "Lightning Strike");
     s.game_mut().state.players[0].mana_pool =
-        Mana::restricted_to(ogre_spells.clone(), [0, 0, 0, 3, 0, 0]);
+        Mana::restricted_to(ogre_spells.clone(), [0, 0, 0, 3, 0, 0]).into();
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, ogre));
     assert!(!can_cast(&s, strike));
@@ -277,7 +277,7 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
         s.allow_priority_floats();
         let guide = s.force_permanent_on_battlefield(0, "Scarecrow Guide");
         s.game_mut().state.players[0].mana_pool =
-            Mana::restricted_to(restriction.clone(), [0, 0, 0, 0, 0, 1]);
+            Mana::restricted_to(restriction.clone(), [0, 0, 0, 0, 0, 1]).into();
         s.game_mut().scenario_refresh_priority().unwrap();
         let offered =
             s.action_space().actions.iter().any(

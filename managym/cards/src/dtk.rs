@@ -1,13 +1,16 @@
 //! Dragons of Tarkir.
 use managym_state::{
-    ability::{Effect, ObjectSelector, Scope, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility},
+    ability::{Condition, Effect, ObjectSelector, Scope, TargetSpec},
+    card::{
+        CardDefinition, CardType, CardTypes, PrintedCharacteristics, SpellCostReduction,
+        StaticAbility,
+    },
     mana::{Color, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![clone_legion(), rending_volley()]
+    vec![clone_legion(), dragonlords_servant(), rending_volley()]
 }
 
 fn clone_legion() -> CardDefinition {
@@ -52,6 +55,31 @@ fn rending_volley() -> CardDefinition {
                 4,
                 ObjectSelector::Target(white_or_blue_creature),
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dragonlords_servant() -> CardDefinition {
+    let text_box = "Dragon spells you cast cost {1} less to cast.";
+    CardDefinition {
+        key: "dtk.dragonlords_servant",
+        scryfall_id: "0ffcdd54-b6be-4d42-82c0-ae927037e859",
+        printed: PrintedCharacteristics {
+            name: "Dragonlord's Servant".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Shaman".into()],
+            power: Some(1),
+            toughness: Some(3),
+            statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
+                first_on_own_turn: false,
+                predicate: CardPredicate::subtype("Dragon"),
+                condition: Condition::Always,
+                generic: 1,
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

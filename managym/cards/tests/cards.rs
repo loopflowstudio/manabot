@@ -12,6 +12,10 @@ mod support;
 mod aer;
 #[path = "cards/afr.rs"]
 mod afr;
+#[path = "cards/atq.rs"]
+mod atq;
+#[path = "cards/bfz.rs"]
+mod bfz;
 #[path = "cards/blb.rs"]
 mod blb;
 #[path = "cards/bng.rs"]
@@ -24,6 +28,8 @@ mod c17;
 mod c19;
 #[path = "cards/chk.rs"]
 mod chk;
+#[path = "cards/clb.rs"]
+mod clb;
 #[path = "cards/cmr.rs"]
 mod cmr;
 #[path = "cards/csp.rs"]
@@ -32,14 +38,20 @@ mod csp;
 mod definitions;
 #[path = "cards/dft.rs"]
 mod dft;
+#[path = "cards/dmu.rs"]
+mod dmu;
 #[path = "cards/dom.rs"]
 mod dom;
 #[path = "cards/dtk.rs"]
 mod dtk;
+#[path = "cards/ecl.rs"]
+mod ecl;
 #[path = "cards/eld.rs"]
 mod eld;
 #[path = "cards/emn.rs"]
 mod emn;
+#[path = "cards/eoe.rs"]
+mod eoe;
 #[path = "cards/fdn.rs"]
 mod fdn;
 #[path = "cards/frf.rs"]
@@ -48,6 +60,8 @@ mod frf;
 mod fut;
 #[path = "cards/gpt.rs"]
 mod gpt;
+#[path = "cards/gtc.rs"]
+mod gtc;
 #[path = "cards/hob.rs"]
 mod hob;
 #[path = "cards/ice.rs"]
@@ -60,6 +74,8 @@ mod inv;
 mod isd;
 #[path = "cards/j22.rs"]
 mod j22;
+#[path = "cards/jou.rs"]
+mod jou;
 #[path = "cards/khm.rs"]
 mod khm;
 #[path = "cards/kld.rs"]
@@ -84,6 +100,10 @@ mod mid;
 mod mkm;
 #[path = "cards/mmq.rs"]
 mod mmq;
+#[path = "cards/mrd.rs"]
+mod mrd;
+#[path = "cards/msh.rs"]
+mod msh;
 #[path = "cards/nec.rs"]
 mod nec;
 #[path = "cards/observability.rs"]
@@ -104,8 +124,12 @@ mod psal;
 mod ptk;
 #[path = "cards/rav.rs"]
 mod rav;
+#[path = "cards/rix.rs"]
+mod rix;
 #[path = "cards/roe.rs"]
 mod roe;
+#[path = "cards/rtr.rs"]
+mod rtr;
 #[path = "cards/scryfall.rs"]
 mod scryfall;
 #[path = "cards/shm.rs"]
@@ -118,6 +142,8 @@ mod spm;
 mod sth;
 #[path = "cards/stx.rs"]
 mod stx;
+#[path = "cards/tdm.rs"]
+mod tdm;
 #[path = "cards/ths.rs"]
 mod ths;
 #[path = "cards/tla.rs"]

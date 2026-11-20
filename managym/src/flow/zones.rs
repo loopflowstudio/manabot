@@ -16,7 +16,7 @@ use crate::{
         game_object::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
-        mana::ManaSpent,
+        payment::PaymentReceipt,
         permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
@@ -27,16 +27,16 @@ use crate::{
 
 /// The rules facts a zone-change successor can read. Entry replacements
 /// belong to `ZoneEntry`, separately from facts about the departing object.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct CarryOver {
     /// CR 400.7d: a permanent can read how its spell was cast.
     cast: Option<CastFacts>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct CastFacts {
     x: u8,
-    spent: ManaSpent,
+    spent: PaymentReceipt,
 }
 
 impl Game {
@@ -643,7 +643,7 @@ impl Game {
                 Some(StackObject::Spell(spell)) if to_zone == ZoneType::Battlefield => {
                     Some(CastFacts {
                         x: spell.x,
-                        spent: spell.spent,
+                        spent: spell.spent.clone(),
                     })
                 }
                 _ => None,

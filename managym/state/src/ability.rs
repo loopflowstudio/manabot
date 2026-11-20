@@ -195,6 +195,12 @@ pub enum Condition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if there are `count` or more [predicate] permanents on the
+    /// battlefield", whoever controls them.
+    BattlefieldAtLeast {
+        count: usize,
+        predicate: CardPredicate,
+    },
     /// "if you control `count` or more permanents you don't own" (Agent of
     /// Treachery).
     ControlsUnownedAtLeast {
@@ -247,6 +253,8 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    /// "while saddled": the source Mount is saddled (CR 702.171b).
+    SourceSaddled,
     /// The exact ability source has these current characteristics.
     SourceMatches(CardPredicate),
     /// Triggering question: the permanent whose event fired the trigger has
@@ -306,9 +314,11 @@ impl Condition {
         match self {
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceSaddled
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters => true,
-            Condition::ControlsAtLeast { predicate, .. } => predicate.reads_source(),
+            Condition::ControlsAtLeast { predicate, .. }
+            | Condition::BattlefieldAtLeast { predicate, .. } => predicate.reads_source(),
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
             _ => false,
         }
@@ -339,6 +349,7 @@ impl Condition {
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceSaddled
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
             | Condition::YourTurn
@@ -347,6 +358,7 @@ impl Condition {
             | Condition::GraveyardAtLeast { .. }
             | Condition::AnyGraveyardAtLeast { .. }
             | Condition::ControlsAtLeast { .. }
+            | Condition::BattlefieldAtLeast { .. }
             | Condition::ControlsUnownedAtLeast { .. }
             | Condition::CardsInHandAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
@@ -553,10 +565,19 @@ pub enum EffectValue {
     PermanentsSacrificedThisTurn,
     /// "The number of spells you've cast this turn."
     SpellsCastThisTurn,
+    /// The total power of the creatures tapped to pay the resolving
+    /// ability's cost ("charge counters equal to its power", station, CR
+    /// 702.184a), each read as the ability resolves or from its last known
+    /// information once it has left; 0 outside a resolution.
+    PowerTappedToPay,
     /// The power of the permanent whose event fired the trigger, from its
     /// last known information once it has left ("where X is that
     /// creature's power").
     TriggeringPower,
+    /// The mana value of the spell whose casting fired the trigger ("you lose
+    /// life equal to its mana value"), its announced X included while it is
+    /// on the stack.
+    TriggeringManaValue,
     /// The toughness of the frame's primary target, from its last known
     /// information once it has left ("you gain life equal to its
     /// toughness").
@@ -590,17 +611,24 @@ pub enum EffectValue {
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
 /// Waterbend pays only generic mana; taps never count as mana production.
+/// Life is paid in one action by a player whose life total is at least the
+/// amount (CR 119.4); no mana is owed for it.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PaymentCost {
     Mana(ManaCost),
     Waterbend { generic: u8 },
+    Life(u32),
 }
 
 impl PaymentCost {
-    pub fn mana_cost(&self) -> ManaCost {
+    /// The mana this cost states, or `None` for a cost paid in life: a life
+    /// cost is not {0}. For readers of a definition (a ward's price); a
+    /// payment being made owes a `CostComponent`.
+    pub fn mana(&self) -> Option<ManaCost> {
         match self {
-            Self::Mana(cost) => cost.clone(),
-            Self::Waterbend { generic } => ManaCost::default().with_generic(*generic),
+            Self::Mana(cost) => Some(cost.clone()),
+            Self::Waterbend { generic } => Some(ManaCost::default().with_generic(*generic)),
+            Self::Life(_) => None,
         }
     }
 }
@@ -1160,6 +1188,10 @@ pub enum Effect {
     /// they control": the active player chooses first (CR 101.4), and the
     /// sacrifices are one event.
     EachPlayerKeepsCreatures { max_total_power: i32 },
+    /// "Each player sacrifices `count` creatures of their choice": the active
+    /// player chooses first (CR 101.4), a player with no more than `count`
+    /// sacrifices them all, and the sacrifices are one event.
+    EachPlayerSacrificesCreatures { count: usize },
     /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
     /// `effects` trigger from this spell or ability's source. Their targets
     /// are chosen as the delayed ability is put on the stack.
@@ -1593,6 +1625,11 @@ impl Effect {
             }
             // "Copy that spell": the cast spell is the context.
             Effect::CopyTriggeringObject | Effect::CopyTriggeringSpellForEach { .. } => true,
+            // "Equal to its mana value".
+            Effect::LoseLife {
+                amount: EffectValue::TriggeringManaValue,
+                ..
+            } => true,
             Effect::ForPlayer { effects, .. } => effects.iter().any(Effect::asks_triggering_spell),
             _ => false,
         }
@@ -1727,6 +1764,7 @@ impl Effect {
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
+            | Effect::EachPlayerSacrificesCreatures { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
             | Effect::FightLastTarget

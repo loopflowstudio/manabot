@@ -36,6 +36,9 @@ pub enum CounterKind {
     Age,
     /// No rules meaning of its own; cards count it (Dark Depths).
     Ice,
+    /// No rules meaning of its own; station puts them on and a Spacecraft's
+    /// or Planet's "N+" abilities count them (CR 702.184).
+    Charge,
 }
 
 impl CounterKind {
@@ -56,6 +59,7 @@ impl CounterKind {
             CounterKind::MinusOneMinusOne => "minus_one_minus_one",
             CounterKind::Age => "age",
             CounterKind::Ice => "ice",
+            CounterKind::Charge => "charge",
         }
     }
 
@@ -67,7 +71,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 14] = [
+    pub const ALL: [CounterKind; 15] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -82,6 +86,7 @@ impl CounterKind {
         CounterKind::MinusOneMinusOne,
         CounterKind::Age,
         CounterKind::Ice,
+        CounterKind::Charge,
     ];
 }
 
@@ -177,8 +182,8 @@ pub struct Permanent {
     pub cast_x: u8,
     /// The mana spent to cast that spell (CR 601.2h), read by its own
     /// entering-the-battlefield triggers; empty otherwise.
-    #[serde(skip_serializing_if = "crate::mana::ManaSpent::is_empty")]
-    pub cast_spent: crate::mana::ManaSpent,
+    #[serde(skip_serializing_if = "crate::payment::PaymentReceipt::is_empty")]
+    pub cast_spent: crate::payment::PaymentReceipt,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]

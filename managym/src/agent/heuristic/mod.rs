@@ -387,6 +387,14 @@ impl Heuristic {
                     Action::DeclineChoice
                 });
             }
+            // A ward paid in life ("Ward—Pay 7 life."): never pay the life
+            // that would lose the game.
+            if b.objects
+                .get(&b.raw.action_space.focus[0])
+                .is_some_and(|c| c.ward_life > 0 && c.ward_life >= b.raw.agent.life)
+            {
+                return b.first(Action::DeclineChoice);
+            }
         }
         b.first(Action::PayCost)
     }

@@ -409,6 +409,73 @@ def test_continuation_text_states_announcing_only_when_present() -> None:
     )
 
 
+def _choose(env: managym.Env, wording: str) -> None:
+    """Submit the one offered action whose line contains `wording`."""
+    decision = capture_text_decision(env)
+    [line] = [
+        line
+        for line in decision.text.splitlines()
+        if " — " in line and wording in line
+    ]
+    submit_response(env, decision, line.split(" — ", 1)[0])
+
+
+def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
+    text = capture_text_decision(env).text
+    stack = text.split("Stack (native order, top to bottom):\n", 1)[1]
+    continuation = text.split("Current continuation:\n", 1)[1].split("\n\n", 1)[0]
+    return stack.split("\n", 1)[0], continuation.splitlines()
+
+
+def test_a_taken_optional_cost_is_named_for_what_the_card_offers() -> None:
+    """`kicked` records bargain too; the text says which cost was taken."""
+    env = priority_root(("Archon's Glory",), ("Gray Ogre", "Prophetic Prism", "Plains"))
+    _choose(env, "Cast")
+    _, continuation = _stack_and_continuation(env)
+    assert continuation[0] == (
+        "Stage: additional cost. Choose whether to bargain: sacrifice an "
+        "artifact, enchantment or token as you cast this spell."
+    )
+    _choose(env, "Bargain: sacrifice an artifact, enchantment or token")
+    relations = capture_text_decision(env).text
+    assert "; bargain included" in relations and "kicker included" not in relations
+    _choose(env, "Target")
+    _choose(env, "Sacrifice Prophetic Prism (bargain)")
+    _choose(env, "Pay the offered cost")
+    stack, _ = _stack_and_continuation(env)
+    assert stack.startswith("S1") and "; bargained;" in stack
+    assert "kicked" not in stack
+
+    env = priority_root(("Burst Lightning",), ("Mountain",) * 5)
+    _choose(env, "Cast")
+    _, continuation = _stack_and_continuation(env)
+    assert continuation[0] == (
+        "Stage: additional cost. Choose whether to pay the kicker cost."
+    )
+    _choose(env, "Pay the offered cost")
+    assert "; kicker included" in capture_text_decision(env).text
+
+
+def test_a_chosen_sacrifice_is_committed_once_and_not_already_paid() -> None:
+    env = priority_root((), ("Hungry Ghoul", "Gray Ogre", "Swamp", "Swamp"))
+    _choose(env, "Activate ability")
+    _choose(env, "Sacrifice Gray Ogre")
+    _, continuation = _stack_and_continuation(env)
+    assert (
+        "Committed to this cost: Gray Ogre, sacrificed when the payment completes."
+        in continuation
+    )
+    assert any(
+        "A chosen sacrifice leaves when the payment completes" in line
+        for line in continuation
+    )
+    # One line names the Ogre; it is neither paid nor listed a second time.
+    assert sum("Gray Ogre" in line for line in continuation) == 1
+    assert not any(
+        line.startswith(("Already paid", "Reserved sacrifice")) for line in continuation
+    )
+
+
 def test_face_down_card_text_appears_only_when_present() -> None:
     env = priority_root(("Gray Ogre",), ())
     decision = capture_text_decision(env)
@@ -521,6 +588,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "is_ally": "Ally",
         "is_lesson": "Lesson",
         "ward_cost": "ward mana value",
+        "ward_life": "ward: pay N life",
+        "ward_program": "ward: pay N life (the same price in learning tokens)",
         "kicker_cost": "kicker mana value or the definition's kicker rule",
     },
     managym.Permanent: {
@@ -1697,20 +1766,20 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ).read_text()
     )
     matchup = manifest["matchup"]
-    env = managym.Env(seed=167, decision_memory=True)
+    env = managym.Env(seed=197, decision_memory=True)
     env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
             for role in ("hero", "villain")
         ]
     )
-    rng = random.Random(167)
+    rng = random.Random(197)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 366
+    assert len(memory) == 440
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250

@@ -5,8 +5,9 @@ use managym_state::{
         PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
-        CardDefinition, CardType, CardTypes, ManaAbility, PrintedCharacteristics,
-        ReplacementEffect, StaticAbility, StaticPtBuff, StaticScope,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
+        ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticPtBuff,
+        StaticScope,
     },
     mana::{Mana, ManaCost},
     permanent::CounterKind,
@@ -17,6 +18,9 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         beastmaster_ascension(),
         bloodchief_ascension(),
+        burst_lightning(),
+        expedition_map(),
+        into_the_roil(),
         lotus_cobra(),
         valakut_the_molten_pinnacle(),
     ]
@@ -183,6 +187,96 @@ fn valakut_the_molten_pinnacle() -> CardDefinition {
                     }],
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn burst_lightning() -> CardDefinition {
+    let text_box = "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nBurst Lightning deals 2 damage to any target. If this spell was kicked, it deals 4 damage instead.";
+    CardDefinition {
+        key: "zen.burst_lightning",
+        scryfall_id: "2dc16614-5cf8-444d-a5ae-cac25018af68",
+        printed: PrintedCharacteristics {
+            name: "Burst Lightning".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
+            spell_effects: vec![Effect::If {
+                condition: Condition::Kicked,
+                then: vec![Effect::deal_damage(
+                    4,
+                    ObjectSelector::Target(TargetSpec::AnyTarget),
+                )],
+                otherwise: vec![Effect::deal_damage(
+                    2,
+                    ObjectSelector::Target(TargetSpec::AnyTarget),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn expedition_map() -> CardDefinition {
+    let text_box = "{2}, {T}, Sacrifice this artifact: Search your library for a land card, reveal it, put it into your hand, then shuffle.";
+    CardDefinition {
+        key: "zen.expedition_map",
+        scryfall_id: "c55bee97-593f-441f-b96c-a998d5212a55",
+        printed: PrintedCharacteristics {
+            name: "Expedition Map".into(),
+            mana_cost: Some(ManaCost::parse("{1}")),
+            types: CardTypes::new([CardType::Artifact]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}"),
+                tap_source: true,
+                sacrifice_source: true,
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn into_the_roil() -> CardDefinition {
+    let text_box = "Kicker {1}{U} (You may pay an additional {1}{U} as you cast this spell.)\nReturn target nonland permanent to its owner's hand. If this spell was kicked, draw a card.";
+    CardDefinition {
+        key: "zen.into_the_roil",
+        scryfall_id: "5dba9972-dd8b-407b-9374-a8f0ed1a96db",
+        printed: PrintedCharacteristics {
+            name: "Into the Roil".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{1}{U}"))],
+            spell_effects: vec![
+                Effect::return_to_hand(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Land],
+                        ..Default::default()
+                    },
+                })),
+                Effect::If {
+                    condition: Condition::Kicked,
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![],
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

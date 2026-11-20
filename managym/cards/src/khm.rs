@@ -1,9 +1,11 @@
 //! Kaldheim.
 use managym_state::{
-    ability::{Ability, Actor, Effect, ObjectSelector, TargetSpec, TriggerCondition, TurnStep},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition, TurnStep,
+    },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, SacrificeCost, StaticAbility,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -11,7 +13,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![koma_cosmos_serpent()]
+    vec![koma_cosmos_serpent(), seize_the_spoils()]
 }
 
 fn koma_cosmos_serpent() -> CardDefinition {
@@ -65,6 +67,29 @@ fn koma_cosmos_serpent() -> CardDefinition {
                     ])),
                     duration: EffectDuration::EndOfTurn,
                 }]),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn seize_the_spoils() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, discard a card.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")";
+    CardDefinition {
+        key: "khm.seize_the_spoils",
+        scryfall_id: "b3b7a69c-75d2-49a6-ab56-ef608d0b0208",
+        printed: PrintedCharacteristics {
+            name: "Seize the Spoils".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::Discard],
+            spell_effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                },
+                Effect::create_tokens("token.treasure", 1),
             ],
             text_box: text_box.into(),
             ..Default::default()

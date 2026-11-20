@@ -39,6 +39,7 @@ fn offer(kind: Action, focus: &[i32], declared: Option<bool>) -> ActionOption {
         name_group: None,
         ability_index: None,
         continuation_index: None,
+        pays_directly: false,
     }
 }
 fn card(id: i32, name: &str, mv: u8) -> CardData {
@@ -188,6 +189,25 @@ fn heuristic_kicker_memory_and_optional_costs() {
         offer(Action::DeclineChoice, &[], None),
         offer(Action::PayCost, &[], None),
     ];
+    assert_eq!(choose(&o), 1);
+}
+/// A ward paid in life is paid while it leaves the payer alive and declined
+/// when it would not.
+#[test]
+fn heuristic_pays_a_life_ward_only_when_it_survives() {
+    let mut o = board(Space::PayOrNot);
+    let mut sire = creature(30, 20, 7, 7);
+    sire.characteristics.ward_life = 7;
+    sire.object_id = Some(30);
+    o.opponent_permanents = vec![sire];
+    o.action_space.focus = vec![30];
+    o.action_space.actions = vec![
+        offer(Action::PayCost, &[], None),
+        offer(Action::DeclineChoice, &[], None),
+    ];
+    o.agent.life = 8;
+    assert_eq!(choose(&o), 0);
+    o.agent.life = 7;
     assert_eq!(choose(&o), 1);
 }
 #[test]

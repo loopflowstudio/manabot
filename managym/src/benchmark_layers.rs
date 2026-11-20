@@ -49,7 +49,7 @@ pub fn probe(game: &mut crate::Game, id: crate::state::game_object::PermanentId)
             crate::benchmark_allocations::start();
             let start = Instant::now();
             if operation == "mana" {
-                *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR");
+                *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR").into();
             } else {
                 branch.state.tap(id);
             }

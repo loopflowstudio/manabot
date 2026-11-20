@@ -18,6 +18,7 @@ use crate::{
         combat::CombatState,
         decision::SuspendedResolution,
         event::{EventLedger, GameEvent},
+        payment::Payment,
         priority::PriorityState,
         statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
@@ -30,7 +31,7 @@ use crate::{
             PermanentId, PermanentVec, PlayerId, Target,
         },
         knowledge::LibraryKnowledge,
-        mana::Mana,
+        mana::{Mana, ManaPool},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::{ZoneManager, ZoneType},
@@ -256,43 +257,17 @@ pub struct CastChoices {
     pub resolving: bool,
 }
 
-/// A fully announced spell or activation waiting for selected costs.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum Payment {
-    Spell {
-        #[serde(rename = "card")]
-        object: ObjectId,
-        #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-    },
-    Activation {
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
-        /// The announced value of X (CR 602.2b, 601.2b).
-        #[serde(skip_serializing_if = "crate::state::is_zero")]
-        x: u8,
-    },
-}
-
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
-/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> payment; activating a
-/// waterbend ability walks Waterbend until the cost is paid.
+/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> Pay; activating an
+/// ability walks ActivationX? -> ActivatedTarget? -> Pay.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
-    ManaPayment {
+    /// Paying the announced cost: the step is `payment.owed[0]`
+    /// (`Game::paying`). Choosing a payment for it shrinks or removes that
+    /// component and appends to `payment.receipt`.
+    Pay {
         player: PlayerId,
         payment: Box<Payment>,
-        sacrifice: Option<PermanentId>,
-        alternative: Option<crate::state::mana::ManaCost>,
-    },
-    SacrificePayment {
-        player: PlayerId,
-        payment: Box<Payment>,
-        cost: Box<crate::state::card::SacrificeCost>,
     },
     /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
     /// `chosen` holds those already selected, clause by clause, and
@@ -305,30 +280,6 @@ pub enum PendingChoice {
         chosen: Vec<Target>,
         #[serde(skip_serializing_if = "crate::state::is_zero")]
         requirement: usize,
-    },
-    /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
-    /// control" activation cost.
-    TapPayment {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
-        #[serde(skip_serializing_if = "is_single_tap")]
-        remaining: usize,
-    },
-    /// Choosing the card from hand to exile for a spell's alternative cost
-    /// (`AdditionalCost::ExileFromHandAlternative`), before the rest of its
-    /// payment.
-    ExileFromHandPayment {
-        player: PlayerId,
-        payment: Box<Payment>,
-    },
-    /// Choosing the card to discard for a "Discard a card" activation cost.
-    DiscardPayment {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
     },
     /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
     AnnounceX {
@@ -374,26 +325,6 @@ pub enum PendingChoice {
         chosen_req_indices: Vec<usize>,
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
-    },
-    /// Paying a crew cost (CR 702.122a): tap other untapped creatures one
-    /// at a time until their total power reaches the crew number.
-    Crew {
-        player: PlayerId,
-        permanent: PermanentId,
-        ability_index: usize,
-        /// Power still owed; the cost is paid once it reaches zero.
-        remaining_power: i32,
-    },
-    /// Paying a waterbend cost (an ability's, or a spell's additional or
-    /// alternative cost): tap artifacts/creatures for {1} each, then pay the
-    /// remainder with mana.
-    Waterbend {
-        player: PlayerId,
-        payment: Box<Payment>,
-        /// Generic mana further taps may still pay.
-        remaining_generic: u8,
-        /// Generic mana already paid by taps.
-        tapped: u8,
     },
 }
 
@@ -629,19 +560,19 @@ impl TrackedState {
 
     // Mana pools feed `mana_pools` only.
 
-    pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+    pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
         self.revisions.mana_pools += 1;
         &mut self.state.players[player.0].mana_pool
     }
 
     /// The ordinary and until-end-of-combat pools together.
-    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut Mana, &mut Mana) {
+    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut ManaPool, &mut ManaPool) {
         self.revisions.mana_pools += 1;
         let player = &mut self.state.players[player.0];
         (&mut player.mana_pool, &mut player.combat_mana_pool)
     }
 
-    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
         self.revisions.mana_pools += 1;
         &mut self.state.players[player.0].combat_mana_pool
     }
@@ -805,8 +736,4 @@ impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }
-}
-
-fn is_single_tap(remaining: &usize) -> bool {
-    *remaining == 1
 }
