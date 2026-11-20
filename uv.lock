@@ -221,7 +221,7 @@ wheels = [
 
 [[package]]
 name = "etude-sdk"
-version = "0.4.2"
+version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
@@ -229,9 +229,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/86/28/eb5748447a418d3605adb8b10971d70b39ba655babc04f629fd7b4cac256/etude_sdk-0.4.2.tar.gz", hash = "sha256:27f9c778b2db519108b557e6a35a35c541719035969a32c7972c01d55c661d9a", size = 1039937, upload-time = "2026-11-20T18:59:41.997Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/34/e220a0ef427ca531b04db6446545152ef1b00be7ba26d89e19cbc865a8a4/etude_sdk-0.4.3.tar.gz", hash = "sha256:f75b75593a323b26c1fdd63316955e60fbfe8a71e6846f4e5cb9a5e106ad5775", size = 1045488, upload-time = "2026-11-20T23:50:06.067Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/69/5f137c462ff1009f81d5dad2a3a8eff269111ff2dda8feec7727328085fb/etude_sdk-0.4.2-py3-none-any.whl", hash = "sha256:45d8c3760012101e58e34abbacac75677fa19aa4116e8b24cff2d7cab2023397", size = 638927, upload-time = "2026-11-20T18:59:40.074Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/df/fd761a8b0d479352276d37837f1a0760368dd98857afce2dcc46001cdc15/etude_sdk-0.4.3-py3-none-any.whl", hash = "sha256:6c9d4463ec841f88f5b8fbe855eebe6c643a109eaba16e236abcd54cabecf066", size = 641305, upload-time = "2026-11-20T23:50:04.381Z" },
 ]
 
 [package.optional-dependencies]
@@ -546,9 +546,9 @@ training-runtime = [
 requires-dist = [
     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
     { name = "cloudpickle", specifier = ">=3.1.2" },
-    { name = "etude-sdk", specifier = ">=0.4.2,<0.5" },
-    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = ">=0.4.2,<0.5" },
-    { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", specifier = ">=0.4.2,<0.5" },
+    { name = "etude-sdk", specifier = ">=0.4.3,<0.5" },
+    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = ">=0.4.3,<0.5" },
+    { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", specifier = ">=0.4.3,<0.5" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
@@ -575,7 +575,7 @@ provides-extras = ["openrouter", "llm", "reports", "artifacts", "academy", "eval
 
 [package.metadata.requires-dev]
 play-runtime = [
-    { name = "etude-sdk", specifier = "==0.4.2" },
+    { name = "etude-sdk", specifier = "==0.4.3" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "maturin", specifier = ">=1.9.3,<2.0" },
