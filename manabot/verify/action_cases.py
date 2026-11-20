@@ -293,6 +293,16 @@ def reorder_offers(
     return result
 
 
+# These tables keep their row order when object slots move. Their joins
+# store the object index plus one, with zero for absence.
+_OBJECT_JOINS = {
+    "relations": observation_schema.columns("relations", "source", "reference"),
+    "facts": [observation_schema.FACT_OBJECT_INDEX],
+    "effects": observation_schema.columns("effects", "controller", "source"),
+    "effect_members": observation_schema.columns("effect_members", "object"),
+}
+
+
 def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     """Reverse object slots with their identity joins, masks and focus references."""
     result = {k: v.clone() for k, v in obs.items()}
@@ -317,28 +327,9 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         focus = obs["action_focus"]
         mask = (focus >= offset) & (focus < offset + count)
         result["action_focus"][mask] = offset + count - 1 - (focus[mask] - offset)
-        if "relations" in obs:
-            # Continuation references use object index + 1 (zero is absence).
-            for col in observation_schema.columns("relations", "source", "reference"):
-                refs = obs["relations"][..., col]
-                mask = (refs > offset) & (refs <= offset + count)
-                result["relations"][..., col][mask] = (
-                    2 * offset + count + 1 - refs[mask]
-                )
-        if "facts" in obs:
-            col = observation_schema.FACT_OBJECT_INDEX
-            refs = obs["facts"][..., col]
-            mask = (refs > offset) & (refs <= offset + count)
-            result["facts"][..., col][mask] = 2 * offset + count + 1 - refs[mask]
-        for block, cols in (
-            ("effects", observation_schema.columns("effects", "controller", "source")),
-            (
-                "effect_members",
-                (observation_schema.column("effect_members", "object"),),
-            ),
-        ):
+        for block, columns in _OBJECT_JOINS.items():
             if block in obs:
-                for col in cols:
+                for col in columns:
                     refs = obs[block][..., col]
                     mask = (refs > offset) & (refs <= offset + count)
                     result[block][..., col][mask] = 2 * offset + count + 1 - refs[mask]

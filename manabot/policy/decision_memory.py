@@ -37,12 +37,11 @@ _RECORD_TEMPORAL = _span(_RECORDS, "ordinal_high", "last_low")
 _RECORD_PHASE = column(_RECORDS, "phase")
 _RECORD_STEP = column(_RECORDS, "step")
 _RECORD_PHASE_STEP = _span(_RECORDS, "phase", "step")
-_RECORD_KIND = _span(_RECORDS, "kind_high", "kind_low")
+_RECORD_KIND = column(_RECORDS, "kind_high")
 _RECORD_MEMBER_OFFSET = column(_RECORDS, "member_offset")
 # Mana, response and choice member counts.
 _RECORD_COUNTS = _span(_RECORDS, "mana_count", "choice_count")
 _RECORD_CHOOSER = column(_RECORDS, "chooser_role")
-_RECORD_CHOOSER_SPAN = _span(_RECORDS, "chooser_role", "chooser_role")
 _RECORD_VALID = column(_RECORDS, "valid")
 # Life, hand and board context of both seats: word pairs.
 _RECORD_CONTEXT = _span(_RECORDS, "life_viewer_high", "board_opponent_battle_low")
@@ -57,7 +56,7 @@ _RECORD_NUMBERED_SELECTORS = (
 )
 _RECORD_CHOICE_PRESENT = column(_RECORDS, "choice_kind_present")
 _RECORD_CHOICE_KIND = _span(_RECORDS, "choice_kind_high", "choice_kind_low")
-_RECORD_NAME = _span(_RECORDS, "name_high", "name_low")
+_RECORD_NAME = column(_RECORDS, "name_high")
 _RECORD_DECLARED_PRESENT = column(_RECORDS, "declared_present")
 _RECORD_DECLARED = column(_RECORDS, "declared")
 _RECORD_DECLARATION = _span(_RECORDS, "declared_present", "declared")
@@ -70,7 +69,6 @@ _RECORD_WORDS = [
 ]
 _REFERENCE_ROLE = column(_REFERENCES, "role")
 _REFERENCE_DEFINITION = column(_REFERENCES, "definition")
-_REFERENCE_DEFINITION_SPAN = _span(_REFERENCES, "definition", "definition")
 _REFERENCE_WORDS = _span(_REFERENCES, "power_high", "toughness_low")
 # Tapped, ready, attacking and blocking flags.
 _REFERENCE_FLAGS = _span(_REFERENCES, "tapped", "blocking")
@@ -87,7 +85,6 @@ _DETAIL_ORDINAL = column(_DETAILS, "ordinal")
 _DETAIL_VALID = column(_DETAILS, "valid")
 _MEMBER_REFERENCE = column(_MEMBERS, "reference")
 _MEMBER_ORDINAL = column(_MEMBERS, "ordinal")
-_MEMBER_ORDINAL_SPAN = _span(_MEMBERS, "ordinal", "ordinal")
 
 
 @dataclass(frozen=True)
@@ -477,7 +474,7 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
         headers = obs[_RECORDS][batch, :count]
         details = obs[_DETAILS][batch, :detail_count]
         if not np.isin(
-            record_word(headers[:, _RECORD_KIND], 0), decision_name_values()
+            record_word(headers, _RECORD_KIND), decision_name_values()
         ).all():
             raise ValueError("unadmitted decision-memory kind")
         chosen = headers[:, _RECORD_CHOICE_PRESENT] == 1
@@ -490,7 +487,7 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
             details[program, _DETAIL_TOKEN_KIND].astype(np.int64),
             record_word(details[program, _DETAIL_VALUE], 0),
         )
-        named = record_word(headers[:, _RECORD_NAME], 0)
+        named = record_word(headers, _RECORD_NAME)
         if (named < 0).any() or (named >= len(tables.name_definitions)).any():
             raise ValueError("invalid decision-memory name row")
 
@@ -1046,46 +1043,37 @@ def _prepare_dense_memory(
     lengths = headers[..., _RECORD_VALID].sum(1).astype(np.int64)
     batches, slots = np.nonzero(headers[..., _RECORD_VALID])
     selected = headers[batches, slots]
-    temporal = np.stack(
-        [
-            record_word(selected[:, i : i + 2], 0)
-            for i in range(_RECORD_TEMPORAL.start, _RECORD_TEMPORAL.stop, 2)
-        ],
-        -1,
-    )
-    context = np.stack(
-        [
-            record_word(selected[:, i : i + 2], 0)
-            for i in range(_RECORD_CONTEXT.start, _RECORD_CONTEXT.stop, 2)
-        ],
-        -1,
-    )
+
+    def word_pairs(rows: np.ndarray, span: slice) -> np.ndarray:
+        halves = rows[:, span]
+        return record_word(halves.reshape(len(rows), halves.shape[1] // 2, 2), 0)
+
+    temporal = word_pairs(selected, _RECORD_TEMPORAL)
+    context = word_pairs(selected, _RECORD_CONTEXT)
     context[:, :2] = context[:, :2].astype(np.uint32).view(np.int32)
     selectors = np.zeros((len(selected), 10), np.float32)
     for index, offset in enumerate(_RECORD_SELECTORS):
         selectors[:, index * 2] = selected[:, offset]
         if offset in _RECORD_NUMBERED_SELECTORS:
-            selectors[:, index * 2 + 1] = _scaled(
-                record_word(selected[:, offset + 1 : offset + 3], 0)
-            )
+            selectors[:, index * 2 + 1] = _scaled(record_word(selected, offset + 1))
     selectors[:, 8:] = selected[:, _RECORD_DECLARATION]
     numbers = np.concatenate(
         (
             _scaled(temporal),
             selected[:, _RECORD_PHASE_STEP] / [4, 12],
-            selected[:, _RECORD_CHOOSER_SPAN] / 2,
+            selected[:, _RECORD_CHOOSER, None] / 2,
             _scaled(context),
             selectors,
         ),
         -1,
     ).astype(np.float32)
-    kinds = tables.names(1, record_word(selected[:, _RECORD_KIND], 0))
+    kinds = tables.names(1, record_word(selected, _RECORD_KIND))
     choices = np.zeros(len(selected), np.int64)
     present = selected[:, _RECORD_CHOICE_PRESENT] == 1
     choices[present] = tables.names(
         1, record_word(selected[present, _RECORD_CHOICE_KIND], 0)
     )
-    choice_names = record_word(selected[:, _RECORD_NAME], 0)
+    choice_names = record_word(selected, _RECORD_NAME)
     references_list: list[np.ndarray] = []
     details_list: list[np.ndarray] = []
     detail_routes: list[np.ndarray] = []
@@ -1109,7 +1097,7 @@ def _prepare_dense_memory(
         groups.append(
             np.repeat(np.arange(length * 3, dtype=np.int64) + record_base * 3, counts)
         )
-        positions.append((members[:, _MEMBER_ORDINAL_SPAN] / 128).astype(np.float32))
+        positions.append((members[:, _MEMBER_ORDINAL, None] / 128).astype(np.float32))
         reference_base += reference_count
         record_base += int(length)
     references = (
@@ -1122,27 +1110,17 @@ def _prepare_dense_memory(
         if details_list
         else np.zeros((0, MEMORY_WIDTHS[_DETAILS]), np.float32)
     )
-    numeric = (
-        np.stack(
-            [
-                record_word(references[:, i : i + 2], 0)
-                for i in range(_REFERENCE_WORDS.start, _REFERENCE_WORDS.stop, 2)
-            ],
-            -1,
-        )
-        .astype(np.uint32)
-        .view(np.int32)
-    )
+    numeric = word_pairs(references, _REFERENCE_WORDS).astype(np.uint32).view(np.int32)
     reference_numbers = np.concatenate(
         (
-            references[:, _REFERENCE_ROLE : _REFERENCE_ROLE + 1] / 2,
+            references[:, _REFERENCE_ROLE, None] / 2,
             _scaled(numeric),
             references[:, _REFERENCE_FLAGS],
-            (references[:, _REFERENCE_DEFINITION_SPAN] > 0).astype(np.float32),
+            (references[:, _REFERENCE_DEFINITION, None] > 0).astype(np.float32),
         ),
         -1,
     ).astype(np.float32)
-    payloads = record_word(details[:, _DETAIL_VALUE], 0)
+    payloads = record_word(details, _DETAIL_VALUE_HIGH)
     token_kinds = details[:, _DETAIL_TOKEN_KIND].astype(np.int64)
     values = np.zeros(len(details), np.int64)
     program = details[:, _DETAIL_FIELD] == 0
