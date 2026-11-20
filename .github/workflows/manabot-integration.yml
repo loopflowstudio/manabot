@@ -102,9 +102,7 @@ jobs:
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py \
             tests/verify/test_decision_memory_probe.py \
             tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py \
-            tests/verify/test_observation_parity.py::test_encodes_every_observed_permanent_and_card_field_in_parity \
-            tests/verify/test_observation_parity.py::test_fact_capacity_fills_exactly_and_rejects_overflow \
-            tests/verify/test_observation_parity.py::test_vector_buffers_derive_fact_capacity
+            tests/verify/test_native_observation_contract.py
 
       - name: Two-seat, Elemental and Etude evaluation integration
         if: matrix.group == 'evaluation'
