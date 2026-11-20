@@ -2,7 +2,7 @@
 use crate::infra::profiler::{InfoDict, InfoValue};
 #[cfg(feature = "python")]
 use pyo3::{
-    exceptions::{PyKeyError, PyTypeError, PyValueError},
+    exceptions::{PyTypeError, PyValueError},
     prelude::*,
     types::{PyAny, PyDict, PyDictMethods},
     Bound, Python,
@@ -44,7 +44,7 @@ pub fn require_numpy_array<'py>(
     expected_dtype_name: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     let Some(value) = dict.get_item(key)? else {
-        return Err(PyKeyError::new_err(format!(
+        return Err(PyValueError::new_err(format!(
             "buffers missing required key '{key}'"
         )));
     };

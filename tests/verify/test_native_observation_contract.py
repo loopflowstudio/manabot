@@ -8,6 +8,7 @@ capacities are respected or refused with `managym.ObservationCapacity`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import nullcontext
 import json
 
@@ -178,6 +179,66 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
     del missing["facts"]
     with pytest.raises(ValueError):
         managym.encode_observation_into(restored, missing)
+
+
+def _batched(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return dict(buffers, actions=buffers["actions"][None])
+
+
+def _read_only(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    buffers["opponent_cards"].flags.writeable = False
+    return buffers
+
+
+def _strided(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    wide = np.zeros((buffers["facts"].shape[0], 2 * buffers["facts"].shape[1]))
+    return dict(buffers, facts=wide.astype(np.float32)[:, ::2])
+
+
+def _wrong_dtype(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return dict(buffers, action_focus=buffers["action_focus"].astype(np.float32))
+
+
+def _missing_mask(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return {k: v for k, v in buffers.items() if k != "opponent_cards_valid"}
+
+
+@pytest.mark.parametrize(
+    ("malform", "error"),
+    [
+        (_batched, ValueError),
+        (_read_only, ValueError),
+        (_strided, ValueError),
+        (_wrong_dtype, TypeError),
+        (_missing_mask, ValueError),
+    ],
+)
+def test_malformed_buffers_fail_before_a_capacity_overflow(
+    malform: Callable[[dict[str, np.ndarray]], dict[str, np.ndarray]],
+    error: type[Exception],
+) -> None:
+    """A collector recovering from capacity must never see broken buffers."""
+    env = managym.Env(seed=5, skip_trivial=True)
+    obs, _ = env.reset(make_player_configs())
+    space = ObservationSpace(ObservationConfig(max_cards_per_player=4))
+    with pytest.raises(managym.ObservationCapacity):
+        encode_observation(space, obs)
+    buffers = malform(space.allocate())
+    for value in buffers.values():
+        if value.flags.writeable:
+            value.fill(-7)
+    with pytest.raises(error) as raised:
+        managym.encode_observation_into(obs, buffers)
+    assert not isinstance(raised.value, managym.ObservationCapacity)
+    assert all(
+        np.all(value == -7) for value in buffers.values() if value.flags.writeable
+    )
+
+
+def test_policy_action_count_overflow_is_a_capacity_error() -> None:
+    assert managym.policy_action_count(70, 64, "first-legal") == 64
+    with pytest.raises(managym.ObservationCapacity, match="actions 70 > 64"):
+        managym.policy_action_count(70, 64)
 
 
 def test_env_encode_methods_warn_and_name_their_removal() -> None:

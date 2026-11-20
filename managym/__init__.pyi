@@ -1129,16 +1129,25 @@ class NameCandidate:
 def naming_catalog() -> list[NameCandidate]: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
-) -> int: ...
+) -> int:
+    """How many of `count` legal actions a policy of `capacity` slots reads.
+
+    More actions than slots raises `ObservationCapacity` unless
+    `action_overflow="first-legal"`, which keeps the first `capacity`.
+    """
+    ...
 def encode_observation_into(
     obs: Observation, out: Dict[str, np.ndarray], action_overflow: str = "error"
 ) -> None:
     """Write any observation (live, restored or a viewer projection) into out.
 
-    The configuration is read from the buffers' shapes; a missing companion or
-    wrong width raises `ValueError` before any write. An observation that does
-    not fit raises `ObservationCapacity`. More legal actions than slots is an
-    overflow unless `action_overflow="first-legal"`.
+    The configuration is read from the buffers' shapes. The whole buffer
+    contract is checked before encoding: a missing array, wrong shape or
+    non-contiguous or read-only array raises `ValueError` and a wrong dtype or
+    non-NumPy value `TypeError`, whatever the observation holds, and nothing
+    is written. Only then does an observation that does not fit raise
+    `ObservationCapacity`. More legal actions than slots is an overflow unless
+    `action_overflow="first-legal"`.
     """
     ...
 

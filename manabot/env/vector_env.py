@@ -12,6 +12,7 @@ from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_TYPES_INDEX, ObservationSpace
 import managym
+from managym.enums import ZoneEnum
 from managym.recording import resolve_player_policies
 
 
@@ -55,7 +56,7 @@ class VectorEnv:
         else:
             self._board_keys = ("agent_cards", "opponent_cards")
             self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
-            self._land_index = len(managym.ZoneEnum.__members__) + 1 + 2 + 1
+            self._land_index = len(ZoneEnum) + 1 + 2 + 1
         self._creature_index = self._land_index + 1
         self._prev_obs_keys: Tuple[str, ...] = (self._board_keys[0], "opponent_player")
         if self.reward.config.potential_enabled:

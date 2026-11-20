@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.belief import likelihood as likelihood_module
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
 from manabot.env.observation import encode_observation
@@ -172,6 +173,10 @@ class _FakeObservationSpace:
         return all(reference() is None for reference in self.encoded)
 
 
+def _fake_encode(space: _FakeObservationSpace, row: int) -> dict[str, np.ndarray]:
+    return space.encode(row)
+
+
 class _FakeAgent:
     def prepare(
         self, obs: dict[str, np.ndarray], *, inference: bool = False
@@ -186,7 +191,10 @@ class _FakeAgent:
         return torch.softmax(logits, dim=-1).numpy(), torch.zeros_like(row).numpy()
 
 
-def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch() -> None:
+def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(likelihood_module, "encode_observation", _fake_encode)
     prepared = _FakePrepared()
     root = _FakeRoot(prepared)
     space = PossibleWorldSpace(
@@ -240,7 +248,10 @@ def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch() ->
     assert np.all((result.likelihoods > 0.5) & (result.likelihoods < 1.0))
 
 
-def test_batch_observer_aborts_before_the_next_provider_call() -> None:
+def test_batch_observer_aborts_before_the_next_provider_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(likelihood_module, "encode_observation", _fake_encode)
     prepared = _FakePrepared()
     root = _FakeRoot(prepared)
     space = PossibleWorldSpace(

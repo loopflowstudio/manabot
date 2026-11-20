@@ -720,6 +720,32 @@ pub(super) fn input_buffer_config(
     Ok(config)
 }
 
+/// Check one observation's caller-owned buffers (no batch axis) against the
+/// whole contract of `config`: every array present, with its shape, dtype,
+/// C-contiguity and writability. Nothing is written; the scalar encoder runs
+/// this before encoding, so a malformed buffer set is never reported as a
+/// game that outgrew its capacity.
+#[cfg(feature = "python")]
+pub(crate) fn check_observation_buffers(
+    py: Python<'_>,
+    buffers: &Bound<'_, PyDict>,
+    config: &ObservationEncoderConfig,
+) -> PyResult<()> {
+    // A leading-axis view keeps the array's own flags, so the batch checks
+    // apply unchanged; other values stay as they are and fail the type check.
+    let ndarray = py.import_bound("numpy")?.getattr("ndarray")?;
+    let batched = PyDict::new_bound(py);
+    for (key, value) in buffers.iter() {
+        let value = if value.is_instance(&ndarray)? {
+            value.get_item(py.None())?
+        } else {
+            value
+        };
+        batched.set_item(key, value)?;
+    }
+    read_observation_buffers(&batched, 1, config, false).map(|_| ())
+}
+
 #[cfg(feature = "python")]
 fn read_observation_buffers(
     buffers: &Bound<'_, PyDict>,

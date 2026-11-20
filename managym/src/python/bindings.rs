@@ -5194,6 +5194,7 @@ fn encode_observation_into(
     let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
     let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
     config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+    crate::python::vector_env_bindings::check_observation_buffers(py, &out, &config)?;
     #[cfg(feature = "benchmark")]
     drop(config_timer);
     let encoded =
@@ -5210,7 +5211,7 @@ fn encode_observation_into(
 fn policy_action_count(count: usize, capacity: usize, action_overflow: &str) -> PyResult<usize> {
     let overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
     crate::agent::observation_encoder::policy_action_count(count, capacity, overflow)
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(map_encode_err)
 }
 
 /// The state only policy input v10 holds that `obs` needs, if any (see
