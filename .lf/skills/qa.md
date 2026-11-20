@@ -248,6 +248,15 @@ publish, land or choose the next Graph step from here.
   it. Watch resume tokens live in that tab's storage, so reopen a live Watch
   trace in the same browser context. A completed Play game's evidence opens
   from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
+  An Elemental recipe policy (`etude train manabot/recipes/elemental.py
+  --config '{"updates": 2, "streams": 4}' --until updates=1`, about 10 s)
+  binds the roster: launch it with `--deck elemental_ur --opponent-deck
+  elemental_gw`, otherwise `setup.invalid` names the roster decks. Offer
+  texts carry a number prefix (`1 Play Plains`), so match offers without `^`.
+  X offers read `X = n`: `24 Plains / 16 United Front` against `40 Forest`
+  with `--opponent passive` reaches one after four lands. A checkpoint with
+  exact decks written before an appended input column is listed unavailable
+  with `binding differs … actions 512x23 -> 512x25`; world-bound ones load.
 - Model or training-path changes: `uv run etude train manabot/recipes/local.py`
   runs the local CPU smoke. Inspect metric rows for per-phase collection and
   learning seconds; the command prints its run id. For installed-wheel QA use
