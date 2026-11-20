@@ -16,6 +16,7 @@ from manabot.model.catalog import inspect_checkpoint
 from manabot.policy import buckets
 from manabot.policy.binding import packed
 from manabot.policy.checkpoint import read_container, write_container
+from manabot.policy.readings import input_width, parse_reading, read_numeric
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -83,9 +84,9 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     for key in ("agent_player", "opponent_player"):
         binding["input_schema"][key]["shape"][-1] -= 1
         record["input_columns"][key].pop()
-        record["input_readings"][key].pop()
+        last = input_width(parse_reading(record["input_readings"][key].pop()))
     player = "player_embedding.projection.0.weight"
-    state[player] = state[player][:, :-1].contiguous()
+    state[player] = state[player][:, :-last].contiguous()
     del record["architecture"]
     if legacy_file:
         torch.save(record, path)
@@ -131,7 +132,8 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     batch["agent_player"][..., -1] = 1
     prepared = loaded.prepare(batch)
     np.testing.assert_array_equal(
-        prepared.agent_player, batch["agent_player"][..., :-1]
+        prepared.agent_player,
+        read_numeric(batch["agent_player"][..., :-1], loaded.readings["agent_player"]),
     )
     assert np.isfinite(loaded.evaluate(prepared)[0]).all()
 

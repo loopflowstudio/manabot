@@ -126,12 +126,19 @@ def test_token_and_card_permanents_enter_at_one_scale(
     assert (2 / 3 < size < 1.5) == balanced, size
 
 
-@pytest.mark.parametrize(("stream_norm", "moves"), [(True, True), (False, False)])
-def test_combat_stats_move_the_whole_token(stream_norm: bool, moves: bool) -> None:
+@pytest.mark.parametrize(
+    ("stream_norm", "definition_names", "moves"),
+    [(True, False, True), (True, True, True), (False, True, False)],
+)
+def test_combat_stats_move_the_whole_token(
+    stream_norm: bool, definition_names: bool, moves: bool
+) -> None:
     """2/2 to 9/9 moves the attacker's whole pre-attention token by at least
-    a quarter (measured 34%); summed with the unnormalized program it moves
-    about a fifth (22%), and with a name on the definition under a tenth."""
-    agent = _agent(stream_norm)
+    0.3 under `stream_norm`, with names on definitions or off (measured
+    0.36-0.53 and 0.38-0.56 over four seeds). With names and no norms it moves
+    0.16-0.25. Without names the historical layout moves it 0.48-0.60: the
+    stat flags (`steps:8`) already carry the stats there."""
+    agent = _agent(stream_norm, definition_names=definition_names)
     case = decision_case("attack").observation
     big = {key: value.clone() for key, value in case.items()}
     big["agent_permanents"][
@@ -145,7 +152,7 @@ def test_combat_stats_move_the_whole_token(stream_norm: bool, moves: bool) -> No
         ]
         after = agent._gather_object_embeddings(device_input(agent, big)).objects
         moved = float((after.flatten(0, 1)[attacker] - before).norm() / before.norm())
-    assert (moved >= 0.25) == moves, moved
+    assert (moved >= 0.3) == moves, moved
 
 
 def _with_known_card(batch: ObservationBuffers) -> ObservationBuffers:

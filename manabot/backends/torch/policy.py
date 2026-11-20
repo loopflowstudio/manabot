@@ -373,7 +373,9 @@ class ActorCritic(nn.Module):
             vocabulary=record_vocabulary,
         )
         self.shared_effects = SharedEffectEncoder(
-            embed_dim, vocabulary=record_vocabulary
+            embed_dim,
+            numeric=columns.numeric_width("effects"),
+            vocabulary=record_vocabulary,
         )
         self.name_candidates = NameCandidateEncoder(
             managym.naming_catalog(),

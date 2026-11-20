@@ -1,12 +1,12 @@
 """`focus_film`: offers naming one object differ by a function of it at step 0.
 
 "Declare" and "decline" on one attacker share their focus and differ in one
-flag. The additive head lets the attacker reach their gap only through ReLUs,
-so it barely depends on the attacker; scaling the offer by its focused object
-makes the gap a function of it from initialization.
+flag. The additive head lets the attacker reach their gap only through ReLUs;
+scaling the offer by its focused object makes the gap a function of it from
+initialization. The tests by construction hold whatever the parameter draws;
+the fit compares learning on one decision.
 """
 
-import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
@@ -40,12 +40,6 @@ def _attacker(
     value for every row or one per row."""
     obs["agent_permanents"][:, 0, POWER] = power / 10
     obs["agent_permanents"][:, 0, TOUGHNESS] = toughness / 10
-
-
-def _gap(agent: ActorCritic, obs: ObservationBuffers) -> float:
-    with torch.no_grad():
-        logits, _ = agent(device_input(agent, obs))
-    return float(logits[0, 0] - logits[0, 1])
 
 
 def test_field_is_omitted_when_off_and_keeps_every_other_draw() -> None:
@@ -116,30 +110,6 @@ def test_only_a_focused_offer_trains_the_focus_weight() -> None:
     assert not weight_gradient(1).any()
 
 
-def test_the_attack_gap_moves_with_the_attacker() -> None:
-    """Over 64 seeds, 2/2 to 9/9 moves the declare/decline gap further with
-    `focus_film` than without: the median move is larger (measured 1.25-2.2x
-    across 32-seed windows) and so is the move on most seeds.
-
-    `focus_film` is built last, so each pair shares every other weight and
-    differs only by the focus term."""
-    case = decision_case("attack").observation
-    big = {key: value.clone() for key, value in case.items()}
-    _attacker(big, 9, 9)
-
-    def moves(**fields: object) -> np.ndarray:
-        return np.array(
-            [
-                abs(_gap(agent, big) - _gap(agent, case))
-                for agent in (_agent(seed, **fields) for seed in range(64))
-            ]
-        )
-
-    additive, focused = moves(), moves(focus_film=True)
-    assert np.median(focused) >= 1.2 * np.median(additive)
-    assert (focused > additive).mean() > 0.55
-
-
 def _steps_to_fit(seed: int, **fields: bool) -> int:
     """Full-batch Adam updates on "attack iff power >= 3" over 100 attackers
     until every board's label has probability at least 0.9 (at most 300)."""
@@ -163,9 +133,12 @@ def _steps_to_fit(seed: int, **fields: bool) -> int:
 
 
 def test_a_stat_dependent_attack_rule_fits_sooner() -> None:
-    """Summed over three seeds the new layout fits in under 0.85 of the
-    historical layout's updates (measured 280 against 401)."""
+    """Summed over three seeds, `focus_film` alone fits in under 0.9 of the
+    historical layout's updates (measured 277 against 333) and the new layout
+    in under 0.85 (measured 242)."""
     seeds = range(3)
-    new = [_steps_to_fit(seed, stream_norm=True, focus_film=True) for seed in seeds]
-    historical = [_steps_to_fit(seed) for seed in seeds]
-    assert sum(new) < 0.85 * sum(historical), (new, historical)
+    historical = sum(_steps_to_fit(seed) for seed in seeds)
+    focused = sum(_steps_to_fit(seed, focus_film=True) for seed in seeds)
+    new = sum(_steps_to_fit(seed, stream_norm=True, focus_film=True) for seed in seeds)
+    assert focused < 0.9 * historical, (focused, historical)
+    assert new < 0.85 * historical, (new, historical)

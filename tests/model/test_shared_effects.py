@@ -35,7 +35,7 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     env = shared_effect_root(1)
     obs = env.observation_for_player(env.current_agent_index())
     values = _batch(ObservationSpace(ObservationConfig()).encode(obs))
-    encoder = SharedEffectEncoder(8)
+    encoder = SharedEffectEncoder(8, numeric=8)
     objects = torch.randn(1, 202, 8)
     headers, details, members = (
         values[name].clone() for name in ("effects", "effect_details", "effect_members")
@@ -150,7 +150,7 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
     env = shared_effect_root(1)
     observation = env.observation_for_player(env.current_agent_index())
     values = _batch(ObservationSpace(ObservationConfig()).encode(observation))
-    encoder = SharedEffectEncoder(8)
+    encoder = SharedEffectEncoder(8, numeric=8)
     objects = torch.randn(1, 202, 8, requires_grad=True)
     expected = encoder(
         effect_rows(
@@ -211,7 +211,7 @@ def test_batched_effect_routing_matches_independent_gradients(device: str) -> No
     objects = torch.randn(3, 202, 8, device=device, requires_grad=True)
     independent_objects = objects.detach().clone().requires_grad_()
     independent_headers = headers.detach().clone()
-    encoder = SharedEffectEncoder(8).to(device)
+    encoder = SharedEffectEncoder(8, numeric=8).to(device)
     independent = deepcopy(encoder)
     actual = encoder(effect_rows(headers, details, members, objects), objects)
     expected = torch.cat(

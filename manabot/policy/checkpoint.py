@@ -153,6 +153,7 @@ class Dimensions:
     action: int
     focus: int
     relation: int
+    effect: int
     fact: int
     fact_kinds: int
     token_rows: int
@@ -264,6 +265,7 @@ class PolicyCheckpoint:
             action=columns.numeric_width("actions"),
             focus=encoder.max_focus_objects,
             relation=columns.numeric_width("relations"),
+            effect=columns.numeric_width("effects"),
             fact=columns.fact_width(catalog_ids=True),
             fact_kinds=FACT_KINDS,
             token_rows=int(

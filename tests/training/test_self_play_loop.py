@@ -207,7 +207,7 @@ def test_resume_refuses_a_state_saved_before_readings_were_recorded(
         with pytest.raises(
             ValueError,
             match=r"written before input readings were recorded.*"
-            r"agent_permanents\.timestamp: as_is -> rank",
+            r"actions\.ability: as_is -> one_hot:15",
         ):
             self_play(settings, run, updates=2)
 

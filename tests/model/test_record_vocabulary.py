@@ -143,7 +143,7 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     headers[0, 0, 13:18] = torch.tensor([0, 1, 0, 1, 1])
     details[0, 0] = torch.tensor([1, *_halves(_value("flying"))])
     members[0, 0] = torch.tensor([2, 1])
-    effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
+    effects = SharedEffectEncoder(WIDTH, numeric=8, vocabulary="catalog")
     definitions = cards.definitions(program_input(cards))
     effects(
         effect_rows(headers, details, members, torch.zeros(1, 2, WIDTH), cards),
@@ -230,7 +230,7 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
         torch.cat((members[..., 0].flatten(), headers[..., 10:13:2].flatten())).max()
     )
     objects = torch.randn(3, count, WIDTH)
-    effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
+    effects = SharedEffectEncoder(WIDTH, numeric=8, vocabulary="catalog")
     parameters = [*effects.parameters(), *cards.parameters()]
 
     def reading(batched: bool) -> tuple[torch.Tensor, list[torch.Tensor | None]]:

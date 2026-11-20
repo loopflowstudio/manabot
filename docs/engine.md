@@ -641,8 +641,10 @@ print(columns["exhausted_abilities"]["kind"], columns["exhausted_abilities"]["sc
 # count 1
 ```
 
-A category says how many values it has. Its codes run from 1 to `size`, and 0
-means absent:
+A category says how many values it has: `size` is its largest code. A code
+above it is not an error, so a category can grow. In the rows the policy reads
+column by column, 0 means absent, except a player's `seat`, where 0 is the
+seat on the play:
 
 ```python
 frame_kind = layout["relations"]["columns"]["frame_kind"]

@@ -2,10 +2,12 @@
 
 A column's *kind* is what the encoder wrote: the native `ValueLayout`
 (`managym/src/agent/observation_layout.rs`), published with its `scale` by
-`managym.observation_layout()`. A column's *reading* (`Reading`) is what host
-preparation does with it before a linear projection. `Readings` holds one
-reading per column of each buffer's saved prefix, so a buffer's width is the
-length of its readings.
+`managym.observation_layout()`, and with its `size` when it is a category. A
+column's *reading* is what host preparation does with it before a linear
+projection: a `Reading`, or a `Sized` one (`one_hot:14`, `steps:8`) that turns
+the column into several inputs. `Readings` holds one reading per column of
+each buffer's saved prefix, so a buffer's width is the length of its readings
+and its projection width the sum of their input widths (`input_width`).
 
 A fresh model derives its readings from kinds (`fresh_readings`, through
 `kind_reading`). A checkpoint records its readings (`input_readings`, beside
@@ -27,6 +29,7 @@ constants only.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import cache
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -48,6 +51,12 @@ class Reading(StrEnum):
     """What preparation does with one column. Names are stored in checkpoints."""
 
     AS_IS = "as_is"  # the value as stored
+    # Sized (`Sized`): n + 1 flags, one per code 1..n then one for "above n";
+    # 0 (absent) sets none.
+    ONE_HOT = "one_hot"
+    # Sized: a column stored in tenths as stored, then n flags for the true
+    # value being at least 1..n; a negative value sets none.
+    STEPS = "steps"
     LOG = "log"  # sign(x) * log1p(|x|) / 10
     RANK = "rank"  # rank / 128, independent of any row capacity
     GATHER = "gather"  # an object join; never a number
@@ -70,12 +79,50 @@ class Reading(StrEnum):
     DURATION_TWO = "duration_two"
 
 
-type Readings = Mapping[str, tuple[Reading, ...]]
+SIZED = frozenset({Reading.ONE_HOT, Reading.STEPS})
 
-KNOWN = frozenset(reading.value for reading in Reading)
+
+@dataclass(frozen=True)
+class Sized:
+    """A reading that needs a size, stored as `name:size`. The size is
+    recorded, so a stored model keeps its width when a category grows."""
+
+    reading: Reading
+    size: int
+
+    def __post_init__(self) -> None:
+        if self.reading not in SIZED or self.size < 1:
+            raise ValueError(f"no sized reading {self.reading}:{self.size}")
+
+    def __str__(self) -> str:
+        return f"{self.reading}:{self.size}"
+
+
+type ColumnReading = Reading | Sized
+type Readings = Mapping[str, tuple[ColumnReading, ...]]
+
+
+def method(reading: ColumnReading) -> Reading:
+    """The reading's name without its size."""
+    return reading.reading if isinstance(reading, Sized) else reading
+
+
+def parse_reading(text: str) -> ColumnReading:
+    """A stored reading name (`as_is`, `one_hot:14`). Raises ValueError for an
+    unknown name, a sized reading without its size or an unsized one with one."""
+    name, _, size = text.partition(":")
+    reading = Reading(name)
+    if (reading in SIZED) != bool(size):
+        raise ValueError(f"malformed reading {text!r}")
+    return Sized(reading, int(size)) if size else reading
+
 
 # Every rank divides by this, whatever the capacity of its rows.
 RANK_SCALE = 128
+# A selector's one-hot size: indexes 1..15, then "above 15".
+SELECTOR_SIZE = 15
+# Threshold flags of a column stored in tenths: at least 1..8.
+TENTHS_STEPS = 8
 # Readings `read_numeric` applies; the others are joins or belong to their
 # buffer's own code.
 NUMERIC = frozenset(
@@ -85,6 +132,7 @@ NUMERIC = frozenset(
         Reading.RANK,
         Reading.FACT_VALUE,
         Reading.FACT_VALUE_RAW,
+        *SIZED,
     }
 )
 # Fact kinds whose payload `fact_value` reads as zero (their content is a
@@ -108,6 +156,15 @@ PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
     ("effects", "detail_count"): Reading.GATHER,
     ("effects", "member_count"): Reading.GATHER,
     ("effects", "valid"): Reading.MASK,
+}
+
+# A fresh model also reads a relation's frame and parent, declared
+# `selector`, as joins: they name another relation row. Stored readings keep
+# what they recorded.
+FRESH_PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
+    **PLACED_READINGS,
+    ("relations", "frame"): Reading.GATHER,
+    ("relations", "parent"): Reading.GATHER,
 }
 
 # Stored checkpoints written before readings were recorded read fact durations
@@ -169,11 +226,13 @@ OWN_PREPARATION: Mapping[str, str] = {
 
 @dataclass(frozen=True)
 class ColumnKind:
-    """One published column: its name, native kind and encoder divisor."""
+    """One published column: its name, native kind, encoder divisor and, for a
+    category, its largest code."""
 
     name: str
     kind: str
     scale: int | None
+    size: int | None = None
 
 
 def published_columns(space: "ObservationSpace") -> dict[str, list[ColumnKind]]:
@@ -199,7 +258,7 @@ def published_columns(space: "ObservationSpace") -> dict[str, list[ColumnKind]]:
     )
     return {
         key: [
-            ColumnKind(name, column["kind"], column.get("scale"))
+            ColumnKind(name, column["kind"], column.get("scale"), column.get("size"))
             for name, column in sorted(
                 row["columns"].items(), key=lambda item: item[1]["index"]
             )
@@ -209,20 +268,28 @@ def published_columns(space: "ObservationSpace") -> dict[str, list[ColumnKind]]:
     }
 
 
-def kind_reading(kind: str, scale: int | None) -> Reading:
+def kind_reading(column: ColumnKind) -> ColumnReading:
     """The reading a fresh model gives a column of this kind.
 
-    Raises for a kind the rule does not know, so a new native kind stops a
-    fresh model from building until it is given a reading here.
+    Raises for a kind the rule does not know, or a category without its size,
+    so a new native kind stops a fresh model from building until it is given a
+    reading here.
     """
-    match kind:
+    scale = column.scale
+    match column.kind:
         case "flag":
             return Reading.AS_IS
+        case "count" | "number" if scale == 10:
+            return Sized(Reading.STEPS, TENTHS_STEPS)
         case "count" | "number" if scale is not None:
             return Reading.AS_IS if scale > 1 else Reading.LOG
         case "rank":
             return Reading.RANK
-        case "category" | "selector" | "position":
+        case "category" if column.size is not None:
+            return Sized(Reading.ONE_HOT, column.size)
+        case "selector":
+            return Sized(Reading.ONE_HOT, SELECTOR_SIZE)
+        case "position":
             return Reading.LOG
         case "reference":
             return Reading.GATHER
@@ -230,19 +297,20 @@ def kind_reading(kind: str, scale: int | None) -> Reading:
             return Reading.LOOKUP
         case "tagged":
             return Reading.FACT_VALUE
-    raise ValueError(f"no reading for column kind {kind!r} (scale {scale})")
-
-
-def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
-    """The readings of a model built now, over the runtime's full columns."""
-    return assign_readings(
-        space,
-        lambda key, column: kind_reading(column.kind, column.scale),
-        PLACED_READINGS,
+    raise ValueError(
+        f"no reading for column {column.name} of kind {column.kind!r} "
+        f"(scale {scale}, size {column.size})"
     )
 
 
-def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
+def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[ColumnReading, ...]]:
+    """The readings of a model built now, over the runtime's full columns."""
+    return assign_readings(
+        space, lambda key, column: kind_reading(column), FRESH_PLACED_READINGS
+    )
+
+
+def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[ColumnReading, ...]]:
     """The readings of a checkpoint that records none: what every model did
     before readings were recorded. Never extended."""
     return assign_readings(space, legacy_reading, LEGACY_PLACED_READINGS)
@@ -250,9 +318,9 @@ def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]
 
 def assign_readings(
     space: "ObservationSpace",
-    rule: Callable[[str, ColumnKind], Reading],
+    rule: Callable[[str, ColumnKind], ColumnReading],
     placed: Mapping[tuple[str, str], Reading],
-) -> dict[str, tuple[Reading, ...]]:
+) -> dict[str, tuple[ColumnReading, ...]]:
     """Each published column's `placed` reading, `own` in an own-preparation
     buffer, and otherwise the reading `rule` gives it."""
     return {
@@ -281,36 +349,40 @@ def legacy_reading(key: str, column: ColumnKind) -> Reading:
 
 def recorded_readings(
     recorded: object, columns: Mapping[str, Sequence[str]], location: str
-) -> dict[str, tuple[Reading, ...]]:
+) -> dict[str, tuple[ColumnReading, ...]]:
     """Validate a checkpoint's `input_readings` against its `input_columns`.
 
     Every buffer the columns name needs one known reading per column; an
-    unknown name raises with the column and the writer's revision.
+    unknown name or a malformed size raises with the column and the writer's
+    revision.
     """
     if not isinstance(recorded, dict) or recorded.keys() != columns.keys():
         raise ValueError(
             f"checkpoint input readings differ from its columns; {location}"
         )
-    readings: dict[str, tuple[Reading, ...]] = {}
+    readings: dict[str, tuple[ColumnReading, ...]] = {}
     for key, names in columns.items():
         values = recorded[key]
         if not isinstance(values, list) or len(values) != len(names):
             raise ValueError(
                 f"checkpoint {key} readings do not match its {len(names)} columns; {location}"
             )
+        parsed: list[ColumnReading] = []
         for name, value in zip(names, values, strict=True):
-            if value not in KNOWN:
+            try:
+                parsed.append(parse_reading(value))
+            except (TypeError, ValueError):
                 raise ValueError(
                     f"checkpoint reads {key}.{name} by unknown reading {value!r}; "
                     f"{location}"
-                )
-        readings[key] = tuple(Reading(value) for value in values)
+                ) from None
+        readings[key] = tuple(parsed)
     return readings
 
 
 def cut(
     readings: Readings, widths: Mapping[str, int]
-) -> dict[str, tuple[Reading, ...]]:
+) -> dict[str, tuple[ColumnReading, ...]]:
     """Readings restricted to a checkpoint's saved column prefixes."""
     return {
         key: values[: widths.get(key, len(values))] for key, values in readings.items()
@@ -326,9 +398,29 @@ def signed_log(values: Array) -> Array:
     return (np.sign(values) * np.log1p(np.abs(values)) / 10).astype(np.float32)
 
 
-def numeric_columns(readings: Sequence[Reading]) -> tuple[int, ...]:
+def input_width(reading: ColumnReading) -> int:
+    """How many projection inputs a column becomes; 0 when it is not numeric."""
+    if isinstance(reading, Sized):
+        return reading.size + 1
+    return int(reading in NUMERIC)
+
+
+def numeric_columns(readings: Sequence[ColumnReading]) -> tuple[int, ...]:
     """Indexes of the columns a numeric projection receives."""
-    return tuple(i for i, reading in enumerate(readings) if reading in NUMERIC)
+    return tuple(i for i, reading in enumerate(readings) if input_width(reading))
+
+
+@cache
+def numeric_offsets(readings: tuple[ColumnReading, ...]) -> dict[int, int]:
+    """Each numeric column's first position among the projection inputs, by
+    column index. A column's inputs are `input_width` long from there."""
+    offsets: dict[int, int] = {}
+    at = 0
+    for index, reading in enumerate(readings):
+        if width := input_width(reading):
+            offsets[index] = at
+            at += width
+    return offsets
 
 
 def duration_flags(duration: Array, reading: Reading) -> Array:
@@ -338,26 +430,50 @@ def duration_flags(duration: Array, reading: Reading) -> Array:
 
 
 def read_numeric(
-    values: Array, readings: Sequence[Reading], fact_kinds: Array | None = None
+    values: Array, readings: Sequence[ColumnReading], fact_kinds: Array | None = None
 ) -> Array:
-    """The numeric columns of `values` [..., C] read by their readings, float32.
+    """The numeric columns of `values` [..., C] read by their readings, float32
+    [..., W] with W the sum of their input widths.
 
     `fact_kinds` [...] holds each row's fact kind, which `fact_value` needs.
     Columns read `as_is` or `fact_value_raw` are copied exactly, so a model
     whose readings are all `as_is` computes what it did before readings existed.
     """
-    columns = numeric_columns(readings)
-    out = values[..., list(columns)].astype(np.float32)
-    for position, index in enumerate(columns):
+    readings = tuple(readings)
+    offsets = numeric_offsets(readings)
+    width = sum(input_width(reading) for reading in readings)
+    out = np.zeros((*values.shape[:-1], width), dtype=np.float32)
+    scalars = [index for index in offsets if not isinstance(readings[index], Sized)]
+    out[..., [offsets[index] for index in scalars]] = values[..., scalars]
+    rows = values.reshape(-1, values.shape[-1])
+    block, flat = out.reshape(len(rows), width), out.reshape(-1)
+    starts = np.arange(len(rows)) * width
+    for index, at in offsets.items():
         reading = readings[index]
+        if isinstance(reading, Sized):
+            stored = rows[:, index]
+            if reading.reading is Reading.ONE_HOT:
+                # One write per present row: code k at flag k - 1, any code
+                # above the size at the last flag.
+                present = np.nonzero(stored > 0)[0]
+                codes = np.minimum(stored[present], reading.size + 1).astype(np.int64)
+                flat[starts[present] + at + codes - 1] = 1
+            else:
+                # Stored in tenths: the true value is an integer.
+                true = np.rint(stored.astype(np.float64) * 10)
+                block[:, at] = stored
+                block[:, at + 1 : at + 1 + reading.size] = true[:, None] >= np.arange(
+                    1, reading.size + 1
+                )
+            continue
+        column = out[..., at]
         if reading is Reading.LOG:
-            out[..., position] = signed_log(out[..., position])
+            out[..., at] = signed_log(column)
         elif reading is Reading.RANK:
-            out[..., position] /= np.float32(RANK_SCALE)
+            column /= np.float32(RANK_SCALE)
         elif reading is Reading.FACT_VALUE:
             if fact_kinds is None:
                 raise ValueError("fact_value needs each row's fact kind")
-            column = out[..., position]
             counts = np.isin(fact_kinds, FACT_COUNT_KINDS)
             column[counts] = signed_log(column[counts])
             column[np.isin(fact_kinds, PROGRAM_KINDS)] = 0

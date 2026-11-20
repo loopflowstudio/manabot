@@ -15,7 +15,7 @@ from manabot.model.world import (
 )
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
 from manabot.policy.readings import (
-    Reading,
+    ColumnReading,
     Readings,
     cut,
     fresh_readings,
@@ -50,14 +50,14 @@ def world_fields(
         "writer_catalog": writer_catalog(),
         "input_columns": columns,
         "input_readings": {
-            key: [value.value for value in values] for key, values in readings.items()
+            key: [str(value) for value in values] for key, values in readings.items()
         },
     }
 
 
 def saved_readings(
     checkpoint: Mapping[str, Any], space: ObservationSpace
-) -> dict[str, tuple[Reading, ...]]:
+) -> dict[str, tuple[ColumnReading, ...]]:
     """The readings a checkpoint record was written with.
 
     A record without `input_readings` predates them and gets

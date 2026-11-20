@@ -129,11 +129,13 @@ return self.action_layer(torch.cat((actions, focused), dim=-1))
 
 The difference between "attack" and "leave it back" on one creature is then a
 function of that creature from the first update, rather than something the
-head has to grow. At initialization the effect is modest: on the constructed
-attack decision (`decision_case("attack")`), setting the attacker to 9/9 moves
-the gap between the two logits further with the field than without on about
-two seeds in three, and the median move is 1.25 to 2.2 times as large across
-windows of 32 seeds. The larger effect is on learning (below).
+head has to grow. At initialization the gap barely differs in size: since
+power and toughness read as threshold flags (`steps:8`, below), the additive
+head's gap already moves with the attacker. On the constructed attack
+decision (`decision_case("attack")`), setting the attacker to 9/9 moves the
+gap with the field by 0.7 to 1.3 times its move without, across windows of
+32 seeds (0.9 to 2.2 times with `stream_norm`). The effect is on learning
+(below).
 
 - The layer starts at ordinary initialization, not zero. A zero start would
   leave the gap blind to the creature until the weights move, which is what
@@ -176,12 +178,14 @@ bindings that can change future behavior.
 An object token is a sum: a projection of its numeric row, the encoding of its
 card definition and name, its links, its facts, the effects on it and the
 shared context of the decision. Without normalization, whichever stream is
-largest sets the scale of the token. At initialization a card's definition
-encoding is up to twice its numeric row, so a creature growing from 2/2 to 9/9
-moves its whole token by about a fifth. With names on definitions
-(`definition_names`) the name vector is about seven times the numeric row: the
-same creature moves its token by under a tenth, and a token creature, which
-has no name, enters attention at under half a card's scale.
+largest sets the scale of the token. With names on definitions
+(`definition_names`) the name vector is about seven times the numeric row: on
+the constructed attack decision a creature growing from 2/2 to 9/9 moves its
+whole token by 0.16 to 0.25 of its size over four seeds, and a token creature,
+which has no name, enters attention at under half a card's scale. With the
+field the same move is 0.38 to 0.56. Without names the numeric row's stat
+flags already carry the change (0.48 to 0.60 without the field, 0.36 to 0.53
+with it).
 
 ```python
 model = ModelConfig(stream_norm=True, ...)
@@ -231,10 +235,12 @@ refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 
 On one constructed attack decision, fitting "attack if and only if power is
 at least 3" from initialization takes about 0.7 times as many updates with
-`stream_norm` and `focus_film` as with neither (three seeds: 91, 99 and 90
-against 131, 125 and 145), and about 0.8 times with the Elemental world's
-definitions (95, 93 and 108 against 121, 138 and 122). That is a supervised
-fit of one decision: it shows the mechanisms work, not that self-play learns to attack sooner.
+`stream_norm` and `focus_film` as with neither (three seeds: 75, 82 and 85
+against 109, 109 and 115), and about 0.85 times with `focus_film` alone (95,
+92 and 90). With the Elemental world's definitions both fields take about
+0.83 times as many (92, 88 and 82 against 120, 97 and 99). That is a
+supervised fit of one decision: it shows the mechanisms work, not that
+self-play learns to attack sooner.
 
 ### Bucketed padding
 
@@ -939,8 +945,9 @@ a prefix sum over the name table: every member receives the group's gradient,
 and no member programs are encoded for a group prompt. Name vectors score
 NameCard candidates only: a card, permanent, known-hand or decklist token's
 definition is its rules program. A unit-variance name vector added onto every
-definition outweighed the rest of an object token at initialization (a 9/9
-creature moved its token about 7% with names added, about 20% without), and
+definition outweighed the rest of an object token at initialization (on
+sampled games a 9/9 creature moves its token by a median of about 21% with
+names added, about 60% without), and
 gave training a second source of card identity. The cost is that equal-rule
 cards with different public names read alike off the NameCard prompt.
 Checkpoints written before this choice add name vectors onto viewer-visible
