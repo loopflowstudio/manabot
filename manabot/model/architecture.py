@@ -61,6 +61,11 @@ def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
     payload.pop("record_vocabulary", None)
     if resolved.catalog_records():
         payload["record_vocabulary"] = "catalog"
+    # Names added onto definitions are the historical form and hash as
+    # omitted; keeping them on candidates changes the model only with a world.
+    payload.pop("definition_names", None)
+    if resolved.world is not None and not resolved.definition_names:
+        payload["definition_names"] = False
     return canonical_sha256(
         {
             "layout_version": 2,

@@ -378,6 +378,7 @@ class ActorCritic(nn.Module):
             self.semantic_cards.definition_rows
             if self.semantic_cards is not None
             else None,
+            onto_definitions=config.definition_names,
         )
 
         # An execution choice of the training stage, never model state: no

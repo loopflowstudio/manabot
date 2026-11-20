@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -98,6 +99,56 @@ def test_power_and_toughness_move_a_creature_token(
         assert median >= floor
     else:
         assert median < 0.25
+
+
+@pytest.mark.parametrize(("definition_names", "floor"), [(False, 0.15), (True, None)])
+def test_power_and_toughness_move_a_whole_object_token(
+    definition_names: bool, floor: float | None
+) -> None:
+    """Setting live creatures to 9/9 moves their whole object token (stats,
+    definition, links, facts, shared effects and context, before attention)
+    by a median of at least 15% at initialization in a world-bound model with
+    names (measured about 20%). Adding each name's unit-variance vector onto
+    definitions, as checkpoints written before the choice do, drowns the
+    stats stream (about 7%), so the floor is known to bite."""
+    space = ObservationSpace()
+    changes = []
+    for seed in range(2):
+        torch.manual_seed(seed)
+        agent = ActorCritic(
+            space, ModelConfig(world=WORLD, definition_names=definition_names)
+        ).eval()
+        names = [c.name for c in published_columns(space)["agent_permanents"]]
+        columns = numeric_columns(agent.readings["agent_permanents"])
+        index = {names[column]: at for at, column in enumerate(columns)}
+        for batch in sampled_batches(space, games=3, stride=10):
+            prepared = on_device(agent.prepare(batch), torch.device("cpu"))
+            permanents = prepared.permanents
+            live = (permanents[:, 0, :, index["valid"]] == 1) & (
+                permanents[:, 0, :, index["toughness"]] > 0
+            )
+            large = permanents.clone()
+            for column in ("power", "toughness"):
+                large[:, 0, :, index[column]][live] = 0.9
+            with torch.no_grad():
+                before, after = (
+                    agent._gather_object_embeddings(
+                        dataclasses.replace(prepared, permanents=rows)
+                    ).objects
+                    for rows in (permanents, large)
+                )
+            # Object order: two players, both seats' cards, then permanents.
+            first = 2 + 2 * prepared.agent_cards.shape[1]
+            seat = slice(first, first + permanents.shape[2])
+            moved = after[:, seat][live] - before[:, seat][live]
+            changes.append((moved.norm(dim=1) / before[:, seat][live].norm(dim=1)))
+    change = torch.cat(changes)
+    assert len(change) > 50
+    median = float(change.median())
+    if floor is not None:
+        assert median >= floor
+    else:
+        assert median < 0.15
 
 
 # -- scale bound ---------------------------------------------------------------

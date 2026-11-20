@@ -361,3 +361,15 @@ def test_checkpoints_without_the_field_read_hashed_only_with_a_world() -> None:
     assert ModelConfig.from_checkpoint({}) == ModelConfig()
     explicit = ModelConfig(**world).checkpoint_payload()
     assert ModelConfig.from_checkpoint(explicit).record_vocabulary == "catalog"
+
+
+def test_checkpoints_without_definition_names_add_them_only_with_a_world() -> None:
+    world = {"world": managym.WORLD_SETUP}
+    assert ModelConfig.from_checkpoint(world).definition_names
+    assert ModelConfig.from_checkpoint({}) == ModelConfig()
+    fresh = ModelConfig(**world)
+    assert "definition_names" not in fresh.model_dump()
+    assert not ModelConfig.from_checkpoint(fresh.checkpoint_payload()).definition_names
+    assert architecture_identity(
+        ModelConfig(**world, definition_names=True), ObservationSpace()
+    ) != architecture_identity(fresh, ObservationSpace())
