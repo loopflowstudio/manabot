@@ -277,6 +277,7 @@ def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
     state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
     (evaluation,) = tla_trophies.eval_jobs(state)
     assert evaluation.max_usd == Decimal("1.30")
+    assert evaluation.max_attempts == 1
     assert list(evaluation.checkpoints) == [*raw.checkpoints, *second.checkpoints]
     tournament, gaps = Tournament(
         definition=evaluation.tournament,

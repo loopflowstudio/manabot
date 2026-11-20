@@ -233,6 +233,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             extras=("artifacts", "evaluation"),
             max_hours=1,
             max_usd=Decimal("1.30"),
+            max_attempts=1,
         )
     ]
 
