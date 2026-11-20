@@ -1008,7 +1008,11 @@ class ActorCritic(nn.Module):
             if programs is None:
                 assert obs.programs is not None
                 programs = self.semantic_cards.definitions(obs.programs)
-            definitions = self.name_candidates.public_definitions(programs)
+            definitions = (
+                programs
+                if self.input_ablation == "names"
+                else self.name_candidates.public_definitions(programs)
+            )
             cards, known = self.semantic_cards(obs, definitions)
             enc_agent_cards = enc_agent_cards + keep * cards[:, 0]
             enc_opp_cards = enc_opp_cards + keep * cards[:, 1]

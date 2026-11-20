@@ -27,7 +27,7 @@ class ElementalConfig(RunSettings):
     validate_numerics: bool = False
     streams: int = Field(default=256, ge=2)
     # Attack-lock study: simplify the model's object tokens (ModelConfig.input_ablation).
-    input_ablation: Literal["none", "timestamp", "bare"] = "none"
+    input_ablation: Literal["none", "timestamp", "names", "bare"] = "none"
     # Attack-lock study: weight of the KL to the reference policy (default 0.05).
     tau_scale: float | None = Field(default=None, ge=0)
     checkpoint_every: int | None = Field(default=None, ge=1)

@@ -376,7 +376,7 @@ class ModelConfig(BaseConfig):
     # scales the permanent timestamp rank by 1/128; `bare` also removes
     # definition embeddings, facts, shared effects and shared context from
     # object tokens, leaving the numeric rows.
-    input_ablation: Literal["none", "timestamp", "bare"] = Field(
+    input_ablation: Literal["none", "timestamp", "names", "bare"] = Field(
         default="none", exclude_if=lambda value: value == "none"
     )
     # Serialized architecture choice; categorical logits are loss/draw/win.
