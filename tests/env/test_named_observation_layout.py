@@ -205,7 +205,10 @@ def test_named_layout_reads_effect_programs_by_name() -> None:
     )
     details = managym.observation_layout()["effect_details"]
     kind = details["columns"]["kind"]["index"]
-    assert (encoded["effect_details"][:, kind] >= 11).any()
+    assert (
+        details["row_kind_names"]["program_integer"]
+        in encoded["effect_details"][:, kind]
+    )
 
 
 def test_named_layout_discovery_is_torch_free() -> None:

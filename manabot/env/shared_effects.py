@@ -6,23 +6,33 @@ count as a record, and a record that does not fit is a capacity failure,
 never truncation.
 """
 
+from typing import cast
+
 import numpy as np
 
-import managym
+from manabot.env.observation import V11_LAYOUT, column, columns
 
-_LAYOUT = managym.observation_layout()
-
-# Fixed extents, from the native layout.
+# These three tables have two fixed extents in every supported input version.
 SHARED_EFFECT_SHAPES: dict[str, tuple[int, int]] = {
-    key: (array["shape"][0], array["shape"][1])
-    for key, array in _LAYOUT.items()
-    if key in ("effects", "effect_details", "effect_members")
+    key: cast(tuple[int, int], tuple(V11_LAYOUT[key]["shape"]))
+    for key in ("effects", "effect_details", "effect_members")
 }
 EFFECT_ROWS, EFFECT_DIM = SHARED_EFFECT_SHAPES["effects"]
 DETAIL_ROWS, DETAIL_DIM = SHARED_EFFECT_SHAPES["effect_details"]
 MEMBER_ROWS, MEMBER_DIM = SHARED_EFFECT_SHAPES["effect_members"]
 
-_detail = _LAYOUT["effect_details"]
+EFFECT_MODIFICATION = columns("effects", "modification_high", "modification_low")
+EFFECT_LINKS = columns("effects", "controller", "source")
+EFFECT_SOURCE_DEFINITION = column("effects", "source_definition")
+EFFECT_VALID = column("effects", "valid")
+EFFECT_SPANS = columns(
+    "effects", "detail_offset", "detail_count", "member_offset", "member_count"
+)
+DETAIL_KIND = column("effect_details", "kind")
+DETAIL_VALUE = columns("effect_details", "value_high", "value_low")
+MEMBER_OBJECT = column("effect_members", "object")
+
+_detail = V11_LAYOUT["effect_details"]
 DETAIL_KIND_NAMES = _detail["row_kind_names"]
 DETAIL_KINDS = tuple(DETAIL_KIND_NAMES.values())
 PROGRAM_TOKEN_KIND = np.zeros(max(DETAIL_KINDS) + 1, dtype=np.int64)

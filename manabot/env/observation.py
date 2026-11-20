@@ -51,12 +51,12 @@ REMOVAL_RELEASE = "0.4.0"
 
 # Input v11 with public history and decision memory: every array a v11
 # reader can meet. Legacy v9/v10 rows are `observation_layout(legacy=True)`.
-_LAYOUT = managym.observation_layout(policy_history=True, decision_memory=True)
+V11_LAYOUT = managym.observation_layout(policy_history=True, decision_memory=True)
 
 
 def column(array: str, name: str) -> int:
     """Index of the named native column of `array` in input v11."""
-    return _LAYOUT[array]["columns"][name]["index"]
+    return V11_LAYOUT[array]["columns"][name]["index"]
 
 
 def columns(array: str, *names: str) -> list[int]:
@@ -66,12 +66,12 @@ def columns(array: str, *names: str) -> list[int]:
 
 def column_names(array: str) -> list[str]:
     """The native column names of `array` in input v11, in column order."""
-    return list(_LAYOUT[array]["columns"])
+    return list(V11_LAYOUT[array]["columns"])
 
 
 def width(array: str) -> int:
     """Feature width of `array` in input v11."""
-    return len(_LAYOUT[array]["columns"])
+    return len(V11_LAYOUT[array]["columns"])
 
 
 # Column constants manabot reads, by native column name. Add one only for a
@@ -121,7 +121,7 @@ STACK_DEFINITION_INDEX = column("stack", "definition")
 STACK_SOURCE_INDEX = column("stack", "source")  # object index + 1: a join
 STACK_DIM = width("stack")
 
-RELATION_ROWS = _LAYOUT["relations"]["shape"][0]
+RELATION_ROWS = V11_LAYOUT["relations"]["shape"][0]
 RELATION_DIM = width("relations")
 RELATION_VALID_INDEX = column("relations", "valid")
 RELATION_ELIGIBILITY_INDEX = column("relations", "legal_at_resolution_start")
@@ -147,7 +147,7 @@ FACT_SOURCE_INDEX = column("facts", "source_definition")  # definition + 1
 FACT_VALID_INDEX = column("facts", "valid")
 FACT_DIM = width("facts")
 # Fact kinds by native name (`observation_encoder::FactKind`).
-_FACT_KINDS: dict[str, int] = _LAYOUT["facts"]["row_kind_names"]
+_FACT_KINDS: dict[str, int] = V11_LAYOUT["facts"]["row_kind_names"]
 FACT_COUNTER = _FACT_KINDS["counter"]
 FACT_SET_NAME = _FACT_KINDS["set_name"]
 FACT_USED_ABILITY = _FACT_KINDS["used_ability"]
@@ -199,8 +199,6 @@ class ObservationSpace(gym.spaces.Space):
         super().__init__(shape=None, dtype=None)
         config = config or ObservationConfig()
         self.config = config
-        self.one_token = config.policy_input_version == 11
-        self.turn_state = config.policy_input_version in (10, 11)
         self.layout = managym.ObservationLayout(
             policy_input_version=config.policy_input_version,
             policy_history=config.policy_history_version == 1,
@@ -217,6 +215,8 @@ class ObservationSpace(gym.spaces.Space):
             max_decision_members=config.max_decision_members,
         )
         self.shapes = self.layout.shapes
+        self.one_token = "stack" in self.shapes
+        self.turn_state = "player_turn_state" in self.shapes
         # Checkpoints record str() of each NumPy scalar type.
         self.dtypes = {
             key: np.dtype(dtype).type for key, dtype in self.layout.dtypes.items()

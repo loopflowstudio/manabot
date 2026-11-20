@@ -131,7 +131,7 @@ def catalog_tables(
         ):
             buffers[f"{prefix}_keys"], buffers[f"{prefix}_rows"] = _sorted_keys(table)
         buffers["record_number_rows"] = np.asarray(
-            [tables.numbers.get(kind, 0) for kind in range(6)]
+            [tables.numbers.get(kind, 0) for kind in range(max(tables.numbers) + 1)]
         )
     return CatalogTables(
         buffers,

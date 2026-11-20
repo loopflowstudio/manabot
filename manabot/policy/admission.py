@@ -39,11 +39,19 @@ from manabot.env.observation import (
 )
 from manabot.env.shared_effects import (
     DETAIL_DIM,
+    DETAIL_KIND,
     DETAIL_KINDS,
     DETAIL_ROWS,
+    DETAIL_VALUE,
     EFFECT_DIM,
+    EFFECT_LINKS,
+    EFFECT_MODIFICATION,
     EFFECT_ROWS,
+    EFFECT_SOURCE_DEFINITION,
+    EFFECT_SPANS,
+    EFFECT_VALID,
     MEMBER_DIM,
+    MEMBER_OBJECT,
     MEMBER_ROWS,
     NUMBER_TOKEN_KINDS,
     PROGRAM_TOKEN_KIND,
@@ -67,16 +75,6 @@ from manabot.policy.readings import PROGRAM_KINDS, Readings
 
 # Native columns these checks read, by name.
 _FACT_ORDINAL = column("facts", "value_2")  # a program row's ordinal
-_EFFECT_VALID = column("effects", "valid")
-_EFFECT_MODIFICATION = columns("effects", "modification_high", "modification_low")
-_EFFECT_SOURCE_DEFINITION = column("effects", "source_definition")
-_EFFECT_LINKS = columns("effects", "controller", "source")
-_EFFECT_SPANS = columns(
-    "effects", "detail_offset", "detail_count", "member_offset", "member_count"
-)
-_EFFECT_DETAIL_KIND = column("effect_details", "kind")
-_EFFECT_DETAIL_VALUE = columns("effect_details", "value_high", "value_low")
-_MEMBER_OBJECT = column("effect_members", "object")
 _MEMBER_ORDER = column("effect_members", "order")
 _RELATION_FRAME = column("relations", "frame")
 _RELATION_OBJECTS = columns("relations", "source", "reference")
@@ -404,32 +402,31 @@ def shared_effects(
     """Validate live headers and their complete CSR detail/member partitions."""
     if headers.ndim != 3 or headers.shape[1:] != (EFFECT_ROWS, EFFECT_DIM):
         raise ValueError(f"expected [batch, {EFFECT_ROWS}, {EFFECT_DIM}] state records")
-    valid = headers[..., _EFFECT_VALID]
+    valid = headers[..., EFFECT_VALID]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("state record validity must be binary")
-    host = np.where(valid.astype(bool)[..., None], headers, 0)
-    if not np.isfinite(host).all():
+    positions = np.argwhere(valid)
+    live = headers[positions[:, 0], positions[:, 1]]
+    if not np.isfinite(live).all():
         raise ValueError("state records must be finite")
-    batch = len(host)
+    batch = len(headers)
     if details.shape != (batch, DETAIL_ROWS, DETAIL_DIM) or members.shape != (
         batch,
         MEMBER_ROWS,
         MEMBER_DIM,
     ):
         raise ValueError("invalid shared effect buffer shape")
-    positions = np.argwhere(host[..., _EFFECT_VALID])
     if not len(positions):
         return
-    live = host[positions[:, 0], positions[:, 1]]
-    halves = _indexes(live[:, _EFFECT_MODIFICATION], 65535, "effect vocabulary half")
+    halves = _indexes(live[:, EFFECT_MODIFICATION], 65535, "effect vocabulary half")
     source = _indexes(
-        live[:, _EFFECT_SOURCE_DEFINITION], 2**24, "effect source definition"
+        live[:, EFFECT_SOURCE_DEFINITION], 2**24, "effect source definition"
     )
-    links = _indexes(live[:, _EFFECT_LINKS], objects, "effect source/controller")
+    links = _indexes(live[:, EFFECT_LINKS], objects, "effect source/controller")
     if (links[:, 0] == 0).any():
         raise ValueError("effect controller is absent")
     offsets = _indexes(
-        live[:, _EFFECT_SPANS], max(MEMBER_ROWS, DETAIL_ROWS), "effect CSR offset/count"
+        live[:, EFFECT_SPANS], max(MEMBER_ROWS, DETAIL_ROWS), "effect CSR offset/count"
     )
     detail_indexes: list[int] = []
     member_indexes: list[int] = []
@@ -455,16 +452,14 @@ def shared_effects(
         member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
         member_records.extend([i] * targets)
     detail = details.reshape(-1, DETAIL_DIM)[detail_indexes]
-    kinds = _indexes(
-        detail[:, _EFFECT_DETAIL_KIND], max(DETAIL_KINDS), "effect detail kind"
-    )
-    ids = _indexes(detail[:, _EFFECT_DETAIL_VALUE], 65535, "effect detail half")
+    kinds = _indexes(detail[:, DETAIL_KIND], max(DETAIL_KINDS), "effect detail kind")
+    ids = _indexes(detail[:, DETAIL_VALUE], 65535, "effect detail half")
     if not np.isin(kinds, DETAIL_KINDS).all():
         raise ValueError("live effect detail has no kind")
     member = members.reshape(-1, MEMBER_DIM)[member_indexes]
-    _indexes(member[:, _MEMBER_OBJECT], objects, "effect member")
+    _indexes(member[:, MEMBER_OBJECT], objects, "effect member")
     orders = _indexes(member[:, _MEMBER_ORDER], MEMBER_ROWS, "effect membership order")
-    if (member[:, _MEMBER_OBJECT] == 0).any():
+    if (member[:, MEMBER_OBJECT] == 0).any():
         raise ValueError("effect membership is absent")
     if (orders == 0).any():
         raise ValueError("effect membership order is absent")
@@ -476,12 +471,11 @@ def shared_effects(
             RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
         )
         definition_ids(source, len(catalog.definitions), catalog.definitions)
-        unsigned, program = (
-            (ids[:, 0] << 16) | ids[:, 1],
-            PROGRAM_TOKEN_KIND[kinds] != 0,
-        )
+        unsigned = (ids[:, 0] << 16) | ids[:, 1]
+        token_kinds = PROGRAM_TOKEN_KIND[kinds]
+        program = token_kinds != 0
         catalog.require_names(RecordNamespace.TOKEN, unsigned[~program])
-        catalog.require_tokens(PROGRAM_TOKEN_KIND[kinds[program]], unsigned[program])
+        catalog.require_tokens(token_kinds[program], unsigned[program])
 
 
 def relations(rows: np.ndarray, width: int, objects: int) -> None:

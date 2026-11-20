@@ -15,6 +15,7 @@ from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     RELATION_ELIGIBILITY_INDEX,
     ObservationSpace,
+    allocate_vector_buffers,
     encode_observation,
 )
 from manabot.infra.config import (
@@ -284,17 +285,7 @@ def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
     for key in out:
         np.testing.assert_array_equal(out[key], expected[key], err_msg=key)
     vector = managym.VectorEnv(1, seed=608, skip_trivial=False)
-    buffers = {
-        key: np.zeros((1, *value.shape), dtype=value.dtype)
-        for key, value in expected.items()
-    }
-    buffers.update(
-        {
-            "rewards": np.zeros(1, dtype=np.float64),
-            "terminated": np.zeros(1, dtype=np.uint8),
-            "truncated": np.zeros(1, dtype=np.uint8),
-        }
-    )
+    buffers = allocate_vector_buffers(space, 1)
     vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(players)
     for key in expected:

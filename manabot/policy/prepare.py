@@ -53,7 +53,18 @@ from manabot.env.observation import (
     column,
     columns,
 )
-from manabot.env.shared_effects import NUMBER_TOKEN_KINDS, PROGRAM_TOKEN_KIND
+from manabot.env.shared_effects import (
+    DETAIL_KIND,
+    DETAIL_VALUE,
+    EFFECT_LINKS,
+    EFFECT_MODIFICATION,
+    EFFECT_SOURCE_DEFINITION,
+    EFFECT_SPANS,
+    EFFECT_VALID,
+    MEMBER_OBJECT,
+    NUMBER_TOKEN_KINDS,
+    PROGRAM_TOKEN_KIND,
+)
 from manabot.policy.buckets import has_history_events
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
 from manabot.policy.readings import (
@@ -103,15 +114,6 @@ _LIBRARY_DEFINITION, _LIBRARY_POSITION = columns(
 _DECK_DEFINITION, _DECK_MAIN = columns("decklists", "definition", "main")
 
 _FACT_VALUE_2 = column("facts", "value_2")
-_EFFECT_MODIFICATION = slice(
-    column("effects", "modification_high"), column("effects", "power")
-)
-_EFFECT_LINKS = columns("effects", "controller", "source")
-_EFFECT_SOURCE_DEFINITION = column("effects", "source_definition")
-_EFFECT_VALID = column("effects", "valid")
-_EFFECT_SPANS = slice(column("effects", "detail_offset"), _EFFECT_VALID)
-_DETAIL_KIND, _DETAIL_VALUE_HIGH = columns("effect_details", "kind", "value_high")
-_MEMBER_OBJECT = column("effect_members", "object")
 
 _EVENT_KIND, _EVENT_AMOUNT = columns("events", "kind", "amount")
 _EVENT_DEFINITIONS = columns("events", "source_definition", "target_definition")
@@ -321,7 +323,8 @@ class Tables:
             return words.astype(np.int64) % self.record_buckets
         kinds = kinds.astype(np.int64)
         number = np.isin(kinds, NUMBER_TOKEN_KINDS)
-        rows = self.record_number_rows[kinds.clip(0, 5)].copy()
+        rows = np.empty_like(kinds)
+        rows[number] = self.record_number_rows[kinds[number]]
         if (~number).any():
             rows[~number] = _lookup(
                 self.record_token_keys,
@@ -848,8 +851,8 @@ def _referenced_definitions(
                 obs["facts"][..., FACT_SOURCE_INDEX][
                     obs["facts"][..., FACT_VALID_INDEX] == 1
                 ],
-                obs["effects"][..., _EFFECT_SOURCE_DEFINITION][
-                    obs["effects"][..., _EFFECT_VALID] == 1
+                obs["effects"][..., EFFECT_SOURCE_DEFINITION][
+                    obs["effects"][..., EFFECT_VALID] == 1
                 ],
             )
         )
@@ -985,15 +988,15 @@ def _effects(
     details = obs["effect_details"]
     members = obs["effect_members"]
     detail_rows, member_rows = details.shape[1], members.shape[1]
-    live_batches, live_slots = np.nonzero(headers[..., _EFFECT_VALID] == 1)
+    live_batches, live_slots = np.nonzero(headers[..., EFFECT_VALID] == 1)
     if len(live_batches) == 0:
         return None
     # Select before casting: padding may contain arbitrary payloads, including NaN.
     selected = headers[live_batches, live_slots]
     live = selected.astype(np.int64)
-    halves = live[:, _EFFECT_MODIFICATION]
-    source = live[:, _EFFECT_SOURCE_DEFINITION]
-    links = live[:, _EFFECT_LINKS]
+    halves = live[:, EFFECT_MODIFICATION]
+    source = live[:, EFFECT_SOURCE_DEFINITION]
+    links = live[:, EFFECT_LINKS]
     detail_indexes: list[int] = []
     member_indexes: list[int] = []
     member_records: list[int] = []
@@ -1001,7 +1004,7 @@ def _effects(
     lengths: list[int] = []
     header_tokens = 3 * len(live)
     for i, (b, (d, count, m, targets)) in enumerate(
-        zip(live_batches.tolist(), live[:, _EFFECT_SPANS].tolist(), strict=True)
+        zip(live_batches.tolist(), live[:, EFFECT_SPANS].tolist(), strict=True)
     ):
         detail_start = header_tokens + len(detail_indexes)
         token_indexes.extend(range(3 * i, 3 * i + 3))
@@ -1013,15 +1016,16 @@ def _effects(
     detail_host = details.reshape(-1, details.shape[-1])[detail_indexes].astype(
         np.int64
     )
-    kinds, ids = detail_host[:, _DETAIL_KIND], detail_host[:, _DETAIL_VALUE_HIGH:]
+    kinds, ids = detail_host[:, DETAIL_KIND], detail_host[:, DETAIL_VALUE]
     targets = members.reshape(-1, members.shape[-1])[
-        member_indexes, _MEMBER_OBJECT
+        member_indexes, MEMBER_OBJECT
     ].astype(np.int64)
     records = np.asarray(member_records, dtype=np.int64)
     numeric = read_numeric(selected, tables.layout.readings["effects"])
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
-    program = PROGRAM_TOKEN_KIND[kinds] != 0
+    token_kinds = PROGRAM_TOKEN_KIND[kinds]
+    program = token_kinds != 0
     detail_embedding_rows = np.zeros(len(kinds), dtype=np.int64)
     if (~program).any():
         detail_embedding_rows[~program] = tables.names(
@@ -1029,7 +1033,7 @@ def _effects(
         )
     if program.any():
         detail_embedding_rows[program] = tables.tokens(
-            PROGRAM_TOKEN_KIND[kinds[program]], unsigned[program]
+            token_kinds[program], unsigned[program]
         )
     signed = np.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
     return EffectRoutes(
@@ -1047,9 +1051,7 @@ def _effects(
         detail_rows=detail_embedding_rows,
         detail_kinds=kinds,
         detail_numbers=signed.astype(np.float32),
-        detail_is_number=np.isin(PROGRAM_TOKEN_KIND[kinds], NUMBER_TOKEN_KINDS).astype(
-            np.float32
-        ),
+        detail_is_number=np.isin(token_kinds, NUMBER_TOKEN_KINDS).astype(np.float32),
         token_indexes=np.asarray(token_indexes, dtype=np.int64),
         schedule=pack(lengths),
         routes=live_batches[records] * objects + targets - 1,
