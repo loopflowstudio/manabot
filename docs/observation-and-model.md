@@ -386,9 +386,9 @@ placed readings above, and every other column as stored, the permanent timestamp
 unscaled counts included. It computes what it always did. A warm start
 or memory branch builds its model from the checkpoint and so keeps those
 readings and writes them back. A resume builds from the rule and is refused
-when the saved state read differently (see "How the network reads a column"). Their
-keys and names come from a writer catalog found by the card digest the file
-records, `manabot/model/writer_catalogs/<world_digest>.json`. The loader
+when the saved state read differently (see "How the network reads a column").
+Their keys and names come from a writer catalog found by the card digest the
+file records, `manabot/model/writer_catalogs/<world_digest>.json`. The loader
 checks that the ordered naming candidates (name and optional definition row)
 reproduce the file's naming digest and that its key count equals the file's
 definition rows. Back faces and rules fixtures without keys use their registry
