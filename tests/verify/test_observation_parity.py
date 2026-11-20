@@ -784,7 +784,7 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
     assert len(capture_text_decision(env).actions) == 5
 
 
-@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 23)])
+@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 25)])
 def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
     version: int, width: int
 ) -> None:

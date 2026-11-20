@@ -18,7 +18,7 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import PolicyInference
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.interface import input_columns
+from manabot.model.world import input_columns
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]

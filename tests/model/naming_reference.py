@@ -14,7 +14,7 @@ from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     RELATION_VALID_INDEX,
 )
-from tests.model.prepared_routes import device_input
+from tests.model.prepared_routes import dense_action_features, device_input
 
 
 def packed_definitions(
@@ -138,17 +138,7 @@ class DenseActionReference(ActorCritic):
     ) -> torch.Tensor:
         action_rows = obs["actions"][:, :action_count]
         valid = obs["actions_valid"][:, :action_count]
-        # The continuation selector is a join, never a numeric strategic feature.
-        # Features are every column but the continuation join and validity; the
-        # v11 direct-payment flag trails validity and stays a feature.
-        features = torch.cat(
-            (
-                action_rows[..., :ACTION_CONTINUATION_INDEX],
-                action_rows[..., ACTION_CONTINUATION_INDEX + 2 :],
-            ),
-            dim=-1,
-        )
-        actions = self.action_embedding(features)
+        actions = self.action_embedding(dense_action_features(self, action_rows))
         indexes = torch.where(
             valid.bool(), action_rows[..., ACTION_CONTINUATION_INDEX], 0
         )

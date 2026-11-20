@@ -17,7 +17,7 @@ from itertools import zip_longest
 import os
 from pathlib import Path
 from time import perf_counter
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from etude.records import Clock
@@ -54,8 +54,8 @@ from manabot.infra.config import (
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.run_settings import RunSettings
-from manabot.model.interface import input_columns
 from manabot.model.world import (
+    input_columns,
     validate_agent_decks,
     validate_agent_setup,
 )
@@ -355,9 +355,7 @@ def self_play_collector(
 class Counts(BaseModel):
     """Cumulative completed work, changed in place so Etude saves this object.
 
-    `readings` is the input readings the run's model was built with
-    (`manabot.policy.readings`), recorded when the run starts; a state saved
-    before readings were recorded has none.
+    Model settings and input readings identify the saved weights on resume.
     """
 
     updates: int = 0
@@ -369,10 +367,11 @@ class Counts(BaseModel):
     optimizer_updates: int = 0
     optimizer_exposures: int = 0
     readings: dict[str, list[str]] | None = None
+    model: dict[str, Any] | None = None
 
     def coordinates(self) -> dict[str, int | float]:
         """Cumulative work published in policy files and update metrics."""
-        return self.model_dump(exclude={"readings"})
+        return self.model_dump(exclude={"readings", "model"})
 
 
 def clocks(counts: Counts) -> dict[str, float]:
@@ -479,11 +478,29 @@ def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | Non
     return learner, ema
 
 
+def resume_model(saved: dict[str, Any] | None, model: ModelConfig) -> dict[str, Any]:
+    """Return the model settings to save, refusing a change to the learner."""
+    if saved is not None:
+        previous = ModelConfig.from_checkpoint(saved)
+        changed = [
+            f"{key}: {getattr(previous, key)!r} -> {getattr(model, key)!r}"
+            for key in ModelConfig.model_fields
+            if getattr(previous, key) != getattr(model, key)
+        ]
+        if changed:
+            raise ValueError(
+                f"resumed model settings differ from the saved run ({', '.join(changed)}); "
+                "resume with the run's model settings or from the revision "
+                "that started the run"
+            )
+    return model.checkpoint_payload()
+
+
 def resume_readings(
     counts: Counts, readings: Readings, space: ObservationSpace
 ) -> dict[str, list[str]]:
     """Return the model's readings for run state, refusing incompatible saved weights."""
-    built = {key: [value.value for value in values] for key, values in readings.items()}
+    built = {key: [str(value) for value in values] for key, values in readings.items()}
     saved = counts.readings
     if saved is None:
         if counts.updates == 0:
@@ -491,7 +508,7 @@ def resume_readings(
         # Runs predating the record used legacy readings over the model's prefix.
         legacy = legacy_readings(space)
         saved = {
-            key: [value.value for value in legacy[key][: len(values)]]
+            key: [str(value) for value in legacy[key][: len(values)]]
             for key, values in readings.items()
         }
     if saved == built:
@@ -894,14 +911,20 @@ def self_play(
         }
         if ema is not None:
             objects["ema"] = ema
-        # Compare readings before any saved weights load: a model that reads
-        # differently can also have a different projection width.
+        # Check the saved architecture and input contract before restoring tensors.
+        saved_counts = run.resume(extra=Counts())
+        saved_model = saved_counts.model
+        if saved_model is None and saved_counts.updates > 0:
+            initial = run.out / "policies/00000000-raw.safetensors"
+            saved_model = load_metadata(initial)["hypers"]["agent_hypers"]
+        model = resume_model(saved_model, settings.model)
         readings = resume_readings(
-            run.resume(extra=Counts()),
+            saved_counts,
             learner.agent.readings,
             learner.agent.observation_space,
         )
         counts = run.resume(**objects, extra=Counts())
+        counts.model = model
         counts.readings = readings
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.

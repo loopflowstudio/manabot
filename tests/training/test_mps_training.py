@@ -281,7 +281,7 @@ def test_empty_shared_effect_details_backward(
     values["effects"][0, 0, 16:18] = 1  # One member, live header.
     values["effect_members"][0, 0] = 1  # Object 1, ordinal 1.
     objects = torch.ones(1, 2, 4, device=device)
-    encoder = SharedEffectEncoder(4).to(device)
+    encoder = SharedEffectEncoder(4, numeric=8).to(device)
     before = deepcopy(encoder)
     loss = (
         encoder(

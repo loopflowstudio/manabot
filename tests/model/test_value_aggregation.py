@@ -12,14 +12,12 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
-    ACTION_CONTINUATION_INDEX,
-    ACTION_VALID_INDEX,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import collect, open_collector
-from tests.model.prepared_routes import device_input
+from tests.model.prepared_routes import dense_action_features, device_input
 
 Aggregation = Literal[
     "historical_mean", "masked_mean", "value_token", "attention_readout"
@@ -151,19 +149,10 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
     assert encoded.shape[1] == objects.shape[1] + 1
     # Probe each real-object index, including the final slot, and absent focus.
     # Attention changes representations; the index must still select that row.
+    action_rows = agent.action_embedding(dense_action_features(agent, obs["actions"]))
+    action_rows = action_rows * obs["actions_valid"].unsqueeze(-1)
     for index in range(-1, objects.shape[1]):
         obs["action_focus"].fill_(index)
-        rows = obs["actions"]
-        action_rows = agent.action_embedding(
-            torch.cat(
-                (
-                    rows[..., :ACTION_CONTINUATION_INDEX],
-                    rows[..., ACTION_VALID_INDEX + 1 :],
-                ),
-                -1,
-            )
-        )
-        action_rows = action_rows * obs["actions_valid"].unsqueeze(-1)
         focus = torch.zeros_like(encoded[:, 0]) if index == -1 else encoded[:, index]
         focus_rows = focus[:, None, None, :].expand(
             -1, action_rows.shape[1], agent.max_focus_objects, -1

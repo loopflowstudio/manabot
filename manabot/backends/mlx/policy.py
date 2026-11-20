@@ -213,7 +213,7 @@ class SharedEffects(nn.Module):
         super().__init__()
         self.detail_kind = nn.Embedding(20, dims.hidden)
         self.detail_number = nn.Linear(1, dims.hidden)
-        self.header = nn.Linear(8 + 2 * dims.hidden, dims.hidden)
+        self.header = nn.Linear(dims.effect + 2 * dims.hidden, dims.hidden)
         self.reducer = RecordReducer(dims.hidden)
 
 

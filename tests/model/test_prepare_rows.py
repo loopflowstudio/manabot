@@ -9,8 +9,6 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
-    ACTION_CONTINUATION_INDEX,
-    ACTION_VALID_INDEX,
     FACT_CONTINUATION_PROGRAM,
     FACT_DETAIL_INDEX,
     FACT_KIND_INDEX,
@@ -19,13 +17,13 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
-    TURN_STATE_DIM,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, check
 from manabot.policy.buckets import bucket_sizes, object_columns, trim_observation
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Layout, Tables, prepare
+from manabot.policy.readings import read_numeric
 from manabot.verify.representation import shared_effect_root
 import managym
 from tests.model.prepared_routes import device_input
@@ -134,12 +132,10 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     np.testing.assert_array_equal(prepared.known_counts, trimmed["known_hand"][..., 1])
     np.testing.assert_array_equal(prepared.legal, obs["actions_valid"].astype(bool))
     b, a = np.nonzero(prepared.legal)
-    # Every action column but the continuation join and validity.
+    # Every legal row in order, read by its readings.
     np.testing.assert_array_equal(
         prepared.action_features,
-        np.delete(
-            obs["actions"][b, a], [ACTION_CONTINUATION_INDEX, ACTION_VALID_INDEX], -1
-        ),
+        read_numeric(obs["actions"][b, a], agent.readings["actions"]),
     )
     objects = prepared.validity.shape[1]
     focus = trimmed["action_focus"][b, a]
@@ -165,9 +161,11 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
         else (trimmed["facts"][..., FACT_VALID_INDEX] == 1).any(0).sum()
     )
     if kind == "v10":
+        turn_state = read_numeric(
+            trimmed["player_turn_state"][:, :1], agent.readings["player_turn_state"]
+        )
         np.testing.assert_array_equal(
-            prepared.agent_player[..., -TURN_STATE_DIM:],
-            trimmed["player_turn_state"][:, :1],
+            prepared.agent_player[..., -turn_state.shape[-1] :], turn_state
         )
     if not tables.catalog_records:
         facts = np.where(
