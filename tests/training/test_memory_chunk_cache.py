@@ -31,7 +31,7 @@ from tests.model.test_decision_memory import _two_reference_input, policy
 def chunk_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
     space, raw = _two_reference_input()
     space = ObservationSpace(
-        space.encoder.config.model_copy(update={"max_decision_records": 96})
+        space.config.model_copy(update={"max_decision_records": 96})
     )
     header = raw["decision_records"][0, 0].copy()
     members = raw["decision_members"][0, :4].copy()
@@ -48,7 +48,7 @@ def chunk_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
 
 def test_chunk_cache_preserves_dense_features_outputs_and_gradients() -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
     dense = {key: np.repeat(value, 2, axis=0) for key, value in raw.items()}
@@ -101,7 +101,7 @@ def test_chunk_cache_preserves_dense_features_outputs_and_gradients() -> None:
 
 def test_chunk_boundaries_coalescing_companions_and_archive() -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     before = store.capture(raw, 0, identity)
@@ -135,7 +135,7 @@ def test_chunk_boundaries_coalescing_companions_and_archive() -> None:
 
 def test_selected_dense_export_retains_edits_and_rejects_corruption() -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
     exported = PrefixObservation(raw, [prefix], capacities).materialize()
@@ -174,7 +174,7 @@ def test_record_features_do_not_depend_on_selected_prefix_length(
     np.testing.assert_array_equal(before.numbers, after.numbers[:32])
     assert before.numbers.shape[1] == 38
     assert before.lengths == (32,) and after.lengths == (65,)
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     earlier = store.capture(short, 0, identity)
@@ -208,7 +208,7 @@ def test_changed_native_chunk_still_rejects_invalid_integer_categories(
     field: str, column: int, low: int, high: int
 ) -> None:
     space, raw = _two_reference_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     # Native counts describe the live slices, independently of category values.
     counts = (
         int(raw["decision_records"][0, :, 19].sum()),
@@ -231,7 +231,7 @@ def test_learner_assembles_collected_record_features_without_featurizing_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     details = int((raw[MEMORY_FIELDS[1]][0, :, 5] == 1).sum())

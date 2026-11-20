@@ -13,6 +13,7 @@ from manabot.env.observation import (
     MAX_ACTION_SELECTOR,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.verify.action_cases import (
@@ -119,7 +120,9 @@ def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:
     "field,column",
     [("mode_index", ACTION_MODE_INDEX), ("ability_index", ACTION_ABILITY_INDEX)],
 )
-def test_selector_boundary_parity(field: str, column: int) -> None:
+def test_selector_boundary_encodes_the_maximum_and_rejects_beyond(
+    field: str, column: int
+) -> None:
     env = initial(authored=False)
     raw = env.scenario_refresh()
     space = raw.action_space
@@ -127,12 +130,10 @@ def test_selector_boundary_parity(field: str, column: int) -> None:
     setattr(actions[0], field, MAX_ACTION_SELECTOR)
     space.actions = actions
     raw.action_space = space
-    obs = encode(env, raw)
+    obs = encode(raw)
     assert obs["actions"][0, 0, column] == 16777216
     setattr(actions[0], field, MAX_ACTION_SELECTOR + 1)
     space.actions = actions
     raw.action_space = space
     with pytest.raises(ValueError, match="action selector"):
-        env.encode_observation(raw)
-    with pytest.raises(ValueError, match="action selector"):
-        ObservationSpace().encode(raw)
+        encode_observation(ObservationSpace(), raw)

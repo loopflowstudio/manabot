@@ -23,7 +23,11 @@ from typing import Any, Mapping, Protocol
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
@@ -201,7 +205,7 @@ class AgentLeafEvaluator:
         encoded = (
             observation
             if isinstance(observation, Mapping)
-            else self.observation_space.encode(observation)
+            else encode_observation(self.observation_space, observation)
         )
         valid = np.asarray(encoded["actions_valid"])
         if (

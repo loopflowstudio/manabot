@@ -12,7 +12,6 @@ import torch
 
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.decision_memory_probe import HandProbe, _predict, fit
-from manabot.env.decision_memory import encode_records
 from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
 from manabot.policy.prepare import Prepared
 import manabot.verify.decision_memory_probe as probe_module
@@ -31,6 +30,7 @@ from manabot.verify.decision_memory_probe import (
 )
 import managym
 from managym.decision_memory import DecisionContext, DecisionRecord, PublicChoice
+from tests.model.test_decision_memory import encode_with_records
 
 
 def _planted() -> Corpus:
@@ -40,7 +40,6 @@ def _planted() -> Corpus:
         "elemental-world-v2", managym.authored_deck_keys("elemental-world-v2")[0]
     )
     raw, _ = env.reset([deck, deck])
-    ordinary = {key: value[None] for key, value in space.encode(raw).items()}
     store = MemoryStore(CAPACITIES)
     observations = []
     for signal in (0, 1):
@@ -71,8 +70,8 @@ def _planted() -> Corpus:
                 references=[],
             ),
         )
-        memory = encode_records([record], *CAPACITIES)
-        dense = {**ordinary, **{key: value[None] for key, value in memory.items()}}
+        encoded = encode_with_records(space, raw, [record])
+        dense = {key: value[None] for key, value in encoded.items()}
         prefix = store.capture(dense, 0, PrefixIdentity("fixture", 0, str(signal)))
         observations.append(PrefixObservation(dense, [prefix], CAPACITIES))
     corpus = Corpus([], [], ("target",))

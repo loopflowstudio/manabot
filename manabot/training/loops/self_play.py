@@ -43,6 +43,7 @@ from manabot.backends.torch.learner import Learner, apply_matmul_precision, upda
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.random import seed_random
 from manabot.backends.torch.rl import NumericalError
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -401,7 +402,7 @@ def pretrained_policy(settings: SelfPlay, space: ObservationSpace) -> ActorCriti
     assert settings.pretrained is not None
     with torch.random.fork_rng(devices=[]):
         published, published_space = load_checkpoint(str(settings.pretrained))
-    if published_space.encoder.config != space.encoder.config:
+    if published_space.config != space.config:
         raise ValueError("pretrained policy has another observation config")
     if settings.deck_source is not None:
         validate_agent_decks(published, settings.deck_source.players())
@@ -422,7 +423,7 @@ def load_pretrained(
     from the published policy, with its exact shape.
     """
     if not pretrained_memory_branch(
-        source, agent.config, agent.observation_space.encoder.config
+        source, agent.config, agent.observation_space.config
     ):
         agent.load_state_dict(weights, strict=True)
         return
@@ -510,6 +511,14 @@ def resume_readings(
         saved = {
             key: [str(value) for value in legacy[key][: len(values)]]
             for key, values in readings.items()
+        }
+    if space.config.max_decision_records and saved.keys() == built.keys() - set(
+        MEMORY_FIELDS
+    ):
+        # Older run states omitted the separately prepared memory fields.
+        saved = {
+            **saved,
+            **{key: ["own"] * space.shapes[key][-1] for key in MEMORY_FIELDS},
         }
     if saved == built:
         return built

@@ -15,6 +15,7 @@ from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.managym.experience_projection import decision_surface_view
@@ -249,7 +250,7 @@ def _viewer_observation(decision: TextDecision) -> managym.Observation:
 
 
 def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
-    """Text and both encoders show the owner its foretold card and terms; the
+    """Text and the policy input show the owner its foretold card and terms; the
     opponent's text, JSON and tensor hold no trace beyond the exile count."""
     env = priority_root(("Sozin's Comet",), ("Mountain", "Mountain"))
     decision = capture_text_decision(env)
@@ -262,7 +263,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
         owner.text
     )
     space = ObservationSpace(ObservationConfig())
-    owner_rows = space.encode(_viewer_observation(owner))["agent_cards"]
+    owner_rows = encode_observation(space, _viewer_observation(owner))["agent_cards"]
     assert owner_rows[:, CARD_PERMISSION_INDEX + 11].sum() == 1
 
     pass_priority = next(a for a in owner.actions if "Pass" in a.description)
@@ -277,7 +278,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     observation = _viewer_observation(opponent)
     assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
     assert observation.opponent.zone_counts[5] == 1
-    encoded = space.encode(observation)
+    encoded = encode_observation(space, observation)
     for key in ("agent_cards", "opponent_cards"):
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
 
@@ -290,11 +291,11 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     ],
     ids=["256-facts", "default"],
 )
-def test_once_each_turn_use_reaches_text_and_both_encoders(
+def test_once_each_turn_use_reaches_text_and_the_policy_input(
     config: ObservationConfig,
 ) -> None:
     """Barrels' once-each-turn mana ability, once used, is in the text and in
-    the same permanent column of the reference and native encoders."""
+    its permanent column of the policy input at either fact capacity."""
     env = priority_root(
         (), ("Barrels of Blasting Jelly", "Mountain"), mana_floats="all"
     )
@@ -313,16 +314,13 @@ def test_once_each_turn_use_reaches_text_and_both_encoders(
 
     observation = _viewer_observation(decision)
     space = ObservationSpace(config)
-    encoded = space.encode(observation)
+    encoded = encode_observation(space, observation)
     row = next(
         index
         for index, permanent in enumerate(observation.agent_permanents)
         if permanent.once_each_turn_used
     )
     assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
-    native = env.encode_observation(observation, max_facts=config.max_facts)
-    for key, value in encoded.items():
-        np.testing.assert_array_equal(native[key], value, err_msg=key)
 
 
 def _redigest(payload: dict[str, object]) -> str:
@@ -413,9 +411,7 @@ def _choose(env: managym.Env, wording: str) -> None:
     """Submit the one offered action whose line contains `wording`."""
     decision = capture_text_decision(env)
     [line] = [
-        line
-        for line in decision.text.splitlines()
-        if " — " in line and wording in line
+        line for line in decision.text.splitlines() if " — " in line and wording in line
     ]
     submit_response(env, decision, line.split(" — ", 1)[0])
 
@@ -1331,9 +1327,8 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
     assert {card["id"] for card in projection["agent"]["inspected"]} == inspected_ids
     assert not projection["opponent"]["hand"]
     assert not decision_surface_view(env, 1 - viewer)["agent"].get("inspected")
-    expected = ObservationSpace().encode(raw)
-    for key, actual in env.encode_observation(raw).items():
-        np.testing.assert_array_equal(actual, expected[key], err_msg=key)
+    valid = encode_observation(ObservationSpace(), raw)["actions_valid"]
+    assert int(np.count_nonzero(valid)) == len(raw.action_space.actions)
     stop = next(
         action
         for action in decision.actions
@@ -1343,20 +1338,20 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
     assert not decision_surface_view(env, viewer)["agent"].get("inspected")
 
 
-def _assert_native_observation_parity(
+def _assert_policy_input_holds_the_decision(
     env: managym.Env, decision: TextDecision
 ) -> managym.Observation:
+    """The decision's viewer observation encodes with every legal action valid."""
     # Read the native observation: captured viewer JSON omits continuation frames.
     viewer = DecisionInput.model_validate_json(decision.capture_json).observation.viewer
     observation = env.observation_for_player(viewer)
-    encoded = ObservationSpace(ObservationConfig()).encode(observation)
-    native = env.encode_observation(observation)
-    for key, value in encoded.items():
-        np.testing.assert_array_equal(native[key], value, err_msg=key)
+    encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
+    valid = int(np.count_nonzero(encoded["actions_valid"]))
+    assert valid == len(observation.action_space.actions)
     return observation
 
 
-def test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders() -> None:
+def test_accumulate_wisdom_ordering_reaches_text_commands_and_policy_input() -> None:
     env = priority_root(("Accumulate Wisdom",), ("Island", "Island"))
     decision = capture_text_decision(env)
     cast = next(a for a in decision.actions if "Cast" in a.description)
@@ -1380,7 +1375,7 @@ def test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders() ->
     assert all(
         "next on the bottom" in action.description for action in decision.actions
     )
-    observation = _assert_native_observation_parity(env, decision)
+    observation = _assert_policy_input_holds_the_decision(env, decision)
     assert any(
         frame.kind == 6 and frame.decision == 23 for frame in observation.continuation
     )
@@ -1398,17 +1393,17 @@ def test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders() ->
     assert env.state_digest() == before
 
 
-def test_suki_hand_power_reaches_text_and_both_encoders() -> None:
+def test_suki_hand_power_reaches_text_and_policy_input() -> None:
     env = priority_root(("Suki, Kyoshi Warrior",), ("Plains", "Gray Ogre", "Gray Ogre"))
     decision = capture_text_decision(env)
     assert any(
         "Suki, Kyoshi Warrior" in line and "power/toughness 2/4" in line
         for line in decision.text.splitlines()
     )
-    _assert_native_observation_parity(env, decision)
+    _assert_policy_input_holds_the_decision(env, decision)
 
 
-def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None:
+def test_shared_mill_selection_reaches_text_commands_and_policy_input() -> None:
     env = priority_root(("Ostrich-Horse",), ("Forest", "Forest", "Forest"))
     decision = capture_text_decision(env)
     cast = next(a for a in decision.actions if "Cast" in a.description)
@@ -1423,7 +1418,7 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
     assert "; select cards" in decision.text
     assert "may select up to 1 more cards" in decision.text
     assert len(decision.actions) >= 2
-    observation = _assert_native_observation_parity(env, decision)
+    observation = _assert_policy_input_holds_the_decision(env, decision)
     assert any(
         frame.kind == 6 and frame.decision == 28 and frame.can_decline
         for frame in observation.continuation
@@ -1800,7 +1795,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
     assert len(decision.text.encode()) < 180_000
 
 
-def test_manual_mana_sources_reach_text_commands_and_both_encoders() -> None:
+def test_manual_mana_sources_reach_text_commands_and_policy_input() -> None:
     env = priority_root(("Gray Ogre",), ("Mountain", "Mountain", "Mountain", "Forest"))
     priority = capture_text_decision(env)
     cast = next(action for action in priority.actions if "Cast" in action.description)
@@ -1815,7 +1810,7 @@ def test_manual_mana_sources_reach_text_commands_and_both_encoders() -> None:
         "Pay the offered cost" in action.description for action in payment.actions
     )
     assert len(payment.actions) == 5
-    _assert_native_observation_parity(env, payment)
+    _assert_policy_input_holds_the_decision(env, payment)
     submit_response(env, payment, source.reference)
     following = capture_text_decision(env)
     assert "Tap for mana" in following.text

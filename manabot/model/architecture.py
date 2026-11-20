@@ -70,7 +70,7 @@ def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
         {
             "layout_version": 2,
             "agent": payload,
-            "observation": space.encoder.config.model_dump(mode="json"),
+            "observation": space.config.model_dump(mode="json"),
         }
     )
 

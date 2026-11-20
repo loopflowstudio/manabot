@@ -316,7 +316,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     (failure,) = [row for row in attempts if row.outcome != "completed"]
     assert failure.outcome == ("resource_limit" if resource_limit else "engine_error")
     if resource_limit:
-        assert failure.observation == model.observation_space.encoder.config
+        assert failure.observation == model.observation_space.config
     assert collector.game_error_state.discarded_samples == (4 if seats == "both" else 2)
     assert collector.stats.learner_transitions == batch.actions.size
     assert int(batch.dones.sum()) == (4 if seats == "both" else 2)

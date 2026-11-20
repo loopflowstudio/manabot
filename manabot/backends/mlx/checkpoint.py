@@ -121,7 +121,7 @@ def assemble(
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly. An omitted precision follows the model's
     width (`manabot.backends.mlx.arrays.default_precision`)."""
-    require_supported(checkpoint.model, checkpoint.space.encoder.config)
+    require_supported(checkpoint.model, checkpoint.space.config)
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
         checkpoint.dimensions(),

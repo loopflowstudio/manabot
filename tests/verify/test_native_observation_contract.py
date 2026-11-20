@@ -1,23 +1,28 @@
-"""Parity checks for Rust observation encoding against Python observation encoding."""
+"""The native observation encoder's contract on constructed positions.
+
+There is one encoder (`managym/src/agent/observation_encoder.rs`). These tests
+assert what named columns and rows hold, that caller-owned buffers are filled
+or refused before any write, that vector buffers equal scalar encoding and that
+capacities are respected or refused with `managym.ObservationCapacity`.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import nullcontext
 import json
 
 import numpy as np
 import pytest
 
-from manabot.env.match import Match
-
 # Local imports
 from manabot.env.observation import (
     ACTION_MODE_INDEX,
     ACTION_PAYS_DIRECTLY_INDEX,
     CARD_DIM,
-    CARD_PERMISSION_INDEX,
     FACT_COPY,
     FACT_COPY_EXCEPTION,
+    FACT_COUNTER,
     FACT_DURATION_INDEX,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
@@ -27,17 +32,19 @@ from manabot.env.observation import (
     FACT_TRANSFORMS,
     FACT_USED_ABILITY,
     FACT_VALID_INDEX,
-    PERMANENT_ATTACHED_INDEX,
+    FACT_VALUE_INDEX,
     PERMANENT_DIM,
-    PERMANENT_GRANTED_LAND_INDEX,
     PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
-    RELATION_KEYWORDS_INDEX,
     RELATION_THIS_TURN_INDEX,
+    RELATION_VALID_INDEX,
     RELATION_X_INDEX,
     ObservationConfig,
-    ObservationEncoder,
+    ObservationSpace,
+    ZoneEnum,
+    allocate_vector_buffers,
+    encode_observation,
 )
-from manabot.infra.config import MatchConfig, UnsupportedPolicyInput
+from manabot.infra.config import UnsupportedPolicyInput
 from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
@@ -55,130 +62,34 @@ def random_valid_action(obs: managym.Observation, rng: np.random.Generator) -> i
     return int(rng.integers(0, len(obs.action_space.actions)))
 
 
-def allocate_vector_buffers(
-    num_envs: int,
-    config: ObservationConfig,
-) -> dict[str, np.ndarray]:
-    encoder = ObservationEncoder(config)
-    buffers = encoder.allocate(num_envs)
-    buffers.update(
-        rewards=np.zeros((num_envs,), dtype=np.float64),
-        terminated=np.zeros((num_envs,), dtype=np.uint8),
-        truncated=np.zeros((num_envs,), dtype=np.uint8),
-    )
-    return buffers
-
-
 def assert_buffer_observation_equal(
     buffers: dict[str, np.ndarray],
     env_index: int,
     encoded_obs: dict[str, np.ndarray],
 ) -> None:
     for key, expected in encoded_obs.items():
-        actual = buffers[key][env_index]
-        if key == "action_focus":
-            np.testing.assert_array_equal(
-                actual,
-                expected,
-                err_msg=f"env={env_index} key={key}",
-            )
-        else:
-            np.testing.assert_allclose(
-                actual,
-                expected,
-                atol=1e-6,
-                err_msg=f"env={env_index} key={key}",
-            )
+        np.testing.assert_array_equal(
+            buffers[key][env_index], expected, err_msg=f"env={env_index} key={key}"
+        )
 
 
-def expected_focus_indices(
-    obs: managym.Observation,
-    config: ObservationConfig,
-) -> np.ndarray:
-    object_to_index: dict[int, int] = {}
-    current_object_index = 0
-
-    object_to_index[obs.agent.id] = current_object_index
-    current_object_index += 1
-    object_to_index[obs.opponent.id] = current_object_index
-    current_object_index += 1
-
-    for cards in (obs.agent_cards, obs.opponent_cards):
-        ordered = cards[: config.max_cards_per_player]
-        for card in ordered:
-            object_to_index[card.id] = current_object_index
-            current_object_index += 1
-        current_object_index += config.max_cards_per_player - len(ordered)
-
-    for permanents in (obs.agent_permanents, obs.opponent_permanents):
-        ordered = permanents[: config.max_permanents_per_player]
-        for permanent in ordered:
-            object_to_index[permanent.id] = current_object_index
-            current_object_index += 1
-        current_object_index += config.max_permanents_per_player - len(ordered)
-
-    out = np.full(
-        (config.max_actions, config.max_focus_objects),
-        -1,
-        dtype=np.int32,
-    )
-    for action_index, action in enumerate(
-        obs.action_space.actions[: config.max_actions]
-    ):
-        for focus_index, object_id in enumerate(
-            action.focus[: config.max_focus_objects]
-        ):
-            out[action_index, focus_index] = object_to_index.get(object_id, -1)
-
-    return out
-
-
-@pytest.mark.parametrize("seed", range(42, 62))
-def test_observation_parity(seed: int) -> None:
-    """Compare both encoders throughout 200 games across bounded batches."""
-    rng = np.random.default_rng(seed)
-    env = managym.Env(seed=seed, skip_trivial=True)
-    config = ObservationConfig()
-    encoder = ObservationEncoder(config)
-
-    for game_i in range(10):
-        obs, _ = env.reset(make_player_configs())
-
-        while True:
-            encoded_python = encoder.encode(obs)
-            encoded_rust = env.encode_observation(obs)
-
-            for key in encoded_python:
-                np.testing.assert_allclose(
-                    encoded_rust[key],
-                    encoded_python[key],
-                    atol=1e-6,
-                    err_msg=f"Game {game_i}, key {key}",
-                )
-
-            if obs.game_over:
-                break
-
-            if len(obs.action_space.actions) == 0:
-                break
-
-            action = random_valid_action(obs, rng)
-            obs, _, terminated, truncated, _ = env.step(action)
-            if terminated or truncated:
-                # We still compare one final observation at the top of the loop.
-                continue
-
-
-def test_object_index_mapping_and_padded_focus_resolution():
-    """Focus indices use deterministic object ordering and pad unused slots with -1."""
-    env = managym.Env(seed=7, skip_trivial=True)
-    config = ObservationConfig()
-
+def test_focus_indices_name_hand_rows_and_pad_unused_slots() -> None:
+    env = managym.Env(seed=7)
     obs, _ = env.reset(make_player_configs())
-    encoded = env.encode_observation(obs)
+    space = ObservationSpace()
+    focus = encode_observation(space, obs)["action_focus"]
 
-    expected_focus = expected_focus_indices(obs, config)
-    np.testing.assert_array_equal(encoded["action_focus"], expected_focus)
+    # This opening offers plays from hand and a pass. The hand follows both players.
+    hand = [card.id for card in obs.agent_cards]
+    actions = obs.action_space.actions
+    assert any(action.focus for action in actions) and any(
+        not action.focus for action in actions
+    )
+    for row, action in zip(focus[: len(actions)], actions, strict=True):
+        expected = [2 + hand.index(card) for card in action.focus]
+        np.testing.assert_array_equal(row[: len(expected)], expected)
+        assert (row[len(expected) :] == -1).all()
+    assert (focus[len(actions) :] == -1).all()
 
 
 def test_encode_observation_into_fills_preallocated_buffers_and_validates_contract() -> (
@@ -186,36 +97,122 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
 ):
     env = managym.Env(seed=5, skip_trivial=True)
     config = ObservationConfig()
-    encoder = ObservationEncoder(config)
+    space = ObservationSpace(config)
     obs, _ = env.reset(make_player_configs())
+    restored = managym.Observation.from_json(obs.toJSON())
+    del env  # a restored observation encodes with no live game
 
-    expected = env.encode_observation(obs)
-
-    out = {
-        key: np.full_like(value[0], -7) for key, value in encoder.allocate(1).items()
-    }
-
-    env.encode_observation_into(obs, out)
-
+    expected = encode_observation(space, restored)
+    assert int(expected["agent_cards_valid"].sum()) == 7
+    out = space.allocate()
+    for value in out.values():
+        value.fill(-7)
+    managym.encode_observation_into(restored, space.layout, out)
     for key, expected_value in expected.items():
-        np.testing.assert_allclose(out[key], expected_value, atol=1e-6)
+        np.testing.assert_array_equal(out[key], expected_value, err_msg=key)
 
     bad = dict(out)
     bad["actions"] = np.zeros(
-        (config.max_actions, encoder.action_dim), dtype=np.float64
+        (config.max_actions, space.shapes["actions"][-1]), dtype=np.float64
     )
-    try:
-        env.encode_observation_into(obs, bad)
-        raised = False
-    except (ValueError, TypeError):
-        raised = True
-    assert raised, "Expected dtype mismatch to raise ValueError or TypeError"
+    with pytest.raises((ValueError, TypeError)):
+        managym.encode_observation_into(restored, space.layout, bad)
+
+    missing = dict(out)
+    del missing["facts"]
+    with pytest.raises(ValueError):
+        managym.encode_observation_into(restored, space.layout, missing)
+
+
+def _batched(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return dict(buffers, actions=buffers["actions"][None])
+
+
+def _read_only(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    buffers["opponent_cards"].flags.writeable = False
+    return buffers
+
+
+def _strided(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    rows, columns = buffers["facts"].shape
+    wide = np.zeros((rows, 2 * columns), dtype=np.float32)
+    return dict(buffers, facts=wide[:, ::2])
+
+
+def _wrong_dtype(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return dict(buffers, action_focus=buffers["action_focus"].astype(np.float32))
+
+
+def _swapped_byte_order(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    events = buffers["events"]
+    return dict(buffers, events=events.astype(events.dtype.newbyteorder("S")))
+
+
+def _not_numpy(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return dict(buffers, events=buffers["events"].tolist())
+
+
+def _missing_mask(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return {k: v for k, v in buffers.items() if k != "opponent_cards_valid"}
+
+
+@pytest.mark.parametrize(
+    ("malform", "error"),
+    [
+        (_batched, ValueError),
+        (_read_only, ValueError),
+        (_strided, ValueError),
+        (_wrong_dtype, TypeError),
+        (_swapped_byte_order, TypeError),
+        (_not_numpy, TypeError),
+        (_missing_mask, ValueError),
+    ],
+)
+def test_malformed_buffers_fail_before_a_capacity_overflow(
+    malform: Callable[[dict[str, np.ndarray]], dict[str, np.ndarray]],
+    error: type[Exception],
+) -> None:
+    """A collector recovering from capacity must never see broken buffers."""
+    env = managym.Env(seed=5, skip_trivial=True)
+    obs, _ = env.reset(make_player_configs())
+    space = ObservationSpace(ObservationConfig(max_cards_per_player=4))
+    with pytest.raises(managym.ObservationCapacity):
+        encode_observation(space, obs)
+    buffers = malform(space.allocate())
+    arrays = [value for value in buffers.values() if isinstance(value, np.ndarray)]
+    for value in arrays:
+        if value.flags.writeable:
+            value.fill(-7)
+    with pytest.raises(error) as raised:
+        managym.encode_observation_into(obs, space.layout, buffers)
+    assert not isinstance(raised.value, managym.ObservationCapacity)
+    assert all(np.all(value == -7) for value in arrays if value.flags.writeable)
+
+
+def test_policy_action_count_overflow_is_a_capacity_error() -> None:
+    assert managym.policy_action_count(70, 64, "first-legal") == 64
+    with pytest.raises(managym.ObservationCapacity, match="actions 70 > 64"):
+        managym.policy_action_count(70, 64)
+
+
+def test_env_encode_methods_warn_and_name_their_removal() -> None:
+    env = managym.Env(seed=5, skip_trivial=True)
+    obs, _ = env.reset(make_player_configs())
+    space = ObservationSpace()
+    out = space.allocate()
+    with pytest.warns(DeprecationWarning, match=r"encode_observation_into.*0\.4\.0"):
+        env.encode_observation_into(obs, out)
+    with pytest.warns(DeprecationWarning, match=r"encode_observation.*0\.4\.0"):
+        env.encode_observation(obs)
+    np.testing.assert_array_equal(
+        out["agent_cards"], encode_observation(space, obs)["agent_cards"]
+    )
 
 
 def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
     rng = np.random.default_rng(1234)
     config = ObservationConfig()
-    encoder = ObservationEncoder(config)
+    space = ObservationSpace(config)
     num_envs = 4
     player_configs = make_player_configs()
 
@@ -231,14 +228,16 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         skip_trivial=True,
         player_policies=("agent", "random"),
     )
-    buffers = allocate_vector_buffers(num_envs, config)
-    hot.set_buffers(buffers)
+    buffers = allocate_vector_buffers(space, num_envs)
+    hot.set_buffers(buffers, layout=space.layout)
 
     compat_reset = compat.reset_all(player_configs)
     hot.reset_all_into_buffers(player_configs)
 
     for env_index, (obs, _) in enumerate(compat_reset):
-        assert_buffer_observation_equal(buffers, env_index, encoder.encode(obs))
+        assert_buffer_observation_equal(
+            buffers, env_index, encode_observation(space, obs)
+        )
     np.testing.assert_allclose(buffers["rewards"], np.zeros(num_envs, dtype=np.float64))
     np.testing.assert_array_equal(
         buffers["terminated"], np.zeros(num_envs, dtype=np.uint8)
@@ -263,7 +262,9 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         np.testing.assert_array_equal(buffers["truncated"], expected_truncated)
 
         for env_index, (obs, _, _, _, _) in enumerate(compat_step):
-            assert_buffer_observation_equal(buffers, env_index, encoder.encode(obs))
+            assert_buffer_observation_equal(
+                buffers, env_index, encode_observation(space, obs)
+            )
 
         hot_infos = [dict(info) for info in hot.get_last_info()]
         compat_infos = [dict(info) for _, _, _, _, info in compat_step]
@@ -282,33 +283,34 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         skip_trivial=True,
         player_policies=("agent", "agent"),
     )
-    good = allocate_vector_buffers(num_envs, config)
+    space = ObservationSpace(config)
+    good = allocate_vector_buffers(space, num_envs)
 
-    env.set_buffers(good)
+    env.set_buffers(good, layout=space.layout)
     env.reset_all_into_buffers(player_configs)
     env.step_into_buffers([0, 0])
 
     bad_dtype = dict(good)
     bad_dtype["actions"] = np.zeros_like(good["actions"], dtype=np.float64)
     with pytest.raises((TypeError, ValueError)):
-        env.set_buffers(bad_dtype)
+        env.set_buffers(bad_dtype, layout=space.layout)
 
     bad_shape = dict(good)
     bad_shape["agent_player"] = np.zeros((num_envs, 2, 26), dtype=np.float32)
     with pytest.raises(ValueError):
-        env.set_buffers(bad_shape)
+        env.set_buffers(bad_shape, layout=space.layout)
 
     bad_contiguous = dict(good)
     bad_contiguous["agent_cards"] = np.asfortranarray(good["agent_cards"])
     with pytest.raises(ValueError):
-        env.set_buffers(bad_contiguous)
+        env.set_buffers(bad_contiguous, layout=space.layout)
 
     bad_writable = dict(good)
     read_only = good["agent_cards"].copy()
     read_only.setflags(write=False)
     bad_writable["agent_cards"] = read_only
     with pytest.raises(ValueError):
-        env.set_buffers(bad_writable)
+        env.set_buffers(bad_writable, layout=space.layout)
 
     unconfigured = managym.VectorEnv(
         num_envs=num_envs,
@@ -342,11 +344,7 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     permanents[0] = permanent
     obs.agent_permanents = permanents
 
-    encoder = ObservationEncoder(ObservationConfig())
-    expected = encoder.encode(obs)
-    actual = env.encode_observation(obs)
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    actual = encode_observation(ObservationSpace(), obs)
     assert actual["agent_cards"].shape[-1] == CARD_DIM
     assert actual["agent_permanents"].shape[-1] == PERMANENT_DIM
     assert actual["agent_cards"][0, 38] == 1
@@ -360,79 +358,7 @@ def _token_low(name: str) -> int:
     return managym.catalog_token_value(name) & 0xFFFF
 
 
-# The policy input encodes every Observation fact. These states reach its
-# columns through real T3 games and through each observed field directly.
-_T3_DECK = {
-    "Plains": 5,
-    "Island": 5,
-    "Swamp": 4,
-    "Mountain": 5,
-    "Forest": 5,
-    "Trusty Boomerang": 4,
-    "Glider Staff": 4,
-    "Rowdy Snowballers": 4,
-    "United Front": 4,
-    "Lo and Li, Twin Tutors": 2,
-    "Firebending Lesson": 4,
-    "Toph, the First Metalbender": 2,
-    "White Lotus Tile": 4,
-    "Sozin's Comet": 4,
-}
-
-
-def test_native_and_python_encoders_agree_on_t3_games() -> None:
-    rng = np.random.default_rng(5)
-    env = managym.Env(seed=5, skip_trivial=True)
-    encoder = ObservationEncoder(ObservationConfig())
-    reached: set[str] = set()
-    for _ in range(12):
-        obs, _ = env.reset(
-            [managym.PlayerConfig(name, dict(_T3_DECK)) for name in ("a", "b")]
-        )
-        for _ in range(400):
-            expected = encoder.encode(obs)
-            actual = env.encode_observation(obs)
-            for key, value in expected.items():
-                np.testing.assert_array_equal(actual[key], value, err_msg=key)
-            permanents = np.concatenate(
-                (actual["agent_permanents"], actual["opponent_permanents"])
-            )
-            facts = actual["facts"]
-            for name, seen in (
-                (
-                    "stun",
-                    facts[:, FACT_ID_INDEX + 1] == _token_low("CounterKind::stun"),
-                ),
-                ("effect", actual["effects"][:, -1]),
-                ("attached", permanents[:, PERMANENT_ATTACHED_INDEX]),
-                ("granted land", permanents[:, PERMANENT_GRANTED_LAND_INDEX]),
-                ("stack X", actual["relations"][:, RELATION_X_INDEX]),
-                (
-                    "spell grant",
-                    actual["relations"][
-                        :, RELATION_KEYWORDS_INDEX : RELATION_KEYWORDS_INDEX + 14
-                    ],
-                ),
-                ("face down", actual["agent_cards"][:, CARD_PERMISSION_INDEX + 11]),
-            ):
-                if seen.any():
-                    reached.add(name)
-            if obs.game_over or not obs.action_space.actions:
-                break
-            obs, *_ = env.step(random_valid_action(obs, rng))
-    # Seeded play reaches each of these columns, so parity covers them.
-    assert reached == {
-        "stun",
-        "effect",
-        "attached",
-        "granted land",
-        "stack X",
-        "spell grant",
-        "face down",
-    }
-
-
-def test_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
+def test_encodes_every_observed_permanent_and_card_field() -> None:
     env = managym.Env(seed=11, skip_trivial=False)
     env.reset(make_player_configs())
     env.scenario_force_battlefield(0, "Mountain")
@@ -477,14 +403,11 @@ def test_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     agent.turn_history = history
     obs.agent = agent
 
-    encoder = ObservationEncoder(ObservationConfig())
-    expected = encoder.encode(obs)
-    actual = env.encode_observation(obs)
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    space = ObservationSpace()
+    actual = encode_observation(space, obs)
     row = actual["agent_permanents"][0]
-    own = 2 + 2 * encoder.cards_per_player
-    host = own + encoder.perms_per_player
+    own = 2 + 2 * space.config.max_cards_per_player
+    host = own + space.config.max_permanents_per_player
     # Attacking (column 27), then exhausted, once each turn, granted
     # firebending, attachment join, granted land, blocking join, lost
     # abilities, timestamp rank, dealt damage this turn, validity.
@@ -523,36 +446,25 @@ def test_fact_capacity_fills_exactly_and_rejects_overflow(capacity: int) -> None
     # Controlled transport fixture: each used ability index is one fact row.
     mine.used_abilities = list(range(capacity))
     obs.agent_permanents = [mine]
-    encoder = ObservationEncoder(ObservationConfig(max_facts=capacity))
-    native = env.encode_observation(obs, capacity)
-    reference = encoder.encode(obs)
-    for key, value in reference.items():
-        np.testing.assert_array_equal(native[key], value, err_msg=key)
+    space = ObservationSpace(ObservationConfig(max_facts=capacity))
+    native = encode_observation(space, obs)
     facts = native["facts"]
     assert facts.shape == (capacity, 12)
     assert len(np.unique(facts, axis=0)) == capacity
     assert facts[:, FACT_VALID_INDEX].tolist() == [1] * capacity
     assert facts[:, FACT_KIND_INDEX].tolist() == [FACT_USED_ABILITY] * capacity
 
-    buffers = encoder.allocate()
-    env.encode_observation_into(obs, buffers)
-    for key, value in reference.items():
-        np.testing.assert_array_equal(buffers[key], value, err_msg=key)
-
     mine.used_abilities = list(range(capacity + 1))
     obs.agent_permanents = [mine]
     message = f"observation capacity exceeded: facts {capacity + 1} > {capacity}"
-    with pytest.raises(ValueError, match=message):
-        encoder.encode(obs)
-    with pytest.raises(ValueError, match=message):
-        env.encode_observation(obs, capacity)
-    buffers = encoder.allocate()
-    with pytest.raises(ValueError, match=message):
-        env.encode_observation_into(obs, buffers)
+    with pytest.raises(managym.ObservationCapacity, match=message):
+        encode_observation(space, obs)
 
 
 @pytest.mark.parametrize("frequency", [1, 2])
-def test_waiting_delayed_trigger_rows_agree(frequency: int) -> None:
+def test_waiting_delayed_trigger_rows_name_frequency_and_lifetime(
+    frequency: int,
+) -> None:
     card = "Fatal Fissure" if frequency == 1 else "Ruinous Waterbending"
     env = priority_root((card,), ("Swamp",) * 7, opponent=("Gray Ogre",))
     obs = env.scenario_refresh()
@@ -580,11 +492,7 @@ def test_waiting_delayed_trigger_rows_agree(frequency: int) -> None:
         obs, *_ = env.step(ranked[0])
     else:
         raise AssertionError(f"{card} trigger is not waiting")
-    expected = ObservationEncoder(ObservationConfig()).encode(obs)
-    actual = env.encode_observation(obs)
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
-    relations = actual["relations"]
+    relations = encode_observation(ObservationSpace(), obs)["relations"]
     waiting = relations[:, 3] == 10
     header = relations[waiting & (relations[:, 0] == 1)][0]
     assert header[28] == (1 if frequency == 1 else 3)
@@ -597,7 +505,7 @@ def test_waiting_delayed_trigger_rows_agree(frequency: int) -> None:
         assert remembered[24] == watched[24] > 0
 
 
-def test_transform_parity_and_schedule_relations() -> None:
+def test_transform_fact_and_retained_schedule_relations() -> None:
     env = priority_root((), ("Mountain", "Gray Ogre"))
     obs = env.scenario_refresh()
     mine = obs.agent_permanents[-1]
@@ -635,15 +543,14 @@ def test_transform_parity_and_schedule_relations() -> None:
         frame | {"kind": 11, "source": empty, "mode": 0},
         frame | {"kind": 12, "source": empty, "mode": 1, "attackers": "land creatures"},
     ]
-    frames = managym.parse_continuation_frames_json(json.dumps(frames))
-    encoder = ObservationEncoder(ObservationConfig())
-    expected = encoder.encode(obs)
-    actual = env.encode_observation(obs)
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    space = ObservationSpace()
+    actual = encode_observation(space, obs)
     # Retained frames are read-only: the native environment remains the
-    # execution authority, and offline relation encoding consumes the capture.
-    relations = encoder._encode_relations(frames, obs.agent.player_index)
+    # execution authority, and an offline reader encodes the capture.
+    retained = managym.Observation.from_json(
+        obs.toJSON(), continuation_json=json.dumps(frames)
+    )
+    relations = encode_observation(space, retained)["relations"]
     assert (relations[:, 0] == 7).any(), "inherited definition joins learning tokens"
     frequency = relations[relations[:, 0] == 9]
     assert len(frequency) == 1 and frequency[0, 28] == 2
@@ -661,7 +568,7 @@ def test_saved_action_capacity_is_retained_only_for_the_current_input() -> None:
         ObservationConfig.from_checkpoint({"max_actions": 128})
 
 
-def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> None:
+def test_bumi_scheduled_combat_restriction_is_a_fact_row() -> None:
     env = priority_root((), ("Bumi, Unleashed", "Swamp"), opponent=("Swamp",))
     obs = env.scenario_refresh()
     for _ in range(100):
@@ -687,11 +594,7 @@ def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> No
         obs, *_ = env.step(attack if attack is not None else quiet)
     else:
         raise AssertionError("Bumi's additional combat was not scheduled")
-    expected = ObservationEncoder(ObservationConfig()).encode(obs)
-    actual = env.encode_observation(obs)
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
-    facts = actual["facts"]
+    facts = encode_observation(ObservationSpace(), obs)["facts"]
     restriction = facts[facts[:, FACT_KIND_INDEX] == 10]
     assert len(restriction) == 1 and restriction[0, FACT_OBJECT_INDEX] > 0
     assert "land" in next(
@@ -702,24 +605,26 @@ def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> No
 @pytest.mark.parametrize("capacity", [128, 140, 256, 512])
 def test_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     config = ObservationConfig(max_facts=capacity)
-    encoder = ObservationEncoder(config)
+    space = ObservationSpace(config)
     env = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
-    buffers = allocate_vector_buffers(1, config)
-    env.set_buffers(buffers)
+    buffers = allocate_vector_buffers(space, 1)
+    env.set_buffers(buffers, layout=space.layout)
     obs, _ = env.reset_all(make_player_configs())[0]
     env.reset_seeds_into_buffers([213])
     assert buffers["facts"].shape == (1, capacity, 12)
-    assert_buffer_observation_equal(buffers, 0, encoder.encode(obs))
+    assert_buffer_observation_equal(buffers, 0, encode_observation(space, obs))
     scalar = managym.Env(seed=213, skip_trivial=True)
     scalar.reset(make_player_configs())
     obs, *_ = scalar.step(0)
     env.step_into_buffers([0])
-    assert_buffer_observation_equal(buffers, 0, encoder.encode(obs))
+    assert_buffer_observation_equal(buffers, 0, encode_observation(space, obs))
 
 
-def test_merchant_tap_count_native_reference_and_text_parity() -> None:
+def test_merchant_food_tap_count_is_the_payment_frame_mode() -> None:
+    """Paying with "Tap two untapped Foods" leaves a payment frame whose mode
+    column (a one-based selector) counts the taps still required."""
     env = priority_root(
-        ("Unlucky Cabbage Merchant", "Unlucky Cabbage Merchant"),
+        ("Unlucky Cabbage Merchant", "Unlucky Cabbage Merchant", "Llanowar Elves"),
         ("The Cabbage Merchant", "Forest", "Forest", "Forest", "Forest"),
     )
     owner = env.current_agent_index()
@@ -754,6 +659,10 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
             env.step(index)
         else:
             raise AssertionError("Food creation did not resolve")
+    # Every Forest is tapped; the Foods pay for the Elves.
+    decision = capture_text_decision(env)
+    cast = next(a for a in decision.actions if "Llanowar Elves" in a.description)
+    submit_response(env, decision, cast.reference)
     decision = capture_text_decision(env)
     activation = next(
         action
@@ -762,26 +671,22 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
         and "The Cabbage Merchant" in action.description
     )
     submit_response(env, decision, activation.reference)
-    encoder = ObservationEncoder(ObservationConfig())
+    space = ObservationSpace()
     for remaining in (2, 1):
         actor = env.current_agent_index()
         assert actor is not None
         obs = env.observation_for_player(actor)
         assert obs.continuation[-1].mode == remaining
-        reference = encoder.encode(obs)
-        native = env.encode_observation(obs, encoder.config.max_facts)
-        buffers = encoder.allocate()
-        env.encode_observation_into(obs, buffers)
-        for key, value in reference.items():
-            np.testing.assert_array_equal(native[key], value, err_msg=key)
-            np.testing.assert_array_equal(buffers[key], value, err_msg=key)
+        relations = encode_observation(space, obs)["relations"]
+        valid = relations[relations[:, RELATION_VALID_INDEX] == 1]
+        frame = valid[valid[:, 3] == obs.continuation[-1].kind]
+        assert frame[:, 7].tolist() == [remaining + 1]
         decision = capture_text_decision(env)
         assert f"{remaining} tap selections still required" in decision.text
         assert all(
             "Tap Food to pay" in action.description for action in decision.actions
         )
         submit_response(env, decision, decision.actions[0].reference)
-    assert len(capture_text_decision(env).actions) == 5
 
 
 @pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 25)])
@@ -816,14 +721,11 @@ def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
     obs = env.observation_for_player(actor)
     with pytest.warns(DeprecationWarning) if version < 11 else nullcontext():
         config = ObservationConfig(policy_input_version=version)
-    encoder = ObservationEncoder(config)
-    reference = encoder.encode(obs)
-    scalar = encoder.allocate()
-    env.encode_observation_into(obs, scalar)
-    batch = encoder.allocate(1)
-    assert managym.encode_observations_into([env], batch, 1) == [5]
+    space = ObservationSpace(config)
+    reference = encode_observation(space, obs)
+    batch = space.allocate(1)
+    assert managym.encode_observations_into([env], space.layout, batch, 1) == [5]
     for key, value in reference.items():
-        np.testing.assert_array_equal(scalar[key], value, err_msg=key)
         np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
     actions = reference["actions"]
     assert actions.shape[1] == width
@@ -880,14 +782,11 @@ def test_tap_pays_choice_names_its_payment_and_focuses_the_tapped_creature() -> 
     assert actor is not None
     obs = env.observation_for_player(actor)
     assert [action.mode_index for action in obs.action_space.actions] == [0, 5]
-    encoder = ObservationEncoder(ObservationConfig())
-    reference = encoder.encode(obs)
-    scalar = encoder.allocate()
-    env.encode_observation_into(obs, scalar)
-    batch = encoder.allocate(1)
-    assert managym.encode_observations_into([env], batch, 1) == [2]
+    space = ObservationSpace()
+    reference = encode_observation(space, obs)
+    batch = space.allocate(1)
+    assert managym.encode_observations_into([env], space.layout, batch, 1) == [2]
     for key, value in reference.items():
-        np.testing.assert_array_equal(scalar[key], value, err_msg=key)
         np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
     np.testing.assert_array_equal(reference["actions"][:2, ACTION_MODE_INDEX], [1, 6])
     lions = next(
@@ -895,15 +794,13 @@ def test_tap_pays_choice_names_its_payment_and_focuses_the_tapped_creature() -> 
         for index, permanent in enumerate(obs.agent_permanents)
         if permanent.tapped
     )
-    lions_row = 2 + 2 * encoder.config.max_cards_per_player + lions
+    lions_row = 2 + 2 * space.config.max_cards_per_player + lions
     np.testing.assert_array_equal(
         reference["action_focus"][:2], [[lions_row, -1], [lions_row, -1]]
     )
 
 
-def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_parity() -> (
-    None
-):
+def test_scout_s_warning_record_and_minus_counters_reach_text_and_facts() -> None:
     env = priority_root(("Scout's Warning", "Gray Ogre"), ("Plains", "Gray Ogre"))
     owner = env.current_agent_index()
     assert owner is not None
@@ -939,58 +836,62 @@ def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_par
         "the next creature card cast can be cast as though it had flash"
         in decision.text
     )
-    encoder = ObservationEncoder(ObservationConfig())
-    unchanged = encoder.encode(obs)["facts"]
+    space = ObservationSpace()
     permanents = obs.agent_permanents
-    ogre = next(p for p in permanents if p.power is not None)
+    index, ogre = next(
+        (i, p) for i, p in enumerate(permanents) if p.characteristics.power is not None
+    )
     ogre.counters = {"minus_one_minus_one": 1}
     obs.agent_permanents = [ogre if p.id == ogre.id else p for p in permanents]
-    reference = encoder.encode(obs)
-    assert not np.array_equal(reference["facts"], unchanged), "counter fact row"
-    native = env.encode_observation(obs, encoder.config.max_facts)
-    buffers = encoder.allocate()
-    env.encode_observation_into(obs, buffers)
-    for key, value in reference.items():
-        np.testing.assert_array_equal(native[key], value, err_msg=key)
-        np.testing.assert_array_equal(buffers[key], value, err_msg=key)
+    facts = encode_observation(space, obs)["facts"]
+    counters = facts[
+        (facts[:, FACT_VALID_INDEX] == 1) & (facts[:, FACT_KIND_INDEX] == FACT_COUNTER)
+    ]
+    token = managym.catalog_token_value("CounterKind::minus_one_minus_one")
+    own = 2 + 2 * space.config.max_cards_per_player
+    assert counters[
+        :, [FACT_OBJECT_INDEX, FACT_ID_INDEX + 1, FACT_VALUE_INDEX]
+    ].tolist() == [[own + index + 1, token & 0xFFFF, pytest.approx(0.1)]]
 
 
-@pytest.mark.parametrize("version", [9, 10, 11])
-@pytest.mark.parametrize("history", [0, 1])
-def test_every_input_layout_agrees_natively_on_elemental_games(
-    version: int, history: int
-) -> None:
-    """Python and native agree for the deprecated v9/v10 rows and input
-    v11's one-token rows, with and without public history, over Elemental
-    games whose stacks hold spells and abilities."""
-    with pytest.warns(DeprecationWarning) if version < 11 else nullcontext():
-        config = ObservationConfig(
-            policy_input_version=version,
-            policy_history_version=history,
-            max_cards_per_player=128,
-        )
-    encoder = ObservationEncoder(config)
-    rng = np.random.default_rng(version * 10 + history)
-    env = managym.Env(seed=7, skip_trivial=True)
-    stack_rows = 0
-    for left, right in (("ug", "bg"), ("bg", "ug")):
-        match = Match(
-            MatchConfig.authored(
-                "elemental-world-v2", "elemental_" + left, "elemental_" + right
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_v9_card_rows_also_list_stack_spells_and_battlefield_objects() -> None:
+    """Deprecated v9 card rows hold each side's v11 cards, then its stack
+    spells, then its battlefield objects; v11 lists each thing once."""
+    env = priority_root(("Lightning Bolt",), ("Mountain", "Gray Ogre"))
+    obs = env.scenario_refresh()
+    bolt = next(
+        index
+        for index, action in enumerate(obs.action_space.actions)
+        if int(action.action_type) == ActionEnum.PRIORITY_CAST_SPELL
+    )
+    obs, *_ = env.step(bolt)
+    for _ in range(8):
+        if obs.stack_objects:
+            break
+        actions = obs.action_space.actions
+        obs, *_ = env.step(
+            next(
+                (
+                    i
+                    for i, action in enumerate(actions)
+                    if int(action.action_type)
+                    in (ActionEnum.CHOOSE_TARGET, ActionEnum.PAY_COST)
+                ),
+                0,
             )
         )
-        obs, _ = env.reset(match.to_rust())
-        for _ in range(400):
-            expected = encoder.encode(obs)
-            buffers = encoder.allocate()
-            env.encode_observation_into(obs, buffers)
-            for key, value in expected.items():
-                np.testing.assert_array_equal(buffers[key], value, err_msg=key)
-            assert ("stack" in buffers) == (version == 11)
-            if version == 11:
-                stack_rows += int(buffers["stack_valid"].sum())
-            if obs.game_over:
-                break
-            obs, *_ = env.step(random_valid_action(obs, rng))
-    if version == 11:
-        assert stack_rows > 0
+    assert len(obs.stack_objects) == 1
+    v11 = encode_observation(ObservationSpace(), obs)
+    v9 = encode_observation(
+        ObservationSpace(ObservationConfig(policy_input_version=9)), obs
+    )
+    cards = len(obs.agent_cards)
+    permanents = len(obs.agent_permanents)
+    assert int(v11["agent_cards_valid"].sum()) == cards
+    assert int(v11["stack_valid"].sum()) == 1
+    assert "stack" not in v9
+    assert int(v9["agent_cards_valid"].sum()) == cards + 1 + permanents
+    zone = v9["agent_cards"][:, :7].argmax(axis=1)
+    assert zone[cards] == ZoneEnum.STACK
+    assert (zone[cards + 1 : cards + 1 + permanents] == ZoneEnum.BATTLEFIELD).all()

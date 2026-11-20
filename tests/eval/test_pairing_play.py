@@ -12,7 +12,7 @@ import torch
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.eval import pairing
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import blank_decision_memory, build
@@ -116,7 +116,7 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
         assert request.authored_matchup is not None
         env = managym.Env(seed=123)
         env.reset(EnvMatch(request.authored_matchup.match()).to_rust())
-        rows = space.encode(env.observation_for_player(0))["decklists"]
+        rows = encode_observation(space, env.observation_for_player(0))["decklists"]
         assert rows[0].any()
         assert bool(rows[1].any()) == (disclosure == "open")
         assert request.opponent.player_spec.get("blank_decision_memory", False) == blank

@@ -12,7 +12,7 @@ from manabot.backends import resolve
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
 from manabot.belief.sampling_types import SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import Prepared
@@ -457,7 +457,7 @@ def test_batch_rejects_incomplete_and_nonfinite_rows(
             narrow,
             "space",
             ObservationSpace(
-                narrow.space.encoder.config.model_copy(
+                narrow.space.config.model_copy(
                     update={"max_actions": 1, "action_overflow": "first-legal"}
                 )
             ),
@@ -500,8 +500,8 @@ def test_batch_inputs_match_python_at_selected_capacities(
     engines = [env._engine, branch, env._engine]
     witnesses = [engine.search_witness_json() for engine in engines]
     expected = [
-        teacher.space.encode(
-            engine.observation_for_player(engine.current_agent_index())
+        encode_observation(
+            teacher.space, engine.observation_for_player(engine.current_agent_index())
         )
         for engine in engines
     ]

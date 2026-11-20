@@ -17,6 +17,7 @@ from weakref import WeakValueDictionary
 import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS
+from manabot.env.observation import column, columns
 from manabot.policy.decision_memory import (
     MemoryCursor,
     admit_chunk,
@@ -29,6 +30,15 @@ if TYPE_CHECKING:
 
 MemoryCapacities = tuple[int, int, int, int]
 _CHUNK_ROWS = 32
+_RECORD_LAST_HIGH, _RECORD_LAST_LOW = columns(
+    "decision_records", "last_high", "last_low"
+)
+_RECORD_COUNTS = slice(
+    column("decision_records", "mana_count"),
+    column("decision_records", "choice_count") + 1,
+)
+_REFERENCE_DETAIL_COUNT = column("decision_references", "detail_count")
+_MEMBER_REFERENCE = column("decision_members", "reference")
 
 
 @dataclass(frozen=True, eq=False, slots=True, weakref_slot=True)
@@ -240,13 +250,15 @@ def _record_chunk(
     base = node.previous.cursor if node.previous else MemoryCursor()
     for index in range(start, len(records)):
         header = records[index : index + 1]
-        member_end = member_start + int(header[0, 15:18].sum(dtype=np.float64))
+        member_end = member_start + int(header[0, _RECORD_COUNTS].sum(dtype=np.float64))
         joins = members[member_start - base.members : member_end - base.members]
-        reference_end = int(joins[:, 0].max(initial=reference_start))
+        reference_end = int(joins[:, _MEMBER_REFERENCE].max(initial=reference_start))
         snapshots = references[
             reference_start - base.references : reference_end - base.references
         ]
-        detail_end = detail_start + int(snapshots[:, 11].sum(dtype=np.float64))
+        detail_end = detail_start + int(
+            snapshots[:, _REFERENCE_DETAIL_COUNT].sum(dtype=np.float64)
+        )
         blocks = (
             header,
             details[detail_start - base.details : detail_end - base.details],
@@ -264,7 +276,11 @@ def _record_chunk(
                 for a, b in zip(candidate.rows, blocks, strict=True)
             )
         ):
-            end = int(header[0, 8]) * 65536 + int(header[0, 9]) + 1
+            end = (
+                int(header[0, _RECORD_LAST_HIGH]) * 65536
+                + int(header[0, _RECORD_LAST_LOW])
+                + 1
+            )
             candidate = RecordNode(
                 parent,
                 blocks,

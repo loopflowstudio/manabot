@@ -10,7 +10,7 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import DECKLIST_DIM, ObservationSpace
+from manabot.env.observation import DECKLIST_DIM, ObservationSpace, encode_observation
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.managym.experience_projection import serialize_observation
 from manabot.policy.prepare import Prepared
@@ -47,14 +47,16 @@ def _policy() -> ActorCritic:
 def _prepared(
     space: ObservationSpace, obs: managym.Observation
 ) -> Prepared[np.ndarray]:
-    return _policy().prepare({k: v[None] for k, v in space.encode(obs).items()})
+    return _policy().prepare(
+        {k: v[None] for k, v in encode_observation(space, obs).items()}
+    )
 
 
 def _assert_same_view(a: managym.Observation, b: managym.Observation) -> None:
     """Viewer JSON, every encoded buffer and the Prepared input all agree."""
     space = ObservationSpace()
     assert a.toJSON() == b.toJSON()
-    left, right = space.encode(a), space.encode(b)
+    left, right = encode_observation(space, a), encode_observation(space, b)
     for key, value in left.items():
         np.testing.assert_array_equal(value, right[key], err_msg=key)
     np.testing.assert_equal(asdict(_prepared(space, a)), asdict(_prepared(space, b)))
@@ -85,23 +87,18 @@ def test_opponent_lists_appear_exactly_when_open(decklists: DecklistDisclosure) 
     else:
         assert fields == (None, None, None, None)
 
-    # Python reference and native encoders agree.
+    # The policy input flags disclosure for both viewers and encodes open lists.
     space = ObservationSpace(ObservationConfig())
     assert obs.decklists_closed == (decklists == "closed")
     for viewer in (0, 1):
-        view = env.observation_for_player(viewer)
-        encoded = space.encode(view)
-        native_buffers = env.encode_observation(view)
+        encoded = encode_observation(space, env.observation_for_player(viewer))
         for key in ("agent_player", "opponent_player"):
             assert encoded[key][0, -1] == float(decklists == "open")
-            np.testing.assert_array_equal(encoded[key], native_buffers[key])
-    python = space.encode(obs)["decklists"]
-    native = env.encode_observation(obs)["decklists"]
-    assert python.shape == native.shape == (2, 60, DECKLIST_DIM)
-    np.testing.assert_array_equal(python, native)
-    assert python[0, :, 1].sum() == 41
-    assert python[1, :, 1].sum() == (40 if decklists == "open" else 0)
-    assert not python[1].any() if decklists == "closed" else python[1].any()
+    lists = encode_observation(space, obs)["decklists"]
+    assert lists.shape == (2, 60, DECKLIST_DIM)
+    assert lists[0, :, 1].sum() == 41
+    assert lists[1, :, 1].sum() == (40 if decklists == "open" else 0)
+    assert not lists[1].any() if decklists == "closed" else lists[1].any()
 
     # LLM text and the Academy projection carry the same disclosure.
     text = capture_text_decision(env).text
@@ -195,7 +192,8 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
     ]
     assert opened[0].toJSON() != opened[1].toJSON()
     assert not np.array_equal(
-        space.encode(opened[0])["decklists"], space.encode(opened[1])["decklists"]
+        encode_observation(space, opened[0])["decklists"],
+        encode_observation(space, opened[1])["decklists"],
     )
     assert not np.array_equal(
         _prepared(space, opened[0]).deck_rows, _prepared(space, opened[1]).deck_rows
@@ -241,7 +239,7 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
     for _ in range(3000):
         if owner is not None:
             view = env.observation_for_player(1 - owner)
-            encoded = space.encode(view)
+            encoded = encode_observation(space, view)
             assert not encoded["decklists"][1].any()
             prepared = _policy().prepare({k: v[None] for k, v in encoded.items()})
             assert revealed is not None

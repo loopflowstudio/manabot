@@ -175,10 +175,10 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
-  The session strip always shows **Rematch** (mid-game it asks to stop the
-  game), so detect the end by a second Rematch button, in the "Game Over"
-  dialog (`getByRole('button', {name: 'Rematch', exact: true}).count() >= 2`),
-  and bound play loops by time, since the bot can win first. Live bot work
+  The configured-launch table (`managym academy play`) has no Rematch in its
+  header, so detect the end by the right panel's "Game over — no next
+  decision." text (or one Rematch button), not by counting two Rematch
+  buttons, and bound play loops by time, since the bot can win first. Live bot work
   ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
   needs the owner credential from the same browser profile; a fresh browser
   context gets 403. Games-page Replay links are labelled `Replay game <id>`;
@@ -229,7 +229,7 @@ publish, land or choose the next Graph step from here.
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
   seconds that receipts still equal main's, field for field; the
   `--rollout-evidence`/`--native-encoder` arms check that full evidence and
-  the Python encoder still match the compact, native defaults. To play
+  per-row encoding still match the compact, batched defaults. To play
   games, build two players per arm with `make_player` and drive `act`,
   `prepare_step`, `env.step_semantic` and `observe_step` as
   `manabot/sim/native_game.py` does; the default `decision_seconds=1` times
@@ -359,7 +359,7 @@ publish, land or choose the next Graph step from here.
 - Policy vocabulary/admission changes (`record_vocabulary.rs`, token kinds,
   `manabot/policy/admission.py`): the consumer is training's catalog policy.
   Script a directed `managym.Env` game that reaches the runtime program,
-  `space.encode` each decision at `ObservationConfig(policy_input_version=10)`
+  `encode_observation(space, obs)` each decision at `ObservationConfig(policy_input_version=10)`
   and pass it through `manabot.verify.record_coverage._embed` with a tiny
   catalog `ActorCritic`, as `coverage_sweep` does. Find decisions carrying a
   token by scanning encoded buffers for its u32 as adjacent 16-bit halves
@@ -372,6 +372,14 @@ publish, land or choose the next Graph step from here.
   `-o /tmp/<dir>/wheels`, restore the source at once, unzip the wheel into
   `/tmp/<dir>/site` and run with `PYTHONPATH=/tmp/<dir>/site` (print
   `managym.__file__`); admission must then fail at the first such decision.
+- Tests that fail locally may fail on the base too. Classify them by running
+  the base tree's own tests with this checkout's interpreter: from the base
+  worktree, `PYTHONPATH=<worktree> <checkout>/.venv/bin/python -m pytest <files>`
+  (print `managym.__file__` and `manabot.__file__` first). Viewer JSON changes
+  need a per-decision base comparison of `semantic_observation_json(v)` for
+  both seats and `search_witness_json()`: these bytes bind Academy frames,
+  decision captures and search witnesses, and retained fixtures rarely cover
+  live history.
 - "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
   <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
   /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into
@@ -488,7 +496,7 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
-- Training game journals (`diagnostics: detailed`): run `etude train manabot/recipes/local.py --experiment NAME --config '{"updates": 200, "diagnostics": "detailed"}'` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `SelfPlay.workers=2` gives sharded files.
+- Training game journals (`diagnostics: detailed`): run `etude train manabot/recipes/local.py --experiment NAME --config '{"updates": 200, "diagnostics": "detailed"}'` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`; the dev venv has no `safetensors` package, so read the little-endian u64 header length, the JSON header and each tensor's `data_offsets` slice directly); `SelfPlay.workers=2` gives sharded files.
 - Standalone statistics/recording: stage and install an engine-only wheel into a
   fresh venv, then run the two Python examples in `docs/engine-python.md` outside
   the checkout. Play the same seeded authored game with neither option, statistics

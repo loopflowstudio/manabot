@@ -18,10 +18,13 @@ import time
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    allocate_vector_buffers,
+)
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import Backend, BackendPolicy
-from manabot.sim.rollout import allocate_buffers
 from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
 # -----------------------------------------------------------------------------
@@ -123,7 +126,7 @@ class _ValueLeafScorer:
 
     def _ensure_buffers(self, capacity: int) -> dict[str, np.ndarray]:
         if self._buffers is None or self._capacity < capacity:
-            self._buffers = allocate_buffers(self._obs_space, capacity)
+            self._buffers = allocate_vector_buffers(self._obs_space, capacity)
             self._capacity = capacity
         return self._buffers
 
@@ -138,7 +141,7 @@ class _ValueLeafScorer:
         pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
         num_slots = pool.num_slots
         buffers = self._ensure_buffers(num_slots)
-        pool.set_buffers(buffers, self._capacity)
+        pool.set_buffers(buffers, self._capacity, layout=self._obs_space.layout)
         active = pool.encode_active()
 
         for _ in range(self.depth):

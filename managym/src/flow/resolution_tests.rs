@@ -3876,7 +3876,7 @@ fn determinize_keeps_a_pending_library_top_cast_for_its_chooser() {
 }
 
 /// Equal current choices can retain different work. These are constructed
-/// positions, serialized for the stateless Python encoder/model witness below.
+/// positions, serialized for the Python model witness below.
 #[test]
 fn effect_execution_inputs_separate_results_iteration_and_completion() {
     use crate::agent::observation::Observation;

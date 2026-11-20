@@ -753,6 +753,8 @@ pub struct ArrayLayout {
     /// Masks, semantic_cards and action_focus have no feature axis.
     pub element: Option<ValueLayout>,
     pub row_kinds: BTreeMap<u8, &'static str>,
+    /// Each row kind's name, for consumers that read kinds by name.
+    pub row_kind_names: BTreeMap<&'static str, u8>,
 }
 
 impl ArrayLayout {
@@ -768,6 +770,7 @@ impl ArrayLayout {
             columns: columns.to_vec(),
             element: None,
             row_kinds: BTreeMap::new(),
+            row_kind_names: BTreeMap::new(),
         }
     }
 
@@ -784,25 +787,27 @@ impl ArrayLayout {
             columns: Vec::new(),
             element: Some(element),
             row_kinds: BTreeMap::new(),
+            row_kind_names: BTreeMap::new(),
         }
     }
 }
 
-fn fact_row_kind(kind: FactKind) -> &'static str {
+/// A fact kind's name and what its row holds.
+fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
-        FactKind::Counter => "id: CounterKind token; value: count / 10",
-        FactKind::AddedSubtype => "id: added subtype token; value: 1",
-        FactKind::SetName => "id: set-name token; value: 1",
-        FactKind::SetCreatureType => "id: creature-type token; value: 1",
-        FactKind::UsedAbility => "id: zero-based activated ability index; value: 1",
-        FactKind::Copy => "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2",
-        FactKind::CopyException => "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance",
-        FactKind::Transforms => "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count",
-        FactKind::CombatRestriction => "id: frame index + 1; detail: attacker-predicate token",
-        FactKind::EffectProgram => "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance) or Ward (a permanent's ward price that is not a mana value, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal",
-        FactKind::EffectiveColor => "id: Color token (Colorless for empty colors); value: 1",
-        FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
-        FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",
+        FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
+        FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
+        FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
+        FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
+        FactKind::UsedAbility => ("used_ability", "id: zero-based activated ability index; value: 1"),
+        FactKind::Copy => ("copy", "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2"),
+        FactKind::CopyException => ("copy_exception", "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance"),
+        FactKind::Transforms => ("transforms", "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count"),
+        FactKind::CombatRestriction => ("combat_restriction", "id: frame index + 1; detail: attacker-predicate token"),
+        FactKind::EffectProgram => ("effect_program", "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance) or Ward (a permanent's ward price that is not a mana value, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal"),
+        FactKind::EffectiveColor => ("effective_color", "id: Color token (Colorless for empty colors); value: 1"),
+        FactKind::KeywordCounterTimestamp => ("keyword_counter_timestamp", "id: CounterKind token; timestamp: counter timestamp rank"),
+        FactKind::ContinuationProgram => ("continuation_program", "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0"),
     }
 }
 
@@ -834,6 +839,59 @@ pub fn decision_memory_layout() -> BTreeMap<String, ArrayLayout> {
             ArrayLayout::features(&["opponent_member"], &[None], decision_member::COLUMNS),
         ),
     ])
+}
+
+/// Resolve each variable extent once, at the capacities the encoder will use.
+pub fn configured_arrays(
+    config: &super::observation_encoder::ObservationEncoderConfig,
+) -> Result<BTreeMap<String, ArrayLayout>, String> {
+    let memory = [
+        config.max_decision_records,
+        config.max_decision_references,
+        config.max_decision_reference_details,
+        config.max_decision_members,
+    ];
+    if memory.contains(&0) && memory.iter().any(|&n| n != 0) {
+        return Err(String::from(
+            "decision memory requires all companion capacities",
+        ));
+    }
+    if config.policy_history && config.max_events > crate::agent::policy_history::HISTORY_LIMIT {
+        return Err(String::from("public history v1 requires 1..32 rows"));
+    }
+    let mut arrays = observation_layout(config.policy_history, config.turn_state, config.layout);
+    if config.max_decision_records > 0 {
+        if config.layout == InputLayout::Legacy {
+            return Err(String::from("decision memory requires policy input v11"));
+        }
+        arrays.extend(decision_memory_layout());
+    }
+    for array in arrays.values_mut() {
+        for (extent, axis) in array.shape.iter_mut().zip(&array.axes) {
+            if extent.is_some() {
+                continue;
+            }
+            let n = match *axis {
+                "card" | "definition" => config.max_cards_per_player,
+                "permanent" => config.max_permanents_per_player,
+                "stack" => config.max_stack_objects,
+                "action" => config.max_actions,
+                "focus" => config.max_focus_objects,
+                "event" => config.max_events,
+                "fact" => config.max_facts,
+                "opponent_record" => config.max_decision_records,
+                "opponent_reference" => config.max_decision_references,
+                "opponent_reference_detail" => config.max_decision_reference_details,
+                "opponent_member" => config.max_decision_members,
+                _ => unreachable!("unknown configurable axis {axis}"),
+            };
+            if n == 0 {
+                return Err(format!("{axis} capacity must be positive"));
+            }
+            *extent = Some(n);
+        }
+    }
+    Ok(arrays)
 }
 
 /// Every array `encode` writes, keyed by its buffer name, without allocating
@@ -955,7 +1013,11 @@ pub fn observation_layout(
     let mut facts = ArrayLayout::features(&["fact"], &[None], fact::COLUMNS);
     facts.row_kinds = FactKind::ALL
         .into_iter()
-        .map(|kind| (kind as u8, fact_row_kind(kind)))
+        .map(|kind| (kind as u8, fact_row_kind(kind).1))
+        .collect();
+    facts.row_kind_names = FactKind::ALL
+        .into_iter()
+        .map(|kind| (fact_row_kind(kind).0, kind as u8))
         .collect();
     layout.insert("facts".into(), facts);
     layout.insert(
@@ -968,7 +1030,10 @@ pub fn observation_layout(
         (2, "Subtype token in value_high/value_low"),
         (3, "Color token in value_high/value_low"),
     ]);
-    for kind in 11..=19 {
+    details.row_kind_names = BTreeMap::from([("keyword", 1), ("subtype", 2), ("color", 3)]);
+    for (name, token) in super::shared_effects::PROGRAM_DETAIL_KINDS {
+        let kind = super::shared_effects::program_detail_kind(token as u16) as u8;
+        details.row_kind_names.insert(name, kind);
         details.row_kinds.insert(kind, "Catalog token: TokenKind = kind - 10; exact signed i32 value in value_high/value_low; row order is program order");
     }
     layout.insert("effect_details".into(), details);

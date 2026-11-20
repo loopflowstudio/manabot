@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from manabot.backends.torch.policy import PolicyInference
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 import managym
 
 
@@ -18,11 +18,9 @@ def evaluate_observation(
     run only the observation forward instead of re-encoding the catalog.
     """
     count = len(observation.action_space.actions)
-    if count > space.encoder.max_actions:
-        space = ObservationSpace(
-            space.encoder.config.model_copy(update={"max_actions": count})
-        )
-    encoded = space.encode(observation)
+    if count > space.config.max_actions:
+        space = ObservationSpace(space.config.model_copy(update={"max_actions": count}))
+    encoded = encode_observation(space, observation)
     with torch.no_grad():
         logits, value = scope.agent(
             scope.prepare(

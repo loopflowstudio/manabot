@@ -135,8 +135,15 @@ Collector or batch-closure changes also require
 Fixtures asserting exact rollout shapes or transition counts must explicitly
 select `batch_closure="exact-quota"` as well as one learning seat; whole-game
 closure treats the transition quota as a minimum.
-Run the existing encoder tests alongside cutoff/parity fixtures so callers of
-changed private helpers are checked too. Action overflow is checked at the
+The native encoder is the only one, so an observation change is written once
+in `managym/src/agent/` with a directed test that asserts its named columns or
+rows on a constructed position, and its `observability.rs` entry. Python
+names a column it reads by its native name (`column("facts", "value")` in
+`manabot/env/observation.py`), and `ObservationSpace` takes every shape from
+its native `layout`, so moving or widening a column needs no
+Python edit; renaming one fails the import. Run
+`uv run --extra dev pytest tests/env/test_named_observation_layout.py -q`
+after changing the layout. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
 Changes to effects or runtime token registration require the
 [effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
@@ -155,8 +162,8 @@ includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
 `tests/sim/test_local_update.py` checks the defaults, compact rollout evidence
-and native frontier encoding, against full evidence and the Python per-branch
-encoder: the same roots and seeds must choose identical Commands and write
+and native frontier encoding, against full evidence and per-branch
+encoding: the same roots and seeds must choose identical Commands and write
 identical tensors. It also checks that v3 receipts and registrations omitting
 `rollout_evidence` still read as full evidence. A change to
 `managym.encode_observations_into` also runs `tests/env/test_observation.py`
@@ -716,23 +723,19 @@ and `allocated_bytes` instead of `ms`; setup and root forks stay outside the
 counted region. These are allocation requests and traffic, not live heap size.
 Keep counting disabled for timing comparisons.
 
-The Python-side layers read the same states (the Rust harness prints their
-recipes with `--recipes`) and report time only:
+The LLM text renderer reads the same states (the Rust harness prints their
+recipes with `--recipes`) and reports time only:
 
 ```bash
 uv run --extra play python scripts/bench_states.py diverse-mana
 ```
 
-It adds `encode-py` (the Python policy-input encoder) and `text` (the LLM text
-renderer) time rows. `--recipes` exports the exact native observation and
-atomic decision capture beside each recipe, so both consumers see the same
-checkpoint, including separately serialized continuation frames via
-`Observation.from_json(..., continuation_json=...)`. Academy frame construction
-requires a live Academy session and is not measured here.
-`--recipes-file <path>` reuses an export; `--layers encode-py` selects one
-consumer. The script uses the installed extension, so rebuild after Rust changes.
-Both encoders use input v10 with capacities expanded to hold the complete state;
-neither truncates actions or facts.
+It adds `text` time rows. `--recipes` exports the exact native observation and
+atomic decision capture beside each recipe, so the renderer sees the same
+checkpoint as the Rust layers, including separately serialized continuation
+frames. Academy frame construction requires a live Academy session and is not
+measured here. `--recipes-file <path>` reuses an export. The script uses the
+installed extension, so rebuild after Rust changes.
 
 **Using it.** When a change adds or alters payment, choice, targeting,
 enumeration or continuous-effect behavior, run the states whose shape it could

@@ -1,17 +1,11 @@
-"""
-test_observation.py
-Tests for observation encoding in manabot using minimal test configurations.
+"""Observation space layout and native encoding with minimal capacities.
 
-This test suite verifies:
-1. Parity between Python and managym enums for game state representation
-2. ObservationEncoder produces expected tensor shapes and keys
-3. Validity masks accurately reflect game objects
-4. Object-to-index mapping is consistent
-5. Cross-observation independence
-6. Focus indices validity
+Covers the Python enum mirrors, the space's keys and shapes, validity masks,
+feature normalization, focus indices, events and action-capacity refusal.
+Capacity refusal for cards, permanents and focus is in
+`tests/verify/test_native_buffer_capacities.py`.
 """
 
-from types import SimpleNamespace
 from typing import Tuple
 
 import numpy as np
@@ -22,11 +16,11 @@ from manabot.env.observation import (
     EventEntityKindEnum,
     EventTypeEnum,
     ObservationConfig,
-    ObservationEncoder,
     ObservationSpace,
     PhaseEnum,
     StepEnum,
     ZoneEnum,
+    encode_observation,
 )
 import managym
 
@@ -35,7 +29,7 @@ import managym
 
 @pytest.fixture(scope="session")
 def config():
-    """Create an encoder with minimal dimensions for testing."""
+    """A configuration with minimal capacities for testing."""
     return ObservationConfig(
         max_cards_per_player=8,
         max_permanents_per_player=2,
@@ -45,14 +39,8 @@ def config():
 
 
 @pytest.fixture(scope="session")
-def encoder(config):
-    """Create an observation encoder for testing."""
-    return ObservationEncoder(config)
-
-
-@pytest.fixture(scope="session")
 def observation_space(config):
-    """Create an observation space using our test encoder."""
+    """The observation space of the minimal configuration."""
     return ObservationSpace(config)
 
 
@@ -197,18 +185,18 @@ class TestEnumParity:
         assert int(cpp_enum) == py_enum
 
 
-class TestObservationEncoder:
-    """Test the observation encoder's core functionality."""
+class TestObservationSpace:
+    """The space's capacities, keys and shapes."""
 
     def test_default_padding_targets_202_objects(self):
         # 2 players + 60 cards x 2 + 40 permanents x 2 (permanent capacity
         # raised 30 -> 40: token-heavy GW games exceeded 30 battlefield
         # entries and truncated).
-        default_encoder = ObservationEncoder(ObservationConfig())
+        default_space = ObservationSpace(ObservationConfig())
         total_objects = (
             2
-            + default_encoder.cards_per_player * 2
-            + default_encoder.perms_per_player * 2
+            + default_space.config.max_cards_per_player * 2
+            + default_space.config.max_permanents_per_player * 2
         )
         assert total_objects == 202
 
@@ -257,7 +245,7 @@ class TestObservationEncoder:
         self, observation_space: ObservationSpace, observation: managym.Observation
     ) -> None:
         """Test that encoding produces arrays with correct shapes and no invalid values."""
-        encoded = observation_space.encode(observation)
+        encoded = encode_observation(observation_space, observation)
 
         # Verify all expected keys are present
         expected_keys = self.get_expected_keys()
@@ -274,7 +262,7 @@ class TestObservationEncoder:
 
     def test_validity_masks(self, observation_space, observation, config):
         """Test that validity masks correctly reflect the game state."""
-        encoded = observation_space.encode(observation)
+        encoded = encode_observation(observation_space, observation)
 
         # Check cards validity
         agent_cards_valid = encoded["agent_cards_valid"]
@@ -304,7 +292,7 @@ class TestObservationEncoder:
     def test_player_features_include_turn_and_are_normalized(
         self, observation_space, observation
     ):
-        encoded = observation_space.encode(observation)
+        encoded = encode_observation(observation_space, observation)
 
         for key, player in (
             ("agent_player", observation.agent),
@@ -329,7 +317,7 @@ class TestObservationEncoder:
     def test_card_and_permanent_features_are_partitioned_and_normalized(
         self, observation_space, observation, config
     ):
-        encoded = observation_space.encode(observation)
+        encoded = encode_observation(observation_space, observation)
 
         for i, card in enumerate(observation.agent_cards):
             vec = encoded["agent_cards"][i]
@@ -355,27 +343,9 @@ class TestObservationEncoder:
             assert vec[0] == pytest.approx(0.0)
             assert vec[2] == pytest.approx(perm.damage / 10.0)
 
-    def test_object_index_mapping(self, observation_space, observation, config):
-        """Test that object IDs are mapped to consistent indices."""
-        observation_space.encode(observation)
-        mapping = observation_space.encoder.object_to_index
-
-        # Find a sample card ID
-        if observation.agent_cards:
-            card_id = observation.agent_cards[0].id
-            assert card_id in mapping, "Card ID not found in mapping"
-            idx = mapping[card_id]
-            # Index should be after players but before max objects
-            total_objects = (
-                2
-                + config.max_cards_per_player * 2
-                + config.max_permanents_per_player * 2
-            )
-            assert 2 <= idx < total_objects
-
     def test_focus_indices(self, observation_space, observation, config):
         """Test that action focus indices are valid."""
-        encoded = observation_space.encode(observation)
+        encoded = encode_observation(observation_space, observation)
         focus = encoded["action_focus"]
 
         # Calculate valid range for focus indices
@@ -388,7 +358,7 @@ class TestObservationEncoder:
         assert valid.all(), f"Invalid focus indices found: {focus[~valid]}"
 
     def test_event_features_round_trip(self, observation_space, observation, config):
-        encoded = observation_space.encode(observation)
+        encoded = encode_observation(observation_space, observation)
         learning_events = [
             event
             for event in observation.recent_events
@@ -421,53 +391,13 @@ class TestObservationEncoder:
     ) -> None:
         count = len(observation.action_space.actions)
         assert count > 1
-        encoder = ObservationEncoder(ObservationConfig(max_actions=count - 1))
+        space = ObservationSpace(ObservationConfig(max_actions=count - 1))
         with pytest.raises(
-            ValueError, match=rf"capacity exceeded: actions {count} > {count - 1}"
+            managym.ObservationCapacity,
+            match=rf"capacity exceeded: actions {count} > {count - 1}",
         ):
-            encoder.encode(observation)
+            encode_observation(space, observation)
         assert len(observation.action_space.actions) == count
-
-    @pytest.mark.parametrize(
-        "method, capacity, label",
-        [
-            ("_encode_cards", "max_cards_per_player", "Card list"),
-            ("_encode_perms", "max_permanents_per_player", "Permanent list"),
-        ],
-    )
-    def test_object_capacity_rejects_omitted_objects(self, method, capacity, label):
-        encoder = ObservationEncoder(ObservationConfig(**{capacity: 1}))
-        objects = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
-        # Card rows also read the viewer and turn for cast permissions.
-        context = {"viewer": 0, "turn": 1} if method == "_encode_cards" else {}
-        with pytest.raises(ValueError, match=f"capacity exceeded: {label} 2 > 1"):
-            getattr(encoder, method)(objects, is_mine=1.0, **context)
-        assert encoder.object_to_index == {}
-
-    def test_focus_capacity_rejects_partial_action(self) -> None:
-        encoder = ObservationEncoder(ObservationConfig(max_focus_objects=1))
-        encoder.object_to_index = {1: 0, 2: 1}
-        obs = SimpleNamespace(
-            action_space=SimpleNamespace(
-                actions=[
-                    SimpleNamespace(
-                        action_type=0,
-                        focus=[1, 2],
-                        declared=None,
-                        mode_index=None,
-                        ability_index=None,
-                        continuation_index=None,
-                        name_index=None,
-                        name_definition=None,
-                        name_group=None,
-                        pays_directly=False,
-                        announces_x=False,
-                    )
-                ]
-            )
-        )
-        with pytest.raises(ValueError, match="capacity exceeded: action focus"):
-            encoder._encode_actions(obs.action_space.actions)
 
 
 if __name__ == "__main__":

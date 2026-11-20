@@ -334,9 +334,9 @@ relabels an existing experiment's receipts or registrations.
 ### Native frontier encoding
 
 Each teacher keeps frontier buffers from
-`ObservationEncoder.allocate(capacity)` for its whole life. Native code writes
+`ObservationSpace.allocate(capacity)` for its whole life. Native code writes
 every live branch's acting-player observation into these buffers with one call,
-`managym.encode_observations_into(envs, buffers, capacity)`, which returns each
+`managym.encode_observations_into(envs, space.layout, buffers, capacity)`, which returns each
 row's legal-action count. The buffers grow only when a frontier exceeds their
 capacity, and rows past the live frontier are left untouched. The tensor layout
 is the checkpoint's own, and every legal action is still required. The encoder
@@ -346,14 +346,16 @@ use it without changing their identity.
 
 `LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
 `"native_encoder": false` beside `"config"` in a `make_player` spec, instead
-allocates a fresh batch for each frontier forward and fills its rows one branch
-at a time in Python. Use it to compare encoders; both write identical tensors.
+allocates a fresh batch for each frontier forward and fills its rows with one
+`managym.encode_observation_into` call per branch. The same native encoder
+writes both, so the tensors are identical; the switch selects one batched call
+or one call per row, and its name is kept because saved specs carry it.
 
 A teacher reuses its buffers between calls, so only one search may use it at a
 time; give each concurrent search its own teacher. An extension without the
 batch writer, or a buffer whose shape, dtype or writability does not match the
 selected observation space, raises before any inference. Search never falls
-back to the Python encoder: rebuild the extension, or select
+back to per-row encoding: rebuild the extension, or select
 `native_encoder=False` explicitly.
 
 ### Inference threads

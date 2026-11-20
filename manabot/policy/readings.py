@@ -38,7 +38,6 @@ from manabot.env.observation import (
     FACT_EFFECT_PROGRAM,
     FACT_TRANSFORMS,
 )
-import managym
 
 if TYPE_CHECKING:
     from manabot.env.observation import ObservationSpace
@@ -271,21 +270,16 @@ def published_columns(space: "ObservationSpace") -> dict[str, list[ColumnKind]]:
     Raises when a float buffer is neither read by readings nor named in
     `OWN_PREPARATION`.
     """
-    encoder = space.encoder
     unread = sorted(
         key
-        for key, dtype in encoder.dtypes.items()
+        for key, dtype in space.dtypes.items()
         if np.dtype(dtype).kind == "f"
         and key not in READ_BY_READINGS
         and key not in OWN_PREPARATION
     )
     if unread:
         raise ValueError(f"no reading or own preparation for buffers {unread}")
-    layout = managym.observation_layout(
-        policy_history=bool(encoder.config.policy_history_version),
-        turn_state=encoder.turn_state,
-        legacy=not encoder.one_token,
-    )
+    layout = space.layout.arrays
     return {
         key: [
             ColumnKind(name, column["kind"], column.get("scale"), column.get("size"))

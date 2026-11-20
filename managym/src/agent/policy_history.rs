@@ -24,7 +24,7 @@ pub const HISTORY_DIM: usize = history::WIDTH;
 pub const HISTORY_LIMIT: usize = 32;
 pub type HistoryWindow = Arc<VecDeque<HistoryEvent>>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum HistoryReference {
     Unavailable,
     Player(PlayerId),
@@ -36,7 +36,7 @@ pub enum HistoryReference {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[repr(u8)]
 pub enum HistoryKind {
     Arrival,
@@ -47,7 +47,7 @@ pub enum HistoryKind {
     Countered,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HistoryEvent {
     pub kind: HistoryKind,
     pub amount: i32,
@@ -285,7 +285,7 @@ pub(crate) fn encode_rows(
             } => {
                 let context = context_id.and_then(&context);
                 [
-                    (*definition + 1) as f32,
+                    (u64::from(*definition) + 1) as f32,
                     role(*owner),
                     zone.map(|zone| (zone as usize + 1) as f32).unwrap_or(0.0),
                     context.map(|v| v as f32).unwrap_or(-1.0),

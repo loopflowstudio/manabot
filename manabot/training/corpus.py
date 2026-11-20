@@ -44,7 +44,7 @@ def log_corpus_setup(
     run.log_table(
         DECK_TABLE, deck_cards((p.deck for p in players), writer_catalog()), **clocks
     )
-    observation = collector.observation_space.encoder.config
+    observation = collector.observation_space.config
     run.log_table(
         RUN_TABLE,
         [

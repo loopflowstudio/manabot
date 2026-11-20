@@ -62,7 +62,7 @@ Retained native comparisons additionally require the original receipt directory
 described in the complete record. Games and evaluations for this work run on
 the Mac mini or CI.
 
-The same script compares full evidence and the Python per-branch encoder against
+The same script compares full evidence and per-branch encoding against
 the defaults, compact evidence with native frontier encoding:
 
 ```sh

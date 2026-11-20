@@ -28,7 +28,8 @@ use crate::{
     infra::profiler::InfoDict,
     python::{
         bindings::{map_agent_err, PyEnv, PyObservation, PyPlayerConfig},
-        convert::{info_dict_to_pydict, require_numpy_array},
+        convert::{info_dict_to_pydict, require_ndarray, require_numpy_array},
+        layout_bindings::ObservationLayout,
     },
     state::player::PlayerConfig,
 };
@@ -204,11 +205,25 @@ impl PyVectorEnv {
             .collect())
     }
 
-    #[pyo3(signature = (buffers, action_overflow="error"))]
-    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, action_overflow: &str) -> PyResult<()> {
-        let mut config = input_buffer_config(&buffers)?;
+    #[pyo3(signature = (buffers, action_overflow="error", *, layout=None))]
+    fn set_buffers(
+        &mut self,
+        buffers: Bound<'_, PyDict>,
+        action_overflow: &str,
+        layout: Option<&ObservationLayout>,
+    ) -> PyResult<()> {
+        let inferred = layout.is_none();
+        let layout = registered_layout(&buffers, layout)?;
+        if inferred
+            && self.inner.decision_memory_enabled() != (layout.config.max_decision_records > 0)
+        {
+            return Err(PyValueError::new_err(
+                "decision memory buffers differ from vector configuration",
+            ));
+        }
+        let mut config = layout.config;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, true)?;
+        let buffers = read_observation_buffers(&buffers, Some(self.num_envs), &layout, true)?;
         self.config = config;
         self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
         self.buffers = Some(buffers);
@@ -400,17 +415,18 @@ impl PyVectorEnv {
 
     /// Caller-owned observation-only buffers; registered execution buffers and
     /// diagnostics are untouched. Keep the GIL held throughout the read/write.
-    #[pyo3(signature = (players, buffers, action_overflow="error"))]
+    #[pyo3(signature = (players, buffers, action_overflow="error", *, layout))]
     fn write_observations_for_players(
         &self,
         py: Python<'_>,
         players: Vec<usize>,
         buffers: Bound<'_, PyDict>,
         action_overflow: &str,
+        layout: &ObservationLayout,
     ) -> PyResult<Vec<ObservationRead>> {
-        let mut config = input_buffer_config(&buffers)?;
+        let mut config = layout.config;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, false)?;
+        let buffers = read_observation_buffers(&buffers, Some(self.num_envs), layout, false)?;
         with_observation_field_slices(py, &buffers, |out| {
             self.inner
                 .write_observations_for_players(&players, |slot, observation| {
@@ -535,10 +551,24 @@ impl PyVectorEnv {
     }
 }
 
-/// Every configurable axis follows the supplied ObservationSpace on both paths.
-/// Companion shapes, dtypes and storage are checked before buffers are written.
-/// The buffer set must be policy input v9's: fixed relation, shared-effect and
-/// name-candidate widths, with fact capacity read from the fact axis.
+#[cfg(feature = "python")]
+fn registered_layout<'a>(
+    buffers: &Bound<'_, PyDict>,
+    layout: Option<&'a ObservationLayout>,
+) -> PyResult<std::borrow::Cow<'a, ObservationLayout>> {
+    if let Some(layout) = layout {
+        return Ok(std::borrow::Cow::Borrowed(layout));
+    }
+    super::bindings::warn_deprecated(
+        buffers.py(),
+        "set_buffers without layout is deprecated; pass layout=...; removal in 0.4.0",
+    )?;
+    Ok(std::borrow::Cow::Owned(ObservationLayout::from_config(
+        input_buffer_config(buffers)?,
+    )?))
+}
+
+/// Recover the input configuration of pre-layout receipts and deprecated calls.
 #[cfg(feature = "python")]
 pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
@@ -546,11 +576,11 @@ pub(super) fn input_buffer_config(
     // Strip only the optional batch axis. Full companion and batch shapes are
     // validated by the caller before any writes.
     let shape = |name: &str| -> PyResult<[usize; 2]> {
-        let dimensions: Vec<usize> = buffers
+        let value = buffers
             .get_item(name)?
-            .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?
-            .getattr("shape")?
-            .extract()?;
+            .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?;
+        require_ndarray(name, &value)?;
+        let dimensions: Vec<usize> = value.getattr("shape")?.extract()?;
         match dimensions.as_slice() {
             &[rows, width] | &[_, rows, width] if !dimensions.contains(&0) => Ok([rows, width]),
             _ => Err(PyValueError::new_err(format!(
@@ -564,450 +594,127 @@ pub(super) fn input_buffer_config(
         crate::agent::policy_history::HISTORY_DIM => true,
         _ => return Err(PyValueError::new_err("unsupported event buffer width")),
     };
-    if policy_history && max_events > crate::agent::policy_history::HISTORY_LIMIT {
-        return Err(PyValueError::new_err(
-            "public history v1 requires 1..32 rows",
-        ));
-    }
-    let mut config = ObservationEncoderConfig {
+    let optional_rows = |name: &str| -> PyResult<usize> {
+        if buffers.contains(name)? {
+            Ok(shape(name)?[0])
+        } else {
+            Ok(0)
+        }
+    };
+    let stack = buffers.contains("stack")?;
+    Ok(ObservationEncoderConfig {
+        layout: if stack {
+            crate::agent::observation_encoder::InputLayout::OneToken
+        } else {
+            crate::agent::observation_encoder::InputLayout::Legacy
+        },
+        turn_state: stack || buffers.contains("player_turn_state")?,
+        max_stack_objects: optional_rows("stack")?,
         max_cards_per_player: shape("agent_cards")?[0],
         max_permanents_per_player: shape("agent_permanents")?[0],
         max_actions: shape("actions")?[0],
         max_focus_objects: shape("action_focus")?[1],
+        max_facts: shape("facts")?[0],
         max_events,
         policy_history,
-        ..ObservationEncoderConfig::default()
-    };
-    let memory_fields = [
-        "decision_records",
-        "decision_references",
-        "decision_reference_details",
-        "decision_members",
-    ];
-    let present = memory_fields
-        .map(|field| buffers.contains(field))
-        .into_iter()
-        .collect::<PyResult<Vec<_>>>()?;
-    if present.iter().any(|&value| value) {
-        if !present.iter().all(|&value| value) {
-            return Err(PyValueError::new_err(
-                "decision memory requires all companion buffers",
-            ));
-        }
-        for (field, width) in memory_fields.into_iter().zip([
-            crate::agent::decision_memory::RECORD_DIM,
-            crate::agent::decision_memory::REFERENCE_DIM,
-            crate::agent::decision_memory::DETAIL_DIM,
-            crate::agent::decision_memory::MEMBER_DIM,
-        ]) {
-            let [capacity, actual] = shape(field)?;
-            if capacity == 0 || actual != width {
-                return Err(PyValueError::new_err(
-                    "invalid decision-memory companion widths",
-                ));
-            }
-            match field {
-                "decision_records" => config.max_decision_records = capacity,
-                "decision_references" => config.max_decision_references = capacity,
-                "decision_reference_details" => config.max_decision_reference_details = capacity,
-                "decision_members" => config.max_decision_members = capacity,
-                _ => unreachable!(),
-            }
-        }
-    }
-    // One layout: every v9 buffer is present at its fixed width.
-    let fixed = [
-        (
-            "relations",
-            Some(crate::agent::continuation::RELATION_ROWS),
-            crate::agent::continuation::RELATION_DIM,
-        ),
-        ("facts", None, crate::agent::observation_encoder::FACT_DIM),
-        (
-            "effects",
-            Some(crate::agent::shared_effects::EFFECT_ROWS),
-            crate::agent::shared_effects::EFFECT_DIM,
-        ),
-        (
-            "effect_details",
-            Some(crate::agent::shared_effects::DETAIL_ROWS),
-            crate::agent::shared_effects::DETAIL_DIM,
-        ),
-        (
-            "effect_members",
-            Some(crate::agent::shared_effects::MEMBER_ROWS),
-            crate::agent::shared_effects::MEMBER_DIM,
-        ),
-        (
-            "name_candidates",
-            Some(config.max_actions),
-            crate::agent::observation_encoder::NAME_DIM,
-        ),
-    ];
-    for (name, rows, width) in fixed {
-        if !buffers.contains(name)? {
-            return Err(PyValueError::new_err(format!(
-                "policy input v9 requires a {name} buffer"
-            )));
-        }
-        let [actual_rows, actual_width] = shape(name)?;
-        if actual_width != width || rows.is_some_and(|rows| rows != actual_rows) {
-            return Err(PyValueError::new_err(format!(
-                "policy input v9 requires {name} of shape [{}, {width}]",
-                rows.map_or("capacity".to_string(), |rows| rows.to_string())
-            )));
-        }
-    }
-    if !buffers.contains("decklists")? {
-        return Err(PyValueError::new_err(
-            "policy input v9 requires a decklists buffer",
-        ));
-    }
-    config.max_facts = shape("facts")?[0];
-    // Input v10 is v9 plus both turn-state buffers.
-    config.turn_state = match (
-        buffers.contains("player_turn_state")?,
-        buffers.contains("card_turn_state")?,
-    ) {
-        (false, false) => false,
-        (true, true) => {
-            let player = shape("player_turn_state")?;
-            let card = shape("card_turn_state")?;
-            if player != [2, crate::agent::observation_encoder::TURN_STATE_DIM]
-                || card != [2, config.max_cards_per_player]
-            {
-                return Err(PyValueError::new_err(format!(
-                    "policy input v10 requires player_turn_state of shape [2, {}] and \
-                     card_turn_state of shape [2, {}]",
-                    crate::agent::observation_encoder::TURN_STATE_DIM,
-                    config.max_cards_per_player
-                )));
-            }
-            true
-        }
-        _ => {
-            return Err(PyValueError::new_err(
-                "policy input v10 requires both player_turn_state and card_turn_state",
-            ))
-        }
-    };
-    // Input v11 is the one-token layout: a stack buffer and the turn state.
-    // Without a stack buffer the buffers are the deprecated v9/v10 rows.
-    if buffers.contains("stack")? {
-        let [rows, width] = shape("stack")?;
-        if width != crate::agent::observation_encoder::STACK_DIM || !config.turn_state {
-            return Err(PyValueError::new_err(format!(
-                "policy input v11 requires stack of shape [capacity, {}] and the turn-state buffers",
-                crate::agent::observation_encoder::STACK_DIM
-            )));
-        }
-        config.max_stack_objects = rows;
-    } else {
-        config.layout = crate::agent::observation_encoder::InputLayout::Legacy;
-    }
-    let permanent_width = shape("agent_permanents")?[1];
-    if permanent_width != config.permanent_dim() {
-        return Err(PyValueError::new_err(format!(
-            "agent_permanents width {permanent_width} does not match the {} layout's {}",
-            if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
-                "v11"
-            } else {
-                "v9/v10"
-            },
-            config.permanent_dim()
-        )));
-    }
-    Ok(config)
+        max_decision_records: optional_rows("decision_records")?,
+        max_decision_references: optional_rows("decision_references")?,
+        max_decision_reference_details: optional_rows("decision_reference_details")?,
+        max_decision_members: optional_rows("decision_members")?,
+        ..Default::default()
+    })
+}
+
+/// Check one observation's caller-owned buffers (no batch axis) against the
+/// whole contract of `config`: every array present, with its shape, dtype,
+/// C-contiguity and writability. Nothing is written; the scalar encoder runs
+/// this before encoding, so a malformed buffer set is never reported as a
+/// game that outgrew its capacity.
+#[cfg(feature = "python")]
+pub(crate) fn check_observation_buffers(
+    buffers: &Bound<'_, PyDict>,
+    layout: &ObservationLayout,
+) -> PyResult<()> {
+    read_observation_buffers(buffers, None, layout, false).map(|_| ())
 }
 
 #[cfg(feature = "python")]
 fn read_observation_buffers(
     buffers: &Bound<'_, PyDict>,
-    n: usize,
-    c: &ObservationEncoderConfig,
+    batch: Option<usize>,
+    layout: &ObservationLayout,
     step_state: bool,
 ) -> PyResult<ObservationBuffers> {
-    let required = |name: &str, shape: &[usize]| -> PyResult<Option<Py<PyAny>>> {
-        Ok(Some(
-            require_numpy_array(buffers, name, shape, "float32")?.unbind(),
-        ))
+    for key in buffers.keys().iter() {
+        let name = key
+            .extract::<String>()
+            .map_err(|_| PyValueError::new_err("unexpected non-string buffer key"))?;
+        if !(layout.arrays.contains_key(&name)
+            || step_state && matches!(name.as_str(), "rewards" | "terminated" | "truncated"))
+        {
+            return Err(PyValueError::new_err(format!("unexpected buffer '{name}'")));
+        }
+    }
+    let array = |name: &str| {
+        let a = &layout.arrays[name];
+        let shape: Vec<_> = batch
+            .iter()
+            .chain(a.shape.iter().flatten())
+            .copied()
+            .collect();
+        Ok::<_, PyErr>(require_numpy_array(buffers, name, &shape, a.dtype)?.unbind())
+    };
+    let optional = |name: &str| {
+        layout
+            .arrays
+            .contains_key(name)
+            .then(|| array(name))
+            .transpose()
     };
     Ok(ObservationBuffers {
-        name_candidates: required(
-            "name_candidates",
-            &[
-                n,
-                c.max_actions,
-                crate::agent::observation_encoder::NAME_DIM,
-            ],
-        )?,
-        relations: required(
-            "relations",
-            &[
-                n,
-                crate::agent::continuation::RELATION_ROWS,
-                crate::agent::continuation::RELATION_DIM,
-            ],
-        )?,
-        effects: required(
-            "effects",
-            &[
-                n,
-                crate::agent::shared_effects::EFFECT_ROWS,
-                crate::agent::shared_effects::EFFECT_DIM,
-            ],
-        )?,
-        effect_details: required(
-            "effect_details",
-            &[
-                n,
-                crate::agent::shared_effects::DETAIL_ROWS,
-                crate::agent::shared_effects::DETAIL_DIM,
-            ],
-        )?,
-        effect_members: required(
-            "effect_members",
-            &[
-                n,
-                crate::agent::shared_effects::MEMBER_ROWS,
-                crate::agent::shared_effects::MEMBER_DIM,
-            ],
-        )?,
-        facts: required(
-            "facts",
-            &[n, c.max_facts, crate::agent::observation_encoder::FACT_DIM],
-        )?,
-        known_library: if c.known_library_len() > 0 {
-            required(
-                "known_library",
-                &[n, 2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
-            )?
-        } else {
-            None
-        },
-        known_hand: require_numpy_array(
-            buffers,
-            "known_hand",
-            &[n, 2, c.max_cards_per_player, 2],
-            "float32",
-        )?
-        .unbind(),
-        player_turn_state: if c.turn_state {
-            required(
-                "player_turn_state",
-                &[n, 2, crate::agent::observation_encoder::TURN_STATE_DIM],
-            )?
-        } else {
-            None
-        },
-        card_turn_state: if c.turn_state {
-            required("card_turn_state", &[n, 2, c.max_cards_per_player])?
-        } else {
-            None
-        },
-        stack: if c.stack_rows() > 0 {
-            required(
-                "stack",
-                &[
-                    n,
-                    c.max_stack_objects,
-                    crate::agent::observation_encoder::STACK_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        stack_valid: if c.stack_rows() > 0 {
-            required("stack_valid", &[n, c.max_stack_objects])?
-        } else {
-            None
-        },
-        decklists: required(
-            "decklists",
-            &[
-                n,
-                2,
-                c.max_cards_per_player,
-                crate::agent::observation_encoder::DECKLIST_DIM,
-            ],
-        )?,
-        semantic_cards: require_numpy_array(
-            buffers,
-            "semantic_cards",
-            &[n, 2, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        agent_player: require_numpy_array(
-            buffers,
-            "agent_player",
-            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
-            "float32",
-        )?
-        .unbind(),
-        opponent_player: require_numpy_array(
-            buffers,
-            "opponent_player",
-            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
-            "float32",
-        )?
-        .unbind(),
-        agent_cards: require_numpy_array(
-            buffers,
-            "agent_cards",
-            &[
-                n,
-                c.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-            "float32",
-        )?
-        .unbind(),
-        opponent_cards: require_numpy_array(
-            buffers,
-            "opponent_cards",
-            &[
-                n,
-                c.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-            "float32",
-        )?
-        .unbind(),
-        agent_permanents: require_numpy_array(
-            buffers,
-            "agent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
-            "float32",
-        )?
-        .unbind(),
-        opponent_permanents: require_numpy_array(
-            buffers,
-            "opponent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
-            "float32",
-        )?
-        .unbind(),
-        actions: require_numpy_array(
-            buffers,
-            "actions",
-            &[n, c.max_actions, c.action_dim()],
-            "float32",
-        )?
-        .unbind(),
-        decision_records: if c.max_decision_records > 0 {
-            required(
-                "decision_records",
-                &[
-                    n,
-                    c.max_decision_records,
-                    crate::agent::decision_memory::RECORD_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        decision_reference_details: if c.max_decision_reference_details > 0 {
-            required(
-                "decision_reference_details",
-                &[
-                    n,
-                    c.max_decision_reference_details,
-                    crate::agent::decision_memory::DETAIL_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        decision_references: if c.max_decision_references > 0 {
-            required(
-                "decision_references",
-                &[
-                    n,
-                    c.max_decision_references,
-                    crate::agent::decision_memory::REFERENCE_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        decision_members: if c.max_decision_members > 0 {
-            required(
-                "decision_members",
-                &[
-                    n,
-                    c.max_decision_members,
-                    crate::agent::decision_memory::MEMBER_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        events: require_numpy_array(
-            buffers,
-            "events",
-            &[n, c.max_events, c.event_dim()],
-            "float32",
-        )?
-        .unbind(),
-        action_focus: require_numpy_array(
-            buffers,
-            "action_focus",
-            &[n, c.max_actions, c.max_focus_objects],
-            "int32",
-        )?
-        .unbind(),
-        agent_player_valid: require_numpy_array(buffers, "agent_player_valid", &[n, 1], "float32")?
-            .unbind(),
-        opponent_player_valid: require_numpy_array(
-            buffers,
-            "opponent_player_valid",
-            &[n, 1],
-            "float32",
-        )?
-        .unbind(),
-        agent_cards_valid: require_numpy_array(
-            buffers,
-            "agent_cards_valid",
-            &[n, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        opponent_cards_valid: require_numpy_array(
-            buffers,
-            "opponent_cards_valid",
-            &[n, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        agent_permanents_valid: require_numpy_array(
-            buffers,
-            "agent_permanents_valid",
-            &[n, c.max_permanents_per_player],
-            "float32",
-        )?
-        .unbind(),
-        opponent_permanents_valid: require_numpy_array(
-            buffers,
-            "opponent_permanents_valid",
-            &[n, c.max_permanents_per_player],
-            "float32",
-        )?
-        .unbind(),
-        actions_valid: require_numpy_array(
-            buffers,
-            "actions_valid",
-            &[n, c.max_actions],
-            "float32",
-        )?
-        .unbind(),
-        events_valid: require_numpy_array(buffers, "events_valid", &[n, c.max_events], "float32")?
-            .unbind(),
+        relations: optional("relations")?,
+        effects: optional("effects")?,
+        effect_details: optional("effect_details")?,
+        effect_members: optional("effect_members")?,
+        name_candidates: optional("name_candidates")?,
+        facts: optional("facts")?,
+        semantic_cards: array("semantic_cards")?,
+        known_hand: array("known_hand")?,
+        known_library: optional("known_library")?,
+        decklists: optional("decklists")?,
+        player_turn_state: optional("player_turn_state")?,
+        card_turn_state: optional("card_turn_state")?,
+        stack: optional("stack")?,
+        stack_valid: optional("stack_valid")?,
+        agent_player: array("agent_player")?,
+        opponent_player: array("opponent_player")?,
+        agent_cards: array("agent_cards")?,
+        opponent_cards: array("opponent_cards")?,
+        agent_permanents: array("agent_permanents")?,
+        opponent_permanents: array("opponent_permanents")?,
+        actions: array("actions")?,
+        events: array("events")?,
+        decision_records: optional("decision_records")?,
+        decision_reference_details: optional("decision_reference_details")?,
+        decision_references: optional("decision_references")?,
+        decision_members: optional("decision_members")?,
+        action_focus: array("action_focus")?,
+        agent_player_valid: array("agent_player_valid")?,
+        opponent_player_valid: array("opponent_player_valid")?,
+        agent_cards_valid: array("agent_cards_valid")?,
+        opponent_cards_valid: array("opponent_cards_valid")?,
+        agent_permanents_valid: array("agent_permanents_valid")?,
+        opponent_permanents_valid: array("opponent_permanents_valid")?,
+        actions_valid: array("actions_valid")?,
+        events_valid: array("events_valid")?,
         step_state: if step_state {
             Some(StepStateBuffers {
-                rewards: require_numpy_array(buffers, "rewards", &[n], "float64")?.unbind(),
-                terminated: require_numpy_array(buffers, "terminated", &[n], "uint8")?.unbind(),
-                truncated: require_numpy_array(buffers, "truncated", &[n], "uint8")?.unbind(),
+                rewards: require_numpy_array(buffers, "rewards", batch.as_slice(), "float64")?
+                    .unbind(),
+                terminated: require_numpy_array(buffers, "terminated", batch.as_slice(), "uint8")?
+                    .unbind(),
+                truncated: require_numpy_array(buffers, "truncated", batch.as_slice(), "uint8")?
+                    .unbind(),
             })
         } else {
             None
@@ -1151,15 +858,22 @@ impl PyRolloutPool {
     /// Attach caller-owned numpy buffers with leading dimension `capacity`
     /// (>= num_slots). The rewards/terminated/truncated buffers are required
     /// for layout parity with VectorEnv but are never written.
-    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, capacity: usize) -> PyResult<()> {
-        let config = input_buffer_config(&buffers)?;
+    #[pyo3(signature=(buffers, capacity, *, layout=None))]
+    fn set_buffers(
+        &mut self,
+        buffers: Bound<'_, PyDict>,
+        capacity: usize,
+        layout: Option<&ObservationLayout>,
+    ) -> PyResult<()> {
+        let layout = registered_layout(&buffers, layout)?;
+        let config = layout.config;
         if capacity < self.inner.num_slots() {
             return Err(PyValueError::new_err(format!(
                 "buffer capacity {capacity} < num_slots {}",
                 self.inner.num_slots()
             )));
         }
-        let buffers = read_observation_buffers(&buffers, capacity, &config, true)?;
+        let buffers = read_observation_buffers(&buffers, Some(capacity), &layout, true)?;
         self.config = config;
         self.buffers = Some(buffers);
         Ok(())
@@ -1209,7 +923,7 @@ pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 /// Write each env's acting-player observation into row `i` of buffers from
-/// `ObservationEncoder.allocate(capacity)`; returns each row's legal-action count.
+/// `ObservationSpace.allocate(capacity)`; returns each row's legal-action count.
 ///
 /// Every legal action must fit (`action_overflow="error"`). Rows at and past
 /// `len(envs)` are untouched, and no step-state buffers are read. The GIL stays
@@ -1219,6 +933,7 @@ pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn encode_observations_into(
     py: Python<'_>,
     envs: Vec<PyRef<'_, PyEnv>>,
+    layout: &ObservationLayout,
     buffers: Bound<'_, PyDict>,
     capacity: usize,
 ) -> PyResult<Vec<usize>> {
@@ -1228,8 +943,8 @@ fn encode_observations_into(
             envs.len()
         )));
     }
-    let config = input_buffer_config(&buffers)?;
-    let buffers = read_observation_buffers(&buffers, capacity, &config, false)?;
+    let config = layout.config;
+    let buffers = read_observation_buffers(&buffers, Some(capacity), layout, false)?;
     with_observation_field_slices(py, &buffers, |out| {
         envs.iter()
             .enumerate()
@@ -1244,7 +959,7 @@ fn encode_observations_into(
                 let observation = env.observation_for_player(actor).map_err(map_agent_err)?;
                 let row = out.encoded_row_mut(index, &config).map_err(map_agent_err)?;
                 encode_into(&observation, &config, row)
-                    .map_err(|err| PyValueError::new_err(err.to_string()))?;
+                    .map_err(crate::python::bindings::map_encode_err)?;
                 Ok(observation.action_space.actions.len())
             })
             .collect()

@@ -10,7 +10,7 @@ from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import canonical_parameters, from_torch_state
 from manabot.policy.prepare import reference_distribution
@@ -26,7 +26,7 @@ def _batch(space: ObservationSpace, count: int) -> dict[str, np.ndarray]:
     rows = []
     while len(rows) < count:
         obs = env.observation_for_player(env.current_agent_index())
-        rows.append(space.encode(obs))
+        rows.append(encode_observation(space, obs))
         _, _, terminated, truncated, _ = env.step(
             int(rng.integers(len(obs.action_space.actions)))
         )
@@ -64,7 +64,7 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
     policy, learner = BACKEND.load(
         from_torch_state(
             model.config,
-            space.encoder.config,
+            space.config,
             state,
             parameter_names=dict(model.named_parameters()),
             readings=model.readings,

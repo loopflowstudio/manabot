@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.managym.decision import SemanticContractError
 from manabot.managym.experience import LegacyHeroObservation
 from manabot.managym.experience_projection import decision_surface_view
@@ -113,9 +113,8 @@ def test_bloodbending_text_policy_and_academy_share_authority(paid: bool) -> Non
     duration = "turn" if paid else "combat phase"
     assert f"during this {duration}" in decision.text
     assert "Accumulate Wisdom" in decision.text
-    expected = ObservationSpace().encode(raw)
-    for key, actual in env.encode_observation(raw).items():
-        np.testing.assert_array_equal(actual, expected[key], err_msg=key)
+    valid = encode_observation(ObservationSpace(), raw)["actions_valid"]
+    assert int(np.count_nonzero(valid)) == len(raw.action_space.actions) > 0
     projection = LegacyHeroObservation.model_validate(decision_surface_view(env, 0))
     assert projection.decision_context is not None
     assert projection.decision_context.actor == 0

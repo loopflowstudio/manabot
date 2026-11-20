@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.policy.prepare import NUMBER_TOKEN_KINDS, RecordNamespace, record_key
+from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
+from manabot.policy.prepare import RecordNamespace, record_key
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -130,7 +131,7 @@ def catalog_tables(
         ):
             buffers[f"{prefix}_keys"], buffers[f"{prefix}_rows"] = _sorted_keys(table)
         buffers["record_number_rows"] = np.asarray(
-            [tables.numbers.get(kind, 0) for kind in range(6)]
+            [tables.numbers.get(kind, 0) for kind in range(max(tables.numbers) + 1)]
         )
     return CatalogTables(
         buffers,

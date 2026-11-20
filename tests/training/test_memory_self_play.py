@@ -67,7 +67,7 @@ def train(
         experiment="test", run=name, clocks=CLOCKS, directory=tmp_path / f"{name}-track"
     ) as run:
         path = self_play(recipe, run, updates=50)
-    return path, load_checkpoint(path)[1].encoder.config.max_decision_records
+    return path, load_checkpoint(path)[1].config.max_decision_records
 
 
 def test_rates_follow_decisions_independently_of_update_count() -> None:
