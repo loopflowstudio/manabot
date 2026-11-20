@@ -278,13 +278,13 @@ def test_resume_accepts_historical_memory_readings() -> None:
     historical = Counts(
         updates=3,
         readings={
-            key: [value.value for value in values]
+            key: [str(value) for value in values]
             for key, values in readings.items()
             if key not in MEMORY_FIELDS
         },
     )
     assert loop.resume_readings(historical, readings, space) == {
-        key: [value.value for value in values] for key, values in readings.items()
+        key: [str(value) for value in values] for key, values in readings.items()
     }
 
 
