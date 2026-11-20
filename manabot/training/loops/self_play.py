@@ -481,7 +481,7 @@ def resume_readings(
     counts: Counts, readings: Readings, space: ObservationSpace
 ) -> dict[str, list[str]]:
     """Return the model's readings for run state, refusing incompatible saved weights."""
-    built = {key: [value.value for value in values] for key, values in readings.items()}
+    built = {key: [str(value) for value in values] for key, values in readings.items()}
     saved = counts.readings
     if saved is None:
         if counts.updates == 0:
@@ -489,7 +489,7 @@ def resume_readings(
         # Runs predating the record used legacy readings over the model's prefix.
         legacy = legacy_readings(space)
         saved = {
-            key: [value.value for value in legacy[key][: len(values)]]
+            key: [str(value) for value in legacy[key][: len(values)]]
             for key, values in readings.items()
         }
     if saved == built:
