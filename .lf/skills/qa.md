@@ -119,7 +119,9 @@ publish, land or choose the next Graph step from here.
 - Checkpoints as Academy opponents: launch `managym academy play` with
   `MANABOT_RUNS_DIR=<folder of .pt/.safetensors>` and `ETUDE_HOME=<home of an
   etude train run>`; `GET /api/opponents` lists what the picker shows (an
-  unreadable file is omitted, not listed). The launch opens inside a game, so
+  unreadable file is omitted, not listed; a refused one is listed with
+  `available: false` and its reason). The list is read at launch: restart
+  the server after adding checkpoints. The launch opens inside a game, so
   **Start game** on the New game page and **Start next game** raise a browser
   confirm ("Stop the current game and start a new session?"). Playwright
   dismisses it by default and the click then does nothing: register
@@ -717,3 +719,14 @@ publish, land or choose the next Graph step from here.
   `.github/workflows/manabot-integration.yml`; `tests/sim/test_puct_compatibility.py`,
   `tests/sim/test_conditional_search.py` and `tests/verify/test_learning_regression.py`
   are not among them, and the first two fail on main (2026-11-18).
+- Input readings (`manabot/policy/readings.py`, `input_readings` in a
+  checkpoint): the returning user is a checkpoint written before a change.
+  Train `manabot/recipes/local.py` in a base worktree (its own release
+  extension, this checkout's `.venv/bin/etude`, `PYTHONPATH` at the
+  worktree), then play the same seeded games with `scripts/pinned_pilot.py`'s
+  `play` on both trees (the v11 pilot's decks) and diff probabilities (381
+  decisions matched within 3e-8 in MTG-404). Warm-start a `.runs/` recipe
+  file with `pretrained=<that checkpoint>` and read the child's
+  `input_readings`: they must equal the parent's legacy readings. A copy with
+  one reading renamed must show in `/api/opponents` as unavailable, naming
+  the column.
