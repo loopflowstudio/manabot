@@ -249,6 +249,10 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
         out: Path,
     ) -> dict[str, object]:
         row = original_step(settings, learner, ema, collector, counts, rng, out=out)
+        coordinates = {k: v for k, v in row.items() if k.startswith("coordinates/")}
+        assert coordinates["coordinates/updates"] == 1
+        assert "coordinates/readings" not in coordinates
+        assert all(isinstance(v, (int, float)) for v in coordinates.values())
         stop.touch()
         return row
 

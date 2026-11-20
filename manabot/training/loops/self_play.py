@@ -368,6 +368,10 @@ class Counts(BaseModel):
     optimizer_exposures: int = 0
     readings: dict[str, list[str]] | None = None
 
+    def coordinates(self) -> dict[str, int | float]:
+        """Cumulative work published in policy files and update metrics."""
+        return self.model_dump(exclude={"readings"})
+
 
 def clocks(counts: Counts) -> dict[str, float]:
     """CLOCKS coordinates other than `updates`, which `run.steps` sets for rows."""
@@ -566,7 +570,7 @@ def write_policy(
             extra={
                 "weights": weights,
                 "update": counts.updates,
-                "counts": counts.model_dump(mode="json", exclude={"readings"}),
+                "counts": counts.coordinates(),
                 "seed": seed,
                 "value_semantic": "signed_outcome",
                 "averaging": averaging if weights == "ema" else None,
@@ -744,7 +748,7 @@ def step(
     return (
         metric_row(metrics)
         | rates
-        | {f"coordinates/{k}": v for k, v in counts.model_dump().items()}
+        | {f"coordinates/{k}": v for k, v in counts.coordinates().items()}
         | phases
         | resource_metrics(device)
     )
