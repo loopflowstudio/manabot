@@ -62,7 +62,7 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
-    (tla_trophies, (), {"trophy-w64": 2}),
+    (tla_trophies, (), {"trophy-w64-raw": 2}),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
@@ -100,7 +100,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     [
         (elemental, Matches(tag="heuristic")),
         (seat_comparison, None),
-        (tla_trophies, None),
+        (tla_trophies, Matches(tournament="tla-trophies-held-out-32")),
     ],
 )
 def test_checkpoint_report_shows_behaviour_next_to_strength(
@@ -253,6 +253,31 @@ def _finished_run(
         ),
         seed=0,
     )
+
+
+def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
+    (train,) = tla_trophies.training_jobs(updates=6, threads=2, streams=256, rows=512)
+    assert train.config == tla_trophies.Config(
+        updates=6, threads=2, streams=256, rows=512, checkpoint_every=100
+    )
+    assert {v.name: v.value for v in train.plain().environment} == {
+        "OMP_NUM_THREADS": "2",
+        "MKL_NUM_THREADS": "2",
+    }
+    pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
+    raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
+    (evaluation,) = tla_trophies.eval_jobs(
+        ExperimentState(experiment="fixture", runs=(pilot, raw))
+    )
+    assert list(evaluation.checkpoints) == list(raw.checkpoints)
+    assert tla_trophies.report().evals[0].matches == Matches(tournament=evaluation.name)
+    assert [
+        tla_trophies.Deal.model_validate(s.config)
+        for s in evaluation.tournament.seatings
+    ] == [
+        tla_trophies.Deal(first=2 * i, second=2 * i + 1, seed=40900 + i)
+        for i in range(32)
+    ]
 
 
 # ---------------------------------------------------------------------------

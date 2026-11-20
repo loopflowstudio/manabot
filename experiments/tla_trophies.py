@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import Literal
 
 from etude.eval.match import environment
-from etude.eval.records import Benchmark, Code, Match, Seating, checkpoint_player
+from etude.eval.records import Benchmark, CheckpointSlot, Code, Match, Seating
 from etude.eval.result import Tables
 from etude.jobs import EvalJob, ExperimentState, TrainingJob
-from etude.report import Curve, Report, Score
-from etude.spec import Input
+from etude.report import Curve, Matches, Report, Score
+from etude.spec import Input, Variable
 from etude.train.tracking import track
 
 from experiments.mana_taps import OBSERVATION
@@ -37,6 +37,8 @@ import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 POOLS = "experiments/data/mtg409/pools-v2/corpus.json"
+RAW_JOB = "trophy-w64-raw"
+BENCHMARK = "tla-trophies-held-out-32"
 
 
 def corpus_input() -> Input:
@@ -73,6 +75,10 @@ def deck(pool: Pool) -> managym.Deck:
 
 class Config(StrictModel):
     updates: int
+    threads: int
+    streams: int
+    rows: int
+    checkpoint_every: int
     device: Literal["cuda", "cpu"] = "cuda"
 
 
@@ -93,15 +99,17 @@ def train(config: Config) -> None:
         learning=learning("w64"),
         behavior="current-self",
         device=config.device,
-        streams=2 if local else 64,
+        streams=config.streams,
+        threads=config.threads,
         transitions=1 if local else 64,
         workers=1,
         precision="float32",
         bucketed_shapes=True,
         live_tokens=not local,
-        bootstrap_rows=64,
-        learner_rows=64,
-        checkpoint_every=10,
+        bootstrap_rows=config.rows,
+        learner_rows=config.rows,
+        checkpoint_every=config.checkpoint_every,
+        checkpoint_weights="raw",
         game_errors=GameErrorPolicy(
             threshold=0.25,
             window=100,
@@ -120,13 +128,34 @@ def training_jobs(
     seeds: int = 2,
     hours: float = 1,
     usd_per_run: float = 2,
+    threads: int = 3,
+    streams: int = 64,
+    rows: int = 64,
+    checkpoint_every: int = 100,
 ) -> list[TrainingJob]:
     return [
         TrainingJob(
-            name="trophy-w64",
+            name=RAW_JOB,
             train=train,
-            config=Config(updates=updates),
-            smoke=Config(updates=1, device="cpu"),
+            config=Config(
+                updates=updates,
+                threads=threads,
+                streams=streams,
+                rows=rows,
+                checkpoint_every=checkpoint_every,
+            ),
+            smoke=Config(
+                updates=1,
+                device="cpu",
+                threads=1,
+                streams=2,
+                rows=64,
+                checkpoint_every=1,
+            ),
+            environment=tuple(
+                Variable(name=name, value=str(threads))
+                for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS")
+            ),
             seeds=tuple(range(40901, 40901 + seeds)),
             repo=str(ROOT),
             revision=revision,
@@ -167,29 +196,31 @@ def play(match: Match, agents: Sequence[object]) -> Tables:
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
+    checkpoints = [
+        c for run in state.runs if run.launch == RAW_JOB for c in run.checkpoints
+    ]
+    if not checkpoints:
+        return []
     heuristic = Code(
         name="heuristic", source=heuristic_source_paths(), config=HEURISTIC
     )
     seatings = tuple(
         Seating(
-            name=f"Seed {run.seed} update {c.at['updates']} pair {i + 1}",
-            players=(checkpoint_player(c.ref), heuristic),
+            name=f"Held-out pair {i + 1}",
+            players=(CheckpointSlot(), heuristic),
             config=Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i),
             games=1,
             seeds="one",
         )
-        for run in state.runs
-        for c in run.checkpoints
-        for i in range(2)
+        for i in range(32)
     )
-    if not seatings:
-        return []
     return [
         EvalJob(
             play=play,
             agents=AGENTS,
+            checkpoints=checkpoints,
             tournament=Benchmark(
-                name="tla-trophies-held-out",
+                name=BENCHMARK,
                 environment=environment(
                     "tla-trophies",
                     files=[Path(__file__), ROOT / "manabot/eval/pairing.py"],
@@ -207,10 +238,14 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
 
 
 def report() -> Report:
+    matches = Matches(tournament=BENCHMARK)
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5),
-        evals=(Curve(title="Score against the heuristic"), *behaviour_curves()),
+        evals=(
+            Curve(title="Score against the heuristic", matches=matches),
+            *behaviour_curves(matches=matches),
+        ),
         perf=PERF,
         ml=ML,
     )
