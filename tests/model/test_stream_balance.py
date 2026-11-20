@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch._semantic_cards import KnowledgeStreams
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
@@ -177,15 +178,74 @@ def test_known_card_share_of_the_player_token(stream_norm: bool) -> None:
     assert normalized > 0.05
 
 
-def test_nothing_known_is_exactly_zero() -> None:
+def _knowledge(agent: ActorCritic, batch: ObservationBuffers) -> KnowledgeStreams:
+    assert agent.semantic_cards is not None
+    with torch.no_grad():
+        prepared = device_input(agent, batch)
+        return agent.semantic_cards.knowledge_streams(
+            prepared, _object_definitions(agent, prepared)
+        )
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_a_known_card_leaves_the_decklist_stream_untouched(seed: int) -> None:
+    """Learning a hand card adds a hand stream; the decklist stream is
+    bit-for-bit what it was, and the knowledge vector keeps its direction
+    (one norm over the sum measured cosine 0.07-0.29)."""
+    agent = _agent(True, seed=seed)
+    batch = next(b for b in _games() if not b["known_hand"][0, 1].any())
+    before, after = _knowledge(agent, batch), _knowledge(agent, _with_known_card(batch))
+    assert before.decklist is not None and after.decklist is not None
+    assert torch.equal(before.decklist[0, 1], after.decklist[0, 1])
+    assert not before.hand[0, 1].any() and after.hand[0, 1].any()
+    cosine = torch.nn.functional.cosine_similarity(
+        before.total[0, 1], after.total[0, 1], dim=0
+    )
+    assert cosine > 0.5, float(cosine)
+
+
+@pytest.mark.parametrize("source", ["known_hand", "known_library", "decklists"])
+def test_each_empty_source_is_exactly_zero(source: str) -> None:
+    """An empty source contributes zero, not its norm's bias, and emptying it
+    leaves the other streams as they were."""
     agent = _agent(True)
     assert agent.semantic_cards is not None
+    for norm in (
+        agent.semantic_cards.hand_norm,
+        agent.semantic_cards.library_norm,
+        agent.semantic_cards.decklist_norm,
+    ):
+        assert norm is not None
+        norm.bias.data.fill_(1.0)
+    full = _with_known_card(
+        next(b for b in _games() if not b["known_hand"][0, 1].any())
+    )
+    emptied = {key: value.clone() for key, value in full.items()}
+    emptied[source][0, 1] = 0
+
+    def by_source(streams: KnowledgeStreams) -> dict[str, torch.Tensor]:
+        assert streams.library is not None and streams.decklist is not None
+        return {
+            "known_hand": streams.hand[0, 1],
+            "known_library": streams.library[0, 1],
+            "decklists": streams.decklist[0, 1],
+        }
+
+    before, after = (
+        by_source(_knowledge(agent, full)),
+        by_source(_knowledge(agent, emptied)),
+    )
+    assert not after[source].any()
+    for name in before.keys() - {source}:
+        assert torch.equal(before[name], after[name]), name
+
+
+def test_nothing_known_is_exactly_zero() -> None:
+    agent = _agent(True)
     batch = {key: value.clone() for key, value in _games()[0].items()}
     for key in ("known_hand", "known_library", "decklists"):
         batch[key][0, 1] = 0
-    with torch.no_grad():
-        prepared = device_input(agent, batch)
-        _, known = agent.semantic_cards(prepared, _object_definitions(agent, prepared))
+    known = _knowledge(agent, batch).total
     assert not known[0, 1].any()
     assert known[0, 0].norm() > 1
 

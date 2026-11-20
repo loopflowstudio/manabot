@@ -76,6 +76,46 @@ def test_an_unfocused_offer_is_scaled_by_exactly_one() -> None:
         )
 
 
+def test_a_zero_focus_weight_is_the_additive_model() -> None:
+    """With `focus_film.weight` zero (its bias starts zero) every offer is
+    scaled by exactly one, focused or not: the field adds the term and
+    nothing else."""
+    obs = decision_case("attack").observation
+    additive, focused = _agent(3), _agent(3, focus_film=True)
+    assert focused.focus_film is not None
+    with torch.no_grad():
+        focused.focus_film.weight.zero_()
+        torch.testing.assert_close(
+            focused(device_input(focused, obs))[0],
+            additive(device_input(additive, obs))[0],
+            rtol=0,
+            atol=0,
+        )
+
+
+def test_only_a_focused_offer_trains_the_focus_weight() -> None:
+    """The attack case's two offers name the attacker; with the second's
+    focus removed, its logit sends no gradient to `focus_film.weight` and the
+    first's does."""
+    obs = {
+        key: value.clone() for key, value in decision_case("attack").observation.items()
+    }
+    obs["action_focus"][0, 1] = -1
+    agent = _agent(3, focus_film=True)
+    assert agent.focus_film is not None
+    prepared = device_input(agent, obs)
+
+    def weight_gradient(offer: int) -> torch.Tensor:
+        agent.zero_grad()
+        logits, _ = agent(prepared)
+        logits[0, offer].backward()
+        assert agent.focus_film is not None and agent.focus_film.weight.grad is not None
+        return agent.focus_film.weight.grad.clone()
+
+    assert weight_gradient(0).abs().max() > 0
+    assert not weight_gradient(1).any()
+
+
 def test_the_attack_gap_moves_with_the_attacker() -> None:
     """Over 64 seeds, 2/2 to 9/9 moves the declare/decline gap further with
     `focus_film` than without: the median move is larger (measured 1.25-2.2x
@@ -100,7 +140,7 @@ def test_the_attack_gap_moves_with_the_attacker() -> None:
     assert (focused > additive).mean() > 0.55
 
 
-def _steps_to_fit(**fields: bool) -> int:
+def _steps_to_fit(seed: int, **fields: bool) -> int:
     """Full-batch Adam updates on "attack iff power >= 3" over 100 attackers
     until every board's label has probability at least 0.9 (at most 300)."""
     power, toughness = torch.cartesian_prod(torch.arange(10), torch.arange(10)).T
@@ -108,7 +148,7 @@ def _steps_to_fit(**fields: bool) -> int:
     batch = {key: torch.cat([value] * len(power)) for key, value in case.items()}
     _attacker(batch, power, toughness)
     labels = (power < 3).long()
-    agent = _agent(0, **fields)
+    agent = _agent(seed, **fields)
     prepared = device_input(agent, batch)
     optimizer = torch.optim.Adam(agent.parameters(), lr=3e-4)
     for step in range(300):
@@ -123,7 +163,9 @@ def _steps_to_fit(**fields: bool) -> int:
 
 
 def test_a_stat_dependent_attack_rule_fits_sooner() -> None:
-    """The new layout fits in under 0.85 of the historical layout's updates
-    (measured 91/131 on this seed; 0.62-0.78 across three seeds)."""
-    new, historical = _steps_to_fit(stream_norm=True, focus_film=True), _steps_to_fit()
-    assert new < 0.85 * historical, (new, historical)
+    """Summed over three seeds the new layout fits in under 0.85 of the
+    historical layout's updates (measured 280 against 401)."""
+    seeds = range(3)
+    new = [_steps_to_fit(seed, stream_norm=True, focus_film=True) for seed in seeds]
+    historical = [_steps_to_fit(seed) for seed in seeds]
+    assert sum(new) < 0.85 * sum(historical), (new, historical)

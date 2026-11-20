@@ -420,11 +420,15 @@ class ActorCritic(nn.Module):
 
         # One normalized token stream (`ModelConfig.stream_norm`): every
         # stream summed into an object token is normalized here or starts at
-        # zero (links, stack sources, facts, shared effects). LayerNorms draw
-        # no RNG, so every parameter above keeps its draws.
+        # zero (links, stack sources, facts, shared effects). Pre-normalized
+        # attention leaves the residual stream unnormalized, so the heads read
+        # it through `final_norm`. LayerNorms draw no RNG, so every parameter
+        # above keeps its draws.
         self.stream_norms: nn.ModuleDict | None = None
+        self.final_norm: nn.LayerNorm | None = None
         if config.stream_norm:
-            streams = ["player", "card", "permanent", "definition", "context", "final"]
+            self.final_norm = nn.LayerNorm(embed_dim)
+            streams = ["player", "card", "permanent", "definition", "context"]
             if self.stack_tokens:
                 streams.append("stack")
             self.stream_norms = nn.ModuleDict(
@@ -905,11 +909,10 @@ class ActorCritic(nn.Module):
                 objects = layer(
                     objects, is_agent, key_padding_mask, summaries=summaries
                 )
-        if self.stream_norms is not None:
-            # Pre-normalized blocks leave the residual stream unnormalized;
-            # the heads read it through one final norm, padding kept zero.
+        if self.final_norm is not None:
+            # Padding stays zero, not the norm's bias.
             live_slots = (~key_padding_mask).unsqueeze(-1).to(objects.dtype)
-            objects = self._stream("final", objects) * live_slots
+            objects = self.final_norm(objects) * live_slots
         if columns is not None:
             # Restore the optional neutral value token in the same scatter,
             # at the slot immediately after the original object coordinates.
@@ -952,7 +955,9 @@ class ActorCritic(nn.Module):
         packed = self.attention.forward_live(packed, owners, tokens, summaries)
         for layer in self.extra_attention:
             packed = layer.forward_live(packed, owners, tokens, summaries)
-        return tokens.scatter(self._stream("final", packed))
+        if self.final_norm is not None:
+            packed = self.final_norm(packed)
+        return tokens.scatter(packed)
 
     def _value_from_objects(
         self, objects: torch.Tensor, validity: torch.Tensor

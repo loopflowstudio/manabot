@@ -194,10 +194,10 @@ object token is either normalized to the common scale or starts at zero.**
 | --- | --- |
 | Numeric projections (player, card, permanent, stack) | A `LayerNorm` after each projection |
 | Card definitions, after names join | One `LayerNorm` over the definition table, so a named card and an unnamed token enter at the same scale; the absent row stays zero |
-| Known hand, known library, decklists | Pooled into one vector per player, then one `LayerNorm`; exactly zero for a player with nothing known and no disclosed list |
+| Known hand, known library, decklists | Three streams, each pooled per player with its own `LayerNorm`; each exactly zero for a player whose source is empty |
 | Shared context | One `LayerNorm`; exactly zero for a decision with no relations and no events |
 | Links, stack sources, facts, shared effects | Not normalized: each ends in a zero-initialized layer and grows from nothing |
-| Attention | Pre-normalization, `x + attention(norm(x))` then `x + mlp(norm(x))`, and one final `LayerNorm` before the action and value heads |
+| Attention | Pre-normalization, `x + attention(norm(x))` then `x + mlp(norm(x))`, and one final `LayerNorm` (`ActorCritic.final_norm`) before the action and value heads |
 
 Query and key sizes then stay bounded however many streams a later change
 adds, and the heads read a normalized table. The attention layers keep their
@@ -205,15 +205,21 @@ parameter names; only the order of operations changes. The raw definition
 table that scores naming candidates and feeds decision memory is not
 normalized.
 
-Known cards are one of these streams, not an exception to them. Without the
+Known cards are streams like these, not an exception to them. Without the
 field, each known hand card, library position and decklist entry is weighted
 by its count or `1 / position` and then divided by 60, so one card known to
 be on top of a library reaches its player's token at about a sixtieth of a
-definition. With the field the division is gone and the norm sets the scale
-instead: one known card moves its player's token by at least as large a share
-as it does without the field. The norm keeps which cards are known and drops
-how many; the player row still carries hand and library sizes. A decklist
-entry stays a share of the deck (count / 60) in both layouts.
+definition. With the field the division is gone and each source is normalized
+on its own: known hand cards, known library positions and the disclosed
+decklist arrive separately, so learning a hand card adds a hand stream and
+leaves the decklist stream exactly as it was. One norm over their sum would
+let a first known card overwrite the decklist (the knowledge vector's cosine
+with its decklist-only value fell to 0.07–0.29); with three it stays at
+0.67–0.75, and one known card moves its player's token by about 0.7 of its
+size, against about 0.03 without the field. A normalized hand stream says
+which cards are known, not how many; the player row still carries hand and
+library sizes. A decklist entry stays a share of the deck (count / 60) in
+both layouts.
 
 Omitted, the field serializes as nothing and the model is the historical one:
 unnormalized sums, post-normalization attention and the `/ 60` pools. A stored
@@ -225,7 +231,7 @@ refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 
 On one constructed attack decision, fitting "attack if and only if power is
 at least 3" from initialization takes about 0.7 times as many updates with
-`stream_norm` and `focus_film` as with neither (three seeds: 91, 98 and 90
+`stream_norm` and `focus_film` as with neither (three seeds: 91, 99 and 90
 against 131, 125 and 145), and about 0.8 times with the Elemental world's
 definitions (95, 93 and 108 against 121, 138 and 122). That is a supervised
 fit of one decision: it shows the mechanisms work, not that self-play learns to attack sooner.
