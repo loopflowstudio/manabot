@@ -236,7 +236,7 @@ refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 On one constructed attack decision, fitting "attack if and only if power is
 at least 3" from initialization takes about 0.7 times as many updates with
 `stream_norm` and `focus_film` as with neither (three seeds: 75, 82 and 85
-against 109, 109 and 115), and about 0.85 times with `focus_film` alone (95,
+against 109, 109 and 115), and about 0.83 times with `focus_film` alone (95,
 92 and 90). With the Elemental world's definitions both fields take about
 0.83 times as many (92, 88 and 82 against 120, 97 and 99). That is a
 supervised fit of one decision: it shows the mechanisms work, not that
