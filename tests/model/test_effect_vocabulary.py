@@ -1,7 +1,7 @@
 """Runtime effect symbols must reach the production policy's admission tables.
 
 The exhaustive effect inventory lives in Rust. These bounded probes check its
-vocabulary sources across the Python encoder, admission and embedding-row join.
+vocabulary sources across the native encoder, admission and embedding-row join.
 """
 
 from dataclasses import replace

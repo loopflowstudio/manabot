@@ -1,4 +1,4 @@
-"""Layer payloads reach the native and Python encoders, the text and the policy."""
+"""Layer payloads reach the native encoder, the text and the policy."""
 
 import json
 from pathlib import Path

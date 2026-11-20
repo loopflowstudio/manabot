@@ -16,7 +16,7 @@ is derived from the space the caller supplies, never a native default.
 """
 
 from collections.abc import Mapping
-from typing import Dict, ItemsView, KeysView, Tuple, ValuesView
+from typing import ItemsView, KeysView, ValuesView
 
 import gymnasium as gym
 import numpy as np
@@ -149,55 +149,6 @@ class ObservationEncoder:
     """
 
     def __init__(self, config: ObservationConfig) -> None:
-        self.config = config
-        self.library_shape = tuple(
-            managym.observation_layout()["known_library"]["shape"]
-        )
-        self.relation_dim = RELATION_DIM
-        self.cards_per_player = config.max_cards_per_player
-        self.perms_per_player = config.max_permanents_per_player
-        # Naming is bounded group prompts, so action capacity is independent
-        # of vocabulary size.
-        self.max_actions = config.max_actions
-        self.name_dim = NAME_DIM
-        self.max_focus_objects = config.max_focus_objects
-        self.max_events = config.max_events
-
-        self.num_phases = len(PhaseEnum.__members__)
-        self.num_steps = len(StepEnum.__members__)
-        self.num_zones = len(ZoneEnum.__members__)
-        self.num_actions = len(ActionEnum.__members__)
-        self.num_event_types = len(EventTypeEnum.__members__)
-        self.num_event_entity_kinds = len(EventEntityKindEnum.__members__)
-
-        # Define dimensions for players, cards, permanents.
-        # Player: life + is_active + zones + phase/step one-hots + gy
-        # lessons + until-end-of-combat mana + pooled and spend-restricted colors,
-        # restricted mana by spending subtype, the hand-only lock, no maximum
-        # hand size, turn number, seat, kept red mana and turn history.
-        # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
-        # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + hexproof + outside + indestructible + legendary,
-        # cast-permission terms and announced X; validity is last.
-        self.player_dim = PLAYER_DIM
-        self.card_dim = CARD_DIM
-        # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
-        # can't-be-blocked-this-turn, effective power/toughness, animated
-        # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
-        # (printed + until-EOT grants), death-to-exile replacement, definition,
-        # temporary Avatar subtype, attacking, used exhaust and
-        # once-each-turn ability counts, granted firebending, attachment join,
-        # granted land, blocking join, lost abilities, timestamp rank and
-        # dealt damage this turn; validity is last. Counter kinds, effect-set
-        # subtypes and characteristics and used abilities are fact rows;
-        # continuous-effect records are shared-effect rows.
-        # Input v11 lists each game thing once; deprecated v9/v10 rows also
-        # list battlefield objects and spells as cards (`legacy_input`).
-        self.one_token = config.policy_input_version == 11
-        self.permanent_dim = PERMANENT_DIM if self.one_token else LEGACY_PERMANENT_DIM
-        self.max_stack_objects = config.max_stack_objects if self.one_token else 0
-        self.event_dim = 12 if config.policy_history_version == 1 else 7
-        self.turn_state = config.policy_input_version in (10, 11)
         capacities = (
             config.max_decision_records,
             config.max_decision_reference_details,
@@ -206,16 +157,35 @@ class ObservationEncoder:
         )
         if any(capacities) and not all(capacities):
             raise ValueError("decision memory requires all companion capacities")
+        # Input v11 lists each game thing once; deprecated v9/v10 rows also
+        # list battlefield objects and spells as cards and have no stack array.
+        self.one_token = config.policy_input_version == 11
         if config.max_decision_records and not self.one_token:
             raise ValueError("decision memory requires policy input v11")
+        self.config = config
+        self.turn_state = config.policy_input_version in (10, 11)
+        self.cards_per_player = config.max_cards_per_player
+        self.perms_per_player = config.max_permanents_per_player
+        self.max_stack_objects = config.max_stack_objects if self.one_token else 0
+        # Naming is bounded group prompts, so action capacity is independent
+        # of vocabulary size.
+        self.max_actions = config.max_actions
+        self.max_focus_objects = config.max_focus_objects
+        self.max_events = config.max_events
+        self.num_zones = len(ZoneEnum.__members__)
 
-        # Preserve attack/decline independently of action family and focus.
-        self.action_dim = (
-            self.num_actions + 5
-        )  # declaration, mode, ability, continuation join, validity
+        # Row widths; native `observation_layout()` names every column.
+        self.player_dim = PLAYER_DIM
+        self.card_dim = CARD_DIM
+        self.permanent_dim = PERMANENT_DIM if self.one_token else LEGACY_PERMANENT_DIM
+        self.relation_dim = RELATION_DIM
+        # Family one-hot, then declaration, mode, ability, continuation join
+        # and validity.
+        self.action_dim = len(ActionEnum.__members__) + 5
+        self.event_dim = 12 if config.policy_history_version == 1 else 7
 
     @property
-    def shapes(self) -> Dict[str, Tuple[int, ...]]:
+    def shapes(self) -> dict[str, tuple[int, ...]]:
         return {
             **(
                 {
@@ -238,7 +208,15 @@ class ObservationEncoder:
             **SHARED_EFFECT_SHAPES,
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
-            **({"known_library": self.library_shape} if self.one_token else {}),
+            **(
+                {
+                    "known_library": tuple(
+                        managym.observation_layout()["known_library"]["shape"]
+                    )
+                }
+                if self.one_token
+                else {}
+            ),
             "decklists": (2, self.cards_per_player, DECKLIST_DIM),
             **(
                 {
@@ -263,7 +241,7 @@ class ObservationEncoder:
                 if self.one_token
                 else {}
             ),
-            "name_candidates": (self.max_actions, self.name_dim),
+            "name_candidates": (self.max_actions, NAME_DIM),
             "actions": (self.max_actions, self.action_dim),
             "events": (self.max_events, self.event_dim),
             "action_focus": (self.max_actions, self.max_focus_objects),
@@ -278,13 +256,13 @@ class ObservationEncoder:
         }
 
     @property
-    def dtypes(self) -> Dict[str, np.dtype]:
+    def dtypes(self) -> dict[str, np.dtype]:
         return {
             key: np.int32 if key == "action_focus" else np.float32
             for key in self.shapes
         }
 
-    def allocate(self, *leading_dims: int) -> Dict[str, np.ndarray]:
+    def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
         dtypes = self.dtypes
         return {
             key: np.zeros((*leading_dims, *shape), dtype=dtypes[key])
@@ -310,7 +288,7 @@ class ObservationSpace(gym.spaces.Space):
         )
         self.shapes = self.encoder.shapes
 
-    def sample(self, mask=None) -> Dict[str, np.ndarray]:
+    def sample(self, mask=None) -> dict[str, np.ndarray]:
         return {name: space.sample() for name, space in self.spaces.items()}
 
     def contains(self, x: ObservationBuffers) -> bool:
