@@ -36,11 +36,6 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     assert observations[0].toJSON() == observations[1].toJSON()
     space = ObservationSpace()
     encoded = [space.encode(obs) for obs in observations]
-    for env, obs, expected in zip(branches, observations, encoded, strict=True):
-        actual = env.encode_observation(obs)
-        assert actual.keys() == expected.keys()
-        for key in actual:
-            np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
     differences = [
         key
         for key in encoded[0]
@@ -68,19 +63,14 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     )
 
 
-def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
+def test_native_fixture_mana_outputs_and_other_viewer_safety() -> None:
     space = ObservationSpace()
     for name, env in native_fixtures().items():
         actor = env.current_agent_index()
         assert actor is not None
         for viewer in (actor, 1 - actor):
             observation = env.observation_for_player(viewer)
-            expected = space.encode(observation)
-            actual = env.encode_observation(observation)
-            for key in actual:
-                np.testing.assert_array_equal(
-                    actual[key], expected[key], err_msg=f"{name}: {key}"
-                )
+            encoded = space.encode(observation)
             if name == "mana_color" and viewer == actor:
                 outputs = [
                     output
@@ -93,7 +83,7 @@ def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
                     for color in range(5)
                 }
                 assert all(not any(output.lesson) for output in outputs)
-                assert np.count_nonzero(actual["relations"][:, 0] == 6) == 10
+                assert np.count_nonzero(encoded["relations"][:, 0] == 6) == 10
             if viewer != actor:
                 assert all(frame.kind <= 3 for frame in observation.continuation)
     left, right = collision_branches()
@@ -192,16 +182,14 @@ def test_retained_eligibility_separates_portable_text_and_policy_input() -> None
     for record in _eligibility_evidence():
         capture_json = json.dumps(record.capture)
         capture = DecisionInput.model_validate_json(capture_json)
-        observation = managym.Observation.from_json(
-            json.dumps(_without_active_effects(capture.observation.viewer_state))
-        )
         # Schema 7 intentionally excludes continuation. Join the validated capture
-        # frames only for the stateless reference encoder, never an execution Env.
-        tensors = space.encode(observation)
-        rows = space.encoder._encode_relations(
-            capture.frames, observation.agent.player_index
+        # frames only into a stateless observation, never an execution Env.
+        observation = managym.Observation.from_json(
+            json.dumps(_without_active_effects(capture.observation.viewer_state)),
+            continuation_json=json.dumps(record.capture["frames"]),
         )
-        tensors["relations"] = rows
+        tensors = space.encode(observation)
+        rows = tensors["relations"]
         # The receipt retains the columns through eligibility; X and granted
         # keywords follow them and are empty in these positions.
         retained = RELATION_ELIGIBILITY_INDEX + 1
@@ -279,14 +267,15 @@ def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed
         DecisionInput.model_validate_json(json.dumps(fresh))
 
 
-def test_scalar_and_vector_buffers_match_the_reference_encoder() -> None:
+def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
     space = ObservationSpace()
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     scalar = managym.Env(seed=608, skip_trivial=False)
     observation, _ = scalar.reset(players)
     expected = space.encode(observation)
-    out = {key: np.zeros_like(value) for key, value in expected.items()}
-    scalar.encode_observation_into(observation, out)
+    # Every element is written, padding included.
+    out = {key: np.full_like(value, -7) for key, value in expected.items()}
+    managym.encode_observation_into(observation, out)
     for key in out:
         np.testing.assert_array_equal(out[key], expected[key], err_msg=key)
     vector = managym.VectorEnv(1, seed=608, skip_trivial=False)
@@ -367,6 +356,7 @@ def test_retained_capture_schema_cannot_admit_current_name_references() -> None:
         DecisionInput.model_validate_json(json.dumps(fresh))
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_exported_observation_keeps_complete_policy_input_with_continuation() -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=10))
     for env in collision_branches():

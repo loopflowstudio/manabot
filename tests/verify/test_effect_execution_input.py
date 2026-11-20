@@ -1,21 +1,19 @@
-"""Native retained-state pairs reach the reference encoder, text and real model.
+"""Native retained-state pairs reach the policy input, text and real model.
 
 The fixture is produced by effect_execution_inputs_separate_results_iteration_and_completion
 with EFFECT_EXECUTION_EVIDENCE set. It records constructed positions, not a
 training receipt or an admitted replay world.
 """
 
-from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, cast
 
 import numpy as np
 from pydantic import BaseModel, JsonValue, TypeAdapter
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace, _timestamp_ranks
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.managym.decision_capture import DecisionInput
 from manabot.semantic.text_observation import render_decision
@@ -25,6 +23,11 @@ from tests.model.prepared_routes import device_input
 
 # Relation decision code of a pending native `Decision::SelectCards`.
 SELECTION_OBLIGATION = 28
+RELATIONS = managym.observation_layout()["relations"]["columns"]
+
+
+def _relation(name: str) -> int:
+    return RELATIONS[name]["index"]
 
 
 class ExecutionEvidence(BaseModel):
@@ -35,25 +38,13 @@ class ExecutionEvidence(BaseModel):
     relations: list[float]
 
 
-@dataclass
-class CapturedObservation:
-    """Stateless test projection: viewer JSON plus native, validated capture frames."""
-
-    observation: managym.Observation
-    continuation: list[managym.ContinuationFrame]
-
-    # PyO3 observations are opaque; forward their already validated public fields.
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.observation, name)
-
-
 def _evidence() -> list[ExecutionEvidence]:
     return TypeAdapter(list[ExecutionEvidence]).validate_json(
         (Path(__file__).parents[1] / "fixtures/effect-execution-v8.json").read_text()
     )
 
 
-def test_real_fetch_search_has_native_python_encoder_parity() -> None:
+def test_real_fetch_search_encodes_its_pending_selection_frame() -> None:
     env = priority_root((), ("Fabled Passage", "Mountain"))
     observation = env.scenario_refresh()
     activate = next(
@@ -75,11 +66,29 @@ def test_real_fetch_search_has_native_python_encoder_parity() -> None:
         observation, *_ = env.step(passing)
     else:
         raise AssertionError("fetch search not reached")
-    expected = ObservationSpace().encode(observation)
-    actual = env.encode_observation(observation)
-    assert actual.keys() == expected.keys()
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    encoded = ObservationSpace().encode(observation)
+    rows = encoded["relations"][encoded["relations"][:, _relation("valid")] == 1]
+    # Frame header rows (kind 1), one per continuation frame, each under its parent.
+    headers = rows[rows[:, _relation("kind")] == 1]
+    frames = observation.continuation
+    np.testing.assert_array_equal(
+        headers[:, _relation("frame")], np.arange(1, len(frames) + 1)
+    )
+    np.testing.assert_array_equal(
+        headers[:, _relation("parent")], np.arange(len(frames))
+    )
+    np.testing.assert_array_equal(
+        headers[:, _relation("frame_kind")], [frame.kind for frame in frames]
+    )
+    # The resolving fetch ability names Fabled Passage (definition id + 1).
+    passage = list(managym.catalog_tokens()["keys"]).index("eld.fabled_passage") + 1
+    np.testing.assert_array_equal(headers[:-1, _relation("source_definition")], passage)
+    # The innermost frame is the pending, declinable library selection.
+    selection = headers[-1]
+    assert selection[_relation("decision")] == SELECTION_OBLIGATION
+    assert selection[_relation("can_decline")] == 1
+    assert (rows[:, _relation("decision")] == SELECTION_OBLIGATION).sum() == 2
+    assert encoded["actions_valid"].sum() == len(observation.action_space.actions)
 
 
 def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
@@ -100,19 +109,13 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
         for record in records[start : start + 2]:
             capture_json = json.dumps(record.capture)
             capture = DecisionInput.model_validate_json(capture_json)
+            # The receipt's arrays came from the full live observation; storage
+            # keeps its frames apart from the viewer JSON, so rejoin them.
             obs = managym.Observation.from_json(
-                json.dumps(capture.observation.viewer_state)
+                json.dumps(capture.observation.viewer_state),
+                continuation_json=json.dumps(record.capture["frames"]),
             )
-            tensors = space.encode(obs)
-            joined = CapturedObservation(obs, capture.frames)
-            # Native arrays in the receipt came directly from the full live
-            # observation. Only schema-7 storage separates frames from viewer JSON.
-            tensors["facts"] = space.encoder._encode_facts(
-                cast(managym.Observation, joined), _timestamp_ranks(obs)
-            )
-            tensors["relations"] = space.encoder._encode_relations(
-                capture.frames, obs.agent.player_index
-            )
+            tensors = dict(space.encode(obs))
             for name, width, expected in (
                 ("facts", 12, record.facts),
                 ("relations", 49, record.relations),

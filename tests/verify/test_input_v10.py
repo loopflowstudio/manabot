@@ -1,8 +1,8 @@
 """Policy input v10: the turn state v9 cannot hold.
 
-V10 is v9 plus `player_turn_state` and `card_turn_state`. The native and
-Python encoders write them identically; a v9 encoder refuses an observation
-that needs them, naming v10 and the state, before writing any buffer.
+V10 is v9 plus `player_turn_state` and `card_turn_state`, written by the
+native encoder. A v9 encoder refuses an observation that needs them, naming
+v10 and the state, before writing any buffer.
 """
 
 from typing import Iterator
@@ -16,23 +16,21 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     TURN_STATE_DIM,
     TURN_STATE_LIFE_LOST_INDEX,
+    TURN_STATE_NONARTIFACT_MANA_INDEX,
     TURN_STATE_SPELLS_CAST_INDEX,
-    ObservationEncoder,
     ObservationSpace,
 )
 from manabot.env.vector_env import VectorEnv
-from manabot.infra.config import (
-    ModelConfig,
-    ObservationConfig,
-    RewardConfig,
-    UnsupportedPolicyInput,
-)
-from tests.model.prepared_routes import device_input
+from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.verify.text_observation import priority_root
 import managym
+from tests.model.prepared_routes import device_input
 
-V9 = ObservationConfig(policy_input_version=9)
-V10 = ObservationConfig(policy_input_version=10)
+
+def _config(version: int) -> ObservationConfig:
+    """A deprecated v9/v10 configuration, which warns when built."""
+    with pytest.warns(DeprecationWarning, match=f"policy input v{version}"):
+        return ObservationConfig(policy_input_version=version)
 
 
 def _lost_life(obs: managym.Observation, amount: int) -> managym.Observation:
@@ -45,57 +43,58 @@ def _lost_life(obs: managym.Observation, amount: int) -> managym.Observation:
     return obs
 
 
-def _native(env: managym.Env, obs: managym.Observation, config: ObservationConfig):
-    out = ObservationEncoder(config).allocate()
-    env.encode_observation_into(obs, out)
-    return out
-
-
 def test_v9_refuses_life_lost_only_once_a_visible_card_reads_it() -> None:
+    space = ObservationSpace(_config(9))
     env = priority_root((), ("Mountain",))
     obs = _lost_life(env.scenario_refresh(), 3)
     assert managym.input_v10_state(obs) is None
-    ObservationEncoder(V9).encode(obs)
+    space.encode(obs)
 
     env = priority_root((), ("Bloodchief Ascension",))
     obs = _lost_life(env.scenario_refresh(), 3)
     assert managym.input_v10_state(obs) == "life lost this turn"
-    with pytest.raises(UnsupportedPolicyInput, match="life lost this turn") as raised:
-        ObservationEncoder(V9).encode(obs)
-    assert raised.value.version == 10 and raised.value.state == "life lost this turn"
-    with pytest.raises(ValueError, match="policy input v10 required"):
-        _native(env, obs, V9)
+    out = space.encoder.allocate()
+    for value in out.values():
+        value.fill(-7)
+    with pytest.raises(
+        ValueError, match="policy input v10 required: .*life lost this turn"
+    ):
+        managym.encode_observation_into(obs, out)
+    assert all(np.all(value == -7) for value in out.values())
 
 
-def test_native_and_python_v10_encoders_agree() -> None:
+def test_v10_turn_state_rows_hold_life_lost_spells_cast_and_left_battlefield() -> None:
+    config = _config(10)
     env = priority_root(("Brought Back",), ("Bloodchief Ascension",))
     obs = _lost_life(env.scenario_refresh(), 3)
-    # The encoders copy the card flag; game behavior is covered natively.
+    # The encoder copies the card flag; game behavior is covered natively.
     cards = obs.agent_cards
     cards[0].from_battlefield_this_turn = True
     obs.agent_cards = cards
     agent = obs.agent
     agent.spells_cast = 2
     obs.agent = agent
-    python = ObservationEncoder(V10).encode(obs)
-    native = _native(env, obs, V10)
-    assert set(python) == set(native)
-    for key, value in python.items():
-        np.testing.assert_allclose(native[key], value, atol=1e-6, err_msg=key)
-    assert python["player_turn_state"].shape == (2, TURN_STATE_DIM)
-    assert python["player_turn_state"][1, TURN_STATE_LIFE_LOST_INDEX] == pytest.approx(
-        3 / 20
-    )
-    assert python["player_turn_state"][0, TURN_STATE_SPELLS_CAST_INDEX] == (
-        pytest.approx(2 / 10)
-    )
-    assert python["card_turn_state"][0, 0] == 1.0
-    assert python["card_turn_state"].sum() == 1.0
+    encoded = ObservationSpace(config).encode(obs)
+    players = encoded["player_turn_state"]
+    assert players.shape == (2, TURN_STATE_DIM)
+    # Agent row first: no life lost, two spells cast.
+    assert players[0, TURN_STATE_LIFE_LOST_INDEX] == 0.0
+    assert players[0, TURN_STATE_SPELLS_CAST_INDEX] == pytest.approx(2 / 10)
+    assert players[1, TURN_STATE_LIFE_LOST_INDEX] == pytest.approx(3 / 20)
+    assert players[1, TURN_STATE_SPELLS_CAST_INDEX] == 0.0
+    assert not players[:, TURN_STATE_NONARTIFACT_MANA_INDEX:].any()
+    cards_state = encoded["card_turn_state"]
+    assert cards_state.shape == (2, config.max_cards_per_player)
+    assert cards_state[0, 0] == 1.0
+    assert cards_state.sum() == 1.0
 
 
 @pytest.fixture
-def v10_observation() -> Iterator[tuple[ObservationSpace, dict[str, torch.Tensor]]]:
-    space = ObservationSpace(V10)
+def v10_observation() -> Iterator[
+    tuple[ObservationSpace, ObservationConfig, dict[str, torch.Tensor]]
+]:
+    config = _config(10)
+    space = ObservationSpace(config)
     env = VectorEnv(
         num_envs=2,
         match=Match(),
@@ -105,16 +104,18 @@ def v10_observation() -> Iterator[tuple[ObservationSpace, dict[str, torch.Tensor
         player_policies=("agent", "random"),
     )
     obs, _ = env.reset()
-    yield space, obs
+    yield space, config, obs
     env.close()
 
 
 def test_v10_vector_buffers_reach_the_model(
-    v10_observation: tuple[ObservationSpace, dict[str, torch.Tensor]],
+    v10_observation: tuple[
+        ObservationSpace, ObservationConfig, dict[str, torch.Tensor]
+    ],
 ) -> None:
-    space, obs = v10_observation
+    space, config, obs = v10_observation
     assert obs["player_turn_state"].shape == (2, 2, TURN_STATE_DIM)
-    assert obs["card_turn_state"].shape == (2, 2, V10.max_cards_per_player)
+    assert obs["card_turn_state"].shape == (2, 2, config.max_cards_per_player)
     torch.manual_seed(0)
     agent = ActorCritic(space, ModelConfig(hidden_dim=4, num_attention_heads=2))
     with torch.no_grad():
