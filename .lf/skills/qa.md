@@ -173,10 +173,10 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
-  The session strip always shows **Rematch** (mid-game it asks to stop the
-  game), so detect the end by a second Rematch button, in the "Game Over"
-  dialog (`getByRole('button', {name: 'Rematch', exact: true}).count() >= 2`),
-  and bound play loops by time, since the bot can win first. Live bot work
+  The configured-launch table (`managym academy play`) has no Rematch in its
+  header, so detect the end by the right panel's "Game over — no next
+  decision." text (or one Rematch button), not by counting two Rematch
+  buttons, and bound play loops by time, since the bot can win first. Live bot work
   ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
   needs the owner credential from the same browser profile; a fresh browser
   context gets 403. Games-page Replay links are labelled `Replay game <id>`;
