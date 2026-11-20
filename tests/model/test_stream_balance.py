@@ -99,6 +99,11 @@ def _permanent_norms(agent: ActorCritic) -> dict[str, np.ndarray]:
     }
 
 
+def test_stream_norm_requires_attention() -> None:
+    with pytest.raises(ValueError, match="stream_norm requires attention_on"):
+        ModelConfig(attention_on=False, stream_norm=True)
+
+
 @pytest.mark.parametrize("stream_norm", [True, False])
 def test_numeric_and_definition_streams_share_a_scale(stream_norm: bool) -> None:
     """Without the norms a card's definition reaches several times its numeric

@@ -685,6 +685,7 @@ closed set:
 | --- | --- |
 | `flag` | 0 or 1 |
 | `count` | A nonnegative amount, stored divided by `scale` |
+| `mana` | Floating mana in a player pool, stored divided by `scale` |
 | `number` | A signed amount, stored divided by `scale` |
 | `rank` | A one-based order rank; 0 absent |
 | `position` | A one-based position in a zone; 0 absent |
@@ -694,7 +695,7 @@ closed set:
 | `id` | An identity, such as a card definition or token value; never a magnitude |
 | `tagged` | A value whose meaning depends on its row's kind |
 
-`count` and `number` columns also give `scale`, the divisor the encoder
+`count`, `mana` and `number` columns also give `scale`, the divisor the encoder
 applied: 1 for an unscaled value, otherwise 10, 20 or 60. No other kind has
 one. The encoding explains join targets, index bases and absence
 sentinels in prose; the range describes stored values, including when no fixed bound

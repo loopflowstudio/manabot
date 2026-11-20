@@ -155,9 +155,12 @@ def test_saved_model_records_sized_readings(
     )
 
 
-@pytest.mark.parametrize("value", ["one_hot", "one_hot:0", "as_is:3", "steps:x"])
+@pytest.mark.parametrize(
+    "value",
+    ["one_hot", "one_hot:0", "as_is:3", "as_is:", "steps:x", "steps:+8", "steps:٨", 8],
+)
 def test_a_malformed_sized_reading_is_refused(
-    saved: tuple[ActorCritic, ObservationSpace, Path], value: str
+    saved: tuple[ActorCritic, ObservationSpace, Path], value: object
 ) -> None:
     _, space, path = saved
     record = read_checkpoint(path)
@@ -188,6 +191,12 @@ def test_a_category_size_is_kept_when_the_category_grows(tmp_path: Path) -> None
     assert flags.shape == (4, 13)
     np.testing.assert_array_equal(flags.sum(1), [0, 1, 1, 1])
     assert flags[1, 2] == flags[2, 11] == flags[3, 12] == 1
+
+
+def test_subunit_codes_leave_the_whole_one_hot_empty() -> None:
+    rows = np.array([[0.25, 0.5], [0.25, -1]], dtype=np.float32)
+    actual = read_numeric(rows, (Reading.AS_IS, Sized(Reading.ONE_HOT, 2)))
+    np.testing.assert_array_equal(actual, [[0.25, 0, 0, 0]] * 2)
 
 
 def test_one_hot_and_steps_read_as_documented() -> None:

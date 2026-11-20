@@ -45,6 +45,8 @@ pub enum ValueKind {
     Flag,
     /// A nonnegative amount, stored divided by `scale`.
     Count { scale: u16 },
+    /// Floating mana in a player pool, stored divided by `scale`.
+    Mana { scale: u16 },
     /// A signed amount, stored divided by `scale`.
     Number { scale: u16 },
     /// A one-based order rank; 0 absent.
@@ -68,6 +70,7 @@ impl ValueKind {
         match self {
             Self::Flag => "flag",
             Self::Count { .. } => "count",
+            Self::Mana { .. } => "mana",
             Self::Number { .. } => "number",
             Self::Rank => "rank",
             Self::Position => "position",
@@ -81,7 +84,7 @@ impl ValueKind {
 
     pub const fn scale(self) -> Option<u16> {
         match self {
-            Self::Count { scale } | Self::Number { scale } => Some(scale),
+            Self::Count { scale } | Self::Mana { scale } | Self::Number { scale } => Some(scale),
             _ => None,
         }
     }
@@ -129,18 +132,23 @@ impl ValueLayout {
         "Value / 60",
         "nonnegative; no fixed bound",
     );
+    const MANA_TENTHS: Self = Self::new(
+        ValueKind::Mana { scale: 10 },
+        "Value / 10",
+        "nonnegative; no fixed bound",
+    );
     const RESTRICTED_MANA: Self = Self::new(
-        ValueKind::Count { scale: 10 },
+        ValueKind::Mana { scale: 10 },
         "All spend-restricted mana of this color / 10 (legacy field name)",
         "nonnegative; no fixed bound",
     );
     const SUBTYPE_MANA: Self = Self::new(
-        ValueKind::Count { scale: 10 },
+        ValueKind::Mana { scale: 10 },
         "Spend-restricted mana admitting this subtype / 10; subtype totals can overlap",
         "nonnegative; no fixed bound",
     );
     const NONARTIFACT_MANA: Self = Self::new(
-        ValueKind::Count { scale: 10 },
+        ValueKind::Mana { scale: 10 },
         "Mana of this color that can't be spent to cast nonartifact spells / 10",
         "nonnegative; no fixed bound",
     );
@@ -223,13 +231,13 @@ columns! { player {
     24: STEP_END => ("step_end", ValueLayout::FLAG),
     25: STEP_CLEANUP => ("step_cleanup", ValueLayout::FLAG),
     26: GRAVEYARD_LESSONS => ("graveyard_lessons", ValueLayout::COUNT_TENTHS),
-    27: COMBAT_MANA => ("combat_mana", ValueLayout::COUNT_TENTHS),
-    28: MANA_WHITE => ("mana_white", ValueLayout::COUNT_TENTHS),
-    29: MANA_BLUE => ("mana_blue", ValueLayout::COUNT_TENTHS),
-    30: MANA_BLACK => ("mana_black", ValueLayout::COUNT_TENTHS),
-    31: MANA_RED => ("mana_red", ValueLayout::COUNT_TENTHS),
-    32: MANA_GREEN => ("mana_green", ValueLayout::COUNT_TENTHS),
-    33: MANA_COLORLESS => ("mana_colorless", ValueLayout::COUNT_TENTHS),
+    27: COMBAT_MANA => ("combat_mana", ValueLayout::MANA_TENTHS),
+    28: MANA_WHITE => ("mana_white", ValueLayout::MANA_TENTHS),
+    29: MANA_BLUE => ("mana_blue", ValueLayout::MANA_TENTHS),
+    30: MANA_BLACK => ("mana_black", ValueLayout::MANA_TENTHS),
+    31: MANA_RED => ("mana_red", ValueLayout::MANA_TENTHS),
+    32: MANA_GREEN => ("mana_green", ValueLayout::MANA_TENTHS),
+    33: MANA_COLORLESS => ("mana_colorless", ValueLayout::MANA_TENTHS),
     34: LESSON_MANA_WHITE => ("lesson_mana_white", ValueLayout::RESTRICTED_MANA),
     35: LESSON_MANA_BLUE => ("lesson_mana_blue", ValueLayout::RESTRICTED_MANA),
     36: LESSON_MANA_BLACK => ("lesson_mana_black", ValueLayout::RESTRICTED_MANA),

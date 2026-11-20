@@ -28,9 +28,15 @@ SPEC = {
 }
 
 
-def _agent(seed: int, **fields: object) -> ActorCritic:
+def _agent(
+    seed: int, *, bucketed_shapes: bool = False, **fields: object
+) -> ActorCritic:
     torch.manual_seed(seed)
-    return ActorCritic(SPACE, ModelConfig.model_validate({**SPEC, **fields}))
+    return ActorCritic(
+        SPACE,
+        ModelConfig.model_validate({**SPEC, **fields}),
+        bucketed_shapes=bucketed_shapes,
+    )
 
 
 def _attacker(
@@ -49,7 +55,6 @@ def test_field_is_omitted_when_off_and_keeps_every_other_draw() -> None:
     focused = _agent(5, focus_film=True).state_dict()
     assert {name for name in focused if name not in additive} == {
         "focus_film.weight",
-        "focus_film.bias",
     }
     for name, value in additive.items():
         torch.testing.assert_close(focused[name], value, rtol=0, atol=0)
@@ -62,6 +67,8 @@ def test_an_unfocused_offer_is_scaled_by_exactly_one() -> None:
     obs["action_focus"].fill_(-1)
     with torch.no_grad():
         additive, focused = _agent(7), _agent(7, focus_film=True)
+        assert focused.focus_film is not None
+        focused.focus_film.weight.add_(1)
         torch.testing.assert_close(
             focused(device_input(focused, obs))[0],
             additive(device_input(additive, obs))[0],
@@ -71,7 +78,7 @@ def test_an_unfocused_offer_is_scaled_by_exactly_one() -> None:
 
 
 def test_a_zero_focus_weight_is_the_additive_model() -> None:
-    """With `focus_film.weight` zero (its bias starts zero) every offer is
+    """With `focus_film.weight` zero every offer is
     scaled by exactly one, focused or not: the field adds the term and
     nothing else."""
     obs = decision_case("attack").observation
@@ -97,6 +104,8 @@ def test_only_a_focused_offer_trains_the_focus_weight() -> None:
     obs["action_focus"][0, 1] = -1
     agent = _agent(3, focus_film=True)
     assert agent.focus_film is not None
+    with torch.no_grad():
+        agent.focus_film.weight.add_(1)
     prepared = device_input(agent, obs)
 
     def weight_gradient(offer: int) -> torch.Tensor:
@@ -118,7 +127,7 @@ def _steps_to_fit(seed: int, **fields: bool) -> int:
     batch = {key: torch.cat([value] * len(power)) for key, value in case.items()}
     _attacker(batch, power, toughness)
     labels = (power < 3).long()
-    agent = _agent(seed, **fields)
+    agent = _agent(seed, bucketed_shapes=True, **fields)
     prepared = device_input(agent, batch)
     optimizer = torch.optim.Adam(agent.parameters(), lr=3e-4)
     for step in range(300):
@@ -134,11 +143,18 @@ def _steps_to_fit(seed: int, **fields: bool) -> int:
 
 def test_a_stat_dependent_attack_rule_fits_sooner() -> None:
     """Summed over three seeds, `focus_film` alone fits in under 0.9 of the
-    historical layout's updates (measured 277 against 333) and the new layout
-    in under 0.85 (measured 242)."""
-    seeds = range(3)
-    historical = sum(_steps_to_fit(seed) for seed in seeds)
-    focused = sum(_steps_to_fit(seed, focus_film=True) for seed in seeds)
-    new = sum(_steps_to_fit(seed, stream_norm=True, focus_film=True) for seed in seeds)
+    historical layout's updates (measured 259 against 329) and the new layout
+    in under 0.85 (measured 254)."""
+    previous_threads = torch.get_num_threads()
+    try:
+        torch.set_num_threads(1)
+        seeds = range(3)
+        historical = sum(_steps_to_fit(seed) for seed in seeds)
+        focused = sum(_steps_to_fit(seed, focus_film=True) for seed in seeds)
+        new = sum(
+            _steps_to_fit(seed, stream_norm=True, focus_film=True) for seed in seeds
+        )
+    finally:
+        torch.set_num_threads(previous_threads)
     assert focused < 0.9 * historical, (focused, historical)
     assert new < 0.85 * historical, (new, historical)

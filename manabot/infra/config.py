@@ -490,6 +490,8 @@ class ModelConfig(BaseConfig):
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
             raise ValueError("embedding width must be divisible by attention heads")
+        if self.stream_norm and not self.attention_on:
+            raise ValueError("stream_norm requires attention_on")
         if not self.attention_on and (
             self.value_aggregation == "value_token"
             or self.attention_layers != 1

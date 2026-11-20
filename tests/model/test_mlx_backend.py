@@ -194,7 +194,7 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     )
 
 
-@pytest.mark.parametrize("field", ["focus_film", "stream_norm"])
+@pytest.mark.parametrize("field", ["policy_film", "focus_film", "stream_norm"])
 def test_unimplemented_layouts_are_refused_by_name(field: str) -> None:
     model = ModelConfig(
         world="elemental-world-v2", value_aggregation="masked_mean", **{field: True}

@@ -156,6 +156,31 @@ def test_power_and_toughness_move_a_whole_object_token(
         assert median < 0.15
 
 
+def test_player_mana_is_scalar_and_combat_stats_keep_their_thresholds() -> None:
+    space = ObservationSpace()
+    readings = fresh_readings(space)
+    columns = published_columns(space)
+    for key, width, pools in (("agent_player", 99, 31), ("player_turn_state", 16, 6)):
+        mana = [
+            r
+            for col, r in zip(columns[key], readings[key], strict=True)
+            if col.kind == "mana"
+        ]
+        assert mana == ["as_is"] * pools
+        assert sum(map(input_width, readings[key])) == width
+    for key, names in (
+        (
+            "agent_permanents",
+            ("power", "toughness", "damage", "mana_value", "ward_cost"),
+        ),
+        ("actions", ("x",)),
+    ):
+        by_name = {
+            col.name: str(r) for col, r in zip(columns[key], readings[key], strict=True)
+        }
+        assert all(by_name[name] == "steps:8" for name in names)
+
+
 def test_no_category_or_selector_is_a_magnitude() -> None:
     """A fresh model reads every category and selector as flags, a join, a
     lookup or a mask; none reaches a projection as one number."""

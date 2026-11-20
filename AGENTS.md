@@ -335,7 +335,8 @@ change already touches it; do not rewrite a module only for style. Rust in
   `agent/observation_layout.rs`): unscaled counts get the log squash, a
   category of declared `size` n reads `one_hot:n` and a selector `one_hot:15`
   (the last flag is always "above the size", never a real value), a count or
-  number stored in tenths reads `steps:8`, every `rank` is rank / 128
+  number stored in tenths reads `steps:8`. Scaled player mana pools keep one
+  scalar (`as_is`), and unscaled mana reads `log`. Every `rank` is rank / 128
   independent of fact and effect capacity, references are gathered and ids
   looked up. No category or index reaches a projection as a magnitude. A new
   column declares its kind (`scale` when the encoder divides it, `size` for a

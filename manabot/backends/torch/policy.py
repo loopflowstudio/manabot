@@ -447,7 +447,7 @@ class ActorCritic(nn.Module):
         self.focus_film: nn.Linear | None = None
         if config.focus_film:
             self.focus_film = layer_init(
-                nn.Linear(self.max_focus_objects * embed_dim, embed_dim)
+                nn.Linear(self.max_focus_objects * embed_dim, embed_dim, bias=False)
             )
 
         # When True, forward() stashes legal logits at original coordinates on
@@ -1031,9 +1031,13 @@ class ActorCritic(nn.Module):
         normed = self.stream_norms["definition"](table[1:])
         return torch.cat((table.new_zeros((1, table.shape[1])), normed))
 
-    def _generic_definitions(self, rows: torch.Tensor) -> torch.Tensor:
+    def _generic_definitions(
+        self, rows: torch.Tensor, table: torch.Tensor | None = None
+    ) -> torch.Tensor:
         """Identity rows of a world without card programs."""
         assert self.card_definitions is not None
+        if table is not None:
+            return table[rows]
         if self.stream_norms is None:
             return self.card_definitions(rows)
         return self._definition_table(self.card_definitions.weight)[rows]
@@ -1050,6 +1054,7 @@ class ActorCritic(nn.Module):
         enc_agent_cards = self._stream("card", self.card_embedding(obs.agent_cards))
         enc_opp_cards = self._stream("card", self.card_embedding(obs.opponent_cards))
         definitions = None
+        generic_table = None
         if self.semantic_cards is not None:
             if programs is None:
                 assert obs.programs is not None
@@ -1073,14 +1078,19 @@ class ActorCritic(nn.Module):
                 else self.semantic_cards.lookup(definitions, obs.stack_rows)
             )
         else:
-            cards = self._generic_definitions(obs.card_rows)
+            if self.stream_norms is not None:
+                assert self.card_definitions is not None
+                generic_table = self._definition_table(self.card_definitions.weight)
+            cards = self._generic_definitions(obs.card_rows, generic_table)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
-            permanent_definitions = self._generic_definitions(obs.permanent_rows)
+            permanent_definitions = self._generic_definitions(
+                obs.permanent_rows, generic_table
+            )
             stack_definitions = (
                 None
                 if obs.stack_rows is None
-                else self._generic_definitions(obs.stack_rows)
+                else self._generic_definitions(obs.stack_rows, generic_table)
             )
         # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
@@ -1128,7 +1138,7 @@ class ActorCritic(nn.Module):
         relation_definitions = (
             SemanticCardEncoder.lookup(definitions, obs.relation_rows)
             if definitions is not None
-            else self._generic_definitions(obs.relation_rows)
+            else self._generic_definitions(obs.relation_rows, generic_table)
         )
         encoded_relations = self.continuation.encode_rows(
             obs, objects, relation_definitions
@@ -1558,5 +1568,6 @@ def layer_init(
     layer: nn.Module, gain: float = 1.0, bias_const: float = 0.0
 ) -> nn.Module:
     torch.nn.init.orthogonal_(layer.weight, gain)
-    torch.nn.init.constant_(layer.bias, bias_const)
+    if layer.bias is not None:
+        torch.nn.init.constant_(layer.bias, bias_const)
     return layer

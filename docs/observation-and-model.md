@@ -123,7 +123,7 @@ of its focus objects before the head sees either:
 
 ```python
 focused = (focused * obs.focus_mask.unsqueeze(-1)).flatten(1)  # [K, 2·D]
-actions = actions * (1 + self.focus_film(focused))             # Linear(2·D, D), zero bias
+actions = actions * (1 + self.focus_film(focused))             # Linear(2·D, D, bias=False)
 return self.action_layer(torch.cat((actions, focused), dim=-1))
 ```
 
@@ -131,8 +131,8 @@ The difference between "attack" and "leave it back" on one creature is then a
 function of that creature from the first update, rather than something the
 head has to grow. At initialization the gap barely differs in size: since
 power and toughness read as threshold flags (`steps:8`, below), the additive
-head's gap already moves with the attacker. On the constructed attack
-decision (`decision_case("attack")`), setting the attacker to 9/9 moves the
+head's gap already moves with the attacker. In the original probe, before
+player mana pools became scalar inputs, setting the attacker to 9/9 moved the
 gap with the field by 0.7 to 1.3 times its move without, across windows of
 32 seeds (0.9 to 2.2 times with `stream_norm`). The effect is on learning
 (below).
@@ -140,8 +140,8 @@ gap with the field by 0.7 to 1.3 times its move without, across windows of
 - The layer starts at ordinary initialization, not zero. A zero start would
   leave the gap blind to the creature until the weights move, which is what
   the field is for.
-- An action with no focus object is multiplied by exactly 1, and an action
-  with one is scaled by that one alone.
+- An action with no focus object is multiplied by exactly 1 throughout training. An
+  action with one is scaled by that one alone.
 - `policy_film` is separate and composes with it: it scales the head's output
   by the pooled board, so an action without focus objects still depends on the
   game.
@@ -191,7 +191,7 @@ with it).
 model = ModelConfig(stream_norm=True, ...)
 ```
 
-`stream_norm` selects one layout, with one rule: **everything summed into an
+`stream_norm` requires `attention_on=True` and selects one layout, with one rule: **everything summed into an
 object token is either normalized to the common scale or starts at zero.**
 
 | Stream | With `stream_norm` |
@@ -233,14 +233,13 @@ and Elemental self-play recipes set it; frozen recipes and experiment files
 are unchanged. [MLX](../manabot/backends/mlx.md#what-the-backend-covers)
 refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 
-On one constructed attack decision, fitting "attack if and only if power is
-at least 3" from initialization takes about 0.7 times as many updates with
-`stream_norm` and `focus_film` as with neither (three seeds: 75, 82 and 85
-against 109, 109 and 115), and about 0.83 times with `focus_film` alone (95,
-92 and 90). With the Elemental world's definitions both fields take about
-0.83 times as many (92, 88 and 82 against 120, 97 and 99). That is a
-supervised fit of one decision: it shows the mechanisms work, not that
-self-play learns to attack sooner.
+On the constructed attack decision, the test trains on 100 combinations of
+power and toughness. It counts updates until the model assigns at least 90%
+probability to the correct choice on every board (“attack iff power is at
+least 3”). Across seeds 0, 1 and 2, the additive model took 102, 119 and 108
+updates. Enabling `focus_film` took 88, 90 and 81, and enabling both
+`focus_film` and `stream_norm` took 83, 91 and 80. The totals were 329, 259
+and 254 updates respectively for this supervised decision.
 
 ### Bucketed padding
 
@@ -770,10 +769,11 @@ once on the host, for every backend:
 | Kind | Reading | What the model receives |
 | --- | --- | --- |
 | `flag` | `as_is` | The stored 0 or 1 |
-| `count`, `number` with `scale` 10 | `steps:8` | The stored tenths, then flags for the true value being at least 1, 2, … 8. Power, toughness, damage, mana value, X, ward cost and every other small amount the engine stores in tenths |
+| `count`, `number` with `scale` 10 | `steps:8` | The stored tenths, then flags for the true value being at least 1, 2, … 8. Power, toughness, damage, mana value, X, and ward cost |
+| `mana` with `scale` above 1 | `as_is` | One scalar per floating-mana pool, in stored units |
 | `count`, `number` with any other `scale` above 1 | `as_is` | The stored value: the engine already divided by `scale` |
-| `count`, `number` with `scale` 1 | `log` | `sign(x) · log1p(abs(x)) / 10` |
-| `category` of declared `size` n | `one_hot:n` | n + 1 flags: one for each value 1 to n, then one for "above n". Zero, meaning absent, is all zeros |
+| `count`, `number`, `mana` with `scale` 1 | `log` | `sign(x) · log1p(abs(x)) / 10` |
+| `category` of declared `size` n | `one_hot:n` | n + 1 flags: one for each value 1 to n, then one for "above n". Codes below 1 leave all flags zero |
 | `selector` | `one_hot:15` | 16 flags: indexes 1 to 15, then "above 15" |
 | `position` | `log` | The same squash as an unscaled count |
 | `rank` | `rank` | The rank / 128, whatever the fact or effect capacity |

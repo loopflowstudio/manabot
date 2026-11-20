@@ -102,12 +102,16 @@ type ColumnReading = Reading | Sized
 type Readings = Mapping[str, tuple[ColumnReading, ...]]
 
 
-def parse_reading(text: str) -> ColumnReading:
+def parse_reading(text: object) -> ColumnReading:
     """A stored reading name (`as_is`, `one_hot:14`). Raises ValueError for an
     unknown name, a sized reading without its size or an unsized one with one."""
-    name, _, size = text.partition(":")
+    if not isinstance(text, str):
+        raise TypeError("reading name must be a string")
+    name, separator, size = text.partition(":")
     reading = Reading(name)
-    if (reading in SIZED) != bool(size):
+    if (reading in SIZED) != bool(separator) or (
+        separator and not (size.isascii() and size.isdigit())
+    ):
         raise ValueError(f"malformed reading {text!r}")
     return Sized(reading, int(size)) if size else reading
 
@@ -275,7 +279,7 @@ def kind_reading(column: ColumnKind) -> ColumnReading:
             return Reading.AS_IS
         case "count" | "number" if scale == 10:
             return Sized(Reading.STEPS, TENTHS_STEPS)
-        case "count" | "number" if scale is not None:
+        case "count" | "number" | "mana" if scale is not None:
             return Reading.AS_IS if scale > 1 else Reading.LOG
         case "rank":
             return Reading.RANK
@@ -443,8 +447,8 @@ def read_numeric(
             stored = rows[:, index]
             if reading.reading is Reading.ONE_HOT:
                 # Code k at flag k - 1, any code above the size at the last.
-                present = np.nonzero(stored > 0)[0]
-                codes = np.minimum(stored[present], reading.size + 1).astype(np.int64)
+                present = np.nonzero(stored >= 1)[0]
+                codes = np.clip(stored[present], 1, reading.size + 1).astype(np.int64)
                 out[present, at + codes - 1] = 1
             else:
                 # Stored in tenths: the true value is an integer.
