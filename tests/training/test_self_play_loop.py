@@ -9,10 +9,13 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch import policy as policy_module
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
+from manabot.env.observation import ObservationSpace
+from manabot.policy.readings import Reading, fresh_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
 from manabot.training.learning import DampedPolicyLearning, Learning
@@ -136,6 +139,52 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert reported.updates == 2
     assert reported.learner_transitions == counts.learner_transitions > 0
     assert reported.active_seconds is not None and reported.active_seconds > 0
+
+
+def test_resume_refuses_a_model_that_reads_its_inputs_differently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={"learning": Learning(horizon=2, epochs=1, minibatches=1)}
+    )
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(settings, run, updates=1)
+
+    # The rule changes between the start and the resume: timestamps read as stored.
+    def changed(space: ObservationSpace) -> dict[str, tuple[Reading, ...]]:
+        readings = fresh_readings(space)
+        return {
+            key: tuple(
+                Reading.AS_IS if value is Reading.RANK else value for value in values
+            )
+            for key, values in readings.items()
+        }
+
+    monkeypatch.setattr(policy_module, "fresh_readings", changed)
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(ValueError, match=r"agent_permanents\[\d+\]: rank -> as_is"):
+            self_play(settings, run, updates=2)
+
+
+def test_state_saved_before_readings_resumes_and_records_them() -> None:
+    space = ObservationSpace(gray_ogre_self_play(horizon=2).observation)
+    readings = fresh_readings(space)
+    counts = Counts.model_validate({"updates": 3})
+    loop.keep_readings(counts, readings)
+    assert counts.readings == {
+        key: [str(value) for value in values] for key, values in readings.items()
+    }
+    loop.keep_readings(counts, readings)
 
 
 def test_stop_keeps_registered_counts_at_the_completed_boundary(
