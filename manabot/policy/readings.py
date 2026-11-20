@@ -165,11 +165,51 @@ FRESH_PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
     ("relations", "parent"): Reading.GATHER,
 }
 
-# Stored checkpoints written before readings were recorded read fact durations
-# as two flags.
+# Frozen overrides for checkpoints written before readings were recorded.
+# These keep their original joins, lookups and numeric treatment even if the
+# native kind or the fresh reading of a column changes.
 LEGACY_PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
-    **PLACED_READINGS,
+    ("actions", "continuation"): Reading.GATHER,
+    ("actions", "valid"): Reading.MASK,
+    **{
+        (f"{seat}_permanents", field): reading
+        for seat in ("agent", "opponent")
+        for field, reading in (
+            ("definition", Reading.LOOKUP),
+            ("attached_to", Reading.GATHER),
+            ("blocking", Reading.GATHER),
+        )
+    },
+    ("stack", "definition"): Reading.LOOKUP,
+    ("stack", "source"): Reading.GATHER,
+    ("relations", "source_definition"): Reading.LOOKUP,
+    ("relations", "source"): Reading.GATHER,
+    ("relations", "reference_definition"): Reading.LOOKUP,
+    ("relations", "reference"): Reading.GATHER,
+    ("relations", "valid"): Reading.MASK,
+    ("facts", "object"): Reading.GATHER,
+    ("facts", "kind"): Reading.LOOKUP,
+    ("facts", "id_high"): Reading.FACT_ID,
+    ("facts", "id_low"): Reading.FACT_ID,
+    ("facts", "detail_high"): Reading.LOOKUP,
+    ("facts", "detail_low"): Reading.LOOKUP,
+    ("facts", "value"): Reading.FACT_VALUE_RAW,
+    ("facts", "value_2"): Reading.FACT_VALUE_RAW,
     ("facts", "duration"): Reading.DURATION_TWO,
+    ("facts", "timestamp"): Reading.RANK,
+    ("facts", "source_definition"): Reading.LOOKUP,
+    ("facts", "valid"): Reading.MASK,
+    ("effects", "modification_high"): Reading.LOOKUP,
+    ("effects", "modification_low"): Reading.LOOKUP,
+    ("effects", "timestamp"): Reading.RANK,
+    ("effects", "controller"): Reading.GATHER,
+    ("effects", "source_definition"): Reading.LOOKUP,
+    ("effects", "source"): Reading.GATHER,
+    ("effects", "detail_offset"): Reading.GATHER,
+    ("effects", "detail_count"): Reading.GATHER,
+    ("effects", "member_offset"): Reading.GATHER,
+    ("effects", "member_count"): Reading.GATHER,
+    ("effects", "valid"): Reading.MASK,
 }
 # How many flags each duration reading writes, one per duration code from 1.
 DURATION_FLAGS: Mapping[Reading, int] = {Reading.DURATION: 4, Reading.DURATION_TWO: 2}
@@ -303,20 +343,18 @@ def kind_reading(column: ColumnKind) -> ColumnReading:
 
 def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[ColumnReading, ...]]:
     """The readings of a model built now, over the runtime's full columns."""
-    return assign_readings(
-        space, lambda key, column: kind_reading(column), FRESH_PLACED_READINGS
-    )
+    return assign_readings(space, kind_reading, FRESH_PLACED_READINGS)
 
 
 def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[ColumnReading, ...]]:
     """The readings of a checkpoint that records none: what every model did
     before readings were recorded. Never extended."""
-    return assign_readings(space, legacy_reading, LEGACY_PLACED_READINGS)
+    return assign_readings(space, lambda column: Reading.AS_IS, LEGACY_PLACED_READINGS)
 
 
 def assign_readings(
     space: "ObservationSpace",
-    rule: Callable[[str, ColumnKind], ColumnReading],
+    rule: Callable[[ColumnKind], ColumnReading],
     placed: Mapping[tuple[str, str], Reading],
 ) -> dict[str, tuple[ColumnReading, ...]]:
     """Each published column's `placed` reading, `own` in an own-preparation
@@ -324,25 +362,11 @@ def assign_readings(
     return {
         key: tuple(
             placed.get((key, column.name))
-            or (Reading.OWN if key not in READ_BY_READINGS else rule(key, column))
+            or (Reading.OWN if key not in READ_BY_READINGS else rule(column))
             for column in columns
         )
         for key, columns in published_columns(space).items()
     }
-
-
-def legacy_reading(key: str, column: ColumnKind) -> Reading:
-    if column.kind == "reference":
-        return Reading.GATHER
-    if column.kind == "id":
-        return Reading.LOOKUP
-    # Fact and effect timestamps were divided by 128 before readings existed
-    # (the effect one by its row capacity, then also 128).
-    if (key, column.name) in (("facts", "timestamp"), ("effects", "timestamp")):
-        return Reading.RANK
-    if key == "facts" and column.name in ("value", "value_2"):
-        return Reading.FACT_VALUE_RAW
-    return Reading.AS_IS
 
 
 def recorded_readings(

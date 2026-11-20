@@ -473,8 +473,10 @@ fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
 **No test runs for five minutes.** `tests/conftest.py` ends the run when a
 single test reaches 300 seconds, with every thread's stack and exit status 1.
-Fix or split a test that hits the limit; never raise it. Run the tests for the
-files you changed, not whole directories; CI runs the suite.
+Fix or split a test that times out. Run targeted tests of the changed
+behavior, including existing consumers whose files did not change. When input
+scaling changes, check numeric assertions against the new scale and keep the
+control case that proves the behavior. CI runs the suite.
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.

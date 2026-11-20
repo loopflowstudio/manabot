@@ -257,10 +257,13 @@ publish, land or choose the next Graph step from here.
   with `--opponent passive` reaches one after four lands. A checkpoint with
   exact decks written before an appended input column is listed unavailable
   with `binding differs … actions 512x23 -> 512x25`; world-bound ones load.
-- Model or training-path changes: `uv run etude train manabot/recipes/local.py`
-  runs the local CPU smoke. Inspect metric rows for per-phase collection and
-  learning seconds; the command prints its run id. For installed-wheel QA use
-  `scripts/release/smoke.py`: it trains one tiny policy on the native
+- Model or training-path changes: use `uv run etude train manabot/recipes/local.py`
+  for the local CPU smoke. Inspect update rows for per-phase collection and
+  learning seconds. When saved training state gains a field, check that
+  emitted `coordinates/` values are scalar numbers. When adjusting input or
+  embedding scales, perturb the feature at initialization and measure the
+  resulting change in the full object token with its usual streams enabled.
+  For installed-wheel QA, `scripts/release/smoke.py` trains one policy on the native
   lethal-target root through `etude train`, reloads its
   `out/policies/00000002-raw.safetensors`, and discovers that exact path
   through `managym.academy.bots`. Run from outside the checkout with
