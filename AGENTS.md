@@ -331,9 +331,14 @@ change already touches it; do not rewrite a module only for style. Rust in
   with 64 policy slots and aggregate replay-linked diagnostics; native legality
   and Academy retain all choices, and an omitted overflow policy means error.
 - Model timestamp normalization is rank / 128, independent of fact capacity.
-- New observation state reaches the policy input (native and Python encoders
-  in parity), the LLM text observation and the learning tokens in the change
-  that adds it; the policy input never silently falls behind.
+- New observation state reaches the policy input, the LLM text observation
+  and the learning tokens in the change that adds it; the policy input never
+  silently falls behind. The native encoder (`managym/src/agent/`) is the only
+  one: `ObservationSpace.encode` and every batch path call it, and Python
+  holds the layout (shapes, allocation, the column constants the model reads),
+  never a second writer. Give new columns or rows a directed native test on a
+  constructed position; `tests/env/test_named_observation_layout.py` holds the
+  Python column constants to `managym.observation_layout()`.
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
 - Decklist disclosure (open by default, or closed) lives on native
@@ -468,10 +473,11 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
-- Native `Env.encode_observation_into` reports capacity overflow as `ValueError`
-  with `observation capacity exceeded:`; the Python memory encoder raises
-  `managym.AgentError` with `Capacity:`. Collectors that count capacity failures
-  must recognize those specific messages and propagate other failures.
+- An observation that does not fit its buffers raises
+  `managym.ObservationCapacity` (a `ValueError`, message
+  `observation capacity exceeded: …`) on the scalar, batch and vector paths.
+  Collectors that count capacity failures catch that type, never a message
+  prefix, and propagate other failures.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never

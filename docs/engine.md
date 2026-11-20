@@ -610,10 +610,87 @@ the state before retrying. After a failed step, recover or reset the games first
 
 ## Encoded observations
 
-The native encoder turns an observation into NumPy arrays, one layout per
-engine release. manabot reads the same arrays as its policy input
-(`ObservationConfig.policy_input_version`, v9); how its network reads them is in
-[observations and the policy network](observation-and-model.md#policy-inputs).
+One native encoder turns an observation into NumPy arrays, one layout per
+engine release. Every caller's arrays come from it: a single observation, a
+batch of search branches and the vector environment's step buffers. manabot
+reads the same arrays as its policy input
+(`ObservationConfig.policy_input_version`, v11); how its network reads them is
+in [observations and the policy network](observation-and-model.md#policy-inputs).
+
+### Encoding one observation
+
+```python
+import managym
+from manabot.env.observation import ObservationSpace
+
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+
+space = ObservationSpace()
+arrays = space.encode(observation)
+print(int(arrays["agent_cards_valid"].sum()))
+# 7
+
+restored = managym.Observation.from_json(observation.toJSON())
+del game
+print(int(space.encode(restored)["agent_cards_valid"].sum()))
+# 7
+```
+
+`ObservationSpace.encode(obs)` returns freshly allocated arrays at the space's
+shapes, so a caller may keep them. It takes any `managym.Observation`: the
+one a step returned, a fixed seat's view from `observation_for_player`, or one
+restored with `Observation.from_json`. No game needs to be open. A restored
+observation holds what its JSON held; `toJSON()` omits public history, so
+under `policy_history_version=1` its `events` rows differ from the live
+observation's.
+
+To write into arrays you own, call the function underneath:
+
+```python
+buffers = space.encoder.allocate()
+managym.encode_observation_into(
+    observation, buffers, action_overflow=space.encoder.config.action_overflow
+)
+```
+
+`encode_observation_into(obs, out, action_overflow="error")` reads everything
+it needs from `out`: the row capacities, and from which arrays are present,
+the input version, public history and decision memory. It uses no default
+capacity. Without manabot, build each array from
+[`observation_layout()`](#reading-arrays-by-name)'s `shape` and `dtype`,
+filling every `None` extent with a capacity you choose. Arrays with a missing
+companion, a wrong width or a zero capacity are rejected before anything is
+written.
+
+An observation that does not fit raises `managym.ObservationCapacity`, a
+`ValueError` naming the field, the count and the capacity:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+small = ObservationSpace(ObservationConfig(max_cards_per_player=4))
+try:
+    small.encode(observation)
+except managym.ObservationCapacity as error:
+    print(error)
+# observation capacity exceeded: agent_cards plus sideboard 7 > 4
+```
+
+Catch that type to count or recover from a game that outgrew its buffers; the
+scalar, batch and vector paths all raise it. Any other `ValueError` means the
+buffers or the request are wrong: malformed arrays, state the selected input
+version cannot hold (`managym.input_v10_state(obs)` and
+`managym.unrepresentable_state(obs)` name it), or more legal actions than
+slots without `action_overflow="first-legal"`. Nothing is truncated to fit.
+Discard the arrays after a failure.
+
+`Env.encode_observation` and `Env.encode_observation_into` are deprecated
+aliases that warn and are removed in 0.4.0. Replace the first with
+`space.encode(obs)` and the second with `managym.encode_observation_into`.
 
 ### Reading arrays by name
 
@@ -631,17 +708,11 @@ print(definition["encoding"])
 # CardDefId + 1; 0 means absent
 ```
 
-The scalar encoder writes the arrays the layout describes. This example starts
-a game with fixed decks and reads only valid permanent rows (the first
-decision can have none):
+The encoder writes the arrays the layout describes. With `arrays` from
+[the example above](#encoding-one-observation), read only valid permanent rows
+(the first decision can have none):
 
 ```python
-game = managym.Env(seed=42)
-observation, info = game.reset([
-    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
-    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
-])
-arrays = game.encode_observation(observation)
 valid = arrays["agent_permanents_valid"].astype(bool)
 references = arrays["agent_permanents"][valid, definition["index"]]
 definition_ids = [int(reference) - 1 for reference in references if reference != 0]

@@ -503,11 +503,10 @@ space = ObservationSpace(settings.observation)
 
 Use that `space` for `open_collector` and `ActorCritic(space, settings.model)`;
 the run's saved settings keep the selection. V10 is v9 plus this state,
-in the same native scalar, vector and Python encoders, the LLM text observation
-and the learning tokens.
+in the native encoder, the LLM text observation and the learning tokens.
 
 V10 adds two buffers to the v9 layout; their presence is what selects v10 in
-the native encoders:
+the native encoder:
 
 | Key | Shape | Holds |
 | --- | --- | --- |
@@ -521,9 +520,10 @@ V9 and its checkpoints are unchanged: w17 checkpoints keep loading. A v9 encoder
 a card visible to the viewer reads life lost this turn or graveyard cards put
 there from the battlefield and that state is present, or a pool holds mana
 that can't be spent to cast nonartifact spells. `managym.input_v10_state(obs)`
-names the needed state. The Python encoder raises `UnsupportedPolicyInput`
-naming v10 and the state, and the native encoders raise `ValueError` with the
-same reason, before writing any buffer. A v9 run over decks with these cards
+names the needed state. Encoding raises `ValueError`
+(`policy input v10 required: …`, with that state) before writing any buffer;
+`UnsupportedPolicyInput` is for a configuration or checkpoint bound to an
+unsupported version, not for a position. A v9 run over decks with these cards
 stops at the first such position, so train on them with v10.
 A game, replay or Academy session needs no policy input and plays these cards
 under any configuration. A v9 checkpoint cannot be widened to v10; train a new
@@ -686,8 +686,7 @@ carries twenty rows per seat (ten public plus ten private, with coinciding
 positions represented once). Deprecated inputs v9/v10 omit these facts and preserve their frozen layout,
 so their checkpoints never read them.
 
-Native and Python encoders use the same definition joins and one-based
-position encoding. Prepared resolves definitions once and weights each by the
+The encoder writes definition joins and one-based positions. Prepared resolves definitions once and weights each by the
 reciprocal of its one-based position. Torch projects this separate pooled
 vector, divided by 60, before adding it to hand and decklist knowledge, so a
 known top card and a known hand card have distinct representations. MLX currently admits only input v9 and continues to refuse v11;
@@ -839,7 +838,8 @@ uv run --extra dev python -m manabot.verify.decision_memory --out .runs/decision
 Use a fresh output directory. It retains both viewers' logs, captures, text,
 replayed Commands, four policy checkpoints under each disclosure and a JSON
 summary. It checks a private selection followed by public revelation, a pass
-with mana open, a declined block, branch isolation, encoder parity, separate
+with mana open, a declined block, branch isolation, live and restored
+observations encoding alike, separate
 actor/value gradients and one ordinary CPU update with checkpoint reload.
 Controlled FiLM weights exercise memory sensitivity before training; the update
 uses ordinary initialization. This proves software connectivity and preserves

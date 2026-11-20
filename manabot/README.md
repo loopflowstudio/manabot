@@ -346,14 +346,16 @@ use it without changing their identity.
 
 `LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
 `"native_encoder": false` beside `"config"` in a `make_player` spec, instead
-allocates a fresh batch for each frontier forward and fills its rows one branch
-at a time in Python. Use it to compare encoders; both write identical tensors.
+allocates a fresh batch for each frontier forward and fills its rows with one
+`managym.encode_observation_into` call per branch. The same native encoder
+writes both, so the tensors are identical; the switch selects one batched call
+or one call per row, and its name is kept because saved specs carry it.
 
 A teacher reuses its buffers between calls, so only one search may use it at a
 time; give each concurrent search its own teacher. An extension without the
 batch writer, or a buffer whose shape, dtype or writability does not match the
 selected observation space, raises before any inference. Search never falls
-back to the Python encoder: rebuild the extension, or select
+back to per-row encoding: rebuild the extension, or select
 `native_encoder=False` explicitly.
 
 ### Inference threads

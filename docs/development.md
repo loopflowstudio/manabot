@@ -135,8 +135,13 @@ Collector or batch-closure changes also require
 Fixtures asserting exact rollout shapes or transition counts must explicitly
 select `batch_closure="exact-quota"` as well as one learning seat; whole-game
 closure treats the transition quota as a minimum.
-Run the existing encoder tests alongside cutoff/parity fixtures so callers of
-changed private helpers are checked too. Action overflow is checked at the
+The native encoder is the only one, so an observation change is written once
+in `managym/src/agent/` with a directed test that asserts its named columns or
+rows on a constructed position, and its `observability.rs` entry. A column the
+model reads is also a constant in `manabot/env/observation.py`;
+`uv run --extra dev pytest tests/env/test_named_observation_layout.py -q`
+fails when that constant and `managym.observation_layout()` disagree, so run
+it after adding, moving or widening a column. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
 Changes to effects or runtime token registration require the
 [effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
@@ -155,8 +160,8 @@ includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
 `tests/sim/test_local_update.py` checks the defaults, compact rollout evidence
-and native frontier encoding, against full evidence and the Python per-branch
-encoder: the same roots and seeds must choose identical Commands and write
+and native frontier encoding, against full evidence and per-branch
+encoding: the same roots and seeds must choose identical Commands and write
 identical tensors. It also checks that v3 receipts and registrations omitting
 `rollout_evidence` still read as full evidence. A change to
 `managym.encode_observations_into` also runs `tests/env/test_observation.py`
