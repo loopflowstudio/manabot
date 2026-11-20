@@ -15,6 +15,7 @@ from manabot.training.loops.self_play import CLOCKS, self_play
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
+    behaviour_curves,
     head_to_head,
     job_labels,
 )
@@ -50,7 +51,19 @@ def test_comparisons_draw_one_chart_per_question_across_jobs() -> None:
         Matches(seating="large u50 vs small u100"),
     )
     # They compose into an ordinary Etude report.
-    Report(score=Score(table="games", value="score"), evals=(earlier, fixed, pair))
+    behaviour = behaviour_curves(matches=Matches(tag="heur-w64"))
+    assert len(behaviour) == 11
+    assert all(
+        c.matches == Matches(tag="heur-w64")
+        and c.score is not None
+        and c.score.table == "behaviour"
+        and c.score.unit == "games"
+        for c in behaviour
+    )
+    Report(
+        score=Score(table="games", value="score"),
+        evals=(earlier, fixed, *behaviour, pair),
+    )
 
 
 def test_head_to_head_refuses_an_empty_selection() -> None:
