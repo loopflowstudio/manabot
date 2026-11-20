@@ -208,7 +208,7 @@ impl PyVectorEnv {
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, action_overflow: &str) -> PyResult<()> {
         let mut config = input_buffer_config(&buffers)?;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, true)?;
+        let buffers = read_observation_buffers(&buffers, Some(self.num_envs), &config, true)?;
         self.config = config;
         self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
         self.buffers = Some(buffers);
@@ -410,7 +410,7 @@ impl PyVectorEnv {
     ) -> PyResult<Vec<ObservationRead>> {
         let mut config = input_buffer_config(&buffers)?;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, false)?;
+        let buffers = read_observation_buffers(&buffers, Some(self.num_envs), &config, false)?;
         with_observation_field_slices(py, &buffers, |out| {
             self.inner
                 .write_observations_for_players(&players, |slot, observation| {
@@ -727,50 +727,32 @@ pub(super) fn input_buffer_config(
 /// game that outgrew its capacity.
 #[cfg(feature = "python")]
 pub(crate) fn check_observation_buffers(
-    py: Python<'_>,
     buffers: &Bound<'_, PyDict>,
     config: &ObservationEncoderConfig,
 ) -> PyResult<()> {
-    // A leading-axis view keeps the array's own flags, so the batch checks
-    // apply unchanged; other values stay as they are and fail the type check.
-    let ndarray = py.import_bound("numpy")?.getattr("ndarray")?;
-    let batched = PyDict::new_bound(py);
-    for (key, value) in buffers.iter() {
-        let value = if value.is_instance(&ndarray)? {
-            value.get_item(py.None())?
-        } else {
-            value
-        };
-        batched.set_item(key, value)?;
-    }
-    read_observation_buffers(&batched, 1, config, false).map(|_| ())
+    read_observation_buffers(buffers, None, config, false).map(|_| ())
 }
 
 #[cfg(feature = "python")]
 fn read_observation_buffers(
     buffers: &Bound<'_, PyDict>,
-    n: usize,
+    batch: Option<usize>,
     c: &ObservationEncoderConfig,
     step_state: bool,
 ) -> PyResult<ObservationBuffers> {
-    let required = |name: &str, shape: &[usize]| -> PyResult<Option<Py<PyAny>>> {
-        Ok(Some(
-            require_numpy_array(buffers, name, shape, "float32")?.unbind(),
-        ))
+    let array = |name: &str, row_shape: &[usize], dtype: &str| {
+        let shape: Vec<_> = batch.iter().chain(row_shape).copied().collect();
+        Ok::<_, PyErr>(require_numpy_array(buffers, name, &shape, dtype)?.unbind())
     };
+    let required = |name: &str, shape: &[usize]| array(name, shape, "float32").map(Some);
     Ok(ObservationBuffers {
         name_candidates: required(
             "name_candidates",
-            &[
-                n,
-                c.max_actions,
-                crate::agent::observation_encoder::NAME_DIM,
-            ],
+            &[c.max_actions, crate::agent::observation_encoder::NAME_DIM],
         )?,
         relations: required(
             "relations",
             &[
-                n,
                 crate::agent::continuation::RELATION_ROWS,
                 crate::agent::continuation::RELATION_DIM,
             ],
@@ -778,7 +760,6 @@ fn read_observation_buffers(
         effects: required(
             "effects",
             &[
-                n,
                 crate::agent::shared_effects::EFFECT_ROWS,
                 crate::agent::shared_effects::EFFECT_DIM,
             ],
@@ -786,7 +767,6 @@ fn read_observation_buffers(
         effect_details: required(
             "effect_details",
             &[
-                n,
                 crate::agent::shared_effects::DETAIL_ROWS,
                 crate::agent::shared_effects::DETAIL_DIM,
             ],
@@ -794,40 +774,33 @@ fn read_observation_buffers(
         effect_members: required(
             "effect_members",
             &[
-                n,
                 crate::agent::shared_effects::MEMBER_ROWS,
                 crate::agent::shared_effects::MEMBER_DIM,
             ],
         )?,
         facts: required(
             "facts",
-            &[n, c.max_facts, crate::agent::observation_encoder::FACT_DIM],
+            &[c.max_facts, crate::agent::observation_encoder::FACT_DIM],
         )?,
         known_library: if c.known_library_len() > 0 {
             required(
                 "known_library",
-                &[n, 2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
+                &[2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
             )?
         } else {
             None
         },
-        known_hand: require_numpy_array(
-            buffers,
-            "known_hand",
-            &[n, 2, c.max_cards_per_player, 2],
-            "float32",
-        )?
-        .unbind(),
+        known_hand: array("known_hand", &[2, c.max_cards_per_player, 2], "float32")?,
         player_turn_state: if c.turn_state {
             required(
                 "player_turn_state",
-                &[n, 2, crate::agent::observation_encoder::TURN_STATE_DIM],
+                &[2, crate::agent::observation_encoder::TURN_STATE_DIM],
             )?
         } else {
             None
         },
         card_turn_state: if c.turn_state {
-            required("card_turn_state", &[n, 2, c.max_cards_per_player])?
+            required("card_turn_state", &[2, c.max_cards_per_player])?
         } else {
             None
         },
@@ -835,7 +808,6 @@ fn read_observation_buffers(
             required(
                 "stack",
                 &[
-                    n,
                     c.max_stack_objects,
                     crate::agent::observation_encoder::STACK_DIM,
                 ],
@@ -844,88 +816,60 @@ fn read_observation_buffers(
             None
         },
         stack_valid: if c.stack_rows() > 0 {
-            required("stack_valid", &[n, c.max_stack_objects])?
+            required("stack_valid", &[c.max_stack_objects])?
         } else {
             None
         },
         decklists: required(
             "decklists",
             &[
-                n,
                 2,
                 c.max_cards_per_player,
                 crate::agent::observation_encoder::DECKLIST_DIM,
             ],
         )?,
-        semantic_cards: require_numpy_array(
-            buffers,
-            "semantic_cards",
-            &[n, 2, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        agent_player: require_numpy_array(
-            buffers,
+        semantic_cards: array("semantic_cards", &[2, c.max_cards_per_player], "float32")?,
+        agent_player: array(
             "agent_player",
-            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
+            &[1, crate::agent::observation_encoder::PLAYER_DIM],
             "float32",
-        )?
-        .unbind(),
-        opponent_player: require_numpy_array(
-            buffers,
+        )?,
+        opponent_player: array(
             "opponent_player",
-            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
+            &[1, crate::agent::observation_encoder::PLAYER_DIM],
             "float32",
-        )?
-        .unbind(),
-        agent_cards: require_numpy_array(
-            buffers,
+        )?,
+        agent_cards: array(
             "agent_cards",
             &[
-                n,
                 c.max_cards_per_player,
                 crate::agent::observation_encoder::CARD_DIM,
             ],
             "float32",
-        )?
-        .unbind(),
-        opponent_cards: require_numpy_array(
-            buffers,
+        )?,
+        opponent_cards: array(
             "opponent_cards",
             &[
-                n,
                 c.max_cards_per_player,
                 crate::agent::observation_encoder::CARD_DIM,
             ],
             "float32",
-        )?
-        .unbind(),
-        agent_permanents: require_numpy_array(
-            buffers,
+        )?,
+        agent_permanents: array(
             "agent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
+            &[c.max_permanents_per_player, c.permanent_dim()],
             "float32",
-        )?
-        .unbind(),
-        opponent_permanents: require_numpy_array(
-            buffers,
+        )?,
+        opponent_permanents: array(
             "opponent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
+            &[c.max_permanents_per_player, c.permanent_dim()],
             "float32",
-        )?
-        .unbind(),
-        actions: require_numpy_array(
-            buffers,
-            "actions",
-            &[n, c.max_actions, c.action_dim()],
-            "float32",
-        )?
-        .unbind(),
+        )?,
+        actions: array("actions", &[c.max_actions, c.action_dim()], "float32")?,
         decision_records: if c.max_decision_records > 0 {
             required(
                 "decision_records",
                 &[
-                    n,
                     c.max_decision_records,
                     crate::agent::decision_memory::RECORD_DIM,
                 ],
@@ -937,7 +881,6 @@ fn read_observation_buffers(
             required(
                 "decision_reference_details",
                 &[
-                    n,
                     c.max_decision_reference_details,
                     crate::agent::decision_memory::DETAIL_DIM,
                 ],
@@ -949,7 +892,6 @@ fn read_observation_buffers(
             required(
                 "decision_references",
                 &[
-                    n,
                     c.max_decision_references,
                     crate::agent::decision_memory::REFERENCE_DIM,
                 ],
@@ -961,7 +903,6 @@ fn read_observation_buffers(
             required(
                 "decision_members",
                 &[
-                    n,
                     c.max_decision_members,
                     crate::agent::decision_memory::MEMBER_DIM,
                 ],
@@ -969,71 +910,33 @@ fn read_observation_buffers(
         } else {
             None
         },
-        events: require_numpy_array(
-            buffers,
-            "events",
-            &[n, c.max_events, c.event_dim()],
-            "float32",
-        )?
-        .unbind(),
-        action_focus: require_numpy_array(
-            buffers,
+        events: array("events", &[c.max_events, c.event_dim()], "float32")?,
+        action_focus: array(
             "action_focus",
-            &[n, c.max_actions, c.max_focus_objects],
+            &[c.max_actions, c.max_focus_objects],
             "int32",
-        )?
-        .unbind(),
-        agent_player_valid: require_numpy_array(buffers, "agent_player_valid", &[n, 1], "float32")?
-            .unbind(),
-        opponent_player_valid: require_numpy_array(
-            buffers,
-            "opponent_player_valid",
-            &[n, 1],
-            "float32",
-        )?
-        .unbind(),
-        agent_cards_valid: require_numpy_array(
-            buffers,
-            "agent_cards_valid",
-            &[n, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        opponent_cards_valid: require_numpy_array(
-            buffers,
-            "opponent_cards_valid",
-            &[n, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        agent_permanents_valid: require_numpy_array(
-            buffers,
+        )?,
+        agent_player_valid: array("agent_player_valid", &[1], "float32")?,
+        opponent_player_valid: array("opponent_player_valid", &[1], "float32")?,
+        agent_cards_valid: array("agent_cards_valid", &[c.max_cards_per_player], "float32")?,
+        opponent_cards_valid: array("opponent_cards_valid", &[c.max_cards_per_player], "float32")?,
+        agent_permanents_valid: array(
             "agent_permanents_valid",
-            &[n, c.max_permanents_per_player],
+            &[c.max_permanents_per_player],
             "float32",
-        )?
-        .unbind(),
-        opponent_permanents_valid: require_numpy_array(
-            buffers,
+        )?,
+        opponent_permanents_valid: array(
             "opponent_permanents_valid",
-            &[n, c.max_permanents_per_player],
+            &[c.max_permanents_per_player],
             "float32",
-        )?
-        .unbind(),
-        actions_valid: require_numpy_array(
-            buffers,
-            "actions_valid",
-            &[n, c.max_actions],
-            "float32",
-        )?
-        .unbind(),
-        events_valid: require_numpy_array(buffers, "events_valid", &[n, c.max_events], "float32")?
-            .unbind(),
+        )?,
+        actions_valid: array("actions_valid", &[c.max_actions], "float32")?,
+        events_valid: array("events_valid", &[c.max_events], "float32")?,
         step_state: if step_state {
             Some(StepStateBuffers {
-                rewards: require_numpy_array(buffers, "rewards", &[n], "float64")?.unbind(),
-                terminated: require_numpy_array(buffers, "terminated", &[n], "uint8")?.unbind(),
-                truncated: require_numpy_array(buffers, "truncated", &[n], "uint8")?.unbind(),
+                rewards: array("rewards", &[], "float64")?,
+                terminated: array("terminated", &[], "uint8")?,
+                truncated: array("truncated", &[], "uint8")?,
             })
         } else {
             None
@@ -1185,7 +1088,7 @@ impl PyRolloutPool {
                 self.inner.num_slots()
             )));
         }
-        let buffers = read_observation_buffers(&buffers, capacity, &config, true)?;
+        let buffers = read_observation_buffers(&buffers, Some(capacity), &config, true)?;
         self.config = config;
         self.buffers = Some(buffers);
         Ok(())
@@ -1235,7 +1138,7 @@ pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 /// Write each env's acting-player observation into row `i` of buffers from
-/// `ObservationEncoder.allocate(capacity)`; returns each row's legal-action count.
+/// `ObservationSpace.allocate(capacity)`; returns each row's legal-action count.
 ///
 /// Every legal action must fit (`action_overflow="error"`). Rows at and past
 /// `len(envs)` are untouched, and no step-state buffers are read. The GIL stays
@@ -1255,7 +1158,7 @@ fn encode_observations_into(
         )));
     }
     let config = input_buffer_config(&buffers)?;
-    let buffers = read_observation_buffers(&buffers, capacity, &config, false)?;
+    let buffers = read_observation_buffers(&buffers, Some(capacity), &config, false)?;
     with_observation_field_slices(py, &buffers, |out| {
         envs.iter()
             .enumerate()

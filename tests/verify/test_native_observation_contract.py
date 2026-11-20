@@ -2,7 +2,7 @@
 
 There is one encoder (`managym/src/agent/observation_encoder.rs`). These tests
 assert what named columns and rows hold, that caller-owned buffers are filled
-or refused before any write, that vector buffers equal `space.encode` and that
+or refused before any write, that vector buffers equal scalar encoding and that
 capacities are respected or refused with `managym.ObservationCapacity`.
 """
 
@@ -81,74 +81,28 @@ def assert_buffer_observation_equal(
     encoded_obs: dict[str, np.ndarray],
 ) -> None:
     for key, expected in encoded_obs.items():
-        actual = buffers[key][env_index]
-        if key == "action_focus":
-            np.testing.assert_array_equal(
-                actual,
-                expected,
-                err_msg=f"env={env_index} key={key}",
-            )
-        else:
-            np.testing.assert_allclose(
-                actual,
-                expected,
-                atol=1e-6,
-                err_msg=f"env={env_index} key={key}",
-            )
+        np.testing.assert_array_equal(
+            buffers[key][env_index], expected, err_msg=f"env={env_index} key={key}"
+        )
 
 
-def expected_focus_indices(
-    obs: managym.Observation,
-    config: ObservationConfig,
-) -> np.ndarray:
-    object_rows: dict[int, int] = {}
-    current_object_index = 0
-
-    object_rows[obs.agent.id] = current_object_index
-    current_object_index += 1
-    object_rows[obs.opponent.id] = current_object_index
-    current_object_index += 1
-
-    for cards in (obs.agent_cards, obs.opponent_cards):
-        ordered = cards[: config.max_cards_per_player]
-        for card in ordered:
-            object_rows[card.id] = current_object_index
-            current_object_index += 1
-        current_object_index += config.max_cards_per_player - len(ordered)
-
-    for permanents in (obs.agent_permanents, obs.opponent_permanents):
-        ordered = permanents[: config.max_permanents_per_player]
-        for permanent in ordered:
-            object_rows[permanent.id] = current_object_index
-            current_object_index += 1
-        current_object_index += config.max_permanents_per_player - len(ordered)
-
-    out = np.full(
-        (config.max_actions, config.max_focus_objects),
-        -1,
-        dtype=np.int32,
-    )
-    for action_index, action in enumerate(
-        obs.action_space.actions[: config.max_actions]
-    ):
-        for focus_index, object_id in enumerate(
-            action.focus[: config.max_focus_objects]
-        ):
-            out[action_index, focus_index] = object_rows.get(object_id, -1)
-
-    return out
-
-
-def test_focus_indices_name_object_rows_and_pad_unused_slots() -> None:
-    """Focus indices use deterministic object ordering and pad unused slots with -1."""
-    env = managym.Env(seed=7, skip_trivial=True)
-    config = ObservationConfig()
-
+def test_focus_indices_name_hand_rows_and_pad_unused_slots() -> None:
+    env = managym.Env(seed=7)
     obs, _ = env.reset(make_player_configs())
-    encoded = encode_observation(ObservationSpace(config), obs)
+    space = ObservationSpace()
+    focus = encode_observation(space, obs)["action_focus"]
 
-    expected_focus = expected_focus_indices(obs, config)
-    np.testing.assert_array_equal(encoded["action_focus"], expected_focus)
+    # This opening offers plays from hand and a pass. The hand follows both players.
+    hand = [card.id for card in obs.agent_cards]
+    actions = obs.action_space.actions
+    assert any(action.focus for action in actions) and any(
+        not action.focus for action in actions
+    )
+    for row, action in zip(focus[: len(actions)], actions, strict=True):
+        expected = [2 + hand.index(card) for card in action.focus]
+        np.testing.assert_array_equal(row[: len(expected)], expected)
+        assert (row[len(expected) :] == -1).all()
+    assert (focus[len(actions) :] == -1).all()
 
 
 def test_encode_observation_into_fills_preallocated_buffers_and_validates_contract() -> (
@@ -163,7 +117,9 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
 
     expected = encode_observation(space, restored)
     assert int(expected["agent_cards_valid"].sum()) == 7
-    out = {key: np.full_like(value[0], -7) for key, value in space.allocate(1).items()}
+    out = space.allocate()
+    for value in out.values():
+        value.fill(-7)
     managym.encode_observation_into(restored, out)
     for key, expected_value in expected.items():
         np.testing.assert_array_equal(out[key], expected_value, err_msg=key)
@@ -191,8 +147,9 @@ def _read_only(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
 
 def _strided(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    wide = np.zeros((buffers["facts"].shape[0], 2 * buffers["facts"].shape[1]))
-    return dict(buffers, facts=wide.astype(np.float32)[:, ::2])
+    rows, columns = buffers["facts"].shape
+    wide = np.zeros((rows, 2 * columns), dtype=np.float32)
+    return dict(buffers, facts=wide[:, ::2])
 
 
 def _wrong_dtype(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:

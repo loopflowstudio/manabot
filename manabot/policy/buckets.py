@@ -35,8 +35,7 @@ import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import PrefixObservation
-from manabot.env.observation import ObservationBuffers, ObservationSpace
-from managym import observation_layout
+from manabot.env.observation import ObservationBuffers, ObservationSpace, column, width
 
 MIN_BUCKET = 8
 
@@ -77,17 +76,10 @@ _UNMEASURED_KEYS = ("action_focus",)
 # Column positions come from the native layout by name, so a moved or added
 # column cannot silently shift what is remapped. Policy history v1 is the
 # event layout whose context columns are object references.
-_LAYOUT = observation_layout(policy_history=True)
-
-
-def _column(key: str, name: str) -> int:
-    return int(_LAYOUT[key]["columns"][name]["index"])
-
-
 # Object-table references, one-based (0: none) or zero-based (-1: none):
 # (key, column). `action_focus` is a whole zero-based reference buffer.
 ONE_BASED_REFERENCES: tuple[tuple[str, int], ...] = tuple(
-    (key, _column(key, name))
+    (key, column(key, name))
     for key, name in (
         ("facts", "object"),
         ("effects", "controller"),
@@ -103,15 +95,15 @@ ONE_BASED_REFERENCES: tuple[tuple[str, int], ...] = tuple(
     )
 )
 ZERO_BASED_REFERENCES: tuple[tuple[str, int], ...] = (
-    ("events", _column("events", "source_context")),
-    ("events", _column("events", "target_context")),
+    ("events", column("events", "source_context")),
+    ("events", column("events", "target_context")),
 )
-_EVENT_WIDTH = len(_LAYOUT["events"]["columns"])
+_EVENT_WIDTH = width("events")
 # Row joins into other variable axes.
-_DETAIL_SPAN = (_column("effects", "detail_offset"), _column("effects", "detail_count"))
-_MEMBER_SPAN = (_column("effects", "member_offset"), _column("effects", "member_count"))
-_RELATION_FRAME = _column("relations", "frame")
-_ACTION_CONTINUATION = _column("actions", "continuation")
+_DETAIL_SPAN = (column("effects", "detail_offset"), column("effects", "detail_count"))
+_MEMBER_SPAN = (column("effects", "member_offset"), column("effects", "member_count"))
+_RELATION_FRAME = column("relations", "frame")
+_ACTION_CONTINUATION = column("actions", "continuation")
 
 
 def bucket(need: int, capacity: int) -> int:
@@ -336,13 +328,13 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
             ),
         )
     # Frame ids and action continuation joins index the relation axis.
-    for key, column in (
+    for key, index in (
         ("relations", _RELATION_FRAME),
         ("actions", _ACTION_CONTINUATION),
     ):
         need(
             "relations",
-            _reference_extent(obs[key][..., column], capacities["relations"]),
+            _reference_extent(obs[key][..., index], capacities["relations"]),
         )
     for axis, rows in _object_extents(_object_references(obs), capacities).items():
         need(axis, rows)

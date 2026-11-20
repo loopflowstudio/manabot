@@ -25,67 +25,69 @@ if TYPE_CHECKING:
     from manabot.env.observation import ObservationBuffers
     from manabot.policy.prepare import Packed, Tables
 
-_FIELDS = MEMORY_FIELDS
-_WIDTHS = tuple(MEMORY_WIDTHS[key] for key in _FIELDS)
-
 
 def _span(array: str, first: str, last: str) -> slice:
     return slice(column(array, first), column(array, last) + 1)
 
 
 # Native columns of the four memory tables, by name.
-_R, _F = "decision_records", "decision_references"
-_D, _M = "decision_reference_details", "decision_members"
+_RECORDS, _DETAILS, _REFERENCES, _MEMBERS = MEMORY_FIELDS
 # Ordinal, count, turn, first and last: five 16-bit word pairs.
-_RECORD_TEMPORAL = _span(_R, "ordinal_high", "last_low")
-_RECORD_PHASE = column(_R, "phase")
-_RECORD_STEP = column(_R, "step")
-_RECORD_PHASE_STEP = _span(_R, "phase", "step")
-_RECORD_KIND = _span(_R, "kind_high", "kind_low")
-_RECORD_MEMBER_OFFSET = column(_R, "member_offset")
+_RECORD_TEMPORAL = _span(_RECORDS, "ordinal_high", "last_low")
+_RECORD_PHASE = column(_RECORDS, "phase")
+_RECORD_STEP = column(_RECORDS, "step")
+_RECORD_PHASE_STEP = _span(_RECORDS, "phase", "step")
+_RECORD_KIND = _span(_RECORDS, "kind_high", "kind_low")
+_RECORD_MEMBER_OFFSET = column(_RECORDS, "member_offset")
 # Mana, response and choice member counts.
-_RECORD_COUNTS = _span(_R, "mana_count", "choice_count")
-_RECORD_CHOOSER = column(_R, "chooser_role")
-_RECORD_CHOOSER_SPAN = _span(_R, "chooser_role", "chooser_role")
-_RECORD_VALID = column(_R, "valid")
+_RECORD_COUNTS = _span(_RECORDS, "mana_count", "choice_count")
+_RECORD_CHOOSER = column(_RECORDS, "chooser_role")
+_RECORD_CHOOSER_SPAN = _span(_RECORDS, "chooser_role", "chooser_role")
+_RECORD_VALID = column(_RECORDS, "valid")
 # Life, hand and board context of both seats: word pairs.
-_RECORD_CONTEXT = _span(_R, "life_viewer_high", "board_opponent_battle_low")
+_RECORD_CONTEXT = _span(_RECORDS, "life_viewer_high", "board_opponent_battle_low")
 # Each selector's presence flag, followed by its value's two words.
 _RECORD_SELECTORS = tuple(
-    column(_R, f"{name}_present") for name in ("choice_kind", "mode", "ability", "name")
+    column(_RECORDS, f"{name}_present")
+    for name in ("choice_kind", "mode", "ability", "name")
 )
-_RECORD_NUMBERED_SELECTORS = (column(_R, "mode_present"), column(_R, "ability_present"))
-_RECORD_CHOICE_PRESENT = column(_R, "choice_kind_present")
-_RECORD_CHOICE_KIND = _span(_R, "choice_kind_high", "choice_kind_low")
-_RECORD_NAME = _span(_R, "name_high", "name_low")
-_RECORD_DECLARED_PRESENT = column(_R, "declared_present")
-_RECORD_DECLARED = column(_R, "declared")
-_RECORD_DECLARATION = _span(_R, "declared_present", "declared")
+_RECORD_NUMBERED_SELECTORS = (
+    column(_RECORDS, "mode_present"),
+    column(_RECORDS, "ability_present"),
+)
+_RECORD_CHOICE_PRESENT = column(_RECORDS, "choice_kind_present")
+_RECORD_CHOICE_KIND = _span(_RECORDS, "choice_kind_high", "choice_kind_low")
+_RECORD_NAME = _span(_RECORDS, "name_high", "name_low")
+_RECORD_DECLARED_PRESENT = column(_RECORDS, "declared_present")
+_RECORD_DECLARED = column(_RECORDS, "declared")
+_RECORD_DECLARATION = _span(_RECORDS, "declared_present", "declared")
 _RECORD_DECLARATION_COLUMNS = (_RECORD_DECLARED_PRESENT, _RECORD_DECLARED)
 # Every 16-bit word column.
 _RECORD_WORDS = [
-    column(_R, name) for name in column_names(_R) if name.endswith(("_high", "_low"))
+    column(_RECORDS, name)
+    for name in column_names(_RECORDS)
+    if name.endswith(("_high", "_low"))
 ]
-_REFERENCE_ROLE = column(_F, "role")
-_REFERENCE_DEFINITION = column(_F, "definition")
-_REFERENCE_DEFINITION_SPAN = _span(_F, "definition", "definition")
-_REFERENCE_WORDS = _span(_F, "power_high", "toughness_low")
+_REFERENCE_ROLE = column(_REFERENCES, "role")
+_REFERENCE_DEFINITION = column(_REFERENCES, "definition")
+_REFERENCE_DEFINITION_SPAN = _span(_REFERENCES, "definition", "definition")
+_REFERENCE_WORDS = _span(_REFERENCES, "power_high", "toughness_low")
 # Tapped, ready, attacking and blocking flags.
-_REFERENCE_FLAGS = _span(_F, "tapped", "blocking")
-_REFERENCE_DETAIL_OFFSET = column(_F, "detail_offset")
-_REFERENCE_DETAIL_COUNT = column(_F, "detail_count")
-_REFERENCE_VALID = column(_F, "valid")
-_REFERENCE_DEFINITION_ONLY = column(_F, "definition_only")
-_DETAIL_FIELD = column(_D, "field")
-_DETAIL_TOKEN_KIND = column(_D, "token_kind")
-_DETAIL_VALUE_HIGH = column(_D, "value_high")
-_DETAIL_VALUE_LOW = column(_D, "value_low")
-_DETAIL_VALUE = _span(_D, "value_high", "value_low")
-_DETAIL_ORDINAL = column(_D, "ordinal")
-_DETAIL_VALID = column(_D, "valid")
-_MEMBER_REFERENCE = column(_M, "reference")
-_MEMBER_ORDINAL = column(_M, "ordinal")
-_MEMBER_ORDINAL_SPAN = _span(_M, "ordinal", "ordinal")
+_REFERENCE_FLAGS = _span(_REFERENCES, "tapped", "blocking")
+_REFERENCE_DETAIL_OFFSET = column(_REFERENCES, "detail_offset")
+_REFERENCE_DETAIL_COUNT = column(_REFERENCES, "detail_count")
+_REFERENCE_VALID = column(_REFERENCES, "valid")
+_REFERENCE_DEFINITION_ONLY = column(_REFERENCES, "definition_only")
+_DETAIL_FIELD = column(_DETAILS, "field")
+_DETAIL_TOKEN_KIND = column(_DETAILS, "token_kind")
+_DETAIL_VALUE_HIGH = column(_DETAILS, "value_high")
+_DETAIL_VALUE_LOW = column(_DETAILS, "value_low")
+_DETAIL_VALUE = _span(_DETAILS, "value_high", "value_low")
+_DETAIL_ORDINAL = column(_DETAILS, "ordinal")
+_DETAIL_VALID = column(_DETAILS, "valid")
+_MEMBER_REFERENCE = column(_MEMBERS, "reference")
+_MEMBER_ORDINAL = column(_MEMBERS, "ordinal")
+_MEMBER_ORDINAL_SPAN = _span(_MEMBERS, "ordinal", "ordinal")
 
 
 @dataclass(frozen=True)
@@ -159,7 +161,7 @@ class MemoryRows[A](MemoryFeatures[A]):
 
 
 def memory_lengths(obs: "ObservationBuffers", row: int) -> tuple[int, int, int, int]:
-    headers, details, references = (obs[key][row] for key in _FIELDS[:3])
+    headers, details, references = (obs[key][row] for key in MEMORY_FIELDS[:3])
     return (
         int(headers[:, _RECORD_VALID].sum()),
         int(details[:, _DETAIL_VALID].sum()),
@@ -209,23 +211,23 @@ class MemoryCursor:
 
 def live_memory(obs: "ObservationBuffers") -> list[tuple[np.ndarray, ...]]:
     """Validate arbitrary dense shapes, padding and integers before slicing."""
-    present = [key in obs for key in _FIELDS]
+    present = [key in obs for key in MEMORY_FIELDS]
     if not any(present):
         return []
     if not all(present):
         raise ValueError("decision memory requires all companion buffers")
-    arrays = [obs[key] for key in _FIELDS]
+    arrays = [obs[key] for key in MEMORY_FIELDS]
     if any(
         a.ndim != 3 or a.shape[-1] != w or a.shape[0] != arrays[0].shape[0]
-        for a, w in zip(arrays, _WIDTHS, strict=True)
+        for a, w in zip(arrays, MEMORY_WIDTHS.values(), strict=True)
     ):
         raise ValueError("invalid decision-memory shapes")
     result = []
     for headers, rows, snapshots, joins in zip(*arrays, strict=True):
         records, details, references = (
-            _live(headers, 19),
-            _live(rows, 5),
-            _live(snapshots, 12),
+            _live(headers, _RECORD_VALID),
+            _live(rows, _DETAIL_VALID),
+            _live(snapshots, _REFERENCE_VALID),
         )
         counts = records[:, _RECORD_COUNTS]
         total = counts.sum(dtype=np.float64)
@@ -458,12 +460,12 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
     """Validate only owned values, including for a control without learned heads."""
     from manabot.policy.prepare import record_word
 
-    if _FIELDS[0] not in obs:
+    if _RECORDS not in obs:
         return
     programs = definition_programs()
-    for batch in range(obs[_FIELDS[0]].shape[0]):
+    for batch in range(obs[_RECORDS].shape[0]):
         count, detail_count, reference_count, _ = memory_lengths(obs, batch)
-        references = obs[_FIELDS[2]][batch, :reference_count]
+        references = obs[_REFERENCES][batch, :reference_count]
         for definition in references[
             references[:, _REFERENCE_DEFINITION_ONLY] == 1, _REFERENCE_DEFINITION
         ].astype(np.int64):
@@ -472,8 +474,8 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
                 or not programs[int(definition) - 1].eligible
             ):
                 raise ValueError("ineligible decision-memory definition shortcut")
-        headers = obs[_FIELDS[0]][batch, :count]
-        details = obs[_FIELDS[1]][batch, :detail_count]
+        headers = obs[_RECORDS][batch, :count]
+        details = obs[_DETAILS][batch, :detail_count]
         if not np.isin(
             record_word(headers[:, _RECORD_KIND], 0), decision_name_values()
         ).all():
@@ -579,13 +581,13 @@ def _node_rows(node: Tail | RecordNode) -> tuple[np.ndarray, ...]:
 def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     """Local companion offsets for featurization; temporal words stay absolute."""
     cursor = node.previous.cursor if node.previous else MemoryCursor()
-    arrays = dict(zip(_FIELDS, (a[None] for a in _node_rows(node)), strict=True))
-    references = arrays[_FIELDS[2]].copy()
+    arrays = dict(zip(MEMORY_FIELDS, (a[None] for a in _node_rows(node)), strict=True))
+    references = arrays[_REFERENCES].copy()
     references[..., _REFERENCE_DETAIL_OFFSET] -= cursor.details
-    arrays[_FIELDS[2]] = references
-    members = arrays[_FIELDS[3]].copy()
+    arrays[_REFERENCES] = references
+    members = arrays[_MEMBERS].copy()
     members[..., _MEMBER_REFERENCE] -= cursor.references
-    arrays[_FIELDS[3]] = members
+    arrays[_MEMBERS] = members
     return arrays
 
 
@@ -594,7 +596,8 @@ def retained_memory(obs: "ObservationBuffers") -> "PrefixObservation | None":
 
     return (
         obs
-        if isinstance(obs, PrefixObservation) and not any(key in obs for key in _FIELDS)
+        if isinstance(obs, PrefixObservation)
+        and not any(key in obs for key in MEMORY_FIELDS)
         else None
     )
 
@@ -641,7 +644,7 @@ def validate_retained_memory(
     validate_memory_vocabulary(
         dict(
             zip(
-                _FIELDS[:3],
+                MEMORY_FIELDS[:3],
                 (a[None] for a in (headers, details, references)),
                 strict=True,
             )
@@ -718,11 +721,11 @@ def _featurize_records(nodes: list[RecordNode], tables: Tables) -> None:
     ]
     if not pending:
         return
-    blocks: dict[str, list[np.ndarray]] = {key: [] for key in _FIELDS}
+    blocks: dict[str, list[np.ndarray]] = {key: [] for key in MEMORY_FIELDS}
     detail_base = 0
     for node in pending:
         local = chunk_observation(node)
-        local[_FIELDS[2]][..., 10] += detail_base
+        local[_REFERENCES][..., _REFERENCE_DETAIL_OFFSET] += detail_base
         for key in blocks:
             blocks[key].append(local[key])
         detail_base += len(_node_rows(node)[1])
@@ -781,7 +784,7 @@ def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
     empty = _prepare_dense_memory(
         {
             key: np.zeros((0, 0, width), np.float32)
-            for key, width in zip(_FIELDS, _WIDTHS, strict=True)
+            for key, width in MEMORY_WIDTHS.items()
         },
         tables,
     )
@@ -1037,9 +1040,9 @@ def _prepare_dense_memory(
 ) -> MemoryRows[np.ndarray] | None:
     from manabot.policy.prepare import NUMBER_TOKEN_KINDS, pack, record_word
 
-    if _FIELDS[0] not in obs:
+    if _RECORDS not in obs:
         return None
-    headers = obs[_FIELDS[0]]
+    headers = obs[_RECORDS]
     lengths = headers[..., _RECORD_VALID].sum(1).astype(np.int64)
     batches, slots = np.nonzero(headers[..., _RECORD_VALID])
     selected = headers[batches, slots]
@@ -1092,13 +1095,13 @@ def _prepare_dense_memory(
     reference_base = record_base = 0
     for batch, length in enumerate(lengths):
         _, detail_count, reference_count, member_count = memory_lengths(obs, batch)
-        references = obs[_FIELDS[2]][batch, :reference_count]
+        references = obs[_REFERENCES][batch, :reference_count]
         references_list.append(references)
-        raw_details = obs[_FIELDS[1]][batch, :detail_count]
+        raw_details = obs[_DETAILS][batch, :detail_count]
         expanded, owners = _expand_details(references, raw_details)
         details_list.append(expanded)
         detail_routes.append(owners + reference_base)
-        members = obs[_FIELDS[3]][batch, :member_count]
+        members = obs[_MEMBERS][batch, :member_count]
         member_routes.append(
             members[:, _MEMBER_REFERENCE].astype(np.int64) - 1 + reference_base
         )

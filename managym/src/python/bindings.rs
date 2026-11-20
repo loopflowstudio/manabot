@@ -49,7 +49,7 @@ use crate::{
         Revision,
     },
     flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
-    python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
+    python::convert::info_dict_to_pydict,
     search_state::SearchStateWitness,
     state::{
         deck::Deck,
@@ -109,34 +109,16 @@ fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
 }
 
 #[cfg(feature = "python")]
-fn to_numpy_array_f32(
-    py: Python<'_>,
-    np: &Bound<'_, PyModule>,
-    data: &[f32],
+fn numpy_array<'py, T: pyo3::buffer::Element>(
+    py: Python<'py>,
+    empty: &Bound<'py, PyAny>,
+    data: &[T],
     shape: &[usize],
-) -> PyResult<PyObject> {
-    let array_fn = np.getattr("empty")?;
-    let kwargs = PyDict::new_bound(py);
-    kwargs.set_item("dtype", np.getattr("float32")?)?;
-    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
-    // Bulk-copy exact f32 bits into Python-owned storage; no scalar boxing.
-    PyBuffer::<f32>::get_bound(&array)?.copy_from_slice(py, data)?;
-    Ok(array.unbind())
-}
-
-#[cfg(feature = "python")]
-fn to_numpy_array_i32(
-    py: Python<'_>,
-    np: &Bound<'_, PyModule>,
-    data: &[i32],
-    shape: &[usize],
-) -> PyResult<PyObject> {
-    let array_fn = np.getattr("empty")?;
-    let kwargs = PyDict::new_bound(py);
-    kwargs.set_item("dtype", np.getattr("int32")?)?;
-    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
-    PyBuffer::<i32>::get_bound(&array)?.copy_from_slice(py, data)?;
-    Ok(array.unbind())
+    dtype: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let array = empty.call1((shape.to_vec(), dtype))?;
+    PyBuffer::<T>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array)
 }
 
 #[cfg(feature = "python")]
@@ -145,366 +127,182 @@ fn encoded_to_dict<'py>(
     encoded: crate::agent::observation_encoder::EncodedObservation,
     config: &ObservationEncoderConfig,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let np = PyModule::import_bound(py, "numpy")?;
+    use crate::agent::{continuation, decision_memory, observation_encoder as enc};
+    let empty = py.import_bound("numpy")?.getattr("empty")?;
     let dict = PyDict::new_bound(py);
-    dict.set_item(
-        "name_candidates",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.name_candidates,
-            &[
-                config.max_actions,
-                crate::agent::observation_encoder::NAME_DIM,
-            ],
-        )?,
-    )?;
-    for (name, values, shape) in [
-        (
-            "effects",
-            &encoded.effects,
-            [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
-        ),
-        (
-            "effect_details",
-            &encoded.effect_details,
-            [shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
-        ),
-        (
-            "effect_members",
-            &encoded.effect_members,
-            [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
-        ),
-    ] {
-        dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
-    }
-    if config.turn_state {
-        dict.set_item(
-            "player_turn_state",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.player_turn_state,
-                &[2, crate::agent::observation_encoder::TURN_STATE_DIM],
-            )?,
-        )?;
-        dict.set_item(
-            "card_turn_state",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.card_turn_state,
-                &[2, config.max_cards_per_player],
-            )?,
-        )?;
-    }
-    dict.set_item(
-        "facts",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.facts,
-            &[
-                config.max_facts,
-                crate::agent::observation_encoder::FACT_DIM,
-            ],
-        )?,
-    )?;
-    dict.set_item(
-        "relations",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.relations,
-            &[
-                crate::agent::continuation::RELATION_ROWS,
-                crate::agent::continuation::RELATION_DIM,
-            ],
-        )?,
-    )?;
+    let put = |name: &str, data: &[f32], shape: &[usize]| {
+        dict.set_item(name, numpy_array(py, &empty, data, shape, "float32")?)
+    };
 
-    dict.set_item(
-        "agent_player",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_player,
-            &[1, crate::agent::observation_encoder::PLAYER_DIM],
-        )?,
+    put(
+        "name_candidates",
+        &encoded.name_candidates,
+        &[config.max_actions, enc::NAME_DIM],
     )?;
-    dict.set_item(
-        "opponent_player",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_player,
-            &[1, crate::agent::observation_encoder::PLAYER_DIM],
-        )?,
+    put(
+        "effects",
+        &encoded.effects,
+        &[shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
     )?;
-    dict.set_item(
-        "agent_cards",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_cards,
-            &[
-                config.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-        )?,
+    put(
+        "effect_details",
+        &encoded.effect_details,
+        &[shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
     )?;
-    dict.set_item(
-        "opponent_cards",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_cards,
-            &[
-                config.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-        )?,
+    put(
+        "effect_members",
+        &encoded.effect_members,
+        &[shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
     )?;
-    dict.set_item(
-        "agent_permanents",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
-        )?,
-    )?;
-    dict.set_item(
-        "opponent_permanents",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
-        )?,
-    )?;
-    if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
-        dict.set_item(
-            "stack",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.stack,
-                &[
-                    config.max_stack_objects,
-                    crate::agent::observation_encoder::STACK_DIM,
-                ],
-            )?,
+    if config.turn_state {
+        put(
+            "player_turn_state",
+            &encoded.player_turn_state,
+            &[2, enc::TURN_STATE_DIM],
         )?;
-        dict.set_item(
-            "stack_valid",
-            to_numpy_array_f32(py, &np, &encoded.stack_valid, &[config.max_stack_objects])?,
+        put(
+            "card_turn_state",
+            &encoded.card_turn_state,
+            &[2, config.max_cards_per_player],
         )?;
     }
-    dict.set_item(
+    put("facts", &encoded.facts, &[config.max_facts, enc::FACT_DIM])?;
+    put(
+        "relations",
+        &encoded.relations,
+        &[continuation::RELATION_ROWS, continuation::RELATION_DIM],
+    )?;
+    put("agent_player", &encoded.agent_player, &[1, enc::PLAYER_DIM])?;
+    put(
+        "opponent_player",
+        &encoded.opponent_player,
+        &[1, enc::PLAYER_DIM],
+    )?;
+    let cards = [config.max_cards_per_player, enc::CARD_DIM];
+    put("agent_cards", &encoded.agent_cards, &cards)?;
+    put("opponent_cards", &encoded.opponent_cards, &cards)?;
+    let permanents = [config.max_permanents_per_player, config.permanent_dim()];
+    put("agent_permanents", &encoded.agent_permanents, &permanents)?;
+    put(
+        "opponent_permanents",
+        &encoded.opponent_permanents,
+        &permanents,
+    )?;
+    if config.layout == enc::InputLayout::OneToken {
+        put(
+            "stack",
+            &encoded.stack,
+            &[config.max_stack_objects, enc::STACK_DIM],
+        )?;
+        put(
+            "stack_valid",
+            &encoded.stack_valid,
+            &[config.max_stack_objects],
+        )?;
+    }
+    put(
         "actions",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.actions,
-            &[config.max_actions, config.action_dim()],
-        )?,
+        &encoded.actions,
+        &[config.max_actions, config.action_dim()],
     )?;
     if config.max_decision_records > 0 {
-        dict.set_item(
+        put(
             "decision_records",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_records,
-                &[
-                    config.max_decision_records,
-                    crate::agent::decision_memory::RECORD_DIM,
-                ],
-            )?,
+            &encoded.decision_records,
+            &[config.max_decision_records, decision_memory::RECORD_DIM],
         )?;
-        dict.set_item(
+        put(
             "decision_reference_details",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_reference_details,
-                &[
-                    config.max_decision_reference_details,
-                    crate::agent::decision_memory::DETAIL_DIM,
-                ],
-            )?,
+            &encoded.decision_reference_details,
+            &[
+                config.max_decision_reference_details,
+                decision_memory::DETAIL_DIM,
+            ],
         )?;
-        dict.set_item(
+        put(
             "decision_references",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_references,
-                &[
-                    config.max_decision_references,
-                    crate::agent::decision_memory::REFERENCE_DIM,
-                ],
-            )?,
+            &encoded.decision_references,
+            &[
+                config.max_decision_references,
+                decision_memory::REFERENCE_DIM,
+            ],
         )?;
-        dict.set_item(
+        put(
             "decision_members",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_members,
-                &[
-                    config.max_decision_members,
-                    crate::agent::decision_memory::MEMBER_DIM,
-                ],
-            )?,
+            &encoded.decision_members,
+            &[config.max_decision_members, decision_memory::MEMBER_DIM],
         )?;
     }
-    dict.set_item(
+    put(
         "events",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.events,
-            &[config.max_events, config.event_dim()],
-        )?,
+        &encoded.events,
+        &[config.max_events, config.event_dim()],
     )?;
     dict.set_item(
         "action_focus",
-        to_numpy_array_i32(
+        numpy_array(
             py,
-            &np,
+            &empty,
             &encoded.action_focus,
             &[config.max_actions, config.max_focus_objects],
+            "int32",
         )?,
     )?;
-
-    dict.set_item(
-        "agent_player_valid",
-        to_numpy_array_f32(py, &np, &encoded.agent_player_valid, &[1])?,
-    )?;
-    dict.set_item(
+    put("agent_player_valid", &encoded.agent_player_valid, &[1])?;
+    put(
         "opponent_player_valid",
-        to_numpy_array_f32(py, &np, &encoded.opponent_player_valid, &[1])?,
+        &encoded.opponent_player_valid,
+        &[1],
     )?;
-    dict.set_item(
+    put(
         "agent_cards_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_cards_valid,
-            &[config.max_cards_per_player],
-        )?,
+        &encoded.agent_cards_valid,
+        &[config.max_cards_per_player],
     )?;
-    dict.set_item(
+    put(
         "opponent_cards_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_cards_valid,
-            &[config.max_cards_per_player],
-        )?,
+        &encoded.opponent_cards_valid,
+        &[config.max_cards_per_player],
     )?;
-    dict.set_item(
+    put(
         "agent_permanents_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_permanents_valid,
-            &[config.max_permanents_per_player],
-        )?,
+        &encoded.agent_permanents_valid,
+        &[config.max_permanents_per_player],
     )?;
-    dict.set_item(
+    put(
         "opponent_permanents_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_permanents_valid,
-            &[config.max_permanents_per_player],
-        )?,
+        &encoded.opponent_permanents_valid,
+        &[config.max_permanents_per_player],
     )?;
-    dict.set_item(
+    put(
         "actions_valid",
-        to_numpy_array_f32(py, &np, &encoded.actions_valid, &[config.max_actions])?,
+        &encoded.actions_valid,
+        &[config.max_actions],
     )?;
-    dict.set_item(
-        "events_valid",
-        to_numpy_array_f32(py, &np, &encoded.events_valid, &[config.max_events])?,
-    )?;
-
-    dict.set_item(
+    put("events_valid", &encoded.events_valid, &[config.max_events])?;
+    put(
         "semantic_cards",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.semantic_cards,
-            &[2, config.max_cards_per_player],
-        )?,
+        &encoded.semantic_cards,
+        &[2, config.max_cards_per_player],
     )?;
     if config.known_library_len() > 0 {
-        dict.set_item(
+        put(
             "known_library",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.known_library,
-                &[2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
-            )?,
+            &encoded.known_library,
+            &[2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
         )?;
     }
-    dict.set_item(
+    put(
         "known_hand",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.known_hand,
-            &[2, config.max_cards_per_player, 2],
-        )?,
+        &encoded.known_hand,
+        &[2, config.max_cards_per_player, 2],
     )?;
-    dict.set_item(
+    put(
         "decklists",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.decklists,
-            &[
-                2,
-                config.max_cards_per_player,
-                crate::agent::observation_encoder::DECKLIST_DIM,
-            ],
-        )?,
+        &encoded.decklists,
+        &[2, config.max_cards_per_player, enc::DECKLIST_DIM],
     )?;
-
     Ok(dict)
-}
-
-#[cfg(feature = "python")]
-fn fill_encoded_into_existing_buffers(
-    py: Python<'_>,
-    out: &Bound<'_, PyDict>,
-    encoded: crate::agent::observation_encoder::EncodedObservation,
-    config: &ObservationEncoderConfig,
-) -> PyResult<()> {
-    let np = PyModule::import_bound(py, "numpy")?;
-    let copyto = np.getattr("copyto")?;
-    let expected = encoded_to_dict(py, encoded, config)?;
-    // Validate the complete contract before changing any caller-owned buffer.
-    let mut copies = Vec::new();
-    for (key_obj, source) in expected.iter() {
-        let key = key_obj.extract::<String>()?;
-        let dtype_name = source
-            .getattr("dtype")?
-            .getattr("name")?
-            .extract::<String>()?;
-        let shape = shape_to_vec(&source.getattr("shape")?)?;
-        let target = require_numpy_array(out, &key, &shape, &dtype_name)?;
-        copies.push((target, source));
-    }
-    for (target, source) in copies {
-        copyto.call1((target, source))?;
-    }
-
-    Ok(())
 }
 
 #[cfg(feature = "python")]
@@ -5194,7 +4992,7 @@ fn encode_observation_into(
     let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
     let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
     config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-    crate::python::vector_env_bindings::check_observation_buffers(py, &out, &config)?;
+    crate::python::vector_env_bindings::check_observation_buffers(&out, &config)?;
     #[cfg(feature = "benchmark")]
     drop(config_timer);
     let encoded =
@@ -5202,7 +5000,12 @@ fn encode_observation_into(
 
     #[cfg(feature = "benchmark")]
     let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
-    fill_encoded_into_existing_buffers(py, &out, encoded, &config)
+    // Stage the complete encoding before touching the validated caller buffers.
+    let copyto = py.import_bound("numpy")?.getattr("copyto")?;
+    for (key, source) in encoded_to_dict(py, encoded, &config)?.iter() {
+        copyto.call1((out.as_any().get_item(key)?, source))?;
+    }
+    Ok(())
 }
 
 #[cfg(feature = "python")]

@@ -8,18 +8,7 @@ never learning features.
 import numpy as np
 from numpy.typing import NDArray
 
-import managym
-
-# Table widths, from the native layout.
-MEMORY_WIDTHS: dict[str, int] = {
-    key: array["shape"][-1]
-    for key, array in managym.observation_layout(decision_memory=True).items()
-    if key.startswith("decision_")
-}
-RECORD_DIM = MEMORY_WIDTHS["decision_records"]
-REFERENCE_DIM = MEMORY_WIDTHS["decision_references"]
-DETAIL_DIM = MEMORY_WIDTHS["decision_reference_details"]
-MEMBER_DIM = MEMORY_WIDTHS["decision_members"]
+from manabot.env.observation import width
 
 MEMORY_FIELDS = (
     "decision_records",
@@ -27,6 +16,8 @@ MEMORY_FIELDS = (
     "decision_references",
     "decision_members",
 )
+MEMORY_WIDTHS = {key: width(key) for key in MEMORY_FIELDS}
+RECORD_DIM, DETAIL_DIM, REFERENCE_DIM, MEMBER_DIM = MEMORY_WIDTHS.values()
 
 
 def integer_words(value: int) -> tuple[int, int]:

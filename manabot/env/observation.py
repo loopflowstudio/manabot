@@ -213,7 +213,7 @@ class ObservationSpace(gym.spaces.Space):
     input. The space writes nothing; `encode_observation` does.
     """
 
-    def __init__(self, config: ObservationConfig | None = None):
+    def __init__(self, config: ObservationConfig | None = None) -> None:
         super().__init__(shape=None, dtype=None)
         config = config or ObservationConfig()
         memory = (
@@ -289,17 +289,13 @@ class ObservationSpace(gym.spaces.Space):
         return encode_observation(self, obs)
 
     def sample(self, mask: Any = None) -> dict[str, np.ndarray]:
-        return {name: space.sample() for name, space in self.spaces.items()}
+        return self.spaces.sample()
 
     def contains(self, x: ObservationBuffers) -> bool:
         return all(
             name in x and x[name].shape == self.shapes[name]
             for name in self.spaces.keys()
         )
-
-    @property
-    def shape(self) -> tuple | None:
-        return None
 
     def __getitem__(self, key: str) -> gym.spaces.Space:
         return self.spaces[key]
@@ -314,14 +310,11 @@ class ObservationSpace(gym.spaces.Space):
         return self.spaces.items()
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ObservationSpace):
-            return False
-        if set(self.spaces.keys()) != set(other.spaces.keys()):
-            return False
-        for key in self.spaces:
-            if self.spaces[key] != other.spaces[key]:
-                return False
-        return True
+        return (
+            isinstance(other, ObservationSpace)
+            and self.keys() == other.keys()
+            and all(space == other[name] for name, space in self.items())
+        )
 
 
 def encode_observation(

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import CompactObservation
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
@@ -150,14 +151,7 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     ):
         raise ValueError("own-seat decision memory is disabled")
     if retained:
-        for axis, key in enumerate(
-            (
-                "decision_records",
-                "decision_reference_details",
-                "decision_references",
-                "decision_members",
-            )
-        ):
+        for axis, key in enumerate(MEMORY_FIELDS):
             expected = spec.space.shapes[key]
             if isinstance(obs, CompactObservation):
                 if (
