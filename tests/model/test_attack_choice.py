@@ -99,7 +99,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
             "world_binding": binding,
             "hypers": {
                 "agent_hypers": ModelConfig().model_dump(),
-                "observation_hypers": space.encoder.config.model_dump(),
+                "observation_hypers": space.config.model_dump(),
             },
             "model_state_dict": {},
         },

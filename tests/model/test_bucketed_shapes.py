@@ -94,7 +94,7 @@ def test_outputs_and_gradients_match_default(
     case = _policy(history=history)
     obs = _later_decisions(case)
     agent = _bucketed(case)
-    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space, objects=True)
     assert buckets is not None and buckets.trims_objects
     outputs = []
     for model in (case.agent, agent):
@@ -121,7 +121,7 @@ def test_outputs_and_gradients_match_default(
         assert (
             sizes_of(
                 np.asarray(prepared.bucket_needs),
-                agent.observation_space.encoder,
+                agent.observation_space,
                 objects=True,
             )
             == buckets
@@ -185,7 +185,7 @@ def test_reference_to_padding_object_is_kept() -> None:
     agent = _bucketed(case)
     objects = case.agent._is_agent_template.shape[1]
     _set_focus(objects - 1)(obs)
-    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space, objects=True)
     assert buckets is not None
     assert buckets.sizes["permanents"] == buckets.capacities["permanents"]
     with torch.no_grad():
@@ -199,7 +199,7 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
     """Needs measured once per row give any grouping of those rows the buckets
     measuring the group directly gives, so later epochs need not measure."""
     case = _policy(history=True)
-    encoder = case.agent.observation_space.encoder
+    encoder = case.agent.observation_space
     batch = collect(case.collector, case.agent, 24)
     obs = {
         key: torch.from_numpy(value[:, 0]).float()
@@ -229,5 +229,5 @@ def test_collection_records_each_rows_measured_needs() -> None:
     recorded = batch.recorded.gather_needs(rows)
     assert recorded is not None
     host = batch.observations(rows).observation
-    encoder = agent.observation_space.encoder
+    encoder = agent.observation_space
     assert np.array_equal(recorded, row_needs(host, encoder))

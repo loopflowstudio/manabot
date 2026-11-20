@@ -542,11 +542,11 @@ from manabot.env.observation import ObservationSpace
 space = ObservationSpace()
 games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))
 games.reset_all(Match().to_rust())
-buffers = space.encoder.allocate(2)
+buffers = space.allocate(2)
 
 players = [0, 1]
 reads = games.write_observations_for_players(
-    players, buffers, action_overflow=space.encoder.config.action_overflow
+    players, buffers, action_overflow=space.config.action_overflow
 )
 # Row i in every array describes players[i] in slot i.
 
@@ -583,7 +583,7 @@ not remap it to its controller or grant access to hidden information. Only the
 published chooser sees legal actions. Hand snapshots are separate privileged
 records and must stay out of viewer-safe inputs and exports.
 
-`space.encoder.allocate(num_envs)` supplies every required writable, contiguous
+`space.allocate(num_envs)` supplies every required writable, contiguous
 NumPy array at the selected version's shapes, dtypes and capacities. No reward
 or done arrays are needed. Keep these buffers separate from ordinary step
 buffers and copy rows you need to retain before the next write.
@@ -621,7 +621,7 @@ in [observations and the policy network](observation-and-model.md#policy-inputs)
 
 ```python
 import managym
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 
 game = managym.Env(seed=42)
 observation, info = game.reset([
@@ -630,18 +630,22 @@ observation, info = game.reset([
 ])
 
 space = ObservationSpace()
-arrays = space.encode(observation)
+arrays = encode_observation(space, observation)
 print(int(arrays["agent_cards_valid"].sum()))
 # 7
 
 restored = managym.Observation.from_json(observation.toJSON())
 del game
-print(int(space.encode(restored)["agent_cards_valid"].sum()))
+print(int(encode_observation(space, restored)["agent_cards_valid"].sum()))
 # 7
 ```
 
-`ObservationSpace.encode(obs)` returns freshly allocated arrays at the space's
-shapes, so a caller may keep them. It takes any `managym.Observation`: the
+`encode_observation(space, obs)` returns freshly allocated arrays at the
+space's shapes, so a caller may keep them. The space is an `ObservationConfig`
+and the native layout at its capacities: `space.shapes` is
+`observation_layout()` for the config's input version, history and memory,
+with every `None` extent filled from a capacity, and `space.allocate()` builds
+those arrays. It takes any `managym.Observation`: the
 one a step returned, a fixed seat's view from `observation_for_player`, or one
 restored with `Observation.from_json`. No game needs to be open. A restored
 observation holds what its JSON held; `toJSON()` omits public history, so
@@ -651,9 +655,9 @@ observation's.
 To write into arrays you own, call the function underneath:
 
 ```python
-buffers = space.encoder.allocate()
+buffers = space.allocate()
 managym.encode_observation_into(
-    observation, buffers, action_overflow=space.encoder.config.action_overflow
+    observation, buffers, action_overflow=space.config.action_overflow
 )
 ```
 
@@ -674,7 +678,7 @@ from manabot.infra.config import ObservationConfig
 
 small = ObservationSpace(ObservationConfig(max_cards_per_player=4))
 try:
-    small.encode(observation)
+    encode_observation(small, observation)
 except managym.ObservationCapacity as error:
     print(error)
 # observation capacity exceeded: agent_cards plus sideboard 7 > 4
@@ -694,7 +698,10 @@ Discard the arrays after a failure.
 
 `Env.encode_observation` and `Env.encode_observation_into` are deprecated
 aliases that warn and are removed in 0.4.0. Replace the first with
-`space.encode(obs)` and the second with `managym.encode_observation_into`.
+`encode_observation(space, obs)` and the second with
+`managym.encode_observation_into`. In manabot, `ObservationSpace.encode(obs)`,
+`space.encoder` (now the space itself) and `ObservationEncoder` (now
+`ObservationSpace`) warn and are removed in 0.4.0 too.
 
 ### Reading arrays by name
 
@@ -738,7 +745,9 @@ ranks. The encoding explains scaling, join targets, index bases and absence
 sentinels; the range describes stored values, including when no fixed bound
 exists. A `tagged` kind needs its row-kind description before preprocessing.
 Tagged fact, relation and effect rows describe meanings conditional on their
-row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
+row kind in `row_kinds` (integer codes mapped to descriptions); facts also
+name each kind in `row_kind_names` (`"counter"` → 1), so a reader looks kinds
+up by name rather than copying numbers. Masks and
 scalar-valued arrays have empty `columns` and describe their `element` meaning
 without inventing a feature axis. Shared headers own the detail/member slices;
 unused rows are zero. `policy_history=True` describes the 12-column public

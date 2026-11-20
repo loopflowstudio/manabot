@@ -196,9 +196,7 @@ def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:
                 Match().to_rust(), agent.observation_space
             ),
             "hypers": {
-                "observation_hypers": (
-                    agent.observation_space.encoder.config.model_dump()
-                ),
+                "observation_hypers": (agent.observation_space.config.model_dump()),
                 "agent_hypers": agent.config.model_dump(),
             },
             "model_state_dict": agent.state_dict(),
@@ -221,9 +219,7 @@ def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
                 Match().to_rust(), agent.observation_space
             ),
             "hypers": {
-                "observation_hypers": (
-                    agent.observation_space.encoder.config.model_dump()
-                ),
+                "observation_hypers": (agent.observation_space.config.model_dump()),
                 "agent_hypers": {
                     **agent.config.model_dump(),
                     "max_conditions": 5,

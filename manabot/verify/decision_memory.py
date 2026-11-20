@@ -14,7 +14,7 @@ from typing import Literal, Protocol
 
 import numpy as np
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision, render_decision
@@ -74,8 +74,10 @@ class Proof:
                 source
                 == self.replay.observation_for_player(viewer).decision_memory_json()
             )
-            live = self.space.encode(obs)
-            restored = self.space.encode(managym.Observation.from_json(obs.toJSON()))
+            live = encode_observation(self.space, obs)
+            restored = encode_observation(
+                self.space, managym.Observation.from_json(obs.toJSON())
+            )
             for key in (
                 "decision_records",
                 "decision_reference_details",
@@ -237,8 +239,8 @@ def run_demo(out: Path, backend: DemoBackend) -> None:
         assert actor is not None
         obs = {
             key: value[None]
-            for key, value in proof.space.encode(
-                proof.env.observation_for_player(actor)
+            for key, value in encode_observation(
+                proof.space, proof.env.observation_for_player(actor)
             ).items()
         }
         policies[disclosure] = backend.prove_policies(

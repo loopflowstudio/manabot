@@ -203,7 +203,7 @@ class LocalUpdateTeacher:
         capacity = len(self._frontier_buffers.get("actions_valid", ()))
         if len(engines) > capacity:
             capacity = len(engines)
-            self._frontier_buffers = self.space.encoder.allocate(capacity)
+            self._frontier_buffers = self.space.allocate(capacity)
         counts = managym.encode_observations_into(
             engines, self._frontier_buffers, capacity
         )
@@ -221,14 +221,14 @@ class LocalUpdateTeacher:
         # The selected space owns every axis, including historical inputs and
         # nondefault capacities. Each row is a contiguous view of this call's
         # fresh batch; no observation buffers survive into the next frontier.
-        encodings = self.space.encoder.allocate(len(engines))
+        encodings = self.space.allocate(len(engines))
         counts: list[int] = []
         for index, engine in enumerate(engines):
             actor = int(engine.current_agent_index())
             raw = engine.observation_for_player(actor)
             encoded = {key: value[index] for key, value in encodings.items()}
             count = len(raw.action_space.actions)
-            if count == 0 or count > self.space.encoder.max_actions:
+            if count == 0 or count > self.space.config.max_actions:
                 raise ValueError("policy cannot represent complete legal offers")
             # Search requires every legal offer, even if a checkpoint permits
             # first-legal truncation during training.

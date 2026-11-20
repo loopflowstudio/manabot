@@ -25,7 +25,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from manabot.env.match import Match
-from manabot.env.observation import ObservationEncoder
+from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig
 import managym
@@ -269,13 +269,13 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     env.reset(Match(attempt.matchup).to_rust())
     frame: str | None = None
     agreement = ReplayAgreement(attempt.outcome)
-    encoder = (
-        ObservationEncoder(attempt.observation)
+    space = (
+        ObservationSpace(attempt.observation)
         if attempt.outcome == "resource_limit" and attempt.observation is not None
         else None
     )
     # Replay the same fixed allocation at every step, as the collector does.
-    buffers = encoder.allocate() if encoder is not None else {}
+    buffers = space.allocate() if space is not None else {}
     for index, action in enumerate(attempt.actions):
         if index == len(attempt.actions) - 1:
             frame = env.semantic_decision_frame_json()
@@ -308,11 +308,11 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                 "error_class": type(error).__name__,
                 "error": str(error),
             }
-        if encoder is not None:
+        if space is not None:
             # Native gameplay alone cannot reproduce an allocation failure.
             try:
                 managym.encode_observation_into(
-                    observation, buffers, encoder.config.action_overflow
+                    observation, buffers, space.config.action_overflow
                 )
             except managym.ObservationCapacity as error:
                 retained = matches_retained_error(

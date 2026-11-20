@@ -92,7 +92,7 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
         restore_memory(replace(archive, chunks=archive.chunks[:-1]))
     with pytest.raises(ValueError):
         before.tail.chunk.rows[0].setflags(write=True)
-    assert space.encoder.shapes["decision_records"] == (4, 74)
+    assert space.shapes["decision_records"] == (4, 74)
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -387,7 +387,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
             max_decision_members=capacities[3],
         )
     )
-    buffers = space.encoder.allocate(1)
+    buffers = space.allocate(1)
     buffers.update(
         rewards=np.zeros(1, np.float64),
         terminated=np.zeros(1, np.uint8),
@@ -398,7 +398,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
     )
     env.set_buffers(buffers)
     env.reset_all_into_buffers(Match().to_rust())
-    dense_buffers = space.encoder.allocate(1)
+    dense_buffers = space.allocate(1)
     store, dense_store = MemoryStore(capacities), MemoryStore(capacities)
     rng = random.Random(19)
     observed: set[int] = set()
@@ -434,7 +434,7 @@ def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
             max_decision_members=8192,
         )
     )
-    buffers = space.encoder.allocate(2)
+    buffers = space.allocate(2)
     buffers.update(
         rewards=np.zeros(2, np.float64),
         terminated=np.zeros(2, np.uint8),

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from manabot.env.match import Match
+from manabot.env.observation import encode_observation
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
@@ -149,18 +150,17 @@ class CheckpointOpponent:
         started = time.monotonic()
         actor = env.current_agent_index()
         raw = env.observation_for_player(actor)
-        encoder = self.space.encoder
         if (
-            len(raw.action_space.actions) > encoder.max_actions
+            len(raw.action_space.actions) > self.space.config.max_actions
             or max(len(raw.agent_cards), len(raw.opponent_cards))
-            > encoder.cards_per_player
+            > self.space.config.max_cards_per_player
             or max(len(raw.agent_permanents), len(raw.opponent_permanents))
-            > encoder.perms_per_player
+            > self.space.config.max_permanents_per_player
         ):
             raise ValueError(
                 "checkpoint encoding would truncate native observations or offers"
             )
-        encoded = self.space.encode(raw)
+        encoded = encode_observation(self.space, raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
         index = select_agent_action(self.agent, encoded, deterministic=False)

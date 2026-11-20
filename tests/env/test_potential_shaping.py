@@ -50,7 +50,7 @@ def first_valid_actions(obs: dict[str, torch.Tensor]) -> torch.Tensor:
 class TestVectorEnvPotential:
     def _blank_tensors(self, env: VectorEnv) -> tuple[torch.Tensor, torch.Tensor]:
         """Blank board rows (input v11 permanents) and player rows."""
-        encoder = env.observation_space.encoder
+        encoder = env.observation_space
         board = torch.zeros(
             (env.num_envs, encoder.perms_per_player, encoder.permanent_dim)
         )

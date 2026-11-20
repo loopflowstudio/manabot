@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
@@ -114,7 +114,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
         assert game.env is not None and game.trace is not None
         space = ObservationSpace(ObservationConfig())
         vector = managym.VectorEnv(num_envs=1, seed=seed)
-        buffers = space.encoder.allocate(1)
+        buffers = space.allocate(1)
         buffers.update(
             rewards=np.zeros(1, dtype=np.float64),
             terminated=np.zeros(1, dtype=np.uint8),
@@ -144,7 +144,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 game.env.semantic_decision_frame_json()
             )
-            for key, expected in space.encode(game.obs).items():
+            for key, expected in encode_observation(space, game.obs).items():
                 np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
 
             command = _command(frame, frame.offers[0], "color")
@@ -186,5 +186,5 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
         assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
             game.env.semantic_decision_frame_json()
         )
-        for key, expected in space.encode(game.obs).items():
+        for key, expected in encode_observation(space, game.obs).items():
             np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)

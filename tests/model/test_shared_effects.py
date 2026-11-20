@@ -10,7 +10,7 @@ import torch
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy import admission
 from manabot.recipes.baseline import settings
@@ -34,7 +34,7 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     torch.manual_seed(7)
     env = shared_effect_root(1)
     obs = env.observation_for_player(env.current_agent_index())
-    values = _batch(ObservationSpace(ObservationConfig()).encode(obs))
+    values = _batch(encode_observation(ObservationSpace(ObservationConfig()), obs))
     encoder = SharedEffectEncoder(8)
     objects = torch.randn(1, 202, 8)
     headers, details, members = (
@@ -92,7 +92,7 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
             world=managym.WORLD_SETUP,
         ),
     )
-    values = _batch(space.encode(obs))
+    values = _batch(encode_observation(space, obs))
     logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     reordered_logits, reordered_value = model(
@@ -110,7 +110,7 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
     path = tmp_path / "shared.pt"
     save_checkpoint(model, space, path, player_configs=None)
     restored, restored_space = load_checkpoint(str(path))
-    assert restored_space.encoder.config == space.encoder.config
+    assert restored_space.config == space.config
     restored.eval()
     model.eval()
     with torch.no_grad():
@@ -142,14 +142,16 @@ def test_shared_effect_policy_uses_ordinary_learner_and_export(
         path = self_play(inputs, run, updates=1)
     model, space = load_checkpoint(str(path))
     assert isinstance(model.shared_effects, SharedEffectEncoder)
-    assert space.encoder.config == inputs.observation
+    assert space.config == inputs.observation
 
 
 def test_shared_memberships_are_object_joins_under_permutation() -> None:
     torch.manual_seed(11)
     env = shared_effect_root(1)
     observation = env.observation_for_player(env.current_agent_index())
-    values = _batch(ObservationSpace(ObservationConfig()).encode(observation))
+    values = _batch(
+        encode_observation(ObservationSpace(ObservationConfig()), observation)
+    )
     encoder = SharedEffectEncoder(8)
     objects = torch.randn(1, 202, 8, requires_grad=True)
     expected = encoder(
@@ -193,8 +195,9 @@ def test_batched_effect_routing_matches_independent_gradients(device: str) -> No
     torch.manual_seed(42)
     env = shared_effect_root(7)
     values = _batch(
-        ObservationSpace(ObservationConfig()).encode(
-            env.observation_for_player(env.current_agent_index())
+        encode_observation(
+            ObservationSpace(ObservationConfig()),
+            env.observation_for_player(env.current_agent_index()),
         )
     )
     headers, details, members = (

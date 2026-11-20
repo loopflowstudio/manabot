@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
@@ -47,7 +47,7 @@ def test_controlled_drill_prefix_admits_shared_effects(
     scalar_obs, _ = scalar.reset(players)
     assert scalar_obs.decklists_closed is closed
     space = ObservationSpace()
-    buffers = space.encoder.allocate(1)
+    buffers = space.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
         terminated=np.zeros(1, dtype=np.uint8),
@@ -88,7 +88,7 @@ def test_controlled_drill_prefix_admits_shared_effects(
         assert len(obs.shared_effects) == payloads
         assert sum(len(record.members) for record in obs.shared_effects) == memberships
         assert all(len(record.effect.keywords) == 2 for record in obs.shared_effects)
-        encoded = space.encode(obs)
+        encoded = encode_observation(space, obs)
         if closed:
             assert not obs.opponent.main_counts
             assert not encoded["decklists"][1].any()
@@ -116,7 +116,7 @@ def test_source_dependent_shared_transport_has_exact_public_join() -> None:
             if record.effect.duration == "WhileYouControlSource"
         )
         assert record.source is not None and record.source.incarnation is not None
-        encoded = space.encode(obs)
+        encoded = encode_observation(space, obs)
         row = encoded["effects"][encoded["effects"][:, _effect("valid")] == 1][0]
         assert row[_effect("duration")] == 3
         # The source join is the one-based index of the source's permanent row.
@@ -133,14 +133,17 @@ def test_source_dependent_shared_transport_has_exact_public_join() -> None:
 
 def _history(env: managym.Env, viewer: int) -> np.ndarray:
     """The viewer's valid public history v1 rows."""
-    encoded = ObservationSpace(ObservationConfig(policy_history_version=1)).encode(
-        env.observation_for_player(viewer)
+    encoded = encode_observation(
+        ObservationSpace(ObservationConfig(policy_history_version=1)),
+        env.observation_for_player(viewer),
     )
     return encoded["events"][encoded["events_valid"] == 1]
 
 
 def _effect_durations(env: managym.Env, viewer: int) -> set[float]:
-    headers = ObservationSpace().encode(env.observation_for_player(viewer))["effects"]
+    headers = encode_observation(
+        ObservationSpace(), env.observation_for_player(viewer)
+    )["effects"]
     valid = headers[:, _effect("valid")] == 1
     return set(headers[valid, _effect("duration")].tolist())
 
@@ -179,7 +182,7 @@ def test_historical_projection_cannot_invent_shared_provenance() -> None:
     payload.pop("shared_effects")
     old = managym.Observation.from_json(json.dumps(payload))
     with pytest.raises(ValueError, match="provenance"):
-        ObservationSpace().encode(old)
+        encode_observation(ObservationSpace(), old)
     assert "shared_effects" not in json.loads(old.toJSON())
 
 
@@ -200,7 +203,7 @@ def test_shared_transport_rejects_each_capacity_without_truncation(field: str) -
         managym.ObservationCapacity,
         match=f"observation capacity exceeded: {field} {limit + 1} > {limit}",
     ):
-        ObservationSpace().encode(obs)
+        encode_observation(ObservationSpace(), obs)
 
 
 def test_shared_payload_preserves_absence_zero_duration_and_every_detail() -> None:
@@ -217,7 +220,7 @@ def test_shared_payload_preserves_absence_zero_duration_and_every_detail() -> No
         color="Red",
     )
     obs = managym.Observation.from_json(json.dumps(payload))
-    native = ObservationSpace().encode(obs)
+    native = encode_observation(ObservationSpace(), obs)
     np.testing.assert_array_equal(native["effects"][0, 5:9], [0, 1, 1, 3])
     assert native["effects"][0, 14] == 5
     np.testing.assert_array_equal(native["effect_details"][:5, 0], [1, 1, 2, 2, 3])
@@ -240,7 +243,9 @@ def test_shared_capture_and_text_ignore_hidden_hand_permutations() -> None:
         decision = capture_text_decision(branch)
         assert decision.text == original.text
         assert decision.capture_json == original.capture_json
-        determinized = space.encode(branch.observation_for_player(viewer))
-        for key, expected in space.encode(env.observation_for_player(viewer)).items():
+        determinized = encode_observation(space, branch.observation_for_player(viewer))
+        for key, expected in encode_observation(
+            space, env.observation_for_player(viewer)
+        ).items():
             np.testing.assert_array_equal(expected, determinized[key], err_msg=key)
     assert changed > 0

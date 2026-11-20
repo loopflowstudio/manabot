@@ -218,7 +218,7 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
     path = tmp_path / "policy.pt"
     save_checkpoint(agent, space, path, player_configs=Match().to_rust())
     loaded, loaded_space = load_checkpoint(str(path))
-    assert loaded_space.encoder.config.model_dump(mode="json") == serialized
+    assert loaded_space.config.model_dump(mode="json") == serialized
     assert loaded.architecture_receipt() == agent.architecture_receipt()
     different = ActorCritic(
         ObservationSpace(ObservationConfig(max_facts=256)), agent.config

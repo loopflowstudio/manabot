@@ -60,6 +60,7 @@ fn observation_layout(
         }
         value.set_item("columns", columns)?;
         value.set_item("row_kinds", array.row_kinds)?;
+        value.set_item("row_kind_names", array.row_kind_names)?;
         if let Some(element) = array.element {
             value.set_item("element", value_dict(py, &element)?)?;
         }

@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from manabot.env.observation import encode_observation
 from manabot.env.vector_env import VectorEnv
 import manabot.managym._managym as native
 from manabot.semantic.decision_contract import SemanticDecisionContract
@@ -163,8 +164,8 @@ def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
         positional = root.clone_env()
         post_observation = positional.step(case.action)[0]
         assert semantic.state_digest() == positional.state_digest()
-        expected = env.observation_space.encode(post_observation)
-        encoded = env.observation_space.encode(observation)
+        expected = encode_observation(env.observation_space, post_observation)
+        encoded = encode_observation(env.observation_space, observation)
         actions = torch.full((env.num_envs,), case.action, dtype=torch.int64)
 
         def restore() -> None:

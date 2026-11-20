@@ -19,7 +19,7 @@ from manabot.backends.torch.checkpoint import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -228,7 +228,7 @@ def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
         obs = engine.step(action["index"])[0]
     else:
         pytest.fail("Avatar grant did not resolve")
-    encoded = ObservationSpace(ObservationConfig()).encode(view)
+    encoded = encode_observation(ObservationSpace(ObservationConfig()), view)
     assert encoded["agent_permanents"][0, 26] == 1
     payload = serialize_observation(view)
     permanent = next(

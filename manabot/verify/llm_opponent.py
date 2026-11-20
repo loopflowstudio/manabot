@@ -11,6 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from manabot.belief.protocol import SamplerBackend
+from manabot.env.observation import encode_observation
 from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import TextDecision
 from manabot.verify.util import select_agent_action
@@ -48,8 +49,8 @@ class CheckpointOpponent:
             sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
             size_bytes=path.stat().st_size,
             parameters=self.agent.parameter_count,
-            policy_input_version=self.space.encoder.config.policy_input_version,
-            policy_history_version=self.space.encoder.config.policy_history_version,
+            policy_input_version=self.space.config.policy_input_version,
+            policy_history_version=self.space.config.policy_history_version,
             seed=seed,
         )
         self.decisions = 0
@@ -58,7 +59,7 @@ class CheckpointOpponent:
         raw = env.observation_for_player(env.current_agent_index())
         if len(raw.action_space.actions) != len(decision.actions):
             raise ValueError("policy action space differs from the captured decision")
-        obs = self.space.encode(raw)
+        obs = encode_observation(self.space, raw)
         with self.backend.seeded_inference(
             self.identity.seed + self.decisions, cpu_only=True
         ):

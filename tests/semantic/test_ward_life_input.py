@@ -12,6 +12,7 @@ from manabot.env.observation import (
     PERMANENT_DIM,
     WARD,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.policy import admission
@@ -34,7 +35,9 @@ def test_sire_of_seven_deaths_ward_is_life_in_columns_facts_json_and_text() -> N
     vocabulary = record_vocabulary(SemanticCardEncoder("world", 4, records=True))
     for viewer in (owner, 1 - owner):
         obs = env.observation_for_player(viewer)
-        permanents = obs.agent_permanents if viewer == owner else obs.opponent_permanents
+        permanents = (
+            obs.agent_permanents if viewer == owner else obs.opponent_permanents
+        )
         sire = next(
             permanent.characteristics
             for permanent in permanents
@@ -45,7 +48,7 @@ def test_sire_of_seven_deaths_ward_is_life_in_columns_facts_json_and_text() -> N
         program = sire.ward_program
         assert program[1] == (4, 7), "the amount is an integer token"
 
-        expected = space.encode(obs)
+        expected = encode_observation(space, obs)
 
         rows = np.concatenate(
             [expected["agent_permanents"], expected["opponent_permanents"]]
@@ -72,7 +75,9 @@ def test_sire_of_seven_deaths_ward_is_life_in_columns_facts_json_and_text() -> N
         # The JSON boundary keeps the price.
         restored = managym.Observation.from_json(obs.toJSON())
         restored_permanents = (
-            restored.agent_permanents if viewer == owner else restored.opponent_permanents
+            restored.agent_permanents
+            if viewer == owner
+            else restored.opponent_permanents
         )
         assert any(
             permanent.characteristics.ward_life == 7

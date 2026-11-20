@@ -35,7 +35,7 @@ import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import PrefixObservation
-from manabot.env.observation import ObservationBuffers, ObservationEncoder
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from managym import observation_layout
 
 MIN_BUCKET = 8
@@ -131,8 +131,8 @@ class BucketSizes:
         return any(self.sizes[axis] < self.capacities[axis] for axis in OBJECT_AXES)
 
 
-def _capacities(encoder: ObservationEncoder) -> dict[str, int]:
-    shapes = encoder.shapes
+def _capacities(space: ObservationSpace) -> dict[str, int]:
+    shapes = space.shapes
     return {
         "facts": shapes["facts"][0],
         "effects": shapes["effects"][0],
@@ -141,11 +141,11 @@ def _capacities(encoder: ObservationEncoder) -> dict[str, int]:
         "relations": shapes["relations"][0],
         "actions": shapes["actions"][0],
         "events": shapes["events"][0],
-        "cards": encoder.cards_per_player,
-        "known": encoder.cards_per_player,
-        "decklists": encoder.cards_per_player,
-        "permanents": encoder.perms_per_player,
-        "stack": encoder.max_stack_objects,
+        "cards": space.config.max_cards_per_player,
+        "known": space.config.max_cards_per_player,
+        "decklists": space.config.max_cards_per_player,
+        "permanents": space.config.max_permanents_per_player,
+        "stack": shapes["stack"][0] if "stack" in shapes else 0,
     }
 
 
@@ -285,9 +285,7 @@ AXES: tuple[str, ...] = (
 OBJECT_AXES: tuple[str, ...] = ("cards", "permanents", "stack")
 
 
-def row_needs(
-    obs: ObservationBuffers, encoder: ObservationEncoder
-) -> np.ndarray | None:
+def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | None:
     """Rows each batch row needs on every variable axis, [B, len(AXES)] int64.
 
     A batch's need on an axis is the maximum over its rows, so needs measured
@@ -297,7 +295,7 @@ def row_needs(
     shapes differ from the declared layout: it is not trimmed, so the model
     rejects it exactly as it would without buckets.
     """
-    shapes = encoder.shapes
+    shapes = space.shapes
     if any(
         key not in obs
         or obs[key].ndim != len(shape) + 1
@@ -310,7 +308,7 @@ def row_needs(
         )
     ):
         return None
-    capacities = _capacities(encoder)
+    capacities = _capacities(space)
     count = len(obs["actions_valid"])
     needs = {axis: np.zeros(count, np.int64) for axis in AXES}
 
@@ -352,10 +350,10 @@ def row_needs(
 
 
 def sizes_of(
-    needs: np.ndarray, encoder: ObservationEncoder, *, objects: bool
+    needs: np.ndarray, space: ObservationSpace, *, objects: bool
 ) -> BucketSizes:
     """The buckets of a batch whose rows need `needs` [B, len(AXES)]."""
-    capacities = _capacities(encoder)
+    capacities = _capacities(space)
     most = needs.max(0, initial=0)
     sizes = {
         axis: bucket(int(most[column]), capacities[axis])
@@ -368,11 +366,11 @@ def sizes_of(
 
 
 def bucket_sizes(
-    obs: ObservationBuffers, encoder: ObservationEncoder, *, objects: bool
+    obs: ObservationBuffers, space: ObservationSpace, *, objects: bool
 ) -> BucketSizes | None:
     """Measure one batch's buckets; None leaves it untouched (`row_needs`)."""
-    needs = row_needs(obs, encoder)
-    return None if needs is None else sizes_of(needs, encoder, objects=objects)
+    needs = row_needs(obs, space)
+    return None if needs is None else sizes_of(needs, space, objects=objects)
 
 
 def object_columns(buckets: BucketSizes) -> list[slice]:

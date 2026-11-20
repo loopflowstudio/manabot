@@ -153,8 +153,9 @@ class Dimensions:
 def layout(
     space: ObservationSpace, column_widths: dict[str, int] | None = None
 ) -> Layout:
-    encoder = space.encoder
-    width = (column_widths or {}).get("agent_permanents", encoder.permanent_dim)
+    width = (column_widths or {}).get(
+        "agent_permanents", space.shapes["agent_permanents"][-1]
+    )
     links = tuple(c for c in PERMANENT_LINK_INDEXES if c < width)
     joins = (PERMANENT_DEFINITION_INDEX, *links)
     return Layout(
@@ -251,7 +252,6 @@ class PolicyCheckpoint:
         return Tables.from_buffers(self.buffers, layout(self.space, self.column_widths))
 
     def dimensions(self) -> Dimensions:
-        encoder = self.space.encoder
         model = self.model
         width = (self.column_widths or {}).get
         columns = layout(self.space, self.column_widths)
@@ -261,12 +261,12 @@ class PolicyCheckpoint:
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=width("agent_player", encoder.player_dim),
-            card=width("agent_cards", encoder.card_dim),
+            player=width("agent_player", self.space.shapes["agent_player"][-1]),
+            card=width("agent_cards", self.space.shapes["agent_cards"][-1]),
             permanent=len(columns.numeric_permanent_columns),
-            action=width("actions", encoder.action_dim),
-            focus=encoder.max_focus_objects,
-            relation=width("relations", encoder.relation_dim),
+            action=width("actions", self.space.shapes["actions"][-1]),
+            focus=self.space.config.max_focus_objects,
+            relation=width("relations", self.space.shapes["relations"][-1]),
             fact_kinds=FACT_KINDS,
             token_rows=int(
                 self.parameters["semantic_cards.token_embedding.weight"].shape[0]
@@ -434,13 +434,15 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
     if interface is None:
         return checkpoint
-    width = interface.widths.get("agent_player", checkpoint.space.encoder.player_dim)
+    width = interface.widths.get(
+        "agent_player", checkpoint.space.shapes["agent_player"][-1]
+    )
     projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
     extra = (
         interface.widths.get(
             "player_turn_state", checkpoint.space.shapes["player_turn_state"][-1]
         )
-        if checkpoint.space.encoder.turn_state
+        if checkpoint.space.turn_state
         else 0
     )
     if projected != width + extra:
@@ -453,10 +455,10 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         raise ValueError(f"{error}; {written_at(record)}") from error
     logging.getLogger(__name__).info(
         "Policy input v%s (%s). Player columns %d/%d. %s.",
-        checkpoint.space.encoder.config.policy_input_version,
+        checkpoint.space.config.policy_input_version,
         written_at(record),
         width,
-        checkpoint.space.encoder.player_dim,
+        checkpoint.space.shapes["agent_player"][-1],
         report.summary(),
     )
     return replace(bound, column_widths=interface.widths, report=report)

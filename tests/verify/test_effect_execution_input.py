@@ -13,7 +13,7 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig
 from manabot.managym.decision_capture import DecisionInput
 from manabot.semantic.text_observation import render_decision
@@ -66,7 +66,7 @@ def test_real_fetch_search_encodes_its_pending_selection_frame() -> None:
         observation, *_ = env.step(passing)
     else:
         raise AssertionError("fetch search not reached")
-    encoded = ObservationSpace().encode(observation)
+    encoded = encode_observation(ObservationSpace(), observation)
     rows = encoded["relations"][encoded["relations"][:, _relation("valid")] == 1]
     # Frame header rows (kind 1), one per continuation frame, each under its parent.
     headers = rows[rows[:, _relation("kind")] == 1]
@@ -115,7 +115,7 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
                 json.dumps(capture.observation.viewer_state),
                 continuation_json=json.dumps(record.capture["frames"]),
             )
-            tensors = dict(space.encode(obs))
+            tensors = dict(encode_observation(space, obs))
             for name, width, expected in (
                 ("facts", 12, record.facts),
                 ("relations", 49, record.relations),

@@ -286,7 +286,7 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     torch.save(
         {
             "hypers": {
-                "observation_hypers": space.encoder.config.model_dump(),
+                "observation_hypers": space.config.model_dump(),
                 "agent_hypers": agent_hypers,
             },
             "model_state_dict": agent.state_dict(),

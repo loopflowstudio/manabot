@@ -29,6 +29,7 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluate import validate_registered_player
@@ -86,7 +87,7 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
             admitted.registration, path, backend=TORCH_BACKEND
         )
         assert paths["layer-fixture"] == str(path)
-        assert selected is not None and selected.encoder.config == recipe.observation
+        assert selected is not None and selected.config == recipe.observation
     finally:
         close_collector(collector)
 
@@ -103,7 +104,7 @@ def test_layer_input_text_forward_backward_and_reload(
     )
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = space.encode(obs)
+    reference = encode_observation(space, obs)
     assert reference["effect_details"].shape == (4096, 3)
     assert (reference["effect_details"][:, 0] >= 11).any()
     assert "exile" in capture_text_decision(env).text.lower()
@@ -121,7 +122,7 @@ def test_layer_input_text_forward_backward_and_reload(
     path = tmp_path / "layer.pt"
     save_checkpoint(model, space, path, player_configs=None)
     restored, restored_space = load_checkpoint(str(path))
-    assert restored_space.encoder.config == config
+    assert restored_space.config == config
     for expected, actual in zip(
         model(device_input(model, values)),
         restored(device_input(restored, values)),
@@ -141,14 +142,14 @@ def test_layer_colors_counter_order_and_signed_program_payload_encode() -> None:
     payload["shared_effects"][0]["effect"]["program"] = [[4, -17], [4, 2**31 - 1]]
     observed = managym.Observation.from_json(json.dumps(payload))
     config = ObservationConfig()
-    encoded = ObservationSpace(config).encode(observed)
+    encoded = encode_observation(ObservationSpace(config), observed)
     assert set(encoded["facts"][:, 1]) >= {12, 13}
     assert encoded["facts"][encoded["facts"][:, 1] == 13, 9].min() > 0
 
 
 def test_vector_buffers_match_scalar_encoding() -> None:
     space = ObservationSpace(ObservationConfig())
-    vector_buffers = space.encoder.allocate(1)
+    vector_buffers = space.allocate(1)
     vector_buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
         terminated=np.zeros(1, dtype=np.uint8),
@@ -165,7 +166,7 @@ def test_vector_buffers_match_scalar_encoding() -> None:
     scalar = managym.Env(seed=23)
     scalar.reset(players)
     observed = scalar.observation_for_player(scalar.current_agent_index())
-    expected = space.encode(observed)
+    expected = encode_observation(space, observed)
     for key in expected:
         np.testing.assert_array_equal(
             vector_buffers[key][0], expected[key], err_msg=key
@@ -200,7 +201,7 @@ def test_captured_continuation_program_reaches_input_and_policy() -> None:
     assert "captured program" in capture_text_decision(env).text.lower()
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = space.encode(obs)
+    reference = encode_observation(space, obs)
     assert (reference["facts"][:, 1] == 14).sum() > 0
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16))

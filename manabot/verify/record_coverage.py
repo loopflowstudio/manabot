@@ -22,7 +22,7 @@ from typing import Literal
 
 import numpy as np
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import TrainingBackend
@@ -129,7 +129,7 @@ def coverage_sweep(
         played.update(first, second)
         env = managym.Env(
             seed=seed * 100_003 + game,
-            decision_memory=space.encoder.config.max_decision_records > 0,
+            decision_memory=space.config.max_decision_records > 0,
         )
         env.reset(seats)
         pending: list[dict[str, np.ndarray]] = []
@@ -139,7 +139,7 @@ def coverage_sweep(
                 break
             obs = env.observation_for_player(player)
             try:
-                encoded = space.encode(obs)
+                encoded = encode_observation(space, obs)
             except managym.ObservationCapacity:
                 # Training aborts a game past its capacities (`recover_capacity`).
                 overflows += 1

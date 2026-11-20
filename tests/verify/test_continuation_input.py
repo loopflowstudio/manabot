@@ -15,6 +15,7 @@ from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     RELATION_ELIGIBILITY_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import (
     ModelConfig,
@@ -39,7 +40,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     ]
     assert observations[0].toJSON() == observations[1].toJSON()
     space = ObservationSpace()
-    encoded = [space.encode(obs) for obs in observations]
+    encoded = [encode_observation(space, obs) for obs in observations]
     differences = [
         key
         for key in encoded[0]
@@ -62,8 +63,8 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     # Enabling history does not conceal the current-state distinction.
     space = ObservationSpace(ObservationConfig(policy_history_version=1))
     assert not np.array_equal(
-        space.encode(observations[0])["relations"],
-        space.encode(observations[1])["relations"],
+        encode_observation(space, observations[0])["relations"],
+        encode_observation(space, observations[1])["relations"],
     )
 
 
@@ -74,7 +75,7 @@ def test_native_fixture_mana_outputs_and_other_viewer_safety() -> None:
         assert actor is not None
         for viewer in (actor, 1 - actor):
             observation = env.observation_for_player(viewer)
-            encoded = space.encode(observation)
+            encoded = encode_observation(space, observation)
             if name == "mana_color" and viewer == actor:
                 outputs = [
                     output
@@ -100,7 +101,7 @@ def test_native_fixture_mana_outputs_and_other_viewer_safety() -> None:
 
 def test_checkpoint_retains_its_policy_input_version(tmp_path: Path) -> None:
     space = ObservationSpace()
-    version = space.encoder.config.policy_input_version
+    version = space.config.policy_input_version
     agent = ActorCritic(space, ModelConfig(hidden_dim=16))
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     path = tmp_path / "policy.pt"
@@ -110,7 +111,7 @@ def test_checkpoint_retains_its_policy_input_version(tmp_path: Path) -> None:
     assert payload["hypers"]["observation_hypers"]["policy_input_version"] == version
     restored, restored_space = load_checkpoint(str(path))
     assert restored_space.shapes == space.shapes
-    assert restored_space.encoder.config.policy_input_version == version
+    assert restored_space.config.policy_input_version == version
     assert restored.state_dict().keys() == agent.state_dict().keys()
     for key, value in agent.state_dict().items():
         torch.testing.assert_close(restored.state_dict()[key], value)
@@ -138,7 +139,7 @@ def test_stack_targets_remain_distinct_after_the_same_committed_cost() -> None:
         any(frame.kind == 1 for frame in obs.continuation) for obs in observations
     )
     space = ObservationSpace()
-    left, right = [space.encode(obs) for obs in observations]
+    left, right = [encode_observation(space, obs) for obs in observations]
     assert not np.array_equal(left["relations"], right["relations"])
 
 
@@ -192,7 +193,7 @@ def test_retained_eligibility_separates_portable_text_and_policy_input() -> None
             json.dumps(_without_active_effects(capture.observation.viewer_state)),
             continuation_json=json.dumps(record.capture["frames"]),
         )
-        tensors = space.encode(observation)
+        tensors = encode_observation(space, observation)
         rows = tensors["relations"]
         # The receipt retains the columns through eligibility; X and granted
         # keywords follow them and are empty in these positions.
@@ -276,7 +277,7 @@ def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     scalar = managym.Env(seed=608, skip_trivial=False)
     observation, _ = scalar.reset(players)
-    expected = space.encode(observation)
+    expected = encode_observation(space, observation)
     # Every element is written, padding included.
     out = {key: np.full_like(value, -7) for key, value in expected.items()}
     managym.encode_observation_into(observation, out)
@@ -307,7 +308,7 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     torch.manual_seed(195)
     _, raw = ordering_root()
     space = ObservationSpace()
-    encoded = space.encode(raw)
+    encoded = encode_observation(space, raw)
     batch = {
         key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()
     }
@@ -375,8 +376,8 @@ def test_exported_observation_keeps_complete_policy_input_with_continuation() ->
         )
         assert exported.toJSON() == observation.toJSON()
         assert exported.continuation_json() == observation.continuation_json()
-        expected = space.encode(observation)
-        actual = space.encode(exported)
+        expected = encode_observation(space, observation)
+        actual = encode_observation(space, exported)
         for key in expected:
             np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
         frames = json.loads(observation.continuation_json())

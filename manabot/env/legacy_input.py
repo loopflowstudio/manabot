@@ -18,8 +18,12 @@ import warnings
 
 import pydantic
 
+import managym
+
 # A v9/v10 permanent row ends at `dealt_damage_this_turn`, then validity.
-LEGACY_PERMANENT_DIM = 38
+LEGACY_PERMANENT_DIM = len(
+    managym.observation_layout(legacy=True)["agent_permanents"]["columns"]
+)
 REMOVAL_RELEASE = "0.4.0"
 
 

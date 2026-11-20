@@ -367,7 +367,7 @@ def check(
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
     weights = from_torch_state(
         agent.config,
-        space.encoder.config,
+        space.config,
         state,
         parameter_names=dict(agent.named_parameters()),
     )

@@ -32,7 +32,7 @@ def _captured(
         player_policies=player_policies,
         opponent_policy=opponent_policy,
     )
-    buffers = ObservationSpace().encoder.allocate(1)
+    buffers = ObservationSpace().allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
         terminated=np.zeros(1, dtype=np.uint8),

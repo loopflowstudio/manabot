@@ -334,11 +334,14 @@ change already touches it; do not rewrite a module only for style. Rust in
 - New observation state reaches the policy input, the LLM text observation
   and the learning tokens in the change that adds it; the policy input never
   silently falls behind. The native encoder (`managym/src/agent/`) is the only
-  one: `ObservationSpace.encode` and every batch path call it, and Python
-  holds the layout (shapes, allocation, the column constants the model reads),
-  never a second writer. Give new columns or rows a directed native test on a
-  constructed position; `tests/env/test_named_observation_layout.py` holds the
-  Python column constants to `managym.observation_layout()`.
+  one, and native owns the layout (`managym.observation_layout()`):
+  `encode_observation(space, obs)` and every batch path call it, and
+  `ObservationSpace` is a config plus that layout at its capacities (shapes,
+  allocation). Python reads columns by native name (`column("facts", "value")`
+  in `manabot.env.observation`), never by number or a hand-kept copy. Give new
+  columns or rows a directed native test on a constructed position.
+  `ObservationSpace.encode`, `space.encoder` and `ObservationEncoder` are
+  warning aliases removed in 0.4.0; frozen experiment files keep them.
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
 - Decklist disclosure (open by default, or closed) lives on native

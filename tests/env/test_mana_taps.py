@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 import managym
@@ -48,7 +48,7 @@ def test_priority_tap_encodes_and_replays(tmp_path: Path) -> None:
     ]
     assert len(taps) == 1 and obs.action_space.actions[taps[0]].focus
     space = ObservationSpace(ObservationConfig())
-    valid = space.encode(obs)["actions_valid"]
+    valid = encode_observation(space, obs)["actions_valid"]
     assert valid[taps[0]]
     assert int(np.count_nonzero(valid)) == len(obs.action_space.actions)
     after, *_ = capture.step(env, taps[0])

@@ -14,7 +14,7 @@ import pytest
 from manabot.env import observation
 from manabot.env.decision_memory import MEMORY_WIDTHS
 from manabot.env.legacy_input import LEGACY_PERMANENT_DIM
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
 from manabot.verify.representation import kellan_upgrade_root
@@ -28,114 +28,51 @@ def board() -> tuple[managym.Env, managym.Observation]:
     return env, env.observation_for_player(env.current_agent_index())
 
 
-# Every column constant manabot reads, as (constant, array, native column).
-# A moved or renamed native column fails here instead of being read silently
-# from the wrong place by the model.
-_MIRRORED_COLUMNS = [
-    # The action family one-hot fills the columns before `declared`.
-    ("ACTION_TYPE_DIM", "actions", "declared"),
-    ("ACTION_DECLARED_INDEX", "actions", "declared"),
-    ("ACTION_MODE_INDEX", "actions", "mode"),
-    ("ACTION_ABILITY_INDEX", "actions", "ability"),
-    ("ACTION_CONTINUATION_INDEX", "actions", "continuation"),
-    ("ACTION_VALID_INDEX", "actions", "valid"),
-    ("ACTION_PAYS_DIRECTLY_INDEX", "actions", "pays_directly"),
-    ("PLAYER_RESTRICTED_INDEX", "agent_player", "restricted_lesson_white"),
-    ("PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX", "agent_player", "no_maximum_hand_size"),
-    ("CARD_PERMISSION_INDEX", "agent_cards", "permission"),
-    ("PERMANENT_DEFINITION_INDEX", "agent_permanents", "definition"),
-    ("PERMANENT_ONCE_EACH_TURN_INDEX", "agent_permanents", "once_each_turn_used"),
-    ("PERMANENT_ATTACHED_INDEX", "agent_permanents", "attached_to"),
-    ("PERMANENT_BLOCKING_INDEX", "agent_permanents", "blocking"),
-    ("PERMANENT_TIMESTAMP_INDEX", "agent_permanents", "timestamp"),
-    ("PERMANENT_MANA_VALUE_INDEX", "agent_permanents", "mana_value"),
-    ("PERMANENT_TYPES_INDEX", "agent_permanents", "is_land"),
-    ("STACK_IS_MINE_INDEX", "stack", "is_mine"),
-    ("STACK_DEFINITION_INDEX", "stack", "definition"),
-    ("STACK_SOURCE_INDEX", "stack", "source"),
-    ("RELATION_VALID_INDEX", "relations", "valid"),
-    ("RELATION_ELIGIBILITY_INDEX", "relations", "legal_at_resolution_start"),
-    ("RELATION_X_INDEX", "relations", "x"),
-    ("RELATION_THIS_TURN_INDEX", "relations", "this_turn"),
-    ("FACT_OBJECT_INDEX", "facts", "object"),
-    ("FACT_KIND_INDEX", "facts", "kind"),
-    ("FACT_ID_INDEX", "facts", "id_high"),
-    ("FACT_DETAIL_INDEX", "facts", "detail_high"),
-    ("FACT_VALUE_INDEX", "facts", "value"),
-    ("FACT_DURATION_INDEX", "facts", "duration"),
-    ("FACT_ORDER_INDEX", "facts", "timestamp"),
-    ("FACT_SOURCE_INDEX", "facts", "source_definition"),
-    ("FACT_VALID_INDEX", "facts", "valid"),
-    ("TURN_STATE_LIFE_LOST_INDEX", "player_turn_state", "life_lost"),
-    ("TURN_STATE_SPELLS_CAST_INDEX", "player_turn_state", "spells_cast"),
-    (
-        "TURN_STATE_NONARTIFACT_MANA_INDEX",
-        "player_turn_state",
-        "nonartifact_mana_white",
-    ),
-]
-# Widths, as (constant, array).
-_MIRRORED_WIDTHS = [
-    ("NAME_DIM", "name_candidates"),
-    ("PLAYER_DIM", "agent_player"),
-    ("CARD_DIM", "agent_cards"),
-    ("PERMANENT_DIM", "agent_permanents"),
-    ("STACK_DIM", "stack"),
-    ("RELATION_DIM", "relations"),
-    ("FACT_DIM", "facts"),
-    ("DECKLIST_DIM", "decklists"),
-    ("TURN_STATE_DIM", "player_turn_state"),
-]
-
-
-@pytest.mark.parametrize("constant,array,column", _MIRRORED_COLUMNS)
-def test_python_column_constants_name_the_native_columns(
-    constant: str, array: str, column: str
-) -> None:
+def test_column_constants_are_read_from_the_native_layout() -> None:
     layout = managym.observation_layout()
-    assert getattr(observation, constant) == layout[array]["columns"][column]["index"]
-
-
-@pytest.mark.parametrize("constant,array", _MIRRORED_WIDTHS)
-def test_python_widths_are_the_native_widths(constant: str, array: str) -> None:
-    layout = managym.observation_layout()[array]
-    width = len(layout["columns"])
-    assert getattr(observation, constant) == width == (layout["shape"][-1] or width)
-
-
-def test_every_column_constant_is_mirrored() -> None:
-    listed = {name for name, *_ in (*_MIRRORED_COLUMNS, *_MIRRORED_WIDTHS)}
-    # Imported into the module; held by test_legacy_and_shared_widths_are_native.
-    listed.add("LEGACY_PERMANENT_DIM")
-    named = {name for name in vars(observation) if name.endswith(("_INDEX", "_DIM"))}
-    assert named == listed
-
-
-def test_python_fact_kinds_are_native_row_kinds() -> None:
-    kinds = set(managym.observation_layout()["facts"]["row_kinds"])
-    assert observation.FACT_KINDS == max(kinds)
-    assert observation.FACT_EFFECT not in kinds, "reserved: shared-effect rows"
-    for name in dir(observation):
-        if name.startswith("FACT_") and name not in (
-            *(constant for constant, *_ in _MIRRORED_COLUMNS),
-            "FACT_DIM",
-            "FACT_KINDS",
-            "FACT_EFFECT",
-            "FACT_TIMESTAMP_SCALE",
-        ):
-            assert getattr(observation, name) in kinds, name
-
-
-def test_legacy_and_shared_widths_are_native() -> None:
-    legacy = managym.observation_layout(legacy=True)
-    assert len(legacy["agent_permanents"]["columns"]) == LEGACY_PERMANENT_DIM
-    raw = managym.observation_layout()
-    assert raw["relations"]["shape"][0] == observation.RELATION_ROWS
+    assert observation.ACTION_TYPE_DIM == len(observation.ActionEnum)
+    assert (
+        observation.PERMANENT_DEFINITION_INDEX
+        == layout["agent_permanents"]["columns"]["definition"]["index"]
+    )
+    assert observation.FACT_DIM == len(layout["facts"]["columns"])
+    assert observation.RELATION_ROWS == layout["relations"]["shape"][0]
+    assert LEGACY_PERMANENT_DIM == len(
+        managym.observation_layout(legacy=True)["agent_permanents"]["columns"]
+    )
     for key, shape in SHARED_EFFECT_SHAPES.items():
-        assert tuple(raw[key]["shape"]) == shape, key
+        assert tuple(layout[key]["shape"]) == shape, key
     memory = managym.observation_layout(decision_memory=True)
-    for key, width in MEMORY_WIDTHS.items():
-        assert memory[key]["shape"][-1] == width, key
+    assert MEMORY_WIDTHS.keys() == {k for k in memory if k.startswith("decision_")}
+
+
+def test_fact_kinds_are_named_native_row_kinds() -> None:
+    facts = managym.observation_layout()["facts"]
+    names = facts["row_kind_names"]
+    assert set(names.values()) == set(facts["row_kinds"])
+    assert observation.FACT_COUNTER == names["counter"] == 1
+    assert observation.FACT_CONTINUATION_PROGRAM == names["continuation_program"]
+    # The model's kind embedding is sized by the largest kind.
+    assert observation.FACT_KINDS == max(names.values()) == 14
+    assert observation.FACT_EFFECT not in names.values(), "reserved: shared-effect rows"
+
+
+def test_encoder_names_warn_and_name_their_removal(
+    board: tuple[managym.Env, managym.Observation],
+) -> None:
+    _, obs = board
+    space = ObservationSpace()
+    with pytest.warns(DeprecationWarning, match=r"ObservationSpace\.encode .*0\.4\.0"):
+        encoded = space.encode(obs)
+    expected = encode_observation(space, obs)
+    assert encoded.keys() == expected.keys()
+    for key, value in expected.items():
+        np.testing.assert_array_equal(encoded[key], value, err_msg=key)
+    with pytest.warns(DeprecationWarning, match=r"encoder is deprecated .*0\.4\.0"):
+        assert space.encoder is space
+    with pytest.warns(DeprecationWarning, match=r"ObservationEncoder .*0\.4\.0"):
+        layout = observation.ObservationEncoder(ObservationConfig(max_actions=7))
+    assert layout.config.max_actions == layout.allocate()["actions"].shape[0] == 7
 
 
 @pytest.mark.parametrize(
@@ -182,12 +119,12 @@ def test_space_shapes_are_the_native_layout_at_its_capacities(
         legacy=input_version < 11,
         decision_memory=memory,
     )
-    encoded = space.encode(obs)
+    encoded = encode_observation(space, obs)
     assert layout.keys() == encoded.keys() == space.shapes.keys()
     for key, array in encoded.items():
         metadata = layout[key]
         assert len(metadata["axes"]) == array.ndim
-        assert np.dtype(metadata["dtype"]) == array.dtype == space.encoder.dtypes[key]
+        assert np.dtype(metadata["dtype"]) == array.dtype == space.dtypes[key]
         for extent, actual in zip(metadata["shape"], array.shape, strict=True):
             assert extent is None or extent == actual, key
         columns = metadata["columns"]
@@ -258,8 +195,8 @@ def test_named_layout_names_v10_turn_state() -> None:
 
 def test_named_layout_reads_effect_programs_by_name() -> None:
     env = kellan_upgrade_root()
-    encoded = ObservationSpace().encode(
-        env.observation_for_player(env.current_agent_index())
+    encoded = encode_observation(
+        ObservationSpace(), env.observation_for_player(env.current_agent_index())
     )
     details = managym.observation_layout()["effect_details"]
     kind = details["columns"]["kind"]["index"]

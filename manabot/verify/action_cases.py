@@ -11,7 +11,7 @@ from typing import Literal
 import torch
 
 from manabot.env import observation as observation_schema
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 import managym
 
 
@@ -60,7 +60,7 @@ def reach(env: managym.Env, kind: int) -> managym.Observation:
 
 
 def encode(raw: managym.Observation) -> dict[str, torch.Tensor]:
-    encoded = ObservationSpace().encode(raw)
+    encoded = encode_observation(ObservationSpace(), raw)
     return {key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()}
 
 

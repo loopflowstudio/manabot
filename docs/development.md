@@ -137,11 +137,13 @@ select `batch_closure="exact-quota"` as well as one learning seat; whole-game
 closure treats the transition quota as a minimum.
 The native encoder is the only one, so an observation change is written once
 in `managym/src/agent/` with a directed test that asserts its named columns or
-rows on a constructed position, and its `observability.rs` entry. A column the
-model reads is also a constant in `manabot/env/observation.py`;
+rows on a constructed position, and its `observability.rs` entry. Python
+names a column it reads by its native name (`column("facts", "value")` in
+`manabot/env/observation.py`), and `ObservationSpace` takes every shape from
+`managym.observation_layout()`, so moving or widening a column needs no
+Python edit; renaming one fails the import. Run
 `uv run --extra dev pytest tests/env/test_named_observation_layout.py -q`
-fails when that constant and `managym.observation_layout()` disagree, so run
-it after adding, moving or widening a column. Action overflow is checked at the
+after changing the layout. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
 Changes to effects or runtime token registration require the
 [effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):

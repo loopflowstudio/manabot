@@ -16,8 +16,8 @@ from manabot.env.failures import (
 from manabot.env.observation import (
     ACTION_MODE_INDEX,
     RELATION_ROWS,
-    ObservationEncoder,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.training.rollout.producers import ShardedVectorEnv
@@ -27,9 +27,9 @@ from tests.current_capacity import capacity_position
 
 
 def _vector_buffers(
-    encoder: ObservationEncoder, num_envs: int = 1
+    space: ObservationSpace, num_envs: int = 1
 ) -> dict[str, np.ndarray]:
-    buffers = encoder.allocate(num_envs)
+    buffers = space.allocate(num_envs)
     buffers.update(
         rewards=np.zeros(num_envs, dtype=np.float64),
         terminated=np.zeros(num_envs, dtype=np.uint8),
@@ -48,7 +48,7 @@ def _players() -> managym.GameSetup:
 
 
 def _encode_everywhere(
-    encoder: ObservationEncoder,
+    space: ObservationSpace,
     obs: managym.Observation,
     vector_buffers: dict[str, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
@@ -57,11 +57,11 @@ def _encode_everywhere(
     Stale preallocated buffers are overwritten completely, padding included,
     and the first vector stream holds the same arrays.
     """
-    expected = dict(ObservationSpace(encoder.config).encode(obs))
-    into = encoder.allocate()
+    expected = dict(encode_observation(space, obs))
+    into = space.allocate()
     for value in into.values():
         value.fill(-7)
-    managym.encode_observation_into(obs, into, encoder.config.action_overflow)
+    managym.encode_observation_into(obs, into, space.config.action_overflow)
     for key, value in expected.items():
         np.testing.assert_array_equal(into[key], value, err_msg=key)
         if vector_buffers is not None:
@@ -73,13 +73,13 @@ def test_native_encoded_arrays_are_writable_and_independent() -> None:
     space = ObservationSpace()
     scalar = managym.Env(seed=213, skip_trivial=True)
     obs, _ = scalar.reset(_players())
-    first = space.encode(obs)
-    second = space.encode(obs)
+    first = encode_observation(space, obs)
+    second = encode_observation(space, obs)
     assert first.keys() == second.keys() == space.shapes.keys()
     for key, value in second.items():
         expected = value.copy()
         assert first[key].shape == space.shapes[key]
-        assert first[key].dtype == space.encoder.dtypes[key]
+        assert first[key].dtype == space.dtypes[key]
         assert first[key].flags.writeable and first[key].flags.c_contiguous
         first[key].fill(19)
         np.testing.assert_array_equal(value, expected, err_msg=key)
@@ -96,7 +96,7 @@ def test_land_growth_preserves_every_permanent(capacity: int) -> None:
         skip_trivial=True,
         player_policies=("agent", "agent"),
     )
-    encoder = ObservationEncoder(
+    space = ObservationSpace(
         ObservationConfig(
             max_cards_per_player=128,
             max_permanents_per_player=capacity,
@@ -104,7 +104,7 @@ def test_land_growth_preserves_every_permanent(capacity: int) -> None:
             action_overflow="first-legal",
         )
     )
-    buffers = _vector_buffers(encoder)
+    buffers = _vector_buffers(space)
     vector.set_buffers(buffers, "first-legal")
     scalar.reset(players)
     vector.reset_all_into_buffers(players)
@@ -120,14 +120,14 @@ def test_land_growth_preserves_every_permanent(capacity: int) -> None:
     if capacity == 40:
         message = "observation capacity exceeded: opponent_permanents 41 > 40"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            ObservationSpace(encoder.config).encode(obs)
+            encode_observation(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
-            managym.encode_observation_into(obs, encoder.allocate(), "first-legal")
+            managym.encode_observation_into(obs, space.allocate(), "first-legal")
         with pytest.raises(Exception, match=message):
             vector.step_into_buffers([last])
     else:
         vector.step_into_buffers([last])
-        reference = _encode_everywhere(encoder, obs, buffers)
+        reference = _encode_everywhere(space, obs, buffers)
         assert reference["agent_permanents_valid"].sum() == len(obs.agent_permanents)
         assert reference["opponent_permanents_valid"].sum() == len(
             obs.opponent_permanents
@@ -137,7 +137,7 @@ def test_land_growth_preserves_every_permanent(capacity: int) -> None:
 @pytest.mark.parametrize("workers", [1, 2])
 def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
     game = capacity_position("land")
-    encoder = ObservationEncoder(
+    space = ObservationSpace(
         ObservationConfig(
             max_cards_per_player=128,
             max_permanents_per_player=40,
@@ -151,7 +151,7 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
         else ShardedVectorEnv(num_envs=2, seed=game.seed, workers=workers)
     )
     try:
-        buffers = _vector_buffers(encoder, num_envs=2)
+        buffers = _vector_buffers(space, num_envs=2)
         vector.set_buffers(buffers, "first-legal")
         vector.reset_each_into_buffers([game.setup(), _players()])
         scalar = managym.Env(seed=game.seed, skip_trivial=True)
@@ -176,7 +176,7 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
         assert "game_error" not in healthy
         assert not buffers["terminated"].any() and not buffers["truncated"].any()
         assert not buffers["rewards"].any()
-        reference = ObservationSpace(encoder.config).encode(obs)
+        reference = encode_observation(space, obs)
         for key, value in reference.items():
             np.testing.assert_array_equal(buffers[key][1], value, err_msg=key)
         vector.replace_failed_into_buffers([True, False])
@@ -203,16 +203,16 @@ def test_nondefault_axes_match_scalar_and_vector_buffers(history: int) -> None:
         max_events=3,
         policy_history_version=history,
     )
-    encoder = ObservationEncoder(config)
+    space = ObservationSpace(config)
     scalar = managym.Env(seed=213, skip_trivial=True)
     vector = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
-    buffers = _vector_buffers(encoder)
+    buffers = _vector_buffers(space)
     vector.set_buffers(buffers)
     obs, _ = scalar.reset(_players())
     vector.reset_all_into_buffers(_players())
     for _ in range(12):
-        encoded = _encode_everywhere(encoder, obs, buffers)
-        for key, shape in encoder.shapes.items():
+        encoded = _encode_everywhere(space, obs, buffers)
+        for key, shape in space.shapes.items():
             assert encoded[key].shape == shape, key
         assert encoded["actions_valid"].sum() == min(
             len(obs.action_space.actions), config.max_actions
@@ -232,7 +232,7 @@ def test_historical_256_offer_capture_respects_supplied_capacity(capacity: int) 
     )
     obs = managym.Observation.from_json(json.dumps(capture["observation"]))
     assert len(obs.action_space.actions) == 256
-    encoder = ObservationEncoder(
+    space = ObservationSpace(
         ObservationConfig(
             max_cards_per_player=128,
             max_actions=capacity,
@@ -241,11 +241,11 @@ def test_historical_256_offer_capture_respects_supplied_capacity(capacity: int) 
     if capacity < 256:
         message = f"observation capacity exceeded: actions 256 > {capacity}"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            ObservationSpace(encoder.config).encode(obs)
+            encode_observation(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
-            managym.encode_observation_into(obs, encoder.allocate())
+            managym.encode_observation_into(obs, space.allocate())
     else:
-        reference = _encode_everywhere(encoder, obs)
+        reference = _encode_everywhere(space, obs)
         assert reference["actions_valid"].sum() == 256
 
 
@@ -275,27 +275,27 @@ def test_affordable_x_modes_reach_scalar_and_vector_buffers(
     assert not obs.game_over
     assert len(obs.action_space.actions) < 256
     assert [action.mode_index for action in obs.action_space.actions] == [0, 1, 2, 3]
-    encoder = ObservationEncoder(
+    space = ObservationSpace(
         ObservationConfig(
             max_cards_per_player=128,
             max_actions=capacity,
             max_permanents_per_player=permanents,
         )
     )
-    buffers = _vector_buffers(encoder)
+    buffers = _vector_buffers(space)
     vector.set_buffers(buffers)
     if permanents == 1:
         assert max(len(obs.agent_permanents), len(obs.opponent_permanents)) > 1
         message = "observation capacity exceeded: .*permanents .* > 1"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            ObservationSpace(encoder.config).encode(obs)
+            encode_observation(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
-            managym.encode_observation_into(obs, encoder.allocate())
+            managym.encode_observation_into(obs, space.allocate())
         with pytest.raises(Exception, match="permanents"):
             vector.step_into_buffers([last])
     else:
         vector.step_into_buffers([last])
-        encoded = _encode_everywhere(encoder, obs, buffers)
+        encoded = _encode_everywhere(space, obs, buffers)
         assert encoded["actions_valid"].sum() == 4
         # Mode selectors are one-based; zero means the action names no mode.
         np.testing.assert_array_equal(
@@ -322,7 +322,7 @@ def test_affordable_x_modes_reach_scalar_and_vector_buffers(
                 np.testing.assert_array_equal(buffers[key], expected, err_msg=key)
         obs, *_ = scalar.step(0)
         vector.step_into_buffers([0])
-        _encode_everywhere(encoder, obs, buffers)
+        _encode_everywhere(space, obs, buffers)
 
 
 @pytest.mark.parametrize(
@@ -344,10 +344,10 @@ def test_affordable_x_modes_reach_scalar_and_vector_buffers(
     ],
 )
 def test_companion_shapes_rejected_before_scalar_writes(key: str) -> None:
-    encoder = ObservationEncoder(ObservationConfig())
+    space = ObservationSpace(ObservationConfig())
     scalar = managym.Env(seed=213, skip_trivial=True)
     obs, _ = scalar.reset(_players())
-    buffers = encoder.allocate()
+    buffers = space.allocate()
     for value in buffers.values():
         value.fill(-7)
     shape = list(buffers[key].shape)
@@ -374,8 +374,8 @@ def test_companion_shapes_rejected_before_scalar_writes(key: str) -> None:
 )
 @pytest.mark.parametrize("batched", [False, True])
 def test_zero_capacity_rejected(key: str, batched: bool) -> None:
-    encoder = ObservationEncoder(ObservationConfig())
-    buffers = encoder.allocate()
+    space = ObservationSpace(ObservationConfig())
+    buffers = space.allocate()
     shape = list(buffers[key].shape)
     shape[1 if key == "action_focus" else 0] = 0
     buffers[key] = np.zeros(shape, dtype=buffers[key].dtype)
@@ -396,23 +396,23 @@ def test_zero_capacity_rejected(key: str, batched: bool) -> None:
 def test_event_capacity_keeps_legacy_window_and_public_history_bound(
     history: int,
 ) -> None:
-    encoder = ObservationEncoder(
+    space = ObservationSpace(
         ObservationConfig(max_events=33, policy_history_version=history)
     )
     scalar = managym.Env(seed=213)
     obs, _ = scalar.reset(_players())
     vector = managym.VectorEnv(num_envs=1, seed=213)
-    buffers = _vector_buffers(encoder)
+    buffers = _vector_buffers(space)
     if history:
         with pytest.raises(ValueError, match="1..32"):
-            managym.encode_observation_into(obs, encoder.allocate())
+            managym.encode_observation_into(obs, space.allocate())
         with pytest.raises(ValueError, match="1..32"):
             vector.set_buffers(buffers)
     else:
         vector.set_buffers(buffers)
         vector.reset_all_into_buffers(_players())
-        encoded = _encode_everywhere(encoder, obs, buffers)
-        assert encoded["events"].shape == (33, encoder.event_dim)
+        encoded = _encode_everywhere(space, obs, buffers)
+        assert encoded["events"].shape == (33, space.shapes["events"][-1])
 
 
 @pytest.mark.parametrize("capacity", [2, 3, 5])
@@ -427,31 +427,31 @@ def test_focus_capacity_preserves_complete_action(capacity: int) -> None:
     actions[0] = action
     space.actions = actions
     obs.action_space = space
-    encoder = ObservationEncoder(ObservationConfig(max_focus_objects=capacity))
+    space = ObservationSpace(ObservationConfig(max_focus_objects=capacity))
     if capacity < 3:
         message = f"observation capacity exceeded: action focus 3 > {capacity}"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            ObservationSpace(encoder.config).encode(obs)
+            encode_observation(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
-            managym.encode_observation_into(obs, encoder.allocate())
+            managym.encode_observation_into(obs, space.allocate())
     else:
-        reference = _encode_everywhere(encoder, obs)
+        reference = _encode_everywhere(space, obs)
         # Players are objects 0 and 1; the agent's first card row is object 2.
         np.testing.assert_array_equal(reference["action_focus"][0, :3], [0, 1, 2])
         assert (reference["action_focus"][0, 3:] == -1).all()
 
 
 def test_card_capacity_overflow_rejected_by_all_paths() -> None:
-    encoder = ObservationEncoder(ObservationConfig(max_cards_per_player=1))
+    space = ObservationSpace(ObservationConfig(max_cards_per_player=1))
     scalar = managym.Env(seed=213)
     obs, _ = scalar.reset(_players())
     vector = managym.VectorEnv(num_envs=1, seed=213)
-    vector.set_buffers(_vector_buffers(encoder))
+    vector.set_buffers(_vector_buffers(space))
     message = "observation capacity exceeded: agent_cards.* > 1"
     with pytest.raises(managym.ObservationCapacity, match=message):
-        ObservationSpace(encoder.config).encode(obs)
+        encode_observation(space, obs)
     with pytest.raises(managym.ObservationCapacity, match=message):
-        managym.encode_observation_into(obs, encoder.allocate())
+        managym.encode_observation_into(obs, space.allocate())
     with pytest.raises(Exception, match="cards.* > 1"):
         vector.reset_all_into_buffers(_players())
 
@@ -460,18 +460,18 @@ def test_card_capacity_overflow_rejected_by_all_paths() -> None:
 def test_explicit_legal_prefix_keeps_first_actions_in_scalar_and_vector_buffers(
     capacity: int,
 ) -> None:
-    encoder = ObservationEncoder(
+    space = ObservationSpace(
         ObservationConfig(max_actions=capacity, action_overflow="first-legal")
     )
     scalar = managym.Env(seed=213, skip_trivial=True)
     vector = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
-    buffers = _vector_buffers(encoder)
+    buffers = _vector_buffers(space)
     vector.set_buffers(buffers, "first-legal")
     obs, _ = scalar.reset(_players())
     vector.reset_all_into_buffers(_players())
     for _ in range(12):
         count = len(obs.action_space.actions)
-        reference = _encode_everywhere(encoder, obs, buffers)
+        reference = _encode_everywhere(space, obs, buffers)
         assert reference["actions_valid"].sum() == min(count, capacity)
         assert (
             vector.semantic_decision_frames_json()[0]
@@ -492,15 +492,16 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
     assert len(obs.action_space.actions) == 71  # 70 individually legal lands + pass.
     before = scalar.state_digest()
     frame = json.loads(scalar.semantic_decision_frame_json())
-    full = ObservationSpace(
-        ObservationConfig(max_cards_per_player=128, max_actions=128)
-    ).encode(obs)
-    encoder = ObservationEncoder(
+    full = encode_observation(
+        ObservationSpace(ObservationConfig(max_cards_per_player=128, max_actions=128)),
+        obs,
+    )
+    space = ObservationSpace(
         ObservationConfig(
             max_cards_per_player=128, max_actions=64, action_overflow="first-legal"
         )
     )
-    reference = _encode_everywhere(encoder, obs)
+    reference = _encode_everywhere(space, obs)
     for key, expected in reference.items():
         np.testing.assert_array_equal(
             expected,
@@ -556,12 +557,12 @@ def test_cutoff_diagnostics_keep_exact_counts_and_bounded_replay_samples(
 def test_captured_vector_records_native_support_before_policy_step(
     tmp_path: Path,
 ) -> None:
-    encoder = ObservationEncoder(
+    space = ObservationSpace(
         ObservationConfig(max_actions=2, action_overflow="first-legal")
     )
     with capture_scope(CaptureScope(tmp_path)):
         vector = CapturedVector(num_envs=1, seed=213)
-        vector.set_buffers(_vector_buffers(encoder), "first-legal")
+        vector.set_buffers(_vector_buffers(space), "first-legal")
         vector.reset_all_into_buffers(
             [managym.PlayerConfig(name, {"Mountain": 30}) for name in ("a", "b")]
         )
@@ -608,10 +609,10 @@ def _short_effect_details(buffers: dict[str, np.ndarray]) -> None:
 def test_incomplete_buffer_set_is_rejected_before_any_write(
     incomplete: Callable[[dict[str, np.ndarray]], None],
 ) -> None:
-    encoder = ObservationEncoder(ObservationConfig())
+    space = ObservationSpace(ObservationConfig())
     scalar = managym.Env(seed=213, skip_trivial=True)
     obs, _ = scalar.reset(_players())
-    buffers = encoder.allocate()
+    buffers = space.allocate()
     incomplete(buffers)
     for value in buffers.values():
         value.fill(-7)

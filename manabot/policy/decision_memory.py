@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
+from manabot.env.observation import column, column_names
 from managym.decision_memory import (
     DefinitionProgram,
     decision_name_values,
@@ -26,6 +27,65 @@ if TYPE_CHECKING:
 
 _FIELDS = MEMORY_FIELDS
 _WIDTHS = tuple(MEMORY_WIDTHS[key] for key in _FIELDS)
+
+
+def _span(array: str, first: str, last: str) -> slice:
+    return slice(column(array, first), column(array, last) + 1)
+
+
+# Native columns of the four memory tables, by name.
+_R, _F = "decision_records", "decision_references"
+_D, _M = "decision_reference_details", "decision_members"
+# Ordinal, count, turn, first and last: five 16-bit word pairs.
+_RECORD_TEMPORAL = _span(_R, "ordinal_high", "last_low")
+_RECORD_PHASE = column(_R, "phase")
+_RECORD_STEP = column(_R, "step")
+_RECORD_PHASE_STEP = _span(_R, "phase", "step")
+_RECORD_KIND = _span(_R, "kind_high", "kind_low")
+_RECORD_MEMBER_OFFSET = column(_R, "member_offset")
+# Mana, response and choice member counts.
+_RECORD_COUNTS = _span(_R, "mana_count", "choice_count")
+_RECORD_CHOOSER = column(_R, "chooser_role")
+_RECORD_CHOOSER_SPAN = _span(_R, "chooser_role", "chooser_role")
+_RECORD_VALID = column(_R, "valid")
+# Life, hand and board context of both seats: word pairs.
+_RECORD_CONTEXT = _span(_R, "life_viewer_high", "board_opponent_battle_low")
+# Each selector's presence flag, followed by its value's two words.
+_RECORD_SELECTORS = tuple(
+    column(_R, f"{name}_present") for name in ("choice_kind", "mode", "ability", "name")
+)
+_RECORD_NUMBERED_SELECTORS = (column(_R, "mode_present"), column(_R, "ability_present"))
+_RECORD_CHOICE_PRESENT = column(_R, "choice_kind_present")
+_RECORD_CHOICE_KIND = _span(_R, "choice_kind_high", "choice_kind_low")
+_RECORD_NAME = _span(_R, "name_high", "name_low")
+_RECORD_DECLARED_PRESENT = column(_R, "declared_present")
+_RECORD_DECLARED = column(_R, "declared")
+_RECORD_DECLARATION = _span(_R, "declared_present", "declared")
+_RECORD_DECLARATION_COLUMNS = (_RECORD_DECLARED_PRESENT, _RECORD_DECLARED)
+# Every 16-bit word column.
+_RECORD_WORDS = [
+    column(_R, name) for name in column_names(_R) if name.endswith(("_high", "_low"))
+]
+_REFERENCE_ROLE = column(_F, "role")
+_REFERENCE_DEFINITION = column(_F, "definition")
+_REFERENCE_DEFINITION_SPAN = _span(_F, "definition", "definition")
+_REFERENCE_WORDS = _span(_F, "power_high", "toughness_low")
+# Tapped, ready, attacking and blocking flags.
+_REFERENCE_FLAGS = _span(_F, "tapped", "blocking")
+_REFERENCE_DETAIL_OFFSET = column(_F, "detail_offset")
+_REFERENCE_DETAIL_COUNT = column(_F, "detail_count")
+_REFERENCE_VALID = column(_F, "valid")
+_REFERENCE_DEFINITION_ONLY = column(_F, "definition_only")
+_DETAIL_FIELD = column(_D, "field")
+_DETAIL_TOKEN_KIND = column(_D, "token_kind")
+_DETAIL_VALUE_HIGH = column(_D, "value_high")
+_DETAIL_VALUE_LOW = column(_D, "value_low")
+_DETAIL_VALUE = _span(_D, "value_high", "value_low")
+_DETAIL_ORDINAL = column(_D, "ordinal")
+_DETAIL_VALID = column(_D, "valid")
+_MEMBER_REFERENCE = column(_M, "reference")
+_MEMBER_ORDINAL = column(_M, "ordinal")
+_MEMBER_ORDINAL_SPAN = _span(_M, "ordinal", "ordinal")
 
 
 @dataclass(frozen=True)
@@ -101,10 +161,10 @@ class MemoryRows[A](MemoryFeatures[A]):
 def memory_lengths(obs: "ObservationBuffers", row: int) -> tuple[int, int, int, int]:
     headers, details, references = (obs[key][row] for key in _FIELDS[:3])
     return (
-        int(headers[:, 19].sum()),
-        int(details[:, 5].sum()),
-        int(references[:, 12].sum()),
-        int(headers[:, 15:18].sum()),
+        int(headers[:, _RECORD_VALID].sum()),
+        int(details[:, _DETAIL_VALID].sum()),
+        int(references[:, _REFERENCE_VALID].sum()),
+        int(headers[:, _RECORD_COUNTS].sum()),
     )
 
 
@@ -167,7 +227,7 @@ def live_memory(obs: "ObservationBuffers") -> list[tuple[np.ndarray, ...]]:
             _live(rows, 5),
             _live(snapshots, 12),
         )
-        counts = records[:, 15:18]
+        counts = records[:, _RECORD_COUNTS]
         total = counts.sum(dtype=np.float64)
         if (counts < 0).any() or total > len(joins):
             raise ValueError("invalid decision-memory member partition")
@@ -196,17 +256,17 @@ def record_chunks(
     )
     for start in range(cursor.records, len(records), size):
         headers = records[start : start + size]
-        count = headers[:, 15:18].sum(dtype=np.float64)
+        count = headers[:, _RECORD_COUNTS].sum(dtype=np.float64)
         if count < 0 or count > len(members) - member_start:
             raise ValueError("invalid decision-memory member partition")
         member_end = member_start + int(count)
         joins = members[member_start:member_end]
-        last = joins[:, 0].max(initial=reference_start)
+        last = joins[:, _MEMBER_REFERENCE].max(initial=reference_start)
         if last < reference_start or last > len(references):
             raise ValueError("invalid decision-memory member join")
         reference_end = int(last)
         snapshots = references[reference_start:reference_end]
-        counts = snapshots[:, 11]
+        counts = snapshots[:, _REFERENCE_DETAIL_COUNT]
         count = counts.sum(dtype=np.float64)
         if (counts < 0).any() or count > len(details) - detail_start:
             raise ValueError("invalid decision-memory reference detail partition")
@@ -239,31 +299,31 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     for block in rows:
         _integers(block)
     if (
-        not (records[:, 19] == 1).all()
-        or not (details[:, 5] == 1).all()
-        or not (references[:, 12] == 1).all()
+        not (records[:, _RECORD_VALID] == 1).all()
+        or not (details[:, _DETAIL_VALID] == 1).all()
+        or not (references[:, _REFERENCE_VALID] == 1).all()
     ):
         raise ValueError("invalid decision-memory chunk validity")
-    _words(
-        records[:, [*range(10), 12, 13, *range(20, 60), 61, 62, 64, 65, 67, 68, 70, 71]]
-    )
-    _words(references[:, 2:6])
-    _words(details[:, 2:4])
+    _words(records[:, _RECORD_WORDS])
+    _words(references[:, _REFERENCE_WORDS])
+    _words(details[:, _DETAIL_VALUE])
     if (
-        _outside_integer_range(records[:, 10], 0, 4)
-        or _outside_integer_range(records[:, 11], 0, 11)
-        or _outside_integer_range(records[:, 18], 1, 2)
+        _outside_integer_range(records[:, _RECORD_PHASE], 0, 4)
+        or _outside_integer_range(records[:, _RECORD_STEP], 0, 11)
+        or _outside_integer_range(records[:, _RECORD_CHOOSER], 1, 2)
     ):
         raise ValueError("invalid decision-memory phase, step or chooser")
-    if _outside_integer_range(records[:, [60, 63, 66, 69, 72, 73]], 0, 1):
+    if _outside_integer_range(
+        records[:, [*_RECORD_SELECTORS, *_RECORD_DECLARATION_COLUMNS]], 0, 1
+    ):
         raise ValueError("invalid decision-memory selector presence")
-    for offset in (60, 63, 66, 69):
+    for offset in _RECORD_SELECTORS:
         if records[records[:, offset] == 0, offset + 1 : offset + 3].any():
             raise ValueError("unavailable decision-memory selector has a value")
-    if records[records[:, 72] == 0, 73].any():
+    if records[records[:, _RECORD_DECLARED_PRESENT] == 0, _RECORD_DECLARED].any():
         raise ValueError("unavailable decision-memory declaration has a value")
     # Word arithmetic must be exact even above float32's integer range.
-    temporal = records[:, :10].astype(np.int64).reshape(-1, 5, 2)
+    temporal = records[:, _RECORD_TEMPORAL].astype(np.int64).reshape(-1, 5, 2)
     temporal = temporal[:, :, 0] * 65536 + temporal[:, :, 1]
     if (
         not np.array_equal(
@@ -279,13 +339,15 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
 
     # Bound before integer conversion/repeat: imported counts can be finite
     # integers far beyond int64, and may never drive an allocation.
-    raw_counts = records[:, 15:18]
+    raw_counts = records[:, _RECORD_COUNTS]
     member_count = raw_counts.sum(dtype=np.float64)
     if (raw_counts < 0).any() or member_count > len(joins):
         raise ValueError("invalid decision-memory member partition")
     counts = raw_counts.astype(np.int64)
     record_ends = counts.sum(1).cumsum()
-    if not np.array_equal(records[:, 14], cursor.members + record_ends - counts.sum(1)):
+    if not np.array_equal(
+        records[:, _RECORD_MEMBER_OFFSET], cursor.members + record_ends - counts.sum(1)
+    ):
         raise ValueError("invalid decision-memory member partition")
     members = joins[: int(member_count)]
     _integers(members)
@@ -293,16 +355,18 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     group_starts = group_counts.cumsum() - group_counts
     if (
         not np.array_equal(
-            members[:, 1],
+            members[:, _MEMBER_ORDINAL],
             np.arange(len(members)) - np.repeat(group_starts, group_counts),
         )
         or (
-            (members[:, 0] < 1) | (members[:, 0] > cursor.references + len(references))
+            (members[:, _MEMBER_REFERENCE] < 1)
+            | (members[:, _MEMBER_REFERENCE] > cursor.references + len(references))
         ).any()
     ):
         raise ValueError("invalid decision-memory member join or ordinal")
     identities, first = np.unique(
-        members[members[:, 0] > cursor.references, 0], return_index=True
+        members[members[:, _MEMBER_REFERENCE] > cursor.references, _MEMBER_REFERENCE],
+        return_index=True,
     )
     if len(identities) and (
         not np.array_equal(
@@ -317,59 +381,69 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     if joins[len(members) :].any() or len(identities) != len(references):
         raise ValueError("unowned decision-memory member or snapshot rows")
     if (
-        _outside_integer_range(references[:, 13], 0, 1)
-        or ((references[:, 13] == 1) & (references[:, 1] == 0)).any()
+        _outside_integer_range(references[:, _REFERENCE_DEFINITION_ONLY], 0, 1)
+        or (
+            (references[:, _REFERENCE_DEFINITION_ONLY] == 1)
+            & (references[:, _REFERENCE_DEFINITION] == 0)
+        ).any()
     ):
         raise ValueError("invalid decision-memory definition shortcut")
 
-    raw_counts = references[:, 11]
+    raw_counts = references[:, _REFERENCE_DETAIL_COUNT]
     detail_count = raw_counts.sum(dtype=np.float64)
     if (raw_counts < 0).any() or detail_count > len(details):
         raise ValueError("invalid decision-memory reference detail partition")
     counts = raw_counts.astype(np.int64)
     starts = counts.cumsum() - counts
-    if not np.array_equal(references[:, 10], starts + cursor.details):
+    if not np.array_equal(
+        references[:, _REFERENCE_DETAIL_OFFSET], starts + cursor.details
+    ):
         raise ValueError("invalid decision-memory reference detail partition")
     if detail_count != len(details):
         raise ValueError("unowned decision-memory reference details")
     if (
-        (references[:, 1] < 0).any()
-        or _outside_integer_range(references[:, 0], 0, 2)
-        or _outside_integer_range(references[:, 6:10], 0, 1)
+        (references[:, _REFERENCE_DEFINITION] < 0).any()
+        or _outside_integer_range(references[:, _REFERENCE_ROLE], 0, 2)
+        or _outside_integer_range(references[:, _REFERENCE_FLAGS], 0, 1)
     ):
         raise ValueError("invalid decision-memory reference features")
-    unknown = references[:, 0] == 0
+    unknown = references[:, _REFERENCE_ROLE] == 0
     if (
         references[unknown, :10].any()
-        or references[unknown, 11].any()
-        or references[unknown, 13].any()
+        or references[unknown, _REFERENCE_DETAIL_COUNT].any()
+        or references[unknown, _REFERENCE_DEFINITION_ONLY].any()
     ):
         raise ValueError("unavailable decision-memory reference has features")
 
     # Route every owned detail once. Empty reference slices retain their
     # place in counts but own no rows; each program must precede its mana.
     owners = np.repeat(np.arange(len(references)), counts)
-    program = details[:, 0] == 0
+    program = details[:, _DETAIL_FIELD] == 0
     programs = np.bincount(owners[program], minlength=len(references))
     positions = np.arange(len(details)) - np.repeat(starts, counts)
     expected_program = positions < programs[owners]
     if (
         not np.array_equal(program, expected_program)
-        or not (details[~program, 0] == 1).all()
-        or not ((details[program, 1] >= 1) & (details[program, 1] <= 9)).all()
-        or not (details[~program, 1] == -1).all()
+        or not (details[~program, _DETAIL_FIELD] == 1).all()
+        or not (
+            (details[program, _DETAIL_TOKEN_KIND] >= 1)
+            & (details[program, _DETAIL_TOKEN_KIND] <= 9)
+        ).all()
+        or not (details[~program, _DETAIL_TOKEN_KIND] == -1).all()
     ):
         raise ValueError("invalid decision-memory program or mana kind")
     coordinates = np.where(program, positions, positions - programs[owners])
     if (
-        not np.array_equal(details[:, 4], coordinates)
+        not np.array_equal(details[:, _DETAIL_ORDINAL], coordinates)
         or ((counts - programs) % 6).any()
     ):
         raise ValueError("invalid decision-memory program or mana coordinates")
-    if ((references[:, 13] == 1) & (programs > 0)).any():
+    if ((references[:, _REFERENCE_DEFINITION_ONLY] == 1) & (programs > 0)).any():
         raise ValueError("definition-only snapshot also owns a program")
-    boolean = details[:, 1] == 5
-    if details[boolean, 2].any() or _outside_integer_range(details[boolean, 3], 0, 1):
+    boolean = details[:, _DETAIL_TOKEN_KIND] == 5
+    if details[boolean, _DETAIL_VALUE_HIGH].any() or _outside_integer_range(
+        details[boolean, _DETAIL_VALUE_LOW], 0, 1
+    ):
         raise ValueError("invalid decision-memory boolean token")
     return MemoryCursor(
         cursor.records + len(records),
@@ -390,7 +464,9 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
     for batch in range(obs[_FIELDS[0]].shape[0]):
         count, detail_count, reference_count, _ = memory_lengths(obs, batch)
         references = obs[_FIELDS[2]][batch, :reference_count]
-        for definition in references[references[:, 13] == 1, 1].astype(np.int64):
+        for definition in references[
+            references[:, _REFERENCE_DEFINITION_ONLY] == 1, _REFERENCE_DEFINITION
+        ].astype(np.int64):
             if (
                 not 0 < definition <= len(programs)
                 or not programs[int(definition) - 1].eligible
@@ -398,18 +474,21 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
                 raise ValueError("ineligible decision-memory definition shortcut")
         headers = obs[_FIELDS[0]][batch, :count]
         details = obs[_FIELDS[1]][batch, :detail_count]
-        if not np.isin(record_word(headers[:, 12:14], 0), decision_name_values()).all():
-            raise ValueError("unadmitted decision-memory kind")
-        chosen = headers[:, 60] == 1
         if not np.isin(
-            record_word(headers[chosen, 61:63], 0), decision_name_values()
+            record_word(headers[:, _RECORD_KIND], 0), decision_name_values()
+        ).all():
+            raise ValueError("unadmitted decision-memory kind")
+        chosen = headers[:, _RECORD_CHOICE_PRESENT] == 1
+        if not np.isin(
+            record_word(headers[chosen, _RECORD_CHOICE_KIND], 0), decision_name_values()
         ).all():
             raise ValueError("unadmitted decision-memory choice")
-        program = details[:, 0] == 0
+        program = details[:, _DETAIL_FIELD] == 0
         tables.tokens(
-            details[program, 1].astype(np.int64), record_word(details[program, 2:4], 0)
+            details[program, _DETAIL_TOKEN_KIND].astype(np.int64),
+            record_word(details[program, _DETAIL_VALUE], 0),
         )
-        named = record_word(headers[:, 70:72], 0)
+        named = record_word(headers[:, _RECORD_NAME], 0)
         if (named < 0).any() or (named >= len(tables.name_definitions)).any():
             raise ValueError("invalid decision-memory name row")
 
@@ -461,14 +540,14 @@ def _expand_details(
     keep their reference index, so unknown snapshots and repeated joins retain
     exactly the same ownership as the native transport.
     """
-    counts = references[:, 11].astype(np.int64)
+    counts = references[:, _REFERENCE_DETAIL_COUNT].astype(np.int64)
     shortcut_counts = np.zeros(len(references), np.int64)
     shortcut_starts = np.zeros(len(references), np.int64)
-    shortcuts = references[:, 13] == 1
+    shortcuts = references[:, _REFERENCE_DEFINITION_ONLY] == 1
     programs = None
     if shortcuts.any():
         programs = _catalog_program_rows()
-        definitions = references[shortcuts, 1].astype(np.int64) - 1
+        definitions = references[shortcuts, _REFERENCE_DEFINITION].astype(np.int64) - 1
         shortcut_counts[shortcuts] = programs.counts[definitions]
         shortcut_starts[shortcuts] = programs.starts[definitions]
     expanded_counts = counts + shortcut_counts
@@ -502,10 +581,10 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     cursor = node.previous.cursor if node.previous else MemoryCursor()
     arrays = dict(zip(_FIELDS, (a[None] for a in _node_rows(node)), strict=True))
     references = arrays[_FIELDS[2]].copy()
-    references[..., 10] -= cursor.details
+    references[..., _REFERENCE_DETAIL_OFFSET] -= cursor.details
     arrays[_FIELDS[2]] = references
     members = arrays[_FIELDS[3]].copy()
-    members[..., 0] -= cursor.references
+    members[..., _MEMBER_REFERENCE] -= cursor.references
     arrays[_FIELDS[3]] = members
     return arrays
 
@@ -548,11 +627,14 @@ def validate_retained_memory(
         np.concatenate([_node_rows(node)[index] for node in pending.values()])
         for index in range(3)
     )
-    if not include_own and (headers[:, 18] == 1).any():
+    if not include_own and (headers[:, _RECORD_CHOOSER] == 1).any():
         raise ValueError("own-seat decision memory is disabled")
-    definition_ids(references[:, 1], size, lookup)
+    definition_ids(references[:, _REFERENCE_DEFINITION], size, lookup)
     definition_ids(
-        record_word(details, 2)[(details[:, 0] == 0) & (details[:, 1] == 7)] + 1,
+        record_word(details, _DETAIL_VALUE_HIGH)[
+            (details[:, _DETAIL_FIELD] == 0) & (details[:, _DETAIL_TOKEN_KIND] == 7)
+        ]
+        + 1,
         size,
         lookup,
     )
@@ -958,39 +1040,49 @@ def _prepare_dense_memory(
     if _FIELDS[0] not in obs:
         return None
     headers = obs[_FIELDS[0]]
-    lengths = headers[..., 19].sum(1).astype(np.int64)
-    batches, slots = np.nonzero(headers[..., 19])
+    lengths = headers[..., _RECORD_VALID].sum(1).astype(np.int64)
+    batches, slots = np.nonzero(headers[..., _RECORD_VALID])
     selected = headers[batches, slots]
     temporal = np.stack(
-        [record_word(selected[:, i : i + 2], 0) for i in (0, 2, 4, 6, 8)], -1
+        [
+            record_word(selected[:, i : i + 2], 0)
+            for i in range(_RECORD_TEMPORAL.start, _RECORD_TEMPORAL.stop, 2)
+        ],
+        -1,
     )
     context = np.stack(
-        [record_word(selected[:, i : i + 2], 0) for i in range(20, 60, 2)], -1
+        [
+            record_word(selected[:, i : i + 2], 0)
+            for i in range(_RECORD_CONTEXT.start, _RECORD_CONTEXT.stop, 2)
+        ],
+        -1,
     )
     context[:, :2] = context[:, :2].astype(np.uint32).view(np.int32)
     selectors = np.zeros((len(selected), 10), np.float32)
-    for index, offset in enumerate((60, 63, 66, 69)):
+    for index, offset in enumerate(_RECORD_SELECTORS):
         selectors[:, index * 2] = selected[:, offset]
-        if offset in (63, 66):
+        if offset in _RECORD_NUMBERED_SELECTORS:
             selectors[:, index * 2 + 1] = _scaled(
                 record_word(selected[:, offset + 1 : offset + 3], 0)
             )
-    selectors[:, 8:] = selected[:, 72:74]
+    selectors[:, 8:] = selected[:, _RECORD_DECLARATION]
     numbers = np.concatenate(
         (
             _scaled(temporal),
-            selected[:, 10:12] / [4, 12],
-            selected[:, 18:19] / 2,
+            selected[:, _RECORD_PHASE_STEP] / [4, 12],
+            selected[:, _RECORD_CHOOSER_SPAN] / 2,
             _scaled(context),
             selectors,
         ),
         -1,
     ).astype(np.float32)
-    kinds = tables.names(1, record_word(selected[:, 12:14], 0))
+    kinds = tables.names(1, record_word(selected[:, _RECORD_KIND], 0))
     choices = np.zeros(len(selected), np.int64)
-    present = selected[:, 60] == 1
-    choices[present] = tables.names(1, record_word(selected[present, 61:63], 0))
-    choice_names = record_word(selected[:, 70:72], 0)
+    present = selected[:, _RECORD_CHOICE_PRESENT] == 1
+    choices[present] = tables.names(
+        1, record_word(selected[present, _RECORD_CHOICE_KIND], 0)
+    )
+    choice_names = record_word(selected[:, _RECORD_NAME], 0)
     references_list: list[np.ndarray] = []
     details_list: list[np.ndarray] = []
     detail_routes: list[np.ndarray] = []
@@ -1007,12 +1099,14 @@ def _prepare_dense_memory(
         details_list.append(expanded)
         detail_routes.append(owners + reference_base)
         members = obs[_FIELDS[3]][batch, :member_count]
-        member_routes.append(members[:, 0].astype(np.int64) - 1 + reference_base)
-        counts = headers[batch, :length, 15:18].astype(np.int64).ravel()
+        member_routes.append(
+            members[:, _MEMBER_REFERENCE].astype(np.int64) - 1 + reference_base
+        )
+        counts = headers[batch, :length, _RECORD_COUNTS].astype(np.int64).ravel()
         groups.append(
             np.repeat(np.arange(length * 3, dtype=np.int64) + record_base * 3, counts)
         )
-        positions.append((members[:, 1:2] / 128).astype(np.float32))
+        positions.append((members[:, _MEMBER_ORDINAL_SPAN] / 128).astype(np.float32))
         reference_base += reference_count
         record_base += int(length)
     references = (
@@ -1032,15 +1126,15 @@ def _prepare_dense_memory(
         (
             references[:, :1] / 2,
             _scaled(numeric),
-            references[:, 6:10],
-            (references[:, 1:2] > 0).astype(np.float32),
+            references[:, _REFERENCE_FLAGS],
+            (references[:, _REFERENCE_DEFINITION_SPAN] > 0).astype(np.float32),
         ),
         -1,
     ).astype(np.float32)
-    payloads = record_word(details[:, 2:4], 0)
-    token_kinds = details[:, 1].astype(np.int64)
+    payloads = record_word(details[:, _DETAIL_VALUE], 0)
+    token_kinds = details[:, _DETAIL_TOKEN_KIND].astype(np.int64)
     values = np.zeros(len(details), np.int64)
-    program = details[:, 0] == 0
+    program = details[:, _DETAIL_FIELD] == 0
     values[program] = tables.tokens(token_kinds[program], payloads[program])
     signed = payloads.astype(np.uint32).view(np.int32)
     numeric_values = np.where(
@@ -1053,7 +1147,7 @@ def _prepare_dense_memory(
     # Native stable hashes of DecisionMemory::Program and ::Mana. The lookup
     # is against the supplied checkpoint vocabulary, not a current-world join.
     field_values = np.array([30649973, 1006277364], np.int64)
-    fields = tables.names(1, field_values)[details[:, 0].astype(np.int64)]
+    fields = tables.names(1, field_values)[details[:, _DETAIL_FIELD].astype(np.int64)]
 
     def cat(arrays: list[np.ndarray], width: int | None = None) -> np.ndarray:
         return (
@@ -1068,15 +1162,17 @@ def _prepare_dense_memory(
         choices,
         choice_names,
         reference_numbers,
-        tables.rows(references[:, 1].astype(np.int64)),
+        tables.rows(references[:, _REFERENCE_DEFINITION].astype(np.int64)),
         fields,
         values,
         np.stack(
             (
                 token_kinds / 9,
-                np.where(program, details[:, 4] / 128, 0),
-                np.where(program, 0, np.floor_divide(details[:, 4], 6) / 128),
-                np.where(program, 0, np.remainder(details[:, 4], 6) / 5),
+                np.where(program, details[:, _DETAIL_ORDINAL] / 128, 0),
+                np.where(
+                    program, 0, np.floor_divide(details[:, _DETAIL_ORDINAL], 6) / 128
+                ),
+                np.where(program, 0, np.remainder(details[:, _DETAIL_ORDINAL], 6) / 5),
                 numeric_values,
             ),
             -1,

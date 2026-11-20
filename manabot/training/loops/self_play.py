@@ -385,7 +385,7 @@ def pretrained_weights(
     assert settings.pretrained is not None
     with torch.random.fork_rng(devices=[]):
         published, published_space = load_checkpoint(str(settings.pretrained))
-    if published_space.encoder.config != space.encoder.config:
+    if published_space.config != space.config:
         raise ValueError("pretrained policy has another observation config")
     if settings.deck_source is not None:
         validate_agent_decks(published, settings.deck_source.players())
@@ -407,7 +407,7 @@ def load_pretrained(
     from the published policy, with its exact shape.
     """
     if not pretrained_memory_branch(
-        source, agent.config, agent.observation_space.encoder.config
+        source, agent.config, agent.observation_space.config
     ):
         agent.load_state_dict(weights, strict=True)
         return

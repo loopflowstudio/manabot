@@ -42,7 +42,7 @@ def players() -> list[managym.PlayerConfig]:
 
 
 def buffers(vector: CapturedVector, count: int) -> None:
-    arrays = ObservationSpace().encoder.allocate(count)
+    arrays = ObservationSpace().allocate(count)
     arrays.update(
         rewards=np.zeros(count),
         terminated=np.zeros(count, dtype=np.uint8),

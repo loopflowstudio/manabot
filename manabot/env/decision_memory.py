@@ -8,16 +8,18 @@ never learning features.
 import numpy as np
 from numpy.typing import NDArray
 
-RECORD_DIM = 74
-REFERENCE_DIM = 14
-DETAIL_DIM = 6
-MEMBER_DIM = 2
-MEMORY_WIDTHS = {
-    "decision_records": RECORD_DIM,
-    "decision_references": REFERENCE_DIM,
-    "decision_reference_details": DETAIL_DIM,
-    "decision_members": MEMBER_DIM,
+import managym
+
+# Table widths, from the native layout.
+MEMORY_WIDTHS: dict[str, int] = {
+    key: array["shape"][-1]
+    for key, array in managym.observation_layout(decision_memory=True).items()
+    if key.startswith("decision_")
 }
+RECORD_DIM = MEMORY_WIDTHS["decision_records"]
+REFERENCE_DIM = MEMORY_WIDTHS["decision_references"]
+DETAIL_DIM = MEMORY_WIDTHS["decision_reference_details"]
+MEMBER_DIM = MEMORY_WIDTHS["decision_members"]
 
 MEMORY_FIELDS = (
     "decision_records",

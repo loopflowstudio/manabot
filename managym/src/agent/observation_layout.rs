@@ -653,6 +653,8 @@ pub struct ArrayLayout {
     /// Masks, semantic_cards and action_focus have no feature axis.
     pub element: Option<ValueLayout>,
     pub row_kinds: BTreeMap<u8, &'static str>,
+    /// Each row kind's name, for consumers that read kinds by name.
+    pub row_kind_names: BTreeMap<&'static str, u8>,
 }
 
 impl ArrayLayout {
@@ -668,6 +670,7 @@ impl ArrayLayout {
             columns: columns.to_vec(),
             element: None,
             row_kinds: BTreeMap::new(),
+            row_kind_names: BTreeMap::new(),
         }
     }
 
@@ -684,25 +687,27 @@ impl ArrayLayout {
             columns: Vec::new(),
             element: Some(element),
             row_kinds: BTreeMap::new(),
+            row_kind_names: BTreeMap::new(),
         }
     }
 }
 
-fn fact_row_kind(kind: FactKind) -> &'static str {
+/// A fact kind's name and what its row holds.
+fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
-        FactKind::Counter => "id: CounterKind token; value: count / 10",
-        FactKind::AddedSubtype => "id: added subtype token; value: 1",
-        FactKind::SetName => "id: set-name token; value: 1",
-        FactKind::SetCreatureType => "id: creature-type token; value: 1",
-        FactKind::UsedAbility => "id: zero-based activated ability index; value: 1",
-        FactKind::Copy => "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2",
-        FactKind::CopyException => "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance",
-        FactKind::Transforms => "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count",
-        FactKind::CombatRestriction => "id: frame index + 1; detail: attacker-predicate token",
-        FactKind::EffectProgram => "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance) or Ward (a permanent's ward price that is not a mana value, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal",
-        FactKind::EffectiveColor => "id: Color token (Colorless for empty colors); value: 1",
-        FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
-        FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",
+        FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
+        FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
+        FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
+        FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
+        FactKind::UsedAbility => ("used_ability", "id: zero-based activated ability index; value: 1"),
+        FactKind::Copy => ("copy", "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2"),
+        FactKind::CopyException => ("copy_exception", "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance"),
+        FactKind::Transforms => ("transforms", "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count"),
+        FactKind::CombatRestriction => ("combat_restriction", "id: frame index + 1; detail: attacker-predicate token"),
+        FactKind::EffectProgram => ("effect_program", "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance) or Ward (a permanent's ward price that is not a mana value, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal"),
+        FactKind::EffectiveColor => ("effective_color", "id: Color token (Colorless for empty colors); value: 1"),
+        FactKind::KeywordCounterTimestamp => ("keyword_counter_timestamp", "id: CounterKind token; timestamp: counter timestamp rank"),
+        FactKind::ContinuationProgram => ("continuation_program", "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0"),
     }
 }
 
@@ -855,7 +860,11 @@ pub fn observation_layout(
     let mut facts = ArrayLayout::features(&["fact"], &[None], fact::COLUMNS);
     facts.row_kinds = FactKind::ALL
         .into_iter()
-        .map(|kind| (kind as u8, fact_row_kind(kind)))
+        .map(|kind| (kind as u8, fact_row_kind(kind).1))
+        .collect();
+    facts.row_kind_names = FactKind::ALL
+        .into_iter()
+        .map(|kind| (fact_row_kind(kind).0, kind as u8))
         .collect();
     layout.insert("facts".into(), facts);
     layout.insert(

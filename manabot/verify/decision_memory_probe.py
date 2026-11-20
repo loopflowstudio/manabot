@@ -179,7 +179,7 @@ def collect_games(
         seen = [0, 0]
         status = "complete"
         failure: str | None = None
-        buffers = space.encoder.allocate()
+        buffers = space.allocate()
         for decision in range(max_decisions):
             if time.monotonic() >= deadline:
                 raise TimeoutError(

@@ -15,6 +15,7 @@ from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.managym.experience_projection import decision_surface_view
@@ -262,7 +263,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
         owner.text
     )
     space = ObservationSpace(ObservationConfig())
-    owner_rows = space.encode(_viewer_observation(owner))["agent_cards"]
+    owner_rows = encode_observation(space, _viewer_observation(owner))["agent_cards"]
     assert owner_rows[:, CARD_PERMISSION_INDEX + 11].sum() == 1
 
     pass_priority = next(a for a in owner.actions if "Pass" in a.description)
@@ -277,7 +278,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     observation = _viewer_observation(opponent)
     assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
     assert observation.opponent.zone_counts[5] == 1
-    encoded = space.encode(observation)
+    encoded = encode_observation(space, observation)
     for key in ("agent_cards", "opponent_cards"):
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
 
@@ -313,7 +314,7 @@ def test_once_each_turn_use_reaches_text_and_the_policy_input(
 
     observation = _viewer_observation(decision)
     space = ObservationSpace(config)
-    encoded = space.encode(observation)
+    encoded = encode_observation(space, observation)
     row = next(
         index
         for index, permanent in enumerate(observation.agent_permanents)
@@ -410,9 +411,7 @@ def _choose(env: managym.Env, wording: str) -> None:
     """Submit the one offered action whose line contains `wording`."""
     decision = capture_text_decision(env)
     [line] = [
-        line
-        for line in decision.text.splitlines()
-        if " — " in line and wording in line
+        line for line in decision.text.splitlines() if " — " in line and wording in line
     ]
     submit_response(env, decision, line.split(" — ", 1)[0])
 
@@ -1328,7 +1327,7 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
     assert {card["id"] for card in projection["agent"]["inspected"]} == inspected_ids
     assert not projection["opponent"]["hand"]
     assert not decision_surface_view(env, 1 - viewer)["agent"].get("inspected")
-    valid = ObservationSpace().encode(raw)["actions_valid"]
+    valid = encode_observation(ObservationSpace(), raw)["actions_valid"]
     assert int(np.count_nonzero(valid)) == len(raw.action_space.actions)
     stop = next(
         action
@@ -1346,7 +1345,7 @@ def _assert_policy_input_holds_the_decision(
     # Read the native observation: captured viewer JSON omits continuation frames.
     viewer = DecisionInput.model_validate_json(decision.capture_json).observation.viewer
     observation = env.observation_for_player(viewer)
-    encoded = ObservationSpace(ObservationConfig()).encode(observation)
+    encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
     valid = int(np.count_nonzero(encoded["actions_valid"]))
     assert valid == len(observation.action_space.actions)
     return observation

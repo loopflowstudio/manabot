@@ -334,7 +334,7 @@ relabels an existing experiment's receipts or registrations.
 ### Native frontier encoding
 
 Each teacher keeps frontier buffers from
-`ObservationEncoder.allocate(capacity)` for its whole life. Native code writes
+`ObservationSpace.allocate(capacity)` for its whole life. Native code writes
 every live branch's acting-player observation into these buffers with one call,
 `managym.encode_observations_into(envs, buffers, capacity)`, which returns each
 row's legal-action count. The buffers grow only when a frontier exceeds their

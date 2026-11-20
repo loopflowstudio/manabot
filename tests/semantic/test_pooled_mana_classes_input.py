@@ -13,6 +13,7 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     POOLED_MANA,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.managym.enums import ActionEnum
@@ -50,7 +51,7 @@ def test_pooled_mana_classes_encode_as_a_program_on_their_player() -> None:
     for seat, object_row in (("agent", 1), ("opponent", 2)):
         env, obs = _observation(seat)
         assert managym.unrepresentable_state(obs) is None
-        expected = ObservationSpace(ObservationConfig()).encode(obs)
+        expected = encode_observation(ObservationSpace(ObservationConfig()), obs)
         token = managym.catalog_token_value(POOLED_MANA)
         facts = expected["facts"].reshape(-1, FACT_DIM)
         rows = facts[
@@ -70,9 +71,9 @@ def _assert_encodes(env: managym.Env, obs: managym.Observation) -> None:
     """Both legacy inputs encode ``obs``; the acting view matches the batch path."""
     for version in (9, 10):
         space = ObservationSpace(ObservationConfig(policy_input_version=version))
-        reference = space.encode(obs)
+        reference = encode_observation(space, obs)
         if obs.agent.player_index == env.current_agent_index():
-            buffers = space.encoder.allocate(1)
+            buffers = space.allocate(1)
             managym.encode_observations_into([env], buffers, 1)
             for key, value in reference.items():
                 np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
@@ -216,7 +217,7 @@ def test_combat_mana_without_qualifiers_round_trips_and_projects_absence() -> No
     assert native_class.restriction is None
     serialized = json.loads(obs.toJSON())["agent"]["pooled_mana_classes"][0]
     assert "effect" not in serialized and "restriction" not in serialized
-    ObservationSpace(ObservationConfig()).encode(obs)
+    encode_observation(ObservationSpace(ObservationConfig()), obs)
     view = serialize_observation(obs, include_details=True)["agent"]
     expected = {"mana": [0, 0, 0, 0, 1, 0], "combat": True}
     assert view["pooled_mana_classes"] == [expected]

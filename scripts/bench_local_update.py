@@ -284,7 +284,7 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
             name = "semantic_python_parsing"
         elif code.co_qualname == "ObservationSpace.encode":
             name = "observation_encoding"
-        elif code.co_qualname == "ObservationEncoder.allocate":
+        elif code.co_qualname == "ObservationSpace.allocate":
             name = "observation_allocation"
         elif code.co_name == "stack" and "numpy" in code.co_filename:
             name = "tensor_assembly"

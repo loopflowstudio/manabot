@@ -6,11 +6,14 @@ count as a record, and a record that does not fit is a capacity failure,
 never truncation.
 """
 
-EFFECT_ROWS, EFFECT_DIM = 128, 18
-DETAIL_ROWS, DETAIL_DIM = 4096, 3
-MEMBER_ROWS, MEMBER_DIM = 2048, 2
+import managym
+
+# Fixed extents, from the native layout.
 SHARED_EFFECT_SHAPES: dict[str, tuple[int, int]] = {
-    "effects": (EFFECT_ROWS, EFFECT_DIM),
-    "effect_details": (DETAIL_ROWS, DETAIL_DIM),
-    "effect_members": (MEMBER_ROWS, MEMBER_DIM),
+    key: (array["shape"][0], array["shape"][1])
+    for key, array in managym.observation_layout().items()
+    if key in ("effects", "effect_details", "effect_members")
 }
+EFFECT_ROWS, EFFECT_DIM = SHARED_EFFECT_SHAPES["effects"]
+DETAIL_ROWS, DETAIL_DIM = SHARED_EFFECT_SHAPES["effect_details"]
+MEMBER_ROWS, MEMBER_DIM = SHARED_EFFECT_SHAPES["effect_members"]

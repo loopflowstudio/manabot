@@ -64,7 +64,7 @@ class AdmittedRollout:
                 continue
             needs = self.batch.recorded.gather_needs(chunk)
             if needs is None:
-                needs = row_needs(obs, self.agent.observation_space.encoder)
+                needs = row_needs(obs, self.agent.observation_space)
             if needs is None:
                 continue
             if self._needs is None:

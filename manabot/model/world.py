@@ -135,7 +135,7 @@ def validate_policy_input(agent: Any, binding: dict) -> None:
 
 def _input_binding(observation_space: Any) -> dict:
     return {
-        "policy_input_version": observation_space.encoder.config.policy_input_version,
+        "policy_input_version": observation_space.config.policy_input_version,
         # The input binds the native group partition through its branching
         # bound; changing it reinterprets every group route.
         "naming_representation": "public-groups-v1",
@@ -148,7 +148,7 @@ def _input_binding(observation_space: Any) -> dict:
         "input_schema": {
             key: {
                 "shape": list(shape),
-                "dtype": str(observation_space.encoder.dtypes[key]),
+                "dtype": str(observation_space.dtypes[key]),
             }
             for key, shape in observation_space.shapes.items()
         },

@@ -131,7 +131,7 @@ class RandomBatchController:
 
 
 def allocate_buffers(obs_space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    buffers = obs_space.encoder.allocate(n)
+    buffers = obs_space.allocate(n)
     buffers.update(
         rewards=np.zeros((n,), dtype=np.float64),
         terminated=np.zeros((n,), dtype=np.uint8),
@@ -310,7 +310,7 @@ class PolicyRolloutMCPlayer:
         self.last_scores: np.ndarray | None = None
         self._obs_space = ObservationSpace()
         self._capacity = (
-            self._obs_space.encoder.max_actions * self.worlds * self.rollouts
+            self._obs_space.config.max_actions * self.worlds * self.rollouts
         )
         self._buffers = allocate_buffers(self._obs_space, self._capacity)
 

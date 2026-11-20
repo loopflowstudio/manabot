@@ -141,32 +141,36 @@ class ActorCritic(nn.Module):
         )
         self.logger = getLogger(__name__)
 
-        # Extract dimensions from the observation encoder.
-        enc = observation_space.encoder
-        if config.decision_memory != "none" and not enc.config.max_decision_records:
+        if (
+            config.decision_memory != "none"
+            and not observation_space.config.max_decision_records
+        ):
             raise ValueError(
                 "decision-memory model requires explicit observation capacities"
             )
         if config.decision_memory != "none" and not config.catalog_records():
             raise ValueError("decision memory requires a catalog world")
-        if config.decision_memory != "none" and not enc.one_token:
+        if config.decision_memory != "none" and not observation_space.one_token:
             raise ValueError("decision memory requires policy input v11")
         if config.recent_events and (
-            config.world is None or enc.config.policy_history_version != 1
+            config.world is None or observation_space.config.policy_history_version != 1
         ):
             raise ValueError("recent events require world and policy_history_version=1")
-        if not config.recent_events and enc.config.policy_history_version != 0:
+        if (
+            not config.recent_events
+            and observation_space.config.policy_history_version != 0
+        ):
             raise ValueError(
                 "history observation contract requires recent_events ActorCritic"
             )
         self.column_widths = column_widths or {}
         width = self.column_widths.get
-        player_dim = width("agent_player", enc.player_dim)
-        card_dim = width("agent_cards", enc.card_dim)
+        player_dim = width("agent_player", observation_space.shapes["agent_player"][-1])
+        card_dim = width("agent_cards", observation_space.shapes["agent_cards"][-1])
         # Inputs v10/v11 append each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
-        self.turn_state = enc.turn_state
-        self.stack_tokens = enc.one_token
+        self.turn_state = observation_space.turn_state
+        self.stack_tokens = observation_space.one_token
         if self.turn_state:
             player_dim += width("player_turn_state", TURN_STATE_DIM)
             card_dim += 1
@@ -174,8 +178,8 @@ class ActorCritic(nn.Module):
         # numeric permanent features.
         columns = layout(observation_space, column_widths)
         perm_dim = len(columns.numeric_permanent_columns)
-        action_dim = width("actions", enc.action_dim)
-        self.max_focus_objects = enc.max_focus_objects
+        action_dim = width("actions", observation_space.shapes["actions"][-1])
+        self.max_focus_objects = observation_space.config.max_focus_objects
         embed_dim = config.hidden_dim
 
         self.semantic_cards = None
@@ -188,8 +192,8 @@ class ActorCritic(nn.Module):
                 embed_dim,
                 decklists=True,
                 records=config.catalog_records(),
-                decision_memory=bool(enc.config.max_decision_records),
-                library=enc.one_token,
+                decision_memory=bool(observation_space.config.max_decision_records),
+                library=observation_space.one_token,
             )
         else:
             # Generic worlds still distinguish card definitions. The content
@@ -283,10 +287,16 @@ class ActorCritic(nn.Module):
         is_agent_parts = [
             torch.ones(1, dtype=torch.bool),
             torch.zeros(1, dtype=torch.bool),
-            torch.ones(enc.cards_per_player, dtype=torch.bool),
-            torch.zeros(enc.cards_per_player, dtype=torch.bool),
-            torch.ones(enc.perms_per_player, dtype=torch.bool),
-            torch.zeros(enc.perms_per_player, dtype=torch.bool),
+            torch.ones(observation_space.config.max_cards_per_player, dtype=torch.bool),
+            torch.zeros(
+                observation_space.config.max_cards_per_player, dtype=torch.bool
+            ),
+            torch.ones(
+                observation_space.config.max_permanents_per_player, dtype=torch.bool
+            ),
+            torch.zeros(
+                observation_space.config.max_permanents_per_player, dtype=torch.bool
+            ),
         ]
         is_agent_template = torch.cat(is_agent_parts).unsqueeze(0)
         self.register_buffer("_is_agent_template", is_agent_template)
@@ -341,7 +351,7 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.bias)
 
         self.continuation = ContinuationEncoder(
-            embed_dim, width("relations", enc.relation_dim)
+            embed_dim, width("relations", observation_space.shapes["relations"][-1])
         )
 
         # The policy input links permanents to other objects: an Aura or
@@ -534,13 +544,13 @@ class ActorCritic(nn.Module):
         capacity = obs["actions_valid"].shape[1]
         if self.bucketed_shapes:
             if needs is None:
-                needs = row_needs(obs, self.observation_space.encoder)
+                needs = row_needs(obs, self.observation_space)
             if needs is not None:
                 obs = trim_observation(
                     obs,
                     sizes_of(
                         needs,
-                        self.observation_space.encoder,
+                        self.observation_space,
                         objects=self.object_trimming(),
                     ),
                 )

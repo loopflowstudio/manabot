@@ -96,7 +96,7 @@ def score_checkpoint(
             "match_id": f"scenario:{scenario_name}:{seed}:{score.checkpoint_sha256}",
             "scenario_root": scenario_identity(scenario_name),
             "world_binding": checkpoint_world(env.match.to_rust(), space),
-            "observation_hypers": space.encoder.config.model_dump(),
+            "observation_hypers": space.config.model_dump(),
             "deal_seed": seed,
             "seat_players": [score.checkpoint_sha256, "scripted-villain"],
             "checkpoint_sha256": score.checkpoint_sha256,

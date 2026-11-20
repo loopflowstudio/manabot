@@ -17,7 +17,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.decision_memory import blank_memory
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import (
@@ -48,7 +48,9 @@ def encode_with_records(
     payload["decision_memory"] = TypeAdapter(list[DecisionRecord]).dump_python(
         records, mode="json"
     )
-    encoded = dict(space.encode(managym.Observation.from_json(json.dumps(payload))))
+    encoded = dict(
+        encode_observation(space, managym.Observation.from_json(json.dumps(payload)))
+    )
     assert int(encoded["decision_records"].any(axis=1).sum()) == len(records)
     return encoded
 
@@ -795,9 +797,7 @@ def test_no_head_admission_respects_own_seat_configuration(include_own: bool) ->
 
     space, obs = _shared_reference_input()
     space = ObservationSpace(
-        space.encoder.config.model_copy(
-            update={"decision_memory_include_own": include_own}
-        )
+        space.config.model_copy(update={"decision_memory_include_own": include_own})
     )
     obs["decision_records"][0, 0, 18] = 1
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))

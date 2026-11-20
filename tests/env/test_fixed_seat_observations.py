@@ -6,7 +6,7 @@ import torch
 
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 import managym
@@ -26,7 +26,7 @@ def _players(
 
 
 def _step_buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
-    buffers = space.encoder.allocate(size)
+    buffers = space.allocate(size)
     buffers.update(
         rewards=np.zeros(size, dtype=np.float64),
         terminated=np.zeros(size, dtype=np.uint8),
@@ -43,7 +43,7 @@ def _assert_rows(
 ) -> None:
     for slot, (scalar, player) in enumerate(zip(scalars, players, strict=True)):
         observation = scalar.observation_for_player(player)
-        expected = space.encode(observation)
+        expected = encode_observation(space, observation)
         for key in expected:
             np.testing.assert_array_equal(
                 buffers[key][slot], expected[key], err_msg=key
@@ -78,7 +78,7 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
     for scalar in scalars:
         observation, _ = scalar.reset(players)
         assert observation.decklists_closed is (disclosure == "closed")
-    buffers = space.encoder.allocate(2)
+    buffers = space.allocate(2)
     try:
         for _ in range(6):
             before = {key: value.copy() for key, value in execution.items()}
@@ -119,7 +119,7 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
 def test_fixed_seat_invalid_requests_and_buffers_do_not_write() -> None:
     vector = managym.VectorEnv(2, seed=42)
     space = ObservationSpace()
-    buffers = space.encoder.allocate(2)
+    buffers = space.allocate(2)
     for value in buffers.values():
         value.fill(19)
     with pytest.raises(managym.AgentError, match="must be reset"):
@@ -158,7 +158,7 @@ def test_fixed_seat_supplied_capacities_and_action_overflow() -> None:
     vector.reset_all(players)
     scalar.reset(players)
     tiny = ObservationSpace(ObservationConfig(max_actions=1))
-    buffers = tiny.encoder.allocate(1)
+    buffers = tiny.allocate(1)
     assert len(scalar.observation_for_player(0).action_space.actions) > 1
     with pytest.raises(managym.AgentError, match="[Cc]apacity|actions"):
         vector.write_observations_for_players([0], buffers)
@@ -173,7 +173,7 @@ def test_fixed_seat_supplied_capacities_and_action_overflow() -> None:
     small = ObservationSpace(ObservationConfig(max_cards_per_player=1))
     with pytest.raises(managym.AgentError, match="[Cc]apacity|cards"):
         vector.write_observations_for_players(
-            [0], small.encoder.allocate(1), action_overflow="first-legal"
+            [0], small.allocate(1), action_overflow="first-legal"
         )
 
 
@@ -183,7 +183,7 @@ def test_fixed_seat_reset_reassign_and_replacement_identities() -> None:
     vector.set_buffers(_step_buffers(space, 2))
     players = _players()
     vector.reset_all_into_buffers(players)
-    buffers = space.encoder.allocate(2)
+    buffers = space.allocate(2)
     try:
         first = vector.write_observations_for_players([1, 0], buffers)
         vector.reset_seeds_into_buffers([42, 43])
@@ -212,7 +212,7 @@ def test_fixed_seat_done_reads_replacement_including_maximum_seed() -> None:
     vector = managym.VectorEnv(1, seed=2**64 - 1)
     vector.reset_all(players)
     space = ObservationSpace()
-    buffers = space.encoder.allocate(1)
+    buffers = space.allocate(1)
     before = vector.write_observations_for_players([1], buffers)[0]
     for _ in range(120):
         [(_, _, terminated, truncated, _)] = vector.step([0])
@@ -232,7 +232,7 @@ def test_fixed_seat_torch_wrapper_preserves_tensor_buffers_on_seed_rebuild() -> 
     match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
     space = ObservationSpace()
     vector = TorchVectorEnv(2, match, space, Reward(RewardConfig()), "cpu", seed=42)
-    buffers = space.encoder.allocate(2)
+    buffers = space.allocate(2)
     try:
         previous = None
         for seed in (42, 99, 42):

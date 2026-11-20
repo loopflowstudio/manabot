@@ -13,6 +13,7 @@ from manabot.env.observation import (
     MAX_ACTION_SELECTOR,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.verify.action_cases import (
@@ -135,4 +136,4 @@ def test_selector_boundary_encodes_the_maximum_and_rejects_beyond(
     space.actions = actions
     raw.action_space = space
     with pytest.raises(ValueError, match="action selector"):
-        ObservationSpace().encode(raw)
+        encode_observation(ObservationSpace(), raw)

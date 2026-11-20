@@ -22,6 +22,7 @@ from manabot.env.observation import (
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.architecture import architecture_identity
@@ -220,7 +221,9 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
     torch.set_num_threads(1)
     env = kellan_upgrade_root()
     space = ObservationSpace()
-    observation = space.encode(env.observation_for_player(env.current_agent_index()))
+    observation = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
     headers = torch.from_numpy(observation["effects"]).repeat(3, 1, 1)
     details = torch.from_numpy(observation["effect_details"]).repeat(3, 1, 1)
     members = torch.from_numpy(observation["effect_members"]).repeat(3, 1, 1)
@@ -296,7 +299,10 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
     env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     space = ObservationSpace()
-    values = {key: torch.from_numpy(v)[None] for key, v in space.encode(obs).items()}
+    values = {
+        key: torch.from_numpy(v)[None]
+        for key, v in encode_observation(space, obs).items()
+    }
     assert (values["effect_details"][..., 0] >= 11).any()
     fresh = ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP)
     assert fresh.record_vocabulary == "catalog"

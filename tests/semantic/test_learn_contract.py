@@ -12,6 +12,7 @@ from manabot.belief.population import BeliefTrainingExample, pack_belief_example
 from manabot.belief.range import BeliefState
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
+from manabot.env.observation import encode_observation
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.decision import (
@@ -306,7 +307,7 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
-    scalar = ObservationSpace(ObservationConfig()).encode(obs)
+    scalar = encode_observation(ObservationSpace(ObservationConfig()), obs)
     retrievals = 0
     for index, action in enumerate(obs.action_space.actions):
         kind = int(action.action_type)
@@ -333,10 +334,12 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
         ObservationConfig(max_cards_per_player=len(obs.agent_cards)),
     ):
         with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
-            ObservationSpace(config).encode(obs)
+            encode_observation(ObservationSpace(config), obs)
     # A focus width of zero cannot hold the focused object at all.
     with pytest.raises(ValueError, match="action_focus buffer shape"):
-        ObservationSpace(ObservationConfig(max_focus_objects=0)).encode(obs)
+        encode_observation(
+            ObservationSpace(ObservationConfig(max_focus_objects=0)), obs
+        )
 
 
 def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
@@ -346,7 +349,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     from manabot.infra.config import ObservationConfig
 
     space = ObservationSpace(ObservationConfig())
-    buffers = space.encoder.allocate(1)
+    buffers = space.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
         terminated=np.zeros(1, dtype=np.uint8),
@@ -363,7 +366,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     obs, _ = scalar.reset(configs)
     rng = random.Random(0)
     for _ in range(2000):
-        encoded = space.encode(obs)
+        encoded = encode_observation(space, obs)
         for key, value in encoded.items():
             np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
         retrievals = [
@@ -375,7 +378,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
             selected = retrievals[-1]
             after, *_ = scalar.step(selected)
             vector.step_into_buffers([selected])
-            for key, value in space.encode(after).items():
+            for key, value in encode_observation(space, after).items():
                 np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
             return
         assert not obs.game_over

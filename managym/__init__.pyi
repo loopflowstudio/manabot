@@ -42,6 +42,8 @@ class ObservationArrayLayout(TypedDict):
     dtype: Literal["float32", "int32"]
     columns: dict[str, ObservationColumnLayout]
     row_kinds: dict[int, str]
+    # Each row kind's name (facts), for readers that look kinds up by name.
+    row_kind_names: dict[str, int]
     element: NotRequired[ObservationValueLayout]
 
 def observation_layout(
@@ -53,7 +55,7 @@ def observation_layout(
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
-    Keys match `encode_observation` and the vector env buffers; a None extent
+    Keys match `encode_observation_into` and the vector env buffers; a None extent
     is a caller-selected capacity. `policy_history` selects the public history
     rows of `events` instead of raw events; `turn_state` adds
     `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
@@ -1145,7 +1147,7 @@ def encode_observations_into(
 ) -> list[int]:
     """Write each env's acting-player view into rows 0..len(envs) of buffers.
 
-    Buffers come from `ObservationEncoder.allocate(capacity)`; later rows are
+    Buffers come from `ObservationSpace.allocate(capacity)`; later rows are
     untouched. Returns each row's legal-action count. Shape, dtype and
     writability failures raise before any write; an observation exceeding a
     capacity (every legal action must fit) raises `ObservationCapacity`,

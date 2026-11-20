@@ -61,7 +61,7 @@ def _roster() -> list[managym.PlayerConfig]:
 
 
 def _buffers(count: int) -> dict[str, np.ndarray]:
-    buffers = ObservationSpace().encoder.allocate(count)
+    buffers = ObservationSpace().allocate(count)
     buffers.update(
         rewards=np.zeros(count, dtype=np.float64),
         terminated=np.zeros(count, dtype=np.uint8),

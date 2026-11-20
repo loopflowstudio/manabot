@@ -12,7 +12,7 @@ from manabot import managym
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
@@ -32,7 +32,7 @@ def _players(
 
 
 def _buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
-    buffers = space.encoder.allocate(size)
+    buffers = space.allocate(size)
     buffers.update(
         rewards=np.zeros(size, dtype=np.float64),
         terminated=np.zeros(size, dtype=np.uint8),
@@ -93,8 +93,10 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
             int(card.zone) == int(managym.ZoneEnum.HAND) for card in obs.opponent_cards
         )
         assert obs.opponent.known_hand == {}
-        expected = space.encode(scalar.observation_for_player(obs.agent.player_index))
-        for key, actual in space.encode(obs).items():
+        expected = encode_observation(
+            space, scalar.observation_for_player(obs.agent.player_index)
+        )
+        for key, actual in encode_observation(space, obs).items():
             np.testing.assert_array_equal(actual, expected[key], err_msg=key)
         if disclosure == "closed":
             assert obs.opponent.main_counts is None

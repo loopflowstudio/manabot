@@ -9,7 +9,7 @@ import torch
 
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from tests.model.prepared_routes import device_input
@@ -110,7 +110,7 @@ def test_definition_lookup_preserves_autograd_contract(
 def tensors(space, observation):
     return {
         key: torch.from_numpy(value).unsqueeze(0)
-        for key, value in space.encode(observation).items()
+        for key, value in encode_observation(space, observation).items()
     }
 
 
@@ -164,7 +164,7 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     for seed in (17, 91):
         hidden = engine.clone_env()
         hidden.determinize(seed, perspective=1 - actor)
-        encoded = space.encode(hidden.observation_for_player(1 - actor))
+        encoded = encode_observation(space, hidden.observation_for_player(1 - actor))
         for key in ("semantic_cards", "known_hand", "decklists"):
             np.testing.assert_array_equal(encoded[key], public[key][0].numpy())
 

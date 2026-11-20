@@ -59,7 +59,7 @@ def make_teacher(
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace(observation)
-    history = space.encoder.config.policy_history_version == 1
+    history = space.config.policy_history_version == 1
     agent = ActorCritic(
         space,
         ModelConfig(
@@ -497,7 +497,7 @@ def test_native_frontier_encoding_writes_the_row_encoder_tensors(
     teacher, env = make_teacher(tmp_path, native_encoder=False)
     roots = _searched_roots(env, 6)
     rows, counts = teacher._encode_rows(roots)
-    buffers = teacher.space.encoder.allocate(len(roots) + 2)
+    buffers = teacher.space.allocate(len(roots) + 2)
     for value in buffers.values():
         value.fill(7)
     assert managym.encode_observations_into(roots, buffers, len(roots) + 2) == counts
@@ -513,11 +513,11 @@ def test_native_frontier_encoding_writes_the_row_encoder_tensors(
         np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
     with pytest.raises(ValueError, match="capacity"):
         managym.encode_observations_into(roots, buffers, 1)
-    narrow = teacher.space.encoder.allocate(len(roots))
+    narrow = teacher.space.allocate(len(roots))
     narrow["actions"] = narrow["actions"][..., :-1].copy()
     with pytest.raises(ValueError):
         managym.encode_observations_into(roots, narrow, len(roots))
-    frozen = teacher.space.encoder.allocate(len(roots))
+    frozen = teacher.space.allocate(len(roots))
     frozen["agent_cards"].flags.writeable = False
     with pytest.raises(ValueError, match="writable"):
         managym.encode_observations_into(roots, frozen, len(roots))

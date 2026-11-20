@@ -41,22 +41,21 @@ class VectorEnv:
 
         self._buffers = self._allocate_buffers()
         self._rust_env.set_buffers(
-            self._buffers, self.observation_space.encoder.config.action_overflow
+            self._buffers, self.observation_space.config.action_overflow
         )
         self._build_tensor_views()
 
         # Land and creature counts read the battlefield: input v11's permanent
         # rows, or the deprecated v9/v10 battlefield card rows.
-        encoder = self.observation_space.encoder
         self._battlefield_zone_index: int | None
-        if encoder.one_token:
+        if self.observation_space.one_token:
             self._board_keys = ("agent_permanents", "opponent_permanents")
             self._battlefield_zone_index = None
             self._land_index = PERMANENT_TYPES_INDEX
         else:
             self._board_keys = ("agent_cards", "opponent_cards")
             self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
-            self._land_index = encoder.num_zones + 1 + 2 + 1
+            self._land_index = len(managym.ZoneEnum.__members__) + 1 + 2 + 1
         self._creature_index = self._land_index + 1
         self._prev_obs_keys: Tuple[str, ...] = (self._board_keys[0], "opponent_player")
         if self.reward.config.potential_enabled:
@@ -69,16 +68,15 @@ class VectorEnv:
     def _build_rust_env(self, seed: int) -> CapturedVector:
         return CapturedVector(
             num_envs=self.num_envs,
-            decision_memory=self.observation_space.encoder.config.max_decision_records
-            > 0,
-            decision_memory_include_own=self.observation_space.encoder.config.decision_memory_include_own,
+            decision_memory=self.observation_space.config.max_decision_records > 0,
+            decision_memory_include_own=self.observation_space.config.decision_memory_include_own,
             seed=seed,
             skip_trivial=self._skip_trivial,
             player_policies=self._player_policies,
         )
 
     def _allocate_buffers(self) -> Dict[str, np.ndarray]:
-        buffers = self.observation_space.encoder.allocate(self.num_envs)
+        buffers = self.observation_space.allocate(self.num_envs)
         buffers.update(
             rewards=np.zeros((self.num_envs,), dtype=np.float64),
             terminated=np.zeros((self.num_envs,), dtype=np.uint8),
@@ -306,7 +304,7 @@ class VectorEnv:
             self._rust_env.close()
             self._rust_env = self._build_rust_env(seed=seed)
             self._rust_env.set_buffers(
-                self._buffers, self.observation_space.encoder.config.action_overflow
+                self._buffers, self.observation_space.config.action_overflow
             )
         if options and "match" in options:
             self._player_configs = options["match"].to_rust()

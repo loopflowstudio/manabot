@@ -50,7 +50,7 @@ def run_census(out: Path, max_decisions: int = 2000) -> None:
         max_decision_members=131072,
     )
     space = ObservationSpace(config)
-    buffers = space.encoder.allocate()
+    buffers = space.allocate()
     keys = managym.authored_deck_keys("elemental-world-v2")
     if len(keys) != 10:
         raise ValueError("census requires ten Elemental decks")

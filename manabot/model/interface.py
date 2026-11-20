@@ -18,11 +18,10 @@ import managym
 
 
 def input_columns(space: ObservationSpace) -> dict[str, list[str]]:
-    encoder = space.encoder
     layout = managym.observation_layout(
-        policy_history=bool(encoder.config.policy_history_version),
-        turn_state=encoder.turn_state,
-        legacy=not encoder.one_token,
+        policy_history=bool(space.config.policy_history_version),
+        turn_state=space.turn_state,
+        legacy=not space.one_token,
     )
     return {
         key: sorted(row["columns"], key=lambda name: row["columns"][name]["index"])
