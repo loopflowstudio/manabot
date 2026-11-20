@@ -2102,6 +2102,14 @@ fn encode_actions(
         if let Some(column) = row.get_mut(action::PAYS_DIRECTLY) {
             *column = bool_to_f32(action.pays_directly);
         }
+        if let (true, Some(x), Some([has_x, value])) = (
+            action.announces_x,
+            action.mode_index,
+            row.get_mut(action::HAS_X..=action::X),
+        ) {
+            *has_x = 1.0;
+            *value = x as f32 / 10.0;
+        }
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;
@@ -2287,6 +2295,7 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        announces_x: false,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
@@ -2300,6 +2309,7 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        announces_x: false,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
@@ -2313,6 +2323,7 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        announces_x: false,
                     },
                 ],
                 focus: Vec::new(),
@@ -2455,6 +2466,7 @@ mod tests {
                 ability_index: None,
                 continuation_index: None,
                 pays_directly: false,
+                announces_x: false,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
@@ -2756,6 +2768,7 @@ mod tests {
                 ability_index: None,
                 continuation_index: None,
                 pays_directly: false,
+                announces_x: false,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
