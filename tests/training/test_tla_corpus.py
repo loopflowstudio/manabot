@@ -3,10 +3,11 @@
 import csv
 import gzip
 from pathlib import Path
+import sys
 
 import pytest
 
-from experiments.tla_corpus import Corpus, Source, build_corpus
+from experiments.tla_corpus import Corpus, Source, build_corpus, main
 from manabot.infra.identity import file_sha256
 
 
@@ -126,3 +127,22 @@ def test_seven_wins_after_three_losses_is_not_a_trophy(tmp_path: Path) -> None:
     path, source = _source(tmp_path, losses + rows)
     with pytest.raises(ValueError, match="three recorded losses"):
         build_corpus(path, source)
+
+
+def test_cli_derives_from_retained_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path, source = _source(tmp_path, _event("a"))
+    path.with_name("source.json").write_text(source.model_dump_json())
+    output = tmp_path / "derived"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["tla_corpus", str(output), "--source-dir", str(tmp_path), "--target", "1"],
+    )
+    main()
+    [snapshot] = output.iterdir()
+    assert snapshot.name == "corpus.json"
+    corpus = Corpus.model_validate_json(snapshot.read_bytes())
+    assert corpus.source == source
+    assert [t.event_id for t in corpus.trophies] == ["a"]

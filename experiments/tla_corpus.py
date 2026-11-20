@@ -236,13 +236,24 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("out", type=Path)
+    parser.add_argument(
+        "--source-dir",
+        type=Path,
+        help="Directory containing the retained source receipt and dump",
+    )
     parser.add_argument("--target", type=int, default=1000)
     args = parser.parse_args()
     snapshot = args.out / "corpus.json"
     if snapshot.exists():
         raise ValueError("corpus is frozen; choose a new version directory")
-    source = prefetch(args.out)
-    corpus = build_corpus(args.out / "games.csv.gz", source, args.target)
+    directory = args.source_dir or args.out
+    source = (
+        Source.model_validate_json((directory / "source.json").read_bytes())
+        if args.source_dir is not None
+        else prefetch(directory)
+    )
+    corpus = build_corpus(directory / "games.csv.gz", source, args.target)
+    args.out.mkdir(parents=True, exist_ok=True)
     atomic_json(snapshot, corpus.model_dump(mode="json"))
     print(
         f"{len(corpus.trophies)} trophies; {len(corpus.eligible)} eligible; sha256={corpus.digest}"
