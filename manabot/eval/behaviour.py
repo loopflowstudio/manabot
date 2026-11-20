@@ -1,13 +1,14 @@
 """Count observed play choices in the existing verification replay.
 
-Play emits two native-seat rows for each completed game. Pool their integer
+Play emits two native-seat rows for each completed game. Pool their
 counts before dividing so games contribute in proportion to opportunities.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from managym import ActionSpaceEnum as Space
-from managym.card_capture import CapturedCards
+from managym.card_capture import CapturedCards, TurnMana
 from managym.enums import ActionEnum as Action
 from managym.recording import PlayerSetup
 from managym.replay import RecordedDecision, ReplayStop
@@ -25,10 +26,24 @@ class PlayCounts:
     attackers_declared: int = 0
     blockers_offered: int = 0
     blockers_declared: int = 0
+    attackers_lost_for_nothing: int = 0
+    blockers_lost_for_nothing: int = 0
+    mana_turns_early: int = 0
+    mana_use_early: float = 0.0
+    mana_turns_mid: int = 0
+    mana_use_mid: float = 0.0
+    mana_turns_late: int = 0
+    mana_use_late: float = 0.0
     casts: int = 0
     casts_off_turn: int = 0
     games: int = 0
     turns: int = 0
+
+
+def mana_use(turns: Sequence[TurnMana]) -> tuple[int, float]:
+    """Count funded own turns and sum their individual paid fractions."""
+    fractions = [turn.paid / turn.available for turn in turns if turn.available]
+    return len(fractions), sum(fractions, 0.0)
 
 
 class Play(Reducer[PlayCounts]):
@@ -87,4 +102,27 @@ class Play(Reducer[PlayCounts]):
     def end(self, result: ReplayStop, capture: CapturedCards) -> list[PlayCounts]:
         if result.status != "complete":
             return []
-        return [replace(row, games=1, turns=capture.turn) for row in self.seats]
+        facts = capture.capture.exposure
+        if (
+            facts is None
+            or facts.mana_turns is None
+            or facts.attackers_lost_for_nothing is None
+            or facts.blockers_lost_for_nothing is None
+        ):
+            raise ValueError("play counts require combat and turn mana exposure")
+        rows = []
+        for counts in self.seats:
+            seat = counts.seat
+            turns = facts.mana_turns[seat]
+            row = replace(
+                counts,
+                games=1,
+                turns=capture.turn,
+                attackers_lost_for_nothing=facts.attackers_lost_for_nothing[seat],
+                blockers_lost_for_nothing=facts.blockers_lost_for_nothing[seat],
+            )
+            row.mana_turns_early, row.mana_use_early = mana_use(turns[:3])
+            row.mana_turns_mid, row.mana_use_mid = mana_use(turns[3:6])
+            row.mana_turns_late, row.mana_use_late = mana_use(turns[6:])
+            rows.append(row)
+        return rows

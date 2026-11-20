@@ -55,7 +55,7 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
 
     capture = CapturedCards.model_validate(
         {
-            "turn": 4,
+            "turn": 13,
             "final_cards": [],
             "capture": {
                 "version": 1,
@@ -63,6 +63,27 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
                 "initial": [],
                 "opening": [[], []],
                 "moves": [],
+                "exposure": {
+                    "choices": [],
+                    "resolutions": [],
+                    "attackers_lost_for_nothing": [1, 0],
+                    "blockers_lost_for_nothing": [0, 1],
+                    "mana_turns": [
+                        [
+                            {"available": available, "paid": paid}
+                            for available, paid in [
+                                (0, 0),
+                                (2, 1),
+                                (3, 0),
+                                (4, 4),
+                                (5, 0),
+                                (0, 0),
+                                (2, 3),
+                            ]
+                        ],
+                        [],
+                    ],
+                },
             },
         }
     )
@@ -75,18 +96,26 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
             casts_made=1,
             attackers_offered=2,
             attackers_declared=1,
+            attackers_lost_for_nothing=1,
+            mana_turns_early=2,
+            mana_use_early=0.5,
+            mana_turns_mid=2,
+            mana_use_mid=1.0,
+            mana_turns_late=1,
+            mana_use_late=1.5,
             casts=2,
             games=1,
-            turns=4,
+            turns=13,
         ),
         PlayCounts(
             1,
             blockers_offered=2,
             blockers_declared=1,
+            blockers_lost_for_nothing=1,
             casts=1,
             casts_off_turn=1,
             games=1,
-            turns=4,
+            turns=13,
         ),
     ]
     assert play.end(ReplayStop("interrupted", 10), capture) == []

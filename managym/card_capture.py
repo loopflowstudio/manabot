@@ -84,7 +84,21 @@ class ManaUse(StrictModel):
     priority_expired_max: int = Field(ge=0)
 
 
+class TurnMana(StrictModel):
+    available: int = Field(ge=0)
+    paid: int = Field(ge=0)
+
+
 class ExposureCapture(StrictModel):
+    mana_turns: tuple[tuple[TurnMana, ...], tuple[TurnMana, ...]] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    attackers_lost_for_nothing: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    blockers_lost_for_nothing: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     mana: tuple[ManaUse, ManaUse] | None = Field(
         default=None, exclude_if=lambda v: v is None
     )

@@ -586,6 +586,65 @@ impl PaymentModel<'_> {
         });
     }
 
+    /// Gross usable output and net new units. Each tap can choose one mode.
+    fn source_bounds(
+        &self,
+        resources: &PaymentResources,
+        life: u32,
+        usable_total: impl Fn(&Mana) -> u64,
+        pays_by_tap: impl Fn(&ManaSource) -> bool,
+    ) -> (u64, u64) {
+        let mut net_total = 0;
+        let mut total = 0;
+        for (index, source) in self.sources.iter().enumerate() {
+            if !resources.present[index] {
+                continue;
+            }
+            // Fixed mana, tapping abilities and waterbending compete for the
+            // same tap. Non-tapping activations can still use this object later.
+            let mut tap_total = 0;
+            let mut net_tap_total = 0;
+            if resources.untapped[index] {
+                tap_total = source.fixed.as_ref().map_or(0, &usable_total);
+                net_tap_total = source
+                    .fixed
+                    .as_ref()
+                    .map_or(0, |output| u64::from(output.total()));
+                if pays_by_tap(source) {
+                    tap_total = tap_total.max(1);
+                    net_tap_total = net_tap_total.max(1);
+                }
+            }
+            for (ability_index, ability) in source.abilities.iter().enumerate() {
+                let uses = self.uses(resources, index, ability_index) as u64;
+                if uses == 0 || ability.life_cost > life {
+                    continue;
+                }
+                let output = uses * ability.outputs.iter().map(&usable_total).max().unwrap_or(0);
+                let net_output = uses
+                    * ability
+                        .outputs
+                        .iter()
+                        .map(|output| {
+                            u64::from(output.total())
+                                .saturating_sub(u64::from(ability.cost.mana_value))
+                        })
+                        .max()
+                        .unwrap_or(0);
+                if ability.tap_source {
+                    net_tap_total = net_tap_total.max(net_output);
+                    tap_total = tap_total.max(output);
+                } else {
+                    total += output;
+                    net_total += net_output;
+                }
+            }
+            total += tap_total;
+            net_total += net_tap_total;
+        }
+        (total, net_total)
+    }
+
     fn resources(&self) -> PaymentResources {
         PaymentResources {
             present: vec![true; self.sources.len()],
@@ -725,54 +784,10 @@ impl PaymentModel<'_> {
         // activations. Restricted seeds can fund filters without being lost
         // from this accounting. Already saved outputs remain gross supply;
         // their upfront fees are explicit pending Pay obligations.
-        let mut net_total = u64::from(state.pool.total());
-        let mut total = usable_total(&state.pool);
-        for (index, source) in self.sources.iter().enumerate() {
-            if !state.resources.present[index] {
-                continue;
-            }
-            // Fixed mana, tapping abilities and waterbending compete for the
-            // same tap. Non-tapping activations can still use this object later.
-            let mut tap_total = 0;
-            let mut net_tap_total = 0;
-            if state.resources.untapped[index] {
-                tap_total = source.fixed.as_ref().map_or(0, &usable_total);
-                net_tap_total = source
-                    .fixed
-                    .as_ref()
-                    .map_or(0, |output| u64::from(output.total()));
-                if pays_by_tap(source) {
-                    tap_total = tap_total.max(1);
-                    net_tap_total = net_tap_total.max(1);
-                }
-            }
-            for (ability_index, ability) in source.abilities.iter().enumerate() {
-                let uses = self.uses(&state.resources, index, ability_index) as u64;
-                if uses == 0 {
-                    continue;
-                }
-                let output = uses * ability.outputs.iter().map(&usable_total).max().unwrap_or(0);
-                let net_output = uses
-                    * ability
-                        .outputs
-                        .iter()
-                        .map(|output| {
-                            u64::from(output.total())
-                                .saturating_sub(u64::from(ability.cost.mana_value))
-                        })
-                        .max()
-                        .unwrap_or(0);
-                if ability.tap_source {
-                    net_tap_total = net_tap_total.max(net_output);
-                    tap_total = tap_total.max(output);
-                } else {
-                    total += output;
-                    net_total += net_output;
-                }
-            }
-            total += tap_total;
-            net_total += net_tap_total;
-        }
+        let (gross, net) =
+            self.source_bounds(&state.resources, u32::MAX, usable_total, pays_by_tap);
+        let mut total = usable_total(&state.pool) + gross;
+        let mut net_total = u64::from(state.pool.total()) + net;
         for obligation in &state.obligations {
             if let Obligation::Output { choices, .. } = obligation {
                 total += choices.iter().map(&usable_total).max().unwrap_or(0);
@@ -1661,6 +1676,27 @@ impl Game {
             ability.mana_cost = ability
                 .mana_cost
                 .reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
+        }
+    }
+
+    pub(crate) fn capture_priority_mana(&mut self, player: PlayerId) {
+        if self
+            .card_capture
+            .as_ref()
+            .and_then(|cards| cards.exposure.as_ref())
+            .is_none()
+            || player != self.active_player()
+        {
+            return;
+        }
+        let model = self.payment_model(player, None);
+        let (_, net) = model.source_bounds(&model.resources(), model.life, |_| 0, |_| false);
+        let supply = net + u64::from(self.pooled_mana(player).total());
+        if let Some(turn) = self
+            .exposure_mut()
+            .and_then(|capture| capture.mana_turns[player.0].last_mut())
+        {
+            turn.available = turn.available.max(turn.paid + supply);
         }
     }
 
@@ -3220,7 +3256,13 @@ impl Game {
             let Some(suspended) = self.state.suspended_decision.as_ref() else {
                 return Ok(());
             };
-            let Decision::ManaSpend { player, cost, .. } = &suspended.decision else {
+            let Decision::ManaSpend {
+                player,
+                cost,
+                completion,
+                ..
+            } = &suspended.decision
+            else {
                 return Ok(());
             };
             let player = *player;
@@ -3236,7 +3278,13 @@ impl Game {
                 let choice = choices
                     .get(index)
                     .ok_or_else(|| AgentError("illegal mana spending choice".into()))?;
+                let count_paid = !matches!(**completion, SpendCompletion::Upfront(_));
                 let receipt = self.spend_mana_unit(player, &choice.unit, &cost);
+                if count_paid {
+                    if let Some(exposure) = self.exposure_mut() {
+                        exposure.paid(player, u64::from(choice.unit.total()));
+                    }
+                }
                 let suspended = self.state.suspended_decision_mut().as_mut().unwrap();
                 let Decision::ManaSpend { cost, spent, .. } = &mut suspended.decision else {
                     unreachable!()
