@@ -641,11 +641,11 @@ print(int(encode_observation(space, restored)["agent_cards_valid"].sum()))
 ```
 
 `encode_observation(space, obs)` returns freshly allocated arrays at the
-space's shapes, so a caller may keep them. The space is an `ObservationConfig`
-and the native layout at its capacities: `space.shapes` is
-`observation_layout()` for the config's input version, history and memory,
-with every `None` extent filled from a capacity, and `space.allocate()` builds
-those arrays. It takes any `managym.Observation`: the
+space's shapes, so a caller may keep them. The space builds `space.layout`
+from its `ObservationConfig`. The native layout resolves the shapes for the
+configured input version, optional blocks and capacities. `space.shapes`
+reads those shapes from the layout, and `space.allocate()` uses the layout's
+allocator. The encoder accepts any `managym.Observation`, including the
 one a step returned, a fixed seat's view from `observation_for_player`, or one
 restored with `Observation.from_json`. No game needs to be open. A restored
 observation retains the public history written by `toJSON()`. Older JSON
