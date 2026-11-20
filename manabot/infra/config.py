@@ -110,7 +110,7 @@ class ObservationConfig(BaseConfig):
     mana_floats: ManaFloats = Field(
         default="off", exclude_if=lambda value: value == "off"
     )
-    max_focus_objects: int = 2
+    max_focus_objects: int = Field(default=2, gt=0)
     # Memory capacities are explicit until the replay census sizes the pilot.
     decision_memory_include_own: bool = Field(
         default=False, exclude_if=lambda value: not value

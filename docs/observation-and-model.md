@@ -95,8 +95,8 @@ logits = scores.new_full(capacity, -1e8)
 logits = logits.index_put((batches, slots), scores.to(logits.dtype))
 ```
 
-- A focus slot of −1 means the action names fewer than two objects; its
-  contribution is zeroed rather than pointing at a padding row.
+- `max_focus_objects` sets the number of focus slots per action. It must be
+  positive and defaults to two. An unused slot holds −1 and contributes zero.
 - Masking to −1e8 gives an illegal slot zero probability, so the learner's
   ratios and KL terms sum over legal actions only.
 - `max_actions` is a declared capacity. Overflow is an error by default; the

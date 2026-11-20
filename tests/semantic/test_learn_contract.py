@@ -307,7 +307,9 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
-    scalar = encode_observation(ObservationSpace(ObservationConfig()), obs)
+    scalar = encode_observation(
+        ObservationSpace(ObservationConfig(max_focus_objects=1)), obs
+    )
     retrievals = 0
     for index, action in enumerate(obs.action_space.actions):
         kind = int(action.action_type)
@@ -335,11 +337,6 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     ):
         with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
             encode_observation(ObservationSpace(config), obs)
-    # A focus width of zero cannot hold the focused object at all.
-    with pytest.raises(ValueError, match="action_focus buffer shape"):
-        encode_observation(
-            ObservationSpace(ObservationConfig(max_focus_objects=0)), obs
-        )
 
 
 def test_learn_vector_buffers_match_scalar_at_every_prefix_step():

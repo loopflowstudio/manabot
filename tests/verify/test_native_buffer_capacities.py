@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+from pydantic import ValidationError
 import pytest
 
 from manabot.env.failures import (
@@ -402,6 +403,12 @@ def test_event_capacity_keeps_legacy_window_and_public_history_bound(
         vector.reset_all_into_buffers(_players())
         encoded = _encode_everywhere(space, obs, buffers)
         assert encoded["events"].shape == (33, space.shapes["events"][-1])
+
+
+@pytest.mark.parametrize("capacity", [0, -1])
+def test_focus_capacity_must_be_positive_at_configuration(capacity: int) -> None:
+    with pytest.raises(ValidationError, match="max_focus_objects"):
+        ObservationConfig(max_focus_objects=capacity)
 
 
 @pytest.mark.parametrize("capacity", [2, 3, 5])
