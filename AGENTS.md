@@ -330,7 +330,21 @@ change already touches it; do not rewrite a module only for style. Rust in
   Jack Heart's 2026-11-04 TLA pilot choice of `action_overflow=first-legal`
   with 64 policy slots and aggregate replay-linked diagnostics; native legality
   and Academy retain all choices, and an omitted overflow policy means error.
-- Model timestamp normalization is rank / 128, independent of fact capacity.
+- The model reads each numeric input column by a reading. A fresh model
+  derives it from the column's native kind (`ValueLayout` in
+  `agent/observation_layout.rs`): unscaled counts, categories and selectors get
+  the log squash, every `rank` is rank / 128 independent of fact and effect
+  capacity, references are gathered and ids looked up. A new column declares
+  its kind (and `scale` when the encoder divides it); add no Python column
+  table and no per-backend scaling. The one table is `PLACED_READINGS`
+  (`manabot/policy/readings.py`): validity flags, embedded words, fact
+  durations and join extents read by their place in a structured row.
+  A checkpoint records its readings
+  (`input_readings`) and never consults the rule; one without the record gets
+  `legacy_readings`, which is never extended. The native kinds of buffers with
+  their own preparation (decision memory, history events) are not used. A
+  run's saved state records its model's readings, and a resume whose model
+  reads differently is refused.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; the policy input never silently falls behind.
@@ -453,8 +467,10 @@ fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
 **No test runs for five minutes.** `tests/conftest.py` ends the run when a
 single test reaches 300 seconds, with every thread's stack and exit status 1.
-Fix or split a test that hits the limit; never raise it. Run the tests for the
-files you changed, not whole directories; CI runs the suite.
+Fix or split a test that times out. Run targeted tests of the changed
+behavior, including existing consumers whose files did not change. When input
+scaling changes, check numeric assertions against the new scale and keep the
+control case that proves the behavior. CI runs the suite.
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.

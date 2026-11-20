@@ -264,7 +264,7 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
-    from manabot.model.world import checkpoint_world
+    from manabot.model.interface import world_fields
     from manabot.sim.table_bots import CheckpointVillain
     from managym.bots import choose_bot
 
@@ -290,7 +290,7 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
                 "agent_hypers": agent_hypers,
             },
             "model_state_dict": agent.state_dict(),
-            "world_binding": checkpoint_world(config.to_rust(), space),
+            **world_fields(space, agent.readings, config.to_rust()),
             "bc": {"value_semantic": "signed_outcome"},
         },
         checkpoint,

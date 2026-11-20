@@ -195,7 +195,7 @@ class Facts(nn.Module):
     def __init__(self, dims: Dimensions) -> None:
         super().__init__()
         self.kind = nn.Embedding(dims.fact_kinds + 1, dims.hidden)
-        self.numeric = nn.Linear(6, dims.hidden)
+        self.numeric = nn.Linear(dims.fact, dims.hidden)
         self.program_numeric = nn.Linear(1, dims.hidden)
         self.program_sequence = PackedGRU(dims.hidden, dims.hidden)
         self.output = nn.Linear(dims.hidden, dims.hidden)
@@ -227,7 +227,7 @@ class Continuation(nn.Module):
     def __init__(self, dims: Dimensions) -> None:
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Linear(dims.relation - 5 + 4 * dims.hidden, dims.hidden),
+            nn.Linear(dims.relation + 4 * dims.hidden, dims.hidden),
             nn.Tanh(),
             nn.Linear(dims.hidden, dims.hidden),
         )
@@ -274,7 +274,7 @@ class MLXActorCritic(nn.Module):
         self.player_embedding = Projection(dims.player, hidden)
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
-        self.action_embedding = Projection(dims.action - 2, hidden)
+        self.action_embedding = Projection(dims.action, hidden)
         self.attention = ObjectAttention(
             hidden, dims.heads, dims.feedforward, ownership=True
         )
@@ -508,7 +508,7 @@ class MLXActorCritic(nn.Module):
             binding=admission.binding(
                 self.config,
                 self._static.space,
-                self._static.tables.layout.column_widths,
+                self._static.tables.layout.readings,
             ),
         )
 
@@ -576,7 +576,10 @@ class MLXActorCritic(nn.Module):
         return self(batch)
 
     def _public(self, programs: mx.array) -> mx.array:
-        """`NameCandidateEncoder.public_definitions`: add names to their programs."""
+        """`NameCandidateEncoder.public_definitions`: the definition vectors objects
+        read, with names added only under `definition_names`."""
+        if not self.config.definition_names:
+            return programs
         static: _Static = self._static
         names = _take(self.name_candidates.embedding.weight, static.named_names)
         return programs.at[static.named_rows].add(names)
@@ -597,7 +600,7 @@ class MLXActorCritic(nn.Module):
             raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
         if batch.binding != admission.binding(
-            self.config, static.space, static.tables.layout.column_widths
+            self.config, static.space, static.tables.layout.readings
         ):
             raise ValueError("prepared batch belongs to another policy configuration")
         dims = self.dims

@@ -279,6 +279,7 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
             encoder.config,
             {k: v.numpy() for k, v in agent.state_dict().items()},
             parameter_names=dict(agent.named_parameters()),
+            readings=agent.readings,
         )
     )
     learner = Learner(policy, minibatch_rows=2)
@@ -335,6 +336,7 @@ def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
             encoder.config,
             {k: v.numpy() for k, v in agent.state_dict().items()},
             parameter_names=dict(agent.named_parameters()),
+            readings=agent.readings,
         )
     )
     assert policy.precision == "float32"
@@ -420,6 +422,7 @@ def test_omitted_precision_follows_the_width_rule(
         space.encoder.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
         parameter_names=dict(agent.named_parameters()),
+        readings=agent.readings,
     )
     policy, learner = MLXBackend().load(weights)
     assert policy.precision == learner.precision == expected

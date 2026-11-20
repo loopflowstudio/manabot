@@ -13,6 +13,7 @@ run preserves the retired executor's offsets; resume starts fresh streams.
 from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
+from itertools import zip_longest
 import os
 from pathlib import Path
 from typing import Literal
@@ -52,11 +53,13 @@ from manabot.infra.config import (
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.run_settings import RunSettings
+from manabot.model.interface import input_columns
 from manabot.model.world import (
     validate_agent_decks,
     validate_agent_setup,
 )
 from manabot.policy.checkpoint import pretrained_memory_branch
+from manabot.policy.readings import Readings, legacy_readings
 from manabot.training.corpus import (
     ParentCheckpoint,
     log_corpus_outcomes,
@@ -348,7 +351,12 @@ def self_play_collector(
 
 
 class Counts(BaseModel):
-    """Cumulative completed work, changed in place so Etude saves this object."""
+    """Cumulative completed work, changed in place so Etude saves this object.
+
+    `readings` is the input readings the run's model was built with
+    (`manabot.policy.readings`), recorded when the run starts; a state saved
+    before readings were recorded has none.
+    """
 
     updates: int = 0
     training_seconds: float = 0.0
@@ -358,6 +366,11 @@ class Counts(BaseModel):
     idle_stream_steps: int = 0
     optimizer_updates: int = 0
     optimizer_exposures: int = 0
+    readings: dict[str, list[str]] | None = None
+
+    def coordinates(self) -> dict[str, int | float]:
+        """Cumulative work published in policy files and update metrics."""
+        return self.model_dump(exclude={"readings"})
 
 
 def clocks(counts: Counts) -> dict[str, float]:
@@ -378,10 +391,12 @@ def behavior(
     return learner.agent
 
 
-def pretrained_weights(
-    settings: SelfPlay, space: ObservationSpace
-) -> tuple[dict[str, torch.Tensor], ModelConfig]:
-    """The published weights and their model, admitted against these settings."""
+def pretrained_policy(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
+    """The published policy, admitted against these settings.
+
+    The run's model is built with its readings, so a warm start reads its
+    inputs exactly as the published policy did, whatever the current rule.
+    """
     assert settings.pretrained is not None
     with torch.random.fork_rng(devices=[]):
         published, published_space = load_checkpoint(str(settings.pretrained))
@@ -391,10 +406,9 @@ def pretrained_weights(
         validate_agent_decks(published, settings.deck_source.players())
     else:
         validate_agent_setup(published, Match(root_match(settings)).to_rust())
-    weights = published.state_dict()
-    if any(not torch.isfinite(v).all() for v in weights.values()):
+    if any(not torch.isfinite(v).all() for v in published.state_dict().values()):
         raise ValueError("pretrained policy contains nonfinite tensors")
-    return weights, published.config
+    return published
 
 
 def load_pretrained(
@@ -438,15 +452,19 @@ def parent_checkpoint(path: Path) -> ParentCheckpoint:
 def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | None]:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     space = ObservationSpace(settings.observation)
+    published = (
+        pretrained_policy(settings, space) if settings.pretrained is not None else None
+    )
     torch.manual_seed(seed)
     agent = ActorCritic(
         space,
         settings.model,
+        readings=None if published is None else published.readings,
         bucketed_shapes=settings.bucketed_shapes,
         live_tokens=settings.live_tokens,
     ).to(settings.device)
-    if settings.pretrained is not None:
-        load_pretrained(agent, *pretrained_weights(settings, space))
+    if published is not None:
+        load_pretrained(agent, published.state_dict(), published.config)
     learner = Learner(
         agent,
         settings.device,
@@ -457,6 +475,54 @@ def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | Non
     )
     ema = deepcopy(agent) if settings.learning.ema is not None else None
     return learner, ema
+
+
+def resume_readings(
+    counts: Counts, readings: Readings, space: ObservationSpace
+) -> dict[str, list[str]]:
+    """Return the model's readings for run state, refusing incompatible saved weights."""
+    built = {key: [value.value for value in values] for key, values in readings.items()}
+    saved = counts.readings
+    if saved is None:
+        if counts.updates == 0:
+            return built
+        # Runs predating the record used legacy readings over the model's prefix.
+        legacy = legacy_readings(space)
+        saved = {
+            key: [value.value for value in legacy[key][: len(values)]]
+            for key, values in readings.items()
+        }
+    if saved == built:
+        return built
+
+    columns = input_columns(space)
+
+    def name(key: str, index: int) -> str:
+        names = columns.get(key, ())
+        return f"{key}.{names[index]}" if index < len(names) else f"{key}[{index}]"
+
+    differ = sorted(
+        f"{name(key, index)}: {was} -> {now}"
+        for key in saved.keys() | built.keys()
+        for index, (was, now) in enumerate(
+            zip_longest(saved.get(key, ()), built.get(key, ()))
+        )
+        if was != now
+    )
+    shown = 8
+    listed = ", ".join(differ[:shown]) + (
+        f", and {len(differ) - shown} more" if len(differ) > shown else ""
+    )
+    written = (
+        "the saved run"
+        if counts.readings is not None
+        else "the saved run, which was written before input readings were recorded"
+    )
+    raise ValueError(
+        f"resumed model reads its inputs differently from {written} "
+        f"({listed}); resume from the revision that started the "
+        "run, or warm start from its last published policy"
+    )
 
 
 def write_policy(
@@ -495,7 +561,7 @@ def write_policy(
             extra={
                 "weights": weights,
                 "update": counts.updates,
-                "counts": counts.model_dump(mode="json"),
+                "counts": counts.coordinates(),
                 "seed": seed,
                 "value_semantic": "signed_outcome",
                 "averaging": averaging if weights == "ema" else None,
@@ -673,7 +739,7 @@ def step(
     return (
         metric_row(metrics)
         | rates
-        | {f"coordinates/{k}": v for k, v in counts.model_dump().items()}
+        | {f"coordinates/{k}": v for k, v in counts.coordinates().items()}
         | phases
         | resource_metrics(device)
     )
@@ -811,7 +877,15 @@ def self_play(
         }
         if ema is not None:
             objects["ema"] = ema
+        # Compare readings before any saved weights load: a model that reads
+        # differently can also have a different projection width.
+        readings = resume_readings(
+            run.resume(extra=Counts()),
+            learner.agent.readings,
+            learner.agent.observation_space,
+        )
         counts = run.resume(**objects, extra=Counts())
+        counts.readings = readings
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):

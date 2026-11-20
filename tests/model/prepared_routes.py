@@ -10,6 +10,7 @@ import torch
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic, _catalog_order
+from manabot.env.observation import ObservationSpace
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import (
     CatalogPrograms,
@@ -22,9 +23,13 @@ from manabot.policy.prepare import (
     _facts,
     catalog_programs,
 )
+from manabot.policy.readings import Readings, legacy_readings
 
 
-def _tables(catalog: SemanticCardEncoder | None) -> Tables:
+def _tables(
+    catalog: SemanticCardEncoder | None, readings: Readings | None = None
+) -> Tables:
+    """Tables over `readings`, by default those of a checkpoint that records none."""
     buffers = {
         "name_candidates.definitions": np.zeros(1, np.int64),
         "_is_agent_template": np.zeros(0, bool),
@@ -38,7 +43,12 @@ def _tables(catalog: SemanticCardEncoder | None) -> Tables:
         )
         buffers["name_candidates.program_rows"] = np.zeros(1, np.int64)
     return replace(
-        Tables.from_buffers(buffers, Layout((), ())),
+        Tables.from_buffers(
+            buffers,
+            Layout(
+                legacy_readings(ObservationSpace()) if readings is None else readings
+            ),
+        ),
         order_lengths=_catalog_order,
     )
 
@@ -60,13 +70,14 @@ def fact_rows(
     facts: torch.Tensor,
     objects: torch.Tensor,
     catalog: SemanticCardEncoder | None = None,
+    readings: Readings | None = None,
 ) -> FactRoutes[torch.Tensor]:
     values = facts.detach().cpu().numpy()
     if not torch.is_grad_enabled():
         values = values[:, (values[..., 11] == 1).any(0)]
     return cast(
         FactRoutes[torch.Tensor],
-        _device(_facts(values, _tables(catalog), objects.shape[1]), objects),
+        _device(_facts(values, _tables(catalog, readings), objects.shape[1]), objects),
     )
 
 

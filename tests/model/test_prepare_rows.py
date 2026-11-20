@@ -25,8 +25,7 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, check
 from manabot.policy.buckets import bucket_sizes, object_columns, trim_observation
-from manabot.policy.checkpoint import layout
-from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Tables, prepare
+from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Layout, Tables, prepare
 from manabot.verify.representation import shared_effect_root
 import managym
 from tests.model.prepared_routes import device_input
@@ -54,7 +53,7 @@ def _observations(
 def _tables(agent: ActorCritic) -> Tables:
     return Tables.from_buffers(
         {name: value.detach().numpy() for name, value in agent.named_buffers()},
-        layout(agent.observation_space),
+        Layout(agent.readings),
     )
 
 
@@ -184,7 +183,7 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
             prepared.facts.source_rows,
             facts[..., FACT_SOURCE_INDEX].astype(np.int64) % 4096,
         )
-        assert prepared.facts.columns.shape[-1] == 5
+        assert prepared.facts.columns.shape[-1] == agent.facts.numeric.in_features == 7
     if kind == "history":
         assert prepared.events is not None
         np.testing.assert_array_equal(

@@ -12,6 +12,7 @@ from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.source import source_commit
+from manabot.model.interface import world_fields
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 from manabot.sim.table_bots import CheckpointVillain
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
@@ -39,7 +40,7 @@ def checkpoint():
             "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": space.encoder.config.model_dump(),
         },
-        "world_binding": checkpoint_world(selected_match().to_rust(), space),
+        **world_fields(space, agent.readings, selected_match().to_rust()),
     }
 
 

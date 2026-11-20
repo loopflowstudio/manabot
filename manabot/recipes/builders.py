@@ -121,6 +121,7 @@ def elemental_self_play() -> SelfPlay:
             hidden_dim=64,
             attention_layers=2,
             num_attention_heads=4,
+            value_aggregation="masked_mean",
         ),
         learning=move_learning(),
         behavior="current-self",

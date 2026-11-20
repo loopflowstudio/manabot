@@ -14,7 +14,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.world import checkpoint_world
+from manabot.model.interface import world_fields
 from manabot.semantic.learning import ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
 from manabot.sim.matchup import AuthoredMatchup
@@ -130,7 +130,7 @@ def test_research_checkpoint_binds_common_catalog(
             "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": space.encoder.config.model_dump(),
         },
-        "world_binding": checkpoint_world(Match(roster.match()).to_rust(), space),
+        **world_fields(space, agent.readings, Match(roster.match()).to_rust()),
     }
     path = tmp_path / "research.pt"
     torch.save(payload, path)
