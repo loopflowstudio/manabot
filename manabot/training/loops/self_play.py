@@ -487,7 +487,9 @@ def resume_model(saved: dict[str, Any] | None, model: ModelConfig) -> dict[str, 
         ]
         if changed:
             raise ValueError(
-                f"resumed model settings differ from the saved run ({', '.join(changed)})"
+                f"resumed model settings differ from the saved run ({', '.join(changed)}); "
+                "resume with the run's model settings or from the revision "
+                "that started the run"
             )
     return model.checkpoint_payload()
 

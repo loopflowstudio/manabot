@@ -442,7 +442,12 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
     columns = Layout(checkpoint.readings)
     width = len(checkpoint.readings["agent_player"])
-    projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
+    projection = checkpoint.parameters.get("player_embedding.projection.0.weight")
+    if projection is None:
+        raise ValueError(
+            f"checkpoint has no player projection weights; {written_at(record)}"
+        )
+    projected = projection.shape[1]
     extra = (
         columns.numeric_width("player_turn_state")
         if checkpoint.space.encoder.turn_state
