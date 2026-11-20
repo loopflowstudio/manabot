@@ -74,7 +74,7 @@ from manabot.policy.readings import (
     Reading,
     Readings,
     duration_flags,
-    numeric_columns,
+    input_width,
     read_numeric,
 )
 
@@ -158,8 +158,9 @@ class Layout:
         return {key: len(values) for key, values in self.readings.items()}
 
     def numeric_width(self, key: str) -> int:
-        """How many of a buffer's columns its projection receives."""
-        return len(numeric_columns(self.readings[key]))
+        """How many inputs a buffer's projection receives: the sum of its
+        columns' input widths."""
+        return sum(input_width(reading) for reading in self.readings[key])
 
     def fact_width(self, *, catalog_ids: bool) -> int:
         """Inputs of the fact projection: the numeric payloads and timestamp,

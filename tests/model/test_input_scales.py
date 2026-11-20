@@ -20,11 +20,12 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.policy.prepare import Layout, Prepared, Tables, prepare
+from manabot.policy.prepare import Prepared
 from manabot.policy.readings import (
-    Readings,
+    READ_BY_READINGS,
+    fresh_readings,
+    input_width,
     legacy_readings,
-    numeric_columns,
     published_columns,
 )
 import managym
@@ -55,26 +56,24 @@ def sampled_batches(
                 break
 
 
-def creature_rows(
-    space: ObservationSpace, agent: ActorCritic, readings: Readings
-) -> tuple[np.ndarray, int, int]:
-    """Prepared numeric rows of live creatures, with the power and toughness
-    positions among the numeric columns."""
-    tables = Tables.from_buffers(
-        {name: value.detach().numpy() for name, value in agent.named_buffers()},
-        Layout(readings),
+def nine_nine(
+    batch: ObservationBuffers, space: ObservationSpace, keys: tuple[str, ...]
+) -> tuple[ObservationBuffers, np.ndarray]:
+    """The batch with every live creature of `keys` set to 9/9 as the encoder
+    stores it (tenths), and which rows of each key [B, len(keys), P] those are."""
+    names = [c.name for c in published_columns(space)["agent_permanents"]]
+    valid, power, toughness = (
+        names.index(name) for name in ("valid", "power", "toughness")
     )
-    names = [column.name for column in published_columns(space)["agent_permanents"]]
-    columns = numeric_columns(readings["agent_permanents"])
-    index = {names[column]: position for position, column in enumerate(columns)}
-    rows = []
-    for batch in sampled_batches(space, games=4, stride=10):
-        permanents = prepare(batch, tables).permanents
-        flat = permanents.reshape(-1, permanents.shape[-1])
-        rows.append(
-            flat[(flat[:, index["valid"]] == 1) & (flat[:, index["toughness"]] > 0)]
-        )
-    return np.concatenate(rows), index["power"], index["toughness"]
+    large = dict(batch)
+    live = []
+    for key in keys:
+        rows = batch[key].copy()
+        creature = (rows[..., valid] == 1) & (rows[..., toughness] > 0)
+        rows[..., power][creature] = rows[..., toughness][creature] = 0.9
+        large[key] = rows
+        live.append(creature)
+    return large, np.stack(live, 1)
 
 
 @pytest.mark.parametrize(("fresh", "floor"), [(True, 0.25), (False, None)])
@@ -85,20 +84,30 @@ def test_power_and_toughness_move_a_creature_token(
     least a quarter at initialization; under the legacy readings the raw
     timestamp drowns it, so the floor is known to bite."""
     space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig())
-    readings = agent.readings if fresh else legacy_readings(space)
-    rows, power, toughness = creature_rows(space, agent, readings)
-    assert len(rows) > 50
+    readings = None if fresh else legacy_readings(space)
+    keys = ("agent_permanents", "opponent_permanents")
+    pairs = []
+    agent = ActorCritic(space, ModelConfig(), readings=readings)
+    for batch in sampled_batches(space, games=4, stride=10):
+        large, live = nine_nine(batch, space, keys)
+        if live.any():
+            pairs.append(
+                tuple(
+                    torch.from_numpy(agent.prepare(rows).permanents[live])
+                    for rows in (batch, large)
+                )
+            )
+    assert sum(len(base) for base, _ in pairs) > 50
     changes = []
     for seed in range(4):
         torch.manual_seed(seed)
-        embedding = ActorCritic(space, ModelConfig()).perm_embedding
-        base = torch.from_numpy(rows)
-        large = base.clone()
-        large[:, power] = large[:, toughness] = 0.9
+        embedding = ActorCritic(space, ModelConfig(), readings=readings).perm_embedding
         with torch.no_grad():
-            before, after = embedding(base), embedding(large)
-        changes.append(((after - before).norm(dim=1) / before.norm(dim=1)).numpy())
+            for base, large in pairs:
+                before, after = embedding(base), embedding(large)
+                changes.append(
+                    ((after - before).norm(dim=1) / before.norm(dim=1)).numpy()
+                )
     median = float(np.median(np.concatenate(changes)))
     if floor is not None:
         assert median >= floor
@@ -106,45 +115,41 @@ def test_power_and_toughness_move_a_creature_token(
         assert median < 0.25
 
 
-@pytest.mark.parametrize(("definition_names", "floor"), [(False, 0.15), (True, None)])
+@pytest.mark.parametrize(
+    ("definition_names", "legacy", "floor"),
+    [(False, False, 0.4), (True, False, 0.15), (False, True, None)],
+)
 def test_power_and_toughness_move_a_whole_object_token(
-    definition_names: bool, floor: float | None
+    definition_names: bool, legacy: bool, floor: float | None
 ) -> None:
     """Setting live creatures to 9/9 moves their whole object token (stats,
     definition, links, facts, shared effects and context, before attention)
-    by a median of at least 15% at initialization in a world-bound model with
-    names (measured about 20%). Adding each name's unit-variance vector onto
-    definitions, as checkpoints written before the choice do, drowns the
-    stats stream (about 7%), so the floor is known to bite."""
+    at initialization in a world-bound model: by a median of at least 40%
+    (measured 60%), and at least 15% with each name's unit-variance vector
+    added onto definitions (measured 21%). Read as stored tenths, as the
+    legacy readings do, the stats move it by about 6%, so the floor bites."""
     space = ObservationSpace()
     changes = []
     for seed in range(2):
         torch.manual_seed(seed)
         agent = ActorCritic(
-            space, ModelConfig(world=WORLD, definition_names=definition_names)
+            space,
+            ModelConfig(world=WORLD, definition_names=definition_names),
+            readings=legacy_readings(space) if legacy else None,
         ).eval()
-        names = [c.name for c in published_columns(space)["agent_permanents"]]
-        columns = numeric_columns(agent.readings["agent_permanents"])
-        index = {names[column]: at for at, column in enumerate(columns)}
         for batch in sampled_batches(space, games=3, stride=10):
-            prepared = on_device(agent.prepare(batch), torch.device("cpu"))
-            permanents = prepared.permanents
-            live = (permanents[:, 0, :, index["valid"]] == 1) & (
-                permanents[:, 0, :, index["toughness"]] > 0
-            )
-            large = permanents.clone()
-            for column in ("power", "toughness"):
-                large[:, 0, :, index[column]][live] = 0.9
+            large, live = nine_nine(batch, space, ("agent_permanents",))
+            live = torch.from_numpy(live[:, 0])
             with torch.no_grad():
                 before, after = (
                     agent._gather_object_embeddings(
-                        dataclasses.replace(prepared, permanents=rows)
+                        on_device(agent.prepare(rows), torch.device("cpu"))
                     ).objects
-                    for rows in (permanents, large)
+                    for rows in (batch, large)
                 )
             # Object order: two players, both seats' cards, then permanents.
-            first = 2 + 2 * prepared.agent_cards.shape[1]
-            seat = slice(first, first + permanents.shape[2])
+            first = 2 + 2 * batch["agent_cards"].shape[1]
+            seat = slice(first, first + live.shape[1])
             moved = after[:, seat][live] - before[:, seat][live]
             changes.append((moved.norm(dim=1) / before[:, seat][live].norm(dim=1)))
     change = torch.cat(changes)
@@ -154,6 +159,117 @@ def test_power_and_toughness_move_a_whole_object_token(
         assert median >= floor
     else:
         assert median < 0.15
+
+
+def test_player_mana_is_scalar_and_combat_stats_keep_their_thresholds() -> None:
+    space = ObservationSpace()
+    readings = fresh_readings(space)
+    columns = published_columns(space)
+    for key, width, pools in (("agent_player", 99, 31), ("player_turn_state", 16, 6)):
+        mana = [
+            r
+            for col, r in zip(columns[key], readings[key], strict=True)
+            if col.kind == "mana"
+        ]
+        assert mana == ["as_is"] * pools
+        assert sum(map(input_width, readings[key])) == width
+    for key, names in (
+        (
+            "agent_permanents",
+            ("power", "toughness", "damage", "mana_value", "ward_cost"),
+        ),
+        ("actions", ("x",)),
+    ):
+        by_name = {
+            col.name: str(r) for col, r in zip(columns[key], readings[key], strict=True)
+        }
+        assert all(by_name[name] == "steps:8" for name in names)
+
+
+def test_no_category_or_selector_is_a_magnitude() -> None:
+    """A fresh model reads every category and selector as flags, a join, a
+    lookup or a mask; none reaches a projection as one number."""
+    space = ObservationSpace()
+    readings = fresh_readings(space)
+    scalar = [
+        f"{key}.{column.name}: {reading}"
+        for key, columns in published_columns(space).items()
+        if key in READ_BY_READINGS
+        for column, reading in zip(columns, readings[key], strict=True)
+        if column.kind in ("category", "selector") and input_width(reading) == 1
+    ]
+    assert scalar == []
+
+
+@pytest.mark.parametrize(("legacy", "apart"), [(False, True), (True, False)])
+def test_a_two_two_and_a_three_three_are_a_flag_apart(
+    legacy: bool, apart: bool
+) -> None:
+    """On sampled creatures, making each a 2/2 and then a 3/3 moves its
+    prepared row by at least one flag flip (distance 1); stored tenths move it
+    by 0.14."""
+    space = ObservationSpace()
+    agent = ActorCritic(
+        space, ModelConfig(), readings=legacy_readings(space) if legacy else None
+    )
+    names = [c.name for c in published_columns(space)["agent_permanents"]]
+    power, toughness = names.index("power"), names.index("toughness")
+    distances = []
+    for batch in sampled_batches(space, games=2, stride=10):
+        _, live = nine_nine(batch, space, ("agent_permanents",))
+        rows = []
+        for stat in (0.2, 0.3):
+            sized = dict(batch)
+            sized["agent_permanents"] = batch["agent_permanents"].copy()
+            for column in (power, toughness):
+                sized["agent_permanents"][..., column][live[:, 0]] = stat
+            rows.append(agent.prepare(sized).permanents[:, 0][live[:, 0]])
+        distances.append(np.linalg.norm(rows[1] - rows[0], axis=-1))
+    distance = np.concatenate(distances)
+    assert len(distance) > 10
+    assert bool((distance >= 1).all()) is apart
+
+
+def test_an_x_decision_offers_numbers_apart_from_modes() -> None:
+    """Choosing X for United Front with three spare mana offers 0..3. Each
+    offer is marked `has_x` and carries its value in `x`, so a fresh model
+    reads X = 1 and X = 3 as different amounts rather than only as mode flags;
+    a spell's cast offer at priority carries neither."""
+    space = ObservationSpace()
+    columns = [c.name for c in published_columns(space)["actions"]]
+    has_x, x = columns.index("has_x"), columns.index("x")
+    env = managym.Env(seed=7, skip_trivial=True)
+    deck = {"Plains": 36, "United Front": 4}
+    env.reset([managym.PlayerConfig(name, dict(deck)) for name in ("a", "b")])
+    env.scenario_clear_hand(0)
+    env.scenario_force_card_in_hand(0, "United Front")
+    for _ in range(5):
+        env.scenario_force_battlefield(0, "Plains", ready=True)
+    obs = env.scenario_refresh()
+
+    priority = encode_observation(space, obs)
+    assert not priority["actions"][:, [has_x, x]].any()
+    cast = next(
+        index
+        for index, action in enumerate(obs.action_space.actions)
+        if action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+    )
+    obs, *_ = env.step(cast)
+    assert [a.mode_index for a in obs.action_space.actions] == [0, 1, 2, 3]
+    batch = encode_observation(space, obs)
+    rows = batch["actions"][batch["actions_valid"].astype(bool)]
+    np.testing.assert_array_equal(rows[:, has_x], 1.0)
+    np.testing.assert_allclose(rows[:, x], [0.0, 0.1, 0.2, 0.3])
+
+    model = ActorCritic(space, ModelConfig())
+    inputs = {key: value[None] for key, value in batch.items()}
+    features = model.prepare(inputs).action_features
+    one, three = features[1], features[3]
+    inputs["actions"] = inputs["actions"].copy()
+    inputs["actions"][..., [has_x, x]] = 0
+    modes_only = model.prepare(inputs).action_features
+    # X adds distance between offers beyond what their mode flags give.
+    assert np.linalg.norm(three - one) > np.linalg.norm(modes_only[3] - modes_only[1])
 
 
 # -- scale bound ---------------------------------------------------------------

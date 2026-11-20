@@ -56,9 +56,11 @@ The backend runs what the w160l8 recipe uses: a catalog world with catalog
 record ids, table attention, a masked-mean scalar critic and policy input v9.
 The container carries every configuration, so `backend.load_policy` is where the
 rest is refused: a checkpoint that enables belief inputs, policy history,
-another critic, FiLM or input v10 raises `UnsupportedPolicy` naming every
-unsupported field, rather than running partially. Checkpoints of the `local`
-recipe use FiLM and are refused.
+another critic, FiLM (`policy_film` or `focus_film`), `stream_norm` or input
+v10 raises `UnsupportedPolicy` naming every unsupported field, rather than
+running partially. Checkpoints of the `local` and `baseline` recipes use FiLM
+and are refused. The sized column readings (`one_hot`, `steps`) are host
+preparation and need nothing from the backend.
 
 The modules of `policy.py` mirror the PyTorch model one to one, so a parameter
 path in MLX names the same component as in the torch state dict:

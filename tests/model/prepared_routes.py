@@ -23,7 +23,13 @@ from manabot.policy.prepare import (
     _facts,
     catalog_programs,
 )
-from manabot.policy.readings import Readings, legacy_readings
+from manabot.policy.readings import Readings, legacy_readings, read_numeric
+
+
+def dense_action_features(agent: ActorCritic, rows: torch.Tensor) -> torch.Tensor:
+    """Read every action slot for dense comparisons with the legal-row forward."""
+    features = read_numeric(rows.detach().cpu().numpy(), agent.readings["actions"])
+    return torch.from_numpy(features).to(rows.device)
 
 
 def _tables(

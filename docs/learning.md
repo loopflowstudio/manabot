@@ -511,9 +511,11 @@ outputs are selected explicitly at arena registration.
 initialization, quantile interpolation and exact bootstrap pseudocode at a
 collection boundary. The choices above are explicit implementations, not
 recovered details. Supplement S5–S7 recipes are not blended in; DeepNash's
-R-NaD is not implemented. Departures also include post-normalization
-attention (the paper specifies pre-normalization), the value token as a local
-choice, and missing ordered past-move inputs.
+R-NaD is not implemented. Departures also include the value token as a local
+choice and missing ordered past-move inputs. Attention is pre-normalized, as
+the paper specifies, in a model with
+[`stream_norm`](observation-and-model.md#one-scale-for-every-stream); a model
+without the field keeps the historical post-normalization.
 
 Before any scientific comparison of PPO, categorical and scalar move learning,
 freeze a protocol, independent seeds, budgets, world and code identities,

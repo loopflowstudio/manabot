@@ -19,6 +19,29 @@ from manabot.policy.prepare import CatalogPrograms, Prepared
 
 
 @dataclass(frozen=True)
+class KnowledgeStreams:
+    """Each player's knowledge as the separate streams that make it, [B,2,D].
+
+    Known hand cards, known library positions and the disclosed decklist
+    arrive separately and are summed into the player token. A source the
+    encoder was built without is `None`.
+    """
+
+    hand: torch.Tensor
+    library: torch.Tensor | None
+    decklist: torch.Tensor | None
+
+    @property
+    def total(self) -> torch.Tensor:
+        """The knowledge vector the player token receives."""
+        total = self.hand
+        for stream in (self.library, self.decklist):
+            if stream is not None:
+                total = total + stream
+        return total
+
+
+@dataclass(frozen=True)
 class CatalogShape:
     """Separate catalog dimensions; lengths include expanded definition references.
 
@@ -44,11 +67,14 @@ class SemanticCardEncoder(nn.Module):
         records: bool = False,
         decision_memory: bool = False,
         library: bool = False,
+        stream_norm: bool = False,
     ) -> None:
         """`decklists` adds a projection of the pooled
         decklist rows into each player's knowledge vector; `records` adds the
         fact and shared-effect id vocabulary (see the module docstring).
-        `library` projects positional knowledge separately from hand minima."""
+        `library` projects positional knowledge separately from hand minima.
+        `stream_norm` pools known cards without the `/ 60` attenuation and
+        normalizes each knowledge stream on its own (`knowledge_streams`)."""
         super().__init__()
         catalog = catalog_tables(
             pack_key, records=records, decision_memory=decision_memory
@@ -70,6 +96,15 @@ class SemanticCardEncoder(nn.Module):
             nn.Linear(hidden_dim, hidden_dim, bias=False) if library else None
         )
         self.records = records
+        # One norm per knowledge source, so a first known card cannot set the
+        # scale of the decklist stream (or the reverse).
+        self.hand_norm = nn.LayerNorm(hidden_dim) if stream_norm else None
+        self.library_norm = (
+            nn.LayerNorm(hidden_dim) if stream_norm and library else None
+        )
+        self.decklist_norm = (
+            nn.LayerNorm(hidden_dim) if stream_norm and decklists else None
+        )
 
     @property
     def catalog_shape(self) -> CatalogShape:
@@ -159,24 +194,61 @@ class SemanticCardEncoder(nn.Module):
     def forward(
         self, batch: Prepared[torch.Tensor], definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Card definition rows [B,2,C,D] and each player's knowledge [B,2,D]."""
         cards = self.lookup(definitions, batch.card_rows)
-        known = (
+        return cards, self.knowledge_streams(batch, definitions).total
+
+    def knowledge_streams(
+        self, batch: Prepared[torch.Tensor], definitions: torch.Tensor
+    ) -> KnowledgeStreams:
+        """Pool known hand cards by count, library positions by `1 / position`
+        and decklist rows by their share of the deck.
+
+        Without `stream_norm` hand and library pools are divided by 60, the
+        historical scale. With it each pool is undivided and each stream has
+        its own LayerNorm, masked to exactly zero for a player whose source is
+        empty: learning a hand card adds the hand stream and leaves the
+        decklist stream as it was.
+        """
+        attenuation = 60.0 if self.hand_norm is None else 1.0
+        hand = (
             self.lookup(definitions, batch.known_rows)
             * batch.known_counts[..., None]
-            / 60.0
+            / attenuation
         ).sum(dim=2)
+        hand = masked_norm(self.hand_norm, hand, batch.known_counts)
+        library = None
         if self.library_projection is not None:
-            library = (
+            pooled = (
                 self.lookup(definitions, batch.library_rows)
                 * batch.library_weights[..., None]
-                / 60.0
+                / attenuation
             ).sum(dim=2)
-            known = known + self.library_projection(library)
+            library = masked_norm(
+                self.library_norm,
+                self.library_projection(pooled),
+                batch.library_weights,
+            )
+        decklist = None
         if self.decklist_projection is not None:
             pooled = torch.einsum(
                 "bsrh,bsrc->bsch",
                 self.lookup(definitions, batch.deck_rows),
                 batch.deck_counts,
             ).flatten(start_dim=2)
-            known = known + self.decklist_projection(pooled)
-        return cards, known
+            decklist = masked_norm(
+                self.decklist_norm,
+                self.decklist_projection(pooled),
+                batch.deck_counts,
+            )
+        return KnowledgeStreams(hand, library, decklist)
+
+
+def masked_norm(
+    norm: nn.LayerNorm | None, stream: torch.Tensor, weights: torch.Tensor
+) -> torch.Tensor:
+    """A normalized knowledge source contributes zero for seats with no entries."""
+    if norm is None:
+        return stream
+    present = (weights > 0).flatten(2).any(-1)
+    return norm(stream) * present.unsqueeze(-1).to(stream.dtype)

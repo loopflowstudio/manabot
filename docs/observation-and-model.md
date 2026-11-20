@@ -50,14 +50,16 @@ observation dictionary and does no validation or lookups of its own
 1. **Embed.** Each visible object gets a typed projection. A card's rules tokens
    pass through a token embedding and a GRU, so the model can read what a card
    does as well as its name. Facts, links and effects add to the object they
-   belong to.
+   belong to. With `stream_norm`, every stream summed into an object arrives
+   at [one scale](#one-scale-for-every-stream).
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
    [Live-token attention](#live-token-attention) attends over valid
    objects only; it replaced the pooled token stream
    ([token-stream report](../experiments/reports/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
-   focus objects, and a small head gives it one logit. With `policy_film`, a
-   pooled game state first scales each action embedding. Illegal slots are
+   focus objects, and a small head gives it one logit. With `focus_film`, the
+   focus objects first scale the action's own features; with `policy_film`, a
+   pooled game state then scales each action embedding. Illegal slots are
    masked, so every decision type shares one action head.
 4. **Estimate value.** Objects are projected, pooled by a mean over valid
    objects (`masked_mean`, as in the TLA pilot; the historical default averages
@@ -81,8 +83,10 @@ From `_gather_informed_actions` in
 
 ```python
 focused = post_attention_objects.flatten(0, 1)[obs.focus]
-focused = focused * obs.focus_mask.unsqueeze(-1)
-return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
+focused = (focused * obs.focus_mask.unsqueeze(-1)).flatten(1)
+if self.focus_film is not None:
+    actions = actions * (1 + self.focus_film(focused))
+return self.action_layer(torch.cat((actions, focused), dim=-1))
 ```
 
 `obs` is a device `Prepared` batch. Its host preparation has already resolved
@@ -103,6 +107,27 @@ logits = logits.index_put((batches, slots), scores.to(logits.dtype))
   TLA pilot explicitly keeps the first 64 legal actions, while the engine and
   Academy keep the complete set
   ([policy action capacity](../manabot/README.md#policy-action-capacity)).
+
+### Scoring an offer on its focus
+
+“Attack with this creature” and “leave it back” share their focus and differ
+only in the `declared` flag. With `focus_film=True`, the bias-free linear
+layer scales the offer features by the focused creature's embedding. Its
+orthogonal initialization lets the creature affect that scaling from the
+first decision. For an unfocused offer the embedding is zero, so its
+multiplier is exactly 1 throughout training.
+
+`policy_film` independently conditions the action head's output on the
+pooled board. The baseline and Elemental self-play recipes enable focus
+scoring. Checkpoints that omit `focus_film` use the additive head.
+
+On the constructed attack decision, the test trains on 100 combinations of
+power and toughness. It counts updates until the model assigns at least 90%
+probability to the correct choice on every board (“attack iff power is at
+least 3”). Across seeds 0, 1 and 2, the additive model took 102, 119 and 108
+updates. Enabling `focus_film` took 88, 90 and 81, and enabling both
+`focus_film` and `stream_norm` took 83, 91 and 80. The totals were 329, 259
+and 254 updates respectively for this supervised decision.
 
 ### Estimating value
 
@@ -128,6 +153,66 @@ facts remain a separate sum. Neither path adds attention tokens.
 
 Complete shared records retain duration, timestamp, controller and exact source
 bindings that can change future behavior.
+
+### One scale for every stream
+
+An object token is a sum: a projection of its numeric row, the encoding of its
+card definition and name, its links, its facts, the effects on it and the
+shared context of the decision. Without normalization, whichever stream is
+largest sets the scale of the token. With names on definitions
+(`definition_names`) the name vector is about seven times the numeric row: on
+the constructed attack decision a creature growing from 2/2 to 9/9 moves its
+whole token by 0.16 to 0.25 of its size over four seeds, and a token creature,
+which has no name, enters attention at under half a card's scale. With the
+field the same move is 0.38 to 0.56. Without names the numeric row's stat
+flags already carry the change (0.48 to 0.60 without the field, 0.36 to 0.53
+with it).
+
+```python
+model = ModelConfig(stream_norm=True, ...)
+```
+
+`stream_norm` requires `attention_on=True` and selects one layout, with one rule: **everything summed into an
+object token is either normalized to the common scale or starts at zero.**
+
+| Stream | With `stream_norm` |
+| --- | --- |
+| Numeric projections (player, card, permanent, stack) | A `LayerNorm` after each projection |
+| Card definitions, after names join | One `LayerNorm` over the definition table, so a named card and an unnamed token enter at the same scale; the absent row stays zero |
+| Known hand, known library, decklists | Three streams, each pooled per player with its own `LayerNorm`; each exactly zero for a player whose source is empty |
+| Shared context | One `LayerNorm`; exactly zero for a decision with no relations and no events |
+| Links, stack sources, facts, shared effects | Not normalized: each ends in a zero-initialized layer and grows from nothing |
+| Attention | Pre-normalization, `x + attention(norm(x))` then `x + mlp(norm(x))`, and one final `LayerNorm` (`ActorCritic.final_norm`) before the action and value heads |
+
+Query and key sizes then stay bounded however many streams a later change
+adds, and the heads read a normalized table. The attention layers keep their
+parameter names; only the order of operations changes. The raw definition
+table that scores naming candidates and feeds decision memory is not
+normalized.
+
+Known cards are streams like these, not an exception to them. Without the
+field, each known hand card, library position and decklist entry is weighted
+by its count or `1 / position` and then divided by 60, so one card known to
+be on top of a library reaches its player's token at about a sixtieth of a
+definition. With the field the division is gone and each source is normalized
+on its own: known hand cards, known library positions and the disclosed
+decklist arrive separately, so learning a hand card adds a hand stream and
+leaves the decklist stream exactly as it was. One norm over their sum would
+let a first known card overwrite the decklist (the knowledge vector's cosine
+with its decklist-only value fell to 0.07–0.29); with three it stays at
+0.67–0.75, and one known card moves its player's token by about 0.7 of its
+size, against about 0.03 without the field. A normalized hand stream says
+which cards are known, not how many; the player row still carries hand and
+library sizes. A decklist entry stays a share of the deck (count / 60) in
+both layouts.
+
+Omitted, the field serializes as nothing and the model is the historical one:
+unnormalized sums, post-normalization attention and the `/ 60` pools. A stored
+checkpoint therefore computes what it did. The field cannot be changed on a
+trained model, since it adds parameters and moves the norms. The `baseline`
+and Elemental self-play recipes set it; frozen recipes and experiment files
+are unchanged. [MLX](../manabot/backends/mlx.md#what-the-backend-covers)
+refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 
 ### Bucketed padding
 
@@ -302,7 +387,8 @@ can use an expanded card set on a later revision.
 | A column was appended to an input array | Loads. The model reads the columns it was trained on; the rest are dropped before it sees the array. |
 | A column it reads was removed, renamed or moved | Refused, naming the column. |
 | A column's kind was corrected, or the rule from kind to reading changed | Loads and computes what it did. The model reads each column by the reading the checkpoint recorded (`input_readings`), never by the running rule. |
-| It records a reading this revision does not know | Refused, naming the column and the revision that wrote the checkpoint. |
+| A category gained values | Loads at its recorded width (`one_hot:14`). A value above the recorded size lights the "above" flag; every value it trained on reads as before. |
+| It records a reading this revision does not know, or one with a malformed size | Refused, naming the column and the revision that wrote the checkpoint. |
 | A decision kind, the naming representation or naming branching changed | Refused, naming the field. |
 | The token kinds or roles changed (`learning_schema_sha256`) | Refused. |
 | The model architecture differs from the saved configuration | Refused, as before. |
@@ -311,8 +397,9 @@ can use an expanded card set on a later revision.
 | Engine rules changed | Loads. Play uses the current rules. An evaluation measures the effect on strength. |
 
 If the checkpoint recorded exact decks (`setups` and `content_manifest`), the
-loader compares its whole binding. When adding cards changes the manifest,
-the loader refuses the checkpoint.
+loader checks the saved column prefixes in the same way, including for the
+Elemental roster. All other binding fields must match exactly. When adding
+cards changes the manifest, the loader refuses the checkpoint.
 
 The terms:
 
@@ -558,7 +645,7 @@ Capacities are configuration; widths are the layout.
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
 | `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
-| `actions`, `action_focus`, `name_candidates` | 512 × 23 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
+| `actions`, `action_focus`, `name_candidates` | 512 × 25 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
 Policy inputs v9 and v10 keep 22 action columns. In v11, column 22
@@ -569,6 +656,29 @@ column names what it pays, the same in every decision: the selector 0-4 is
 one {W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise
 and 7 {1} of the waterbend part (the column holds selector + 1). Only payable
 modes are offered, and the choice's focus is the permanent just tapped.
+
+The same `mode` column carries every indexed choice: a mode of a modal spell,
+a mana-spend option, a replacement order and a value of X. In v11, columns 23
+and 24 say when the index is a number. `has_x` is 1 on an offer that chooses a
+value for X (for a spell, an activation or a payment, or a replicate count),
+and `x` is that value in tenths, named and scaled as the stack row's `has_x`
+and `x` are. The native `Action.announces_x` says the same of an offer:
+
+```python
+# arrays = game.encode_observation(observation), at a decision that chooses X
+columns = managym.observation_layout()["actions"]["columns"]
+rows = arrays["actions"][arrays["actions_valid"].astype(bool)]
+print(rows[:, [columns["mode"]["index"], columns["has_x"]["index"], columns["x"]["index"]]])
+# choosing X for a spell with three mana left after its other costs
+# [[1.  1.  0. ]
+#  [2.  1.  0.1]
+#  [3.  1.  0.2]
+#  [4.  1.  0.3]]
+```
+
+`mode` keeps its stored value on these rows. Both columns are appended, so a
+checkpoint trained before them does not read them. Inputs v9 and v10 have
+neither; their X offers differ only in `mode`.
 
 The game-level `decklists_closed` flag is inverted in the `decklists_open`
 column (73) of each player row: 1
@@ -607,12 +717,25 @@ for name in ("tapped", "power", "exhausted_abilities", "timestamp", "attached_to
     column = columns[name]
     print(name, column["kind"], column.get("scale", ""), readings[column["index"]])
 # tapped flag  as_is
-# power number 10 as_is
+# power number 10 steps:8
 # exhausted_abilities count 1 log
 # timestamp rank  rank
 # attached_to reference  gather
 # definition id  lookup
 ```
+
+A reading can turn one stored column into several inputs. `steps:8` is nine:
+the stored value, then one flag for each of "at least 1" through "at least 8".
+
+| Creature | Stored `power` | What the model receives |
+| --- | --- | --- |
+| 2/2 | 0.2 | `0.2, 1, 1, 0, 0, 0, 0, 0, 0` |
+| 3/3 | 0.3 | `0.3, 1, 1, 1, 0, 0, 0, 0, 0` |
+| 12/12 | 1.2 | `1.2, 1, 1, 1, 1, 1, 1, 1, 1` |
+| −1/1 | −0.1 | `−0.1, 0, 0, 0, 0, 0, 0, 0, 0` |
+
+As a bare tenth, the step from 2 power to 3 is a change of 0.1 beside a row
+of 0-or-1 flags. With the flags it is as large as tapping the creature.
 
 A model built fresh takes each reading from this rule. `prepare` applies it
 once on the host, for every backend:
@@ -620,23 +743,43 @@ once on the host, for every backend:
 | Kind | Reading | What the model receives |
 | --- | --- | --- |
 | `flag` | `as_is` | The stored 0 or 1 |
-| `count`, `number` with `scale` above 1 | `as_is` | The stored value: the engine already divided by `scale` |
-| `count`, `number` with `scale` 1 | `log` | `sign(x) · log1p(abs(x)) / 10` |
-| `category`, `selector`, `position` | `log` | The same squash of the stored code |
+| `count`, `number` with `scale` 10 | `steps:8` | The stored tenths, then flags for the true value being at least 1, 2, … 8. Power, toughness, damage, mana value, X, and ward cost |
+| `mana` with `scale` above 1 | `as_is` | One scalar per floating-mana pool, in stored units |
+| `count`, `number` with any other `scale` above 1 | `as_is` | The stored value: the engine already divided by `scale` |
+| `count`, `number`, `mana` with `scale` 1 | `log` | `sign(x) · log1p(abs(x)) / 10` |
+| `category` of declared `size` n | `one_hot:n` | n + 1 flags: one for each value 1 to n, then one for "above n". Codes below 1 leave all flags zero |
+| `selector` | `one_hot:15` | 16 flags: indexes 1 to 15, then "above 15" |
+| `position` | `log` | The same squash as an unscaled count |
 | `rank` | `rank` | The rank / 128, whatever the fact or effect capacity |
 | `reference` | `gather` | The row of the object it names; never a number |
 | `id` | `lookup` | A learned embedding row; never a number |
 | `tagged` | `fact_value` | By the row's fact kind: a scaled payload as stored, an unscaled count through `log`, and zero for program rows, whose content is looked up |
+
+No category or index reaches a projection as a magnitude: a decision kind of
+28 is not "twice" a decision kind of 14. A category declares how many values
+it has beside its kind, and the reading records that size:
+
+```python
+kind = managym.observation_layout()["relations"]["columns"]["frame_kind"]
+print(kind["kind"], kind["size"])
+# category 14
+```
+
+The last flag of a one-hot is always "above the size" and never shared with a
+real value. When a category later gains a value, a checkpoint that recorded
+`one_hot:14` keeps its width, sees the new value as "above 14" and reads
+every value it trained on exactly as before; a value above the size is never
+an error. A fresh model takes the new size. A mode index that packs several
+chosen modes into bits lands in "above 15"; the model does not decode it.
 
 No column is fed to a projection at the scale the engine happened to store. On
 sampled Elemental games every number a fresh model receives stays within
 ±4. Life and turn are divided by 20 and have no fixed bound, so a very long
 game or a life-gain deck can exceed that.
 
-A few columns take their reading from their place in a structured row rather
-than their kind, in fresh and stored models alike (`PLACED_READINGS` in
-`manabot/policy/readings.py`). The `valid` flags of actions, relations, facts
-and effects read `mask`: a mask already carries them, so no projection
+A fresh model reads a few columns according to their role in a structured row
+(`PLACED_READINGS` in `manabot/policy/readings.py`). The `valid` flags of actions,
+relations, facts and effects read `mask`: a mask already carries them, so no projection
 receives them. A fact's `kind` and detail words read `lookup`; its id words
 read `fact_id`, a token row for named kinds and the ordinal / 128 for frame
 and ability indexes; its `duration` reads `duration`, four flags for until end
@@ -644,6 +787,10 @@ of turn, indefinite, while the source is controlled and until your next turn
 (a checkpoint that records no readings reads `duration_two`, the first two
 flags only). An effect's detail and member counts read `gather`
 with their offsets, as the extent of a join.
+
+A relation's `frame` and `parent` are declared `selector` but name another
+relation row. A fresh model reads them `gather`: frame pooling follows them as
+a join, and they are not numeric inputs.
 
 A column whose kind has no reading stops the model from building. `gather`
 and `lookup` columns never reach a projection: they are routed as joins and
@@ -665,10 +812,11 @@ A stored checkpoint never consults the rule. It reads each column the way
 `input_readings` says, so a later correction to a column's kind or to the
 rule changes fresh models only
 ([what a checkpoint is bound to](#what-a-checkpoint-is-bound-to)). A training
-run's saved state records the readings its model was built with, and a resume
-whose model would read a column differently is refused before any weights
-load: resume from the revision that started the run, or warm start from its
-last published policy. A state saved before readings were recorded read
+run records its model settings and input readings in the saved state. For an
+older run, the initial raw policy supplies the model settings. If either the
+settings or the readings differ, resume stops before loading weights. Resume
+from the revision that started the run, or warm start from its last published
+policy. A state saved before readings were recorded read
 `legacy_readings`, so resuming such a run with a fresh model is refused too.
 A warm start keeps the policy's readings but builds the requested
 `ModelConfig`; a policy written before `definition_names` was recorded needs
@@ -772,8 +920,9 @@ a prefix sum over the name table: every member receives the group's gradient,
 and no member programs are encoded for a group prompt. Name vectors score
 NameCard candidates only: a card, permanent, known-hand or decklist token's
 definition is its rules program. A unit-variance name vector added onto every
-definition outweighed the rest of an object token at initialization (a 9/9
-creature moved its token about 7% with names added, about 20% without), and
+definition outweighed the rest of an object token at initialization (on
+sampled games a 9/9 creature moves its token by a median of about 21% with
+names added, about 60% without), and
 gave training a second source of card identity. The cost is that equal-rule
 cards with different public names read alike off the NameCard prompt.
 Checkpoints written before this choice add name vectors onto viewer-visible

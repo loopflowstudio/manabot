@@ -277,8 +277,9 @@ change already touches it; do not rewrite a module only for style. Rust in
   (`checkpoint_source`), its column names, definition keys and naming names.
   `manabot.model.interface.model_interface` checks the recorded input contract.
   The shared policy reader then binds the learned arrays by key. Academy uses
-  that reader when listing checkpoints. When the checkpoint records exact decks, compare its
-  whole binding. Otherwise the card and naming digests record what the writer used. Append
+  that reader when listing checkpoints. When the checkpoint records exact decks,
+  compare its non-schema binding fields exactly and admit its saved column prefixes.
+  Otherwise the card and naming digests record what the writer used. Append
   input columns to named buffers. Shared host preparation projects each buffer
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in
@@ -332,19 +333,24 @@ change already touches it; do not rewrite a module only for style. Rust in
   and Academy retain all choices, and an omitted overflow policy means error.
 - The model reads each numeric input column by a reading. A fresh model
   derives it from the column's native kind (`ValueLayout` in
-  `agent/observation_layout.rs`): unscaled counts, categories and selectors get
-  the log squash, every `rank` is rank / 128 independent of fact and effect
-  capacity, references are gathered and ids looked up. A new column declares
-  its kind (and `scale` when the encoder divides it); add no Python column
-  table and no per-backend scaling. The one table is `PLACED_READINGS`
-  (`manabot/policy/readings.py`): validity flags, embedded words, fact
-  durations and join extents read by their place in a structured row.
-  A checkpoint records its readings
+  `agent/observation_layout.rs`): unscaled counts get the log squash, a
+  category of declared `size` n reads `one_hot:n` and a selector `one_hot:15`
+  (the last flag is always "above the size", never a real value), a count or
+  number stored in tenths reads `steps:8`. Scaled player mana pools keep one
+  scalar (`as_is`), and unscaled mana reads `log`. Every `rank` is rank / 128
+  independent of fact and effect capacity, references are gathered and ids
+  looked up. No category or index reaches a projection as a magnitude. A new
+  column declares its kind (`scale` when the encoder divides it, `size` for a
+  category); add no Python column table and no per-backend scaling. The one
+  table is `PLACED_READINGS` (`manabot/policy/readings.py`): validity flags,
+  embedded words, fact durations and join extents read by their place in a
+  structured row. A sized reading is recorded as `name:size`, so a stored
+  model keeps its width when a category grows. A checkpoint records its readings
   (`input_readings`) and never consults the rule; one without the record gets
   `legacy_readings`, which is never extended. The native kinds of buffers with
   their own preparation (decision memory, history events) are not used. A
-  run's saved state records its model's readings, and a resume whose model
-  reads differently is refused.
+  run's saved state records its model settings and readings. Resume checks both before
+  restoring weights. Older runs supply their model settings from the initial raw policy.
 - New observation state reaches the policy input, the LLM text observation
   and the learning tokens in the change that adds it; the policy input never
   silently falls behind. The native encoder (`managym/src/agent/`) is the only
@@ -474,12 +480,13 @@ benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
-**No test runs for five minutes.** `tests/conftest.py` ends the run when a
-single test reaches 300 seconds, with every thread's stack and exit status 1.
-Fix or split a test that times out. Run targeted tests of the changed
-behavior, including existing consumers whose files did not change. When input
-scaling changes, check numeric assertions against the new scale and keep the
-control case that proves the behavior. CI runs the suite.
+**No test runs for five minutes.** Keep learning tests bounded under CI's
+parallel workers. Use bucketed shapes for small boards when they preserve the
+comparison, and restore any Torch thread limit changed by the test.
+Run targeted tests of the change and its existing consumers.
+When policy input width or scale changes, include model tests that call
+projections directly. Dense reference tests should apply the model's saved
+readings before projection and keep the control that proves the behavior.
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.

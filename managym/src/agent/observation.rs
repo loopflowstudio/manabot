@@ -904,6 +904,10 @@ pub struct ActionOption {
     /// rather than making mana; both share `ActionType::TapForCost`.
     #[serde(default)]
     pub pays_directly: bool,
+    /// `mode_index` is an announced number (X for a spell or activation, a
+    /// replicate count, a resolving payment's X) rather than an option index.
+    #[serde(default)]
+    pub announces_x: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -1039,6 +1043,7 @@ impl Observation {
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
                                 pays_directly: matches!(action, Action::WaterbendTap { .. }),
+                                announces_x: game.announces_x(action),
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
                                     .map(|id| id.0 as i32)
@@ -2520,6 +2525,7 @@ mod characteristics_tests {
             ability_index: None,
             continuation_index: None,
             pays_directly: false,
+            announces_x: false,
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();

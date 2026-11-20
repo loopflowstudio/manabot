@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use super::{
+    continuation::MAX_DECISION_CODE,
     observation_encoder::{FactKind, InputLayout},
     shared_effects::{DETAIL_ROWS, EFFECT_ROWS, MEMBER_ROWS},
 };
@@ -36,21 +37,24 @@ pub fn permanent_columns(layout: InputLayout) -> Vec<Column> {
 
 /// What a column's stored value is: the closed set every consumer chooses its
 /// treatment from. `scale` is the divisor the encoder already applied (1 when
-/// unscaled), and exists only for amounts.
+/// unscaled), and exists only for amounts. `size` is a category's largest
+/// code; a code above it is never an error (a category may grow).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     /// 0 or 1.
     Flag,
     /// A nonnegative amount, stored divided by `scale`.
     Count { scale: u16 },
+    /// Floating mana in a player pool, stored divided by `scale`.
+    Mana { scale: u16 },
     /// A signed amount, stored divided by `scale`.
     Number { scale: u16 },
     /// A one-based order rank; 0 absent.
     Rank,
     /// A one-based position in a zone; 0 absent.
     Position,
-    /// A code from a small fixed set.
-    Category,
+    /// A code from a small fixed set, at most `size`.
+    Category { size: u16 },
     /// A one-based choice index (a mode, an ability, a continuation frame); 0 absent.
     Selector,
     /// A row of the padded object table.
@@ -66,10 +70,11 @@ impl ValueKind {
         match self {
             Self::Flag => "flag",
             Self::Count { .. } => "count",
+            Self::Mana { .. } => "mana",
             Self::Number { .. } => "number",
             Self::Rank => "rank",
             Self::Position => "position",
-            Self::Category => "category",
+            Self::Category { .. } => "category",
             Self::Selector => "selector",
             Self::Reference => "reference",
             Self::Id => "id",
@@ -79,7 +84,14 @@ impl ValueKind {
 
     pub const fn scale(self) -> Option<u16> {
         match self {
-            Self::Count { scale } | Self::Number { scale } => Some(scale),
+            Self::Count { scale } | Self::Mana { scale } | Self::Number { scale } => Some(scale),
+            _ => None,
+        }
+    }
+
+    pub const fn size(self) -> Option<u16> {
+        match self {
+            Self::Category { size } => Some(size),
             _ => None,
         }
     }
@@ -120,18 +132,23 @@ impl ValueLayout {
         "Value / 60",
         "nonnegative; no fixed bound",
     );
+    const MANA_TENTHS: Self = Self::new(
+        ValueKind::Mana { scale: 10 },
+        "Value / 10",
+        "nonnegative; no fixed bound",
+    );
     const RESTRICTED_MANA: Self = Self::new(
-        ValueKind::Count { scale: 10 },
+        ValueKind::Mana { scale: 10 },
         "All spend-restricted mana of this color / 10 (legacy field name)",
         "nonnegative; no fixed bound",
     );
     const SUBTYPE_MANA: Self = Self::new(
-        ValueKind::Count { scale: 10 },
+        ValueKind::Mana { scale: 10 },
         "Spend-restricted mana admitting this subtype / 10; subtype totals can overlap",
         "nonnegative; no fixed bound",
     );
     const NONARTIFACT_MANA: Self = Self::new(
-        ValueKind::Count { scale: 10 },
+        ValueKind::Mana { scale: 10 },
         "Mana of this color that can't be spent to cast nonartifact spells / 10",
         "nonnegative; no fixed bound",
     );
@@ -175,7 +192,7 @@ macro_rules! columns {
     ($module:ident { $($index:literal: $key:ident => ($name:literal, $value:expr)),* $(,)? }) => {
         pub mod $module {
             #[allow(unused_imports)]
-            use super::{Column, ValueKind, ValueLayout, UNSCALED};
+            use super::{Column, ValueKind, ValueLayout, MAX_DECISION_CODE, UNSCALED};
 
             $(pub const $key: usize = $index;)*
             pub const COLUMNS: &[Column] = &[
@@ -214,13 +231,13 @@ columns! { player {
     24: STEP_END => ("step_end", ValueLayout::FLAG),
     25: STEP_CLEANUP => ("step_cleanup", ValueLayout::FLAG),
     26: GRAVEYARD_LESSONS => ("graveyard_lessons", ValueLayout::COUNT_TENTHS),
-    27: COMBAT_MANA => ("combat_mana", ValueLayout::COUNT_TENTHS),
-    28: MANA_WHITE => ("mana_white", ValueLayout::COUNT_TENTHS),
-    29: MANA_BLUE => ("mana_blue", ValueLayout::COUNT_TENTHS),
-    30: MANA_BLACK => ("mana_black", ValueLayout::COUNT_TENTHS),
-    31: MANA_RED => ("mana_red", ValueLayout::COUNT_TENTHS),
-    32: MANA_GREEN => ("mana_green", ValueLayout::COUNT_TENTHS),
-    33: MANA_COLORLESS => ("mana_colorless", ValueLayout::COUNT_TENTHS),
+    27: COMBAT_MANA => ("combat_mana", ValueLayout::MANA_TENTHS),
+    28: MANA_WHITE => ("mana_white", ValueLayout::MANA_TENTHS),
+    29: MANA_BLUE => ("mana_blue", ValueLayout::MANA_TENTHS),
+    30: MANA_BLACK => ("mana_black", ValueLayout::MANA_TENTHS),
+    31: MANA_RED => ("mana_red", ValueLayout::MANA_TENTHS),
+    32: MANA_GREEN => ("mana_green", ValueLayout::MANA_TENTHS),
+    33: MANA_COLORLESS => ("mana_colorless", ValueLayout::MANA_TENTHS),
     34: LESSON_MANA_WHITE => ("lesson_mana_white", ValueLayout::RESTRICTED_MANA),
     35: LESSON_MANA_BLUE => ("lesson_mana_blue", ValueLayout::RESTRICTED_MANA),
     36: LESSON_MANA_BLACK => ("lesson_mana_black", ValueLayout::RESTRICTED_MANA),
@@ -248,7 +265,7 @@ columns! { player {
     58: HAND_ONLY => ("hand_only", ValueLayout::FLAG),
     59: NO_MAXIMUM_HAND_SIZE => ("no_maximum_hand_size", ValueLayout::FLAG),
     60: TURN => ("turn", ValueLayout::new(ValueKind::Count { scale: 20 }, "Value / 20", "nonnegative; no fixed bound")),
-    61: SEAT => ("seat", ValueLayout::new(ValueKind::Category, "Game seat: 0 on the play, 1 on the draw", "0 or 1")),
+    61: SEAT => ("seat", ValueLayout::new(ValueKind::Category { size: 1 }, "Game seat: 0 on the play, 1 on the draw", "0 or 1")),
     62: KEEPS_RED_MANA => ("keeps_red_mana", ValueLayout::FLAG),
     63: ATTACKED => ("attacked", ValueLayout::FLAG),
     64: PERMANENTS_SACRIFICED => ("permanents_sacrificed", ValueLayout::COUNT_TENTHS),
@@ -456,6 +473,10 @@ columns! { action {
     21: VALID => ("valid", ValueLayout::FLAG),
     // Input v11 only. Saved 22-column prefixes keep their meaning.
     22: PAYS_DIRECTLY => ("pays_directly", ValueLayout::FLAG),
+    // The offer announces a number (X, a replicate count, a payment's X):
+    // `mode` keeps its index, and these name it as the stack row does.
+    23: HAS_X => ("has_x", ValueLayout::FLAG),
+    24: X => ("x", ValueLayout::COUNT_TENTHS),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -491,10 +512,10 @@ columns! { decklist {
 } }
 
 columns! { event {
-    0: KIND => ("kind", ValueLayout::new(ValueKind::Category, "EventType: 0 card moved, 1 damage dealt, 2 life changed, 3 spell cast, 4 spell resolved, 5 spell countered, 6 ability triggered", "0..6")),
-    1: SOURCE_KIND => ("source_kind", ValueLayout::new(ValueKind::Category, "EventEntityKind: 0 none, 1 card, 2 permanent, 3 player, 4 object, 5 definition; namespace for raw id", "0..5")),
+    0: KIND => ("kind", ValueLayout::new(ValueKind::Category { size: 6 }, "EventType: 0 card moved, 1 damage dealt, 2 life changed, 3 spell cast, 4 spell resolved, 5 spell countered, 6 ability triggered", "0..6")),
+    1: SOURCE_KIND => ("source_kind", ValueLayout::new(ValueKind::Category { size: 5 }, "EventEntityKind: 0 none, 1 card, 2 permanent, 3 player, 4 object, 5 definition; namespace for raw id", "0..5")),
     2: SOURCE_ID => ("source_id", ValueLayout::new(ValueKind::Id, "Raw event entity id in the accompanying kind namespace; -1 absent; not a padded object-table index", "integers >= -1")),
-    3: TARGET_KIND => ("target_kind", ValueLayout::new(ValueKind::Category, "EventEntityKind: 0 none, 1 card, 2 permanent, 3 player, 4 object, 5 definition; namespace for raw id", "0..5")),
+    3: TARGET_KIND => ("target_kind", ValueLayout::new(ValueKind::Category { size: 5 }, "EventEntityKind: 0 none, 1 card, 2 permanent, 3 player, 4 object, 5 definition; namespace for raw id", "0..5")),
     4: TARGET_ID => ("target_id", ValueLayout::new(ValueKind::Id, "Raw event entity id in the accompanying kind namespace; -1 absent; not a padded object-table index", "integers >= -1")),
     5: AMOUNT => ("amount", ValueLayout::new(ValueKind::Number { scale: UNSCALED }, "Unscaled signed value", "signed; no fixed bound")),
     6: CONTROLLER => ("controller", ValueLayout::new(ValueKind::Id, "Raw player seat; -1 absent", "-1, 0 or 1")),
@@ -609,30 +630,30 @@ columns! { decision_member {
 } }
 
 columns! { history {
-    0: KIND => ("kind", ValueLayout::new(ValueKind::Category, "HistoryKind: 0 arrival, 1 damage, 2 life, 3 cast, 4 resolved, 5 countered", "0..5")),
+    0: KIND => ("kind", ValueLayout::new(ValueKind::Category { size: 5 }, "HistoryKind: 0 arrival, 1 damage, 2 life, 3 cast, 4 resolved, 5 countered", "0..5")),
     1: AMOUNT => ("amount", ValueLayout::new(ValueKind::Number { scale: UNSCALED }, "Unscaled signed value", "signed; no fixed bound")),
     2: SOURCE_DEFINITION => ("source_definition", ValueLayout::DEFINITION),
-    3: SOURCE_OWNER => ("source_owner", ValueLayout::new(ValueKind::Category, "0 unknown, 1 agent, 2 opponent", "0..2")),
-    4: SOURCE_ZONE => ("source_zone", ValueLayout::new(ValueKind::Category, "ZoneType + 1; 0 unknown", "0..7")),
+    3: SOURCE_OWNER => ("source_owner", ValueLayout::new(ValueKind::Category { size: 2 }, "0 unknown, 1 agent, 2 opponent", "0..2")),
+    4: SOURCE_ZONE => ("source_zone", ValueLayout::new(ValueKind::Category { size: 7 }, "ZoneType + 1; 0 unknown", "0..7")),
     5: SOURCE_CONTEXT => ("source_context", ValueLayout::new(ValueKind::Reference, "Zero-based padded object-table index; -1 unavailable", "integers >= -1")),
-    6: SOURCE_STATUS => ("source_status", ValueLayout::new(ValueKind::Category, "0 unavailable, 1 current object join, 2 definition only", "0..2")),
+    6: SOURCE_STATUS => ("source_status", ValueLayout::new(ValueKind::Category { size: 2 }, "0 unavailable, 1 current object join, 2 definition only", "0..2")),
     7: TARGET_DEFINITION => ("target_definition", ValueLayout::DEFINITION),
-    8: TARGET_OWNER => ("target_owner", ValueLayout::new(ValueKind::Category, "0 unknown, 1 agent, 2 opponent", "0..2")),
-    9: TARGET_ZONE => ("target_zone", ValueLayout::new(ValueKind::Category, "ZoneType + 1; 0 unknown", "0..7")),
+    8: TARGET_OWNER => ("target_owner", ValueLayout::new(ValueKind::Category { size: 2 }, "0 unknown, 1 agent, 2 opponent", "0..2")),
+    9: TARGET_ZONE => ("target_zone", ValueLayout::new(ValueKind::Category { size: 7 }, "ZoneType + 1; 0 unknown", "0..7")),
     10: TARGET_CONTEXT => ("target_context", ValueLayout::new(ValueKind::Reference, "Zero-based padded object-table index; -1 unavailable", "integers >= -1")),
-    11: TARGET_STATUS => ("target_status", ValueLayout::new(ValueKind::Category, "0 unavailable, 1 current object join, 2 definition only", "0..2")),
+    11: TARGET_STATUS => ("target_status", ValueLayout::new(ValueKind::Category { size: 2 }, "0 unavailable, 1 current object join, 2 definition only", "0..2")),
 } }
 
 columns! { fact {
     0: OBJECT => ("object", ValueLayout::OBJECT_REFERENCE),
-    1: KIND => ("kind", ValueLayout::new(ValueKind::Category, "FactKind; see row_kinds", "1..14 excluding 6; 0 padding")),
+    1: KIND => ("kind", ValueLayout::new(ValueKind::Category { size: 14 }, "FactKind; see row_kinds", "1..14 excluding 6; 0 padding")),
     2: ID_HIGH => ("id_high", ValueLayout::TOKEN_HALF),
     3: ID_LOW => ("id_low", ValueLayout::TOKEN_HALF),
     4: DETAIL_HIGH => ("detail_high", ValueLayout::TOKEN_HALF),
     5: DETAIL_LOW => ("detail_low", ValueLayout::TOKEN_HALF),
     6: VALUE => ("value", ValueLayout::new(ValueKind::Tagged, "Kind-dependent payload; see row_kinds. Counts and effect power/toughness / 10; program kinds/ordinals and transforms unscaled", "signed; no fixed bound")),
     7: VALUE_2 => ("value_2", ValueLayout::new(ValueKind::Tagged, "Kind-dependent payload; see row_kinds. Counts and effect power/toughness / 10; program kinds/ordinals and transforms unscaled", "signed; no fixed bound")),
-    8: DURATION => ("duration", ValueLayout::new(ValueKind::Category, "0 absent, 1 end of turn, 2 indefinite, 3 while source controlled, 4 until your next turn", "0..4")),
+    8: DURATION => ("duration", ValueLayout::new(ValueKind::Category { size: 4 }, "0 absent, 1 end of turn, 2 indefinite, 3 while source controlled, 4 until your next turn", "0..4")),
     9: TIMESTAMP => ("timestamp", ValueLayout::TIMESTAMP),
     10: SOURCE_DEFINITION => ("source_definition", ValueLayout::DEFINITION),
     11: VALID => ("valid", ValueLayout::FLAG),
@@ -647,7 +668,7 @@ columns! { effect {
     5: HAS_POWER => ("has_power", ValueLayout::FLAG),
     6: HAS_TOUGHNESS => ("has_toughness", ValueLayout::FLAG),
     7: HAS_AMOUNT => ("has_amount", ValueLayout::FLAG),
-    8: DURATION => ("duration", ValueLayout::new(ValueKind::Category, "1 end of turn, 2 indefinite, 3 while source controlled, 4 until your next turn", "1..4; 0 padding")),
+    8: DURATION => ("duration", ValueLayout::new(ValueKind::Category { size: 4 }, "1 end of turn, 2 indefinite, 3 while source controlled, 4 until your next turn", "1..4; 0 padding")),
     9: TIMESTAMP => ("timestamp", ValueLayout::TIMESTAMP),
     10: CONTROLLER => ("controller", ValueLayout::OBJECT_REFERENCE),
     11: SOURCE_DEFINITION => ("source_definition", ValueLayout::DEFINITION),
@@ -660,7 +681,7 @@ columns! { effect {
 } }
 
 columns! { detail {
-    0: KIND => ("kind", ValueLayout::new(ValueKind::Category, "1 keyword, 2 subtype, 3 color; 10 + catalog TokenKind (1..9)", "0 padding; 1..3 or 11..19")),
+    0: KIND => ("kind", ValueLayout::new(ValueKind::Category { size: 19 }, "1 keyword, 2 subtype, 3 color; 10 + catalog TokenKind (1..9)", "0 padding; 1..3 or 11..19")),
     1: VALUE_HIGH => ("value_high", ValueLayout::TOKEN_HALF),
     2: VALUE_LOW => ("value_low", ValueLayout::TOKEN_HALF),
 } }
@@ -671,11 +692,11 @@ columns! { member {
 } }
 
 columns! { relation {
-    0: KIND => ("kind", ValueLayout::new(ValueKind::Category, "Relation row kind; see row_kinds", "1..10; 0 padding")),
+    0: KIND => ("kind", ValueLayout::new(ValueKind::Category { size: 10 }, "Relation row kind; see row_kinds", "1..10; 0 padding")),
     1: FRAME => ("frame", ValueLayout::FRAME),
     2: PARENT => ("parent", ValueLayout::FRAME),
-    3: FRAME_KIND => ("frame_kind", ValueLayout::new(ValueKind::Category, "1 spell, 2 activated, 3 triggered, 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger, 8 placing trigger, 9 placement cursor, 10 delayed trigger, 11 scheduled turn, 12 combat, 13 control, 14 delegation", "1..14; 0 padding")),
-    4: CONTROLLER => ("controller", ValueLayout::new(ValueKind::Category, "1 agent, 2 opponent", "0..2")),
+    3: FRAME_KIND => ("frame_kind", ValueLayout::new(ValueKind::Category { size: 14 }, "1 spell, 2 activated, 3 triggered, 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger, 8 placing trigger, 9 placement cursor, 10 delayed trigger, 11 scheduled turn, 12 combat, 13 control, 14 delegation", "1..14; 0 padding")),
+    4: CONTROLLER => ("controller", ValueLayout::new(ValueKind::Category { size: 2 }, "1 agent, 2 opponent", "0..2")),
     5: SOURCE_DEFINITION => ("source_definition", ValueLayout::DEFINITION),
     6: SOURCE => ("source", ValueLayout::OBJECT_REFERENCE),
     7: MODE => ("mode", ValueLayout::SELECTOR),
@@ -696,14 +717,14 @@ columns! { relation {
     22: CLAUSE => ("clause", ValueLayout::SELECTOR),
     23: REFERENCE_DEFINITION => ("reference_definition", ValueLayout::DEFINITION),
     24: REFERENCE => ("reference", ValueLayout::OBJECT_REFERENCE),
-    25: REFERENCE_PLAYER => ("reference_player", ValueLayout::new(ValueKind::Category, "0 absent, 1 agent, 2 opponent", "0..2")),
-    26: HYBRID_FIRST => ("hybrid_first", ValueLayout::new(ValueKind::Category, "Color index + 1; 0 absent", "0..6")),
-    27: HYBRID_SECOND => ("hybrid_second", ValueLayout::new(ValueKind::Category, "Color index + 1; 0 absent", "0..6")),
-    28: DECISION => ("decision", ValueLayout::new(ValueKind::Category, "Frame decision code. Kind-9 rows: delayed frequency 1 once / 2 each match", "nonnegative integer codes")),
+    25: REFERENCE_PLAYER => ("reference_player", ValueLayout::new(ValueKind::Category { size: 2 }, "0 absent, 1 agent, 2 opponent", "0..2")),
+    26: HYBRID_FIRST => ("hybrid_first", ValueLayout::new(ValueKind::Category { size: 6 }, "Color index + 1; 0 absent", "0..6")),
+    27: HYBRID_SECOND => ("hybrid_second", ValueLayout::new(ValueKind::Category { size: 6 }, "Color index + 1; 0 absent", "0..6")),
+    28: DECISION => ("decision", ValueLayout::new(ValueKind::Category { size: MAX_DECISION_CODE as u16 }, "Frame decision code. Kind-9 rows: delayed frequency 1 once / 2 each match", "nonnegative integer codes")),
     29: ORDINAL => ("ordinal", ValueLayout::new(ValueKind::Selector, "Reference ordinal + 1; kind 10 is effect-execution reference slot", "nonnegative integers; 0 absent")),
     30: RESOLUTIONS_THIS_TURN => ("resolutions_this_turn", ValueLayout::COUNT),
     31: VALID => ("valid", ValueLayout::FLAG),
-    32: LEGAL_AT_RESOLUTION_START => ("legal_at_resolution_start", ValueLayout::new(ValueKind::Category, "0 unknown, 1 legal, 2 illegal", "0..2")),
+    32: LEGAL_AT_RESOLUTION_START => ("legal_at_resolution_start", ValueLayout::new(ValueKind::Category { size: 2 }, "0 unknown, 1 legal, 2 illegal", "0..2")),
     33: X => ("x", ValueLayout::COUNT),
     34: FLYING => ("flying", ValueLayout::FLAG),
     35: REACH => ("reach", ValueLayout::FLAG),
@@ -1097,7 +1118,7 @@ mod tests {
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 23 } else { 22 },
+                    if one_token { 25 } else { 22 },
                 ),
                 (
                     "events",

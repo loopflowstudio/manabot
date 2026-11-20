@@ -365,7 +365,7 @@ def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients()
 ):
     torch.set_num_threads(1)
     torch.manual_seed(17)
-    encoder = SharedEffectEncoder(16)
+    encoder = SharedEffectEncoder(16, numeric=8)
     objects = torch.randn(2, 4, 16, requires_grad=True)
     headers = torch.zeros(2, 128, 18)
     details = torch.zeros(2, 4096, 3)

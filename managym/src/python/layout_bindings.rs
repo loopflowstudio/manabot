@@ -19,6 +19,9 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
     if let Some(scale) = layout.kind.scale() {
         value.set_item("scale", scale)?;
     }
+    if let Some(size) = layout.kind.size() {
+        value.set_item("size", size)?;
+    }
     value.set_item("encoding", layout.encoding)?;
     value.set_item("range", layout.range)?;
     Ok(value)

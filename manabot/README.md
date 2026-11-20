@@ -388,9 +388,11 @@ including the unresolved near-singleton latency target.
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
-When the binding records exact decks and sideboards, loading compares the
-whole binding, including the content manifest. Otherwise the model can play
-any admitted deck. The card digest describes the cards of the writing revision.
+When the binding records exact decks and sideboards, every binding field except
+the input schema must match exactly, including the content manifest. As with
+any checkpoint, the runtime input columns may extend the saved column prefixes.
+Without exact decks, the model can play any admitted deck. The card digest
+describes the cards of the writing revision.
 Loading compares input columns, token names and action kinds by name
 ([compatibility](../docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
 A missing binding or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
@@ -413,6 +415,17 @@ semantic transfer; no previous checkpoint is relabeled compatible.
 state before the policy head, so offer choices that depend on the state stay
 learnable from any start. The local and baseline recipes enable it; the
 ordinary baseline recipe is `baseline-v3`.
+
+`ModelConfig(focus_film=True)` scales each action's features by the objects it
+names, so two offers on one creature differ by a function of that creature
+from the first update
+([scoring an offer on its focus](../docs/observation-and-model.md#scoring-an-offer-on-its-focus)).
+`ModelConfig(stream_norm=True)` normalizes every stream summed into an object
+token and uses pre-normalization attention
+([one scale for every stream](../docs/observation-and-model.md#one-scale-for-every-stream)).
+The baseline and Elemental self-play recipes enable both. Each is omitted from
+a serialized configuration when off, and neither can be changed on a trained
+model.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.

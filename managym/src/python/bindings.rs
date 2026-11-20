@@ -2532,6 +2532,9 @@ pub struct PyAction {
     /// The tap pays part of the cost itself rather than making mana.
     #[pyo3(get)]
     pub pays_directly: bool,
+    /// `mode_index` is an announced number (X, a replicate count).
+    #[pyo3(get)]
+    pub announces_x: bool,
 }
 
 #[cfg(feature = "python")]
@@ -2646,6 +2649,7 @@ impl From<ActionOption> for PyAction {
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
+            announces_x: value.announces_x,
         }
     }
 }
@@ -2665,6 +2669,7 @@ impl From<PyAction> for ActionOption {
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
+            announces_x: value.announces_x,
         }
     }
 }

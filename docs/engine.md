@@ -727,6 +727,17 @@ print(columns["exhausted_abilities"]["kind"], columns["exhausted_abilities"]["sc
 # count 1
 ```
 
+A category says how many values it has: `size` is its largest code. A code
+above it is not an error, so a category can grow. In the rows the policy reads
+column by column, 0 means absent, except a player's `seat`, where 0 is the
+seat on the play:
+
+```python
+frame_kind = layout["relations"]["columns"]["frame_kind"]
+print(frame_kind["kind"], frame_kind["size"])
+# category 14
+```
+
 The encoder writes the arrays the layout describes. With `arrays` from
 [the example above](#encoding-one-observation), read only valid permanent rows
 (the first decision can have none):
@@ -742,7 +753,7 @@ features. Do not log-scale them or infer similarity from their magnitude.
 Retain the installed world's content identity with saved arrays and catalog
 references.
 
-`observation_layout(*, policy_history=False, turn_state=False)` returns a mapping keyed by the
+`observation_layout(*, policy_history=False, turn_state=True, legacy=False, decision_memory=False)` returns a mapping keyed by the
 encoder's array names. Each array describes its `axes`, `shape` and stored
 `dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
 default. The seat axis is viewer-relative (agent first, opponent second).
@@ -754,6 +765,7 @@ closed set:
 | --- | --- |
 | `flag` | 0 or 1 |
 | `count` | A nonnegative amount, stored divided by `scale` |
+| `mana` | Floating mana in a player pool, stored divided by `scale` |
 | `number` | A signed amount, stored divided by `scale` |
 | `rank` | A one-based order rank; 0 absent |
 | `position` | A one-based position in a zone; 0 absent |
@@ -763,7 +775,7 @@ closed set:
 | `id` | An identity, such as a card definition or token value; never a magnitude |
 | `tagged` | A value whose meaning depends on its row's kind |
 
-`count` and `number` columns also give `scale`, the divisor the encoder
+`count`, `mana` and `number` columns also give `scale`, the divisor the encoder
 applied: 1 for an unscaled value, otherwise 10, 20 or 60. No other kind has
 one. The encoding explains join targets, index bases and absence
 sentinels in prose; the range describes stored values, including when no fixed bound

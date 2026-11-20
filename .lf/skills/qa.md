@@ -248,6 +248,15 @@ publish, land or choose the next Graph step from here.
   it. Watch resume tokens live in that tab's storage, so reopen a live Watch
   trace in the same browser context. A completed Play game's evidence opens
   from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
+  An Elemental recipe policy (`etude train manabot/recipes/elemental.py
+  --config '{"updates": 2, "streams": 4}' --until updates=1`, about 10 s)
+  binds the roster: launch it with `--deck elemental_ur --opponent-deck
+  elemental_gw`, otherwise `setup.invalid` names the roster decks. Offer
+  texts carry a number prefix (`1 Play Plains`), so match offers without `^`.
+  X offers read `X = n`: `24 Plains / 16 United Front` against `40 Forest`
+  with `--opponent passive` reaches one after four lands. Checkpoints with
+  world or exact-deck bindings written before an appended input column load
+  on their saved prefix.
 - Model or training-path changes: use `uv run etude train manabot/recipes/local.py`
   for the local CPU smoke. Inspect update rows for per-phase collection and
   learning seconds. When saved training state gains a field, check that
@@ -634,6 +643,14 @@ publish, land or choose the next Graph step from here.
   always writes a container); convert the pinned pilots and u1952, then load
   each `.safetensors`.
   `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
+  Write returning-user checkpoints on `main` as in "Files a returning user
+  wrote". For a column append, cover both `deck_world` and `checkpoint_world`
+  bindings. The Elemental recipe writes `checkpoint_world`. Score the same
+  seeded games on both trees and compare decision counts and logits within
+  1e-5 to verify saved-prefix compatibility. Open one as a Seat 2 opponent with
+  `/?hero=ur_lessons&villain=gw_allies&opponent=<sha256>` and press Start
+  game. Admission changes also reach `tests/model/test_attack_choice.py`
+  (old-world fixtures with an empty state dict), which CI's model job runs.
 - PR CI failures while the run is still in progress: `gh run view --log-failed`
   refuses; read `gh api --allow-escape-sequences
   repos/loopflowstudio/manabot/actions/jobs/<job-id>/logs` and grep `^FAILED`.
