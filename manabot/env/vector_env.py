@@ -10,10 +10,18 @@ import torch
 
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import PERMANENT_TYPES_INDEX, ObservationSpace
+from manabot.env.observation import ObservationSpace, column, columns
 import managym
-from managym.enums import ZoneEnum
 from managym.recording import resolve_player_policies
+
+
+PLAYER_LIFE = column("agent_player", "life")
+PERMANENT_REWARD_COLUMNS = columns("agent_permanents", "is_land", "is_creature", "valid")
+_LEGACY_CARD_COLUMNS = managym.observation_layout(legacy=True)["agent_cards"]["columns"]
+LEGACY_BATTLEFIELD_ZONE = _LEGACY_CARD_COLUMNS["zone_battlefield"]["index"]
+LEGACY_CARD_REWARD_COLUMNS = [
+    _LEGACY_CARD_COLUMNS[name]["index"] for name in ("is_land", "is_creature", "valid")
+]
 
 
 class VectorEnv:
@@ -52,12 +60,12 @@ class VectorEnv:
         if self.observation_space.one_token:
             self._board_keys = ("agent_permanents", "opponent_permanents")
             self._battlefield_zone_index = None
-            self._land_index = PERMANENT_TYPES_INDEX
+            reward_columns = PERMANENT_REWARD_COLUMNS
         else:
             self._board_keys = ("agent_cards", "opponent_cards")
-            self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
-            self._land_index = len(ZoneEnum) + 1 + 2 + 1
-        self._creature_index = self._land_index + 1
+            self._battlefield_zone_index = LEGACY_BATTLEFIELD_ZONE
+            reward_columns = LEGACY_CARD_REWARD_COLUMNS
+        self._land_index, self._creature_index, self._valid_index = reward_columns
         self._prev_obs_keys: Tuple[str, ...] = (self._board_keys[0], "opponent_player")
         if self.reward.config.potential_enabled:
             self._prev_obs_keys = (
@@ -213,8 +221,8 @@ class VectorEnv:
             )
 
         if config.opponent_life_loss_reward != 0.0:
-            prev_life = prev_opponent_player[:, 0, 0]
-            next_life = next_opponent_player[:, 0, 0]
+            prev_life = prev_opponent_player[:, 0, PLAYER_LIFE]
+            next_life = next_opponent_player[:, 0, PLAYER_LIFE]
             shaping += config.opponent_life_loss_reward * torch.clamp(
                 prev_life - next_life,
                 min=0.0,
@@ -280,7 +288,7 @@ class VectorEnv:
             )
         if config.potential_life_weight != 0.0:
             phi += config.potential_life_weight * (
-                agent_player[:, 0, 0] - opponent_player[:, 0, 0]
+                agent_player[:, 0, PLAYER_LIFE] - opponent_player[:, 0, PLAYER_LIFE]
             )
         return phi
 
@@ -290,7 +298,7 @@ class VectorEnv:
         type_feature_index: int,
     ) -> torch.Tensor:
         """Valid battlefield rows of `cards` [B, rows, width] with the type flag."""
-        valid = cards[..., -1] > 0.5
+        valid = cards[..., self._valid_index] > 0.5
         if self._battlefield_zone_index is not None:
             valid = valid & (cards[..., self._battlefield_zone_index] > 0.5)
         matches_type = cards[..., type_feature_index] > 0.5
