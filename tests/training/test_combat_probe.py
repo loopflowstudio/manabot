@@ -73,12 +73,17 @@ def test_played_combat_distinguishes_lock_from_board_dependence(
     assert columns is not None
     blind = combat_probe(scoring_policy(columns, False), batch, space, limit=16)
     aware = combat_probe(scoring_policy(columns, True), batch, space, limit=16)
-    for kind in ("attack", "block"):
+    for kind, column in (
+        ("attack", columns.declare_attacker),
+        ("block", columns.declare_blocker),
+    ):
         prefix = f"combat/{kind}/"
-        assert blind[prefix + "decisions"] == 16
+        probed = len(combat_rows(batch.action_data, column, columns.declared, 16))
+        assert probed > 0
+        assert blind[prefix + "decisions"] == probed
         assert blind[prefix + "gap"] == 3
-        assert 0 < blind[prefix + "shift_decisions/theirs"] <= 16
-        assert blind[prefix + "shift_decisions/mine"] == 16
+        assert 0 < blind[prefix + "shift_decisions/theirs"] <= probed
+        assert blind[prefix + "shift_decisions/mine"] == probed
         for label, sign in (
             ("my_creatures_0_1", -1),
             ("my_creatures_9_9", 1),
