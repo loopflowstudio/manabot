@@ -210,7 +210,7 @@ def collect_choices(
                     for index, signature in enumerate(signatures):
                         groups[signature].append(index)
                     if len(groups) > 1:
-                        obs = encode(env, raw)
+                        obs = encode(raw)
                         assert int(obs["actions_valid"].sum()) == len(actions), (
                             "legal mask count"
                         )
@@ -223,7 +223,7 @@ def collect_choices(
                         space.actions = original[::-1]
                         raw.action_space = space
                         try:
-                            reversed_obs = encode(env, raw)
+                            reversed_obs = encode(raw)
                         finally:
                             space.actions = original
                             raw.action_space = space

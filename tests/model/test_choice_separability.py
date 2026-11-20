@@ -314,7 +314,7 @@ def one_thread() -> Iterator[None]:
 @pytest.mark.parametrize("name", CHOICES)
 def test_native_choice_preserves_focus_and_changes_state(name: ChoiceName) -> None:
     case = _choice(name)
-    obs = encode(case.env, case.raw)
+    obs = encode(case.raw)
     assert int(obs["actions_valid"].sum()) == len(case.raw.action_space.actions)
     # A nonempty native focus must not silently become padding in either encoder.
     for i, action in enumerate(case.raw.action_space.actions):
@@ -340,7 +340,7 @@ def test_shared_policy_can_learn_either_choice(
     # Fixed protocol before scoring: two shared fits total, 180 updates each;
     # no early stopping, per-family fitting, or strategically "correct" labels.
     torch.manual_seed(17)
-    observations = [encode(case.env, case.raw) for case in choices]
+    observations = [encode(case.raw) for case in choices]
     batch = {
         key: torch.cat([obs[key] for obs in observations]) for key in observations[0]
     }
@@ -387,7 +387,7 @@ def test_shared_policy_can_learn_either_choice(
             space.actions = original[::-1]
             case.raw.action_space = space
             try:
-                reordered = encode(case.env, case.raw)
+                reordered = encode(case.raw)
             finally:
                 space.actions = original
                 case.raw.action_space = space

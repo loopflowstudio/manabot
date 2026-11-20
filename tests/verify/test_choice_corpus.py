@@ -37,7 +37,7 @@ def test_payment_source_names_the_battlefield_object() -> None:
     assert permanent.id != permanent.object_id
     descriptor = json.loads(signatures[-1])[-1][0]
     assert descriptor[:3] == ["permanent", "self", permanent.registry_key]
-    inputs = action_inputs(encode(env, raw), len(signatures), "clean")
+    inputs = action_inputs(encode(raw), len(signatures), "clean")
     assert inputs[-1].focus[0] is not None
     assert inputs[-1].focus[0].kind == "permanents"
 
@@ -57,7 +57,7 @@ def test_stack_aliases_share_a_signature_and_reach_collision_inputs() -> None:
         space.actions = [action]
         raw.action_space = space
         signatures.append(_signatures(raw))
-        obs = encode(env, raw)
+        obs = encode(raw)
         inputs.append(action_inputs(obs, 1, "clean"))
         focus = inputs[-1][0].focus[0]
         assert focus is not None and focus.kind == "stack"
