@@ -15,13 +15,21 @@ from manabot.training.loops.self_play import CLOCKS, create, self_play
 from tests.fixtures.training_records import recording
 
 
-@pytest.fixture
-def published(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "parent"))
+def publish(directory: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """One update of the Gray Ogre loop; the path of its published policy."""
+    monkeypatch.setenv("ETUDE_OUT", str(directory / "parent"))
     with recording(
-        experiment="test", run="pretrained", clocks=CLOCKS, directory=tmp_path / "track"
+        experiment="test",
+        run="pretrained",
+        clocks=CLOCKS,
+        directory=directory / "track",
     ) as run:
         return self_play(gray_ogre_self_play(horizon=1), run, updates=1)
+
+
+@pytest.fixture
+def published(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    return publish(tmp_path, monkeypatch)
 
 
 def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
@@ -44,9 +52,16 @@ def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
 
 
 def test_warm_start_keeps_the_readings_of_a_policy_that_recorded_none(
-    published: Path, tmp_path: Path
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    arrays, metadata = read_safetensors(published)
+    # A policy from before readings were recorded: built by the old rule, its
+    # record stripped of the readings.
+    with monkeypatch.context() as old_rule:
+        old_rule.setattr(
+            "manabot.backends.torch.policy.fresh_readings", legacy_readings
+        )
+        published_before = publish(tmp_path, old_rule)
+    arrays, metadata = read_safetensors(published_before)
     del metadata["input_readings"]
     parent = tmp_path / "before-readings.safetensors"
     write_safetensors(parent, arrays, metadata)

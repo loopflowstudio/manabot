@@ -171,7 +171,7 @@ class ActorCritic(nn.Module):
             card_dim += 1
         # Joins (definitions, links, action continuations) and validity
         # columns the mask carries are never numeric features.
-        perm_dim = len(columns.numeric_permanent_columns)
+        perm_dim = columns.numeric_width("agent_permanents")
         action_dim = columns.numeric_width("actions")
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
@@ -367,7 +367,11 @@ class ActorCritic(nn.Module):
         record_vocabulary: RecordVocabulary = (
             "catalog" if config.catalog_records() else "hashed"
         )
-        self.facts = FactEncoder(embed_dim, vocabulary=record_vocabulary)
+        self.facts = FactEncoder(
+            embed_dim,
+            numeric=columns.fact_width(catalog_ids=record_vocabulary == "catalog"),
+            vocabulary=record_vocabulary,
+        )
         self.shared_effects = SharedEffectEncoder(
             embed_dim, vocabulary=record_vocabulary
         )
@@ -377,6 +381,7 @@ class ActorCritic(nn.Module):
             self.semantic_cards.definition_rows
             if self.semantic_cards is not None
             else None,
+            onto_definitions=config.definition_names,
         )
 
         # An execution choice of the training stage, never model state: no

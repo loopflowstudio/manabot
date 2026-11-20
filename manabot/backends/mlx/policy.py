@@ -195,7 +195,7 @@ class Facts(nn.Module):
     def __init__(self, dims: Dimensions) -> None:
         super().__init__()
         self.kind = nn.Embedding(dims.fact_kinds + 1, dims.hidden)
-        self.numeric = nn.Linear(6, dims.hidden)
+        self.numeric = nn.Linear(dims.fact, dims.hidden)
         self.program_numeric = nn.Linear(1, dims.hidden)
         self.program_sequence = PackedGRU(dims.hidden, dims.hidden)
         self.output = nn.Linear(dims.hidden, dims.hidden)
@@ -576,7 +576,10 @@ class MLXActorCritic(nn.Module):
         return self(batch)
 
     def _public(self, programs: mx.array) -> mx.array:
-        """`NameCandidateEncoder.public_definitions`: add names to their programs."""
+        """`NameCandidateEncoder.public_definitions`: the definition vectors objects
+        read, with names added only under `definition_names`."""
+        if not self.config.definition_names:
+            return programs
         static: _Static = self._static
         names = _take(self.name_candidates.embedding.weight, static.named_names)
         return programs.at[static.named_rows].add(names)

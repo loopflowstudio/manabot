@@ -26,7 +26,7 @@ from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.model.world import checkpoint_world
+from manabot.model.interface import world_fields
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.sim.search.sampling import PhysicalHandSampler
 from manabot.sim.search.sampling_receipt import HandSample, validate_hand
@@ -95,7 +95,7 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     checkpoint = tmp_path / "policy.pt"
     torch.save(
         {
-            "world_binding": checkpoint_world(Match(match_config).to_rust(), obs_space),
+            **world_fields(obs_space, agent.readings, Match(match_config).to_rust()),
             "hypers": {
                 "observation_hypers": obs_config.model_dump(),
                 "agent_hypers": agent_config.model_dump(),

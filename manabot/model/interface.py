@@ -49,7 +49,9 @@ def world_fields(
         "world_binding": binding,
         "writer_catalog": writer_catalog(),
         "input_columns": columns,
-        "input_readings": {key: list(values) for key, values in readings.items()},
+        "input_readings": {
+            key: [value.value for value in values] for key, values in readings.items()
+        },
     }
 
 
@@ -84,12 +86,11 @@ def saved_readings(
 
 @dataclass(frozen=True)
 class ModelInterface:
-    """A checkpoint's writer vocabulary, the running one, and its saved column
-    prefixes (only the arrays narrower than the runtime's)."""
+    """A checkpoint's writer vocabulary and the running one. Its saved column
+    prefixes are the lengths of its readings (`saved_readings`)."""
 
     writer: WriterCatalog
     current: WriterCatalog
-    widths: dict[str, int]
 
 
 def model_interface(
@@ -128,7 +129,7 @@ def model_interface(
                 f"incompatible checkpoint rules binding for {key}; {location}"
             )
 
-    widths = saved_widths(checkpoint, expected, space, location)
+    validate_saved_columns(checkpoint, expected, space, location)
     current = writer_catalog()
     writer = checkpoint.get("writer_catalog")
     if writer is None:
@@ -156,16 +157,16 @@ def model_interface(
         raise ValueError(
             f"belief card embedding requires a bound belief vocabulary; {location}"
         )
-    return ModelInterface(writer, current, widths)
+    return ModelInterface(writer, current)
 
 
-def saved_widths(
+def validate_saved_columns(
     checkpoint: Mapping[str, Any],
     expected: Mapping[str, Any],
     space: ObservationSpace,
     location: str,
-) -> dict[str, int]:
-    """The saved width of each named array narrower than the runtime's.
+) -> None:
+    """Check each saved array against the runtime's.
 
     Columns are only appended, so a checkpoint reads the runtime's first N
     columns; recorded names, when present, must equal that prefix."""
@@ -200,14 +201,12 @@ def saved_widths(
                 raise ValueError(
                     f"incompatible {key} columns: checkpoint {recorded[key]}, runtime {wanted}; {location}"
                 )
-            if width != current_shape[-1]:
-                widths[key] = width
+            widths[key] = width
         elif shape != current_shape:
             raise ValueError(f"incompatible {key} shape {shape}; {location}")
     for group in ("player", "cards", "permanents"):
         if widths.get(f"agent_{group}") != widths.get(f"opponent_{group}"):
             raise ValueError(f"{group} column counts differ between seats; {location}")
-    return widths
 
 
 def recorded_writer(

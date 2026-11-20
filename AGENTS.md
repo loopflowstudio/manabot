@@ -339,12 +339,16 @@ change already touches it; do not rewrite a module only for style. Rust in
   independent of fact and effect capacity, references are gathered and ids
   looked up. No category or index reaches a projection as a magnitude. A new
   column declares its kind (`scale` when the encoder divides it, `size` for a
-  category); add no Python column table and no per-backend scaling. A sized
-  reading is recorded as `name:size`, so a stored model keeps its width when a
-  category grows. A checkpoint records its readings
+  category); add no Python column table and no per-backend scaling. The one
+  table is `PLACED_READINGS` (`manabot/policy/readings.py`): validity flags,
+  embedded words, fact durations and join extents read by their place in a
+  structured row. A sized reading is recorded as `name:size`, so a stored
+  model keeps its width when a category grows. A checkpoint records its readings
   (`input_readings`) and never consults the rule; one without the record gets
   `legacy_readings`, which is never extended. The native kinds of buffers with
-  their own preparation (decision memory, history events) are not used.
+  their own preparation (decision memory, history events) are not used. A
+  run's saved state records its model's readings, and a resume whose model
+  reads differently is refused.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; the policy input never silently falls behind.

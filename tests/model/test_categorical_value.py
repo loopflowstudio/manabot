@@ -16,7 +16,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.world import checkpoint_world
+from manabot.model.interface import world_fields
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.training.rollout.collection import Collector, collect, open_collector
 import managym
@@ -67,9 +67,7 @@ def _save_checkpoint(
                 "agent_hypers": saved_config,
                 "observation_hypers": agent.observation_space.encoder.config.model_dump(),
             },
-            "world_binding": checkpoint_world(
-                Match().to_rust(), agent.observation_space
-            ),
+            **world_fields(agent.observation_space, agent.readings, Match().to_rust()),
         },
         path,
     )

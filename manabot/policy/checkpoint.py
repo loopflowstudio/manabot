@@ -142,6 +142,7 @@ class Dimensions:
     action: int
     focus: int
     relation: int
+    fact: int
     fact_kinds: int
     token_rows: int
     name_rows: int
@@ -200,8 +201,8 @@ class PolicyCheckpoint:
     parameters: ParameterArrays
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
-    # The readings the checkpoint was written with (`saved_readings`); after
-    # admission they are cut to its saved column prefixes.
+    # The readings the checkpoint was written with (`saved_readings`), one per
+    # column of each buffer's saved prefix.
     readings: Readings
     report: BindingReport | None = None
 
@@ -248,10 +249,11 @@ class PolicyCheckpoint:
             or model.num_attention_heads * model.hidden_dim,
             player=columns.numeric_width("agent_player"),
             card=columns.numeric_width("agent_cards"),
-            permanent=len(columns.numeric_permanent_columns),
+            permanent=columns.numeric_width("agent_permanents"),
             action=columns.numeric_width("actions"),
             focus=encoder.max_focus_objects,
             relation=columns.numeric_width("relations"),
+            fact=columns.fact_width(catalog_ids=True),
             fact_kinds=FACT_KINDS,
             token_rows=int(
                 self.parameters["semantic_cards.token_embedding.weight"].shape[0]
@@ -427,16 +429,15 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
     if interface is None:
         return checkpoint
-    width = interface.widths.get("agent_player", checkpoint.space.encoder.player_dim)
+    columns = Layout(checkpoint.readings)
+    width = len(checkpoint.readings["agent_player"])
     projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
     extra = (
-        interface.widths.get(
-            "player_turn_state", checkpoint.space.shapes["player_turn_state"][-1]
-        )
+        columns.numeric_width("player_turn_state")
         if checkpoint.space.encoder.turn_state
         else 0
     )
-    if projected != width + extra:
+    if projected != columns.numeric_width("agent_player") + extra:
         raise ValueError("checkpoint player columns differ from its projection")
     if not checkpoint.model.catalog_records() and interface.writer == interface.current:
         return checkpoint

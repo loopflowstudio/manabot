@@ -54,10 +54,12 @@ from manabot.env.observation import (
 from manabot.policy.buckets import has_history_events
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
 from manabot.policy.readings import (
+    DURATION_FLAGS,
     PROGRAM_KINDS,
     RANK_SCALE,
     Reading,
     Readings,
+    duration_flags,
     numeric_columns,
     read_numeric,
 )
@@ -123,9 +125,15 @@ class Layout:
         """How many of a buffer's columns its projection receives."""
         return len(numeric_columns(self.readings[key]))
 
-    @cached_property
-    def numeric_permanent_columns(self) -> tuple[int, ...]:
-        return numeric_columns(self.readings["agent_permanents"])
+    def fact_width(self, *, catalog_ids: bool) -> int:
+        """Inputs of the fact projection: the numeric payloads and timestamp,
+        the duration flags, and with catalog ids the ordinal id."""
+        readings = self.readings["facts"]
+        return (
+            self.numeric_width("facts")
+            + sum(DURATION_FLAGS.get(reading, 0) for reading in readings)
+            + int(catalog_ids)
+        )
 
     @cached_property
     def link_columns(self) -> tuple[int, ...]:
@@ -824,7 +832,6 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         return result
 
     kinds = live[..., FACT_KIND_INDEX].astype(np.int64)
-    duration = live[..., FACT_DURATION_INDEX]
     ident, detail = (
         record_word(live, FACT_ID_INDEX),
         record_word(live, FACT_DETAIL_INDEX),
@@ -840,8 +847,9 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
     columns = np.concatenate(
         [
             payloads,
-            (duration == 1).astype(np.float32)[:, None],
-            (duration == 2).astype(np.float32)[:, None],
+            duration_flags(
+                live[..., FACT_DURATION_INDEX], readings[FACT_DURATION_INDEX]
+            ),
             order,
             (np.where(ordinal, ident, 0).astype(np.float32) / np.float32(RANK_SCALE))[
                 :, None
@@ -875,7 +883,7 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         detail_mask = padded(named_detail.astype(np.float32))
     else:
         # Torch linear chooses a different accumulation path for strided inputs.
-        columns = np.ascontiguousarray(columns[..., :5])
+        columns = np.ascontiguousarray(columns[..., :-1])
         id_rows = ident % tables.record_buckets
         detail_rows = detail % tables.record_buckets
         sources = live[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets

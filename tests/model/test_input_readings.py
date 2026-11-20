@@ -4,13 +4,18 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     FACT_COUNTER,
+    FACT_DIM,
+    FACT_DURATION_INDEX,
     FACT_EFFECT_PROGRAM,
+    FACT_KIND_INDEX,
     FACT_TRANSFORMS,
+    FACT_VALID_INDEX,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
@@ -27,6 +32,7 @@ from manabot.policy.readings import (
 )
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+from tests.model.prepared_routes import fact_rows
 
 
 def _batch(space: ObservationSpace) -> dict[str, np.ndarray]:
@@ -79,10 +85,13 @@ def test_saved_model_reloads_with_its_recorded_readings(
         np.testing.assert_array_equal(before, after)
 
 
-def test_checkpoint_without_readings_reads_as_before(
-    saved: tuple[ActorCritic, ObservationSpace, Path],
-) -> None:
-    _, space, path = saved
+def test_checkpoint_without_readings_reads_as_before(tmp_path: Path) -> None:
+    space = ObservationSpace()
+    policy = ActorCritic(
+        space, ModelConfig(hidden_dim=8, world="world"), readings=legacy_readings(space)
+    )
+    path = tmp_path / "policy.safetensors"
+    save_checkpoint(policy, space, path, player_configs=None)
     record = read_checkpoint(path)
     del record["input_readings"]
     write_checkpoint(record, path)
@@ -139,3 +148,18 @@ def test_fact_payloads_read_by_their_fact_kind() -> None:
     np.testing.assert_array_equal(fresh, expected)
     raw = read_numeric(values, (Reading.FACT_VALUE_RAW,) * 2, kinds)
     np.testing.assert_array_equal(raw, values)
+
+
+@pytest.mark.parametrize("duration", [3, 4])
+def test_durations_three_and_four_reach_a_fresh_model_only(duration: int) -> None:
+    space = ObservationSpace()
+    facts = torch.zeros(1, 2, FACT_DIM)
+    facts[0, :, FACT_KIND_INDEX] = FACT_COUNTER
+    facts[0, :, FACT_VALID_INDEX] = 1
+    facts[0, 1, FACT_DURATION_INDEX] = duration
+    objects = torch.zeros(1, 2, 8)
+    with torch.no_grad():
+        fresh = fact_rows(facts, objects, readings=fresh_readings(space)).columns
+        legacy = fact_rows(facts, objects).columns
+    assert not torch.equal(fresh[0, 0], fresh[0, 1])
+    torch.testing.assert_close(legacy[0, 0], legacy[0, 1], rtol=0, atol=0)

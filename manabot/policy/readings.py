@@ -59,11 +59,15 @@ class Reading(StrEnum):
     # A fact's id words: a token row for named kinds; for ordinal kinds (frame
     # or ability indexes) one number, the ordinal / 128.
     FACT_ID = "fact_id"
-    # A fact's duration as two flags: until end of turn, indefinite.
+    # A fact's duration as four flags: until end of turn, indefinite, while the
+    # source is controlled, until your next turn.
     DURATION = "duration"
     OWN = "own"  # decoded by its buffer's own preparation (`OWN_PREPARATION`)
-    # Stored checkpoints only; the rule never chooses this.
+    # Stored checkpoints only; the rule never chooses these.
     FACT_VALUE_RAW = "fact_value_raw"  # a fact payload as stored, whatever its kind
+    # A fact's duration as the first two flags only; durations 3 and 4 read as
+    # absent.
+    DURATION_TWO = "duration_two"
 
 
 type Readings = Mapping[str, tuple[Reading, ...]]
@@ -105,6 +109,15 @@ PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
     ("effects", "member_count"): Reading.GATHER,
     ("effects", "valid"): Reading.MASK,
 }
+
+# Stored checkpoints written before readings were recorded read fact durations
+# as two flags.
+LEGACY_PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
+    **PLACED_READINGS,
+    ("facts", "duration"): Reading.DURATION_TWO,
+}
+# How many flags each duration reading writes, one per duration code from 1.
+DURATION_FLAGS: Mapping[Reading, int] = {Reading.DURATION: 4, Reading.DURATION_TWO: 2}
 
 # Buffers `prepare` reads through their readings.
 READ_BY_READINGS = frozenset(
@@ -223,24 +236,28 @@ def kind_reading(kind: str, scale: int | None) -> Reading:
 def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
     """The readings of a model built now, over the runtime's full columns."""
     return assign_readings(
-        space, lambda key, column: kind_reading(column.kind, column.scale)
+        space,
+        lambda key, column: kind_reading(column.kind, column.scale),
+        PLACED_READINGS,
     )
 
 
 def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
     """The readings of a checkpoint that records none: what every model did
     before readings were recorded. Never extended."""
-    return assign_readings(space, legacy_reading)
+    return assign_readings(space, legacy_reading, LEGACY_PLACED_READINGS)
 
 
 def assign_readings(
-    space: "ObservationSpace", rule: Callable[[str, ColumnKind], Reading]
+    space: "ObservationSpace",
+    rule: Callable[[str, ColumnKind], Reading],
+    placed: Mapping[tuple[str, str], Reading],
 ) -> dict[str, tuple[Reading, ...]]:
-    """Each published column's placed reading, `own` in an own-preparation
+    """Each published column's `placed` reading, `own` in an own-preparation
     buffer, and otherwise the reading `rule` gives it."""
     return {
         key: tuple(
-            PLACED_READINGS.get((key, column.name))
+            placed.get((key, column.name))
             or (Reading.OWN if key not in READ_BY_READINGS else rule(key, column))
             for column in columns
         )
@@ -312,6 +329,12 @@ def signed_log(values: Array) -> Array:
 def numeric_columns(readings: Sequence[Reading]) -> tuple[int, ...]:
     """Indexes of the columns a numeric projection receives."""
     return tuple(i for i, reading in enumerate(readings) if reading in NUMERIC)
+
+
+def duration_flags(duration: Array, reading: Reading) -> Array:
+    """One float32 flag per duration code from 1 [..., F]; 0 (absent) sets none."""
+    codes = np.arange(1, DURATION_FLAGS[reading] + 1)
+    return (np.asarray(duration)[..., None] == codes).astype(np.float32)
 
 
 def read_numeric(

@@ -791,16 +791,19 @@ than their kind, in fresh and stored models alike (`PLACED_READINGS` in
 and effects read `mask`: a mask already carries them, so no projection
 receives them. A fact's `kind` and detail words read `lookup`; its id words
 read `fact_id`, a token row for named kinds and the ordinal / 128 for frame
-and ability indexes; its `duration` reads `duration`, two flags for until end
-of turn and indefinite. An effect's detail and member counts read `gather`
+and ability indexes; its `duration` reads `duration`, four flags for until end
+of turn, indefinite, while the source is controlled and until your next turn
+(a checkpoint that records no readings reads `duration_two`, the first two
+flags only). An effect's detail and member counts read `gather`
 with their offsets, as the extent of a join.
 
 A relation's `frame` and `parent` are declared `selector` but name another
 relation row. A fresh model reads them `gather`: frame pooling follows them as
 a join, and they are not numeric inputs.
 
-A column whose kind has no reading stops the model from building, and so does
-a `gather` or `lookup` column asked for as a number. A new column therefore
+A column whose kind has no reading stops the model from building. `gather`
+and `lookup` columns never reach a projection: they are routed as joins and
+embedding rows, so a reading cannot turn an id into a magnitude. A new column therefore
 needs only its native declaration: give it the kind that says what it holds,
 and `scale` when the encoder divides it.
 
@@ -817,7 +820,10 @@ no readings, so it stays as it is.
 A stored checkpoint never consults the rule. It reads each column the way
 `input_readings` says, so a later correction to a column's kind or to the
 rule changes fresh models only
-([what a checkpoint is bound to](#what-a-checkpoint-is-bound-to)).
+([what a checkpoint is bound to](#what-a-checkpoint-is-bound-to)). A training
+run's saved state records the readings its model was built with, and a resume
+whose model would read a column differently is refused: resume from the
+revision that started the run, or warm start from its last published policy.
 
 ### Relations and facts
 
@@ -914,10 +920,17 @@ The policy adds a trainable vector per name and, where present, the
 definition's learning-program embedding from the table used by game objects. A
 group's vector is the mean of its members' name vectors, computed exactly from
 a prefix sum over the name table: every member receives the group's gradient,
-and no member programs are encoded for a group prompt. Name vectors join
-viewer-visible program references before card, known-hand and decklist pooling,
-so equal-rule cards with different public names support different preferences;
-closed native decklist rows contribute no identities. Action networks score
+and no member programs are encoded for a group prompt. Name vectors score
+NameCard candidates only: a card, permanent, known-hand or decklist token's
+definition is its rules program. A unit-variance name vector added onto every
+definition outweighed the rest of an object token at initialization (a 9/9
+creature moved its token about 7% with names added, about 20% without), and
+gave training a second source of card identity. The cost is that equal-rule
+cards with different public names read alike off the NameCard prompt.
+Checkpoints written before this choice add name vectors onto viewer-visible
+definitions before pooling and keep doing so (`ModelConfig.definition_names`,
+read as true when a world-bound checkpoint omits it); closed native decklist
+rows contribute no identities. Action networks score
 only legal rows, and rollouts pack legal action fields and complete behavior
 probabilities with original coordinates.
 

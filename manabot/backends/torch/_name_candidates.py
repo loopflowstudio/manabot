@@ -2,8 +2,8 @@
 
 The vocabulary is immutable and bound by the checkpoint naming-vocabulary digest. Each
 name has its own trainable vector even when two definitions have identical rules.
-Only legal choices and viewer-visible definitions contribute name gradients;
-padding is zero. Definition IDs route
+Only legal choices contribute name gradients (and viewer-visible definitions,
+for a checkpoint that adds names onto definitions); padding is zero. Definition IDs route
 joins and are never treated as numerical magnitudes.
 
 Input v9 also offers naming *groups*: ordinary native choices that narrow the
@@ -28,8 +28,11 @@ class NameCandidateEncoder(nn.Module):
         candidates: Sequence[managym.NameCandidate],
         hidden_dim: int,
         definition_rows: torch.Tensor | None = None,
+        *,
+        onto_definitions: bool = False,
     ) -> None:
         super().__init__()
+        self.onto_definitions = onto_definitions
         if not candidates or len({candidate.name for candidate in candidates}) != len(
             candidates
         ):
@@ -79,14 +82,20 @@ class NameCandidateEncoder(nn.Module):
         return embedded + groups
 
     def public_definitions(self, programs: torch.Tensor) -> torch.Tensor:
-        """Join names to public programs before visible-object/knowledge pooling.
+        """The definition vectors objects read: their programs, plus each
+        public name's vector when `onto_definitions` (`ModelConfig.definition_names`).
 
-        Equal-rule definitions must remain distinguishable when their printed
-        names are public. Definition-free names contribute no object identity.
-        Hidden membership is never inferred: consumers still index only the
-        native viewer-safe card, known-hand, decklist and continuation references.
+        Adding names keeps equal-rule definitions distinguishable, but a
+        unit-variance name vector outweighs the rest of a card's token at
+        initialization and gives training a second source of card identity, so
+        fresh models leave programs alone and use names on NameCard candidates
+        only. Definition-free names contribute no object identity. Hidden
+        membership is never inferred: consumers still index only the native
+        viewer-safe card, known-hand, decklist and continuation references.
         The raw program table remains the candidate scorer's semantic input.
         """
+        if not self.onto_definitions:
+            return programs
         assert self.program_rows is not None
         named = self._public_mask
         if self.bucketed:

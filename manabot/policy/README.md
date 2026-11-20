@@ -46,15 +46,18 @@ forward reads the result; no forward reads an observation dictionary.
   reads: `as_is`, `log`, `rank`, `gather`, `lookup`, `mask`, `fact_value`,
   `fact_id`, `duration`, `own` (decoded by the buffer's own preparation), or
   one of the sized readings `one_hot:n` (n + 1 flags) and `steps:n` (the value
-  and n threshold flags). A reading states how many inputs its column becomes,
-  and a buffer's numeric width is the sum over its columns. A fresh
+  and n threshold flags), and for stored checkpoints only `fact_value_raw` and
+  `duration_two`. A reading states how many inputs its column becomes, and a
+  buffer's numeric width is the sum over its columns. A fresh
   model derives them from the kinds `managym.observation_layout()` declares; a
   loaded one takes them from its checkpoint's `input_readings`, or
   `legacy_readings(space)` when the checkpoint predates the record. `prepare`
   applies each numeric reading once, so a backend never scales a column, and
   admission keys include the readings, so two models that differ in one
-  reading never share a prepared batch. A column whose kind has no reading,
-  or a join asked for as a number, raises when the layout is built
+  reading never share a prepared batch. A column whose kind has no reading
+  raises when the layout is built; joins and ids never reach a projection. A
+  reading may write more than one input (`duration`: four flags), so
+  projection widths come from `Layout` (`numeric_width`, `fact_width`)
   ([how the network reads a column](../../docs/observation-and-model.md#how-the-network-reads-a-column)).
 - `checkpoint.py` is the checkpoint container: one safetensors file of
   canonical float32 parameters, lookup buffers and the checkpoint's

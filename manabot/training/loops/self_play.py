@@ -13,6 +13,7 @@ run preserves the retired executor's offsets; resume starts fresh streams.
 from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
+from itertools import zip_longest
 import os
 from pathlib import Path
 from typing import Literal
@@ -57,6 +58,7 @@ from manabot.model.world import (
     validate_agent_setup,
 )
 from manabot.policy.checkpoint import pretrained_memory_branch
+from manabot.policy.readings import Readings
 from manabot.training.corpus import (
     ParentCheckpoint,
     log_corpus_outcomes,
@@ -348,7 +350,12 @@ def self_play_collector(
 
 
 class Counts(BaseModel):
-    """Cumulative completed work, changed in place so Etude saves this object."""
+    """Cumulative completed work, changed in place so Etude saves this object.
+
+    `readings` is the input readings the run's model was built with
+    (`manabot.policy.readings`), recorded when the run starts; a state saved
+    before readings were recorded has none.
+    """
 
     updates: int = 0
     training_seconds: float = 0.0
@@ -358,6 +365,7 @@ class Counts(BaseModel):
     idle_stream_steps: int = 0
     optimizer_updates: int = 0
     optimizer_exposures: int = 0
+    readings: dict[str, list[str]] | None = None
 
 
 def clocks(counts: Counts) -> dict[str, float]:
@@ -464,6 +472,34 @@ def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | Non
     return learner, ema
 
 
+def keep_readings(counts: Counts, readings: Readings) -> None:
+    """Record the model's readings in `counts` in place, or refuse a resume
+    whose model reads a column differently from the run's saved state.
+
+    A resumed run builds its model from the current rule before the saved
+    weights load, so after a kind correction or rule change it would otherwise
+    read some columns differently with nothing said.
+    """
+    built = {key: [str(value) for value in values] for key, values in readings.items()}
+    if counts.readings is None:
+        counts.readings = built
+        return
+    differ = sorted(
+        f"{key}[{index}]: {saved} -> {now}"
+        for key in counts.readings.keys() | built.keys()
+        for index, (saved, now) in enumerate(
+            zip_longest(counts.readings.get(key, ()), built.get(key, ()))
+        )
+        if saved != now
+    )
+    if differ:
+        raise ValueError(
+            "resumed model reads its inputs differently from the saved run "
+            f"({', '.join(differ)}); resume from the revision that started the "
+            "run, or warm start from its last published policy"
+        )
+
+
 def write_policy(
     model: ActorCritic,
     settings: SelfPlay,
@@ -500,7 +536,7 @@ def write_policy(
             extra={
                 "weights": weights,
                 "update": counts.updates,
-                "counts": counts.model_dump(mode="json"),
+                "counts": counts.model_dump(mode="json", exclude={"readings"}),
                 "seed": seed,
                 "value_semantic": "signed_outcome",
                 "averaging": averaging if weights == "ema" else None,
@@ -817,6 +853,7 @@ def self_play(
         if ema is not None:
             objects["ema"] = ema
         counts = run.resume(**objects, extra=Counts())
+        keep_readings(counts, learner.agent.readings)
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
