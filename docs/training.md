@@ -887,45 +887,11 @@ uv run etude train manabot/recipes/local.py --experiment no-probe \
   --config '{"combat_probe_every": 0}'
 ```
 
-On each probed update, `learner.agent` is re-scored after the update on up to
-`combat_probe_rows` (default 256) evenly spaced two-offer `DECLARE_ATTACKER` and
-`DECLARE_BLOCKER` decisions from that update's collected batch (drawing no
-random numbers). The logged keys answer two separate questions
-([reading the combat probe curves](experiment-metrics.md#combat-probe)):
-
-- **Is the policy locking?** `combat/<attack|block>/gap` is the mean declare
-  logit minus decline logit. On an individual decision, a gap of 0 gives a
-  50% declare probability, 2.4 gives about 92%, and 9 gives about 99.99%.
-- **Is it board-blind?** Four `combat/<attack|block>/shift/<edit>` keys measure
-  the mean change in that gap when the same decisions are re-scored after one
-  edit to the raw permanent buffers before `prepare`: `my_creatures_0_1` (my
-  creatures set to 0/1), `my_creatures_9_9` (my creatures set to 9/9),
-  `their_creatures_0_1_tapped` (their creatures set to 0/1 and tapped) and
-  `their_creatures_9_9_untapped` (their creatures set to 9/9 and untapped). A
-  policy can stay unlocked and still read flat near `0` on every shift.
-
-Each shift averages only decisions where the edited side has at least one
-creature (`is_creature`); `combat/<attack|block>/decisions` and
-`combat/<attack|block>/shift_decisions/<mine|theirs>` record the sample counts.
-Unlike the earlier attack-lock study's probe script, which also tapped and
-untapped the acting player's creatures in the two `my_creatures_*` edits, the
-in-loop probe edits power and toughness only on my side so an offered attacker
-or blocker is never shown tapped; my-side shift numbers are therefore close to,
-not identical with, that study's.
-
-Unprobed updates log no `combat/*` or `time/combat_probe` keys. When a probed
-batch has no qualifying decisions of a kind, or no sampled decision has a
-creature on the edited side, the corresponding keys are omitted rather than
-logged as zero or `NaN`; legacy v9/v10 layouts publish no `is_creature` and log
-no `combat/*` keys. `combat_probe_every` and `combat_probe_rows` are
-`RunSettings` options, outside `learner_digest` and checkpoint bindings, though
-Etude still compares recipe configs on resume.
-
-Measured on CPU (Elemental recipe, 32 streams, 256 attack + 237 block decisions,
-about 2,500 row-forwards), one probed update takes 4.4 s (~7% of a 32-stream CPU
-update). Because cost scales with `combat_probe_rows` rather than stream count,
-at 256 streams and cadence 5 it is about 0.2% of CPU training. CUDA cost is
-unmeasured; read `time/combat_probe` in each run's Perf "Update time" chart.
+The probe scores the updated policy on up to `combat_probe_rows` decisions
+per kind from that update's batch. The gap measures the policy's preference
+for declaring. The four shifts measure how that preference changes when either
+player's creatures are edited. For the metric keys, sample counts, missing
+values and measured CPU cost, see [Combat probe](experiment-metrics.md#combat-probe).
 
 ### Checkpoint cadence
 

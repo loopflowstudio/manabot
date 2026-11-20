@@ -1,17 +1,9 @@
 """Etude report panels over the metrics a self-play learner logs.
 
-An experiment file's `report()` passes these as `Report(perf=PERF, ml=ML)`, or
-calls `self_play_report()` when it has no evaluation panels of its own, so
-its Perf and ML details draw manabot's own keys (`update_metrics.metric_row`
-and `combat/...`) rather than Etude's reinforcement-learning defaults. Keys are
-unprefixed: `entropy`, `collection_kl`, `numerical/...`, `combat/...`, and the
-run's coordinates under `coordinates/`. Phase seconds per update are under
-`time/` (`update_metrics.phase_seconds`, read from the live collector and
-learner profilers, plus `time/combat_probe` on probed updates), drawn by `Flame`
-and, for the costs that decide a training machine, by the "Update time" series. Rows from runs before a phase
-was timed leave that series blank; retained rows and the Python vector carry only
-the environment step's parent key, so a new run compares to them on it. Series
-overlay, so the parent beside its children double counts nothing.
+Use `self_play_report()` for a training-only report, or include `PERF` and
+`ML` alongside an experiment's evaluation panels. The Update time series
+overlays parent and child phase times so runs that recorded only the parent
+can still be compared.
 """
 
 from etude.report import (

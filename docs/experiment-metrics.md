@@ -267,7 +267,8 @@ updates = updates_from_run(read(runs_dir, experiment, run_id))
         round(row["combat/attack/shift/their_creatures_9_9_untapped"], 2),
     )
     for update, row in updates.items()
-    if "combat/attack/gap" in row
+    if "combat/attack/shift/my_creatures_9_9" in row
+    and "combat/attack/shift/their_creatures_9_9_untapped" in row
 ][:2]
 ```
 

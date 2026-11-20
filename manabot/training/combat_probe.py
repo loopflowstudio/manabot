@@ -5,6 +5,7 @@ materializing observations. gap_shifts scores each edit against the same
 unmodified positions with the same policy.
 """
 
+from collections.abc import Iterator
 from copy import copy
 from dataclasses import dataclass
 
@@ -100,43 +101,46 @@ def gap_shifts(
     """Score a nonempty batch of two-offer combat rows in original action slots."""
     if execution_rows is not None and execution_rows < 1:
         raise ValueError("execution_rows must be positive")
-    legal = rows["actions_valid"] > 0
-    declared = rows["actions"][..., columns.declared] > 0
-    yes = np.nonzero(legal & declared)
-    no = np.nonzero(legal & ~declared)
-    expected = np.arange(len(legal))
-    if not len(expected) or not (
-        np.array_equal(yes[0], expected) and np.array_equal(no[0], expected)
-    ):
+    count = len(rows["actions_valid"])
+    if count == 0:
         raise ValueError(
             "gap_shifts requires a nonempty batch of two-offer declare/decline rows"
         )
-    width = execution_rows or len(expected)
+    width = execution_rows or count
+    samples: dict[tuple[str, str], list[np.ndarray]] = {}
+    for start in range(0, count, width):
+        chunk = (
+            rows
+            if width >= count
+            else select_rows(rows, np.arange(start, min(start + width, count)))
+        )
+        for key, count_key, values in combat_samples(policy, chunk, columns):
+            samples.setdefault((key, count_key), []).append(values)
+
+    metrics: dict[str, float | int] = {}
+    for (key, count_key), chunks in samples.items():
+        values = np.concatenate(chunks)
+        metrics[key] = float(values.mean())
+        metrics[count_key] = len(values)
+    return metrics
+
+
+def combat_samples(
+    policy: BackendPolicy, rows: dict[str, np.ndarray], columns: CombatColumns
+) -> Iterator[tuple[str, str, np.ndarray]]:
+    """Per-decision gaps and paired shifts for one execution chunk."""
+    legal = rows["actions_valid"] > 0
+    declared = rows["actions"][..., columns.declared] > 0
+    yes, no = legal & declared, legal & ~declared
+    if not (np.all(yes.sum(axis=1) == 1) and np.all(no.sum(axis=1) == 1)):
+        raise ValueError("gap_shifts requires two-offer declare/decline rows")
 
     def gaps(observation: dict[str, np.ndarray]) -> np.ndarray:
-        if width >= len(expected):
-            logits, _ = policy.evaluate(policy.prepare(observation))
-        else:
-            logits = np.concatenate(
-                [
-                    policy.evaluate(
-                        policy.prepare(
-                            select_rows(
-                                observation,
-                                np.arange(start, min(start + width, len(expected))),
-                            )
-                        )
-                    )[0]
-                    for start in range(0, len(expected), width)
-                ]
-            )
+        logits, _ = policy.evaluate(policy.prepare(observation))
         return logits[yes].astype(np.float64) - logits[no]
 
     base = gaps(rows)
-    metrics: dict[str, float | int] = {
-        "gap": float(base.mean()),
-        "decisions": len(base),
-    }
+    yield "gap", "decisions", base
     for key, cols, side, weak, strong in (
         (
             "agent_permanents",
@@ -158,7 +162,6 @@ def gap_shifts(
         present = creatures.any(axis=1)
         if not present.any():
             continue
-        metrics[f"shift_decisions/{side}"] = int(present.sum())
         # Shallow-copy the observation to retain any decision-memory prefixes.
         edited = copy(rows)
         edited[key] = board.copy()
@@ -169,8 +172,11 @@ def gap_shifts(
             )
             if side == "theirs":
                 edited[key][..., cols.tapped][creatures] = power == 0
-            metrics[f"shift/{label}"] = float((gaps(edited) - base)[present].mean())
-    return metrics
+            yield (
+                f"shift/{label}",
+                f"shift_decisions/{side}",
+                (gaps(edited) - base)[present],
+            )
 
 
 def combat_probe(

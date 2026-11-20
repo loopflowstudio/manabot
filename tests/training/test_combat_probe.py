@@ -191,12 +191,11 @@ def test_shifts_in_game_units_condition_on_boards_with_creatures(
         "shift/their_creatures_9_9_untapped": 12,
     }
     assert gap_shifts(policy, rows, cols) == pytest.approx(expected)
-    chunked = scoring_policy(cols, False)
-    chunked.evaluate.side_effect = evaluate
-    assert gap_shifts(chunked, rows, cols, execution_rows=1) == pytest.approx(expected)
+    policy.reset_mock()
+    assert gap_shifts(policy, rows, cols, execution_rows=1) == pytest.approx(expected)
     assert all(
         len(call.args[0]["actions_valid"]) == 1
-        for call in chunked.prepare.call_args_list
+        for call in policy.prepare.call_args_list
     )
 
     bad = {**rows, "actions": rows["actions"].copy()}
