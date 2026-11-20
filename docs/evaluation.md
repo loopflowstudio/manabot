@@ -689,6 +689,29 @@ same traversal. Each reducer's `finish` runs once across all deal blocks, not
 once per worker. The card table uses native seats; participant mapping,
 eligibility and bootstrap intervals remain evaluation responsibilities.
 
+For per-game play counts, pass `reducers={"play": Play()}` with `Play`
+from `manabot.eval.behaviour`. The `play` table in `statistics.json` has one
+row per native seat per completed game. Pool each pair of columns by summing
+both columns before dividing. A zero denominator leaves the rate undefined.
+
+| Numerator / denominator | What one opportunity means |
+| --- | --- |
+| `lands_played / land_turns` | An own turn with a land play offered. Playing any offered land counts once. |
+| `casts_made / cast_turns` | An own turn with a spell cast offered. Choosing a cast counts once even if several spells are cast. |
+| `attackers_declared / attackers_offered` | One attacker declaration decision. The selected offer's declaration flag records the choice. |
+| `blockers_declared / blockers_offered` | One blocker declaration decision, including when several attackers are legal targets. |
+| `casts_off_turn / casts` | One chosen cast action. The numerator counts choices made on the opponent's turn. |
+| `turns / games` | One completed game. Each seat's row carries the final game turn number. |
+
+Choice counts cover nontrivial decisions in the recording. A pass followed by
+a land play later in the same turn counts as one opportunity taken. A cast is
+counted when selected, regardless of how the spell resolves.
+
+An earlier priority pass cannot establish that an attack is safe. Razor Rings
+can first gain a legal target after attackers are declared. Blocker count and
+attacker power alone also cannot establish lethal damage. At 2 life, a 2/2
+lifelink blocker can keep its controller alive against two attacking 2/2s.
+
 Only complete, successfully audited games contribute reducer rows. Rejected
 games remain in the evaluation's original records and outcome diagnostics.
 A catchable reducer exception stops custom analysis and publishes no custom
