@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256
@@ -18,6 +19,7 @@ from manabot.model.world import (
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
 from manabot.policy.readings import (
     ColumnReading,
+    Reading,
     Readings,
     fresh_readings,
     legacy_readings,
@@ -65,7 +67,13 @@ def saved_readings(
             raise ValueError(
                 f"checkpoint input readings have no columns; {written_at(checkpoint)}"
             )
-        return recorded_readings(recorded, columns, written_at(checkpoint))
+        readings = recorded_readings(recorded, columns, written_at(checkpoint))
+        if space.config.max_decision_records and not columns.keys() & set(
+            MEMORY_FIELDS
+        ):
+            for key in MEMORY_FIELDS:
+                readings[key] = (Reading.OWN,) * space.shapes[key][-1]
+        return readings
     if not isinstance(binding, dict):
         return fresh_readings(space)
     schema = binding.get("input_schema")

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.eval.match import play_cell
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.config import MatchConfig
@@ -86,12 +86,9 @@ def test_closed_authored_matrix_hides_opponent_decklists_in_every_leg() -> None:
         for viewer in (0, 1):
             observation = env.observation_for_player(viewer)
             assert observation.decklists_closed
-            for rows in (
-                space.encode(observation)["decklists"],
-                env.encode_observation(observation)["decklists"],
-            ):
-                assert rows[0].any()
-                assert not rows[1].any()
+            rows = encode_observation(space, observation)["decklists"]
+            assert rows[0].any()
+            assert not rows[1].any()
     with pytest.raises(ValueError):
         AuthoredMatchup.model_validate({**opened.model_dump(), "decklists": "mixed"})
 

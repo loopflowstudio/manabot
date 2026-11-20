@@ -48,6 +48,7 @@ from manabot.env.observation import (
     ActionEnum,
     ObservationBuffers,
     ObservationSpace,
+    allocate_vector_buffers,
 )
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
@@ -56,7 +57,6 @@ from manabot.policy.protocol import BackendPolicy
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
-    allocate_buffers,
 )
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import BatchClosure
@@ -541,8 +541,8 @@ def open_collector(
         raise ValueError(
             "adaptive collection requires both-seat current-self, one producer and fixed roots"
         )
-    taps = observation_space.encoder.config.mana_floats
-    payment = observation_space.encoder.config.mana_payment
+    taps = observation_space.config.mana_floats
+    payment = observation_space.config.mana_payment
     match = Match(
         match.config.model_copy(
             update={"mana_floats": (taps, taps), "mana_payment": (payment, payment)}
@@ -613,7 +613,7 @@ def open_collector(
     env: Any
     if root is None:
         # Native decision capture is opt-in from the observation's capacity.
-        memory = observation_space.encoder.config
+        memory = observation_space.config
         capture_decisions = memory.max_decision_records > 0
         env = (
             ShardedVectorEnv(
@@ -647,7 +647,7 @@ def open_collector(
             raise ValueError("unsupported training root")
         env = TargetPracticeVector(observation_space, match, num_envs, seed)
     try:
-        buffers = allocate_buffers(observation_space, num_envs)
+        buffers = allocate_vector_buffers(observation_space, num_envs)
         slots = num_envs * (2 if learning_seats == "both" else 1)
         observation_keys = [
             key for key in observation_space.shapes if key not in ACTION_FIELDS
@@ -701,7 +701,8 @@ def open_collector(
         )
         env.set_buffers(
             buffers,
-            action_overflow=observation_space.encoder.config.action_overflow,
+            action_overflow=observation_space.config.action_overflow,
+            layout=observation_space.layout,
         )
         if not uniform_roster:
             collector.stream_matches = stream_matches(
@@ -1520,9 +1521,9 @@ def _settle_attempt(
             error=error,
             frame_json=frame_json,
             native_trace=native_trace,
-            observation=collector.observation_space.encoder.config
+            observation=collector.observation_space.config
             if outcome == "resource_limit"
-            or collector.observation_space.encoder.config.decision_memory_include_own
+            or collector.observation_space.config.decision_memory_include_own
             else None,
             discarded_samples=discarded,
             learned_samples=learned,

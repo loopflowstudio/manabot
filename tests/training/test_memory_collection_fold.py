@@ -29,7 +29,7 @@ def test_collection_fold_matches_dense_cold_warm_coalesced_fork_reset_and_update
     space, raw = chunk_input()
     # Introduce the second reference only after the first complete chunk.
     raw["decision_members"][0, :128, 0] = 1
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     prefix = store.capture(raw, 0, identity)
@@ -99,7 +99,7 @@ def test_collection_fold_matches_dense_cold_warm_coalesced_fork_reset_and_update
 
 def test_collection_cache_has_weak_node_ownership_and_empty_history_is_zero() -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
     selected = PrefixObservation(raw, [prefix], capacities)
@@ -124,7 +124,7 @@ def test_collection_cache_has_weak_node_ownership_and_empty_history_is_zero() ->
 
 def test_collection_fold_preserves_shuffled_repeated_and_empty_policy_rows() -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     prefixes = []
@@ -158,7 +158,7 @@ def test_collection_fold_preserves_shuffled_repeated_and_empty_policy_rows() -> 
 def test_warm_collection_prepares_only_the_open_tail() -> None:
     """A cached root carries the full reference join without its ancestry."""
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
     selected = PrefixObservation(raw, [prefix], capacities)
@@ -209,7 +209,7 @@ def test_native_open_segment_reuses_records_and_preserves_issued_versions() -> N
     from manabot.env.memory_store import archive_memory, gather_memory, restore_memory
 
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     model = policy(space, "gru", 1, live=True)
@@ -268,7 +268,7 @@ def test_coalesced_open_record_keeps_both_versions_and_reuses_earlier_fragments(
     None
 ):
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     raw["decision_records"][:, 7:] = 0
@@ -306,7 +306,7 @@ def test_coalesced_open_record_keeps_both_versions_and_reuses_earlier_fragments(
 
 def test_identical_native_prefixes_do_not_share_a_growing_segment() -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     source = {key: np.repeat(value, 2, axis=0) for key, value in raw.items()}
     source["decision_records"][:, 5:] = 0

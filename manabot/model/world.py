@@ -22,6 +22,7 @@ import os
 import subprocess
 from typing import Any
 
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.observation import ObservationSpace
 from manabot.infra.source import source_commit, source_dirty
 from manabot.model.writer_catalog import naming_entries
@@ -137,7 +138,7 @@ def validate_policy_input(agent: Any, binding: dict) -> None:
 
 def _input_binding(observation_space: Any) -> dict:
     return {
-        "policy_input_version": observation_space.encoder.config.policy_input_version,
+        "policy_input_version": observation_space.config.policy_input_version,
         # The input binds the native group partition through its branching
         # bound; changing it reinterprets every group route.
         "naming_representation": "public-groups-v1",
@@ -150,7 +151,7 @@ def _input_binding(observation_space: Any) -> dict:
         "input_schema": {
             key: {
                 "shape": list(shape),
-                "dtype": str(observation_space.encoder.dtypes[key]),
+                "dtype": str(observation_space.dtypes[key]),
             }
             for key, shape in observation_space.shapes.items()
         },
@@ -273,6 +274,14 @@ def validate_saved_columns(
         raise ValueError(f"checkpoint input buffers differ; {location}")
     columns = input_columns(space)
     recorded = checkpoint.get("input_columns")
+    # Historical memory checkpoints stored exact buffer shapes but omitted
+    # column declarations for all four separately prepared memory buffers.
+    if isinstance(recorded, dict) and recorded.keys() == columns.keys() - set(
+        MEMORY_FIELDS
+    ):
+        columns = {
+            key: names for key, names in columns.items() if key not in MEMORY_FIELDS
+        }
     if recorded is not None and (
         not isinstance(recorded, dict) or recorded.keys() != columns.keys()
     ):

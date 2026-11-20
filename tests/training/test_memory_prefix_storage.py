@@ -29,7 +29,7 @@ from manabot.env.memory_store import (
     gather_memory,
     restore_memory,
 )
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import ObservationConfig, RewardConfig
 from manabot.training.rollout.collection import (
     Collector,
@@ -92,7 +92,7 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
         restore_memory(replace(archive, chunks=archive.chunks[:-1]))
     with pytest.raises(ValueError):
         before.tail.chunk.rows[0].setflags(write=True)
-    assert space.encoder.shapes["decision_records"] == (4, 74)
+    assert space.shapes["decision_records"] == (4, 74)
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -387,18 +387,13 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
             max_decision_members=capacities[3],
         )
     )
-    buffers = space.encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, np.float64),
-        terminated=np.zeros(1, np.uint8),
-        truncated=np.zeros(1, np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 1)
     env = managym.VectorEnv(
         1, seed=11, decision_memory=True, player_policies=("agent", "agent")
     )
-    env.set_buffers(buffers)
+    env.set_buffers(buffers, layout=space.layout)
     env.reset_all_into_buffers(Match().to_rust())
-    dense_buffers = space.encoder.allocate(1)
+    dense_buffers = space.allocate(1)
     store, dense_store = MemoryStore(capacities), MemoryStore(capacities)
     rng = random.Random(19)
     observed: set[int] = set()
@@ -408,7 +403,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
         epoch = env.current_game_generations()[0]
         cursor = env.decision_memory_cursors()[0][viewer]
         counts = cursor[:4]
-        env.write_observations_for_players([viewer], dense_buffers)
+        env.write_observations_for_players([viewer], dense_buffers, layout=space.layout)
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(buffers[key], dense_buffers[key])
         identity = PrefixIdentity(str(env.current_game_seeds()[0]), viewer, "root")
@@ -434,15 +429,10 @@ def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
             max_decision_members=8192,
         )
     )
-    buffers = space.encoder.allocate(2)
-    buffers.update(
-        rewards=np.zeros(2, np.float64),
-        terminated=np.zeros(2, np.uint8),
-        truncated=np.zeros(2, np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 2)
     env = ShardedVectorEnv(2, 11, workers=2, decision_memory=True)
     try:
-        env.set_buffers(buffers)
+        env.set_buffers(buffers, layout=space.layout)
         env.reset_all_into_buffers(Match().to_rust())
         generations = env.current_game_generations()
         assert len(set(generations)) == 2

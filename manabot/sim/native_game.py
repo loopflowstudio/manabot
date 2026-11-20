@@ -165,7 +165,7 @@ def execute_game(
                 registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
                 and player_space is not None
             ):
-                trained[responsible] = player_space.encoder.config
+                trained[responsible] = player_space.config
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -188,7 +188,7 @@ def execute_game(
             if resolved != game["match_hypers"]:
                 game["match_hypers"] = resolved
                 send(("match", resolved))
-        game["observation_hypers"] = space.encoder.config.model_dump()
+        game["observation_hypers"] = space.config.model_dump()
         send(("observation", game["observation_hypers"]))
         game["runtime_identities"] = runtime_fingerprints(
             game["deal_seed"],
@@ -200,7 +200,7 @@ def execute_game(
         )
         send(("identities", game["runtime_identities"]))
         with perf.span("native_reset_and_encoding"):
-            memory = space.encoder.config
+            memory = space.config
             if "scenario_root" not in game:
                 capture_path = Path(
                     game.get("capture_path", Path(temporary.name) / "journal.jsonl")
@@ -381,7 +381,7 @@ def execute_game(
             responsible,
         )
     if env is not None:
-        if env.obs_space.encoder.config.action_overflow == "first-legal":
+        if env.obs_space.config.action_overflow == "first-legal":
             game["policy_action_cutoff"] = env._capture.policy_action_report()
         env.close(reason=game["termination_reason"])
         if capture is not None:

@@ -11,7 +11,11 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.identity import file_sha256
 from manabot.policy.protocol import Backend, BackendPolicy
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
@@ -48,7 +52,7 @@ class PolicyPriorRandomLeafEvaluator:
         encoded = (
             observation
             if isinstance(observation, Mapping)
-            else self.observation_space.encode(observation)
+            else encode_observation(self.observation_space, observation)
         )
         batch = self.agent.prepare(
             {

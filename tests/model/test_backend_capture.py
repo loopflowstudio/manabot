@@ -59,7 +59,7 @@ def test_capture_replays_both_seat_update(
     agent, space = load_checkpoint(str(out / "initial.pt"), bucketed_shapes=True)
     weights = from_torch_state(
         agent.config,
-        space.encoder.config,
+        space.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
         parameter_names=dict(agent.named_parameters()),
         readings=agent.readings,

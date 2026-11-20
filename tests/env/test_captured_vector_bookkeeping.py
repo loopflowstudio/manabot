@@ -7,7 +7,7 @@ import torch
 from manabot import managym
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from managym.recording import GameRecord
@@ -32,13 +32,9 @@ def _captured(
         player_policies=player_policies,
         opponent_policy=opponent_policy,
     )
-    buffers = ObservationSpace().encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
-    vector.set_buffers(buffers)
+    space = ObservationSpace()
+    buffers = allocate_vector_buffers(space, 1)
+    vector.set_buffers(buffers, layout=space.layout)
     return vector, buffers
 
 

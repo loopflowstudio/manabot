@@ -165,6 +165,10 @@ impl VectorEnv {
         }
     }
 
+    pub fn decision_memory_enabled(&self) -> bool {
+        self.decision_memory_enabled
+    }
+
     pub fn with_decision_memory(mut self, enabled: bool) -> Self {
         self.decision_memory_enabled = enabled;
         self.envs = self

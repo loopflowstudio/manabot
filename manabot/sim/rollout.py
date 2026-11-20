@@ -28,7 +28,11 @@ from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
 from manabot.env.memory_store import select_rows
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    allocate_vector_buffers as allocate_buffers,
+)
 from manabot.infra.config import MatchConfig
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
@@ -130,16 +134,6 @@ class RandomBatchController:
 # -----------------------------------------------------------------------------
 
 
-def allocate_buffers(obs_space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    buffers = obs_space.encoder.allocate(n)
-    buffers.update(
-        rewards=np.zeros((n,), dtype=np.float64),
-        terminated=np.zeros((n,), dtype=np.uint8),
-        truncated=np.zeros((n,), dtype=np.uint8),
-    )
-    return buffers
-
-
 def run_vector_games(
     hero: Any,
     villain: Any,
@@ -180,7 +174,7 @@ def run_vector_games(
         player_policies=("agent", "agent"),
     )
     buffers = allocate_buffers(obs_space, num_streams)
-    env.set_buffers(buffers)
+    env.set_buffers(buffers, layout=obs_space.layout)
     env.reset_all_into_buffers(match.to_rust())
 
     hero_seat = np.arange(num_streams, dtype=np.int64) % 2
@@ -310,7 +304,7 @@ class PolicyRolloutMCPlayer:
         self.last_scores: np.ndarray | None = None
         self._obs_space = ObservationSpace()
         self._capacity = (
-            self._obs_space.encoder.max_actions * self.worlds * self.rollouts
+            self._obs_space.config.max_actions * self.worlds * self.rollouts
         )
         self._buffers = allocate_buffers(self._obs_space, self._capacity)
 
@@ -322,7 +316,7 @@ class PolicyRolloutMCPlayer:
         start = time.perf_counter()
 
         pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
-        pool.set_buffers(self._buffers, self._capacity)
+        pool.set_buffers(self._buffers, self._capacity, layout=self._obs_space.layout)
         num_slots = pool.num_slots
         actions_full = np.zeros(num_slots, dtype=np.int64)
 

@@ -23,6 +23,7 @@ import managym
 from managym.card_capture import CapturedCards, captured_cards
 from managym.decision import Command, DecisionFrame, SemanticContractError
 from managym.recording import (
+    BufferSpec,
     DecisionAnnotation,
     GameInputs,
     GameRecord,
@@ -416,6 +417,35 @@ def replay_failure_inputs(
     return results
 
 
+_HISTORY_EVENT_WIDTH = managym.observation_layout(policy_history=True)["events"][
+    "shape"
+][1]
+
+
+def _search_layout(specs: Mapping[str, BufferSpec]) -> managym.ObservationLayout:
+    """Resolve the native layout recorded by a search receipt's buffer shapes."""
+
+    def rows(name: str, default: int = 0) -> int:
+        return specs[name].shape[1] if name in specs else default
+
+    version = 11 if "stack" in specs else (10 if "player_turn_state" in specs else 9)
+    return managym.ObservationLayout(
+        policy_input_version=version,
+        policy_history=specs["events"].shape[2] == _HISTORY_EVENT_WIDTH,
+        max_cards_per_player=specs["agent_cards"].shape[1],
+        max_permanents_per_player=specs["agent_permanents"].shape[1],
+        max_stack_objects=rows("stack", 32),
+        max_actions=specs["actions"].shape[1],
+        max_focus_objects=specs["action_focus"].shape[2],
+        max_events=specs["events"].shape[1],
+        max_facts=specs["facts"].shape[1],
+        max_decision_records=rows("decision_records"),
+        max_decision_references=rows("decision_references"),
+        max_decision_reference_details=rows("decision_reference_details"),
+        max_decision_members=rows("decision_members"),
+    )
+
+
 def _replay_game_inputs(
     evidence: GameRecord, game: GameInputs, *, statistics: bool = False
 ) -> dict[str, object]:
@@ -529,7 +559,9 @@ def _replay_game_inputs(
                     key: np.zeros(spec.shape, dtype=spec.dtype)
                     for key, spec in search.buffers.items()
                 }
-                pool.set_buffers(buffers, search.capacity)
+                pool.set_buffers(
+                    buffers, search.capacity, layout=_search_layout(search.buffers)
+                )
                 pool.encode_active()
                 for index, operation in enumerate(search.operations):
                     agreement.at_retained_failure = retained_index == index

@@ -12,7 +12,8 @@ from manabot.env.observation import (
     FACT_OBJECT_INDEX,
     FACT_VALUE_INDEX,
     POOLED_MANA,
-    ObservationEncoder,
+    ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.managym.enums import ActionEnum
@@ -46,15 +47,11 @@ def _observation(seat: str) -> tuple[managym.Env, managym.Observation]:
     return env, managym.Observation.from_json(json.dumps(payload))
 
 
-def test_pooled_mana_classes_encode_identically_as_a_program_on_their_player() -> None:
+def test_pooled_mana_classes_encode_as_a_program_on_their_player() -> None:
     for seat, object_row in (("agent", 1), ("opponent", 2)):
         env, obs = _observation(seat)
         assert managym.unrepresentable_state(obs) is None
-        expected = ObservationEncoder(ObservationConfig()).encode(obs)
-        actual = env.encode_observation(obs)
-        for key, value in expected.items():
-            np.testing.assert_array_equal(actual[key], value, err_msg=key)
-
+        expected = encode_observation(ObservationSpace(ObservationConfig()), obs)
         token = managym.catalog_token_value(POOLED_MANA)
         facts = expected["facts"].reshape(-1, FACT_DIM)
         rows = facts[
@@ -70,24 +67,19 @@ def test_pooled_mana_classes_encode_identically_as_a_program_on_their_player() -
         )
 
 
-def _assert_parity(env: managym.Env, obs: managym.Observation) -> None:
+def _assert_encodes(env: managym.Env, obs: managym.Observation) -> None:
+    """Both legacy inputs encode ``obs``; the acting view matches the batch path."""
     for version in (9, 10):
-        encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
-        reference = encoder.encode(obs)
-        native = {key: np.zeros_like(value) for key, value in reference.items()}
-        env.encode_observation_into(obs, native)
-        for key, value in reference.items():
-            np.testing.assert_array_equal(native[key], value, err_msg=key)
+        space = ObservationSpace(ObservationConfig(policy_input_version=version))
+        reference = encode_observation(space, obs)
         if obs.agent.player_index == env.current_agent_index():
-            buffers = encoder.allocate(1)
-            managym.encode_observations_into([env], buffers, 1)
+            buffers = space.allocate(1)
+            managym.encode_observations_into([env], space.layout, buffers, 1)
             for key, value in reference.items():
                 np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
 
 
-def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity() -> (
-    None
-):
+def test_animal_attendant_mana_and_cast_receipt_reach_input_and_text() -> None:
     env = priority_root(
         ("Uncle's Musings",),
         ("Animal Attendant", "Forest", "Forest", "Island", "Plains"),
@@ -112,7 +104,7 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
     assert [list(pooled.mana) for pooled in obs.agent.pooled_mana_classes] == [
         [0, 0, 0, 0, 1, 0]
     ]
-    _assert_parity(env, obs)
+    _assert_encodes(env, obs)
     assert (
         "Of the mana above: G 1; puts a +1/+1 counter on a non-Human creature spell it casts; expires at step end."
         in capture_text_decision(env).text
@@ -129,7 +121,7 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
         obs = env.observation_for_player(owner)
         if obs.stack_objects:
             break
-        _assert_parity(env, obs)
+        _assert_encodes(env, obs)
         pay = next(
             index
             for index, action in enumerate(obs.action_space.actions)
@@ -144,7 +136,7 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
         obs = env.observation_for_player(viewer)
         assert obs.continuation[0].kind == 1
         assert obs.continuation[0].effect_execution
-        _assert_parity(env, obs)
+        _assert_encodes(env, obs)
     assert "mana spent" in capture_text_decision(env).text
 
 
@@ -173,7 +165,7 @@ def test_spending_choices_share_native_vector_text_and_academy_observations() ->
     owner = env.current_agent_index()
     assert owner is not None
     obs = env.observation_for_player(owner)
-    _assert_parity(env, obs)
+    _assert_encodes(env, obs)
     assert obs.continuation[-1].decision == 31
     text = capture_text_decision(env)
     assert len(text.actions) == 3
@@ -208,7 +200,7 @@ def test_spending_choices_share_native_vector_text_and_academy_observations() ->
         submit_response(env, decision, choice.reference)
         actor = env.current_agent_index()
         assert actor is not None
-        _assert_parity(env, env.observation_for_player(actor))
+        _assert_encodes(env, env.observation_for_player(actor))
     assert env.observation_for_player(owner).stack_objects
 
 
@@ -225,10 +217,7 @@ def test_combat_mana_without_qualifiers_round_trips_and_projects_absence() -> No
     assert native_class.restriction is None
     serialized = json.loads(obs.toJSON())["agent"]["pooled_mana_classes"][0]
     assert "effect" not in serialized and "restriction" not in serialized
-    reference = ObservationEncoder(ObservationConfig()).encode(obs)
-    native = env.encode_observation(obs)
-    for key, value in reference.items():
-        np.testing.assert_array_equal(native[key], value, err_msg=key)
+    encode_observation(ObservationSpace(ObservationConfig()), obs)
     view = serialize_observation(obs, include_details=True)["agent"]
     expected = {"mana": [0, 0, 0, 0, 1, 0], "combat": True}
     assert view["pooled_mana_classes"] == [expected]

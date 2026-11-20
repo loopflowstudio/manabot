@@ -28,7 +28,7 @@ def test_learner_fold_matches_stateless_policy_and_gradients(
     # Reference two first appears in the second chunk. Later records mix it
     # with reference one, exercising both local and predecessor-owned joins.
     raw["decision_members"][0, : 32 * 4, 0] = 1
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     identity = PrefixIdentity("game", 0, "root")
     prefixes = []
@@ -109,7 +109,7 @@ def test_fold_empty_history_is_zero_and_transformer_stays_stateless() -> None:
     space, raw = chunk_input()
     for key in MEMORY_FIELDS:
         raw[key][:] = 0
-    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
     store = MemoryStore(capacities)
     prefix = store.capture(raw, 0, PrefixIdentity("empty", 0, "root"))
     retained = PrefixObservation(raw, [prefix], capacities)
