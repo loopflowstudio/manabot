@@ -96,7 +96,6 @@ fn selected_sacrifice_cannot_also_fund_the_announced_spell() {
             );
             activate_named(&mut s, "Treasure", 0);
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
-            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         }
         assert!(s.game().state.permanents[treasure].is_none());
         assert_eq!(zone_of(&s, dispute), Some(ZoneType::Stack));

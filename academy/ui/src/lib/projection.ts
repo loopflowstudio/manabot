@@ -5,6 +5,6 @@ export function exposesOtherPrivateContext(observation: Observation): boolean {
   const context = observation.decision_context;
   return context !== undefined && context.actor !== observation.agent.player_index && (
     context.source !== null || context.targets.length > 0 || context.reserved_sacrifice !== null ||
-    context.mana_cost !== null || context.chosen_mode !== null
+    context.mana_cost !== null || context.chosen_mode !== null || (context.paid?.length ?? 0) > 0
   );
 }

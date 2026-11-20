@@ -90,6 +90,9 @@ pub enum Modification<N = i32> {
     /// Rules effect: doesn't untap during its controller's untap step
     /// (CR 502.3).
     DoesntUntap,
+    /// The Mount is saddled (CR 702.171b): a designation with no rules
+    /// meaning of its own, read by "while saddled" abilities.
+    Saddled,
     /// Rules effect: its activated abilities, mana abilities included, can't
     /// be activated (CR 602.5).
     CantActivateAbilities,
@@ -183,6 +186,7 @@ impl<N> Modification<N> {
             Self::CantBeBlocked => Modification::CantBeBlocked,
             Self::CantBlock => Modification::CantBlock,
             Self::DoesntUntap => Modification::DoesntUntap,
+            Self::Saddled => Modification::Saddled,
             Self::CantActivateAbilities => Modification::CantActivateAbilities,
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
@@ -248,6 +252,7 @@ impl Modification {
             | Self::CantBeBlocked
             | Self::CantBlock
             | Self::DoesntUntap
+            | Self::Saddled
             | Self::CantActivateAbilities
             | Self::MustBeBlockedByAllAble
             | Self::LoseKeywords(_)

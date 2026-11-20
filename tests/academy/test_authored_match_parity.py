@@ -34,12 +34,12 @@ def test_checked_authored_match_parity_receipt() -> None:
     }
     assert receipt["surfaces"]["live"]["presentation"] == {
         "0": {
-            "events": 158,
-            "sha256": "23a1bf8e750ef6a2a0f081004ec02582c29a483716b2fda4356d4cf5246c2f9b",
+            "events": 181,
+            "sha256": "8a6a4bb17525d720e68a3370641bbe7b18615c7b97b3f868efb74e0a18d21e0b",
         },
         "1": {
-            "events": 158,
-            "sha256": "45d5753ff9d14ca3cdde1f6926870f0b12faa308c87233da70d22b997a1bf8d0",
+            "events": 181,
+            "sha256": "e716dd9be0da6527d434c7ca7068458dddd4283e017d96f7657ab36a1e426f2b",
         },
     }
 

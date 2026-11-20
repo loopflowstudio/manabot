@@ -69,3 +69,36 @@ fn rending_volley_targets_white_or_blue_creatures_and_cannot_be_countered() {
     assert!(s.game().state.permanents[blue].is_none());
     assert!(s.game().state.permanents[red].is_some());
 }
+
+/// Dragonlord's Servant makes its controller's Dragon spells cost {1} less,
+/// and no other spell.
+#[test]
+fn dragonlords_servant_reduces_only_dragon_spells() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
+        inspect::top_spell,
+        play::{cast_card, castable, settle},
+    };
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_unfunded_setup(&["Dragonlord's Servant", "Shivan Dragon", "Hill Giant"]);
+    force_lands(&mut s, 0, "Mountain", 5);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let dragon = force_new_card_in_hand(&mut s, 0, "Shivan Dragon");
+    let giant = force_new_card_in_hand(&mut s, 0, "Hill Giant");
+    assert!(
+        !castable(&mut s, dragon),
+        "{{4}}{{R}}{{R}} with five Mountains"
+    );
+    s.force_permanent_on_battlefield(0, "Dragonlord's Servant");
+    assert!(castable(&mut s, dragon));
+    cast_card(&mut s, dragon);
+    assert_eq!(top_spell(&s).spent.total(), 5);
+    settle(&mut s);
+    // The {3}{R} Giant gets no reduction.
+    for land in s.battlefield_permanents_named(0, "Mountain") {
+        s.game_mut().state.permanents[land].as_mut().unwrap().tapped = false;
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(&mut s, giant);
+    assert_eq!(top_spell(&s).spent.total(), 4);
+}

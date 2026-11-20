@@ -1,7 +1,14 @@
 //! Aetherdrift cards expressed in the shared execution and replacement rules.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, ObjectSelector, TriggerCondition, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, ReplacementEffect},
+    ability::{
+        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TriggerCondition,
+        TriggerSubject,
+    },
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, ReplacementEffect,
+    },
+    effect::Modification,
     mana::ManaCost,
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -9,7 +16,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![caradora_heart_of_alacria()]
+    vec![alacrian_jaguar(), caradora_heart_of_alacria()]
 }
 
 fn caradora_heart_of_alacria() -> CardDefinition {
@@ -59,6 +66,49 @@ fn caradora_heart_of_alacria() -> CardDefinition {
                 },
                 multiplier: 1,
                 additional: 1,
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn alacrian_jaguar() -> CardDefinition {
+    let text_box = "Vigilance\nWhenever this creature attacks while saddled, it gets +2/+2 until end of turn.\nSaddle 1 (Tap any number of other creatures you control with total power 1 or more: This Mount becomes saddled until end of turn. Saddle only as a sorcery.)";
+    CardDefinition {
+        key: "dft.alacrian_jaguar",
+        scryfall_id: "2bd40bca-aa54-4e52-8d48-b3709a11e633",
+        printed: PrintedCharacteristics {
+            name: "Alacrian Jaguar".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Mount".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::SourceSaddled,
+                    condition: Box::new(TriggerCondition::attacks(
+                        TriggerSubject::This,
+                        Per::Object,
+                    )),
+                },
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(2, 2),
+                )],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                saddle: Some(1),
+                sorcery_timing: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::Saddled,
+                )],
+                ..Default::default()
             }],
             text_box: text_box.into(),
             ..Default::default()

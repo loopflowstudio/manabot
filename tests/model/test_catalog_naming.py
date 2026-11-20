@@ -18,7 +18,12 @@ import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.env.observation import ACTION_MODE_INDEX, NAME_DIM, ObservationSpace
+from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
+    ACTION_MODE_INDEX,
+    NAME_DIM,
+    ObservationSpace,
+)
 from manabot.infra.config import ModelConfig
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
@@ -647,7 +652,7 @@ def test_legal_row_scoring_rejects_malformed_joins(naming_root: managym.Env) -> 
     model = ActorCritic(space, ModelConfig(hidden_dim=8))
     # Batch row 0 is a group prompt, row 1 a name prompt.
     for key, row, column, value, message in (
-        ("actions", 1, -2, 0.5, "continuation reference"),
+        ("actions", 1, ACTION_CONTINUATION_INDEX, 0.5, "continuation reference"),
         ("action_focus", 1, 0, -2, "focus reference"),
         ("name_candidates", 1, 1, 0, "disagrees with vocabulary"),
         ("name_candidates", 0, 3, 0, "group span"),

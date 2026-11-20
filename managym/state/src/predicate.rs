@@ -10,7 +10,18 @@ use super::mana::Color;
 /// A structural predicate over cards. Every populated field must match.
 /// Deserialization reads a definition's serialized predicate back, so
 /// observation vocabularies can enumerate what the encoders describe.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[serde(default)]
 pub struct CardPredicate {
     /// Shares the asking source permanent's layered name. Requires a source

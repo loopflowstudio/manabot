@@ -178,6 +178,15 @@ class DecisionTargetView(ProtocolModel):
     object: DecisionObjectView
 
 
+class PaidView(ProtocolModel):
+    """One object's payment toward the pending cost, and what remains of it."""
+
+    phrase: str
+    object: DecisionObjectView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+
 class DecisionContextView(ProtocolModel):
     pending: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
     recent_facts: list[str]
@@ -194,6 +203,8 @@ class DecisionContextView(ProtocolModel):
     announcing: Literal["spell", "activated_ability"] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    # What objects have already paid toward the cost being paid, in paid order.
+    paid: list[PaidView] = Field(default_factory=list, exclude_if=lambda value: not value)
 
 
 class OfferSubjectView(ProtocolModel):
@@ -621,6 +632,7 @@ class LegacyHeroObservation(ProtocolModel):
                 or self.decision_context.mana_cost is not None
                 or self.decision_context.chosen_mode is not None
                 or self.decision_context.announcing is not None
+                or self.decision_context.paid
             )
         ):
             raise ValueError("decision context is not oriented to its acting viewer")

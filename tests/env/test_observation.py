@@ -460,6 +460,7 @@ class TestObservationEncoder:
                         name_index=None,
                         name_definition=None,
                         name_group=None,
+                        pays_directly=False,
                     )
                 ]
             )

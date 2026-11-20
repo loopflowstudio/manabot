@@ -61,3 +61,16 @@ fn koma_coils_each_upkeep_and_sacrifices_them_to_lock_or_protect() {
     assert!(!s.game().activations_prohibited(clue));
     assert!(!keywords(&s, koma).has(Keyword::Indestructible));
 }
+
+/// Seize the Spoils discards a chosen card as it is cast, then draws two and
+/// makes a Treasure.
+#[test]
+fn seize_the_spoils_discards_a_chosen_card_then_draws_two_and_makes_a_treasure() {
+    use managym::state::zone::ZoneType;
+    for auto in [false, true] {
+        let s = crate::support::play::cast_discarding_a_chosen_card("Seize the Spoils", 3, auto);
+        // The Ogre and two drawn cards.
+        assert_eq!(s.zone_size(0, ZoneType::Hand), 3);
+        assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
+    }
+}

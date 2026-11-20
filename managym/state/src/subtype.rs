@@ -75,6 +75,8 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Drake", Creature),
     ("Druid", Creature),
     ("Elder", Creature),
+    ("Eldrazi", Creature),
+    ("Elemental", Creature),
     ("Elephant", Creature),
     ("Elf", Creature),
     ("Elk", Creature),
@@ -150,6 +152,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Scout", Creature),
     ("Seal", Creature),
     ("Serpent", Creature),
+    ("Shaman", Creature),
     ("Shapeshifter", Creature),
     ("Shard", Enchantment),
     ("Sheep", Creature),
@@ -180,6 +183,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Wizard", Creature),
     ("Wolf", Creature),
     ("Wurm", Creature),
+    ("Zombie", Creature),
 ];
 
 /// Every subtype in the table, in name order.

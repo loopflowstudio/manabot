@@ -413,7 +413,9 @@ impl Game {
     ) -> bool {
         debug_assert!(!matches!(
             condition,
-            Condition::ControlsAtLeast { .. } | Condition::AnyOf(_)
+            Condition::ControlsAtLeast { .. }
+                | Condition::BattlefieldAtLeast { .. }
+                | Condition::AnyOf(_)
         ));
         self.condition_holds(
             condition,
@@ -575,6 +577,13 @@ impl Game {
     }
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state[object].keywords;
+        // Mana spent on the spell can give it a keyword (CR 106.6).
+        if let Some(crate::state::stack_object::StackObject::Spell(spell)) = self
+            .find_spell_on_stack_index(object)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            keywords = keywords.union(spell.spent.keywords_gained());
+        }
         for (_, owner, view) in self.static_sources() {
             for ability in &view.static_abilities {
                 if let StaticAbility::KeywordGrant(grant) = ability {
@@ -772,6 +781,16 @@ impl Game {
                     .count()
                     == *count
             }
+            Condition::BattlefieldAtLeast { count, predicate } => {
+                let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
+                [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.iter_battlefield_permanents(player))
+                    .filter(|&id| self.permanent_matches_with_source(id, predicate, source))
+                    .take(*count)
+                    .count()
+                    == *count
+            }
             Condition::ControlsUnownedAtLeast { count } => {
                 self.iter_battlefield_permanents(controller)
                     .filter(|&id| {
@@ -816,6 +835,14 @@ impl Game {
                 .and_then(|r| self.lookup_current_permanent(r).ok())
                 .is_some_and(|id| self.permanent_matches_predicate(id, predicate)),
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
+            Condition::SourceSaddled => source
+                .and_then(|source| self.lookup_current_permanent(source).ok())
+                .is_some_and(|id| {
+                    self.permanent_has_modification(
+                        id,
+                        &crate::state::effect::Modification::Saddled,
+                    )
+                }),
             Condition::TriggeringHadCounters => match triggering {
                 Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
                     Some(permanent) => permanent.has_counters(),
@@ -1052,7 +1079,7 @@ mod cache_tests {
             .unwrap();
         let raw = game.layer_view(id);
         assert!(Arc::ptr_eq(&raw, &game.characteristics(id)));
-        *game.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R");
+        *game.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R").into();
         assert!(Arc::ptr_eq(&raw, &game.characteristics(id)));
         let affected = game.affected_permanent(id).unwrap();
         game.apply_continuous(
@@ -1072,7 +1099,7 @@ mod cache_tests {
         let board = game.layer_board();
         let before = game.characteristics(id);
         let mut branch = game.clone();
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR");
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR").into();
         let after = branch.characteristics(id);
         assert!(Arc::ptr_eq(&board, &branch.layer_board()));
         assert_ne!(before.activated_abilities, after.activated_abilities);
@@ -1103,9 +1130,9 @@ mod cache_tests {
             EffectDuration::Indefinite,
         );
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RRR");
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RRR").into();
         assert_eq!(branch.characteristics(id).pt(), (4, 4));
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default();
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default().into();
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
     }
 
@@ -1142,7 +1169,7 @@ mod cache_tests {
         );
         let fixed = branch.characteristics(id);
         branch.state.untap(id);
-        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R");
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R").into();
         assert!(Arc::ptr_eq(&fixed, &branch.characteristics(id)));
 
         let affected = branch.affected_permanent(id).unwrap();

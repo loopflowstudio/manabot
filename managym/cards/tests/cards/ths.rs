@@ -136,3 +136,54 @@ fn lightning_strike_excludes_opposing_hexproof_planeswalkers_and_battles() {
         assert_eq!(counters_of(&s, opposing, counter), 5);
     }
 }
+
+/// Theros's five Temples enter tapped, scry 1 as they enter (the
+/// top card stays or goes to the bottom, as chosen) and pay either of their
+/// two colors, and no other.
+#[test]
+fn temples_enter_tapped_scry_one_and_supply_either_color() {
+    for (name, colors) in [
+        ("Temple of Abandon", "RG"),
+        ("Temple of Deceit", "UB"),
+        ("Temple of Mystery", "GU"),
+        ("Temple of Silence", "WB"),
+        ("Temple of Triumph", "RW"),
+    ] {
+        crate::support::play::temple_scries_one_and_pays_either_color(name, colors);
+    }
+}
+
+/// Burnished Hart pays {3} and itself for up to two basic lands, both
+/// entering tapped.
+#[test]
+fn burnished_hart_sacrifices_itself_for_two_tapped_basic_lands() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands},
+        inspect::{card_of, library_card, tapped, zone_of},
+        play::{activate, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_unfunded_setup(&["Burnished Hart"]);
+    let hart = s.force_permanent_on_battlefield(0, "Burnished Hart");
+    let hart_card = card_of(&s, hart);
+    force_lands(&mut s, 0, "Mountain", 3);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    activate(&mut s, hart, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(zone_of(&s, hart_card), Some(ZoneType::Graveyard));
+    assert_eq!(s.untapped_permanents_named(0, "Mountain"), 0);
+    for name in ["Forest", "Plains"] {
+        let land = library_card(&s, 0, name);
+        select_card(&mut s, land);
+    }
+    settle(&mut s);
+    for name in ["Forest", "Plains"] {
+        let [entered] = s.battlefield_permanents_named(0, name)[..] else {
+            panic!("one {name} entered")
+        };
+        assert!(tapped(&s, entered), "{name}");
+    }
+}

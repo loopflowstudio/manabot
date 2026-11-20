@@ -4,7 +4,7 @@ use super::{
     card::CardDefId,
     deck::Deck,
     game_object::{CardId, PublicId},
-    mana::Mana,
+    mana::ManaPool,
 };
 
 /// Whether both players know each other's main deck and sideboard.
@@ -94,10 +94,10 @@ pub struct Player {
     pub life: i32,
     pub drew_when_empty: bool,
     pub alive: bool,
-    pub mana_pool: Mana,
+    pub mana_pool: ManaPool,
     /// Mana that lasts until end of combat (firebending) — persists across
     /// combat steps instead of emptying, empties as combat ends.
-    pub combat_mana_pool: Mana,
+    pub combat_mana_pool: ManaPool,
 }
 
 impl Player {
@@ -113,8 +113,8 @@ impl Player {
             life: 20,
             drew_when_empty: false,
             alive: true,
-            mana_pool: Mana::default(),
-            combat_mana_pool: Mana::default(),
+            mana_pool: ManaPool::default(),
+            combat_mana_pool: ManaPool::default(),
         }
     }
 }

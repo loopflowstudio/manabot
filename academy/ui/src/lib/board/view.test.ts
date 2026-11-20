@@ -65,6 +65,29 @@ describe('boardView over every retained frame', () => {
   );
 });
 
+describe('what is committed to the pending cost', () => {
+  const pay = retained.map(({ frame }) => frame)
+    .find(frame => frame.projection.decision_context && frame.projection.agent.battlefield.length >= 2)!;
+  const [ogre, other] = pay.projection.agent.battlefield;
+  const paying: ExperienceFrame = { ...pay, projection: { ...pay.projection, decision_context: { ...pay.projection.decision_context!, paid: [
+    { phrase: `sacrificed ${ogre.name}`, object: { entity_id: 0, subject: { kind: 'object', id: { entity: ogre.id, incarnation: 0 } }, display_id: ogre.id, label: ogre.name ?? '' } },
+    { phrase: 'exiled Opt to delve' },
+  ] } } };
+
+  it('marks the permanent that paid with the engine\'s phrase, alone in its pile', () => {
+    const view = boardView(paying, PLAYERS);
+    const marked = permanents(view).filter(item => item.paid !== null);
+    expect(marked.map(item => [item.permanent.id, item.paid])).toEqual([[ogre.id, `sacrificed ${ogre.name}`]]);
+    const pile = [...view.you.creatures, ...view.you.support].find(candidate => candidate.items.some(item => item.permanent.id === ogre.id))!;
+    expect(pile.items.map(item => item.permanent.id)).toEqual([ogre.id]);
+    expect(permanents(view).find(item => item.permanent.id === other.id)?.paid).toBeNull();
+  });
+
+  it('marks nothing when nothing has paid', () => {
+    expect(permanents(boardView(pay, PLAYERS)).every(item => item.paid === null)).toBe(true);
+  });
+});
+
 describe('where decisions land', () => {
   it('names players in target choices as the board names them', () => {
     const bolt = (load(new URL('bolt-target.json', PROTOCOL)) as { recovery: { frame: ExperienceFrame } }).recovery.frame;
@@ -90,7 +113,7 @@ describe('where decisions land', () => {
     const view = boardView(navigation.PAY_OR_NOT.frame, PLAYERS);
     const lands = view.you.support.flatMap(pile => pile.items).filter(item => item.offers.length);
     expect(lands.flatMap(item => item.offers.map(placed => placed.offer.label)))
-      .toEqual(expect.arrayContaining(['Tap Mountain to help pay', 'Tap Island to help pay']));
+      .toEqual(expect.arrayContaining(['Tap Mountain for {R}', 'Tap Island for {U}']));
     expect(view.primary?.offer.label).toBe('Pay the cost');
   });
 

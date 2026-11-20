@@ -75,7 +75,7 @@ pub struct PendingTrigger {
     pub x: u8,
     /// For an entering permanent's own trigger, the mana spent to cast the
     /// spell that became it; otherwise empty.
-    pub spent: crate::state::mana::ManaSpent,
+    pub spent: crate::state::payment::PaymentReceipt,
     /// The attacking creature whose attack triggered its own ability.
     pub attacker: Option<crate::state::game_object::PermanentId>,
     /// The modes of a "choose up to" ability chosen so far.

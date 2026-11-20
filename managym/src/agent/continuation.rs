@@ -11,13 +11,15 @@ use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
         decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
-        game::{ActivationSource, Game, Payment, PendingChoice},
+        game::{ActivationSource, Game, PendingChoice},
+        payment::{CostComponent, Operation},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
+        ability::{DelayedExpiry, DelayedFrequency},
         game_object::{ObjectId, PlayerId, Target},
-        mana::{ManaCost, ManaSpent},
+        mana::ManaCost,
+        payment::{How, PaymentReceipt, Toward},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -198,16 +200,20 @@ impl ContinuationFrame {
     }
 }
 
-/// The cast receipt a stack object carries when a rule still reads it
+/// The receipt a stack object carries, when its frame shows any of it
 /// (`effect_execution::receipt_matters`).
-fn stack_receipt(object: &StackObject) -> Option<ManaSpent> {
+fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
     let spent = match object {
-        StackObject::Spell(spell) => spell.spent,
-        StackObject::TriggeredAbility(ability) => ability.spent,
-        StackObject::ActivatedAbility(_) => return None,
+        StackObject::Spell(spell) => &spell.spent,
+        StackObject::TriggeredAbility(ability) => &ability.spent,
+        StackObject::ActivatedAbility(ability) => &ability.paid,
     };
-    super::effect_execution::receipt_matters(&spent, Some(object.source_definition_id()))
-        .then_some(spent)
+    super::effect_execution::receipt_matters(
+        spent,
+        Some(object.source_definition_id()),
+        Some(object.source_object()),
+    )
+    .then_some(spent)
 }
 
 impl Game {
@@ -655,7 +661,14 @@ impl Game {
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
         if let Some(spent) = stack_receipt(object) {
-            super::effect_execution::project_receipt(self, &spent, viewer, &mut frame, false);
+            super::effect_execution::project_receipt(
+                self,
+                spent,
+                Some(object.source_object()),
+                viewer,
+                &mut frame,
+                false,
+            );
         }
         frame
     }
@@ -672,20 +685,44 @@ impl Game {
             ..ContinuationFrame::default()
         };
         match pending {
-            PendingChoice::ManaPayment {
-                player,
-                payment,
-                sacrifice,
-                alternative,
-            } => {
-                self.payment_frame(payment, viewer, &mut frame);
-                frame.sacrifice =
-                    sacrifice.map(|id| self.target_reference(Target::Permanent(id), viewer));
-                frame.cost(&self.payment_mana_cost(*player, payment, alternative.as_ref()));
-            }
-            PendingChoice::SacrificePayment { payment, .. }
-            | PendingChoice::ExileFromHandPayment { payment, .. } => {
-                self.payment_frame(payment, viewer, &mut frame)
+            PendingChoice::Pay { payment, .. } => {
+                self.payment_frame(&payment.operation, viewer, &mut frame);
+                match &payment.owed[0] {
+                    CostComponent::Mana { .. } => {
+                        frame.sacrifice = payment
+                            .receipt
+                            .sacrificed()
+                            .find_map(|object| self.state.permanent_of(object))
+                            .map(|id| self.target_reference(Target::Permanent(id), viewer));
+                        frame.waterbend = payment.waterbends();
+                        frame.cost(payment.mana().0);
+                    }
+                    // A cost of several taps shows how many are still owed.
+                    CostComponent::Tap(cost, _)
+                        if cost.count
+                            + payment
+                                .receipt
+                                .contributed(How::Tapped, Toward::Printed)
+                                .count()
+                            > 1 =>
+                    {
+                        frame.mode = Some(cost.count);
+                    }
+                    _ => {}
+                }
+                // What this payment has already committed: mana as it was
+                // produced, and the objects that paid, as references. The
+                // source's own printed cost is paid as the payment completes.
+                if !payment.receipt.is_empty() {
+                    super::effect_execution::project_receipt(
+                        self,
+                        &payment.receipt,
+                        None,
+                        viewer,
+                        &mut frame,
+                        false,
+                    );
+                }
             }
             PendingChoice::ChooseTargets {
                 object,
@@ -728,59 +765,13 @@ impl Game {
                     .unwrap_or_default();
                 frame.targets = self.clause_targets(chosen, &clauses, viewer);
             }
-            PendingChoice::DiscardPayment {
-                source,
-                ability_index,
-                ..
-            }
-            | PendingChoice::TapPayment {
-                source,
-                ability_index,
-                ..
-            } => {
-                frame.source = self.activation_reference(*source, viewer);
-                frame.ability = Some(*ability_index);
-            }
             PendingChoice::ActivationX {
-                permanent,
-                ability_index,
-                ..
-            }
-            | PendingChoice::Crew {
                 permanent,
                 ability_index,
                 ..
             } => {
                 frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                 frame.ability = Some(*ability_index);
-            }
-            PendingChoice::Waterbend {
-                player,
-                payment,
-                tapped,
-                ..
-            } => {
-                self.payment_frame(payment, viewer, &mut frame);
-                frame.waterbend = true;
-                let owed = self
-                    .payment_mana_cost(*player, payment, None)
-                    .reduced_generic(*tapped);
-                frame.cost(&owed);
-            }
-        }
-        if let PendingChoice::TapPayment {
-            remaining,
-            source,
-            ability_index,
-            ..
-        } = pending
-        {
-            if self
-                .activation_ability(*source, *ability_index)
-                .and_then(|a| a.tap_cost)
-                .is_some_and(|cost| cost.count > 1)
-            {
-                frame.mode = Some(*remaining);
             }
         }
         frame
@@ -861,13 +852,36 @@ impl Game {
         for (frame, object) in frames.iter_mut().zip(self.state.stack_objects.iter().rev()) {
             debug_assert!(matches!(frame.kind, 1..=3));
             if let Some(spent) = stack_receipt(object) {
-                super::effect_execution::project_receipt(self, &spent, viewer, frame, true);
+                super::effect_execution::project_receipt(
+                    self,
+                    spent,
+                    Some(object.source_object()),
+                    viewer,
+                    frame,
+                    true,
+                );
             }
         }
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
             || self.is_game_over()
         {
             return;
+        }
+        if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
+            if !payment.receipt.is_empty() {
+                let frame = frames
+                    .iter_mut()
+                    .find(|frame| frame.kind == 4)
+                    .expect("the pending payment's announcement frame");
+                super::effect_execution::project_receipt(
+                    self,
+                    &payment.receipt,
+                    None,
+                    viewer,
+                    frame,
+                    true,
+                );
+            }
         }
         let Some(suspended) = &self.state.suspended_decision else {
             return;
@@ -912,8 +926,10 @@ impl Game {
                 frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
             }
             Decision::Payment(progress) => {
-                frame.cost(&progress.remaining.mana_cost());
-                frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
+                if let CostComponent::Mana { cost, .. } = &progress.owed {
+                    frame.cost(cost);
+                }
+                frame.waterbend = progress.waterbends();
                 frame.can_decline = progress.can_decline();
             }
             Decision::ManaUpfront {
@@ -985,9 +1001,14 @@ impl Game {
         frame
     }
 
-    fn payment_frame(&self, payment: &Payment, viewer: PlayerId, frame: &mut ContinuationFrame) {
-        match payment {
-            Payment::Spell {
+    fn payment_frame(
+        &self,
+        operation: &Operation,
+        viewer: PlayerId,
+        frame: &mut ContinuationFrame,
+    ) {
+        match operation {
+            Operation::Spell {
                 object,
                 cast,
                 mode,
@@ -1001,7 +1022,7 @@ impl Game {
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }
-            Payment::Activation {
+            Operation::Activation {
                 source,
                 ability_index,
                 targets,
@@ -1260,7 +1281,7 @@ mod tests {
     #[test]
     fn mana_output_is_a_child_of_the_payment_it_interrupts() {
         use crate::{
-            flow::decision::PaymentProgress,
+            flow::payment::PaymentProgress,
             state::{mana::Mana, player::PlayerConfig},
         };
         let mut game = Game::new(
@@ -1281,7 +1302,9 @@ mod tests {
             },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 actor,
-                PaymentCost::Waterbend { generic: 2 },
+                CostComponent::resolving(&crate::state::ability::PaymentCost::Waterbend {
+                    generic: 2,
+                }),
                 vec![],
                 vec![],
             )))),
@@ -1299,7 +1322,7 @@ mod tests {
     #[test]
     fn every_decision_code_is_within_the_validated_bound() {
         use crate::{
-            flow::decision::{PaymentProgress, ResolutionCastOffer},
+            flow::{decision::ResolutionCastOffer, payment::PaymentProgress},
             state::{
                 ability::LinkedGrant, game_object::PermanentId, permanent::CounterKind,
                 predicate::CardPredicate,
@@ -1321,7 +1344,7 @@ mod tests {
             Decision::ManaSpend {
                 player,
                 cost: ManaCost::default(),
-                spent: crate::state::mana::ManaSpent::default(),
+                spent: Default::default(),
                 completion: Box::new(SpendCompletion::Foretell(game.state.players[0].deck[0])),
             },
             Decision::OrderReplacement {
@@ -1340,7 +1363,9 @@ mod tests {
             },
             Decision::Payment(PaymentProgress::new(
                 player,
-                PaymentCost::Waterbend { generic: 1 },
+                CostComponent::resolving(&crate::state::ability::PaymentCost::Waterbend {
+                    generic: 1,
+                }),
                 vec![],
                 vec![],
             )),
@@ -1468,6 +1493,7 @@ mod tests {
             Decision::KeepCreatures {
                 player,
                 max_total_power: 0,
+                sacrifice: None,
                 kept: vec![],
             },
             Decision::ChooseToExile {

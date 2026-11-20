@@ -378,7 +378,7 @@ Its rules are deliberately approximate:
   chump to prevent lethal damage.
 - Use its own pumps when they change a fight or make unblocked damage lethal;
   ignore hypothetical opposing combat tricks. Pay offered optional ward and
-  “unless pays” costs.
+  “unless pays” costs, except a ward paid in life that would leave it at 0.
 
 Choices are deterministic for the same visible state and decision history.
 Equal-value casts use the first legal offer; equal-ranked discard and
@@ -1071,11 +1071,12 @@ a token or copy is created, and a zone change allocates nothing.
 Slots are private to the store, the zone lists and the match-state hash. Cards
 take the first slots in setup order (main decks, then sideboards), followed by
 tokens and copies in creation order, which is the numbering recorded states
-already use. The match-state hash stays at version 16 and its bytes do not
-change: a field recorded as a row number writes its slot, and a field recorded
-as `{"entity", "incarnation"}` writes slot and generation under those keys.
-Version 16 therefore cannot tell a current id from a stale one in the fields
-that used to hold a bare row; the next hash version writes whole ids.
+already use. A field recorded as a row number writes its slot, and a field
+recorded as `{"entity", "incarnation"}` writes slot and generation under those
+keys. The match-state hash therefore cannot tell a current id from a stale one
+in the fields that used to hold a bare row; a later hash version writes whole
+ids. Version 17 adds, with whole ids, the object that produced each pooled
+unit of mana and each unit a payment spent.
 Observations, replays and the Python API are unchanged.
 
 ### Zones
@@ -1183,13 +1184,19 @@ order is deterministic so replay, training and search stay exact, and a card
 that needs more stays unsupported rather than approximated.
 
 **Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
-with a `PaymentCost` (mana, or waterbend taps against a generic obligation) and
-`if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
-remaining cost and the exact objects already contributed, and completion
+with a `PaymentCost` (mana, waterbend taps against a generic obligation, or
+life) and `if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
+`CostComponent` still owed and a `PaymentReceipt` of what has paid, the same
+two records a cast or activation keeps: `CostComponent::resolving` is the one
+place the definition's cost becomes what is owed, and a waterbend tap or a
+life payment is the step an announced cost takes. Completion
 prepends exactly one branch to the effect frame; counter-unless-paid uses the
 same progress with the spell's controller as payer. A mana ability activated
 during payment stays committed if the payment is then declined, and waterbend
-taps are cost payment, never tapping for mana. People and policies see the same
+taps are cost payment, never tapping for mana. A life cost ("Ward—Pay 7
+life.") is one action: Pay is offered only to a player whose life total is at
+least the amount (CR 119.4) and loses the life at once, under manual and
+automatic payment alike; no mana ability is offered for it. People and policies see the same
 native offers (pay or not, waterbend, modal colors, discard), with no
 human-only payment flow.
 

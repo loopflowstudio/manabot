@@ -20,7 +20,8 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
-        game::{ActivationSource, Game, Payment},
+        game::{ActivationSource, Game},
+        payment::{Operation, Payment},
         proposed_event::{
             EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
@@ -29,7 +30,8 @@ use crate::{
         ability::Effect,
         card::CardDefId,
         game_object::{ObjectId, ObjectLki, PlayerId, Target},
-        mana::{Mana, ManaSpent},
+        mana::Mana,
+        payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
     },
 };
 
@@ -59,6 +61,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "chosen object",
     "chosen to exile",
     "commit completion event",
+    "contribution",
     "controller",
     "copy definition",
     "copy exceptions",
@@ -115,6 +118,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "library end",
     "library order",
     "life change",
+    "life paid",
     "linked exile",
     "linked return",
     "linked source",
@@ -122,6 +126,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "spending option",
     "cost sacrifice",
     "maximum total power",
+    "creatures each player sacrifices",
     "may copy",
     "mode",
     "moved",
@@ -133,6 +138,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "ordered prefix",
     "paid activation",
     "paid announcement",
+    "paid by",
     "paid source",
     "paid spell",
     "pay casting costs",
@@ -173,7 +179,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "token definition",
     "triggering player",
     "turn action",
-    "waterbend contributions",
     "zone move",
 ];
 
@@ -427,14 +432,11 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
-            FrameCompletion::Paid {
-                player,
-                payment,
-                spent,
-            } => {
+            FrameCompletion::Paid { player, payment } => {
                 self.paid_summary();
-                if !spent.is_empty() {
-                    self.receipt(spent);
+                // Unfinished: the source's own printed cost is paid last.
+                if !payment.receipt.is_empty() {
+                    self.receipt(&payment.receipt, None);
                 }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
@@ -471,8 +473,8 @@ impl<'a> Projection<'a> {
     }
 
     fn payment(&mut self, payment: &Payment) {
-        match payment {
-            Payment::Spell {
+        match &payment.operation {
+            Operation::Spell {
                 object,
                 cast,
                 mode,
@@ -487,7 +489,7 @@ impl<'a> Projection<'a> {
                     self.target("target", *target);
                 }
             }
-            Payment::Activation {
+            Operation::Activation {
                 source,
                 ability_index,
                 targets,
@@ -510,21 +512,73 @@ impl<'a> Projection<'a> {
         }
     }
 
-    /// The mana actually spent to cast (CR 601.2h) and the entry counters
-    /// its spend effects add.
-    fn receipt(&mut self, spent: &ManaSpent) {
-        self.field("mana spent", spent);
+    /// What a payment took, less what the frame of `source` already says.
+    /// Its mana is the amounts actually spent to cast (CR 601.2h) and the
+    /// entry counters its spend effects add, the two mana facts a rule reads;
+    /// which object produced each unit is in the text only and adds no policy
+    /// tokens. Life paid is an amount. Each object that paid otherwise is a
+    /// reference, with what was done to it and the part of the cost it paid
+    /// (`shown_contributions`).
+    fn receipt(&mut self, spent: &PaymentReceipt, source: Option<ObjectId>) {
+        if !spent.mana().is_empty() {
+            self.mana_spent(spent);
+        }
+        if spent.life() > 0 {
+            self.field("life paid", &spent.life());
+            self.summary(|| format!("Life paid: {}.", spent.life()));
+        }
+        let shown: Vec<Contribution> = shown_contributions(spent, source).copied().collect();
+        if shown.is_empty() {
+            return;
+        }
+        for paid in &shown {
+            self.field("contribution", &(paid.how, paid.toward));
+            self.object("paid by", paid.object);
+        }
+        let (game, viewer) = (self.game, self.viewer);
+        self.summary(|| {
+            let paid: Vec<_> = shown
+                .iter()
+                .map(|paid| contribution_phrase(game, viewer, paid))
+                .collect();
+            format!("Paid with: {}.", paid.join("; "))
+        });
+    }
+
+    fn mana_spent(&mut self, spent: &PaymentReceipt) {
+        let facts = ManaSpent::of(spent);
+        self.field("mana spent", &facts);
         self.summary(|| {
             let mana = mana_description(&Mana {
-                mana: spent.amounts,
+                mana: facts.amounts,
                 ..Default::default()
             });
-            match spent.entry_counters {
-                0 => format!("Mana spent to cast: {mana}."),
-                counters => format!(
-                    "Mana spent to cast: {mana}; it enters with {counters} additional +1/+1 counter(s)."
-                ),
+            let sources = spent
+                .mana_sources()
+                .iter()
+                .filter_map(|origin| default_content_pack().definition(origin.definition))
+                .map(|definition| definition.printed.name.as_str())
+                .collect::<Vec<_>>();
+            let mut text = format!("Mana spent to cast: {mana}");
+            if !sources.is_empty() {
+                text.push_str(&format!(" (from {})", sources.join(", ")));
             }
+            if facts.entry_counters > 0 {
+                text.push_str(&format!(
+                    "; it enters with {} additional +1/+1 counter(s)",
+                    facts.entry_counters
+                ));
+            }
+            for keyword in &facts.gains {
+                text.push_str(&format!(
+                    "; it gains {} until end of turn",
+                    keyword.printed()
+                ));
+            }
+            if facts.copies > 0 {
+                text.push_str(&format!("; that mana copies it {} time(s)", facts.copies));
+            }
+            text + "."
         });
     }
 
@@ -820,16 +874,116 @@ impl<'a> Projection<'a> {
     }
 }
 
-/// Whether a rule still reads `spent`, the mana spent to cast the spell that
-/// is, or became the source of, the object defined by `definition`: its
-/// definition counts that mana (Toph, converge), or a spend effect applied
-/// (Animal Attendant's counter). Other receipts are not projected.
-pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) -> bool {
+/// A receipt's rule-read mana facts, under the names their tokens have: the
+/// amounts by color and what the units' spend riders did. Which object
+/// produced each unit is text only and adds no policy tokens.
+#[derive(Debug, Serialize)]
+struct ManaSpent {
+    amounts: [u8; 6],
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    entry_counters: u8,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    gains: Vec<crate::state::card::Keyword>,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    copies: u8,
+}
+
+impl ManaSpent {
+    fn of(spent: &PaymentReceipt) -> Self {
+        Self {
+            amounts: spent.amounts(),
+            entry_counters: spent.entry_counters(),
+            gains: spent.keywords_gained().iter().collect(),
+            copies: spent.copy_triggers().count() as u8,
+        }
+    }
+}
+
+/// What one object did toward a cost, as `viewer` may name it: "tapped Gray
+/// Ogre to crew". A departed object is named by what it last was. A chosen
+/// sacrifice is carried out as the payment completes (CR 601.2h), so while
+/// its object is still where it was the phrase says so, not "sacrificed X".
+pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribution) -> String {
+    let how = match paid.how {
+        How::Tapped => "tapped",
+        How::Sacrificed => "sacrificed",
+        How::Exiled => "exiled",
+        How::Discarded => "discarded",
+    };
+    let toward = match paid.toward {
+        Toward::Printed => "",
+        Toward::Waterbend => " to waterbend",
+        Toward::Crew => " to crew",
+        Toward::Saddle => " to saddle",
+        Toward::Alternative => " instead of paying mana",
+        Toward::Convoke => " to convoke",
+        Toward::Improvise => " to improvise",
+        Toward::Delve => " to delve",
+        Toward::Bargain => " to bargain",
+        Toward::Forage => " to forage",
+        Toward::Station => " to station",
+    };
+    let object = Projection::label(game.visible_reference(paid.object, viewer));
+    if paid.how == How::Sacrificed && game.state.live(paid.object).is_some() {
+        format!("{object}, sacrificed{toward} when the payment completes")
+    } else {
+        format!("{how} {object}{toward}")
+    }
+}
+
+/// One unit of mana spent toward a cost, as `viewer` may name its source:
+/// "{G} from Forest". A unit no object produced has no source to name.
+pub(crate) fn spent_mana_phrase(game: &Game, viewer: PlayerId, unit: &SpentMana) -> String {
+    let mut amounts = [0; 6];
+    amounts[unit.color as usize] = 1;
+    let mana = mana_description(&Mana {
+        mana: amounts,
+        ..Default::default()
+    });
+    match unit.source {
+        Some(origin) => format!(
+            "{mana} from {}",
+            Projection::label(game.visible_reference(origin.object, viewer))
+        ),
+        None => mana,
+    }
+}
+
+/// The contributions a frame of `source` shows. The receipt keeps everything
+/// paid; the frame omits its own source paying its own printed cost (its
+/// {T}, "sacrifice this", "discard this"), which the frame's ability already
+/// states. Every other object is shown, and so is the source when it paid
+/// under a keyword.
+fn shown_contributions(
+    spent: &PaymentReceipt,
+    source: Option<ObjectId>,
+) -> impl Iterator<Item = &Contribution> {
+    spent
+        .contributions()
+        .iter()
+        .filter(move |paid| !(paid.toward == Toward::Printed && Some(paid.object) == source))
+}
+
+/// Whether the frame of `source`, an object defined by `definition`, shows
+/// anything of `spent`, what was paid for it or for the spell that became
+/// it. It does when the payment says something the frame does not: another
+/// object contributed (`shown_contributions`), life was paid, a spend effect
+/// applied (Animal Attendant's counter), or the definition counts the mana
+/// spent (Toph, converge). Mana that no rule reads, and the source's own
+/// printed cost, stay on the receipt and out of the observation.
+pub(crate) fn receipt_matters(
+    spent: &PaymentReceipt,
+    definition: Option<CardDefId>,
+    source: Option<ObjectId>,
+) -> bool {
     static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
     if spent.is_empty() {
         return false;
     }
-    if spent.entry_counters > 0 {
+    if spent.mana().iter().any(|unit| unit.effect.is_some())
+        || shown_contributions(spent, source).next().is_some()
+        || spent.life() > 0
+    {
         return true;
     }
     let reads = READS.get_or_init(|| {
@@ -845,17 +999,18 @@ pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) 
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }
 
-/// Project the cast receipt of a stack spell, or of the stack ability an
-/// entering permanent's own trigger became.
+/// Project the receipt of a stack spell or ability, or of the payment in
+/// progress, onto the frame of `source`.
 pub(crate) fn project_receipt(
     game: &Game,
-    spent: &ManaSpent,
+    spent: &PaymentReceipt,
+    source: Option<ObjectId>,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
     text: bool,
 ) {
     let mut out = Projection::new(game, viewer, text);
-    out.receipt(spent);
+    out.receipt(spent, source);
     out.finish(frame);
 }
 
@@ -907,8 +1062,8 @@ pub(crate) fn project_frame(
     let source_definition = effect
         .source()
         .map(|object| game.state.source_base(object).0);
-    if receipt_matters(&effect.spent, source_definition) {
-        out.receipt(&effect.spent);
+    if receipt_matters(&effect.spent, source_definition, effect.source()) {
+        out.receipt(&effect.spent, effect.source());
     }
     if let Some(player) = effect.triggering_player {
         out.field("triggering player", &player);
@@ -954,12 +1109,12 @@ pub(crate) fn project_decision(
             spent,
             completion,
         } => {
-            out.field("mana spent", spent);
+            out.field("mana spent", &ManaSpent::of(spent));
             out.summary(|| {
                 format!(
                     "Mana already spent in this payment: {}.",
                     mana_description(&crate::state::mana::Mana {
-                        mana: spent.amounts,
+                        mana: spent.amounts(),
                         ..Default::default()
                     })
                 )
@@ -969,20 +1124,22 @@ pub(crate) fn project_decision(
                 out.field("spending option", &choice.unit);
             }
             match completion.as_ref() {
-                SpendCompletion::Announced {
-                    payment, sacrifice, ..
-                } => {
+                SpendCompletion::Announced(payment) => {
                     out.payment(payment);
-                    if let Some(permanent) = sacrifice {
+                    for permanent in payment
+                        .receipt
+                        .sacrificed()
+                        .filter_map(|object| game.state.permanent_of(object))
+                    {
                         out.target(
                             "cost sacrifice",
-                            crate::state::game_object::Target::Permanent(*permanent),
+                            crate::state::game_object::Target::Permanent(permanent),
                         );
                     }
                 }
                 SpendCompletion::Resolution(payment) => {
                     out.effects("if paid", &payment.if_paid);
-                    out.objects("waterbend contributions", &payment.waterbend_paid);
+                    out.receipt(&payment.receipt, None);
                     if let Some(key) = payment.spends {
                         out.object("once each turn source", key.0);
                         out.field("once each turn ability", &key.1);
@@ -1065,8 +1222,8 @@ pub(crate) fn project_decision(
             out.field("placement", &(random_order, reveal, to_battlefield));
         }
         Decision::Payment(progress) => {
-            out.field("remaining payment", &progress.remaining);
-            out.objects("waterbend contributions", &progress.waterbend_paid);
+            out.field("remaining payment", &progress.owed);
+            out.receipt(&progress.receipt, None);
             out.effects("if paid", &progress.if_paid);
             out.effects("if declined", &progress.if_declined);
             if let Some(key) = &progress.spends {
@@ -1131,10 +1288,14 @@ pub(crate) fn project_decision(
         Decision::Discard { remaining, .. } => out.field("discards remaining", remaining),
         Decision::KeepCreatures {
             max_total_power,
+            sacrifice,
             kept,
             ..
         } => {
-            out.field("maximum total power", max_total_power);
+            match sacrifice {
+                Some(count) => out.field("creatures each player sacrifices", count),
+                None => out.field("maximum total power", max_total_power),
+            }
             for id in kept {
                 out.target("kept creature", Target::Permanent(*id));
             }

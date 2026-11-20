@@ -182,14 +182,13 @@ publish, land or choose the next Graph step from here.
   context gets 403. Games-page Replay links are labelled `Replay game <id>`;
   select them with `locator('a', {hasText: /^Replay$/})`. The game-over
   dialog moves focus and scrolls the table, so screenshot it as it is.
-  To play specific cards, open **Import decklist files**, check "Use imported
-  decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
-  textareas appear only then), fill both, press Check decklists, then New
-  Game; `POST /api/decklists/validate` answers the same check. During the
-  opponent's turn the offers stay rendered but disabled, so click only enabled
-  buttons, or every click times out while the bot plays on. Hover a card name
-  to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
-  usually wins before a slow card is used; give the opponent a light deck.
+  For a demo with specific cards, check that art for an uncached card loads
+  through the same launch the person will use. Hover a card name to read
+  `[data-testid=card-rules-text]`. During an active decision, move the pointer
+  between offers and tab through them. Keep the prompt, committed facts and
+  hints distinct, and check that changing a preview leaves the action buttons
+  in place. For a multi-step payment, make a contribution and check that the
+  panel shows what committed, what remains payable and what is still floating.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
   browser and the real server, destroy its active socket pairs, stop listening

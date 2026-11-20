@@ -50,12 +50,17 @@ from managym.enums import (  # noqa: F401
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
 
-# Native action tensor: family, declaration, mode/ability selectors, validity.
+# Native action tensor: family, declaration, mode/ability selectors,
+# continuation, validity, then appended columns.
 ACTION_TYPE_DIM = len(ActionEnum)
 ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
 ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
+ACTION_VALID_INDEX = ACTION_CONTINUATION_INDEX + 1
+# In v11 this flag marks taps that directly pay a cost (convoke, improvise,
+# waterbend). Its position preserves the saved 22-column prefix.
+ACTION_PAYS_DIRECTLY_INDEX = ACTION_VALID_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 # Name candidate columns: name row + 1, definition + 1, then the first and
 # last name rows (+ 1) of a naming group choice.
@@ -167,6 +172,9 @@ FACT_EFFECT_PROGRAM = 11
 # The id of an effect program that states a player's pooled mana with a
 # spend effect or combat expiry (native `observation_encoder::POOLED_MANA`).
 POOLED_MANA = "PooledMana"
+# The id of an effect program that states a permanent's ward price when the
+# ward-cost column cannot, as "Ward—Pay 7 life." (native `observation_encoder::WARD`).
+WARD = "Ward"
 FACT_EFFECTIVE_COLOR = 12
 FACT_KEYWORD_COUNTER_TIMESTAMP = 13
 FACT_CONTINUATION_PROGRAM = 14
@@ -344,9 +352,10 @@ class ObservationEncoder:
             raise ValueError("decision memory requires policy input v11")
 
         # Preserve attack/decline independently of action family and focus.
+        # declaration, mode, ability, continuation join, validity, direct payment
         self.action_dim = (
-            self.num_actions + 5
-        )  # declaration, mode, ability, continuation join, validity
+            ACTION_PAYS_DIRECTLY_INDEX if self.one_token else ACTION_VALID_INDEX
+        ) + 1
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -853,6 +862,18 @@ class ObservationEncoder:
                     (0.0, 0.0),
                     provenance=(0.0, timestamp, None),
                 )
+        # A ward price that is not a mana value: one program on its permanent.
+        for perm in permanents:
+            for ordinal, (token_kind, token_value) in enumerate(
+                perm.characteristics.ward_program
+            ):
+                push(
+                    perm.id,
+                    FACT_EFFECT_PROGRAM,
+                    token(WARD),
+                    (float(token_kind), float(ordinal)),
+                    token_value,
+                )
         # Spend effects and combat expiry: one program per pooled class on its player.
         for player in (obs.agent, obs.opponent):
             for pooled in player.pooled_mana_classes:
@@ -1109,7 +1130,7 @@ class ObservationEncoder:
         i += 1
         arr[i] = float(characteristics.is_lesson)
         i += 1
-        arr[i] = float(characteristics.ward_cost > 0)
+        arr[i] = float(characteristics.ward_cost > 0 or characteristics.ward_life > 0)
         i += 1
         arr[i] = float(characteristics.ward_cost) / 10.0
         i += 1
@@ -1213,7 +1234,7 @@ class ObservationEncoder:
             arr[PERMANENT_TOKEN_INDEX] = float(perm.is_token)
             arr[PERMANENT_ALLY_INDEX] = float(card.is_ally)
             arr[PERMANENT_LESSON_INDEX] = float(card.is_lesson)
-            arr[PERMANENT_WARD_INDEX] = float(card.ward_cost > 0)
+            arr[PERMANENT_WARD_INDEX] = float(card.ward_cost > 0 or card.ward_life > 0)
             arr[PERMANENT_WARD_INDEX + 1] = card.ward_cost / 10.0
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
@@ -1266,7 +1287,9 @@ class ObservationEncoder:
         )
         candidates = np.zeros((self.max_actions, self.name_dim), dtype=np.float32)
         for idx, action in enumerate(actions):
-            arr[idx, -1] = 1.0
+            arr[idx, ACTION_VALID_INDEX] = 1.0
+            if self.one_token:
+                arr[idx, ACTION_PAYS_DIRECTLY_INDEX] = float(action.pays_directly)
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:
                 arr[idx, action_type] = 1.0
@@ -1321,7 +1344,7 @@ class ObservationEncoder:
         return {
             "actions": arr,
             "action_focus": action_focus,
-            "actions_valid": arr[..., -1].astype(np.float32),
+            "actions_valid": arr[..., ACTION_VALID_INDEX].astype(np.float32),
             "name_candidates": candidates,
         }
 
