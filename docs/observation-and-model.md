@@ -804,10 +804,9 @@ sampled Elemental games every number a fresh model receives stays within
 ±4. Life and turn are divided by 20 and have no fixed bound, so a very long
 game or a life-gain deck can exceed that.
 
-A few columns take their reading from their place in a structured row rather
-than their kind, in fresh and stored models alike (`PLACED_READINGS` in
-`manabot/policy/readings.py`). The `valid` flags of actions, relations, facts
-and effects read `mask`: a mask already carries them, so no projection
+A fresh model reads a few columns according to their role in a structured row
+(`PLACED_READINGS` in `manabot/policy/readings.py`). The `valid` flags of actions,
+relations, facts and effects read `mask`: a mask already carries them, so no projection
 receives them. A fact's `kind` and detail words read `lookup`; its id words
 read `fact_id`, a token row for named kinds and the ordinal / 128 for frame
 and ability indexes; its `duration` reads `duration`, four flags for until end

@@ -28,8 +28,7 @@ use crate::{
 impl Game {
     /// Whether `action`'s mode index is an announced number rather than an
     /// option: X for a spell (or its replicate count), X for an activation,
-    /// or a resolving optional payment's X. Mirrors `action_description`'s
-    /// "X = n" arms.
+    /// or a resolving optional payment's X.
     pub(crate) fn announces_x(&self, action: &Action) -> bool {
         use crate::flow::decision::Decision;
         matches!(action, Action::ChooseMode { .. })
@@ -110,12 +109,7 @@ impl Game {
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),
-            Action::ChooseMode { mode, .. }
-                if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
-                ) =>
-            {
+            Action::ChooseMode { mode, .. } if self.announces_x(action) => {
                 Some(format!("X = {mode}"))
             }
             Action::ChooseMode { mode, .. }
@@ -159,7 +153,6 @@ impl Game {
                         )),
                         NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
                     },
-                    Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
                     Decision::ManaSpend { player, cost, .. } => {
                         let choices = self.mana_spend_choices(*player, cost);
                         let unit = &choices.get(*mode)?.unit;

@@ -4025,6 +4025,7 @@ fn announced_x_offers_carry_their_value() {
     let rows = encoded(&s, 0);
     for (offer, row) in offers.iter().zip(rows.actions.chunks_exact(width)) {
         let mode = offer.mode_index.expect("an X offer has its value") as f32;
+        assert_eq!(offer.description, Some(format!("X = {mode}")));
         assert_eq!(
             (row[action::HAS_X], row[action::X], row[action::MODE]),
             (1.0, mode / 10.0, mode + 1.0)

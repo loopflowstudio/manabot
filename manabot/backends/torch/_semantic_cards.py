@@ -210,14 +210,13 @@ class SemanticCardEncoder(nn.Module):
         empty: learning a hand card adds the hand stream and leaves the
         decklist stream as it was.
         """
-        normalized = self.hand_norm is not None
-        attenuation = 1.0 if normalized else 60.0
+        attenuation = 60.0 if self.hand_norm is None else 1.0
         hand = (
             self.lookup(definitions, batch.known_rows)
             * batch.known_counts[..., None]
             / attenuation
         ).sum(dim=2)
-        hand = masked_norm(self.hand_norm, hand, (batch.known_counts > 0).any(-1))
+        hand = masked_norm(self.hand_norm, hand, batch.known_counts)
         library = None
         if self.library_projection is not None:
             pooled = (
@@ -228,7 +227,7 @@ class SemanticCardEncoder(nn.Module):
             library = masked_norm(
                 self.library_norm,
                 self.library_projection(pooled),
-                (batch.library_weights > 0).any(-1),
+                batch.library_weights,
             )
         decklist = None
         if self.decklist_projection is not None:
@@ -240,16 +239,16 @@ class SemanticCardEncoder(nn.Module):
             decklist = masked_norm(
                 self.decklist_norm,
                 self.decklist_projection(pooled),
-                (batch.deck_counts > 0).flatten(2).any(-1),
+                batch.deck_counts,
             )
         return KnowledgeStreams(hand, library, decklist)
 
 
 def masked_norm(
-    norm: nn.LayerNorm | None, stream: torch.Tensor, present: torch.Tensor
+    norm: nn.LayerNorm | None, stream: torch.Tensor, weights: torch.Tensor
 ) -> torch.Tensor:
-    """`norm(stream)` where `present` [B,2], exactly zero elsewhere; the stream
-    unchanged without a norm (its empty pools are already zero)."""
+    """A normalized knowledge source contributes zero for seats with no entries."""
     if norm is None:
         return stream
+    present = (weights > 0).flatten(2).any(-1)
     return norm(stream) * present.unsqueeze(-1).to(stream.dtype)

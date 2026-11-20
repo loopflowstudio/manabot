@@ -29,7 +29,6 @@ constants only.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from functools import cache
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -138,11 +137,12 @@ NUMERIC = frozenset(
 PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
 FACT_COUNT_KINDS = (FACT_TRANSFORMS,)
 
-# Columns read by their place in a structured row rather than their kind, in
-# fresh and legacy readings alike: validity carried by a mask, category and id
-# words embedded or routed, and the extent of a join.
+# Fresh readings determined by a column's role in its row.
 PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
     ("actions", "valid"): Reading.MASK,
+    # These selectors identify relation rows used by frame pooling.
+    ("relations", "frame"): Reading.GATHER,
+    ("relations", "parent"): Reading.GATHER,
     ("relations", "valid"): Reading.MASK,
     ("facts", "kind"): Reading.LOOKUP,
     ("facts", "id_high"): Reading.FACT_ID,
@@ -154,15 +154,6 @@ PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
     ("effects", "detail_count"): Reading.GATHER,
     ("effects", "member_count"): Reading.GATHER,
     ("effects", "valid"): Reading.MASK,
-}
-
-# A fresh model also reads a relation's frame and parent, declared
-# `selector`, as joins: they name another relation row. Stored readings keep
-# what they recorded.
-FRESH_PLACED_READINGS: Mapping[tuple[str, str], Reading] = {
-    **PLACED_READINGS,
-    ("relations", "frame"): Reading.GATHER,
-    ("relations", "parent"): Reading.GATHER,
 }
 
 # Frozen overrides for checkpoints written before readings were recorded.
@@ -343,7 +334,7 @@ def kind_reading(column: ColumnKind) -> ColumnReading:
 
 def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[ColumnReading, ...]]:
     """The readings of a model built now, over the runtime's full columns."""
-    return assign_readings(space, kind_reading, FRESH_PLACED_READINGS)
+    return assign_readings(space, kind_reading, PLACED_READINGS)
 
 
 def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[ColumnReading, ...]]:
@@ -418,19 +409,6 @@ def input_width(reading: ColumnReading) -> int:
     return int(reading in NUMERIC)
 
 
-@cache
-def numeric_offsets(readings: tuple[ColumnReading, ...]) -> dict[int, int]:
-    """Each numeric column's first position among the projection inputs, by
-    column index. A column's inputs are `input_width` long from there."""
-    offsets: dict[int, int] = {}
-    at = 0
-    for index, reading in enumerate(readings):
-        if width := input_width(reading):
-            offsets[index] = at
-            at += width
-    return offsets
-
-
 def duration_flags(duration: Array, reading: Reading) -> Array:
     """One float32 flag per duration code from 1 [..., F]; 0 (absent) sets none."""
     codes = np.arange(1, DURATION_FLAGS[reading] + 1)
@@ -447,19 +425,18 @@ def read_numeric(
     Columns read `as_is` or `fact_value_raw` are copied exactly, so a model
     whose readings are all `as_is` computes what it did before readings existed.
     """
-    readings = tuple(readings)
-    offsets = numeric_offsets(readings)
-    width = sum(input_width(reading) for reading in readings)
+    widths = [input_width(reading) for reading in readings]
+    width = sum(widths)
     rows = values.reshape(-1, values.shape[-1])
     out = np.zeros((len(rows), width), dtype=np.float32)
-    scalars = [index for index in offsets if not isinstance(readings[index], Sized)]
-    out[:, [offsets[index] for index in scalars]] = rows[:, scalars]
     kinds = None if fact_kinds is None else np.asarray(fact_kinds).reshape(-1)
-    for index, at in offsets.items():
-        reading = readings[index]
+    at = 0
+    for index, (reading, count) in enumerate(zip(readings, widths, strict=True)):
+        if not count:
+            continue
+        stored = rows[:, index]
         column = out[:, at]
         if isinstance(reading, Sized):
-            stored = rows[:, index]
             if reading.reading is Reading.ONE_HOT:
                 # Code k at flag k - 1, any code above the size at the last.
                 present = np.nonzero(stored >= 1)[0]
@@ -472,14 +449,17 @@ def read_numeric(
                 out[:, at + 1 : at + 1 + reading.size] = true[:, None] >= np.arange(
                     1, reading.size + 1
                 )
-        elif reading is Reading.LOG:
-            column[:] = signed_log(column)
-        elif reading is Reading.RANK:
-            column /= np.float32(RANK_SCALE)
-        elif reading is Reading.FACT_VALUE:
-            if kinds is None:
-                raise ValueError("fact_value needs each row's fact kind")
-            counts = np.isin(kinds, FACT_COUNT_KINDS)
-            column[counts] = signed_log(column[counts])
-            column[np.isin(kinds, PROGRAM_KINDS)] = 0
+        else:
+            column[:] = stored
+            if reading is Reading.LOG:
+                column[:] = signed_log(column)
+            elif reading is Reading.RANK:
+                column /= np.float32(RANK_SCALE)
+            elif reading is Reading.FACT_VALUE:
+                if kinds is None:
+                    raise ValueError("fact_value needs each row's fact kind")
+                counts = np.isin(kinds, FACT_COUNT_KINDS)
+                column[counts] = signed_log(column[counts])
+                column[np.isin(kinds, PROGRAM_KINDS)] = 0
+        at += count
     return out.reshape(*values.shape[:-1], width)

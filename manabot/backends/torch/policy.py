@@ -17,6 +17,7 @@ composes with the other and neither changes the model.
 from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
+from functools import partial
 from types import TracebackType
 from typing import TYPE_CHECKING, Literal, Optional, Tuple
 
@@ -1032,15 +1033,13 @@ class ActorCritic(nn.Module):
         return torch.cat((table.new_zeros((1, table.shape[1])), normed))
 
     def _generic_definitions(
-        self, rows: torch.Tensor, table: torch.Tensor | None = None
+        self, rows: torch.Tensor, *, table: torch.Tensor | None
     ) -> torch.Tensor:
         """Identity rows of a world without card programs."""
         assert self.card_definitions is not None
         if table is not None:
             return table[rows]
-        if self.stream_norms is None:
-            return self.card_definitions(rows)
-        return self._definition_table(self.card_definitions.weight)[rows]
+        return self.card_definitions(rows)
 
     def _gather_object_embeddings(
         self, obs: Prepared[torch.Tensor], programs: torch.Tensor | None = None
@@ -1054,7 +1053,6 @@ class ActorCritic(nn.Module):
         enc_agent_cards = self._stream("card", self.card_embedding(obs.agent_cards))
         enc_opp_cards = self._stream("card", self.card_embedding(obs.opponent_cards))
         definitions = None
-        generic_table = None
         if self.semantic_cards is not None:
             if programs is None:
                 assert obs.programs is not None
@@ -1065,33 +1063,21 @@ class ActorCritic(nn.Module):
                 self.name_candidates.public_definitions(programs)
             )
             cards, known = self.semantic_cards(obs, definitions)
-            enc_agent_cards = enc_agent_cards + cards[:, 0]
-            enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
-            permanent_definitions = self.semantic_cards.lookup(
-                definitions, obs.permanent_rows
-            )
-            stack_definitions = (
-                None
-                if obs.stack_rows is None
-                else self.semantic_cards.lookup(definitions, obs.stack_rows)
-            )
+            lookup = partial(self.semantic_cards.lookup, definitions)
         else:
-            if self.stream_norms is not None:
-                assert self.card_definitions is not None
-                generic_table = self._definition_table(self.card_definitions.weight)
-            cards = self._generic_definitions(obs.card_rows, generic_table)
-            enc_agent_cards = enc_agent_cards + cards[:, 0]
-            enc_opp_cards = enc_opp_cards + cards[:, 1]
-            permanent_definitions = self._generic_definitions(
-                obs.permanent_rows, generic_table
+            assert self.card_definitions is not None
+            table = (
+                self._definition_table(self.card_definitions.weight)
+                if self.stream_norms is not None
+                else None
             )
-            stack_definitions = (
-                None
-                if obs.stack_rows is None
-                else self._generic_definitions(obs.stack_rows, generic_table)
-            )
+            lookup = partial(self._generic_definitions, table=table)
+            cards = lookup(obs.card_rows)
+        enc_agent_cards = enc_agent_cards + cards[:, 0]
+        enc_opp_cards = enc_opp_cards + cards[:, 1]
+        permanent_definitions = lookup(obs.permanent_rows)
         # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
             self._stream(
@@ -1115,10 +1101,10 @@ class ActorCritic(nn.Module):
         ]
         if self.stack_tokens:
             assert self.stack_embedding is not None and obs.stack is not None
-            assert stack_definitions is not None
+            assert obs.stack_rows is not None
             parts.append(
                 self._stream("stack", self.stack_embedding(obs.stack))
-                + stack_definitions
+                + lookup(obs.stack_rows)
             )
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
@@ -1135,17 +1121,11 @@ class ActorCritic(nn.Module):
         objects = self.shared_effects(
             obs.effects, objects, token_embedding, definitions
         )
-        relation_definitions = (
-            SemanticCardEncoder.lookup(definitions, obs.relation_rows)
-            if definitions is not None
-            else self._generic_definitions(obs.relation_rows, generic_table)
-        )
         encoded_relations = self.continuation.encode_rows(
-            obs, objects, relation_definitions
+            obs, objects, lookup(obs.relation_rows)
         )
-        shared_context = encoded_relations.sum(1) / obs.relation_valid.sum(
-            1, keepdim=True
-        ).clamp_min(1)
+        relation_count = obs.relation_valid.sum(1, keepdim=True)
+        shared_context = encoded_relations.sum(1) / relation_count.clamp_min(1)
         frame_context = self.continuation.frame_context(obs, encoded_relations)
         if self.recent_events is not None:
             assert definitions is not None and obs.events is not None
@@ -1154,7 +1134,7 @@ class ActorCritic(nn.Module):
             )
         if self.stream_norms is not None:
             # Zero, not a unit-scale bias, for a decision with no context.
-            present = obs.relation_valid.sum(1) > 0
+            present = relation_count.squeeze(-1) > 0
             if self.recent_events is not None:
                 assert obs.events is not None
                 present = present | obs.events.validity.any(-1)
@@ -1511,30 +1491,21 @@ class GameObjectAttention(nn.Module):
             owned_objects = objects + perspective_scale * self.perspective
 
         mask = (~key_padding_mask).unsqueeze(-1).float()
-        if self.pre_norm:
-            normed = self.norm1(owned_objects)
-            attn_out, _ = self.mha(
-                normed,
-                normed,
-                normed,
-                key_padding_mask=key_padding_mask,
-                need_weights=False,
-            )
-            x = owned_objects + attn_out
-            return (x + self.mlp(self.norm2(x))) * mask
-
-        attn_out, _ = self.mha(
-            owned_objects,
-            owned_objects,
-            owned_objects,
+        attention_input = self.norm1(owned_objects) if self.pre_norm else owned_objects
+        attended, _ = self.mha(
+            attention_input,
+            attention_input,
+            attention_input,
             key_padding_mask=key_padding_mask,
             need_weights=False,
         )
+        return self._after_attention(owned_objects + attended) * mask
 
-        x = self.norm1(owned_objects + attn_out)
-        mlp_out = self.mlp(x)
-        post_norm = self.norm2(x + mlp_out)
-        return post_norm * mask
+    def _after_attention(self, residual: torch.Tensor) -> torch.Tensor:
+        if self.pre_norm:
+            return residual + self.mlp(self.norm2(residual))
+        x = self.norm1(residual)
+        return self.norm2(x + self.mlp(x))
 
     def forward_live(
         self,
@@ -1555,13 +1526,10 @@ class GameObjectAttention(nn.Module):
             ).unsqueeze(-1)
         if self.perspective is not None:
             packed = packed + owners.unsqueeze(-1) * self.perspective
-        if self.pre_norm:
-            x = packed + tokens.self_attention(self.mha, self.norm1(packed))
-            return x + self.mlp(self.norm2(x))
-        attended = tokens.self_attention(self.mha, packed)
-        x = self.norm1(packed + attended)
-        output = self.norm2(x + self.mlp(x))
-        return output
+        attention_input = self.norm1(packed) if self.pre_norm else packed
+        return self._after_attention(
+            packed + tokens.self_attention(self.mha, attention_input)
+        )
 
 
 def layer_init(
