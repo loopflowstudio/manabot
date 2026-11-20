@@ -188,6 +188,7 @@ class ActorCritic(nn.Module):
                 records=config.catalog_records(),
                 decision_memory=bool(enc.config.max_decision_records),
                 library=enc.one_token,
+                stream_norm=config.stream_norm,
             )
         else:
             # Generic worlds still distinguish card definitions. The content
@@ -216,6 +217,7 @@ class ActorCritic(nn.Module):
                 num_heads=num_heads,
                 feedforward_dim=config.attention_feedforward_dim,
                 memory_gate_scale=config.decision_memory_gate_scale,
+                pre_norm=config.stream_norm,
             )
             self.logger.info(
                 f"Attention: {embed_dim} -> {embed_dim} with {num_heads} heads"
@@ -298,6 +300,7 @@ class ActorCritic(nn.Module):
                 ownership=False,
                 feedforward_dim=config.attention_feedforward_dim,
                 memory_gate_scale=config.decision_memory_gate_scale,
+                pre_norm=config.stream_norm,
             )
             for _ in range(config.attention_layers - 1)
         )
@@ -409,6 +412,32 @@ class ActorCritic(nn.Module):
             if config.value_aggregation == "attention_readout"
             else None
         )
+
+        # One normalized token stream (`ModelConfig.stream_norm`): every
+        # stream summed into an object token is normalized here or starts at
+        # zero (links, stack sources, facts, shared effects). LayerNorms draw
+        # no RNG, so every parameter above keeps its draws.
+        self.stream_norms: nn.ModuleDict | None = None
+        if config.stream_norm:
+            streams = ["player", "card", "permanent", "definition", "context", "final"]
+            if self.stack_tokens:
+                streams.append("stack")
+            self.stream_norms = nn.ModuleDict(
+                {name: nn.LayerNorm(embed_dim) for name in streams}
+            )
+
+        # Focus-conditioned scoring (FiLM over the offer's focused objects):
+        # the offer's features are scaled by 1 + W @ focused before
+        # action_layer, so two offers naming one object differ by a function
+        # of it at initialization. Ordinary initialization, unlike
+        # policy_film: a zero start would leave that gap blind to the object
+        # until W moved. Built last so every other parameter keeps the draws
+        # of the model without it.
+        self.focus_film: nn.Linear | None = None
+        if config.focus_film:
+            self.focus_film = layer_init(
+                nn.Linear(self.max_focus_objects * embed_dim, embed_dim)
+            )
 
         # When True, forward() stashes legal logits at original coordinates on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -871,6 +900,12 @@ class ActorCritic(nn.Module):
                 objects = layer(
                     objects, is_agent, key_padding_mask, summaries=summaries
                 )
+        if self.stream_norms is not None:
+            # Pre-normalized blocks leave the residual stream unnormalized;
+            # the heads read it through one final norm, padding kept zero.
+            objects = self._stream("final", objects) * (~key_padding_mask).unsqueeze(
+                -1
+            ).to(objects.dtype)
         if columns is not None:
             # Restore the optional neutral value token in the same scatter,
             # at the slot immediately after the original object coordinates.
@@ -913,7 +948,7 @@ class ActorCritic(nn.Module):
         packed = self.attention.forward_live(packed, owners, tokens, summaries)
         for layer in self.extra_attention:
             packed = layer.forward_live(packed, owners, tokens, summaries)
-        return tokens.scatter(packed)
+        return tokens.scatter(self._stream("final", packed))
 
     def _value_from_objects(
         self, objects: torch.Tensor, validity: torch.Tensor
@@ -965,22 +1000,54 @@ class ActorCritic(nn.Module):
             actions = actions + state.programs[obs.candidate_rows]
         actions = actions + state.shared_context[obs.legal_batches]
         focused = post_attention_objects.flatten(0, 1)[obs.focus]
-        focused = focused * obs.focus_mask.unsqueeze(-1)
-        return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
+        focused = (focused * obs.focus_mask.unsqueeze(-1)).flatten(1)
+        if self.focus_film is not None:
+            # An absent focus is zero, so an unfocused offer is scaled by 1.
+            actions = actions * (1 + self.focus_film(focused))
+        return self.action_layer(torch.cat((actions, focused), dim=-1))
+
+    def _stream(self, name: str, x: torch.Tensor) -> torch.Tensor:
+        """Normalize one stream summed into object tokens (`stream_norm`)."""
+        if self.stream_norms is None:
+            return x
+        return self.stream_norms[name](x)
+
+    def _definition_table(self, table: torch.Tensor) -> torch.Tensor:
+        """Normalize a definition table [definitions + 1, D] with row 0 kept
+        zero, so a named card and an unnamed token enter at one scale."""
+        if self.stream_norms is None:
+            return table
+        normed = self.stream_norms["definition"](table[1:])
+        return torch.cat((table.new_zeros((1, table.shape[1])), normed))
+
+    def _generic_definitions(self, rows: torch.Tensor) -> torch.Tensor:
+        """Identity rows of a world without card programs."""
+        assert self.card_definitions is not None
+        if self.stream_norms is None:
+            return self.card_definitions(rows)
+        return self._definition_table(self.card_definitions.weight)[rows]
 
     def _gather_object_embeddings(
         self, obs: Prepared[torch.Tensor], programs: torch.Tensor | None = None
     ) -> EmbeddedObservation:
-        enc_agent_player = self.player_embedding(obs.agent_player)
-        enc_opp_player = self.player_embedding(obs.opponent_player)
-        enc_agent_cards = self.card_embedding(obs.agent_cards)
-        enc_opp_cards = self.card_embedding(obs.opponent_cards)
+        enc_agent_player = self._stream(
+            "player", self.player_embedding(obs.agent_player)
+        )
+        enc_opp_player = self._stream(
+            "player", self.player_embedding(obs.opponent_player)
+        )
+        enc_agent_cards = self._stream("card", self.card_embedding(obs.agent_cards))
+        enc_opp_cards = self._stream("card", self.card_embedding(obs.opponent_cards))
         definitions = None
         if self.semantic_cards is not None:
             if programs is None:
                 assert obs.programs is not None
                 programs = self.semantic_cards.definitions(obs.programs)
-            definitions = self.name_candidates.public_definitions(programs)
+            # Every object reader sees the normalized table; the raw
+            # `programs` keep scoring naming candidates and decision memory.
+            definitions = self._definition_table(
+                self.name_candidates.public_definitions(programs)
+            )
             cards, known = self.semantic_cards(obs, definitions)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
@@ -995,23 +1062,26 @@ class ActorCritic(nn.Module):
                 else self.semantic_cards.lookup(definitions, obs.stack_rows)
             )
         else:
-            assert self.card_definitions is not None
-            cards = self.card_definitions(obs.card_rows)
+            cards = self._generic_definitions(obs.card_rows)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
-            permanent_definitions = self.card_definitions(obs.permanent_rows)
+            permanent_definitions = self._generic_definitions(obs.permanent_rows)
             stack_definitions = (
                 None
                 if obs.stack_rows is None
-                else self.card_definitions(obs.stack_rows)
+                else self._generic_definitions(obs.stack_rows)
             )
         # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
-            self.perm_embedding(obs.permanents[:, 0].contiguous())
+            self._stream(
+                "permanent", self.perm_embedding(obs.permanents[:, 0].contiguous())
+            )
             + permanent_definitions[:, 0]
         )
         enc_opp_perms = (
-            self.perm_embedding(obs.permanents[:, 1].contiguous())
+            self._stream(
+                "permanent", self.perm_embedding(obs.permanents[:, 1].contiguous())
+            )
             + permanent_definitions[:, 1]
         )
         parts = [
@@ -1025,7 +1095,10 @@ class ActorCritic(nn.Module):
         if self.stack_tokens:
             assert self.stack_embedding is not None and obs.stack is not None
             assert stack_definitions is not None
-            parts.append(self.stack_embedding(obs.stack) + stack_definitions)
+            parts.append(
+                self._stream("stack", self.stack_embedding(obs.stack))
+                + stack_definitions
+            )
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
@@ -1044,7 +1117,7 @@ class ActorCritic(nn.Module):
         relation_definitions = (
             SemanticCardEncoder.lookup(definitions, obs.relation_rows)
             if definitions is not None
-            else self.card_definitions(obs.relation_rows)
+            else self._generic_definitions(obs.relation_rows)
         )
         encoded_relations = self.continuation.encode_rows(
             obs, objects, relation_definitions
@@ -1058,6 +1131,15 @@ class ActorCritic(nn.Module):
             shared_context = (
                 self.recent_events(obs.events, objects, definitions) + shared_context
             )
+        if self.stream_norms is not None:
+            # Zero, not a unit-scale bias, for a decision with no context.
+            present = obs.relation_valid.sum(1) > 0
+            if self.recent_events is not None:
+                assert obs.events is not None
+                present = present | obs.events.validity.any(-1)
+            shared_context = self._stream(
+                "context", shared_context
+            ) * present.unsqueeze(-1).to(shared_context.dtype)
         objects = objects + shared_context.unsqueeze(1)
         return EmbeddedObservation(
             objects, obs.is_agent, obs.validity, shared_context, frame_context, programs
@@ -1329,6 +1411,12 @@ class GameObjectAttention(nn.Module):
       - Adding a learned perspective vector (with sign flip based on controller),
       - Applying multi-head attention,
       - And returning the context-rich output.
+
+    Post-normalization (`norm(x + f(x))`) is the historical layout. With
+    `pre_norm` each block reads a normalized copy of the residual stream,
+    `x + mha(norm1(x))` then `x + mlp(norm2(x))` (Xiong et al., 2020), so
+    query/key size does not grow with the number of streams summed into a
+    token; the caller then owns one final norm. Parameter names are shared.
     """
 
     def __init__(
@@ -1339,8 +1427,10 @@ class GameObjectAttention(nn.Module):
         ownership: bool = True,
         feedforward_dim: int | None = None,
         memory_gate_scale: float = 1.0,
+        pre_norm: bool = False,
     ) -> None:
         super().__init__()
+        self.pre_norm = pre_norm
         self.memory_gate: nn.Parameter | None = None
         self.memory_projection: nn.Linear | None = None
         self.memory_gate_scale = memory_gate_scale
@@ -1399,6 +1489,19 @@ class GameObjectAttention(nn.Module):
                 )
             owned_objects = objects + perspective_scale * self.perspective
 
+        mask = (~key_padding_mask).unsqueeze(-1).float()
+        if self.pre_norm:
+            normed = self.norm1(owned_objects)
+            attn_out, _ = self.mha(
+                normed,
+                normed,
+                normed,
+                key_padding_mask=key_padding_mask,
+                need_weights=False,
+            )
+            x = owned_objects + attn_out
+            return (x + self.mlp(self.norm2(x))) * mask
+
         attn_out, _ = self.mha(
             owned_objects,
             owned_objects,
@@ -1410,8 +1513,6 @@ class GameObjectAttention(nn.Module):
         x = self.norm1(owned_objects + attn_out)
         mlp_out = self.mlp(x)
         post_norm = self.norm2(x + mlp_out)
-
-        mask = (~key_padding_mask).unsqueeze(-1).float()
         return post_norm * mask
 
     def forward_live(
@@ -1433,6 +1534,9 @@ class GameObjectAttention(nn.Module):
             ).unsqueeze(-1)
         if self.perspective is not None:
             packed = packed + owners.unsqueeze(-1) * self.perspective
+        if self.pre_norm:
+            x = packed + tokens.self_attention(self.mha, self.norm1(packed))
+            return x + self.mlp(self.norm2(x))
         attended = tokens.self_attention(self.mha, packed)
         x = self.norm1(packed + attended)
         output = self.norm2(x + self.mlp(x))

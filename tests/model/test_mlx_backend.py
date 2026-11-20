@@ -22,6 +22,7 @@ from manabot.backends import resolve  # noqa: E402
 from manabot.backends.convert import convert  # noqa: E402
 from manabot.backends.mlx.checkpoint import (  # noqa: E402
     mlx_parameters,
+    require_supported,
 )
 from manabot.backends.mlx.policy import (  # noqa: E402
     ObjectAttention,
@@ -43,6 +44,7 @@ from manabot.infra.config import (  # noqa: E402
     ObservationConfig,
 )
 from manabot.policy.checkpoint import (  # noqa: E402
+    UnsupportedPolicy,
     canonical_parameters,
     from_torch_state,
     read_safetensors,
@@ -190,6 +192,15 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     assert "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in str(
         refused.value
     )
+
+
+@pytest.mark.parametrize("field", ["focus_film", "stream_norm"])
+def test_unimplemented_layouts_are_refused_by_name(field: str) -> None:
+    model = ModelConfig(
+        world="elemental-world-v2", value_aggregation="masked_mean", **{field: True}
+    )
+    with pytest.raises(UnsupportedPolicy, match=field):
+        require_supported(model, ObservationConfig(policy_input_version=9))
 
 
 def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:

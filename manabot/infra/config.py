@@ -379,6 +379,15 @@ class ModelConfig(BaseConfig):
     # head (FiLM). Omitted is the historical additive policy, so frozen
     # recipes and checkpoints keep their meaning.
     policy_film: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Scale each offer's own features by its focused post-attention objects
+    # before the action layer, so offers naming one object differ by a
+    # function of it from initialization. Omitted is the historical head.
+    focus_film: bool = Field(default=False, exclude_if=lambda value: not value)
+    # One normalized token stream: a LayerNorm on every stream summed into an
+    # object token (numeric projections, definitions, the knowledge pool,
+    # shared context), pre-normalization attention and a final norm. Omitted
+    # is the historical post-normalization layout with `/ 60` knowledge pools.
+    stream_norm: bool = Field(default=False, exclude_if=lambda value: not value)
     attention_layers: int = Field(default=1, ge=1)
     # Omitted defaults preserve historical recipe and checkpoint identities.
     attention_feedforward_dim: int | None = Field(

@@ -44,11 +44,14 @@ class SemanticCardEncoder(nn.Module):
         records: bool = False,
         decision_memory: bool = False,
         library: bool = False,
+        stream_norm: bool = False,
     ) -> None:
         """`decklists` adds a projection of the pooled
         decklist rows into each player's knowledge vector; `records` adds the
         fact and shared-effect id vocabulary (see the module docstring).
-        `library` projects positional knowledge separately from hand minima."""
+        `library` projects positional knowledge separately from hand minima.
+        `stream_norm` pools known cards without the `/ 60` attenuation and
+        normalizes each player's knowledge vector (`forward`)."""
         super().__init__()
         catalog = catalog_tables(
             pack_key, records=records, decision_memory=decision_memory
@@ -70,6 +73,7 @@ class SemanticCardEncoder(nn.Module):
             nn.Linear(hidden_dim, hidden_dim, bias=False) if library else None
         )
         self.records = records
+        self.knowledge_norm = nn.LayerNorm(hidden_dim) if stream_norm else None
 
     @property
     def catalog_shape(self) -> CatalogShape:
@@ -159,17 +163,27 @@ class SemanticCardEncoder(nn.Module):
     def forward(
         self, batch: Prepared[torch.Tensor], definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Card definition rows [B,2,C,D] and each player's knowledge [B,2,D].
+
+        Knowledge pools known hand cards by count, library positions by
+        `1 / position` and decklist rows by their share of the deck. Without
+        `knowledge_norm` hand and library pools are divided by 60, the
+        historical scale. With it the pool is undivided and one LayerNorm sets
+        its scale to that of the other object streams; a player with nothing
+        known and no disclosed list receives exactly zero.
+        """
         cards = self.lookup(definitions, batch.card_rows)
+        attenuation = 1.0 if self.knowledge_norm is not None else 60.0
         known = (
             self.lookup(definitions, batch.known_rows)
             * batch.known_counts[..., None]
-            / 60.0
+            / attenuation
         ).sum(dim=2)
         if self.library_projection is not None:
             library = (
                 self.lookup(definitions, batch.library_rows)
                 * batch.library_weights[..., None]
-                / 60.0
+                / attenuation
             ).sum(dim=2)
             known = known + self.library_projection(library)
         if self.decklist_projection is not None:
@@ -179,4 +193,11 @@ class SemanticCardEncoder(nn.Module):
                 batch.deck_counts,
             ).flatten(start_dim=2)
             known = known + self.decklist_projection(pooled)
+        if self.knowledge_norm is not None:
+            present = (batch.known_counts > 0).any(-1)
+            if self.library_projection is not None:
+                present = present | (batch.library_weights > 0).any(-1)
+            if self.decklist_projection is not None:
+                present = present | (batch.deck_counts > 0).flatten(2).any(-1)
+            known = self.knowledge_norm(known) * present.unsqueeze(-1).to(known.dtype)
         return cards, known
