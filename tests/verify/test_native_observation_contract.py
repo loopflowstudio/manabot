@@ -156,6 +156,11 @@ def _wrong_dtype(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return dict(buffers, action_focus=buffers["action_focus"].astype(np.float32))
 
 
+def _not_numpy(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    # Capacities are read from `events`, so it is checked before the full contract.
+    return dict(buffers, events=buffers["events"].tolist())
+
+
 def _missing_mask(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {k: v for k, v in buffers.items() if k != "opponent_cards_valid"}
 
@@ -167,6 +172,7 @@ def _missing_mask(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         (_read_only, ValueError),
         (_strided, ValueError),
         (_wrong_dtype, TypeError),
+        (_not_numpy, TypeError),
         (_missing_mask, ValueError),
     ],
 )
@@ -181,15 +187,14 @@ def test_malformed_buffers_fail_before_a_capacity_overflow(
     with pytest.raises(managym.ObservationCapacity):
         encode_observation(space, obs)
     buffers = malform(space.allocate())
-    for value in buffers.values():
+    arrays = [value for value in buffers.values() if isinstance(value, np.ndarray)]
+    for value in arrays:
         if value.flags.writeable:
             value.fill(-7)
     with pytest.raises(error) as raised:
         managym.encode_observation_into(obs, buffers)
     assert not isinstance(raised.value, managym.ObservationCapacity)
-    assert all(
-        np.all(value == -7) for value in buffers.values() if value.flags.writeable
-    )
+    assert all(np.all(value == -7) for value in arrays if value.flags.writeable)
 
 
 def test_policy_action_count_overflow_is_a_capacity_error() -> None:

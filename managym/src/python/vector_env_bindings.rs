@@ -28,7 +28,7 @@ use crate::{
     infra::profiler::InfoDict,
     python::{
         bindings::{map_agent_err, PyEnv, PyObservation, PyPlayerConfig},
-        convert::{info_dict_to_pydict, require_numpy_array},
+        convert::{info_dict_to_pydict, require_ndarray, require_numpy_array},
     },
     state::player::PlayerConfig,
 };
@@ -546,11 +546,11 @@ pub(super) fn input_buffer_config(
     // Strip only the optional batch axis. Full companion and batch shapes are
     // validated by the caller before any writes.
     let shape = |name: &str| -> PyResult<[usize; 2]> {
-        let dimensions: Vec<usize> = buffers
+        let value = buffers
             .get_item(name)?
-            .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?
-            .getattr("shape")?
-            .extract()?;
+            .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?;
+        require_ndarray(name, &value)?;
+        let dimensions: Vec<usize> = value.getattr("shape")?.extract()?;
         match dimensions.as_slice() {
             &[rows, width] | &[_, rows, width] if !dimensions.contains(&0) => Ok([rows, width]),
             _ => Err(PyValueError::new_err(format!(

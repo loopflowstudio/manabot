@@ -36,6 +36,20 @@ pub fn shape_to_vec(shape_obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
     shape_obj.extract::<Vec<usize>>()
 }
 
+/// Refuse a buffer value that is not a NumPy array, naming the buffer.
+#[cfg(feature = "python")]
+pub fn require_ndarray(key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let ndarray = value.py().import_bound("numpy")?.getattr("ndarray")?;
+    if !value.is_instance(&ndarray)? {
+        let type_name = value.get_type().qualname()?;
+        return Err(PyTypeError::new_err(format!(
+            "buffer '{key}' must be a NumPy array, got {type_name}; \
+             allocate NumPy buffers and convert them with torch.from_numpy"
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(feature = "python")]
 pub fn require_numpy_array<'py>(
     dict: &Bound<'py, PyDict>,
@@ -49,14 +63,7 @@ pub fn require_numpy_array<'py>(
         )));
     };
 
-    let ndarray = dict.py().import_bound("numpy")?.getattr("ndarray")?;
-    if !value.is_instance(&ndarray)? {
-        let type_name = value.get_type().qualname()?;
-        return Err(PyTypeError::new_err(format!(
-            "buffer '{key}' must be a NumPy array, got {type_name}; \
-             allocate NumPy buffers and convert them with torch.from_numpy"
-        )));
-    }
+    require_ndarray(key, &value)?;
 
     let dtype_name = value
         .getattr("dtype")?
