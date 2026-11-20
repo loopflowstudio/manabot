@@ -16,6 +16,7 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
+from manabot.policy.prepare import Prepared
 from manabot.policy.readings import published_columns
 from manabot.verify.action_cases import decision_case
 from tests.model.prepared_routes import device_input
@@ -51,6 +52,18 @@ def _games() -> tuple[dict[str, torch.Tensor], ...]:
     )
 
 
+def _object_definitions(
+    agent: ActorCritic, prepared: Prepared[torch.Tensor]
+) -> torch.Tensor:
+    """The definition table object tokens read, as `_gather_object_embeddings` builds it."""
+    assert agent.semantic_cards is not None and prepared.programs is not None
+    return agent._definition_table(
+        agent.name_candidates.public_definitions(
+            agent.semantic_cards.definitions(prepared.programs)
+        )
+    )
+
+
 def _permanent_norms(agent: ActorCritic) -> dict[str, np.ndarray]:
     """Per live permanent: numeric and definition stream norms, and the whole
     pre-attention token norm split by token status."""
@@ -60,12 +73,7 @@ def _permanent_norms(agent: ActorCritic) -> dict[str, np.ndarray]:
         for batch in _games():
             prepared = device_input(agent, batch)
             state = agent._gather_object_embeddings(prepared)
-            assert agent.semantic_cards is not None and prepared.programs is not None
-            table = agent._definition_table(
-                agent.name_candidates.public_definitions(
-                    agent.semantic_cards.definitions(prepared.programs)
-                )
-            )
+            table = _object_definitions(agent, prepared)
             slots = prepared.permanents.shape[2]
             for seat, key in enumerate(("agent_permanents", "opponent_permanents")):
                 valid = batch[f"{key}_valid"][0] == 1
@@ -177,13 +185,7 @@ def test_nothing_known_is_exactly_zero() -> None:
         batch[key][0, 1] = 0
     with torch.no_grad():
         prepared = device_input(agent, batch)
-        assert prepared.programs is not None
-        table = agent._definition_table(
-            agent.name_candidates.public_definitions(
-                agent.semantic_cards.definitions(prepared.programs)
-            )
-        )
-        _, known = agent.semantic_cards(prepared, table)
+        _, known = agent.semantic_cards(prepared, _object_definitions(agent, prepared))
     assert not known[0, 1].any()
     assert known[0, 0].norm() > 1
 

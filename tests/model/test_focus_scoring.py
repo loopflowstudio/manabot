@@ -6,8 +6,6 @@ so it barely depends on the attacker; scaling the offer by its focused object
 makes the gap a function of it from initialization.
 """
 
-import itertools
-
 import numpy as np
 import torch
 
@@ -35,8 +33,11 @@ def _agent(seed: int, **fields: object) -> ActorCritic:
     return ActorCritic(SPACE, ModelConfig.model_validate({**SPEC, **fields}))
 
 
-def _attacker(obs: ObservationBuffers, power: int, toughness: int) -> None:
-    """Set the attack case's one creature (agent permanent 0) in place."""
+def _attacker(
+    obs: ObservationBuffers, power: int | torch.Tensor, toughness: int | torch.Tensor
+) -> None:
+    """Set the attack case's one creature (agent permanent 0) in place, one
+    value for every row or one per row."""
     obs["agent_permanents"][:, 0, POWER] = power / 10
     obs["agent_permanents"][:, 0, TOUGHNESS] = toughness / 10
 
@@ -102,13 +103,11 @@ def test_the_attack_gap_moves_with_the_attacker() -> None:
 def _steps_to_fit(**fields: bool) -> int:
     """Full-batch Adam updates on "attack iff power >= 3" over 100 attackers
     until every board's label has probability at least 0.9 (at most 300)."""
-    boards = list(itertools.product(range(10), range(10)))
+    power, toughness = torch.cartesian_prod(torch.arange(10), torch.arange(10)).T
     case = decision_case("attack").observation
-    batch = {key: torch.cat([value] * len(boards)) for key, value in case.items()}
-    for row, (power, toughness) in enumerate(boards):
-        batch["agent_permanents"][row, 0, POWER] = power / 10
-        batch["agent_permanents"][row, 0, TOUGHNESS] = toughness / 10
-    labels = torch.tensor([0 if power >= 3 else 1 for power, _ in boards])
+    batch = {key: torch.cat([value] * len(power)) for key, value in case.items()}
+    _attacker(batch, power, toughness)
+    labels = (power < 3).long()
     agent = _agent(0, **fields)
     prepared = device_input(agent, batch)
     optimizer = torch.optim.Adam(agent.parameters(), lr=3e-4)

@@ -908,9 +908,8 @@ class ActorCritic(nn.Module):
         if self.stream_norms is not None:
             # Pre-normalized blocks leave the residual stream unnormalized;
             # the heads read it through one final norm, padding kept zero.
-            objects = self._stream("final", objects) * (~key_padding_mask).unsqueeze(
-                -1
-            ).to(objects.dtype)
+            live_slots = (~key_padding_mask).unsqueeze(-1).to(objects.dtype)
+            objects = self._stream("final", objects) * live_slots
         if columns is not None:
             # Restore the optional neutral value token in the same scatter,
             # at the slot immediately after the original object coordinates.
