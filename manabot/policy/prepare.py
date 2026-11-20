@@ -28,6 +28,7 @@ import numpy as np
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     ACTION_TYPE_DIM,
+    ACTION_VALID_INDEX,
     FACT_COMBAT_RESTRICTION,
     FACT_CONTINUATION_PROGRAM,
     FACT_COPY_EXCEPTION,
@@ -52,6 +53,8 @@ from manabot.env.observation import (
     STACK_IS_MINE_INDEX,
     STACK_SOURCE_INDEX,
     ObservationBuffers,
+    column,
+    columns,
 )
 from manabot.env.shared_effects import EFFECT_ROWS
 from manabot.policy.buckets import has_history_events
@@ -79,8 +82,47 @@ ORDINAL_ID_KINDS = (
 )
 PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
 NAMED_DETAIL_KINDS = (FACT_EFFECT, FACT_COPY_EXCEPTION)
-# One-based object joins of a relation row.
-_RELATION_OBJECT_COLUMNS = (6, 24)
+_RELATION_OBJECT_COLUMNS = columns("relations", "source", "reference")
+_RELATION_DEFINITIONS = columns(
+    "relations", "source_definition", "reference_definition"
+)
+_RELATION_FRAME, _RELATION_FRAME_KIND = columns("relations", "frame", "frame_kind")
+_RELATION_FRAME_IDS = slice(_RELATION_FRAME, _RELATION_FRAME_KIND)
+_RELATION_FEATURE_SLICES = (
+    slice(None, column("relations", "source_definition")),
+    slice(column("relations", "mode"), column("relations", "reference_definition")),
+    slice(column("relations", "reference_player"), RELATION_VALID_INDEX),
+    slice(RELATION_VALID_INDEX + 1, None),
+)
+
+_NAME, _NAME_DEFINITION, _GROUP_FIRST, _GROUP_LAST = columns(
+    "name_candidates", "name", "definition", "group_first", "group_last"
+)
+_HAND_DEFINITION, _HAND_COUNT = columns("known_hand", "definition", "count")
+_LIBRARY_DEFINITION, _LIBRARY_POSITION = columns(
+    "known_library", "definition", "position"
+)
+_DECK_DEFINITION, _DECK_MAIN = columns("decklists", "definition", "main")
+
+_FACT_VALUE_2 = column("facts", "value_2")
+_EFFECT_MODIFICATION = slice(
+    column("effects", "modification_high"), column("effects", "power")
+)
+_EFFECT_NUMERIC = slice(column("effects", "power"), column("effects", "controller"))
+_EFFECT_LINKS = columns("effects", "controller", "source")
+_EFFECT_SOURCE_DEFINITION = column("effects", "source_definition")
+_EFFECT_VALID = column("effects", "valid")
+_EFFECT_SPANS = slice(column("effects", "detail_offset"), _EFFECT_VALID)
+_DETAIL_KIND, _DETAIL_VALUE_HIGH = columns("effect_details", "kind", "value_high")
+_MEMBER_OBJECT = column("effect_members", "object")
+
+_EVENT_KIND, _EVENT_AMOUNT = columns("events", "kind", "amount")
+_EVENT_DEFINITIONS = columns("events", "source_definition", "target_definition")
+_EVENT_OWNERS = columns("events", "source_owner", "target_owner")
+_EVENT_ZONES = columns("events", "source_zone", "target_zone")
+_EVENT_CONTEXT = columns("events", "source_context", "target_context")
+_EVENT_STATUS = columns("events", "source_status", "target_status")
+
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
 # Validity of the visible object table, in its concatenation order.
 OBJECT_VALIDITY_KEYS = (
@@ -575,8 +617,10 @@ def prepare(
     link_targets: list[Array] = []
     link_masks: list[Array] = []
     base = np.arange(batch)[:, None] * objects
-    for column in layout.link_columns:
-        links = np.concatenate([obs[key][..., column] for key in _PERMANENT_KEYS], 1)
+    for link_column in layout.link_columns:
+        links = np.concatenate(
+            [obs[key][..., link_column] for key in _PERMANENT_KEYS], 1
+        )
         link_targets.append(
             (base + (links.astype(np.int64) - 1).clip(min=0)).reshape(-1)
         )
@@ -586,25 +630,24 @@ def prepare(
     relation_valid = relations[..., RELATION_VALID_INDEX]
     clean = np.where(relation_valid[..., None] == 1, relations, 0)
     features = clean.copy()
-    pending = np.isin(clean[..., 3], (7, 8, 10))
-    features[..., 1:3] = np.where(pending[..., None], 0, clean[..., 1:3])
+    pending = np.isin(clean[..., _RELATION_FRAME_KIND], (7, 8, 10))
+    features[..., _RELATION_FRAME_IDS] = np.where(
+        pending[..., None], 0, clean[..., _RELATION_FRAME_IDS]
+    )
     relation_features = np.concatenate(
-        [
-            features[..., :5],
-            features[..., 7:23],
-            features[..., 25:RELATION_VALID_INDEX],
-            features[..., RELATION_VALID_INDEX + 1 :],
-        ],
+        [features[..., span] for span in _RELATION_FEATURE_SLICES],
         -1,
     ).astype(f32)
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
-    for column in _RELATION_OBJECT_COLUMNS:
-        indexes = clean[..., column].astype(np.int64)
+    for link_column in _RELATION_OBJECT_COLUMNS:
+        indexes = clean[..., link_column].astype(np.int64)
         relation_objects.append((base + (indexes - 1).clip(min=0)).reshape(-1))
         relation_masks.append((indexes > 0).astype(f32))
-    frame_ids = np.where(relation_valid == 1, relations[..., 1], 1).astype(np.int64)
+    frame_ids = np.where(
+        relation_valid == 1, relations[..., _RELATION_FRAME], 1
+    ).astype(np.int64)
     frame_base = np.arange(batch)[:, None] * relation_count
     frame_indexes = (frame_base + (frame_ids - 1).clip(min=0)).reshape(-1)
 
@@ -617,14 +660,14 @@ def prepare(
     action_rows = obs["actions"][legal_batches, legal_slots]
     action_features = action_rows[:, :ACTION_CONTINUATION_INDEX]
     # Continuation and validity keep their published positions when features grow.
-    suffix = action_rows[:, ACTION_CONTINUATION_INDEX + 2 :]
+    suffix = action_rows[:, ACTION_VALID_INDEX + 1 :]
     if suffix.shape[1]:
         action_features = np.concatenate((action_features, suffix), axis=1)
     frames = action_rows[:, ACTION_CONTINUATION_INDEX].astype(np.int64)
     candidates = obs["name_candidates"][legal_batches, legal_slots].astype(np.int64)
     focus = obs["action_focus"][legal_batches, legal_slots].astype(np.int64)
-    if candidates.shape[-1] >= 4:
-        first, last = candidates[:, 2], candidates[:, 3]
+    if candidates.shape[-1] > max(_GROUP_FIRST, _GROUP_LAST):
+        first, last = candidates[:, _GROUP_FIRST], candidates[:, _GROUP_LAST]
     else:
         first = last = np.zeros(len(candidates), np.int64)
 
@@ -663,17 +706,17 @@ def prepare(
         permanents=numeric,
         validity=validity.astype(f32),
         card_rows=tables.rows(obs["semantic_cards"]),
-        known_rows=tables.rows(knowledge[..., 0]),
-        known_counts=knowledge[..., 1].astype(f32),
-        library_rows=tables.rows(library[..., 0]),
+        known_rows=tables.rows(knowledge[..., _HAND_DEFINITION]),
+        known_counts=knowledge[..., _HAND_COUNT].astype(f32),
+        library_rows=tables.rows(library[..., _LIBRARY_DEFINITION]),
         library_weights=np.divide(
             np.float32(1),
-            library[..., 1],
-            out=np.zeros_like(library[..., 1]),
-            where=library[..., 1] > 0,
+            library[..., _LIBRARY_POSITION],
+            out=np.zeros_like(library[..., _LIBRARY_POSITION]),
+            where=library[..., _LIBRARY_POSITION] > 0,
         ).astype(f32),
-        deck_rows=tables.rows(decklists[..., 0]),
-        deck_counts=(decklists[..., 1:] / f32(60)).astype(f32),
+        deck_rows=tables.rows(decklists[..., _DECK_DEFINITION]),
+        deck_counts=(decklists[..., _DECK_MAIN:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
         stack=stack[
             ...,
@@ -702,7 +745,7 @@ def prepare(
         effects=_effects(obs, tables, objects),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
-        relation_rows=tables.rows(relations[..., [5, 23]]),
+        relation_rows=tables.rows(relations[..., _RELATION_DEFINITIONS]),
         relation_objects=tuple(relation_objects),
         relation_object_masks=tuple(relation_masks),
         frame_indexes=frame_indexes,
@@ -713,13 +756,13 @@ def prepare(
         action_features=action_features.astype(f32),
         action_frames=legal_batches * relation_count + (frames - 1).clip(min=0),
         action_frame_mask=(frames != 0).astype(f32),
-        name_rows=candidates[:, 0],
-        name_mask=(candidates[:, 0] > 0).astype(f32),
+        name_rows=candidates[:, _NAME],
+        name_mask=(candidates[:, _NAME] > 0).astype(f32),
         group_first=(first - 1).clip(min=0),
         group_last=last,
         group_mask=(first > 0).astype(f32),
         group_counts=(last - first + 1).clip(min=1).astype(f32),
-        candidate_rows=tables.rows(candidates[:, 1]),
+        candidate_rows=tables.rows(candidates[:, _NAME_DEFINITION]),
         focus=legal_batches[:, None] * objects + focus.clip(min=0),
         focus_mask=(focus != -1).astype(f32),
         attention_columns=columns,
@@ -757,16 +800,17 @@ def _referenced_definitions(
     references = [
         obs["semantic_cards"],
         *(obs[key][..., PERMANENT_DEFINITION_INDEX] for key in _PERMANENT_KEYS),
-        obs["known_hand"][..., 0],
-        obs["decklists"][..., 0],
-        obs["relations"][..., [5, 23]],
-        candidates[:, 1],
+        obs["known_hand"][..., _HAND_DEFINITION],
+        obs["decklists"][..., _DECK_DEFINITION],
+        obs["relations"][..., _RELATION_DEFINITIONS],
+        candidates[:, _NAME_DEFINITION],
     ]
     if "known_library" in obs:
-        references.append(obs["known_library"][..., 0])
+        references.append(obs["known_library"][..., _LIBRARY_DEFINITION])
     if history:
         references.extend(
-            obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)
+            obs["events"][..., col][obs["events_valid"] == 1]
+            for col in _EVENT_DEFINITIONS
         )
     if "stack" in obs:
         references.append(obs["stack"][..., STACK_DEFINITION_INDEX])
@@ -776,7 +820,9 @@ def _referenced_definitions(
                 obs["facts"][..., FACT_SOURCE_INDEX][
                     obs["facts"][..., FACT_VALID_INDEX] == 1
                 ],
-                obs["effects"][..., 11][obs["effects"][..., 17] == 1],
+                obs["effects"][..., _EFFECT_SOURCE_DEFINITION][
+                    obs["effects"][..., _EFFECT_VALID] == 1
+                ],
             )
         )
     referenced = np.unique(
@@ -811,7 +857,7 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
     columns = np.stack(
         [
             live[..., FACT_VALUE_INDEX],
-            live[..., FACT_VALUE_INDEX + 1],
+            live[..., _FACT_VALUE_2],
             (duration == 1).astype(np.float32),
             (duration == 2).astype(np.float32),
             live[..., FACT_ORDER_INDEX] / scale,
@@ -880,7 +926,7 @@ def _fact_programs(
         return None
     rows = np.nonzero(flat)[0]
     program_facts = facts.reshape(-1, facts.shape[-1])[rows]
-    starts = np.nonzero(program_facts[:, FACT_VALUE_INDEX + 1] == 0)[0]
+    starts = np.nonzero(program_facts[:, _FACT_VALUE_2] == 0)[0]
     lengths = np.diff(np.append(starts, len(rows)))
     word = record_word(program_facts, FACT_DETAIL_INDEX)
     signed = np.where(word >= 2**31, word - 2**32, word).astype(np.float32)
@@ -904,13 +950,15 @@ def _effects(
     details = obs["effect_details"]
     members = obs["effect_members"]
     detail_rows, member_rows = details.shape[1], members.shape[1]
-    live_batches, live_slots = np.nonzero(headers[..., 17] == 1)
+    live_batches, live_slots = np.nonzero(headers[..., _EFFECT_VALID] == 1)
     if len(live_batches) == 0:
         return None
     # Select before casting: padding may contain arbitrary payloads, including NaN.
     selected = headers[live_batches, live_slots]
     live = selected.astype(np.int64)
-    halves, source, links = live[:, :2], live[:, 11], live[:, [10, 12]]
+    halves = live[:, _EFFECT_MODIFICATION]
+    source = live[:, _EFFECT_SOURCE_DEFINITION]
+    links = live[:, _EFFECT_LINKS]
     detail_indexes: list[int] = []
     member_indexes: list[int] = []
     member_records: list[int] = []
@@ -918,7 +966,7 @@ def _effects(
     lengths: list[int] = []
     header_tokens = 3 * len(live)
     for i, (b, (d, count, m, targets)) in enumerate(
-        zip(live_batches.tolist(), live[:, 13:17].tolist(), strict=True)
+        zip(live_batches.tolist(), live[:, _EFFECT_SPANS].tolist(), strict=True)
     ):
         detail_start = header_tokens + len(detail_indexes)
         token_indexes.extend(range(3 * i, 3 * i + 3))
@@ -930,12 +978,12 @@ def _effects(
     detail_host = details.reshape(-1, details.shape[-1])[detail_indexes].astype(
         np.int64
     )
-    kinds, ids = detail_host[:, 0], detail_host[:, 1:]
-    targets = members.reshape(-1, members.shape[-1])[member_indexes][:, 0].astype(
-        np.int64
-    )
+    kinds, ids = detail_host[:, _DETAIL_KIND], detail_host[:, _DETAIL_VALUE_HIGH:]
+    targets = members.reshape(-1, members.shape[-1])[
+        member_indexes, _MEMBER_OBJECT
+    ].astype(np.int64)
     records = np.asarray(member_records, dtype=np.int64)
-    numeric = selected[:, 2:10].astype(np.float32)
+    numeric = selected[:, _EFFECT_NUMERIC].astype(np.float32)
     numeric[:, -1] /= np.float32(EFFECT_ROWS)
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
@@ -990,19 +1038,19 @@ def _events(obs: ObservationBuffers, tables: Tables, objects: int) -> EventRows[
     valid = obs["events_valid"]
     rows = np.where((valid != 0)[..., None], obs["events"], 0)
     counts = valid.sum(1, keepdims=True)
-    focus = rows[..., [5, 10]].astype(np.int64)
+    focus = rows[..., _EVENT_CONTEXT].astype(np.int64)
     return EventRows(
-        kinds=rows[..., 0].astype(np.int64),
-        amounts=rows[..., 1:2].astype(np.float32) / np.float32(20),
+        kinds=rows[..., _EVENT_KIND].astype(np.int64),
+        amounts=rows[..., _EVENT_AMOUNT, None].astype(np.float32) / np.float32(20),
         ages=(counts - valid.cumsum(1)).clip(min=0).astype(np.float32),
         validity=valid.astype(bool),
         counts=counts.astype(np.float32),
-        definitions=tables.rows(rows[..., [2, 7]]),
-        owners=rows[..., [3, 8]].astype(np.int64),
-        zones=rows[..., [4, 9]].astype(np.int64),
+        definitions=tables.rows(rows[..., _EVENT_DEFINITIONS]),
+        owners=rows[..., _EVENT_OWNERS].astype(np.int64),
+        zones=rows[..., _EVENT_ZONES].astype(np.int64),
         focus=np.arange(len(rows))[:, None, None] * objects + focus.clip(min=0),
         focus_mask=(focus >= 0) & (valid != 0)[..., None],
-        status=rows[..., [6, 11]].astype(np.int64),
+        status=rows[..., _EVENT_STATUS].astype(np.int64),
     )
 
 
