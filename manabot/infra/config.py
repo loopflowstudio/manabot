@@ -392,6 +392,11 @@ class ModelConfig(BaseConfig):
     record_vocabulary: Literal["hashed", "catalog"] = Field(
         default="catalog", exclude_if=lambda value: value == "catalog"
     )
+    # Whether each public name vector is added onto its definition's program,
+    # so every card token carries a name stream beside its rules program.
+    # Fresh models keep names on NameCard candidates only; checkpoints that
+    # omit the field predate the choice and add them (`from_checkpoint`).
+    definition_names: bool = Field(default=False, exclude_if=lambda value: not value)
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -432,21 +437,33 @@ class ModelConfig(BaseConfig):
     def from_checkpoint(cls, payload: dict[str, Any]) -> "ModelConfig":
         """Read a saved model configuration.
 
-        A checkpoint that omits the record vocabulary predates the choice, so
-        it means the frozen hashed ids where the choice exists (with a world).
-        Without a world both values build the same model, and omission reads
-        as the fresh default so it equals its regime's configuration.
+        A checkpoint that omits the record vocabulary or definition names
+        predates the choice, so it means the frozen hashed ids and names added
+        onto definitions where the choice exists (with a world). Without a
+        world both values build the same model, and omission reads as the
+        fresh default so it equals its regime's configuration.
         """
         config = cls(**payload)
-        predates_choice = "record_vocabulary" not in payload
-        if predates_choice and config.world is not None:
-            return cls(**{**payload, "record_vocabulary": "hashed"})
-        return config
+        if config.world is None:
+            return config
+        predated = {
+            key: value
+            for key, value in (
+                ("record_vocabulary", "hashed"),
+                ("definition_names", True),
+            )
+            if key not in payload
+        }
+        return cls(**{**payload, **predated}) if predated else config
 
     def checkpoint_payload(self) -> dict[str, Any]:
-        """The serialized configuration with the record vocabulary explicit, so
-        `from_checkpoint` reads a fresh catalog model back as catalog."""
-        return {**self.model_dump(), "record_vocabulary": self.record_vocabulary}
+        """The serialized configuration with the record vocabulary and definition
+        names explicit, so `from_checkpoint` reads a fresh model back as fresh."""
+        return {
+            **self.model_dump(),
+            "record_vocabulary": self.record_vocabulary,
+            "definition_names": self.definition_names,
+        }
 
     def catalog_records(self) -> bool:
         """Whether fact and shared-effect ids read the card vocabulary."""

@@ -44,6 +44,7 @@ class FactEncoder(nn.Module):
         self,
         width: int,
         *,
+        numeric: int,
         buckets: int = 4096,
         vocabulary: RecordVocabulary = "hashed",
     ) -> None:
@@ -54,9 +55,9 @@ class FactEncoder(nn.Module):
             self.ident = nn.Embedding(buckets, width)
             self.detail = nn.Embedding(buckets, width)
             self.source = nn.Embedding(buckets, width)
-        # Amounts (2), duration one-hot (2) and timestamp rank; catalog ids
-        # add the ordinal id.
-        self.numeric = nn.Linear(5 if vocabulary == "hashed" else 6, width)
+        # Amounts (2), duration flags and timestamp rank; catalog ids add the
+        # ordinal id. `numeric` is `Layout.fact_width`.
+        self.numeric = nn.Linear(numeric, width)
         self.program_numeric = nn.Linear(1, width)
         self.program_sequence = nn.GRU(width, width, batch_first=True)
         self.output = nn.Linear(width, width)
