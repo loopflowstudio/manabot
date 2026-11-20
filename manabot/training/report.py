@@ -7,6 +7,7 @@ returns an ordinary Etude record, so a report mixes them with its own panels:
 - `job_labels`: `Report.labels`, a display name per job from its model;
 - `against_earlier_self`, `against_fixed`: eval `Curve`s with a line per job;
 - `head_to_head`: an eval `Curve` of named pairs, one line for the first seat;
+- `behaviour_curves`: checkpoint play rates against the heuristic.
 
 
 Jobs are keyed by their Etude name; retained declarations use their regime id.
@@ -15,7 +16,7 @@ Matches are selected by the tags or names `eval_jobs(state)` gives its seatings.
 
 from collections.abc import Mapping, Sequence
 
-from etude.report import Curve, Matches
+from etude.report import Curve, Matches, Score
 
 from manabot.infra.config import ModelConfig
 
@@ -69,3 +70,31 @@ def head_to_head(title: str, seatings: Sequence[str]) -> Curve:
     if not seatings:
         raise ValueError("head-to-head needs at least one seating")
     return Curve(title=title, matches=tuple(Matches(seating=name) for name in seatings))
+
+
+def behaviour_curves(
+    *, matches: Matches | tuple[Matches, ...] | None = None
+) -> tuple[Curve, ...]:
+    """Checkpoint play against the heuristic, pooled by each measure's opportunities."""
+    return tuple(
+        Curve(
+            title=title,
+            matches=matches,
+            score=Score(
+                table="behaviour", value=taken, per=opportunities, unit="games"
+            ),
+        )
+        for title, taken, opportunities in (
+            ("Land played when able", "lands_played", "land_turns"),
+            ("Cast a spell when able", "casts_made", "cast_turns"),
+            ("Mana spent, turns 1–3", "mana_use_early", "mana_turns_early"),
+            ("Mana spent, turns 4–6", "mana_use_mid", "mana_turns_mid"),
+            ("Mana spent, turns 7+", "mana_use_late", "mana_turns_late"),
+            ("Attackers declared", "attackers_declared", "attackers_offered"),
+            ("Blockers declared", "blockers_declared", "blockers_offered"),
+            ("Chump attacks", "attackers_lost_for_nothing", "attackers_declared"),
+            ("Chump blocks", "blockers_lost_for_nothing", "blockers_declared"),
+            ("Spells cast on the opponent's turn", "casts_off_turn", "casts"),
+            ("Turns per game", "turns", "games"),
+        )
+    )

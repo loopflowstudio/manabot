@@ -92,6 +92,35 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     assert NOT_YET_RUNNABLE <= found
 
 
+@pytest.mark.parametrize(
+    ("experiment", "matches"),
+    [(elemental, Matches(tag="heuristic")), (seat_comparison, None)],
+)
+def test_checkpoint_report_shows_behaviour_next_to_strength(
+    experiment: ModuleType, matches: Matches | None
+) -> None:
+    strength, *rest = experiment.report().evals
+    assert strength.title == "Score against the heuristic" and strength.score is None
+    curves = rest[:11]
+    assert all(
+        isinstance(c, Curve) and c.matches == matches and c.score.table == "behaviour"
+        for c in curves
+    )
+    assert {c.score.value: c.score.per for c in curves} == {
+        "lands_played": "land_turns",
+        "casts_made": "cast_turns",
+        "mana_use_early": "mana_turns_early",
+        "mana_use_mid": "mana_turns_mid",
+        "mana_use_late": "mana_turns_late",
+        "attackers_declared": "attackers_offered",
+        "blockers_declared": "blockers_offered",
+        "attackers_lost_for_nothing": "attackers_declared",
+        "blockers_lost_for_nothing": "blockers_declared",
+        "casts_off_turn": "casts",
+        "turns": "games",
+    }
+
+
 def test_self_play_experiments_and_recipes_report_the_combat_probe() -> None:
     files = [
         path

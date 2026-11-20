@@ -197,6 +197,7 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
         job="pairing",
         seed=19,
         name="fixture-19",
+        at={"updates": 0},
         artifact=ArtifactRef(
             uri=path.as_uri(),
             sha256=file_sha256(path),

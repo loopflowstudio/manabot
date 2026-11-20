@@ -199,7 +199,7 @@ jobs:
       - name: Exercise latest compatible Torch with the pinned Etude client
         shell: bash
         run: |
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3]==0.4.1'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3]==0.4.2'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cd "$RUNNER_TEMP"
           rm -rf release-smoke

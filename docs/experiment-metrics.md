@@ -328,6 +328,27 @@ run at cadence 5); CUDA cost is unmeasured and is reported per run as
 Combat probe curves describe how the policy reacts to board edits on its own
 training positions, not held-out playing strength.
 
+## Checkpoint behaviour against the heuristic
+
+Read the eleven curves beside **Score against the heuristic** in Elemental and
+seat-comparison reports. At each checkpoint, Etude pools opportunities across
+verified games for each training seed, then averages the seeds within each job.
+For example, seven declarations across ten attacker decisions give an
+**Attackers declared** value of 0.70. A zero denominator or a checkpoint with
+no recorded behaviour leaves a gap.
+
+Land and cast rates count own turns on which the play was offered. Mana spent
+shows the average fraction of available mana paid in turn cycles 1–3, 4–6 and
+7 onward. A spend on the opponent's turn belongs to the preceding own turn.
+Read these alongside off-turn casting to see when a checkpoint holds mana.
+
+Compare declaration rates with **Chump attacks** and **Chump blocks**. Those
+curves count declared creatures that died in combat while their opposing
+combatant survived (for attackers, all their blockers survived). A block that
+prevents lethal damage can count. **Turns per game** gives the game length
+behind these rates. See the [measurement definitions](evaluation.md#custom-statistics-for-every-evaluation-game)
+for mana availability, combat deaths and replay coverage.
+
 ## Self-play
 
 A run's self-play outcomes, pooled into windows of updates:
