@@ -9,6 +9,7 @@ need; move one out of it, into the checks below, when it runs.
 
 from collections import Counter
 from dataclasses import replace
+from importlib import import_module
 from pathlib import Path
 from types import ModuleType
 
@@ -27,7 +28,7 @@ from etude.jobs import (
 )
 from etude.page import experiment_files
 from etude.records import ArtifactRef
-from etude.report import Curve, Matches, Ranking
+from etude.report import Curve, Matches, Ranking, Series
 import pytest
 
 from experiments import (
@@ -89,6 +90,44 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "tla_frontier",
     }
     assert NOT_YET_RUNNABLE <= found
+
+
+def test_self_play_experiments_and_recipes_report_the_combat_probe() -> None:
+    files = [
+        path
+        for path in experiment_files(EXPERIMENTS)
+        if "training_jobs" in defined_functions(path)
+    ]
+    files.extend(
+        ROOT / "manabot/recipes" / f"{name}.py"
+        for name in ("baseline", "belief_policy", "elemental", "local")
+    )
+    for path in files:
+        assert "report" in defined_functions(path), path
+        module = import_module(".".join(path.relative_to(ROOT).with_suffix("").parts))
+        report = module.report()
+        ml = {
+            panel.title: panel.keys for panel in report.ml if isinstance(panel, Series)
+        }
+        assert ml["Attack and block log-odds"] == (
+            "combat/attack/gap",
+            "combat/block/gap",
+        )
+        for kind in ("attack", "block"):
+            assert set(ml[f"{kind.title()} gap shift under board edits"]) == {
+                f"combat/{kind}/shift/{edit}"
+                for edit in (
+                    "my_creatures_0_1",
+                    "my_creatures_9_9",
+                    "their_creatures_0_1_tapped",
+                    "their_creatures_9_9_untapped",
+                )
+            }
+        (update_time,) = (
+            p for p in report.perf if isinstance(p, Series) and p.title == "Update time"
+        )
+        assert "time/combat_probe" in update_time.keys
+    assert belief.report().other_metrics
 
 
 def test_no_experiment_file_keeps_a_retired_declaration() -> None:

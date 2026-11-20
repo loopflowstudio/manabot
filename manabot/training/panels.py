@@ -13,7 +13,16 @@ the environment step's parent key, so a new run compares to them on it. Series
 overlay, so the parent beside its children double counts nothing.
 """
 
-from etude.report import Attempts, Counters, Elapsed, Flame, MetricPanel, Pace, Series
+from etude.report import (
+    Attempts,
+    Counters,
+    Elapsed,
+    Flame,
+    MetricPanel,
+    Pace,
+    Report,
+    Series,
+)
 
 PERF: tuple[MetricPanel, ...] = (
     Pace(),
@@ -31,6 +40,7 @@ PERF: tuple[MetricPanel, ...] = (
             "time/collection/stream_bookkeeping",
             "time/collection/batch_assembly",
             "time/learning",
+            "time/combat_probe",
         ),
         unit="seconds",
     ),
@@ -74,4 +84,29 @@ ML: tuple[MetricPanel, ...] = (
     # Rows the update kept of those collected (Ataraxos-style filtering).
     Series(title="Retained rows", keys=("retained", "rows"), unit="rows"),
     Series(title="Clipped steps", keys=("numerical/clip_fraction",), unit="fraction"),
+    Series(
+        title="Attack and block log-odds",
+        keys=("combat/attack/gap", "combat/block/gap"),
+        unit="log-odds",
+    ),
+    *(
+        Series(
+            title=f"{kind.title()} gap shift under board edits",
+            keys=tuple(
+                f"combat/{kind}/shift/{edit}"
+                for edit in (
+                    "my_creatures_0_1",
+                    "my_creatures_9_9",
+                    "their_creatures_0_1_tapped",
+                    "their_creatures_9_9_untapped",
+                )
+            ),
+            unit="log-odds",
+        )
+        for kind in ("attack", "block")
+    ),
 )
+
+
+def self_play_report(*, other_metrics: bool = False) -> Report:
+    return Report(perf=PERF, ml=ML, other_metrics=other_metrics)

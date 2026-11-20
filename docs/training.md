@@ -894,8 +894,8 @@ random numbers). The logged keys answer two separate questions
 ([reading the combat probe curves](experiment-metrics.md#combat-probe)):
 
 - **Is the policy locking?** `combat/<attack|block>/gap` is the mean declare
-  logit minus decline logit (log-odds of declaring: `0` = 50%, `2.4` = 92%,
-  `9+` = >99.99%, when declines stop being sampled).
+  logit minus decline logit. On an individual decision, a gap of 0 gives a
+  50% declare probability, 2.4 gives about 92%, and 9 gives about 99.99%.
 - **Is it board-blind?** Four `combat/<attack|block>/shift/<edit>` keys measure
   the mean change in that gap when the same decisions are re-scored after one
   edit to the raw permanent buffers before `prepare`: `my_creatures_0_1` (my

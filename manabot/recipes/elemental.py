@@ -8,6 +8,7 @@ from pathlib import Path
 import time
 from typing import Literal
 
+from etude.report import Report
 from etude.train.tracking import track
 from pydantic import Field
 
@@ -15,6 +16,7 @@ from manabot.experiment.numerics import NumericsReceipt, check_numerics
 from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import elemental_self_play
 from manabot.training.loops.self_play import CLOCKS, self_play
+from manabot.training.panels import self_play_report
 
 # Longest the CUDA numerics gate may take before training.
 NUMERICS_SECONDS = 1800
@@ -40,6 +42,10 @@ def gate(directory: Path) -> None:
     status = check_numerics(directory, time.time() + NUMERICS_SECONDS).status
     if status != "completed":
         raise RuntimeError(f"CUDA numerics gate {status}")
+
+
+def report() -> Report:
+    return self_play_report()
 
 
 def train(config: ElementalConfig) -> None:

@@ -7,6 +7,7 @@ the loop. Evaluation is a separate Etude pass over its immutable checkpoints.
 from pathlib import Path
 from typing import Literal
 
+from etude.report import Report
 from etude.train.tracking import track
 from pydantic import Field
 
@@ -16,6 +17,7 @@ from manabot.recipes.builders import PACK
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+from manabot.training.panels import self_play_report
 from manabot.verify.learning_regression import BaselineReport, report_recipe
 
 BASELINE_STEPS = 128
@@ -55,6 +57,10 @@ def settings(config: BaselineConfig) -> SelfPlay:
         live_tokens=config.device == "cuda" and not config.padded_shapes,
         checkpoint_every=max(1, config.updates // 2),
     )
+
+
+def report() -> Report:
+    return self_play_report()
 
 
 def train(config: BaselineConfig) -> None:

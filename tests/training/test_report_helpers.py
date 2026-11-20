@@ -1,16 +1,23 @@
 """Report helpers name jobs, ask one question per chart."""
 
+from pathlib import Path
+import subprocess
+
 from etude.report import Curve, Matches, Report, Score, Series
+from etude.train.read import read
 import pytest
 
 from experiments.tla_frontier import report
 from manabot.infra.config import ModelConfig
+from manabot.recipes.builders import gray_ogre_self_play
+from manabot.training.loops.self_play import CLOCKS, self_play
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
     head_to_head,
     job_labels,
 )
+from tests.fixtures.training_records import recording
 
 
 def _model(*, width: int = 64, layers: int = 2) -> ModelConfig:
@@ -85,3 +92,44 @@ def test_frontier_opens_ml_with_logged_learning_rates() -> None:
     rate, damping = report().ml[:2]
     assert isinstance(rate, Series) and rate.keys == ("learning_rate",)
     assert isinstance(damping, Series) and damping.keys == ("tau",)
+
+
+def test_local_report_draws_sparse_combat_probe_readings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = tmp_path / "track"
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "run"))
+    with recording(
+        experiment="local", run="probe", seed=197, clocks=CLOCKS, directory=track
+    ) as run:
+        self_play(gray_ogre_self_play(horizon=10), run, updates=10)
+    recorded = read(track, "local", "probe")
+    for key in ("combat/attack/gap", "time/combat_probe"):
+        assert list(recorded.points(key, "updates").x) == [5, 10]
+
+    # Render in the CLI's process so Etude can reload the recipe's neighbours.
+    out = tmp_path / "report"
+    subprocess.run(
+        [
+            "uv",
+            "run",
+            "--no-sync",
+            "etude",
+            "report",
+            "manabot/recipes/local.py",
+            "--source",
+            str(track),
+            "--out",
+            str(out),
+        ],
+        check=True,
+    )
+    (page,) = out.rglob("*.html")
+    html = page.read_text()
+    for label in (
+        "Attack and block log-odds",
+        "Attack gap shift under board edits",
+        "Block gap shift under board edits",
+        "time/combat_probe",
+    ):
+        assert label in html

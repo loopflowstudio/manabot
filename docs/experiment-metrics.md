@@ -280,9 +280,9 @@ separate two independent failure modes:
 
 - **Attack and block log-odds** (`combat/attack/gap`, `combat/block/gap`):
   **is the policy locking?** Each gap is the mean declare logit minus decline
-  logit over two-offer `DECLARE_ATTACKER` or `DECLARE_BLOCKER` decisions
-  (`0` = 50% declare probability, `2.4` = 92%, `9+` = >99.99%, when declines
-  stop being sampled).
+  logit over two-offer `DECLARE_ATTACKER` or `DECLARE_BLOCKER` decisions.
+  For an individual decision, a gap of 0 gives a 50% declare probability,
+  2.4 gives about 92%, and 9 gives about 99.99%.
 - **Attack gap shift under board edits** and **Block gap shift under board
   edits**: **is the policy board-blind?** Each chart draws four shifts — the
   mean change in that gap when the same decisions are re-scored after one edit
