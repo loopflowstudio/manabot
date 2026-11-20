@@ -68,8 +68,8 @@ their host differences.
 
 ### Which packing to use
 
-Two seeds on one L4 gave the best measured return. The table uses updates
-2–6 for every seed, after its first update. Each seed's throughput is the
+Two seeds on one L4 gave the best return in the initial pilot. The table
+uses updates 2–6 for every seed, after its first update. Each seed's throughput is the
 increase in learner decisions divided by elapsed wall seconds between the
 first and sixth update records, including the update-5 probe. Aggregate
 throughput is the sum of the simultaneously running seeds' rates. All three
@@ -98,7 +98,7 @@ window. There was no fourth-slot trial.
 | `tla_trophies` | `trophy-w64` (40901, 40902) | 30, 30 | 0.1911 |
 | `tla-trophies-three` | `trophy-w64` (40901, 40902, 40903) | 9, 9, 9 | 0.1395 |
 
-Etude estimated USD0.41 across all three rentals. The launch passes capped
+Etude estimated USD0.4085 across all three rentals. The launch passes capped
 the solo control at USD1.25, the two-seed experiment at USD4.50 and the
 three-seed calibration at USD3.75. All rentals ended.
 
@@ -184,17 +184,18 @@ about USD0.87 including the original pilot.
 ## Long-run admission
 
 At the measured 89–93 seconds/update, 400 updates take about ten hours
-per seed. On November 20, Etude 0.4.2 quoted the 10.5-hour training window
-plus its startup allowance at USD7.42 for one L4. The training commitment
-limit was USD7.70, leaving room within the USD10 Task budget for CPU
-evaluation. With USD2.50 per seed Etude rejected the duration. With
-USD7.42 per seed it admitted only the first of the three seeds. Etude
-requires each seed to cover the entire machine alone, then sums those
-limits before packing. Even a prepaid machine only removes the startup
-allowance from that per-seed check.
+per seed. On November 20, the quoted 10.5-hour window plus 15 minutes
+of startup cost USD7.4175 for one L4, or USD2.4725 per slot at full
+occupancy. RunPod uses no reservation increment.
 
-The two quotes submitted no training. A budgeted launch of the full
-window needs admission against the shared machine cost. The local smoke
-registered two checkpoints, and the resolved schedule test covers all
-32 held-out deals per raw checkpoint per seed. The published pilot graphs
-above are the latest measured behaviour trajectories.
+Etude 0.4.2 rejected the USD2.50 and USD2.75 per-seed quotes because its
+admission check budgets the whole machine against each seed's cap. At
+USD7.42 per seed, the quote fit only one seed under the experiment limit.
+Queued attempts also use the whole-machine rate to bound their duration.
+The rental itself is budgeted from the pooled caps, and runtime charges
+are split by occupancy.
+
+The long run awaits the Etude fix. The local smoke registered two
+checkpoints, and the resolved schedule test covers all 32 held-out deals
+per raw checkpoint per seed. The pilot graphs above are the latest
+measured behaviour trajectories.
