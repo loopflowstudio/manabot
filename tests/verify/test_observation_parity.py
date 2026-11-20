@@ -14,7 +14,6 @@ from manabot.env.match import Match
 from manabot.env.observation import (
     ACTION_MODE_INDEX,
     ACTION_PAYS_DIRECTLY_INDEX,
-    ACTION_X_INDEX,
     CARD_DIM,
     CARD_PERMISSION_INDEX,
     FACT_COPY,
@@ -408,7 +407,6 @@ def test_native_and_python_encoders_agree_on_t3_games() -> None:
                 ("attached", permanents[:, PERMANENT_ATTACHED_INDEX]),
                 ("granted land", permanents[:, PERMANENT_GRANTED_LAND_INDEX]),
                 ("stack X", actual["relations"][:, RELATION_X_INDEX]),
-                ("offer X", actual["actions"][:, ACTION_X_INDEX]),
                 (
                     "spell grant",
                     actual["relations"][
@@ -429,7 +427,6 @@ def test_native_and_python_encoders_agree_on_t3_games() -> None:
         "attached",
         "granted land",
         "stack X",
-        "offer X",
         "spell grant",
         "face down",
     }

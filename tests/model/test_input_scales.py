@@ -242,12 +242,8 @@ def test_an_x_decision_offers_numbers_apart_from_modes() -> None:
         env.scenario_force_battlefield(0, "Plains", ready=True)
     obs = env.scenario_refresh()
 
-    def offers() -> np.ndarray:
-        buffers = space.encoder.allocate()
-        env.encode_observation_into(obs, buffers)
-        return buffers["actions"][buffers["actions_valid"].astype(bool)]
-
-    assert not offers()[:, [has_x, x]].any()
+    priority = env.encode_observation(obs)
+    assert not priority["actions"][:, [has_x, x]].any()
     cast = next(
         index
         for index, action in enumerate(obs.action_space.actions)
@@ -255,25 +251,21 @@ def test_an_x_decision_offers_numbers_apart_from_modes() -> None:
     )
     obs, *_ = env.step(cast)
     assert [a.mode_index for a in obs.action_space.actions] == [0, 1, 2, 3]
-    rows = offers()
+    batch = env.encode_observation(obs)
+    np.testing.assert_array_equal(
+        space.encoder.encode(obs)["actions"], batch["actions"]
+    )
+    rows = batch["actions"][batch["actions_valid"].astype(bool)]
     np.testing.assert_array_equal(rows[:, has_x], 1.0)
     np.testing.assert_allclose(rows[:, x], [0.0, 0.1, 0.2, 0.3])
 
-    batch = space.encoder.allocate()
-    env.encode_observation_into(obs, batch)
-    prepared = ActorCritic(space, ModelConfig()).prepare(
-        {key: value[None] for key, value in batch.items()}
-    )
-    features = np.asarray(prepared.action_features)
+    model = ActorCritic(space, ModelConfig())
+    inputs = {key: value[None] for key, value in batch.items()}
+    features = model.prepare(inputs).action_features
     one, three = features[1], features[3]
-    without_x = dict(batch)
-    without_x["actions"] = batch["actions"].copy()
-    without_x["actions"][:, [has_x, x]] = 0
-    modes_only = np.asarray(
-        ActorCritic(space, ModelConfig())
-        .prepare({key: value[None] for key, value in without_x.items()})
-        .action_features
-    )
+    inputs["actions"] = inputs["actions"].copy()
+    inputs["actions"][..., [has_x, x]] = 0
+    modes_only = model.prepare(inputs).action_features
     # X adds distance between offers beyond what their mode flags give.
     assert np.linalg.norm(three - one) > np.linalg.norm(modes_only[3] - modes_only[1])
 

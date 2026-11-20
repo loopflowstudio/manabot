@@ -63,7 +63,8 @@ ACTION_VALID_INDEX = ACTION_CONTINUATION_INDEX + 1
 ACTION_PAYS_DIRECTLY_INDEX = ACTION_VALID_INDEX + 1
 # v11: the offer announces a number (flag, then the value in tenths), named as
 # the stack row's X; `mode` keeps the index.
-ACTION_X_INDEX = ACTION_PAYS_DIRECTLY_INDEX + 1
+ACTION_HAS_X_INDEX = ACTION_PAYS_DIRECTLY_INDEX + 1
+ACTION_X_INDEX = ACTION_HAS_X_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 # Name candidate columns: name row + 1, definition + 1, then the first and
 # last name rows (+ 1) of a naming group choice.
@@ -358,7 +359,7 @@ class ObservationEncoder:
         # declaration, mode, ability, continuation join, validity, then (v11)
         # direct payment and announced X
         self.action_dim = (
-            ACTION_X_INDEX + 2 if self.one_token else ACTION_VALID_INDEX + 1
+            ACTION_X_INDEX + 1 if self.one_token else ACTION_VALID_INDEX + 1
         )
 
         # This maps object IDS to their ultimate Game Object index.
@@ -1295,8 +1296,8 @@ class ObservationEncoder:
             if self.one_token:
                 arr[idx, ACTION_PAYS_DIRECTLY_INDEX] = float(action.pays_directly)
                 if action.announces_x and action.mode_index is not None:
-                    arr[idx, ACTION_X_INDEX] = 1.0
-                    arr[idx, ACTION_X_INDEX + 1] = action.mode_index / 10.0
+                    arr[idx, ACTION_HAS_X_INDEX] = 1.0
+                    arr[idx, ACTION_X_INDEX] = action.mode_index / 10.0
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:
                 arr[idx, action_type] = 1.0

@@ -83,8 +83,10 @@ From `_gather_informed_actions` in
 
 ```python
 focused = post_attention_objects.flatten(0, 1)[obs.focus]
-focused = focused * obs.focus_mask.unsqueeze(-1)
-return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
+focused = (focused * obs.focus_mask.unsqueeze(-1)).flatten(1)
+if self.focus_film is not None:
+    actions = actions * (1 + self.focus_film(focused))
+return self.action_layer(torch.cat((actions, focused), dim=-1))
 ```
 
 `obs` is a device `Prepared` batch. Its host preparation has already resolved
@@ -99,12 +101,6 @@ logits = logits.index_put((batches, slots), scores.to(logits.dtype))
 
 - A focus slot of −1 means the action names fewer than two objects; its
   contribution is zeroed rather than pointing at a padding row.
-- Two offers can name the same object and differ in one flag: "attack with
-  this creature" and "leave it back" share their focus and differ only in
-  `declared`. Concatenation alone lets the creature and the flag meet only
-  through the head's ReLUs, so at initialization the gap between the two
-  logits barely depends on which creature it is
-  ([scoring an offer on its focus](#scoring-an-offer-on-its-focus)).
 - Masking to −1e8 gives an illegal slot zero probability, so the learner's
   ratios and KL terms sum over legal actions only.
 - `max_actions` is a declared capacity. Overflow is an error by default; the
@@ -114,39 +110,24 @@ logits = logits.index_put((batches, slots), scores.to(logits.dtype))
 
 ### Scoring an offer on its focus
 
-```python
-model = ModelConfig(focus_film=True, policy_film=True, ...)
-```
+“Attack with this creature” and “leave it back” share their focus and differ
+only in the `declared` flag. With `focus_film=True`, the bias-free linear
+layer scales the offer features by the focused creature's embedding. Its
+orthogonal initialization lets the creature affect that scaling from the
+first decision. For an unfocused offer the embedding is zero, so its
+multiplier is exactly 1 throughout training.
 
-With `focus_film`, the action's features are multiplied by a linear function
-of its focus objects before the head sees either:
+`policy_film` independently conditions the action head's output on the
+pooled board. The baseline and Elemental self-play recipes enable focus
+scoring. Checkpoints that omit `focus_film` use the additive head.
 
-```python
-focused = (focused * obs.focus_mask.unsqueeze(-1)).flatten(1)  # [K, 2·D]
-actions = actions * (1 + self.focus_film(focused))             # Linear(2·D, D, bias=False)
-return self.action_layer(torch.cat((actions, focused), dim=-1))
-```
-
-The difference between "attack" and "leave it back" on one creature is then a
-function of that creature from the first update, rather than something the
-head has to grow. At initialization the gap barely differs in size: since
-power and toughness read as threshold flags (`steps:8`, below), the additive
-head's gap already moves with the attacker. In the original probe, before
-player mana pools became scalar inputs, setting the attacker to 9/9 moved the
-gap with the field by 0.7 to 1.3 times its move without, across windows of
-32 seeds (0.9 to 2.2 times with `stream_norm`). The effect is on learning
-(below).
-
-- The layer starts at ordinary initialization, not zero. A zero start would
-  leave the gap blind to the creature until the weights move, which is what
-  the field is for.
-- An action with no focus object is multiplied by exactly 1 throughout training. An
-  action with one is scaled by that one alone.
-- `policy_film` is separate and composes with it: it scales the head's output
-  by the pooled board, so an action without focus objects still depends on the
-  game.
-- Omitted, the field serializes as nothing and the model is the historical
-  one. The `baseline` and Elemental self-play recipes set it.
+On the constructed attack decision, the test trains on 100 combinations of
+power and toughness. It counts updates until the model assigns at least 90%
+probability to the correct choice on every board (“attack iff power is at
+least 3”). Across seeds 0, 1 and 2, the additive model took 102, 119 and 108
+updates. Enabling `focus_film` took 88, 90 and 81, and enabling both
+`focus_film` and `stream_norm` took 83, 91 and 80. The totals were 329, 259
+and 254 updates respectively for this supervised decision.
 
 ### Estimating value
 
@@ -232,14 +213,6 @@ trained model, since it adds parameters and moves the norms. The `baseline`
 and Elemental self-play recipes set it; frozen recipes and experiment files
 are unchanged. [MLX](../manabot/backends/mlx.md#what-the-backend-covers)
 refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
-
-On the constructed attack decision, the test trains on 100 combinations of
-power and toughness. It counts updates until the model assigns at least 90%
-probability to the correct choice on every board (“attack iff power is at
-least 3”). Across seeds 0, 1 and 2, the additive model took 102, 119 and 108
-updates. Enabling `focus_film` took 88, 90 and 81, and enabling both
-`focus_film` and `stream_norm` took 83, 91 and 80. The totals were 329, 259
-and 254 updates respectively for this supervised decision.
 
 ### Bucketed padding
 

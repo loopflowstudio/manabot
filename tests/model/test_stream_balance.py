@@ -170,8 +170,7 @@ def _with_known_card(batch: ObservationBuffers) -> ObservationBuffers:
     return known
 
 
-@pytest.mark.parametrize("stream_norm", [True, False])
-def test_known_card_share_of_the_player_token(stream_norm: bool) -> None:
+def test_known_card_share_of_the_player_token() -> None:
     """One known hand card moves the opponent's player token by a share at
     least as large under `stream_norm` as in the historical `/ 60` pool."""
 

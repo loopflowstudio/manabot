@@ -30,6 +30,7 @@ from manabot.policy.readings import (
     legacy_readings,
     published_columns,
     read_numeric,
+    recorded_readings,
     signed_log,
 )
 import managym
@@ -52,9 +53,8 @@ def _batch(space: ObservationSpace) -> dict[str, np.ndarray]:
     return {key: value[None] for key, value in buffers.items()}
 
 
-def _timestamp(space: ObservationSpace) -> int:
-    names = [c.name for c in published_columns(space)["agent_permanents"]]
-    return names.index("timestamp")
+def _column(space: ObservationSpace, key: str, name: str) -> int:
+    return [c.name for c in published_columns(space)[key]].index(name)
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ def test_saved_model_reloads_with_its_recorded_readings(
 ) -> None:
     policy, space, path = saved
     record = read_checkpoint(path)
-    timestamp = _timestamp(space)
+    timestamp = _column(space, "agent_permanents", "timestamp")
     assert record["input_readings"]["agent_permanents"][timestamp] == "rank"
     assert record["input_readings"] == {
         key: [str(value) for value in values]
@@ -100,7 +100,12 @@ def test_checkpoint_without_readings_reads_as_before(tmp_path: Path) -> None:
     write_checkpoint(record, path)
     loaded, _ = load_checkpoint(str(path))
     assert loaded.readings == legacy_readings(space)
-    assert loaded.readings["agent_permanents"][_timestamp(space)] is Reading.AS_IS
+    assert (
+        loaded.readings["agent_permanents"][
+            _column(space, "agent_permanents", "timestamp")
+        ]
+        is Reading.AS_IS
+    )
 
 
 def test_legacy_readings_ignore_native_kind_corrections(
@@ -118,11 +123,7 @@ def test_legacy_readings_ignore_native_kind_corrections(
         return layout
 
     monkeypatch.setattr(managym, "observation_layout", corrected_layout)
-    parent = next(
-        i
-        for i, column in enumerate(published_columns(space)["relations"])
-        if column.name == "parent"
-    )
+    parent = _column(space, "relations", "parent")
     assert fresh_readings(space)["relations"][parent] is Reading.GATHER
     assert legacy_readings(space) == original
 
@@ -132,7 +133,9 @@ def test_unknown_recorded_reading_is_refused(
 ) -> None:
     _, space, path = saved
     record = read_checkpoint(path)
-    record["input_readings"]["agent_permanents"][_timestamp(space)] = "squared"
+    record["input_readings"]["agent_permanents"][
+        _column(space, "agent_permanents", "timestamp")
+    ] = "squared"
     write_checkpoint(record, path)
     with pytest.raises(ValueError, match="agent_permanents.timestamp.*'squared'"):
         load_checkpoint(str(path))
@@ -142,7 +145,7 @@ def test_models_differing_in_one_reading_never_share_a_batch() -> None:
     space = ObservationSpace()
     model = ModelConfig()
     readings = fresh_readings(space)
-    timestamp = _timestamp(space)
+    timestamp = _column(space, "agent_permanents", "timestamp")
     permanents = list(readings["agent_permanents"])
     permanents[timestamp] = Reading.AS_IS
     other = {
@@ -158,10 +161,6 @@ def test_a_kind_without_a_rule_has_no_reading() -> None:
         kind_reading(ColumnKind("x", "magnitude", None))
     with pytest.raises(ValueError, match="size None"):
         kind_reading(ColumnKind("x", "category", None))
-
-
-def _column(space: ObservationSpace, key: str, name: str) -> int:
-    return [c.name for c in published_columns(space)[key]].index(name)
 
 
 def test_saved_model_records_sized_readings(
@@ -183,15 +182,13 @@ def test_saved_model_records_sized_readings(
     "value",
     ["one_hot", "one_hot:0", "as_is:3", "as_is:", "steps:x", "steps:+8", "steps:٨", 8],
 )
-def test_a_malformed_sized_reading_is_refused(
-    saved: tuple[ActorCritic, ObservationSpace, Path], value: object
-) -> None:
-    _, space, path = saved
-    record = read_checkpoint(path)
-    record["input_readings"]["agent_permanents"][_timestamp(space)] = value
-    write_checkpoint(record, path)
+def test_a_malformed_sized_reading_is_refused(value: object) -> None:
     with pytest.raises(ValueError, match="agent_permanents.timestamp"):
-        load_checkpoint(str(path))
+        recorded_readings(
+            {"agent_permanents": [value]},
+            {"agent_permanents": ["timestamp"]},
+            "test checkpoint",
+        )
 
 
 def test_a_category_size_is_kept_when_the_category_grows(tmp_path: Path) -> None:

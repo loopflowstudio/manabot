@@ -108,11 +108,12 @@ def parse_reading(text: object) -> ColumnReading:
         raise TypeError("reading name must be a string")
     name, separator, size = text.partition(":")
     reading = Reading(name)
-    if (reading in SIZED) != bool(separator) or (
-        separator and not (size.isascii() and size.isdigit())
-    ):
-        raise ValueError(f"malformed reading {text!r}")
-    return Sized(reading, int(size)) if size else reading
+    if reading in SIZED:
+        if size.isascii() and size.isdigit():
+            return Sized(reading, int(size))
+    elif not separator:
+        return reading
+    raise ValueError(f"malformed reading {text!r}")
 
 
 # Every rank divides by this, whatever the capacity of its rows.
@@ -435,21 +436,21 @@ def read_numeric(
         if not count:
             continue
         stored = rows[:, index]
-        column = out[:, at]
+        target = out[:, at : at + count]
+        at += count
         if isinstance(reading, Sized):
             if reading.reading is Reading.ONE_HOT:
                 # Code k at flag k - 1, any code above the size at the last.
                 present = np.nonzero(stored >= 1)[0]
                 codes = np.clip(stored[present], 1, reading.size + 1).astype(np.int64)
-                out[present, at + codes - 1] = 1
+                target[present, codes - 1] = 1
             else:
                 # Stored in tenths: the true value is an integer.
                 true = np.rint(stored.astype(np.float64) * 10)
-                column[:] = stored
-                out[:, at + 1 : at + 1 + reading.size] = true[:, None] >= np.arange(
-                    1, reading.size + 1
-                )
+                target[:, 0] = stored
+                target[:, 1:] = true[:, None] >= np.arange(1, reading.size + 1)
         else:
+            column = target[:, 0]
             column[:] = stored
             if reading is Reading.LOG:
                 column[:] = signed_log(column)
@@ -461,5 +462,4 @@ def read_numeric(
                 counts = np.isin(kinds, FACT_COUNT_KINDS)
                 column[counts] = signed_log(column[counts])
                 column[np.isin(kinds, PROGRAM_KINDS)] = 0
-        at += count
     return out.reshape(*values.shape[:-1], width)
