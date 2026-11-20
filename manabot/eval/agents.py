@@ -24,8 +24,8 @@ from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.world import validate_setup_binding
 from manabot.policy.admission import Spec, check, legal_mask
-from manabot.policy.checkpoint import layout, read_container
-from manabot.policy.prepare import Tables, prepare
+from manabot.policy.checkpoint import read_container
+from manabot.policy.prepare import Layout, Tables, prepare
 from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.players import CodePlayer, build_code_player
@@ -114,7 +114,7 @@ def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
         # from read_container otherwise retain the entire weights file.
         tables = Tables.from_buffers(
             {key: value.copy() for key, value in checkpoint.buffers.items()},
-            layout(checkpoint.space, checkpoint.column_widths),
+            Layout(checkpoint.readings),
         )
         spec = Spec(
             checkpoint.model,

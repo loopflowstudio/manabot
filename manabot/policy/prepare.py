@@ -34,14 +34,12 @@ from manabot.env.observation import (
     FACT_DETAIL_INDEX,
     FACT_DURATION_INDEX,
     FACT_EFFECT,
-    FACT_EFFECT_PROGRAM,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_OBJECT_INDEX,
     FACT_ORDER_INDEX,
     FACT_SET_NAME,
     FACT_SOURCE_INDEX,
-    FACT_TIMESTAMP_SCALE,
     FACT_TRANSFORMS,
     FACT_USED_ABILITY,
     FACT_VALID_INDEX,
@@ -53,9 +51,16 @@ from manabot.env.observation import (
     STACK_SOURCE_INDEX,
     ObservationBuffers,
 )
-from manabot.env.shared_effects import EFFECT_ROWS
 from manabot.policy.buckets import has_history_events
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
+from manabot.policy.readings import (
+    PROGRAM_KINDS,
+    RANK_SCALE,
+    Reading,
+    Readings,
+    numeric_columns,
+    read_numeric,
+)
 
 Array = np.ndarray
 
@@ -77,10 +82,11 @@ ORDINAL_ID_KINDS = (
     FACT_CONTINUATION_PROGRAM,
     FACT_COMBAT_RESTRICTION,
 )
-PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
 NAMED_DETAIL_KINDS = (FACT_EFFECT, FACT_COPY_EXCEPTION)
 # One-based object joins of a relation row.
 _RELATION_OBJECT_COLUMNS = (6, 24)
+# Viewer-relative seat prefixes of the per-seat buffers.
+SEATS = ("agent", "opponent")
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
 # Validity of the visible object table, in its concatenation order.
 OBJECT_VALIDITY_KEYS = (
@@ -98,11 +104,37 @@ OBJECT_VALIDITY_KEYS = (
 
 @dataclass(frozen=True)
 class Layout:
-    """Observation layout the policy reads, from the checkpoint's encoder."""
+    """How the policy reads its input buffers: one reading per column of each
+    buffer's saved prefix (`manabot.policy.readings`). Widths are the lengths."""
 
-    numeric_permanent_columns: tuple[int, ...]
-    link_columns: tuple[int, ...]
-    column_widths: dict[str, int] | None = None
+    readings: Readings
+
+    def __post_init__(self) -> None:
+        for buffer in ("player", "cards", "permanents"):
+            agent, opponent = (self.readings.get(f"{seat}_{buffer}") for seat in SEATS)
+            if agent != opponent:
+                raise ValueError(f"{buffer} readings differ between seats")
+
+    @cached_property
+    def widths(self) -> dict[str, int]:
+        return {key: len(values) for key, values in self.readings.items()}
+
+    def numeric_width(self, key: str) -> int:
+        """How many of a buffer's columns its projection receives."""
+        return len(numeric_columns(self.readings[key]))
+
+    @cached_property
+    def numeric_permanent_columns(self) -> tuple[int, ...]:
+        return numeric_columns(self.readings["agent_permanents"])
+
+    @cached_property
+    def link_columns(self) -> tuple[int, ...]:
+        """Permanent columns joining another object (attached to, blocking)."""
+        return tuple(
+            index
+            for index, reading in enumerate(self.readings["agent_permanents"])
+            if reading is Reading.GATHER
+        )
 
 
 @dataclass(frozen=True)
@@ -474,7 +506,7 @@ class Prepared[A]:
     legal_batches: A  # [K]
     legal_slots: A  # [K] original action coordinates
     logit_positions: A  # [B,A] index into K (0 where illegal)
-    action_features: A  # [K, action_dim - 2]
+    action_features: A  # [K, numeric action columns]
     action_frames: A  # [K] flat frame slot
     action_frame_mask: A  # [K] float
     name_rows: A  # [K]
@@ -538,8 +570,9 @@ def prepare(
     )
     obs = {key: np.asarray(value) for key, value in obs.items()}
     history = has_history_events(obs)
-    for key, width in (tables.layout.column_widths or {}).items():
-        obs[key] = obs[key][..., :width]
+    for key, width in tables.layout.widths.items():
+        if key in obs and obs[key].shape[-1] > width:
+            obs[key] = obs[key][..., :width]
     facts = obs["facts"]
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
@@ -562,7 +595,7 @@ def prepare(
     objects = validity.shape[1]
     f32 = np.float32
     permanents = np.stack([obs[key] for key in _PERMANENT_KEYS], axis=1)
-    numeric = permanents[..., list(layout.numeric_permanent_columns)].astype(f32)
+    numeric = read_numeric(permanents, layout.readings["agent_permanents"])
     knowledge = obs["known_hand"]
     decklists = obs["decklists"]
     # Deprecated v9/v10 carry no positional rows. Current input must supply
@@ -588,15 +621,7 @@ def prepare(
     features = clean.copy()
     pending = np.isin(clean[..., 3], (7, 8, 10))
     features[..., 1:3] = np.where(pending[..., None], 0, clean[..., 1:3])
-    relation_features = np.concatenate(
-        [
-            features[..., :5],
-            features[..., 7:23],
-            features[..., 25:RELATION_VALID_INDEX],
-            features[..., RELATION_VALID_INDEX + 1 :],
-        ],
-        -1,
-    ).astype(f32)
+    relation_features = read_numeric(features, layout.readings["relations"])
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
@@ -615,11 +640,7 @@ def prepare(
     positions = np.zeros(legal.shape, dtype=np.int64)
     positions[legal_batches, legal_slots] = np.arange(len(legal_batches))
     action_rows = obs["actions"][legal_batches, legal_slots]
-    action_features = action_rows[:, :ACTION_CONTINUATION_INDEX]
-    # Continuation and validity keep their published positions when features grow.
-    suffix = action_rows[:, ACTION_CONTINUATION_INDEX + 2 :]
-    if suffix.shape[1]:
-        action_features = np.concatenate((action_features, suffix), axis=1)
+    action_features = read_numeric(action_rows, layout.readings["actions"])
     frames = action_rows[:, ACTION_CONTINUATION_INDEX].astype(np.int64)
     candidates = obs["name_candidates"][legal_batches, legal_slots].astype(np.int64)
     focus = obs["action_focus"][legal_batches, legal_slots].astype(np.int64)
@@ -628,11 +649,20 @@ def prepare(
     else:
         first = last = np.zeros(len(candidates), np.int64)
 
-    players = [obs[key].astype(f32) for key in ("agent_player", "opponent_player")]
-    cards = [obs[key].astype(f32) for key in ("agent_cards", "opponent_cards")]
+    players = [
+        read_numeric(obs[f"{seat}_player"], layout.readings[f"{seat}_player"])
+        for seat in SEATS
+    ]
+    cards = [
+        read_numeric(obs[f"{seat}_cards"], layout.readings[f"{seat}_cards"])
+        for seat in SEATS
+    ]
     if "player_turn_state" in obs:
+        turn_state = read_numeric(
+            obs["player_turn_state"], layout.readings["player_turn_state"]
+        )
         players = [
-            np.concatenate((row, obs["player_turn_state"][:, seat : seat + 1]), -1)
+            np.concatenate((row, turn_state[:, seat : seat + 1]), -1)
             for seat, row in enumerate(players)
         ]
         cards = [
@@ -675,14 +705,7 @@ def prepare(
         deck_rows=tables.rows(decklists[..., 0]),
         deck_counts=(decklists[..., 1:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
-        stack=stack[
-            ...,
-            [
-                c
-                for c in range(stack.shape[-1])
-                if c not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
-            ],
-        ].astype(f32)
+        stack=read_numeric(stack, layout.readings["stack"])
         if stack is not None
         else None,
         stack_rows=tables.rows(stack[..., STACK_DEFINITION_INDEX])
@@ -807,18 +830,25 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         record_word(live, FACT_DETAIL_INDEX),
     )
     ordinal = np.isin(kinds, ORDINAL_ID_KINDS)
-    scale = np.float32(FACT_TIMESTAMP_SCALE)
-    columns = np.stack(
+    # Numeric columns in parameter order: the two payloads, the duration flags,
+    # the timestamp, then the ordinal id (`fact_id`), / 128 like a rank.
+    readings = tables.layout.readings["facts"]
+    payload = slice(FACT_VALUE_INDEX, FACT_VALUE_INDEX + 2)
+    timestamp = slice(FACT_ORDER_INDEX, FACT_ORDER_INDEX + 1)
+    payloads = read_numeric(live[..., payload], readings[payload], kinds)
+    order = read_numeric(live[..., timestamp], readings[timestamp])
+    columns = np.concatenate(
         [
-            live[..., FACT_VALUE_INDEX],
-            live[..., FACT_VALUE_INDEX + 1],
-            (duration == 1).astype(np.float32),
-            (duration == 2).astype(np.float32),
-            live[..., FACT_ORDER_INDEX] / scale,
-            np.where(ordinal, ident, 0).astype(np.float32) / scale,
+            payloads,
+            (duration == 1).astype(np.float32)[:, None],
+            (duration == 2).astype(np.float32)[:, None],
+            order,
+            (np.where(ordinal, ident, 0).astype(np.float32) / np.float32(RANK_SCALE))[
+                :, None
+            ],
         ],
         -1,
-    ).astype(np.float32)
+    )
     named = (kinds > 0) & ~ordinal
     program = np.isin(kinds, PROGRAM_KINDS)
     restriction = kinds == FACT_COMBAT_RESTRICTION
@@ -935,8 +965,7 @@ def _effects(
         np.int64
     )
     records = np.asarray(member_records, dtype=np.int64)
-    numeric = selected[:, 2:10].astype(np.float32)
-    numeric[:, -1] /= np.float32(EFFECT_ROWS)
+    numeric = read_numeric(selected, tables.layout.readings["effects"])
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
     program = kinds > 10

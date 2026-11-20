@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
+from manabot.policy.readings import signed_log
 from managym.decision_memory import (
     DefinitionProgram,
     decision_name_values,
@@ -412,11 +413,6 @@ def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> N
         named = record_word(headers[:, 70:72], 0)
         if (named < 0).any() or (named >= len(tables.name_definitions)).any():
             raise ValueError("invalid decision-memory name row")
-
-
-def _scaled(values: np.ndarray) -> np.ndarray:
-    values = values.astype(np.float64)
-    return (np.sign(values) * np.log1p(np.abs(values)) / 10).astype(np.float32)
 
 
 @dataclass(frozen=True)
@@ -972,16 +968,16 @@ def _prepare_dense_memory(
     for index, offset in enumerate((60, 63, 66, 69)):
         selectors[:, index * 2] = selected[:, offset]
         if offset in (63, 66):
-            selectors[:, index * 2 + 1] = _scaled(
+            selectors[:, index * 2 + 1] = signed_log(
                 record_word(selected[:, offset + 1 : offset + 3], 0)
             )
     selectors[:, 8:] = selected[:, 72:74]
     numbers = np.concatenate(
         (
-            _scaled(temporal),
+            signed_log(temporal),
             selected[:, 10:12] / [4, 12],
             selected[:, 18:19] / 2,
-            _scaled(context),
+            signed_log(context),
             selectors,
         ),
         -1,
@@ -1031,7 +1027,7 @@ def _prepare_dense_memory(
     reference_numbers = np.concatenate(
         (
             references[:, :1] / 2,
-            _scaled(numeric),
+            signed_log(numeric),
             references[:, 6:10],
             (references[:, 1:2] > 0).astype(np.float32),
         ),
@@ -1045,7 +1041,7 @@ def _prepare_dense_memory(
     signed = payloads.astype(np.uint32).view(np.int32)
     numeric_values = np.where(
         (token_kinds == -1) | np.isin(token_kinds, NUMBER_TOKEN_KINDS),
-        _scaled(np.where(program, signed, payloads)),
+        signed_log(np.where(program, signed, payloads)),
         0,
     )
     # Field labels have one owner in the native vocabulary. No table indexes

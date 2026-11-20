@@ -10,6 +10,7 @@ import torch
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic, _catalog_order
+from manabot.env.observation import ObservationSpace
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import (
     CatalogPrograms,
@@ -22,6 +23,7 @@ from manabot.policy.prepare import (
     _facts,
     catalog_programs,
 )
+from manabot.policy.readings import legacy_readings
 
 
 def _tables(catalog: SemanticCardEncoder | None) -> Tables:
@@ -38,7 +40,7 @@ def _tables(catalog: SemanticCardEncoder | None) -> Tables:
         )
         buffers["name_candidates.program_rows"] = np.zeros(1, np.int64)
     return replace(
-        Tables.from_buffers(buffers, Layout((), ())),
+        Tables.from_buffers(buffers, Layout(legacy_readings(ObservationSpace()))),
         order_lengths=_catalog_order,
     )
 

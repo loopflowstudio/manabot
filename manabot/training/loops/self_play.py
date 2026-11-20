@@ -378,10 +378,12 @@ def behavior(
     return learner.agent
 
 
-def pretrained_weights(
-    settings: SelfPlay, space: ObservationSpace
-) -> tuple[dict[str, torch.Tensor], ModelConfig]:
-    """The published weights and their model, admitted against these settings."""
+def pretrained_policy(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
+    """The published policy, admitted against these settings.
+
+    The run's model is built with its readings, so a warm start reads its
+    inputs exactly as the published policy did, whatever the current rule.
+    """
     assert settings.pretrained is not None
     with torch.random.fork_rng(devices=[]):
         published, published_space = load_checkpoint(str(settings.pretrained))
@@ -391,10 +393,9 @@ def pretrained_weights(
         validate_agent_decks(published, settings.deck_source.players())
     else:
         validate_agent_setup(published, Match(root_match(settings)).to_rust())
-    weights = published.state_dict()
-    if any(not torch.isfinite(v).all() for v in weights.values()):
+    if any(not torch.isfinite(v).all() for v in published.state_dict().values()):
         raise ValueError("pretrained policy contains nonfinite tensors")
-    return weights, published.config
+    return published
 
 
 def load_pretrained(
@@ -438,15 +439,19 @@ def parent_checkpoint(path: Path) -> ParentCheckpoint:
 def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | None]:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     space = ObservationSpace(settings.observation)
+    published = (
+        pretrained_policy(settings, space) if settings.pretrained is not None else None
+    )
     torch.manual_seed(seed)
     agent = ActorCritic(
         space,
         settings.model,
+        readings=None if published is None else published.readings,
         bucketed_shapes=settings.bucketed_shapes,
         live_tokens=settings.live_tokens,
     ).to(settings.device)
-    if settings.pretrained is not None:
-        load_pretrained(agent, *pretrained_weights(settings, space))
+    if published is not None:
+        load_pretrained(agent, published.state_dict(), published.config)
     learner = Learner(
         agent,
         settings.device,

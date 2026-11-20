@@ -330,7 +330,16 @@ change already touches it; do not rewrite a module only for style. Rust in
   Jack Heart's 2026-11-04 TLA pilot choice of `action_overflow=first-legal`
   with 64 policy slots and aggregate replay-linked diagnostics; native legality
   and Academy retain all choices, and an omitted overflow policy means error.
-- Model timestamp normalization is rank / 128, independent of fact capacity.
+- The model reads each numeric input column by a reading. A fresh model
+  derives it from the column's native kind (`ValueLayout` in
+  `agent/observation_layout.rs`): unscaled counts, categories and selectors get
+  the log squash, every `rank` is rank / 128 independent of fact and effect
+  capacity, references are gathered and ids looked up. A new column declares
+  its kind (and `scale` when the encoder divides it); add no Python column
+  table and no per-backend scaling. A checkpoint records its readings
+  (`input_readings`) and never consults the rule; one without the record gets
+  `legacy_readings`, which is never extended. The native kinds of buffers with
+  their own preparation (decision memory, history events) are not used.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; the policy input never silently falls behind.

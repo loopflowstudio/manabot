@@ -227,7 +227,7 @@ class Continuation(nn.Module):
     def __init__(self, dims: Dimensions) -> None:
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Linear(dims.relation - 5 + 4 * dims.hidden, dims.hidden),
+            nn.Linear(dims.relation + 4 * dims.hidden, dims.hidden),
             nn.Tanh(),
             nn.Linear(dims.hidden, dims.hidden),
         )
@@ -274,7 +274,7 @@ class MLXActorCritic(nn.Module):
         self.player_embedding = Projection(dims.player, hidden)
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
-        self.action_embedding = Projection(dims.action - 2, hidden)
+        self.action_embedding = Projection(dims.action, hidden)
         self.attention = ObjectAttention(
             hidden, dims.heads, dims.feedforward, ownership=True
         )
@@ -508,7 +508,7 @@ class MLXActorCritic(nn.Module):
             binding=admission.binding(
                 self.config,
                 self._static.space,
-                self._static.tables.layout.column_widths,
+                self._static.tables.layout.readings,
             ),
         )
 
@@ -597,7 +597,7 @@ class MLXActorCritic(nn.Module):
             raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
         if batch.binding != admission.binding(
-            self.config, static.space, static.tables.layout.column_widths
+            self.config, static.space, static.tables.layout.readings
         ):
             raise ValueError("prepared batch belongs to another policy configuration")
         dims = self.dims
