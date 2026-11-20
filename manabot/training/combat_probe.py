@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationSpace
 from manabot.policy.protocol import BackendPolicy
 from manabot.policy.readings import published_columns
@@ -90,16 +91,45 @@ def combat_rows(
 
 
 def gap_shifts(
-    policy: BackendPolicy, rows: dict[str, np.ndarray], columns: CombatColumns
+    policy: BackendPolicy,
+    rows: dict[str, np.ndarray],
+    columns: CombatColumns,
+    *,
+    execution_rows: int | None = None,
 ) -> dict[str, float | int]:
     """Score a nonempty batch of two-offer combat rows in original action slots."""
+    if execution_rows is not None and execution_rows < 1:
+        raise ValueError("execution_rows must be positive")
     legal = rows["actions_valid"] > 0
     declared = rows["actions"][..., columns.declared] > 0
     yes = np.nonzero(legal & declared)
     no = np.nonzero(legal & ~declared)
+    expected = np.arange(len(legal))
+    if not len(expected) or not (
+        np.array_equal(yes[0], expected) and np.array_equal(no[0], expected)
+    ):
+        raise ValueError(
+            "gap_shifts requires a nonempty batch of two-offer declare/decline rows"
+        )
+    width = execution_rows or len(expected)
 
     def gaps(observation: dict[str, np.ndarray]) -> np.ndarray:
-        logits, _ = policy.evaluate(policy.prepare(observation))
+        if width >= len(expected):
+            logits, _ = policy.evaluate(policy.prepare(observation))
+        else:
+            logits = np.concatenate(
+                [
+                    policy.evaluate(
+                        policy.prepare(
+                            select_rows(
+                                observation,
+                                np.arange(start, min(start + width, len(expected))),
+                            )
+                        )
+                    )[0]
+                    for start in range(0, len(expected), width)
+                ]
+            )
         return logits[yes].astype(np.float64) - logits[no]
 
     base = gaps(rows)
@@ -148,8 +178,12 @@ def combat_probe(
     batch: RolloutBatch,
     space: ObservationSpace,
     limit: int = 256,
+    *,
+    execution_rows: int | None = None,
 ) -> dict[str, float | int]:
     """Measure each available kind on at most limit collected decisions per kind."""
+    if execution_rows is not None and execution_rows < 1:
+        raise ValueError("execution_rows must be positive")
     columns = combat_columns(space)
     metrics: dict[str, float | int] = {}
     if columns is None:
@@ -161,6 +195,8 @@ def combat_probe(
         selected = combat_rows(batch.action_data, index, columns.declared, limit)
         if selected.size:
             rows = batch.observations(selected).observation
-            for name, value in gap_shifts(policy, rows, columns).items():
+            for name, value in gap_shifts(
+                policy, rows, columns, execution_rows=execution_rows
+            ).items():
                 metrics[f"combat/{kind}/{name}"] = value
     return metrics

@@ -5,9 +5,11 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ObservationConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.protocol import BackendPolicy
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.combat_probe import (
@@ -158,7 +160,7 @@ def test_shifts_in_game_units_condition_on_boards_with_creatures(
 
     def evaluate(obs: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         # Sum all slots so accidental edits to lands or padding change the result.
-        gap = np.zeros(2)
+        gap = np.zeros(len(obs["actions_valid"]))
         for key, side in (
             ("agent_permanents", cols.mine),
             ("opponent_permanents", cols.theirs),
@@ -169,19 +171,52 @@ def test_shifts_in_game_units_condition_on_boards_with_creatures(
                 + board[..., side.toughness] * side.toughness_scale
                 + board[..., side.tapped]
             ).sum(axis=1)
-        return obs["actions"][..., cols.declared] * gap[:, None], np.zeros(2)
+        return obs["actions"][..., cols.declared] * gap[:, None], np.zeros(len(gap))
 
     policy = scoring_policy(cols, False)
     policy.evaluate.side_effect = evaluate
-    assert gap_shifts(policy, rows, cols) == pytest.approx(
-        {
-            "gap": 9,
-            "decisions": 2,
-            "shift_decisions/mine": 2,
-            "shift_decisions/theirs": 1,
-            "shift/my_creatures_0_1": -4,
-            "shift/my_creatures_9_9": 13,
-            "shift/their_creatures_0_1_tapped": -4,
-            "shift/their_creatures_9_9_untapped": 12,
-        }
+    expected = {
+        "gap": 9,
+        "decisions": 2,
+        "shift_decisions/mine": 2,
+        "shift_decisions/theirs": 1,
+        "shift/my_creatures_0_1": -4,
+        "shift/my_creatures_9_9": 13,
+        "shift/their_creatures_0_1_tapped": -4,
+        "shift/their_creatures_9_9_untapped": 12,
+    }
+    assert gap_shifts(policy, rows, cols) == pytest.approx(expected)
+    chunked = scoring_policy(cols, False)
+    chunked.evaluate.side_effect = evaluate
+    assert gap_shifts(chunked, rows, cols, execution_rows=1) == pytest.approx(expected)
+    assert all(
+        len(call.args[0]["actions_valid"]) == 1
+        for call in chunked.prepare.call_args_list
     )
+
+    bad = {**rows, "actions": rows["actions"].copy()}
+    bad["actions"][0, :, cols.declared] = 1
+    bad["actions"][1, :, cols.declared] = 0
+    with pytest.raises(ValueError, match="two-offer declare/decline"):
+        gap_shifts(policy, bad, cols)
+
+
+def test_bucketed_and_live_token_policy_matches_padded_probe(
+    rollout: tuple[RolloutBatch, ObservationSpace],
+) -> None:
+    batch, space = rollout
+    config = ModelConfig(
+        world="elemental-world-v2",
+        hidden_dim=16,
+        attention_layers=1,
+        num_attention_heads=2,
+        attention_on=True,
+        policy_film=True,
+    )
+    torch.manual_seed(7)
+    padded = ActorCritic(space, config)
+    packed = ActorCritic(space, config, bucketed_shapes=True, live_tokens=True)
+    packed.load_state_dict(padded.state_dict())
+    assert combat_probe(
+        packed, batch, space, limit=4, execution_rows=2
+    ) == pytest.approx(combat_probe(padded, batch, space, limit=4), abs=1e-5)
