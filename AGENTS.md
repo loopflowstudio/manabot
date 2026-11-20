@@ -348,11 +348,12 @@ change already touches it; do not rewrite a module only for style. Rust in
 - New observation state reaches the policy input, the LLM text observation
   and the learning tokens in the change that adds it; the policy input never
   silently falls behind. The native encoder (`managym/src/agent/`) is the only
-  one, and native owns the layout (`managym.observation_layout()`):
-  `encode_observation(space, obs)` and every batch path call it, and
-  `ObservationSpace` is a config plus that layout at its capacities (shapes,
-  allocation). Python reads columns by native name (`column("facts", "value")`
-  in `manabot.env.observation`), never by number or a hand-kept copy. Give new
+  one, and native owns the layout (`managym.observation_layout()`,
+  `managym.ObservationLayout`): `encode_observation(space, obs)` and every
+  batch/vector path pass `space.layout`, and `ObservationSpace` is a config
+  plus that layout at its capacities (`layout`, `shapes`, `allocate`). Python
+  reads columns and row kinds by native name (`column("facts", "value")` in
+  `manabot.env.observation`), never by number or a hand-kept copy. Give new
   columns or rows a directed native test on a constructed position.
   `ObservationSpace.encode`, `space.encoder` and `ObservationEncoder` are
   warning aliases removed in 0.4.0; frozen experiment files keep them.

@@ -517,8 +517,8 @@ Use that `space` for `open_collector` and `ActorCritic(space, settings.model)`;
 the run's saved settings keep the selection. V10 is v9 plus this state,
 in the native encoder, the LLM text observation and the learning tokens.
 
-V10 adds two buffers to the v9 layout; their presence is what selects v10 in
-the native encoder:
+V10 adds two buffers to the v9 layout, required when `ObservationLayout` is
+built for input v10 (and carried into v11):
 
 | Key | Shape | Holds |
 | --- | --- | --- |

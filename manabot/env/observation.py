@@ -1,22 +1,24 @@
 """The policy input: named arrays, their shapes and the columns the model reads.
 
 Native code owns the policy input. `managym.encode_observation_into` (one
-observation) and the vector env (many) write it, and
-`managym.observation_layout()` publishes its layout: array names, axes, fixed
-extents, dtypes and named columns. Nothing here is a second copy of that
-layout:
+observation), `managym.encode_observations_into` (many) and the vector env
+write it against a resolved `managym.ObservationLayout`, and
+`managym.observation_layout()` publishes its schema: array names, axes, fixed
+extents, dtypes, named columns and row-kind maps. Nothing here is a second copy
+of that layout:
 
-- `ObservationSpace` is one `ObservationConfig` plus the layout derived from
-  it: `shapes` are the native arrays with each caller-selected (`None`)
-  extent filled from the config's capacities, and `allocate` builds them;
+- `ObservationSpace` is one `ObservationConfig` plus `space.layout`
+  (`managym.ObservationLayout` at the config's input version, history, memory
+  and capacities), from which `shapes`, `dtypes` and `allocate` come;
 - `encode_observation(space, obs)` returns fresh buffers for one observation;
 - the column constants below (`PERMANENT_DEFINITION_INDEX`, `FACT_VALUE_INDEX`,
   ...) and fact kinds are looked up by name in the native layout at import, so
   a renamed native column fails the import instead of being read from the
   wrong place.
 
-Native reads the configuration back from the buffers' shapes, so every buffer
-is derived from the space the caller supplies, never a native default.
+Native checks every buffer key, shape and dtype against the supplied layout
+before writing, so every buffer is derived from the space the caller supplies,
+never a native default.
 """
 
 from collections.abc import Mapping

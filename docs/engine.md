@@ -767,9 +767,11 @@ one. The encoding explains join targets, index bases and absence
 sentinels in prose; the range describes stored values, including when no fixed bound
 exists. A `tagged` kind needs its row-kind description before preprocessing.
 Tagged fact, relation and effect rows describe meanings conditional on their
-row kind in `row_kinds` (integer codes mapped to descriptions); facts also
-name each kind in `row_kind_names` (`"counter"` → 1), so a reader looks kinds
-up by name rather than copying numbers. Masks and
+row kind in `row_kinds` (integer codes mapped to descriptions); `facts` and
+`effect_details` also name each kind in `row_kind_names` (`"counter"` → 1), and
+`effect_details` maps its program kinds to catalog `TokenKind` codes in
+`program_token_kinds`, so a reader looks kinds up by name rather than copying
+numbers. Masks and
 scalar-valued arrays have empty `columns` and describe their `element` meaning
 without inventing a feature axis. Shared headers own the detail/member slices;
 unused rows are zero. `policy_history=True` describes the 12-column public
