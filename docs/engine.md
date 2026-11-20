@@ -631,6 +631,16 @@ print(definition["encoding"])
 # CardDefId + 1; 0 means absent
 ```
 
+A count or number also says whether the encoder already divided it:
+
+```python
+columns = layout["agent_permanents"]["columns"]
+print(columns["power"]["kind"], columns["power"]["scale"])
+# number 10
+print(columns["exhausted_abilities"]["kind"], columns["exhausted_abilities"]["scale"])
+# count 1
+```
+
 The scalar encoder writes the arrays the layout describes. This example starts
 a game with fixed decks and reads only valid permanent rows (the first
 decision can have none):
@@ -657,10 +667,26 @@ encoder's array names. Each array describes its `axes`, `shape` and stored
 `dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
 default. The seat axis is viewer-relative (agent first, opponent second).
 Feature arrays have a `columns` mapping keyed by column name. Each column gives
-its zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish
-identities and references, categorical codes, flags, counts, numeric values and
-ranks. The encoding explains scaling, join targets, index bases and absence
-sentinels; the range describes stored values, including when no fixed bound
+its zero-based `index`, `kind`, `encoding` and `range`. The kind is one of a
+closed set:
+
+| Kind | The column holds |
+| --- | --- |
+| `flag` | 0 or 1 |
+| `count` | A nonnegative amount, stored divided by `scale` |
+| `number` | A signed amount, stored divided by `scale` |
+| `rank` | A one-based order rank; 0 absent |
+| `position` | A one-based position in a zone; 0 absent |
+| `category` | A code from a small fixed set |
+| `selector` | A one-based choice index (a mode, an ability, a continuation frame); 0 absent |
+| `reference` | A one-based row of the padded object table; 0 absent |
+| `id` | An identity, such as a card definition or token value; never a magnitude |
+| `tagged` | A value whose meaning depends on its row's kind |
+
+`count` and `number` columns also give `scale`, the divisor the encoder
+applied: 1 for an unscaled value, otherwise 10, 20 or 60. No other kind has
+one. The encoding explains join targets, index bases and absence
+sentinels in prose; the range describes stored values, including when no fixed bound
 exists. A `tagged` kind needs its row-kind description before preprocessing.
 Tagged fact, relation and effect rows describe meanings conditional on their
 row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
@@ -673,11 +699,12 @@ separately. `turn_state=True` adds policy input v10's `player_turn_state` (colum
 `life_lost`, `spells_cast`, then `nonartifact_mana_white` through
 `nonartifact_mana_colorless`) and `card_turn_state`.
 
-Read the stored encoding before adding preprocessing: permanent damage, power
+Read the kind and `scale` before adding preprocessing: permanent damage, power
 and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
-Fact timestamp ranks are stored as ranks; the built-in model divides them by
-128, independently of fact capacity. The layout describes the array values,
-not a blanket normalization to apply to every column.
+Timestamp ranks are stored as ranks. The layout describes the array values,
+not a blanket normalization to apply to every column; the built-in model
+chooses its treatment from the kind
+([how the network reads a column](observation-and-model.md#how-the-network-reads-a-column)).
 
 The layout comes from the column table the native encoder writes through, so
 it cannot drift from the arrays. Reading it starts no game and imports no

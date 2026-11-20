@@ -301,6 +301,8 @@ can use an expanded card set on a later revision.
 | A token or record name the runtime emits was renamed | Loads when the [rename table](#the-rename-table) has the entry. Otherwise refused, naming the key. |
 | A column was appended to an input array | Loads. The model reads the columns it was trained on; the rest are dropped before it sees the array. |
 | A column it reads was removed, renamed or moved | Refused, naming the column. |
+| A column's kind was corrected, or the rule from kind to reading changed | Loads and computes what it did. The model reads each column by the reading the checkpoint recorded (`input_readings`), never by the running rule. |
+| It records a reading this revision does not know | Refused, naming the column and the revision that wrote the checkpoint. |
 | A decision kind, the naming representation or naming branching changed | Refused, naming the field. |
 | The token kinds or roles changed (`learning_schema_sha256`) | Refused. |
 | The model architecture differs from the saved configuration | Refused, as before. |
@@ -370,11 +372,19 @@ Add an entry in the change that renames the type. The
 
 ### Checkpoints written before keys were recorded
 
-A checkpoint now records its column names, definition keys and naming names in
-row order, and the revision and Etude run that wrote it. The container carries these in `input_columns`, `writer_catalog` and
-`source`. A saved pilot can load on another revision using its
-embedded catalog. Earlier checkpoints can lack any of these fields. Their columns are the first N of their input version's layout
-at the recorded width, which holds because columns are only appended. Their
+A checkpoint now records its column names, each column's reading, its
+definition keys and naming names in row order, and the revision and Etude run
+that wrote it. The container carries these in `input_columns`,
+`input_readings`, `writer_catalog` and `source`. A saved pilot can load on
+another revision using its embedded catalog. Earlier checkpoints can lack any of these fields. Their columns are the first N of their input version's layout
+at the recorded width, which holds because columns are only appended. A
+checkpoint without `input_readings` gets the readings every model used before
+they were recorded (`legacy_readings`): references gathered, ids looked up,
+fact order ranks divided by 128, effect timestamps divided by the effect
+capacity, and every other column as stored, the permanent timestamp and
+unscaled counts included. It computes what it always did. A warm start,
+memory branch or resume builds its model from the checkpoint and so keeps
+those readings and writes them back. Their
 keys and names come from a writer catalog found by the card digest the file
 records, `manabot/model/writer_catalogs/<world_digest>.json`. The loader
 checks that the ordered naming candidates (name and optional definition row)
@@ -570,6 +580,64 @@ is missing or has the wrong shape fails before any write. Column names and
 value encodings for every buffer come from `managym.observation_layout()`
 ([reading arrays by name](engine.md#reading-arrays-by-name)).
 
+### How the network reads a column
+
+The engine declares what it wrote in each column, its kind. The model chooses
+how to read the column, its reading, from that kind. A checkpoint records the
+reading of every column it was trained on:
+
+```python
+import managym
+from manabot.policy.checkpoint import read_metadata
+
+columns = managym.observation_layout()["agent_permanents"]["columns"]
+readings = read_metadata("policy.safetensors")["input_readings"]["agent_permanents"]
+for name in ("tapped", "power", "exhausted_abilities", "timestamp", "attached_to", "definition"):
+    column = columns[name]
+    print(name, column["kind"], column.get("scale", ""), readings[column["index"]])
+# tapped flag  as_is
+# power number 10 as_is
+# exhausted_abilities count 1 log
+# timestamp rank  rank
+# attached_to reference  gather
+# definition id  lookup
+```
+
+A model built fresh takes each reading from this rule. `prepare` applies it
+once on the host, for every backend:
+
+| Kind | Reading | What the model receives |
+| --- | --- | --- |
+| `flag` | `as_is` | The stored 0 or 1 |
+| `count`, `number` with `scale` above 1 | `as_is` | The stored value: the engine already divided by `scale` |
+| `count`, `number` with `scale` 1 | `log` | `sign(x) · log1p(abs(x)) / 10` |
+| `category`, `selector`, `position` | `log` | The same squash of the stored code |
+| `rank` | `rank` | The rank / 128, whatever the fact or effect capacity |
+| `reference` | `gather` | The row of the object it names; never a number |
+| `id` | `lookup` | A learned embedding row; never a number |
+| `tagged` | `fact_value` | By the row's fact kind: a scaled payload as stored, an unscaled count through `log`, and zero for program rows, whose content is looked up |
+
+No column is fed to a projection at the scale the engine happened to store. On
+sampled Elemental games every number a fresh model receives stays within
+±4. Life and turn are divided by 20 and have no fixed bound, so a very long
+game or a life-gain deck can exceed that.
+
+A column whose kind has no reading stops the model from building, and so does
+a `gather` or `lookup` column asked for as a number. A new column therefore
+needs only its native declaration: give it the kind that says what it holds,
+and `scale` when the encoder divides it.
+
+A few buffers are decoded by their own preparation rather than column by
+column: decision-memory records, recent public events, fact programs and
+shared-effect details. The model names each of them with the function that
+decodes it, and a float buffer that is neither read through the rule nor named
+there also stops the model from building.
+
+A stored checkpoint never consults the rule. It reads each column the way
+`input_readings` says, so a later correction to a column's kind or to the
+rule changes fresh models only
+([what a checkpoint is bound to](#what-a-checkpoint-is-bound-to)).
+
 ### Relations and facts
 
 Relation validity is column 31. Only the acting viewer receives private
@@ -610,8 +678,10 @@ Equivalent units and permutations of a single forced payment need no choice.
 Submitting a spending Command commits that unit; replay, forks and stale
 rejection use the same authority as other decisions.
 
-Fact rows carry source, duration and timestamp rank. The model divides
-timestamp ranks by 128, independent of fact capacity.
+Fact rows carry source, duration and timestamp rank. Every timestamp and
+order rank (permanent, fact, effect) is a `rank` column, which a fresh model
+divides by 128, independent of fact and effect capacity
+([how the network reads a column](#how-the-network-reads-a-column)).
 
 ### Shared effects
 
