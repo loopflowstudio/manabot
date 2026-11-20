@@ -581,20 +581,31 @@ impl Game {
     /// step owes no mana, whatever else could still be tapped: surplus or
     /// unusable mana stays in the pool for the priority that follows. While
     /// mana is owed and no source, mana-ability or help choice remains, pay
-    /// it from the pool and finish.
+    /// it from the pool and finish. A waterbend cost always offers its taps
+    /// beside paying with mana, until a plain one (no convoke, improvise or
+    /// delve) owes no more waterbend: then, unless the player floats extra
+    /// mana by hand, it pays the rest when it can. A remaining colored cost
+    /// that needs a mana ability, such as sacrificing Treasure, stays open.
     pub(crate) fn advance_payment(
         &mut self,
         player: PlayerId,
         payment: Payment,
     ) -> Result<(), AgentError> {
-        let paid = payment.paying_mana() && payment.mana().0.mana_value == 0;
-        // A waterbend cost always offers its taps beside paying with mana.
-        let chooses = !payment.paying_mana() || payment.waterbends();
+        let paying = payment.paying_mana();
+        let paid = paying && payment.mana().0.mana_value == 0;
+        let chooses = !paying || payment.waterbends();
+        let waterbent = paying
+            && payment.waterbends()
+            && !payment.help().keyworded()
+            && payment.mana().1 == 0
+            && !self.offers_extra_payment_taps(player)
+            && self.can_pay_mana_cost(player, payment.mana().0);
         self.pending_choice = Some(PendingChoice::Pay {
             player,
             payment: Box::new(payment),
         });
         let finishes = paid
+            || waterbent
             || !chooses && {
                 let _payments = self.payment_scan();
                 !self.has_mana_payment_choices(player) && self.help_actions(player).is_empty()
@@ -1294,7 +1305,7 @@ impl Game {
                 return self.advance_payment(player, payment);
             }
         }
-        self.after_help_tap(player, payment)
+        self.advance_payment(player, payment)
     }
 
     /// Choose what the permanent just tapped pays, by its mode
@@ -1314,29 +1325,6 @@ impl Game {
             .ok_or_else(|| AgentError("not something this tap can pay".into()))?;
         payment.owed.remove(0);
         payment.help_paid(tapped, How::Tapped, paid.toward, paid.color);
-        self.after_help_tap(player, payment)
-    }
-
-    /// Continue `payment` after a tap paid part of its mana. Once a plain
-    /// waterbend cost's taps are made, pay the rest from the pool when it can
-    /// (`advance_payment` always leaves a waterbend cost's choice open). A
-    /// remaining colored cost can still need a mana ability such as
-    /// sacrificing Treasure: the committed payment stays open for it. A cost
-    /// that convoke, improvise or delve also helps stays open for them.
-    fn after_help_tap(&mut self, player: PlayerId, payment: Payment) -> Result<(), AgentError> {
-        let (owed, waterbend) = payment.mana();
-        if payment.waterbends()
-            && !payment.help().keyworded()
-            && waterbend == 0
-            && !self.offers_extra_payment_taps(player)
-            && self.can_pay_mana_cost(player, owed)
-        {
-            self.pending_choice = Some(PendingChoice::Pay {
-                player,
-                payment: Box::new(payment),
-            });
-            return self.finish_mana_payment(player);
-        }
         self.advance_payment(player, payment)
     }
 
