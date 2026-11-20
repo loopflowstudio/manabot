@@ -708,7 +708,8 @@ both columns before dividing. A zero denominator leaves the rate undefined.
 
 Checkpoint evaluations against the heuristic publish a `behaviour` table in
 Etude. Each row describes the checkpoint (`seat=0`) and records its native
-`game_seat`, deck and opposing deck. Benchmark and paired matches use the
+`game_seat`, deck and opposing deck (plus `matchup` and `on_play` in benchmark
+and paired deals). Benchmark and paired matches use the
 accepted whole deal from its original or continued attempt. Elemental full and
 subset grids label rows with `unit` and `deal` and include each valid game.
 For example, `compare(db, table="behaviour", value="lands_played", per="land_turns")`

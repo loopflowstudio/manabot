@@ -226,13 +226,17 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     behaviour = tables["behaviour"]
     assert len(behaviour) == 4
     for leg, (row, expected) in enumerate(zip(behaviour, checkpoint, strict=True)):
+        deck = matchup.decks(leg)[leg % 2]
+        opponent_deck = matchup.decks(leg)[1 - leg % 2]
         assert row == {
             **expected,
             "seat": 0,
             "game_seat": leg % 2,
             "game": leg,
-            "deck": matchup.decks(leg)[leg % 2],
-            "opponent_deck": matchup.decks(leg)[1 - leg % 2],
+            "deck": deck,
+            "opponent_deck": opponent_deck,
+            "matchup": f"{deck} v {opponent_deck}",
+            "on_play": leg % 2 == 0,
             "decklists": "closed",
         }
     track = tmp_path / "track"

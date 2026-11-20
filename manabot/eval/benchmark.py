@@ -252,12 +252,17 @@ def evaluation_tables(
             )
         if play_counts and row.valid and (row.deal_seed, row.leg) in play_counts:
             game_seat = row.leg % 2
+            deck, opponent_deck = decks[game_seat], decks[1 - game_seat]
             behaviour.append(
                 {
                     **checkpoint_counts(play_counts[row.deal_seed, row.leg], game_seat),
                     "game": row.leg,
-                    "deck": decks[game_seat],
-                    "opponent_deck": decks[1 - game_seat],
+                    "deck": deck,
+                    "opponent_deck": opponent_deck,
+                    "matchup": labels[(deck, opponent_deck)]
+                    if matchup is None
+                    else f"{deck} v {opponent_deck}",
+                    "on_play": game_seat == 0,
                 }
             )
     return {"plays": plays, **({"behaviour": behaviour} if behaviour else {})}
