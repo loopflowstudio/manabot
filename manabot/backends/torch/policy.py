@@ -364,7 +364,11 @@ class ActorCritic(nn.Module):
         record_vocabulary: RecordVocabulary = (
             "catalog" if config.catalog_records() else "hashed"
         )
-        self.facts = FactEncoder(embed_dim, vocabulary=record_vocabulary)
+        self.facts = FactEncoder(
+            embed_dim,
+            numeric=columns.fact_width(catalog_ids=record_vocabulary == "catalog"),
+            vocabulary=record_vocabulary,
+        )
         self.shared_effects = SharedEffectEncoder(
             embed_dim, vocabulary=record_vocabulary
         )

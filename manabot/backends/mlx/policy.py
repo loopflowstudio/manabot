@@ -195,7 +195,7 @@ class Facts(nn.Module):
     def __init__(self, dims: Dimensions) -> None:
         super().__init__()
         self.kind = nn.Embedding(dims.fact_kinds + 1, dims.hidden)
-        self.numeric = nn.Linear(6, dims.hidden)
+        self.numeric = nn.Linear(dims.fact, dims.hidden)
         self.program_numeric = nn.Linear(1, dims.hidden)
         self.program_sequence = PackedGRU(dims.hidden, dims.hidden)
         self.output = nn.Linear(dims.hidden, dims.hidden)

@@ -183,7 +183,7 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
             prepared.facts.source_rows,
             facts[..., FACT_SOURCE_INDEX].astype(np.int64) % 4096,
         )
-        assert prepared.facts.columns.shape[-1] == 5
+        assert prepared.facts.columns.shape[-1] == agent.facts.numeric.in_features == 7
     if kind == "history":
         assert prepared.events is not None
         np.testing.assert_array_equal(

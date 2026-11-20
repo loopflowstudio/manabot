@@ -76,7 +76,7 @@ def _granted_keyword(name: str, source: int = 0) -> torch.Tensor:
 
 
 def _fact_encoder() -> FactEncoder:
-    encoder = FactEncoder(WIDTH, vocabulary="catalog")
+    encoder = FactEncoder(WIDTH, numeric=6, vocabulary="catalog")
     # A fresh fact output is zero; expose the representation and its gradients.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(WIDTH))

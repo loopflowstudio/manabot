@@ -142,6 +142,7 @@ class Dimensions:
     action: int
     focus: int
     relation: int
+    fact: int
     fact_kinds: int
     token_rows: int
     name_rows: int
@@ -252,6 +253,7 @@ class PolicyCheckpoint:
             action=columns.numeric_width("actions"),
             focus=encoder.max_focus_objects,
             relation=columns.numeric_width("relations"),
+            fact=columns.fact_width(catalog_ids=True),
             fact_kinds=FACT_KINDS,
             token_rows=int(
                 self.parameters["semantic_cards.token_embedding.weight"].shape[0]
