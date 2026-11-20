@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "4b0f168e9c2b05dd54e6c6cb0080c262ff0c2fb3",
-    "date": "2026-11-18",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44382949690",
-    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
-    "reason": "The benchmark now configures mana_floats independently of mana_payment. The previous reference cannot compile that setup API. The corrected manual/off default reproduces every curated digest."
+    "commit": "932a1bb9cd77e597978891cd9df0ff38268b3529",
+    "date": "2026-11-19",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44633569736",
+    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
+    "reason": "MTG-394 moves search and step digests on purpose: the automatic payer spends the most specific mana first, and mana made during a payment commits to the cost. The worst search reply moved to a different position (seed 1, decision 36) with one more legal choice and 28.5% more playout steps; per-step cost rose about 6.5% (local measurement on an M4 Max). Accepted."
   },
   "bench_search": {
-    "worst_s": 3.6476571719999997,
-    "total_s": 125.554,
+    "worst_s": 5.5442340235,
+    "total_s": 168.17,
     "seeds": {
       "1": {
-        "worst_s": 3.341328071,
-        "total_s": 50.390468614999996,
-        "digest": 12973536517339955137
+        "worst_s": 5.5442340235,
+        "total_s": 74.483976655,
+        "digest": 12271650047222149123
       },
       "2": {
-        "worst_s": 3.6476571719999997,
-        "total_s": 40.118556741,
-        "digest": 15798565271346578031
+        "worst_s": 4.738681553,
+        "total_s": 45.8933968365,
+        "digest": 10117444071094495583
       },
       "3": {
-        "worst_s": 1.952369081,
-        "total_s": 35.044552626000005,
-        "digest": 5569117671639805731
+        "worst_s": 2.5897762255,
+        "total_s": 47.792656794,
+        "digest": 4954990117603543659
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 21224.1,
-    "steps": 124687,
+    "steps_per_s": 14009.177063807614,
+    "steps": 123517,
     "games": 512,
-    "digest": 3471185654390571689
+    "digest": 6877553498864102521
   }
 }
