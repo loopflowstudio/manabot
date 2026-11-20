@@ -22,19 +22,19 @@ from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
 
-def _bucketed(case: PolicyFixture) -> ActorCritic:
-    """A bucketed copy of the fixture's policy with identical weights."""
+def _bucketed(reference: ActorCritic) -> ActorCritic:
+    """A bucketed copy of a policy with identical weights."""
     agent = ActorCritic(
-        case.agent.observation_space, case.agent.config, bucketed_shapes=True
+        reference.observation_space, reference.config, bucketed_shapes=True
     ).eval()
-    agent.load_state_dict(case.agent.state_dict())
+    agent.load_state_dict(reference.state_dict())
     # Fresh fact and link outputs are zero; give those joins real signal.
     with torch.no_grad():
-        for reference, copy in zip(
-            case.agent.parameters(), agent.parameters(), strict=True
+        for original, copy in zip(
+            reference.parameters(), agent.parameters(), strict=True
         ):
-            noise = torch.randn_like(reference) * 0.05
-            reference.add_(noise)
+            noise = torch.randn_like(original) * 0.05
+            original.add_(noise)
             copy.add_(noise)
     return agent
 
@@ -86,18 +86,27 @@ def test_remapped_references_are_every_object_table_column() -> None:
     assert zero_based == set(ZERO_BASED_REFERENCES)
 
 
-@pytest.mark.parametrize("history", [False, True])
-def test_outputs_and_gradients_match_default(
-    history: bool,
-) -> None:
+@pytest.mark.parametrize(
+    ("history", "streams"), [(False, False), (True, False), (True, True)]
+)
+def test_outputs_and_gradients_match_default(history: bool, streams: bool) -> None:
+    """`streams` compares the `stream_norm` and `focus_film` layout."""
     torch.manual_seed(302)
     case = _policy(history=history)
     obs = _later_decisions(case)
-    agent = _bucketed(case)
+    reference = case.agent
+    if streams:
+        reference = ActorCritic(
+            reference.observation_space,
+            reference.config.model_copy(
+                update={"stream_norm": True, "focus_film": True}
+            ),
+        ).eval()
+    agent = _bucketed(reference)
     buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
     assert buckets is not None and buckets.trims_objects
     outputs = []
-    for model in (case.agent, agent):
+    for model in (reference, agent):
         logits, values = model.forward_distribution(device_input(model, obs))
         outputs.append((logits, values))
         legal = obs["actions_valid"].bool()
@@ -107,7 +116,7 @@ def test_outputs_and_gradients_match_default(
     torch.testing.assert_close(logits, expected_logits, atol=1e-5, rtol=1e-5)
     torch.testing.assert_close(values, expected_values, atol=1e-5, rtol=1e-5)
     for (name, a), b in zip(
-        case.agent.named_parameters(), agent.parameters(), strict=True
+        reference.named_parameters(), agent.parameters(), strict=True
     ):
         if a.grad is None:
             # The complete catalog may add exactly-zero program gradients.
@@ -168,7 +177,7 @@ def test_rejections_match_default(
 ) -> None:
     case = _policy()
     obs = _later_decisions(case)
-    agent = _bucketed(case)
+    agent = _bucketed(case.agent)
     plant(obs)
     errors = []
     for model in (case.agent, agent):
@@ -182,7 +191,7 @@ def test_reference_to_padding_object_is_kept() -> None:
     """A focus on the last permanent slot keeps that slot, as the default reads it."""
     case = _policy()
     obs = _later_decisions(case)
-    agent = _bucketed(case)
+    agent = _bucketed(case.agent)
     objects = case.agent._is_agent_template.shape[1]
     _set_focus(objects - 1)(obs)
     buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
@@ -223,7 +232,7 @@ def test_collection_records_each_rows_measured_needs() -> None:
     """A bucketed collector records the needs it measured for every learner row,
     equal to measuring the recorded rows again, so learning reuses them."""
     case = _policy(history=True)
-    agent = _bucketed(case)
+    agent = _bucketed(case.agent)
     batch = collect(case.collector, agent, 12)
     rows = np.arange(batch.actions.size)
     recorded = batch.recorded.gather_needs(rows)

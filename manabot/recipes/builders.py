@@ -99,8 +99,9 @@ def elemental_self_play() -> SelfPlay:
 
     Both seats learn, each game draws its pair uniformly from the authored
     Elemental roster, and an engine failure ends one game within a 10% rolling
-    limit. Model, observation, learning and streams are the frozen
-    `elemental-long-183-v1` recipe's; the world is the installed one.
+    limit. Observation, learning and streams are the frozen
+    `elemental-long-183-v1` recipe's; its model adds stream norms and focus
+    scoring, and the world is the installed one.
     Milestones fall every 50 updates. CPU unless the caller changes `device`.
     """
     pack = "elemental-world-v2"
@@ -122,6 +123,8 @@ def elemental_self_play() -> SelfPlay:
             attention_layers=2,
             num_attention_heads=4,
             value_aggregation="masked_mean",
+            focus_film=True,
+            stream_norm=True,
         ),
         learning=move_learning(),
         behavior="current-self",

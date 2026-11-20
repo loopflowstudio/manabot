@@ -29,8 +29,10 @@ class SharedEffectEncoder(nn.Module):
         self,
         width: int,
         *,
+        numeric: int,
         vocabulary: RecordVocabulary = "hashed",
     ) -> None:
+        """`numeric` is the effect row's projection inputs (`Layout.numeric_width`)."""
         super().__init__()
         self.vocabulary = vocabulary
         if vocabulary == "hashed":
@@ -40,7 +42,7 @@ class SharedEffectEncoder(nn.Module):
         self.detail_number = nn.Linear(1, width)
         if vocabulary == "hashed":
             self.source = nn.Embedding(4096, width)
-        self.header = nn.Linear(8 + 2 * width, width)
+        self.header = nn.Linear(numeric + 2 * width, width)
         self.reducer = RecordReducer(width)
 
     def forward(

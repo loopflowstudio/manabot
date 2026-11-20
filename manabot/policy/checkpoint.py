@@ -153,6 +153,7 @@ class Dimensions:
     action: int
     focus: int
     relation: int
+    effect: int
     fact: int
     fact_kinds: int
     token_rows: int
@@ -264,6 +265,7 @@ class PolicyCheckpoint:
             action=columns.numeric_width("actions"),
             focus=encoder.max_focus_objects,
             relation=columns.numeric_width("relations"),
+            effect=columns.numeric_width("effects"),
             fact=columns.fact_width(catalog_ids=True),
             fact_kinds=FACT_KINDS,
             token_rows=int(
@@ -438,11 +440,14 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     interface = model_interface(record, checkpoint.space)
     if record.get("architecture") is not None:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
-    if interface is None:
-        return checkpoint
     columns = Layout(checkpoint.readings)
     width = len(checkpoint.readings["agent_player"])
-    projected = checkpoint.parameters["player_embedding.projection.0.weight"].shape[1]
+    projection = checkpoint.parameters.get("player_embedding.projection.0.weight")
+    if projection is None:
+        raise ValueError(
+            f"checkpoint has no player projection weights; {written_at(record)}"
+        )
+    projected = projection.shape[1]
     extra = (
         columns.numeric_width("player_turn_state")
         if checkpoint.space.encoder.turn_state
@@ -450,6 +455,8 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     )
     if projected != columns.numeric_width("agent_player") + extra:
         raise ValueError("checkpoint player columns differ from its projection")
+    if interface is None:
+        return checkpoint
     if not checkpoint.model.catalog_records() and interface.writer == interface.current:
         return checkpoint
     try:

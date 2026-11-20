@@ -62,6 +62,10 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
         reasons.append(f"value_kind={model.value_kind!r}")
     if model.policy_film:
         reasons.append("policy_film")
+    if model.focus_film:
+        reasons.append("focus_film")
+    if model.stream_norm:
+        reasons.append("stream_norm")
     if not model.attention_on:
         reasons.append("attention_on=False")
     if reasons:
