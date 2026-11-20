@@ -386,9 +386,11 @@ including the unresolved near-singleton latency target.
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
-When the binding records exact decks and sideboards, loading compares the
-whole binding, including the content manifest. Otherwise the model can play
-any admitted deck. The card digest describes the cards of the writing revision.
+When the binding records exact decks and sideboards, every binding field except
+the input schema must match exactly, including the content manifest. As with
+any checkpoint, the runtime input columns may extend the saved column prefixes.
+Without exact decks, the model can play any admitted deck. The card digest
+describes the cards of the writing revision.
 Loading compares input columns, token names and action kinds by name
 ([compatibility](../docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
 A missing binding or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
