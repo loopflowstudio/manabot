@@ -218,7 +218,7 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
         name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
     )
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
-    match = Match(players=(checkpoint_player(ref), heuristic), games=4)
+    match = Match(players=(checkpoint_player(ref), heuristic), index=0)
     tables = pairing.play_pairing(
         match,
         [load(ref), build(heuristic, {})],

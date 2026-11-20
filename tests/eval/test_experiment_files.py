@@ -97,7 +97,11 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
 
 @pytest.mark.parametrize(
     ("experiment", "matches"),
-    [(elemental, Matches(tag="heuristic")), (seat_comparison, None), (tla_trophies, None)],
+    [
+        (elemental, Matches(tag="heuristic")),
+        (seat_comparison, None),
+        (tla_trophies, None),
+    ],
 )
 def test_checkpoint_report_shows_behaviour_next_to_strength(
     experiment: ModuleType, matches: Matches | None

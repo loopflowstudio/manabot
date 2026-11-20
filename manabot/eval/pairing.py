@@ -39,7 +39,9 @@ def play_pairing(
 ) -> Tables:
     """Play all legs; an incomplete or invalid pairing raises after retaining evidence."""
     legs = 4 if matchup_mode == "cross" else 8
-    if match.games != legs or len(match.players) != 2:
+    # An indexed Etude match is one deal. A legacy multi-game match declares legs.
+    expected_games = legs if match.index is None else 1
+    if match.games != expected_games or len(match.players) != 2:
         raise ValueError("a pairing requires two players and every declared leg")
     players: list[PlayerRegistration] = []
     paths: dict[str, str] = {}

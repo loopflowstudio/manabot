@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from etude.eval.match import environment
-from etude.eval.records import Benchmark, CheckpointSlot, Code, Match, Seating
+from etude.eval.records import Benchmark, Code, Match, Seating, checkpoint_player
 from etude.eval.result import Tables
 from etude.jobs import EvalJob, ExperimentState, TrainingJob
 from etude.report import Curve, Report, Score
@@ -167,14 +167,27 @@ def play(match: Match, agents: Sequence[object]) -> Tables:
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    checkpoints = [c for run in state.runs for c in run.checkpoints]
-    if not checkpoints:
+    heuristic = Code(
+        name="heuristic", source=heuristic_source_paths(), config=HEURISTIC
+    )
+    seatings = tuple(
+        Seating(
+            name=f"Seed {run.seed} update {c.at['updates']} pair {i + 1}",
+            players=(checkpoint_player(c.ref), heuristic),
+            config=Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i),
+            games=1,
+            seeds="one",
+        )
+        for run in state.runs
+        for c in run.checkpoints
+        for i in range(2)
+    )
+    if not seatings:
         return []
     return [
         EvalJob(
             play=play,
             agents=AGENTS,
-            checkpoints=checkpoints,
             tournament=Benchmark(
                 name="tla-trophies-held-out",
                 environment=environment(
@@ -182,26 +195,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
                     files=[Path(__file__), ROOT / "manabot/eval/pairing.py"],
                     config={"pools": corpus_input().sha256},
                 ),
-                seatings=(
-                    Seating(
-                        name="held-out trophy pairs",
-                        players=(
-                            CheckpointSlot(),
-                            Code(
-                                name="heuristic",
-                                source=heuristic_source_paths(),
-                                config=HEURISTIC,
-                            ),
-                        ),
-                        configs=tuple(
-                            Deal(
-                                first=i * 2, second=i * 2 + 1, seed=40900 + i
-                            ).model_dump()
-                            for i in range(2)
-                        ),
-                        games=4,
-                    ),
-                ),
+                seatings=seatings,
             ),
             inputs=(corpus_input(),),
             setup=machine_setup(" --extra artifacts --extra evaluation"),
