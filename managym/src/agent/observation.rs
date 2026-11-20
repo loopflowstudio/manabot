@@ -943,7 +943,7 @@ pub struct Observation {
     pub recent_events: Vec<EventData>,
     #[serde(default)]
     pub decision_memory: crate::agent::decision_memory::DecisionLog,
-    #[serde(skip)]
+    #[serde(default)]
     pub policy_history: crate::agent::policy_history::HistoryWindow,
 }
 

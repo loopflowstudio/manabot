@@ -61,6 +61,9 @@ impl Serialize for ObservationJson<'_> {
             "opponent_permanents",
             &sorted_record(&value.opponent_permanents),
         )?;
+        if !value.policy_history.is_empty() {
+            map.serialize_entry("policy_history", &sorted_record(&value.policy_history))?;
+        }
         map.serialize_entry("recent_events", &EventsJson(&value.recent_events))?;
         if let Some(effects) = &value.shared_effects {
             map.serialize_entry("shared_effects", &sorted_record(effects))?;

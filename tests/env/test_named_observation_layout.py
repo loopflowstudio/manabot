@@ -4,6 +4,7 @@ Outside consumers read columns from `managym.observation_layout()`; manabot's
 column constants and space shapes are held to that layout here.
 """
 
+import json
 import subprocess
 import sys
 from typing import Literal
@@ -282,6 +283,29 @@ def test_managym_layout_rejects_missing_and_extra_memory_before_writing(
             for arrays in (scalar, batch)
             for array in arrays.values()
         )
+
+
+def test_public_history_round_trips_for_both_viewers() -> None:
+    env = priority_root(("Mountain",), ())
+    env.step(0)  # Play the only land. Its arrival has a public object reference.
+    layout = managym.ObservationLayout(policy_history=True)
+    for viewer in (0, 1):
+        observation = env.observation_for_player(viewer)
+        live, restored = layout.allocate(), layout.allocate()
+        managym.encode_observation_into(observation, layout, live)
+        text = observation.toJSON()
+        managym.encode_observation_into(
+            managym.Observation.from_json(text), layout, restored
+        )
+        assert live["events_valid"].sum() == 1
+        for field in ("events", "events_valid"):
+            np.testing.assert_array_equal(live[field], restored[field])
+        historical = json.loads(text)
+        del historical["policy_history"]
+        managym.encode_observation_into(
+            managym.Observation.from_json(json.dumps(historical)), layout, restored
+        )
+        assert not restored["events_valid"].any()
 
 
 def test_layoutless_vector_registration_warns_and_preserves_memory_configuration() -> (
