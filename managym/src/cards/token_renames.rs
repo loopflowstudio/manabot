@@ -85,12 +85,16 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Field, "spells", None),
     (Text, "land choices remaining", None),
     (Text, "selected lands", None),
+    // Split into `contribution` facts naming how and toward what each paid.
+    (Text, "waterbend contributions", None),
 ];
 
-/// The search now describes arbitrary distinct names and a structured ending.
+/// The search now describes arbitrary distinct names and a structured ending;
+/// a payment's contributions are `contribution` facts.
 pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
     ("token", "execution/6/land choices remaining", None),
     ("token", "execution/6/selected lands", None),
+    ("token", "execution/6/waterbend contributions", None),
 ];
 
 #[cfg(test)]

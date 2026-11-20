@@ -6,11 +6,12 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{
         decision::{
-            Decision, EffectFrame, FrameCompletion, PaymentProgress, ResolutionCastOffer,
-            ResolutionTarget, TargetIteration,
+            Decision, EffectFrame, FrameCompletion, ResolutionCastOffer, ResolutionTarget,
+            TargetIteration,
         },
         event::GameEvent,
         game::Game,
+        payment::{CostComponent, PaymentProgress},
         proposed_event::{
             EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
@@ -20,13 +21,14 @@ use crate::{
     state::{
         ability::{
             Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except,
-            LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
-            TargetRequirement, TargetSpec,
+            LinkedChooser, LinkedExile, ObjectSelector, PlayerSelector, Scope, TargetRequirement,
+            TargetSpec,
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
         effect::{Affected, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
+        payment::How,
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
         stack_object::{
@@ -67,8 +69,31 @@ impl Game {
                 .count() as i32,
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
+            EffectValue::TriggeringManaValue => match frame.context_target {
+                // A spell that has left the stack is read as the card it became.
+                Some(Target::StackSpell(spell)) => self
+                    .state
+                    .live(spell)
+                    .or_else(|| self.state.zones.successor(spell))
+                    .map_or(0, |object| i32::from(self.object_mana_value(object))),
+                _ => 0,
+            },
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::ExcessDamage => frame.excess_damage,
+            EffectValue::PowerTappedToPay => frame
+                .spent
+                .contributions()
+                .iter()
+                .filter(|paid| paid.how == How::Tapped)
+                .map(|paid| {
+                    let power = self
+                        .state
+                        .permanent_of(paid.object)
+                        .map(|id| self.characteristics(id).power)
+                        .or_else(|| self.object_lki(paid.object).map(|lki| lki.power));
+                    power.unwrap_or(0).max(0)
+                })
+                .sum(),
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
             EffectValue::ColorsSpentToCast => i32::from(frame.spent.colors()),
             EffectValue::SourcePower => self
@@ -107,7 +132,9 @@ impl Game {
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
             | EffectValue::SourcePower
+            | EffectValue::PowerTappedToPay
             | EffectValue::TriggeringPower
+            | EffectValue::TriggeringManaValue
             | EffectValue::TargetToughness
             | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self
@@ -213,7 +240,7 @@ impl Game {
             ),
             kicked: spell.kicked,
             x: spell.x,
-            spent: spell.spent,
+            spent: spell.spent.clone(),
             targets,
             completion: FrameCompletion::Spell {
                 object,
@@ -318,6 +345,7 @@ impl Game {
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
             x: ability.x,
+            spent: ability.paid,
             targets,
             context_target: attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
@@ -414,7 +442,7 @@ impl Game {
             source_transforms: triggered.source_transforms,
             resolutions_this_turn,
             x: triggered.x,
-            spent: triggered.spent,
+            spent: triggered.spent.clone(),
             targets,
             context_target: triggered.context,
             triggering_player: triggered.player,
@@ -1258,7 +1286,7 @@ impl Game {
                 let cost = (0..ages).fold(ManaCost::default(), |cost, _| cost.plus(each));
                 Some(Decision::Payment(PaymentProgress::new(
                     frame.controller,
-                    PaymentCost::Mana(cost),
+                    CostComponent::mana(cost),
                     Vec::new(),
                     vec![Effect::sacrifice_this()],
                 )))
@@ -1406,13 +1434,14 @@ impl Game {
             } => {
                 let count = self.effect_value(amount, frame).max(0);
                 self.invalidate_mana_cache(frame.controller);
+                let origin = frame.source().map(|source| self.mana_origin(source));
                 let pool = if *until_end_of_combat {
                     self.state.combat_mana_pool_mut(frame.controller)
                 } else {
                     self.state.mana_pool_mut(frame.controller)
                 };
                 for _ in 0..count {
-                    pool.add(mana);
+                    pool.add(mana, origin);
                 }
                 if *until_end_of_combat {
                     self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);
@@ -1548,7 +1577,7 @@ impl Game {
                 if_declined,
             } => Some(Decision::Payment(PaymentProgress::new(
                 frame.controller,
-                cost.clone(),
+                CostComponent::resolving(cost),
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
@@ -1564,7 +1593,7 @@ impl Game {
                 );
                 trigger.remembered = frame.remembered.clone();
                 trigger.x = frame.x;
-                trigger.spent = frame.spent;
+                trigger.spent = frame.spent.clone();
                 trigger.player = frame.triggering_player;
                 None
             }
@@ -1584,7 +1613,7 @@ impl Game {
                 }
                 let mut payment = PaymentProgress::new(
                     frame.controller,
-                    PaymentCost::Mana(Default::default()),
+                    CostComponent::mana(ManaCost::default()),
                     effects.clone(),
                     Vec::new(),
                 );
@@ -1765,9 +1794,20 @@ impl Game {
                 Vec::new(),
                 frame,
             ),
-            Effect::EachPlayerKeepsCreatures { max_total_power } => {
-                self.keep_creatures(self.active_player(), *max_total_power, Vec::new(), frame)
-            }
+            Effect::EachPlayerKeepsCreatures { max_total_power } => self.keep_creatures(
+                self.active_player(),
+                *max_total_power,
+                None,
+                Vec::new(),
+                frame,
+            ),
+            Effect::EachPlayerSacrificesCreatures { count } => self.keep_creatures(
+                self.active_player(),
+                i32::MAX,
+                Some(*count),
+                Vec::new(),
+                frame,
+            ),
             Effect::CreateDelayedTrigger {
                 event,
                 frequency,
@@ -1917,8 +1957,12 @@ impl Game {
                     _ => return None,
                 };
                 let spell_controller = self.state.stack_objects[index].controller();
-                let mut payment =
-                    PaymentProgress::new(spell_controller, cost.clone(), Vec::new(), Vec::new());
+                let mut payment = PaymentProgress::new(
+                    spell_controller,
+                    CostComponent::resolving(cost),
+                    Vec::new(),
+                    Vec::new(),
+                );
                 payment.counters_on_decline = frame.primary_target();
                 Some(Decision::Payment(payment))
             }

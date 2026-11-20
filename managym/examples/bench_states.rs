@@ -15,7 +15,12 @@ use managym::{
     },
     benchmark_allocations, benchmark_layers, benchmark_payments,
     flow::event::GameEvent,
-    state::{game_object::PlayerId, permanent::CounterKind, player::PlayerConfig, zone::ZoneType},
+    state::{
+        game_object::PlayerId,
+        permanent::CounterKind,
+        player::{GameSetup, ManaFloats, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -39,6 +44,13 @@ const STATES: &[(&str, &str)] = &[
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
     ("names", "The Rise of Sozin chapter II; catalog-wide bounded naming groups beside a large graveyard"),
+    ("convoke-duplicates", "Guardian of Vitu-Ghazi + Appeal to Eirdu; N other Guardians and N Forests. Identical sources still yield one direct-tap offer per creature"),
+    ("convoke-diverse", "Guardian of Vitu-Ghazi + Appeal to Eirdu; N creatures cycling eight color mixes (two are mana sources) and N lands cycling four kinds. The payment step grows with N squared and a search reply with N cubed: a step asks a number of payment plans that grows with N, each over the whole board, and search tries one tap per source. One payment model answers every tap offer of a decision"),
+    ("delve-graveyard", "Teval, Sire of Seven Deaths, three lands and N graveyard cards cycling eight names; one exile offer per card, no payment search"),
+    ("improvise-artifacts", "Ironheart, one Island and N artifacts cycling Treasure, Prism, Waterskin, Scarecrow Guide and Battle Fan; the payment step and search grow as in convoke-diverse, beside one plan per mana ability"),
+    ("float-origins", "diverse-mana with mana_floats = all; the floated checkpoint has every mana ability used at priority, so the pool holds one origin per unit and a clone copies each unit's class"),
+    ("crew-saddle", "Cultivator's Caravan, Alacrian Jaguar and Lumen-Class Frigate with N creatures cycling eight names; crew, saddle and station tap choices, one offer per creature"),
+    ("bargain-forage", "Archon's Glory + Feed the Cycle; N artifacts and tokens cycling five kinds and N graveyard cards; bargain's sacrifice and forage's exile are single picks among N, never subsets"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -64,6 +76,33 @@ const MANA: &[&str] = &[
     "Jasmine Dragon Tea Shop",
     "White Lotus Hideout",
 ];
+const CREATURES: &[&str] = &[
+    "White Lotus Reinforcements",
+    "Kyoshi Warriors",
+    "Badgermole Cub",
+    "Hermitic Herbalist",
+    "Gray Ogre",
+    "Earth King's Lieutenant",
+    "Supportive Parents",
+    "Tiger-Seal",
+];
+const ARTIFACTS: &[&str] = &[
+    "token.treasure",
+    "Prophetic Prism",
+    "Bender's Waterskin",
+    "Scarecrow Guide",
+    "Kyoshi Battle Fan",
+];
+const GRAVEYARD: &[&str] = &[
+    "Gray Ogre",
+    "Forest",
+    "Pillar Launch",
+    "Badgermole Cub",
+    "Island",
+    "Kyoshi Warriors",
+    "Prophetic Prism",
+    "Tiger-Seal",
+];
 const STATICS: &[&str] = &[
     "White Lotus Reinforcements",
     "Earth King's Lieutenant",
@@ -82,6 +121,21 @@ impl Seat {
     fn add(&mut self, name: &str, count: usize) {
         self.battlefield
             .extend(std::iter::repeat_n(name.to_string(), count));
+    }
+    /// `size` permanents cycling `names`; a `token.` name is a token key.
+    fn cycle(&mut self, names: &[&str], size: usize) {
+        for &name in names.iter().cycle().take(size) {
+            if name.starts_with("token.") {
+                self.tokens.push(name.into());
+            } else {
+                self.add(name, 1);
+            }
+        }
+    }
+    /// `size` graveyard cards cycling `GRAVEYARD`.
+    fn fill_graveyard(&mut self, size: usize) {
+        let cards = GRAVEYARD.iter().cycle().take(size);
+        self.graveyard.extend(cards.map(|name| name.to_string()));
     }
 }
 #[derive(Clone, Debug, Serialize)]
@@ -123,8 +177,65 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 }
             }
         }
-        "diverse-mana" | "restricted-filter" | "distinct-restrictions" => {
-            let names = if name == "diverse-mana" {
+        "convoke-duplicates" | "convoke-diverse" => {
+            let seat = &mut seats[0];
+            if name == "convoke-duplicates" {
+                seat.add("Guardian of Vitu-Ghazi", size);
+                seat.add("Forest", size);
+            } else {
+                seat.cycle(CREATURES, size);
+                seat.cycle(&["Forest", "Plains", "Airship Engine Room", "Island"], size);
+            }
+            seat.hand
+                .extend(["Guardian of Vitu-Ghazi".into(), "Appeal to Eirdu".into()]);
+        }
+        "delve-graveyard" => {
+            let seat = &mut seats[0];
+            for card in ["Teval, Arbiter of Virtue", "Swamp", "Forest", "Island"] {
+                seat.add(card, 1);
+            }
+            seat.hand.push("Sire of Seven Deaths".into());
+            seat.fill_graveyard(size);
+        }
+        "improvise-artifacts" => {
+            let seat = &mut seats[0];
+            seat.add("Island", 1);
+            seat.cycle(ARTIFACTS, size);
+            seat.hand.push("Ironheart, Clever Champion".into());
+        }
+        "crew-saddle" => {
+            let seat = &mut seats[0];
+            for card in [
+                "Cultivator's Caravan",
+                "Alacrian Jaguar",
+                "Lumen-Class Frigate",
+            ] {
+                seat.add(card, 1);
+            }
+            seat.cycle(CREATURES, size);
+        }
+        "bargain-forage" => {
+            seats[1].add("Gray Ogre", 1);
+            let seat = &mut seats[0];
+            for card in ["Gray Ogre", "Plains", "Swamp", "Swamp", "Swamp"] {
+                seat.add(card, 1);
+            }
+            seat.cycle(
+                &[
+                    "token.food",
+                    "token.treasure",
+                    "Prophetic Prism",
+                    "Kyoshi Battle Fan",
+                    "token.ally",
+                ],
+                size,
+            );
+            seat.hand
+                .extend(["Archon's Glory".into(), "Feed the Cycle".into()]);
+            seat.fill_graveyard(size);
+        }
+        "diverse-mana" | "restricted-filter" | "distinct-restrictions" | "float-origins" => {
+            let names = if matches!(name, "diverse-mana" | "float-origins") {
                 MANA
             } else {
                 &[
@@ -243,8 +354,12 @@ fn build(recipe: &Recipe) -> Env {
             PlayerConfig::new(format!("seat {i}"), deck)
         })
         .collect();
+    let mut setup = GameSetup::from(players);
+    if recipe.state == "float-origins" {
+        setup.mana_floats[0] = ManaFloats::All;
+    }
     let mut env = Env::new(7, true, false, false);
-    env.reset(players).unwrap();
+    env.reset(setup).unwrap();
     for (i, seat) in recipe.seats.iter().enumerate() {
         env.scenario_clear_hand(i).unwrap();
         for name in &seat.battlefield {
@@ -352,7 +467,11 @@ fn actions(env: &mut Env) -> Vec<Action> {
         .clone()
 }
 fn first_action(env: &mut Env, kind: &str) -> Option<usize> {
-    actions(env).iter().position(|a| match kind {
+    nth_action(env, kind, 0)
+}
+fn nth_action(env: &mut Env, kind: &str, nth: usize) -> Option<usize> {
+    let offered = actions(env);
+    let matching = offered.iter().enumerate().filter(|(_, a)| match kind {
         "cast" => matches!(a, Action::CastSpell { .. }),
         "activate" => matches!(
             a,
@@ -378,7 +497,49 @@ fn first_action(env: &mut Env, kind: &str) -> Option<usize> {
                 | Action::DeclareBlocker { .. }
         ),
         _ => false,
-    })
+    });
+    matching.map(|(index, _)| index).nth(nth)
+}
+/// The decision a cost choice is made at: each step of `path` takes the nth
+/// offered action of a kind. Fixture preparation only.
+fn follow(root: &Env, path: &[(&str, usize)]) -> Env {
+    let mut env = root.fork().unwrap();
+    for &(kind, nth) in path {
+        let index = nth_action(&mut env, kind, nth)
+            .unwrap_or_else(|| panic!("no {kind} action {nth} on the way to a cost choice"));
+        env.step(index as i64).unwrap();
+    }
+    env
+}
+/// Tap every mana source at priority, taking the first offer of each choice
+/// an ability asks, so the pool holds every unit the board can float.
+fn float_everything(root: &Env) -> Env {
+    let mut env = root.fork().unwrap();
+    for _ in 0..256 {
+        let index = if env.action_space_kind() == Some(ActionSpaceKind::Priority) {
+            let offered = actions(&mut env);
+            let game = env.benchmark_game_mut();
+            let source = offered.iter().position(|a| match a {
+                Action::TapForMana { .. } => true,
+                Action::ActivateAbility {
+                    permanent,
+                    ability_index,
+                    ..
+                } => game.characteristics(*permanent).activated_abilities[*ability_index]
+                    .mana_choices()
+                    .is_some(),
+                _ => false,
+            });
+            match source {
+                Some(index) => index,
+                None => return env,
+            }
+        } else {
+            0
+        };
+        env.step(index as i64).unwrap();
+    }
+    panic!("mana sources were still offered after 256 decisions")
 }
 /// Reach combat by passing priority and declaring every attacker. Bound the
 /// preparation trace, not the rules search; error if it never reaches combat.
@@ -409,7 +570,7 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
                 .position(|a| matches!(a, Action::PassPriority { .. }))
         };
         env.step(index? as i64).unwrap();
-        if env.benchmark_game_mut().state.turn.turn_number > 1 {
+        if env.is_game_over() || env.benchmark_game_mut().state.turn.turn_number > 1 {
             return None;
         }
     }
@@ -489,6 +650,24 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             .create_token("token.ally", PlayerId(0), false)
             .unwrap();
         result.push(("order".into(), reach(&entered, "order")));
+    }
+    let cost_choices: &[(&str, &[(&str, usize)])] = match recipe.state.as_str() {
+        "crew-saddle" => &[
+            ("crew", &[("activate", 0)]),
+            ("saddle", &[("activate", 1)]),
+            ("station", &[("activate", 2)]),
+        ],
+        "bargain-forage" => &[
+            ("bargain", &[("cast", 0), ("choice", 0), ("choice", 0)]),
+            ("forage", &[("cast", 1), ("choice", 0)]),
+        ],
+        _ => &[],
+    };
+    for (label, path) in cost_choices {
+        result.push(((*label).into(), follow(root, path)));
+    }
+    if recipe.state == "float-origins" {
+        result.push(("floated".into(), float_everything(root)));
     }
     if recipe.state == "choices" {
         let mut activated = root.fork().unwrap();
@@ -891,6 +1070,18 @@ mod tests {
             let mut first = root.fork().unwrap();
             assert_eq!(surface(&mut first), surface(&mut again), "{name}");
             let points = checkpoints(&root, &recipe);
+            if name == "convoke-duplicates" {
+                let (_, payment) = points
+                    .iter()
+                    .find(|(label, _)| label == "cast-choice")
+                    .expect("duplicate convoke reaches a payment choice");
+                let mut env = payment.fork().unwrap();
+                let taps = actions(&mut env)
+                    .into_iter()
+                    .filter(|action| matches!(action, Action::WaterbendTap { .. }))
+                    .count();
+                assert_eq!(taps, recipe.size);
+            }
             if name == "duplicate-creatures" {
                 assert!(points.iter().any(|(label, _)| label == "attack"));
                 assert!(points.iter().any(|(label, _)| label == "block"));

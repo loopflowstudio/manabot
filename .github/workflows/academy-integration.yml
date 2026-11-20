@@ -57,6 +57,7 @@ jobs:
             tests/academy/test_named_search_recovery.py \
             tests/academy/test_schedule_recovery.py \
             tests/academy/test_forced_step_automation.py \
+            tests/academy/test_authored_match_parity.py \
             tests/academy/test_watch.py \
             tests/academy/test_policy_runtime.py \
             tests/academy/test_play_sessions.py \

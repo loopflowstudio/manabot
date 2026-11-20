@@ -14,31 +14,39 @@
 
 mod aer;
 mod afr;
+mod atq;
+mod bfz;
 mod blb;
 mod bng;
 mod bro;
 mod c17;
 mod c19;
 mod chk;
+mod clb;
 mod cmr;
 mod csp;
 mod dft;
+mod dmu;
 mod dom;
 mod dtk;
+mod ecl;
 mod eld;
 mod emn;
+mod eoe;
 mod fdn;
 mod fin;
 mod frf;
 mod fut;
 mod gpt;
 mod grn;
+mod gtc;
 mod hob;
 mod ice;
 mod iko;
 mod inv;
 mod isd;
 mod j22;
+mod jou;
 mod khm;
 mod kld;
 mod ktk;
@@ -52,6 +60,8 @@ mod mh2;
 mod mid;
 mod mkm;
 mod mmq;
+mod mrd;
+mod msh;
 mod nec;
 mod ody;
 mod ons;
@@ -61,6 +71,7 @@ mod por;
 mod psal;
 mod ptk;
 mod rav;
+mod rix;
 mod roe;
 mod rtr;
 mod shm;
@@ -68,6 +79,7 @@ mod soi;
 mod spm;
 mod sth;
 mod stx;
+mod tdm;
 mod ths;
 mod tla;
 mod tle;
@@ -110,31 +122,39 @@ pub fn token_catalog() -> &'static [TokenDefinition] {
 const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
+    atq::cards,
     blb::cards,
+    bfz::cards,
     bng::cards,
     bro::cards,
     c17::cards,
     chk::cards,
     c19::cards,
+    clb::cards,
     cmr::cards,
     csp::cards,
     dft::cards,
+    dmu::cards,
     dom::cards,
     dtk::cards,
+    ecl::cards,
     eld::cards,
     emn::cards,
+    eoe::cards,
     fdn::cards,
     fin::cards,
     frf::cards,
     fut::cards,
     gpt::cards,
     grn::cards,
+    gtc::cards,
     hob::cards,
     ice::cards,
     iko::cards,
     inv::cards,
     isd::cards,
     j22::cards,
+    jou::cards,
     khm::cards,
     kld::cards,
     ktk::cards,
@@ -148,6 +168,8 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     mid::cards,
     mkm::cards,
     mmq::cards,
+    mrd::cards,
+    msh::cards,
     nec::cards,
     ody::cards,
     ons::cards,
@@ -158,12 +180,14 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ptk::cards,
     rav::cards,
     roe::cards,
+    rix::cards,
     rtr::cards,
     shm::cards,
     soi::cards,
     spm::cards,
     sth::cards,
     stx::cards,
+    tdm::cards,
     ths::cards,
     tla::cards,
     tle::cards,

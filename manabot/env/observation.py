@@ -47,12 +47,16 @@ type ObservationBuffers = Mapping[str, np.ndarray]
 # Add a constant only for a column the model, preparation or a test reads.
 
 # Action rows: one-hot family, declaration, mode/ability selectors,
-# continuation join, validity.
+# continuation join, validity, then appended columns.
 ACTION_TYPE_DIM = len(ActionEnum)
 ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
 ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
+ACTION_VALID_INDEX = ACTION_CONTINUATION_INDEX + 1
+# In v11 this flag marks taps that directly pay a cost (convoke, improvise,
+# waterbend). Its position preserves the saved 22-column prefix.
+ACTION_PAYS_DIRECTLY_INDEX = ACTION_VALID_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 # Name candidate columns: name row + 1, definition + 1, then the first and
 # last name rows (+ 1) of a naming group choice.
@@ -125,6 +129,9 @@ FACT_KINDS = 14
 # The id of an effect program that states a player's pooled mana with a
 # spend effect or combat expiry (native `observation_encoder::POOLED_MANA`).
 POOLED_MANA = "PooledMana"
+# The id of an effect program that states a permanent's ward price when the
+# ward-cost column cannot, as "Ward—Pay 7 life." (native `observation_encoder::WARD`).
+WARD = "Ward"
 
 # Decklist rows: definition id + 1, then main, unseen, sideboard and
 # remaining-sideboard counts. A closed opponent's rows are all zero.
@@ -179,9 +186,11 @@ class ObservationEncoder:
         self.card_dim = CARD_DIM
         self.permanent_dim = PERMANENT_DIM if self.one_token else LEGACY_PERMANENT_DIM
         self.relation_dim = RELATION_DIM
-        # Family one-hot, then declaration, mode, ability, continuation join
-        # and validity.
-        self.action_dim = len(ActionEnum.__members__) + 5
+        # Family one-hot, then declaration, mode, ability, continuation join,
+        # validity and (v11) direct payment.
+        self.action_dim = (
+            ACTION_PAYS_DIRECTLY_INDEX if self.one_token else ACTION_VALID_INDEX
+        ) + 1
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
     @property

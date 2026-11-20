@@ -1,12 +1,21 @@
 //! Innistrad: Midnight Hunt.
 use managym_state::{
-    ability::{Effect, EffectValue},
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility},
+    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
+    card::{
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility,
+    },
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![consider(), join_the_dance()]
+    vec![
+        cathar_commando(),
+        consider(),
+        eaten_alive(),
+        join_the_dance(),
+    ]
 }
 
 fn consider() -> CardDefinition {
@@ -42,6 +51,69 @@ fn join_the_dance() -> CardDefinition {
             types: CardTypes::new([CardType::Sorcery]),
             spell_effects: vec![Effect::create_tokens("token.human", 2)],
             statics: vec![StaticAbility::Flashback(ManaCost::parse("{3}{G}{W}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cathar_commando() -> CardDefinition {
+    let text_box = "Flash\n{1}, Sacrifice this creature: Destroy target artifact or enchantment.";
+    let artifact_or_enchantment = CardPredicate {
+        card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "mid.cathar_commando",
+        scryfall_id: "98cbc1c2-b76e-4da3-aa43-00e10b2ce532",
+        printed: PrintedCharacteristics {
+            name: "Cathar Commando".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(3),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                sacrifice_source: true,
+                effects: vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
+                        predicate: artifact_or_enchantment,
+                    },
+                ))],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn eaten_alive() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, sacrifice a creature or pay {3}{B}.\nExile target creature or planeswalker.";
+    CardDefinition {
+        key: "mid.eaten_alive",
+        scryfall_id: "e7975a3c-570a-4bff-a60d-d274f758b93f",
+        printed: PrintedCharacteristics {
+            name: "Eaten Alive".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::Sacrifice(Box::new(SacrificeCost {
+                predicate: CardPredicate::creature(),
+                another: false,
+                or_mana: Some(ManaCost::parse("{3}{B}")),
+            }))],
+            spell_effects: vec![Effect::exile(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                        ..Default::default()
+                    },
+                },
+            ))],
             text_box: text_box.into(),
             ..Default::default()
         },

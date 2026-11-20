@@ -118,3 +118,30 @@ fn unearthed_cityscape_leveler_is_exiled_at_the_next_end_step() {
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
     assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
 }
+
+/// Goblin Firebomb pays {7}, its tap and itself to destroy any permanent, a
+/// land included, and has flash.
+#[test]
+fn goblin_firebomb_sacrifices_itself_to_destroy_any_permanent_and_has_flash() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands},
+        inspect::{card_of, zone_of},
+        play::{activate, settle},
+    };
+    use managym::state::{game_object::Target, player::ManaPayment, zone::ZoneType};
+    let mut s = five_color_unfunded_setup(&["Goblin Firebomb"]);
+    let bomb = s.force_permanent_on_battlefield(0, "Goblin Firebomb");
+    let bomb_card = card_of(&s, bomb);
+    force_lands(&mut s, 0, "Mountain", 7);
+    let plains = s.force_permanent_on_battlefield(1, "Plains");
+    let plains_card = card_of(&s, plains);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    activate(&mut s, bomb, 0);
+    assert!(s.choose_target(Target::Permanent(plains)));
+    assert_eq!(zone_of(&s, bomb_card), Some(ZoneType::Graveyard));
+    assert_eq!(s.untapped_permanents_named(0, "Mountain"), 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, plains_card), Some(ZoneType::Graveyard));
+
+    crate::support::play::casts_at_instant_speed("Goblin Firebomb");
+}

@@ -1,5 +1,6 @@
 use super::observation_layout::{
-    action, card, decklist, event, fact, known_hand, name, permanent, player, stack, turn_state,
+    action, action_columns, card, decklist, event, fact, known_hand, name, permanent, player,
+    stack, turn_state,
 };
 
 use std::{
@@ -57,8 +58,9 @@ pub enum FactKind {
     CombatRestriction = 10,
     /// A rules program in learning tokens (detail: token value, values:
     /// token kind and ordinal): a copy exception's payload under its
-    /// `Modification` id, or a player's pooled mana with a spend effect or combat expiry
-    /// under `POOLED_MANA`.
+    /// `Modification` id, a player's pooled mana with a spend effect or combat expiry
+    /// under `POOLED_MANA`, or a permanent's ward price that is not a mana
+    /// value under `WARD`.
     EffectProgram = 11,
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
@@ -84,8 +86,7 @@ impl FactKind {
 }
 
 pub const ACTION_TYPE_DIM: usize = action::DECLARED;
-/// Declaration choice is separate from its family: attack and decline must
-/// have distinct policy inputs even when they focus the same permanent.
+/// Width of the current v11 action layout. Use the config for a selected layout.
 pub const ACTION_DIM: usize = action::WIDTH;
 /// Selectors encode index+1, reserving zero for absence. Keep f32 integers exact.
 pub const MAX_ACTION_SELECTOR: usize = (1 << 24) - 1;
@@ -286,8 +287,12 @@ impl ObservationEncoderConfig {
         self.stack_rows() * STACK_DIM
     }
 
+    pub fn action_dim(&self) -> usize {
+        action_columns(self.layout).len()
+    }
+
     pub fn actions_len(&self) -> usize {
-        self.max_actions * ACTION_DIM
+        self.max_actions * self.action_dim()
     }
 
     pub fn action_focus_len(&self) -> usize {
@@ -1539,7 +1544,7 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
     out[card::IS_TOKEN] = bool_to_f32(card.is_token);
     out[card::IS_ALLY] = bool_to_f32(card.is_ally);
     out[card::IS_LESSON] = bool_to_f32(card.is_lesson);
-    out[card::HAS_WARD] = bool_to_f32(card.ward_cost > 0);
+    out[card::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
     out[card::WARD_COST] = card.ward_cost as f32 / 10.0;
     out[card::HAS_KICKER] = bool_to_f32(card.kicker_cost > 0);
     out[card::KICKER_COST] = card.kicker_cost as f32 / 10.0;
@@ -1663,7 +1668,7 @@ fn encode_permanent_features(
         out[permanent::IS_TOKEN] = bool_to_f32(permanent.is_token);
         out[permanent::IS_ALLY] = bool_to_f32(card.is_ally);
         out[permanent::IS_LESSON] = bool_to_f32(card.is_lesson);
-        out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0);
+        out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
         out[permanent::WARD_COST] = card.ward_cost as f32 / 10.0;
     }
     out[out.len() - 1] = 1.0;
@@ -1747,6 +1752,10 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [f3
 /// The id of an `EffectProgram` on a player that states pooled mana with a
 /// spend effect or combat expiry (`PooledManaClassData::program`).
 pub const POOLED_MANA: &str = "PooledMana";
+
+/// The id of an effect program that states a permanent's ward price when
+/// the `ward_cost` column cannot ("Ward—Pay 7 life.").
+pub const WARD: &str = "Ward";
 
 /// One fact row before its object join and timestamp rank are known.
 struct Fact {
@@ -1906,6 +1915,19 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             });
         }
     }
+    // A ward price that is not a mana value: one program on its permanent.
+    for permanent in permanents() {
+        for (ordinal, &(kind, value)) in permanent.characteristics.ward_program.iter().enumerate() {
+            out.push(Fact {
+                object: permanent.id,
+                kind: FactKind::EffectProgram,
+                id: name_value(WARD),
+                detail: value,
+                values: [f32::from(kind), ordinal as f32],
+                effect: None,
+            });
+        }
+    }
     // Spend effects and combat expiry: one program per pooled class on its player.
     for player in [&obs.agent, &obs.opponent] {
         for class in &player.pooled_mana_classes {
@@ -2043,17 +2065,13 @@ fn encode_actions(
     object_to_index: &HashMap<i32, i32>,
 ) {
     // encode_into has validated the retained policy support and its focus capacity.
-    for (action_index, action) in obs
+    for (action_index, (action, row)) in obs
         .action_space
         .actions
         .iter()
-        .take(config.max_actions)
+        .zip(out_actions.chunks_exact_mut(config.action_dim()))
         .enumerate()
     {
-        let action_start = action_index * ACTION_DIM;
-        let action_end = action_start + ACTION_DIM;
-        let row = &mut out_actions[action_start..action_end];
-
         let action_type_index = action.action_type as usize;
         if action_type_index < ACTION_TYPE_DIM {
             row[action_type_index] = 1.0;
@@ -2081,6 +2099,9 @@ fn encode_actions(
             .continuation_index
             .map_or(0.0, |index| (index + 1) as f32);
         row[action::VALID] = 1.0;
+        if let Some(column) = row.get_mut(action::PAYS_DIRECTLY) {
+            *column = bool_to_f32(action.pays_directly);
+        }
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;
@@ -2163,14 +2184,14 @@ mod tests {
     };
 
     use super::{
-        encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
+        action, encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
         ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, FACT_DIM, PERMANENT_DIM,
         PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
     fn selector_encoding_is_exact_and_rejects_overflow() {
-        use super::{action, MAX_ACTION_SELECTOR};
+        use super::MAX_ACTION_SELECTOR;
         let mut obs = sample_observation();
         obs.action_space.actions[0].mode_index = Some(0);
         obs.action_space.actions[1].ability_index = Some(MAX_ACTION_SELECTOR);
@@ -2265,6 +2286,7 @@ mod tests {
                         name_group: None,
                         ability_index: None,
                         continuation_index: None,
+                        pays_directly: false,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
@@ -2277,6 +2299,7 @@ mod tests {
                         name_group: None,
                         ability_index: None,
                         continuation_index: None,
+                        pays_directly: false,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
@@ -2289,6 +2312,7 @@ mod tests {
                         name_group: None,
                         ability_index: None,
                         continuation_index: None,
+                        pays_directly: false,
                     },
                 ],
                 focus: Vec::new(),
@@ -2430,15 +2454,13 @@ mod tests {
                 name_group: None,
                 ability_index: None,
                 continuation_index: None,
+                pays_directly: false,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&observation, &config).expect("attack decision encodes");
-        assert_ne!(
-            &encoded.actions[..ACTION_DIM - 1],
-            &encoded.actions[ACTION_DIM..2 * ACTION_DIM - 1],
-            "the policy must be able to prefer attacking or declining"
-        );
+        assert_eq!(encoded.actions[action::DECLARED], 1.0);
+        assert_eq!(encoded.actions[config.action_dim() + action::DECLARED], 0.0);
         assert_eq!(
             &encoded.action_focus[..config.max_focus_objects],
             &encoded.action_focus[config.max_focus_objects..2 * config.max_focus_objects]
@@ -2464,6 +2486,8 @@ mod tests {
                 is_ally: false,
                 is_lesson: false,
                 ward_cost: 0,
+                ward_life: 0,
+                ward_program: Vec::new(),
                 kicker_cost: 0,
                 card_types: CardTypeData {
                     is_castable: true,
@@ -2731,6 +2755,7 @@ mod tests {
                 name_group: None,
                 ability_index: None,
                 continuation_index: None,
+                pays_directly: false,
             })
             .collect();
         let config = ObservationEncoderConfig::default();

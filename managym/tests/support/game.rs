@@ -180,7 +180,7 @@ impl Scenario {
     }
 
     pub fn set_player_mana_pool(&mut self, player: usize, mana: &str) {
-        self.game.state.players[player].mana_pool = Mana::parse(mana);
+        self.game.state.players[player].mana_pool = Mana::parse(mana).into();
     }
 }
 

@@ -2,12 +2,13 @@
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    card::{AdditionalCost, CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![diresight(), savor()]
+    vec![diresight(), feed_the_cycle(), savor()]
 }
 
 fn savor() -> CardDefinition {
@@ -53,6 +54,31 @@ fn diresight() -> CardDefinition {
                     amount: EffectValue::Fixed(2),
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn feed_the_cycle() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, forage or pay {B}. (To forage, exile three cards from your graveyard or sacrifice a Food.)\nDestroy target creature or planeswalker.";
+    CardDefinition {
+        key: "blb.feed_the_cycle",
+        scryfall_id: "7e017ff8-2936-4a1b-bece-00004cfbad06",
+        printed: PrintedCharacteristics {
+            name: "Feed the Cycle".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            additional_costs: vec![AdditionalCost::ForageOr(ManaCost::parse("{B}"))],
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                        ..Default::default()
+                    },
+                },
+            ))],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -113,6 +113,7 @@ fn stack(
                 attached: None,
                 x: 0,
                 granted_by: None,
+                paid: Default::default(),
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
@@ -1888,10 +1889,8 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
 
 #[test]
 fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
-    use crate::flow::decision::{
-        Decision, EffectFrame, ManaProduction, PaymentProgress, SuspendedResolution,
-    };
-    use crate::state::ability::PaymentCost;
+    use crate::flow::decision::{Decision, EffectFrame, ManaProduction, SuspendedResolution};
+    use crate::flow::payment::{CostComponent, PaymentProgress};
     use crate::state::mana::{Mana, ManaCost};
 
     let player = PlayerId(0);
@@ -1913,7 +1912,7 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
             },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 player,
-                PaymentCost::Mana(ManaCost::parse("{1}")),
+                CostComponent::mana(ManaCost::parse("{1}")),
                 vec![Effect::gain_life(2)],
                 vec![],
             )))),
@@ -2764,9 +2763,9 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
 
 #[test]
 fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
-    use crate::flow::decision::{Decision, EffectFrame, PaymentProgress, SuspendedResolution};
+    use crate::flow::decision::{Decision, EffectFrame, SuspendedResolution};
+    use crate::flow::payment::{CostComponent, PaymentProgress};
     use crate::flow::trigger::ExileLink;
-    use crate::state::ability::PaymentCost;
     use crate::state::mana::{Mana, ManaCost};
     let player = PlayerId(0);
     let (mut game, _, _) = fixture(player);
@@ -2803,12 +2802,12 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         exiled_object: returned_ref,
         returns: true,
     });
-    game.state.players[player.0].mana_pool = Mana::parse("R");
+    game.state.players[player.0].mana_pool = Mana::parse("R").into();
     game.state.suspended_decision = Some(SuspendedResolution {
         frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
         decision: Decision::Payment(PaymentProgress::new(
             player,
-            PaymentCost::Mana(ManaCost::parse("{U}")),
+            CostComponent::mana(ManaCost::parse("{U}")),
             vec![Effect::gain_life(2)],
             vec![],
         )),

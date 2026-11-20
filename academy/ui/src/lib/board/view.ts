@@ -44,6 +44,8 @@ export interface PermanentItem {
   offers: PlacedOffer[];
   /** Auras and Equipment attached to this permanent, drawn behind it. */
   attached: PermanentItem[];
+  /** What it has committed to the pending cost: "tapped to crew". */
+  paid: string | null;
 }
 
 /** Identical permanents fanned as one pile; each copy stays its own control. */
@@ -182,7 +184,7 @@ function isLand(permanent: PermanentState): boolean {
 /** Everything a person could tell two permanents apart by, plus their offers. */
 function pileKey(item: PermanentItem): string {
   const p = item.permanent;
-  if (item.attached.length || p.attacking || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
+  if (item.paid || item.attached.length || p.attacking || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
   return JSON.stringify([p.name, p.controller_id, p.tapped, p.power, p.toughness, p.damage, p.summoning_sick,
     p.plus1_counters, p.counters ?? null, p.is_token ?? false, p.abilities_lost ?? false,
     item.offers.map(placed => placed.offer.label)]);
@@ -199,9 +201,9 @@ function piles(items: PermanentItem[]): Pile[] {
   return [...byKey.values()];
 }
 
-function side(player: PlayerState, offersAt: (anchor: Anchor) => PlacedOffer[]): SideView {
+function side(player: PlayerState, offersAt: (anchor: Anchor) => PlacedOffer[], paid: ReadonlyMap<number, string>): SideView {
   const items = new Map<number, PermanentItem>(player.battlefield.map(permanent => [permanent.id,
-    { permanent, offers: offersAt({ kind: 'object', id: permanent.id }), attached: [] }]));
+    { permanent, offers: offersAt({ kind: 'object', id: permanent.id }), attached: [], paid: paid.get(permanent.id) ?? null }]));
   const hosts: PermanentItem[] = [];
   for (const item of items.values()) {
     const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
@@ -322,8 +324,11 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   };
 
   const { agent, opponent } = frame.projection;
-  const you = side(agent, offersAt);
-  const them = side(opponent, offersAt);
+  // What the pending cost has already taken, by the object as it is now.
+  const paid = new Map((frame.projection.decision_context?.paid ?? [])
+    .flatMap(entry => (entry.object ? [[entry.object.display_id, entry.phrase] as const] : [])));
+  const you = side(agent, offersAt, paid);
+  const them = side(opponent, offersAt, paid);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));
   const hand = agent.hand.filter(card => !onStack.has(card.id))

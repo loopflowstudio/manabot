@@ -18,8 +18,10 @@
 
 use crate::{
     agent::{
-        ability_description::predicate_description, effect_execution::EXECUTION_TEXT,
-        observation::MODIFICATION_NAMES, observation_encoder::POOLED_MANA,
+        ability_description::predicate_description,
+        effect_execution::EXECUTION_TEXT,
+        observation::MODIFICATION_NAMES,
+        observation_encoder::{POOLED_MANA, WARD},
     },
     cards::{
         content_pack::default_content_pack,
@@ -117,6 +119,7 @@ pub fn record_names() -> Vec<RecordName> {
     }
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
+    out.push(record(Token, WARD, None));
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
@@ -162,6 +165,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "CastChoices",
         "EffectiveTrigger",
         "ManaSpent",
+        "Help",
     ] {
         add(TokenKind::Structure, name);
         add(TokenKind::Structure, &format!("/{name}"));
@@ -197,6 +201,26 @@ fn execution_names(out: &mut Vec<RecordName>) {
             ][..],
         ),
         ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
+        // What a payment made during resolution still owes.
+        ("CostComponent", &["Mana", "Life"][..]),
+        // What a payment's contributing objects did and paid for.
+        ("How", &["Tapped", "Sacrificed", "Exiled", "Discarded"][..]),
+        (
+            "Toward",
+            &[
+                "Printed",
+                "Waterbend",
+                "Crew",
+                "Alternative",
+                "Convoke",
+                "Improvise",
+                "Delve",
+                "Bargain",
+                "Forage",
+                "Saddle",
+                "Station",
+            ][..],
+        ),
         (
             "Effect",
             &[
@@ -235,9 +259,14 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "program",
         "amounts",
         "entry_counters",
+        "gains",
+        "copies",
         "combat",
         "definition",
         "name",
+        "cost",
+        "help",
+        "waterbend",
     ] {
         add(TokenKind::Field, field);
     }

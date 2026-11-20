@@ -51,8 +51,9 @@ pub struct ExposureCapture {
     pub mana: [ManaUse; 2],
 }
 
-/// Priority-floated units lose source identity when pooled. Track the range
-/// that can remain after each spend, without changing the rules' mana classes.
+/// A pooled unit's origin names its source, not whether it was floated at
+/// priority. Track the range of priority-floated units that can remain after
+/// each spend, without changing the rules' mana classes.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct ManaUse {
     pub priority_produced: u64,

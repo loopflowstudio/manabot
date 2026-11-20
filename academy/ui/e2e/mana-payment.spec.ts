@@ -92,7 +92,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await expect(primary).toHaveText(/^Pay \{1\}\{R\}/);
     await expect(primary).toHaveAccessibleName(/\{1\}\{R\} · \S+/);
     await expect(planned(page)).toHaveCount(2);
-    await expect(page.getByTestId('decision-prompt')).toContainText('Space taps the dashed lands');
+    await expect(page.getByTestId('decision-hint')).toContainText('Space taps the dashed lands');
     await expect(page.getByTestId('action-option')).toHaveCount((await frame(page)).offers.length);
     for (const colorScheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
@@ -133,8 +133,8 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     // Space pays what remains along the plan the button reads.
     const after = await frame(page);
     if (after.action_space === 'PAY_OR_NOT') {
-      // The tap paid {R}; the plan for the rest is one more source.
-      await expect(primary).toHaveAccessibleName(/\{1\}\{R\} · \S+/);
+      // The tap committed {R} to the cost; the plan for the {1} left is one more source.
+      await expect(primary).toHaveAccessibleName(/: \{1\} · \S+$/);
       await expect(planned(page)).toHaveCount(1);
       const remaining = await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')));
       before = after.revision;

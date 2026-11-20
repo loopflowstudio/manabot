@@ -266,3 +266,118 @@ fn bloodchief_ascension_drains_for_each_card_put_into_an_opponents_graveyard() {
         assert_eq!(counters_of(&s, ascension, CounterKind::Quest), quests);
     }
 }
+
+/// Burst Lightning deals 2, or 4 when its {4} kicker was paid; the receipt
+/// holds the kicker mana.
+#[test]
+fn burst_lightning_deals_four_only_when_kicked() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
+        inspect::top_spell,
+        play::{cast_card, choose, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{
+            game_object::{PlayerId, Target},
+            player::ManaPayment,
+        },
+    };
+    for kicked in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Burst Lightning"]);
+        force_lands(&mut s, 0, "Mountain", 5);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        let burst = force_new_card_in_hand(&mut s, 0, "Burst Lightning");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        cast_card(&mut s, burst);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+        choose(&mut s, |a| {
+            if kicked {
+                matches!(a, Action::PayCost { .. })
+            } else {
+                matches!(a, Action::Decline { .. })
+            }
+        });
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        assert_eq!(top_spell(&s).spent.total(), if kicked { 5 } else { 1 });
+        settle(&mut s);
+        s.assert_life(1, if kicked { 16 } else { 18 });
+    }
+}
+
+/// Into the Roil returns a nonland permanent to its owner's hand and draws a
+/// card only when kicked; a land is no target.
+#[test]
+fn into_the_roil_bounces_a_nonland_permanent_and_draws_only_when_kicked() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
+        inspect::{card_of, has_action, zone_of},
+        play::{cast_card, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{game_object::Target, player::ManaPayment, zone::ZoneType},
+    };
+    for kicked in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Into the Roil", "Gray Ogre"]);
+        force_lands(&mut s, 0, "Island", 4);
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let ogre_card = card_of(&s, ogre);
+        let plains = s.force_permanent_on_battlefield(1, "Plains");
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        let roil = force_new_card_in_hand(&mut s, 0, "Into the Roil");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        cast_card(&mut s, roil);
+        choose(&mut s, |a| {
+            if kicked {
+                matches!(a, Action::PayCost { .. })
+            } else {
+                matches!(a, Action::Decline { .. })
+            }
+        });
+        assert!(!has_action(&s, |a| {
+            matches!(a, Action::ChooseTarget { target: Target::Permanent(land), .. } if *land == plains)
+        }));
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        let hand = s.zone_size(0, ZoneType::Hand);
+        settle(&mut s);
+        assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Hand));
+        assert_eq!(
+            s.zone_size(0, ZoneType::Hand),
+            hand + usize::from(kicked),
+            "kicked {kicked}"
+        );
+    }
+}
+
+/// Expedition Map pays {2}, its tap and itself for any land card, nonbasic
+/// included, put into its controller's hand.
+#[test]
+fn expedition_map_sacrifices_itself_for_any_land_into_hand() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands},
+        inspect::{card_of, has_action, library_card, zone_of},
+        play::{activate, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_unfunded_setup(&["Expedition Map", "Rumble Arena", "Gray Ogre"]);
+    let map = s.force_permanent_on_battlefield(0, "Expedition Map");
+    let map_card = card_of(&s, map);
+    force_lands(&mut s, 0, "Mountain", 2);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    activate(&mut s, map, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(zone_of(&s, map_card), Some(ZoneType::Graveyard));
+    let arena = library_card(&s, 0, "Rumble Arena");
+    let ogre = library_card(&s, 0, "Gray Ogre");
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == ogre)
+    ));
+    select_card(&mut s, arena);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, arena), Some(ZoneType::Hand));
+}

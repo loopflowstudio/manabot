@@ -100,6 +100,7 @@ jobs:
           uv run pytest -n logical --durations=20 \
             tests/training/test_monitor_evaluation.py \
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py \
+            tests/verify/test_choice_corpus.py tests/semantic/test_ward_life_input.py \
             tests/verify/test_decision_memory_probe.py \
             tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py \
             tests/verify/test_native_observation_contract.py

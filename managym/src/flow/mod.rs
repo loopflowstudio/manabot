@@ -13,6 +13,7 @@ pub mod identity;
 mod knowledge;
 mod layers;
 pub mod mana;
+pub mod payment;
 pub mod play;
 pub mod priority;
 pub mod proposed_event;

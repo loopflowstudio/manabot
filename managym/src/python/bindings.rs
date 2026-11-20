@@ -38,7 +38,7 @@ use crate::{
             RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
             StackTargetData, StackTargetKindData, TurnData,
         },
-        observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
+        observation_encoder::ObservationEncoderConfig,
         shared_effects,
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
         vector_env::ObservationRead,
@@ -303,7 +303,12 @@ fn encoded_to_dict<'py>(
     }
     dict.set_item(
         "actions",
-        to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.actions,
+            &[config.max_actions, config.action_dim()],
+        )?,
     )?;
     if config.max_decision_records > 0 {
         dict.set_item(
@@ -1980,6 +1985,14 @@ impl PyObservationCharacteristics {
         self.data.ward_cost
     }
     #[getter]
+    fn ward_life(&self) -> i32 {
+        self.data.ward_life
+    }
+    #[getter]
+    fn ward_program(&self) -> Vec<(u16, i32)> {
+        self.data.ward_program.clone()
+    }
+    #[getter]
     fn kicker_cost(&self) -> i32 {
         self.data.kicker_cost
     }
@@ -2718,6 +2731,9 @@ pub struct PyAction {
     pub ability_index: Option<usize>,
     #[pyo3(get)]
     pub continuation_index: Option<usize>,
+    /// The tap pays part of the cost itself rather than making mana.
+    #[pyo3(get)]
+    pub pays_directly: bool,
 }
 
 #[cfg(feature = "python")]
@@ -2831,6 +2847,7 @@ impl From<ActionOption> for PyAction {
             name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
+            pays_directly: value.pays_directly,
         }
     }
 }
@@ -2849,6 +2866,7 @@ impl From<PyAction> for ActionOption {
             name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
+            pays_directly: value.pays_directly,
         }
     }
 }

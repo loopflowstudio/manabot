@@ -4,13 +4,57 @@ use managym_state::{
         Ability, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement,
         TargetSpec, TriggerCondition, TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
-    mana::ManaCost,
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics,
+    },
+    effect::Modification,
+    mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![dramatic_reversal(), noxious_gearhulk()]
+    vec![
+        cultivators_caravan(),
+        dramatic_reversal(),
+        noxious_gearhulk(),
+    ]
+}
+
+fn cultivators_caravan() -> CardDefinition {
+    let text_box = "{T}: Add one mana of any color.\nCrew 3 (Tap any number of creatures you control with total power 3 or more: This Vehicle becomes an artifact creature until end of turn.)";
+    CardDefinition {
+        key: "kld.cultivators_caravan",
+        scryfall_id: "b46b3726-4bc8-4e3a-bc6d-402c81663712",
+        printed: PrintedCharacteristics {
+            name: "Cultivator's Caravan".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Vehicle".into()],
+            power: Some(5),
+            toughness: Some(5),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(
+                        ["W", "U", "B", "R", "G"].map(Mana::parse),
+                    )],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    crew: Some(3),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::BecomeCreature,
+                    )],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn dramatic_reversal() -> CardDefinition {

@@ -16,7 +16,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![cityscape_leveler(), giant_cindermaw()]
+    vec![cityscape_leveler(), giant_cindermaw(), goblin_firebomb()]
 }
 
 /// Unearth `cost` (CR 702.84a): "Return this card from your graveyard to the
@@ -124,6 +124,34 @@ fn giant_cindermaw() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Trample]),
             statics: vec![StaticAbility::PlayersCantGainLife],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_firebomb() -> CardDefinition {
+    let text_box = "Flash\n{7}, {T}, Sacrifice this artifact: Destroy target permanent.";
+    CardDefinition {
+        key: "bro.goblin_firebomb",
+        scryfall_id: "0ba00d0f-0ea5-417c-a792-06b3b9d1c8f1",
+        printed: PrintedCharacteristics {
+            name: "Goblin Firebomb".into(),
+            mana_cost: Some(ManaCost::parse("{1}")),
+            types: CardTypes::new([CardType::Artifact]),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{7}"),
+                tap_source: true,
+                sacrifice_source: true,
+                effects: vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
+                        predicate: CardPredicate::default(),
+                    },
+                ))],
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

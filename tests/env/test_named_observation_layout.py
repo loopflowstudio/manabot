@@ -38,6 +38,8 @@ _MIRRORED_COLUMNS = [
     ("ACTION_MODE_INDEX", "actions", "mode"),
     ("ACTION_ABILITY_INDEX", "actions", "ability"),
     ("ACTION_CONTINUATION_INDEX", "actions", "continuation"),
+    ("ACTION_VALID_INDEX", "actions", "valid"),
+    ("ACTION_PAYS_DIRECTLY_INDEX", "actions", "pays_directly"),
     ("PLAYER_RESTRICTED_INDEX", "agent_player", "restricted_lesson_white"),
     ("PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX", "agent_player", "no_maximum_hand_size"),
     ("CARD_PERMISSION_INDEX", "agent_cards", "permission"),

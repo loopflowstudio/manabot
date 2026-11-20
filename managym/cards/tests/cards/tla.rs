@@ -4,7 +4,9 @@
 //! end.
 
 use crate::support::game::move_card;
-use crate::support::inspect::{current_object, now, permanent_of};
+use crate::support::inspect::{
+    current_object, now, object_public_id, offer_labels, permanent_of, tap_pays_choice,
+};
 use crate::support::{
     game::{
         animate, clear_hand, clear_summoning_sickness, deck, enter_battlefield,
@@ -17,7 +19,7 @@ use crate::support::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
         counters_of, find_owned_card, find_owned_card_off_battlefield, hand, has_action, keywords,
         library, library_card, library_top, offered_cards, offered_targets, permanent,
-        permanent_named, pt_modifications, stack_spell_card, tapped, zone_of,
+        permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, zone_of,
     },
     play::{
         activate, activate_card, activate_first, activate_named, attack_with, cast,
@@ -45,7 +47,9 @@ use managym::{
         effect::{CopyEffect, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
+        payment::{Contribution, How, Toward},
         permanent::CounterKind,
+        stack_object::StackObject,
         zone::ZoneType,
     },
     Game,
@@ -708,6 +712,47 @@ fn allies_at_last_can_choose_one_source_and_uses_its_current_power() {
     assert_eq!(s.life(0), life + 3);
 }
 
+/// The automatic payer spends mana that only this kind of spell can use
+/// before ordinary mana that pays the same pip, so the ordinary mana is what
+/// stays in the pool.
+#[test]
+fn automatic_payment_spends_ally_only_mana_before_ordinary_mana() {
+    let ally = ManaRestriction::only(["Ally"], ["Ally"]);
+    let mut s = five_color_setup(&["Jasmine Dragon Tea Shop", "Rebellious Captives"]);
+    s.allow_priority_floats();
+    let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, shop, 0);
+    choose_mode(&mut s, 4);
+    assert_eq!(pool(&s).restricted_of(&ally), [0, 0, 0, 0, 1, 0]);
+    // Two ordinary green beside it: {1}{G} needs two of the three units.
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana {
+            mana: [0, 0, 0, 0, 2, 0],
+            ..Default::default()
+        },
+        None,
+    );
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let captives = library_card(&s, 0, "Rebellious Captives");
+    let captives = move_card(&mut s, captives, ZoneType::Hand);
+    crate::support::play::cast_card(&mut s, captives);
+    let spell = crate::support::inspect::top_spell(&s);
+    assert_eq!(spell.spent.total(), 2);
+    let from_shop = spell
+        .spent
+        .mana()
+        .iter()
+        .filter(|unit| {
+            unit.source
+                .is_some_and(|origin| origin.object == card_of(&s, shop))
+        })
+        .count();
+    assert_eq!(from_shop, 1, "the Ally-only unit paid");
+    assert_eq!(pool(&s).restricted_of(&ally), [0; 6]);
+    assert_eq!(pool(&s).total(), 1, "one ordinary green is left");
+}
+
 /// Restricted mana (CR 106.6) pays for Ally spells and abilities of Ally
 /// sources, and nothing else.
 #[test]
@@ -724,7 +769,13 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 4);
     assert_eq!(pool(&s).restricted_of(&ally), [0, 0, 0, 0, 1, 0]);
-    s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 1, 0, 1];
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana {
+            mana: [0, 0, 0, 1, 0, 1],
+            ..Default::default()
+        },
+        None,
+    );
     let captives = library_card(&s, 0, "Rebellious Captives");
     let ogre = library_card(&s, 0, "Gray Ogre");
     let captives = move_card(&mut s, captives, ZoneType::Hand);
@@ -749,7 +800,13 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     s.set_player_mana_pool(0, "");
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 0);
-    s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 0, 0, 5];
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana {
+            mana: [0, 0, 0, 0, 0, 5],
+            ..Default::default()
+        },
+        None,
+    );
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(
         !can_activate(&s, scroll),
@@ -948,6 +1005,23 @@ fn badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana() {
     choose_mode(&mut s, 1);
     settle(&mut s);
     assert_eq!(*pool(&s), managym::state::mana::Mana::parse("UG"));
+    // Each unit keeps the object that produced it: the Herbalist's chosen
+    // output, and the Cub's triggered bonus.
+    let produced_by = |color| {
+        let origins: Vec<_> = s.game().state.players[0]
+            .mana_pool
+            .origins(None, color)
+            .collect();
+        assert_eq!(origins.len(), 1);
+        let origin = origins[0].expect("an object produced it");
+        assert_eq!(
+            s.game().state[origin.object].definition_id,
+            origin.definition
+        );
+        s.game().state[origin.object].name.clone()
+    };
+    assert_eq!(produced_by(Color::Blue), "Hermitic Herbalist");
+    assert_eq!(produced_by(Color::Green), "Badgermole Cub");
 }
 
 fn pool(s: &Scenario) -> &managym::state::mana::Mana {
@@ -1041,7 +1115,18 @@ fn landcyclers_discard_for_two_and_find_their_basic_type() {
         activate_card(&mut s, object, index);
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard), "{name}");
-        assert_eq!(s.game().state.stack_objects.len(), 1);
+        // The receipt names the card as it was in hand when discarded.
+        let [StackObject::ActivatedAbility(cycling)] = s.game().state.stack_objects.as_slice()
+        else {
+            panic!("{name}: one cycling ability")
+        };
+        assert_eq!(
+            cycling
+                .paid
+                .contributed(How::Discarded, Toward::Printed)
+                .collect::<Vec<_>>(),
+            [object]
+        );
 
         let library = s.zone_size(0, ZoneType::Library);
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -1539,6 +1624,94 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
     s.assert_life(1, 17);
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
     assert_eq!(current_object(&s, strike).owner, PlayerId(1));
+}
+
+/// Hama's waterbend {4} for Appeal to Eirdu keeps Appeal's convoke: an
+/// artifact that cannot convoke can still waterbend, and a creature may pay
+/// {1} by either, which the receipt keeps apart.
+#[test]
+fn hama_can_waterbend_for_a_spell_with_convoke() {
+    let mut s = five_color_setup(&[
+        "Hama, the Bloodbender",
+        "Appeal to Eirdu",
+        "Prophetic Prism",
+        "Gray Ogre",
+    ]);
+    let appeal = library_card(&s, 1, "Appeal to Eirdu");
+    put_on_top(&mut s, appeal);
+    let ogres: Vec<PermanentId> = (0..2)
+        .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
+        .collect();
+    s.set_player_mana_pool(0, "UUUUU");
+    cast(&mut s, "Hama, the Bloodbender");
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+    let appeal = now(&s, appeal);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == appeal),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, appeal), Some(ZoneType::Exile));
+    let prism = s.force_permanent_on_battlefield(0, "Prophetic Prism");
+    s.set_player_mana_pool(0, "");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        can_cast(&s, appeal),
+        "three creatures and one artifact can waterbend {{4}}"
+    );
+    let hama = s.battlefield_permanents_named(0, "Hama, the Bloodbender")[0];
+    cast_card(&mut s, appeal);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogres[0])));
+    if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+        choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    }
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    let tap = |s: &mut crate::support::game::Scenario, tapped: PermanentId| {
+        choose(
+            s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == tapped),
+        );
+    };
+    // The Prism only waterbends: it pays at once.
+    tap(&mut s, prism);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    // A creature convokes or waterbends.
+    // {1} by convoke is mode 5, {1} of the waterbend part mode 7.
+    for (creature, mode) in [(ogres[0], 5), (ogres[1], 7), (hama, 7)] {
+        tap(&mut s, creature);
+        let choice = tap_pays_choice(&s);
+        assert_eq!(choice.focus, [object_public_id(&s, creature)]);
+        assert_eq!(choice.modes, [5, 7]);
+        if creature == ogres[0] {
+            assert_choice_contract(&s);
+        }
+        let labels = offer_labels(&s);
+        assert_eq!(labels.len(), 2, "{labels:?}");
+        assert!(labels[0].ends_with("pays {1} (convoke)"), "{labels:?}");
+        assert!(labels[1].ends_with("pays {1} (waterbend)"), "{labels:?}");
+        choose(
+            &mut s,
+            |a| matches!(a, Action::ChooseMode { mode: m, .. } if *m == mode),
+        );
+    }
+    let spell = crate::support::inspect::top_spell(&s);
+    assert_eq!(spell.spent.total(), 0);
+    assert_eq!(
+        spell
+            .spent
+            .contributed(How::Tapped, Toward::Waterbend)
+            .collect::<Vec<_>>(),
+        [prism, ogres[1], hama].map(|permanent| card_of(&s, permanent))
+    );
+    assert_eq!(
+        spell
+            .spent
+            .contributed(How::Tapped, Toward::Convoke)
+            .collect::<Vec<_>>(),
+        [card_of(&s, ogres[0])]
+    );
 }
 
 /// Hama can exile an opposing noncreature permanent card: cast by
@@ -3081,7 +3254,6 @@ fn treasure_completes_an_announced_cost_without_a_priority_window() {
     assert_eq!(frame.offers[0].label, "Add {B}");
     assert_choice_contract(&s);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 2, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(zone_of(&s, victim), Some(ZoneType::Graveyard));
     assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
 }
@@ -3938,7 +4110,6 @@ fn treasure_is_available_when_announcing_a_kicker_cost() {
     let treasure = permanent_named(&s, "Treasure");
     activate_first(&mut s, treasure);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     assert!(s
         .battlefield_permanents_named(1, "Gnarled Professor")
@@ -5986,9 +6157,10 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     let ozai = s.force_permanent_on_battlefield(0, "Ozai, the Phoenix King");
     s.set_player_mana_pool(0, "WUB");
     let lesson = ManaRestriction::spell(["Lesson"]);
-    s.game_mut().state.players[0]
-        .mana_pool
-        .add(&Mana::restricted_to(lesson.clone(), [0, 0, 0, 0, 1, 0]));
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana::restricted_to(lesson.clone(), [0, 0, 0, 0, 1, 0]),
+        None,
+    );
     assert!(!observed_keywords(&s, ozai).flying);
 
     declare_attackers(&mut s, &[ozai]);
@@ -5999,12 +6171,25 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     );
     let keywords = observed_keywords(&s, ozai);
     assert!(keywords.flying && keywords.indestructible, "eight unspent");
+    // Firebending's mana names Ozai, the source of the effect that added it.
+    let ozai_object = s.game().state.permanents[ozai].as_ref().unwrap().object;
+    let from_ozai = |pool: &managym::state::mana::ManaPool| {
+        pool.origins(None, Color::Red)
+            .filter(|origin| origin.is_some_and(|origin| origin.object == ozai_object))
+            .count()
+    };
+    assert_eq!(from_ozai(&s.game().state.players[0].combat_mana_pool), 4);
 
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     let mut red = Mana::parse("RRRRRRR");
     red.add(&Mana::restricted_to(lesson, [0, 0, 0, 1, 0, 0]));
     assert_eq!(*pool(&s), red);
     assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+    // Becoming red and outliving combat changes a unit's color and pool,
+    // never where it came from: Ozai's four, beside the fixture's three.
+    let regular = &s.game().state.players[0].mana_pool;
+    assert_eq!(from_ozai(regular), 4);
+    assert_eq!(regular.origins(None, Color::Red).flatten().count(), 4);
     assert!(observed_keywords(&s, ozai).indestructible);
 
     s.set_player_mana_pool(0, "RRRRR");
@@ -7185,7 +7370,6 @@ fn a_committed_nonlesson_cost_excludes_herbalists_restricted_activation() {
     assert_choice_contract(&s);
     activate_named(&mut s, "Hermitic Herbalist", 0);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
@@ -9540,6 +9724,11 @@ fn waterbend_pays_entirely_with_creature_taps() {
     for expected_remaining in (0..5).rev() {
         let space = s.action_space().clone();
         assert_eq!(space.kind, ActionSpaceKind::Waterbend);
+        let instruction = s.game().decision_context(PlayerId(0)).unwrap().instruction;
+        assert!(
+            instruction.contains("a creature or artifact tapped for waterbend"),
+            "{instruction}"
+        );
         // No mana available: only tap actions.
         assert!(space
             .actions
@@ -9961,6 +10150,76 @@ fn waterbend_and_mana_floats_have_distinct_bonus_accounting() {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     }
+}
+
+/// A waterbend paid as an effect resolves lists its taps to the payer as a
+/// waterbend cost paid while casting does: Waterbending Lesson's "discard a
+/// card unless you waterbend {2}".
+#[test]
+fn waterbending_lesson_resolution_payment_names_the_creature_tapped() {
+    // Two helpers, so {2} is payable with an empty pool and the tap is offered.
+    let mut s = five_color_setup(&["Waterbending Lesson", "Gray Ogre", "Hill Giant"]);
+    for name in ["Gray Ogre", "Hill Giant"] {
+        enter_and_settle(&mut s, name);
+        ready(&mut s, name);
+    }
+    let ogre = permanent_named(&s, "Gray Ogre");
+    s.set_player_mana_pool(0, "3U");
+    cast(&mut s, "Waterbending Lesson");
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    s.set_player_mana_pool(0, "0");
+    pass_until(&mut s, ActionSpaceKind::Waterbend);
+    assert!(s
+        .game()
+        .decision_context(PlayerId(0))
+        .unwrap()
+        .paid
+        .is_empty());
+    choose(
+        &mut s,
+        |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == ogre),
+    );
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "resolution_payment");
+    let [paid] = context.paid.as_slice() else {
+        panic!("one tap: {:?}", context.paid)
+    };
+    assert_eq!(paid.phrase, "tapped Gray Ogre to waterbend");
+    assert_eq!(paid.object.as_ref().unwrap().label, "Gray Ogre");
+}
+
+/// A mana ability's own cost, paid inside Waterbending Lesson's resolving
+/// payment, suspends a decision of its own; the creature already tapped to
+/// waterbend is still what has paid.
+#[test]
+fn waterbending_lesson_tap_stays_named_while_a_mana_ability_is_being_paid() {
+    let (mut s, _, _) = lesson_payment(
+        &[
+            "Waterbending Lesson",
+            "Prophetic Prism",
+            "Callous Inspector",
+            "Tireless Provisioner",
+        ],
+        "0",
+    );
+    s.game_mut()
+        .create_token("token.treasure", PlayerId(0), false);
+    let creature = permanent_named(&s, "Callous Inspector");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == creature),
+    );
+    // The Prism's own {1} is a decision inside the Lesson's payment.
+    activate_named(&mut s, "Prophetic Prism", 0);
+    assert_ne!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    let [paid] = context.paid.as_slice() else {
+        panic!("one tap: {:?}", context.paid)
+    };
+    assert_eq!(paid.phrase, "tapped Callous Inspector to waterbend");
+    assert_eq!(paid.object.as_ref().unwrap().label, "Callous Inspector");
 }
 
 #[test]
@@ -13330,6 +13589,12 @@ fn redirect_lightning_moves_a_spell_to_another_target() {
         assert!(s.choose_target(Target::StackSpell(now(&s, strike))));
         assert_eq!(s.life(0), if pay_mana { life } else { life - 5 });
         spend_colorless(&mut s);
+        // The life is part of what was paid, beside the mana.
+        let Some(StackObject::Spell(redirect)) = s.game().state.stack_objects.last() else {
+            panic!("Redirect Lightning is on the stack")
+        };
+        assert_eq!(redirect.spent.life(), if pay_mana { 0 } else { 5 });
+        assert_eq!(redirect.spent.total(), if pay_mana { 3 } else { 1 });
         resolve_top(&mut s);
         assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
         assert!(
@@ -14597,6 +14862,58 @@ fn avatar_aang_draws_on_each_bending_and_transforms_after_all_four() {
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 4);
     assert_eq!(counters_of(&s, aang, CounterKind::PlusOnePlusOne), 4);
     s.assert_life(1, 16);
+}
+
+/// A source's own costs are part of the one receipt (CR 602.2b, 601.2h):
+/// Airship Engine Room's "{4}, {T}, Sacrifice this land" records the land as
+/// tapped and as sacrificed, and Koh's "Pay 1 life" is the life the
+/// activation paid.
+#[test]
+fn a_sources_own_tap_sacrifice_and_life_are_on_its_activation_receipt() {
+    let mut s = five_color_setup(&["Airship Engine Room", "Koh, the Face Stealer"]);
+    let room = s.force_permanent_on_battlefield(0, "Airship Engine Room");
+    let room_object = card_of(&s, room);
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, room, 0);
+    let ability = top_activation(&s);
+    assert_eq!(
+        ability.paid.contributions(),
+        [How::Tapped, How::Sacrificed].map(|how| Contribution {
+            object: room_object,
+            how,
+            toward: Toward::Printed,
+            // The source's own costs are paid after its mana.
+            after_mana: 4,
+        })
+    );
+    assert_eq!((ability.paid.total(), ability.paid.life()), (4, 0));
+    assert!(s.game().state.permanents[room].is_none());
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    // The stack frame already says whose ability it is and what it costs, so
+    // it does not repeat the source's own payment.
+    assert!(
+        !context
+            .pending
+            .iter()
+            .any(|line| line.starts_with("Paid with:")),
+        "{:?}",
+        context.pending
+    );
+    settle(&mut s);
+
+    let koh = s.force_permanent_on_battlefield(0, "Koh, the Face Stealer");
+    let life = s.life(0);
+    activate(&mut s, koh, 0);
+    let ability = top_activation(&s);
+    assert_eq!(ability.paid.life(), 1);
+    assert!(ability.paid.contributions().is_empty());
+    assert_eq!(s.life(0), life - 1);
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert!(
+        context.pending.iter().any(|line| line == "Life paid: 1."),
+        "{:?}",
+        context.pending
+    );
 }
 
 /// Koh exiles a creature as it enters and may exile each other nontoken

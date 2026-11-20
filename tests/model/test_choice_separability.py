@@ -16,7 +16,9 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
     ACTION_DECLARED_INDEX,
+    ACTION_PAYS_DIRECTLY_INDEX,
     ACTION_TYPE_DIM,
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_MANA_VALUE_INDEX,
@@ -40,6 +42,7 @@ ChoiceName = Literal[
     "look_select",
     "learn_discard",
     "waterbend",
+    "convoke_or_mana",
     "trigger_order",
 ]
 CHOICES: tuple[ChoiceName, ...] = (
@@ -53,6 +56,7 @@ CHOICES: tuple[ChoiceName, ...] = (
     "look_select",
     "learn_discard",
     "waterbend",
+    "convoke_or_mana",
     "trigger_order",
 )
 
@@ -75,6 +79,57 @@ def _indices(raw: managym.Observation, kind: managym.ActionEnum) -> list[int]:
         for i, action in enumerate(raw.action_space.actions)
         if action.action_type == kind
     ]
+
+
+def _name(raw: managym.Observation, object_id: int) -> str:
+    """The agent's visible card or permanent of `object_id`, or ""."""
+    for row in (*raw.agent_permanents, *raw.agent_cards):
+        if row.id == object_id:
+            return row.characteristics.name
+    return ""
+
+
+def _appeal_payment() -> tuple[managym.Env, managym.Observation]:
+    """Appeal to Eirdu targeting Gray Ogre alone, at its convoke payment."""
+    creatures = ("Savannah Lions", "Gray Ogre", "Hill Giant", "Llanowar Elves")
+    env = initial(
+        authored=False, deck={"Appeal to Eirdu": 4, **dict.fromkeys(creatures, 9)}
+    )
+    for creature in creatures:
+        env.scenario_force_battlefield(0, creature, ready=True)
+    env.scenario_force_card_in_hand(0, "Appeal to Eirdu")
+    raw = env.scenario_refresh()
+    for _ in range(100):
+        cast = [
+            i
+            for i in _indices(raw, managym.ActionEnum.PRIORITY_CAST_SPELL)
+            if _name(raw, raw.action_space.actions[i].focus[0]) == "Appeal to Eirdu"
+        ]
+        if cast:
+            break
+        raw, _, done, _, _ = env.step(
+            _indices(raw, managym.ActionEnum.PRIORITY_PASS_PRIORITY)[0]
+        )
+        assert not done
+    else:
+        raise AssertionError("did not reach a main-phase cast")
+    raw, *_ = env.step(cast[0])
+    while raw.action_space.action_space_type == managym.ActionSpaceEnum.CHOOSE_TARGET:
+        actions = raw.action_space.actions
+        ogre = next(
+            (
+                i
+                for i, a in enumerate(actions)
+                if a.action_type == managym.ActionEnum.CHOOSE_TARGET
+                and _name(raw, a.focus[0]) == "Gray Ogre"
+            ),
+            None,
+        )
+        # One target is enough: decline the second.
+        if ogre is None:
+            ogre = _indices(raw, managym.ActionEnum.DECLINE_CHOICE)[0]
+        raw, *_ = env.step(ogre)
+    return env, raw
 
 
 def _choice(name: ChoiceName) -> NativeChoice:
@@ -150,6 +205,21 @@ def _choice(name: ChoiceName) -> NativeChoice:
         assert raw.action_space.action_space_type == managym.ActionSpaceEnum.WATERBEND
         taps = _indices(raw, managym.ActionEnum.TAP_FOR_COST)
         candidates = (taps[0], taps[1])
+    elif name == "convoke_or_mana":
+        # One permanent, two taps of one action type: Llanowar Elves taps for
+        # {G} or convokes {1} of Appeal to Eirdu ({3}{W}, no lands).
+        env, raw = _appeal_payment()
+        elves = [
+            i
+            for i, action in enumerate(raw.action_space.actions)
+            if action.action_type == managym.ActionEnum.TAP_FOR_COST
+            and _name(raw, action.focus[0]) == "Llanowar Elves"
+        ]
+        assert len(elves) == 2
+        mana, convoke = sorted(
+            elves, key=lambda i: raw.action_space.actions[i].pays_directly
+        )
+        candidates = (mana, convoke)
     else:
         decks: dict[str, dict[str, int]] = {
             "cast_pass": {"Gray Ogre": 4, "Mountain": 36},
@@ -271,8 +341,10 @@ def _remove_discriminant(
     erased = {key: value.clone() for key, value in obs.items()}
     a, b = case.candidates
     if case.name == "trigger_order":
-        erased["actions"][..., -2] = 0
+        erased["actions"][..., ACTION_CONTINUATION_INDEX] = 0
         erased["action_focus"].fill_(-1)
+    elif case.name == "convoke_or_mana":
+        erased["actions"][..., ACTION_PAYS_DIRECTLY_INDEX] = 0
     elif case.name in {"scry", "pay_decline"}:
         erased["actions"][..., :ACTION_TYPE_DIM] = 0
     elif case.name in {"look_select", "learn_discard"}:

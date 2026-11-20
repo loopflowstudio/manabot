@@ -20,7 +20,10 @@ use crate::support::{
         put_onto_battlefield, until_end_of_turn, ur_lessons_setup, Scenario,
     },
     inspect::{card_of, library_card},
-    play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle, spend_colorless},
+    play::{
+        activate, cast, choose, choose_mode, pass_until, resolve_top, settle, spend_colorless,
+        tap_for_mana, target_opponent,
+    },
 };
 use managym::agent::observation_layout::{
     action, card, fact, permanent, player, relation, stack, turn_state,
@@ -314,6 +317,7 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::CantBlock",
             Seen::Via("the action tensor omits its blocks"),
         ),
+        Modification::Saddled => ("Modification::Saddled", Seen::Via("its effect fact row")),
         Modification::DoesntUntap => (
             "Modification::DoesntUntap",
             Seen::Via("its effect fact row and the tapped column after the untap step"),
@@ -431,6 +435,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::CantBeBlocked),
         permanent(Modification::CantBlock),
         permanent(Modification::DoesntUntap),
+        permanent(Modification::Saddled),
         permanent(Modification::CantActivateAbilities),
         permanent(Modification::MustBeBlockedByAllAble),
         permanent(Modification::LoseKeywords(Keywords::of(&[
@@ -453,7 +458,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 36;
+const MODIFICATION_VARIANTS: usize = 37;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -752,6 +757,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
+        Effect::EachPlayerSacrificesCreatures { .. } => "Effect::EachPlayerSacrificesCreatures",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::CopyTriggeringSpellForEach { .. } => "Effect::CopyTriggeringSpellForEach",
@@ -765,7 +771,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 82;
+const EFFECT_VARIANTS: usize = 83;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -983,6 +989,7 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
+        Effect::EachPlayerSacrificesCreatures { count: 13 },
         Effect::TransformSource,
         Effect::ControlPlayer {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -1167,6 +1174,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::GraveyardAtLeast { .. } => "Condition::GraveyardAtLeast",
         Condition::AnyGraveyardAtLeast { .. } => "Condition::AnyGraveyardAtLeast",
         Condition::ControlsAtLeast { .. } => "Condition::ControlsAtLeast",
+        Condition::BattlefieldAtLeast { .. } => "Condition::BattlefieldAtLeast",
         Condition::ControlsUnownedAtLeast { .. } => "Condition::ControlsUnownedAtLeast",
         Condition::CardsInHandAtLeast { .. } => "Condition::CardsInHandAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
@@ -1184,6 +1192,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceMatches(_) => "Condition::SourceMatches",
         Condition::SourceTapped => "Condition::SourceTapped",
+        Condition::SourceSaddled => "Condition::SourceSaddled",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
         Condition::CardsThisWayMatch(_) => "Condition::CardsThisWayMatch",
@@ -1208,6 +1217,10 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 1,
             predicate: CardPredicate::creature(),
         },
+        Condition::BattlefieldAtLeast {
+            count: 13,
+            predicate: CardPredicate::creature(),
+        },
         Condition::ControlsUnownedAtLeast { count: 3 },
         Condition::CardsInHandAtLeast { count: 4 },
         Condition::UnspentManaAtLeast { count: 3 },
@@ -1225,6 +1238,7 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 4,
         },
         Condition::SourceTapped,
+        Condition::SourceSaddled,
         Condition::SourceMatches(CardPredicate::subtype("Scout")),
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,
@@ -1491,6 +1505,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "avatar_aang_draws_on_each_bending_and_transforms_after_all_four",
         ),
+        StaticAbility::SpellsHave { .. } => witnessed(
+            "StaticAbility::SpellsHave",
+            Seen::Actions("a spell castable only with the granted help is offered; then its taps or exiles, each a receipt reference"),
+            "Teval, Arbiter of Virtue",
+            "tdm",
+            "teval_grants_delve_and_takes_life_equal_to_mana_value",
+        ),
         StaticAbility::UntapsDuringOtherUntapSteps => witnessed(
             "StaticAbility::UntapsDuringOtherUntapSteps",
             Seen::Via("the permanent's tapped column after another player's untap step"),
@@ -1595,6 +1616,55 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "gpt",
             "shattering_spree_replicated_twice_destroys_three_artifacts",
         ),
+        AdditionalCost::Convoke => witnessed(
+            "AdditionalCost::Convoke",
+            Seen::Actions("the cast is offered when creatures can pay; each convoke tap is an action and a receipt reference"),
+            "Appeal to Eirdu",
+            "ecl",
+            "appeal_to_eirdu_convokes_for_generic_and_for_white",
+        ),
+        AdditionalCost::Improvise => witnessed(
+            "AdditionalCost::Improvise",
+            Seen::Actions("the cast is offered when artifacts can pay; each improvise tap is an action and a receipt reference"),
+            "Ironheart, Clever Champion",
+            "msh",
+            "ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells",
+        ),
+        AdditionalCost::Delve => witnessed(
+            "AdditionalCost::Delve",
+            Seen::Actions("the cast is offered when the graveyard can pay; each exiled card is an action and a receipt reference"),
+            "Teval, Arbiter of Virtue",
+            "tdm",
+            "teval_grants_delve_and_takes_life_equal_to_mana_value",
+        ),
+        AdditionalCost::Bargain => witnessed(
+            "AdditionalCost::Bargain",
+            Seen::Actions("bargain is a cast choice when a permanent can be sacrificed; the sacrifice is an action and a receipt reference"),
+            "Archon's Glory",
+            "woe",
+            "archons_glory_gains_flying_and_lifelink_only_when_bargained",
+        ),
+        AdditionalCost::ForageOr(_) => witnessed(
+            "AdditionalCost::ForageOr",
+            Seen::Actions("the Food, each graveyard card and the mana are actions of one cost step; what foraged is a receipt reference"),
+            "Feed the Cycle",
+            "blb",
+            "feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black",
+        ),
+        AdditionalCost::Discard => witnessed(
+            "AdditionalCost::Discard",
+            Seen::Actions("the cast is offered only with another card in hand; the discard is an action and a receipt reference"),
+            "Thrill of Possibility",
+            "eld",
+            "thrill_of_possibility_discards_a_chosen_card_as_it_is_cast",
+        ),
+        AdditionalCost::AlternativeMana { .. } => witnessed(
+            "AdditionalCost::AlternativeMana",
+            Seen::Actions("the alternative is a cast choice only while its condition holds; the receipt holds the mana paid"),
+            "Blasphemous Edict",
+            "fdn",
+            "blasphemous_edict_costs_one_black_at_thirteen_creatures",
+        ),
         AdditionalCost::RequiredWaterbend(_) => witnessed(
             "AdditionalCost::RequiredWaterbend",
             Seen::Actions("the cast is offered only while the waterbend total is payable"),
@@ -1682,6 +1752,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
             unless: None,
         }),
         StaticAbility::UntapsDuringOtherUntapSteps,
+        StaticAbility::SpellsHave {
+            predicate: CardPredicate::default(),
+            cost: AdditionalCost::Delve,
+        },
         StaticAbility::SpellsCostLessMana(ManaCost::parse("{W}{U}{B}{R}{G}")),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
@@ -1728,6 +1802,9 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
         AdditionalCost::Waterbend(ManaCost::parse("{6}")),
         AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}")),
         AdditionalCost::Replicate(ManaCost::parse("{R}")),
+        AdditionalCost::Convoke,
+        AdditionalCost::Improvise,
+        AdditionalCost::Delve,
         AdditionalCost::PayLifeOrMana {
             life: 5,
             mana: ManaCost::parse("{2}"),
@@ -1736,6 +1813,13 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
             predicate: CardPredicate::default(),
             not_your_turn: true,
         },
+        AdditionalCost::Bargain,
+        AdditionalCost::ForageOr(ManaCost::parse("{B}")),
+        AdditionalCost::AlternativeMana {
+            cost: ManaCost::parse("{B}"),
+            condition: Condition::Always,
+        },
+        AdditionalCost::Discard,
     ]
 }
 
@@ -2434,8 +2518,8 @@ fn player_life_and_mana_move_their_named_columns() {
         let player = &mut game.state.players[0];
         match field {
             "life" => player.life = 7,
-            "mana_pool" => player.mana_pool = Mana::parse("R"),
-            "combat_mana_pool" => player.combat_mana_pool = Mana::parse("R"),
+            "mana_pool" => player.mana_pool = Mana::parse("R").into(),
+            "combat_mana_pool" => player.combat_mana_pool = Mana::parse("R").into(),
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
@@ -2574,6 +2658,15 @@ fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
     Some(&source[start..end])
 }
 
+/// The cost a static ability gives other spells ("spells you cast have
+/// delve"): its card prints that cost as much as a spell with the keyword.
+fn granted_cost(ability: &StaticAbility) -> Option<&AdditionalCost> {
+    match ability {
+        StaticAbility::SpellsHave { cost, .. } => Some(cost),
+        _ => None,
+    }
+}
+
 /// Every variant is witnessed by a real card that prints it, and that card's
 /// named directed test exists in its card test file and names the card.
 #[test]
@@ -2588,9 +2681,11 @@ fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
     });
     let costs = cost_witnesses().into_iter().map(|cost| {
         let row = cost_seen(&cost);
-        let printed = card_definition(row.card)
+        let card = card_definition(row.card);
+        let printed = card
             .additional_costs
             .iter()
+            .chain(card.statics.iter().filter_map(granted_cost))
             .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&cost));
         (row, printed)
     });
@@ -2674,9 +2769,14 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
         let card = card_definition(row.card);
         let tokens = tokens_of(&card);
         let mut stripped = card.clone();
-        Arc::make_mut(&mut stripped.printed)
-            .additional_costs
-            .retain(|candidate| std::mem::discriminant(candidate) != std::mem::discriminant(&cost));
+        let differs = |candidate: &AdditionalCost| {
+            std::mem::discriminant(candidate) != std::mem::discriminant(&cost)
+        };
+        let printed = Arc::make_mut(&mut stripped.printed);
+        printed.additional_costs.retain(differs);
+        printed
+            .statics
+            .retain(|ability| granted_cost(ability).is_none_or(differs));
         let without = tokens_of(&stripped);
         assert_ne!(tokens, without, "{}", row.card);
         assert!(tokens.contains(&variant(row.token)), "{}", row.card);
@@ -2884,6 +2984,7 @@ impl Buffer {
             Buffer::Player | Buffer::PlayerTurnState | Buffer::CardTurnState => None,
             Buffer::Relation => Some(relation::VALID),
             Buffer::Facts => Some(fact::VALID),
+            Buffer::Action => Some(action::VALID),
             _ => Some(self.width() - 1),
         }
     }
@@ -3044,6 +3145,12 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_ally => [column(Card, card::IS_ALLY), column(Permanent, permanent::IS_ALLY)],
         is_lesson => [column(Card, card::IS_LESSON), column(Permanent, permanent::IS_LESSON)],
         ward_cost => [Columns(Card, card::HAS_WARD, 2), Columns(Permanent, permanent::HAS_WARD, 2)],
+        ward_life => [
+            column(Card, card::HAS_WARD),
+            column(Permanent, permanent::HAS_WARD),
+            FactOccurrence(FactKind::EffectProgram),
+        ],
+        ward_program => [FactOccurrence(FactKind::EffectProgram)],
         kicker_cost => [Columns(Card, card::HAS_KICKER, 2)],
         card_types => [Rows("card types below")],
         keywords => [Rows("keywords below")],
@@ -3319,6 +3426,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         name_group => [Rows("name_candidates columns 2-3 (v9)")],
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
+        pays_directly => [column(Action, action::PAYS_DIRECTLY)],
     }));
     fields.extend(encoding!(EventData {
         event_type => [Rows("events")],
@@ -3456,6 +3564,8 @@ fn card_sources() -> Vec<(&'static str, CardSource)> {
         is_ally => Layered,
         is_lesson => Layered,
         ward_cost => Layered,
+        ward_life => Layered,
+        ward_program => Layered,
         kicker_cost => Printed("a cost paid when casting"),
         card_types => Layered,
         keywords => Layered,
@@ -3485,14 +3595,22 @@ fn card_json(s: &Scenario, viewer: usize, permanent: PermanentId) -> serde_json:
 /// Every layered card field moves under some continuous effect while its
 /// card is on the battlefield, and no printed field moves: records change
 /// Gran-Gran's supertype, P/T, keywords, subtypes and types, Dragonfly
-/// Swarm loses its ward, and Honest Work renames the Drake.
+/// Swarm loses its ward, Sire of Seven Deaths its ward paid in life, and
+/// Honest Work renames the Drake.
 #[test]
 fn layered_card_fields_read_characteristics_on_the_battlefield() {
-    let mut s = five_color_setup(&["Gran-Gran", "Dragonfly Swarm", "Honest Work", "Wind Drake"]);
+    let mut s = five_color_setup(&[
+        "Gran-Gran",
+        "Dragonfly Swarm",
+        "Honest Work",
+        "Wind Drake",
+        "Sire of Seven Deaths",
+    ]);
     let gran = s.force_permanent_on_battlefield(0, "Gran-Gran");
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
-    let witnesses = [gran, swarm, drake];
+    let sire = s.force_permanent_on_battlefield(1, "Sire of Seven Deaths");
+    let witnesses = [gran, swarm, drake, sire];
     let before = witnesses.map(|id| card_json(&s, 0, id));
     let gran_card = s.game().state.permanents[gran].as_ref().unwrap().object;
     s.game_mut().state[gran_card]
@@ -3516,6 +3634,7 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
         until_end_of_turn(&mut s, gran, modification);
     }
     until_end_of_turn(&mut s, swarm, Modification::LoseAllAbilities);
+    until_end_of_turn(&mut s, sire, Modification::LoseAllAbilities);
     until_end_of_turn(
         &mut s,
         swarm,
@@ -3552,6 +3671,8 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
         "ward is an ability the record removed"
     );
     assert_eq!(swarm_row["is_ally"], true);
+    assert_eq!(before[3]["ward_life"], 7);
+    assert!(after[3].get("ward_life").is_none());
     let drake_row = &after[2];
     assert_eq!(drake_row["name"], "Humble Merchant");
     assert_eq!(
@@ -4596,40 +4717,111 @@ fn pooled_mana_classes_are_programs_on_their_player() {
     }
 }
 
-/// The mana spent to cast a spell that counts it (converge) is an execution
-/// occurrence of its stack frame for both viewers, in registered tokens; a
-/// spell no rule reads the receipt of has none.
+/// Sire of Seven Deaths' "Ward—Pay 7 life." is no mana value: the ward
+/// columns say it has ward at no mana, and the price is a program on the
+/// permanent in the tokens its definition spells, for both viewers.
+#[test]
+fn a_ward_paid_in_life_is_a_program_on_its_permanent() {
+    let mut s = five_color_setup(&["Sire of Seven Deaths", "Tolarian Terror"]);
+    s.force_permanent_on_battlefield(0, "Sire of Seven Deaths");
+    s.force_permanent_on_battlefield(0, "Tolarian Terror");
+    s.game_mut().scenario_refresh_priority().unwrap();
+
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let permanents = if viewer == 0 {
+            &observation.agent_permanents
+        } else {
+            &observation.opponent_permanents
+        };
+        let named = |name: &str| {
+            permanents
+                .iter()
+                .position(|permanent| permanent.characteristics.name == name)
+                .unwrap()
+        };
+        let sire = &permanents[named("Sire of Seven Deaths")].characteristics;
+        assert_eq!((sire.ward_cost, sire.ward_life), (0, 7));
+        // Variant, amount, close: the serialization of `PaymentCost::Life(7)`.
+        assert_eq!(
+            sire.ward_program[..2],
+            [
+                (TokenKind::Variant as u16, name_value("PaymentCost::Life")),
+                (TokenKind::Integer as u16, 7)
+            ]
+        );
+        // A mana ward stays in its column and states no program.
+        let terror = &permanents[named("Tolarian Terror")].characteristics;
+        assert_eq!((terror.ward_cost, terror.ward_life), (2, 0));
+        assert!(terror.ward_program.is_empty());
+
+        let encoded = encoded_default(&observation);
+        let rows: Vec<&[f32]> = encoded
+            .agent_permanents
+            .chunks(PERMANENT_DIM)
+            .chain(encoded.opponent_permanents.chunks(PERMANENT_DIM))
+            .filter(|row| row[permanent::HAS_WARD] == 1.0)
+            .collect();
+        let mut costs: Vec<f32> = rows.iter().map(|row| row[permanent::WARD_COST]).collect();
+        costs.sort_by(f32::total_cmp);
+        assert_eq!(
+            costs,
+            [0.0, 0.2],
+            "both have ward; only the Terror's is mana"
+        );
+
+        let ward = id_columns(name_value(managym::agent::observation_encoder::WARD));
+        let rows: Vec<&[f32]> = encoded
+            .facts
+            .chunks(FACT_DIM)
+            .filter(|row| {
+                row[fact::KIND] == FactKind::EffectProgram as u8 as f32
+                    && row[fact::ID_HIGH..fact::ID_HIGH + 2] == ward
+            })
+            .collect();
+        assert_eq!(rows.len(), sire.ward_program.len());
+        for (ordinal, (row, &(kind, value))) in rows.iter().zip(&sire.ward_program).enumerate() {
+            assert_eq!(row[fact::OBJECT], rows[0][fact::OBJECT]);
+            assert_eq!(row[fact::VALUE], f32::from(kind));
+            assert_eq!(row[fact::VALUE + 1], ordinal as f32);
+            assert_eq!(
+                row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2],
+                id_columns(value)
+            );
+        }
+        let definition = managym_cards::catalog()
+            .iter()
+            .find(|definition| definition.name == "Sire of Seven Deaths")
+            .unwrap();
+        let tokens = tokens_of(&ObjectDefinition::card(definition));
+        for &(kind, value) in &sire.ward_program {
+            assert!(
+                kind == TokenKind::Integer as u16
+                    || tokens.iter().any(|&(k, v)| k as u16 == kind && v == value),
+                "program token ({kind}, {value}) is outside the definition's vocabulary"
+            );
+        }
+    }
+}
+
+/// A stack frame shows of its receipt only what it does not already say. The
+/// mana spent to cast a spell that counts it (converge) is an execution
+/// occurrence of the frame for both viewers, in registered tokens; mana no
+/// rule reads adds nothing, and neither does a source paying its own printed
+/// {T} or sacrifice. Another object that paid is shown
+/// (`payment_contributions_reach_the_stack_frame_as_references`).
 #[test]
 fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     let mut s = five_color_setup(&["Uncle's Musings", "Kyoshi Warrior Guard"]);
     s.set_player_mana_pool(0, "WUGG");
     cast(&mut s, "Uncle's Musings");
-    // The policy's token vocabulary: every definition's tokens and the
-    // registered runtime names.
-    let vocabulary: std::collections::HashSet<(u16, i32)> =
-        managym::agent::record_vocabulary::record_names()
-            .into_iter()
-            .filter_map(|name| name.token)
-            .chain(
-                managym_cards::catalog()
-                    .iter()
-                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
-                    .map(|(kind, value)| (kind as u16, value)),
-            )
-            .collect();
-    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
     let marker = (TokenKind::Text as u16, name_value("mana spent"));
     for viewer in [0, 1] {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
         let frame = &observation.continuation[0];
         assert_eq!(frame.kind, 1);
         assert!(frame.effect_execution.contains(&marker));
-        for token in &frame.effect_execution {
-            assert!(
-                literal.contains(&token.0) || vocabulary.contains(token),
-                "unregistered execution token {token:?}"
-            );
-        }
+        assert_execution_tokens_registered(frame);
         let rows = encoded_default(&observation).facts;
         let programs = rows
             .chunks(FACT_DIM)
@@ -4644,6 +4836,359 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     let observation = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(observation.continuation[0].kind, 1);
     assert!(observation.continuation[0].effect_execution.is_empty());
+
+    // Airship Engine Room's "{4}, {T}, Sacrifice this land": the receipt holds
+    // the land's tap and sacrifice, and the frame repeats neither.
+    let mut s = five_color_setup(&["Airship Engine Room"]);
+    let room = s.force_permanent_on_battlefield(0, "Airship Engine Room");
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, room, 0);
+    let ability = crate::support::inspect::top_activation(&s);
+    assert_eq!(ability.paid.contributions().len(), 2);
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 2, "the activated ability's stack frame");
+        assert!(frame.effect_execution.is_empty());
+        assert!(frame.effect_execution_references.is_empty());
+    }
+}
+
+/// Every execution token of `frame` is a literal, a definition's token or a
+/// registered runtime name: the policy's whole token vocabulary.
+fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
+    let vocabulary: std::collections::HashSet<(u16, i32)> =
+        managym::agent::record_vocabulary::record_names()
+            .into_iter()
+            .filter_map(|name| name.token)
+            .chain(
+                managym_cards::catalog()
+                    .iter()
+                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
+                    .map(|(kind, value)| (kind as u16, value)),
+            )
+            .collect();
+    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
+    for token in &frame.effect_execution {
+        assert!(
+            literal.contains(&token.0) || vocabulary.contains(token),
+            "unregistered execution token {token:?}"
+        );
+    }
+}
+
+/// An object that paid a cost other than with mana is a public fact of the
+/// receipt: the stack frame references it for both players, with what was
+/// done to it, and keeps naming what it was after it has left (Hungry Ghoul,
+/// `fdn::hungry_ghoul_receipt_names_the_sacrificed_creature_after_it_has_left`).
+/// A receipt of mana alone that no rule reads still adds nothing.
+#[test]
+fn payment_contributions_reach_the_stack_frame_as_references() {
+    let mut s = five_color_setup(&["Hungry Ghoul", "Gray Ogre"]);
+    let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_definition = s.game().state[card_of(&s, ogre)].definition_id.0;
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, ghoul, 0);
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    let sacrificed = (TokenKind::Variant as u16, name_value("How::Sacrificed"));
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 2, "the activated ability's stack frame");
+        assert!(frame.effect_execution.contains(&sacrificed));
+        assert_execution_tokens_registered(frame);
+        // The departed Ogre is referenced by what it last was.
+        assert!(frame
+            .effect_execution_references
+            .iter()
+            .any(|reference| reference.definition == Some(ogre_definition)));
+        let rows = encoded_default(&observation).facts;
+        let programs = rows
+            .chunks(FACT_DIM)
+            .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
+            .count();
+        assert_eq!(programs, frame.effect_execution.len());
+    }
+}
+
+/// A tap or exiled card that pays part of a spell's mana cost is a
+/// contribution like any other: the stack frame says which keyword it paid
+/// under (convoke, `ecl::appeal_to_eirdu_convokes_for_generic_and_for_white`;
+/// improvise, `msh::ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells`;
+/// delve, `tdm::teval_grants_delve_and_takes_life_equal_to_mana_value`).
+#[test]
+fn help_paying_a_mana_cost_reaches_the_stack_frame_by_keyword() {
+    for (spell, helper, how, toward) in [
+        ("Hill Giant", "Savannah Lions", "Exiled", "Delve"),
+        ("Appeal to Eirdu", "Savannah Lions", "Tapped", "Convoke"),
+        ("Dramatic Reversal", "Glider Staff", "Tapped", "Improvise"),
+    ] {
+        let mut s = five_color_unfunded_setup(&[
+            spell,
+            helper,
+            "Teval, Arbiter of Virtue",
+            "Ironheart, Clever Champion",
+        ]);
+        let land = match toward {
+            "Delve" => {
+                s.force_permanent_on_battlefield(0, "Teval, Arbiter of Virtue");
+                for _ in 0..3 {
+                    crate::support::game::plant_in_graveyard(&mut s, 0, helper);
+                }
+                "Mountain"
+            }
+            "Improvise" => {
+                s.force_permanent_on_battlefield(0, "Ironheart, Clever Champion");
+                s.force_permanent_on_battlefield(0, helper);
+                "Island"
+            }
+            _ => {
+                for _ in 0..3 {
+                    s.force_permanent_on_battlefield(0, helper);
+                }
+                "Plains"
+            }
+        };
+        s.force_permanent_on_battlefield(0, land);
+        let card = crate::support::game::force_new_card_in_hand(&mut s, 0, spell);
+        crate::support::play::cast_card(&mut s, card);
+        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+            s.step_action(0);
+            if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+                choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+            }
+        }
+        // Take every help on offer, a convoking creature paying what it is
+        // first offered; the land pays what is left.
+        while let Some(help) = s.action_space().actions.iter().position(|a| {
+            matches!(
+                a,
+                Action::WaterbendTap { .. } | Action::SelectCard { .. } | Action::ChooseMode { .. }
+            )
+        }) {
+            s.step_action(help);
+        }
+        let paid = [
+            (
+                TokenKind::Variant as u16,
+                name_value(&format!("How::{how}")),
+            ),
+            (
+                TokenKind::Variant as u16,
+                name_value(&format!("Toward::{toward}")),
+            ),
+        ];
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let frame = observation
+                .continuation
+                .iter()
+                .find(|frame| frame.kind == 1)
+                .unwrap_or_else(|| panic!("{spell} is on the stack: {:?}", s.action_space()));
+            for token in paid {
+                assert!(frame.effect_execution.contains(&token), "{spell}");
+            }
+            assert!(!frame.effect_execution_references.is_empty());
+            assert_execution_tokens_registered(frame);
+        }
+    }
+}
+
+/// Station's tap is a contribution toward `Station`, and the resolving
+/// ability reads its power from the same receipt: the stack frame names the
+/// tapped creature for both players, and the definition's tokens carry the
+/// keyword and the value its effect reads (Lumen-Class Frigate,
+/// `eoe::lumen_class_frigate_stations_for_the_tapped_creatures_power`).
+#[test]
+fn a_station_tap_reaches_the_stack_frame_and_the_definition_tokens() {
+    let mut s = five_color_unfunded_setup(&["Lumen-Class Frigate", "Gray Ogre"]);
+    let frigate = s.force_permanent_on_battlefield(0, "Lumen-Class Frigate");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_definition = s.game().state[card_of(&s, ogre)].definition_id.0;
+    activate(&mut s, frigate, 0);
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    let paid = ["How::Tapped", "Toward::Station"]
+        .map(|name| (TokenKind::Variant as u16, name_value(name)));
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 2, "the activated ability's stack frame");
+        for token in paid {
+            assert!(frame.effect_execution.contains(&token));
+        }
+        assert!(frame
+            .effect_execution_references
+            .iter()
+            .any(|reference| reference.definition == Some(ogre_definition)));
+        assert_execution_tokens_registered(frame);
+    }
+
+    let pack = default_content_pack();
+    let definition = pack
+        .definition(pack.definition_id("Lumen-Class Frigate").unwrap())
+        .unwrap();
+    let rules = tokens_of(definition);
+    assert!(rules.contains(&(TokenKind::Field, name_value("station"))));
+    assert!(rules.contains(&(
+        TokenKind::Variant,
+        name_value("EffectValue::PowerTappedToPay")
+    )));
+}
+
+/// A permanent sacrificed to bargain or to forage is a contribution toward
+/// that cost on the spell's stack frame, for both players
+/// (`woe::archons_glory_gains_flying_and_lifelink_only_when_bargained`,
+/// `blb::feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black`).
+#[test]
+fn bargain_and_forage_sacrifices_reach_the_stack_frame() {
+    for (spell, token, land, toward) in [
+        ("Archon's Glory", "token.treasure", "Plains", "Bargain"),
+        ("Feed the Cycle", "token.food", "Swamp", "Forage"),
+    ] {
+        let mut s = five_color_unfunded_setup(&[spell, "Gray Ogre"]);
+        s.force_permanent_on_battlefield(1, "Gray Ogre");
+        s.force_permanent_on_battlefield(0, land);
+        s.force_permanent_on_battlefield(0, "Mountain");
+        s.game_mut()
+            .create_token(token, PlayerId(0), false)
+            .unwrap();
+        let card = crate::support::game::force_new_card_in_hand(&mut s, 0, spell);
+        crate::support::play::cast_card(&mut s, card);
+        // Bargain, the target, the sacrifice, then whatever mana is left.
+        for _ in 0..8 {
+            if s.game().state.stack_objects.len() == 1
+                && s.action_space().kind == ActionSpaceKind::Priority
+            {
+                break;
+            }
+            let wanted = s
+                .action_space()
+                .actions
+                .iter()
+                .position(|a| matches!(a, Action::PayCost { .. } | Action::SelectCard { .. }));
+            s.step_action(wanted.unwrap_or(0));
+        }
+        let paid = (
+            TokenKind::Variant as u16,
+            name_value(&format!("Toward::{toward}")),
+        );
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let frame = observation
+                .continuation
+                .iter()
+                .find(|frame| frame.kind == 1)
+                .unwrap_or_else(|| panic!("{spell} is on the stack: {:?}", s.action_space()));
+            assert!(frame.effect_execution.contains(&paid), "{spell}");
+            assert_execution_tokens_registered(frame);
+        }
+    }
+}
+
+/// A spend rider is visible before and after it applies: the pooled unit
+/// states it as a program in its definition's tokens, and the cast spell's
+/// stack frame states what it did (Carnelian Orb's haste,
+/// `clb::carnelian_orb_gives_haste_only_to_a_dragon_its_mana_paid_for`;
+/// Pyromancer's Goggles's copy,
+/// `ori::pyromancers_goggles_copies_a_red_instant_its_mana_paid_for`).
+#[test]
+fn spend_riders_reach_the_pool_program_and_the_cast_receipt() {
+    for (source, spell, rider, outcome) in [
+        (
+            "Carnelian Orb of Dragonkind",
+            "Shivan Dragon",
+            "SpellGainsKeyword",
+            "gains",
+        ),
+        (
+            "Pyromancer's Goggles",
+            "Lightning Bolt",
+            "CopySpell",
+            "copies",
+        ),
+    ] {
+        let mut s = five_color_setup(&[source, spell]);
+        let permanent = s.force_permanent_on_battlefield(0, source);
+        // Five ordinary red beside the rider unit: enough for the Dragon.
+        s.set_player_mana_pool(0, "RRRRR");
+        s.allow_priority_floats();
+        tap_for_mana(&mut s, permanent);
+        let definition = managym_cards::catalog()
+            .iter()
+            .find(|definition| definition.name == source)
+            .unwrap();
+        let tokens = tokens_of(&ObjectDefinition::card(definition));
+        let variant = (
+            TokenKind::Variant,
+            name_value(&format!("SpendEffect::{rider}")),
+        );
+        assert!(tokens.contains(&variant), "{source} spells {rider}");
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let owner = if viewer == 0 {
+                &observation.agent
+            } else {
+                &observation.opponent
+            };
+            let [class] = &owner.pooled_mana_classes[..] else {
+                panic!("{source}'s unit is its own class")
+            };
+            assert!(class.program.contains(&(variant.0 as u16, variant.1)));
+            assert_eq!(
+                managym::agent::observation_encoder::unrepresentable_state(&observation),
+                None
+            );
+        }
+
+        tap_for_mana_spent(&mut s, spell);
+        let field = (TokenKind::Field as u16, name_value(outcome));
+        for viewer in [0, 1] {
+            let observation = Observation::for_player(s.game(), PlayerId(viewer));
+            let frame = observation
+                .continuation
+                .iter()
+                .find(|frame| frame.kind == 1)
+                .expect("the spell's stack frame");
+            assert!(
+                frame.effect_execution.contains(&field),
+                "{spell}: {outcome}"
+            );
+            assert_execution_tokens_registered(frame);
+        }
+    }
+}
+
+/// Cast `spell`, spending the rider unit first whenever a unit is offered.
+fn tap_for_mana_spent(s: &mut Scenario, spell: &str) {
+    cast(s, spell);
+    for _ in 0..16 {
+        if s.game()
+            .state
+            .stack_objects
+            .iter()
+            .any(|object| matches!(object, managym::state::stack_object::StackObject::Spell(_)))
+        {
+            return;
+        }
+        if s.action_space().kind == managym::agent::action::ActionSpaceKind::ChooseTarget {
+            target_opponent(s);
+            continue;
+        }
+        // The spending decision's own frame, receipt so far included, stays
+        // inside the registered vocabulary.
+        for frame in &Observation::for_player(s.game(), PlayerId(0)).continuation {
+            assert_execution_tokens_registered(frame);
+        }
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let rider = frame
+            .offers
+            .iter()
+            .position(|offer| offer.label.contains("(puts"))
+            .unwrap_or(0);
+        s.step_action(rider);
+    }
+    panic!("{spell} was not cast: {:?}", s.action_space());
 }
 
 /// A spell on the stack shows its announced X on its stack row, its one row.
@@ -5129,7 +5674,8 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::restricted_to(
         managym::state::mana::ManaRestriction::ExceptNonartifactSpells,
         [0, 0, 0, 0, 0, 1],
-    );
+    )
+    .into();
     assert_eq!(
         refusal(&s),
         Some("mana that can't be spent to cast nonartifact spells")
@@ -5197,7 +5743,7 @@ fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
 fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
     let mut s = five_color_setup(&["Animal Attendant"]);
     s.set_player_mana_pool(0, "255");
-    s.game_mut().state.players[0].combat_mana_pool = managym::state::mana::Mana::parse("1");
+    s.game_mut().state.players[0].combat_mana_pool = managym::state::mana::Mana::parse("1").into();
     for viewer in [0, 1] {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
         let player = if viewer == 0 {

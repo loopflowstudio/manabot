@@ -4,46 +4,53 @@ import json
 
 import torch
 
+from manabot.managym.enums import ActionEnum
+from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.action_cases import encode
 from manabot.verify.choice_corpus import _signatures, action_inputs
+from manabot.verify.text_observation import priority_root
 import managym
 
-# Seed 82000 reaches waterbend payment, whose source uses the card identity of
-# a battlefield permanent. At prefix 19 it also has a spell on the stack.
-PAYMENT_TRACE = (0, 1, 3, 1, 0, 0, 0, 0, 1, 1, 0, 4, 0, 3, 0, 1, 1, 1, 2, 1, 1, 0, 2)
 
-
-def replay_prefix(length: int) -> tuple[managym.Env, managym.Observation]:
-    env = managym.Env(seed=82000)
-    raw, _ = env.reset(
-        [
-            managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
-            for key in ("ur_lessons", "gw_allies")
-        ]
-    )
-    for index in PAYMENT_TRACE[:length]:
-        raw, _, done, truncated, _ = env.step(index)
-        assert not done and not truncated
-    return env, raw
+def choose(env: managym.Env, *choices: str) -> managym.Observation:
+    for choice in choices:
+        decision = capture_text_decision(env)
+        action = next(
+            action for action in decision.actions if action.description == choice
+        )
+        submit_response(env, decision, action.reference)
+    actor = env.current_agent_index()
+    assert actor is not None
+    return env.observation_for_player(actor)
 
 
 def test_payment_source_names_the_battlefield_object() -> None:
-    env, raw = replay_prefix(len(PAYMENT_TRACE))
+    env = priority_root((), ("Island", "Island", "Island", "Flexible Waterbender"))
+    raw = choose(env, "Activate ability of P4 (Flexible Waterbender); ability 1")
     signatures = _signatures(raw)
-    action = raw.action_space.actions[-1]
+    index, action = next(
+        (index, action)
+        for index, action in enumerate(raw.action_space.actions)
+        if int(action.action_type) == ActionEnum.PAY_COST
+    )
     permanent = next(
         item for item in raw.agent_permanents if item.object_id == action.focus[0]
     )
     assert permanent.id != permanent.object_id
-    descriptor = json.loads(signatures[-1])[-1][0]
+    descriptor = json.loads(signatures[index])[-1][0]
     assert descriptor[:3] == ["permanent", "self", permanent.registry_key]
     inputs = action_inputs(encode(raw), len(signatures), "clean")
-    assert inputs[-1].focus[0] is not None
-    assert inputs[-1].focus[0].kind == "permanents"
+    focus = inputs[index].focus[0]
+    assert focus is not None and focus.kind == "permanents"
 
 
 def test_stack_aliases_share_a_signature_and_reach_collision_inputs() -> None:
-    env, raw = replay_prefix(19)
+    env = priority_root(
+        ("Waterbending Lesson",),
+        ("Island", "Island", "Island", "Island", "Gray Ogre", "Hill Giant"),
+    )
+    # The Lesson remains on the stack while its resolution payment is pending.
+    raw = choose(env, "Cast C1 (Waterbending Lesson)", "Pass priority", "Pass priority")
     spell = raw.stack_objects[0]
     assert spell.object_id is not None
     # Project the same diagnostic choice onto each native alias. Both aliases

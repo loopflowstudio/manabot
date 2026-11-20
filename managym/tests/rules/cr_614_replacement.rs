@@ -172,7 +172,7 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     let _ = s.drain_events();
 
     s.advance_to_active_step(0, StepKind::Main);
-    s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::parse("RRR");
+    s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::parse("RRR").into();
     // Re-publish the position after controlled fixture mana was supplied.
     s.game_mut().scenario_refresh_priority().unwrap();
     crate::support::play::cast_card(&mut s, object);

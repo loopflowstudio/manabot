@@ -17,16 +17,18 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::{CastChoices, Game, Payment},
+        game::{CastChoices, Game},
+        payment::{CostComponent, Operation, Payment, PaymentProgress},
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
         turn::OnceEachTurnKey,
     },
     state::{
-        ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
+        ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
-        mana::{ManaCost, ManaSpent},
+        mana::ManaCost,
+        payment::PaymentReceipt,
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -46,11 +48,11 @@ pub enum FrameCompletion {
         next: Box<FrameCompletion>,
     },
     CombatNormal,
-    /// `spent` is the mana the announced cost actually took (CR 601.2h).
+    /// The spell's whole cost is paid; `payment.receipt` is what it actually
+    /// took (CR 601.2h).
     Paid {
         player: PlayerId,
         payment: Payment,
-        spent: ManaSpent,
     },
     Activated {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
@@ -139,10 +141,11 @@ pub struct EffectFrame {
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
-    /// The mana spent to cast the resolving spell, or the permanent whose
-    /// entering triggered the resolving ability; empty otherwise.
-    #[serde(skip_serializing_if = "crate::state::mana::ManaSpent::is_empty")]
-    pub spent: ManaSpent,
+    /// What was paid to cast the resolving spell, to cast the permanent whose
+    /// entering triggered the resolving ability, or to activate the
+    /// resolving ability; empty otherwise.
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub spent: PaymentReceipt,
     /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
@@ -274,7 +277,7 @@ impl EffectFrame {
             resolutions_this_turn: self.resolutions_this_turn,
             kicked: self.kicked,
             x: self.x,
-            spent: self.spent,
+            spent: self.spent.clone(),
             targets: self.targets.clone(),
             active_requirement: self.active_requirement,
             context_target: self.context_target,
@@ -342,56 +345,6 @@ impl EffectFrame {
     }
 }
 
-/// Remaining obligation and outcome branches of one optional payment.
-/// Mana activation costs commit immediately through the mana authority. Only
-/// a waterbend contribution closes the decline branch (the existing contract).
-/// Exact contributed objects are retained as evidence, never followed or untapped.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct PaymentProgress {
-    /// Acceptance of an optional payment precedes choosing its sources in auto mode.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub committed: bool,
-    pub player: PlayerId,
-    pub remaining: PaymentCost,
-    #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub waterbend_paid: Vec<ObjectId>,
-    pub if_paid: Vec<Effect>,
-    pub if_declined: Vec<Effect>,
-    /// The once-each-turn option (exact source, ability index) paying
-    /// spends ("Do this only once each turn").
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub spends: Option<OnceEachTurnKey>,
-    /// The spell or ability declining counters ("counter it unless that
-    /// player pays"): ward answers both.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub counters_on_decline: Option<Target>,
-}
-
-impl PaymentProgress {
-    pub fn new(
-        player: PlayerId,
-        cost: PaymentCost,
-        if_paid: Vec<Effect>,
-        if_declined: Vec<Effect>,
-    ) -> Self {
-        Self {
-            player,
-            remaining: cost,
-            waterbend_paid: Vec::new(),
-            committed: false,
-            if_paid,
-            if_declined,
-            spends: None,
-            counters_on_decline: None,
-        }
-    }
-
-    pub fn can_decline(&self) -> bool {
-        !self.committed && self.waterbend_paid.is_empty()
-    }
-}
-
 /// Where a `CastDuringResolution` decision's candidates come from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ResolutionCastOffer {
@@ -428,13 +381,14 @@ pub enum ResolutionCastOffer {
 
 /// The operation completed by a mana payment. It owns its saved caller;
 /// nested fees cannot contribute to an outer spell's receipt.
+// `Decision::ManaSpend` holds this in a `Box`, so the largest variant costs
+// nothing inline.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum SpendCompletion {
-    Announced {
-        payment: Payment,
-        sacrifice: Option<PermanentId>,
-        waterbend: bool,
-    },
+    /// The mana of an announced spell or activation; its receipt gains the
+    /// units spent as the spend completes.
+    Announced(Payment),
     Upfront(Box<Decision>),
     Resolution(PaymentProgress),
     Foretell(CardId),
@@ -544,7 +498,7 @@ pub enum Decision {
     ManaSpend {
         player: PlayerId,
         cost: ManaCost,
-        spent: ManaSpent,
+        spent: PaymentReceipt,
         completion: Box<SpendCompletion>,
     },
     /// A mana ability's printed upfront cost, before its output exists.
@@ -725,6 +679,10 @@ pub enum Decision {
     KeepCreatures {
         player: PlayerId,
         max_total_power: i32,
+        /// "Sacrifices N creatures of their choice": the player keeps all
+        /// but this many and may not stop sooner.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
     },
     /// `player` chooses a new target for slot `slot` of the stack object
@@ -981,11 +939,29 @@ impl Game {
         let Decision::KeepCreatures {
             player,
             max_total_power,
+            sacrifice,
             kept,
         } = decision
         else {
             return Vec::new();
         };
+        let creatures: Vec<_> = self
+            .battlefield_permanents(*player)
+            .into_iter()
+            .filter(|id| self.characteristics(*id).is_creature())
+            .collect();
+        if let Some(count) = sacrifice {
+            let keeps = creatures.len().saturating_sub(*count);
+            let kept_own = creatures.iter().filter(|id| kept.contains(id)).count();
+            return if kept_own < keeps {
+                creatures
+                    .into_iter()
+                    .filter(|id| !kept.contains(id))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+        }
         let total: i32 = kept
             .iter()
             .filter(|id| {
@@ -1011,12 +987,14 @@ impl Game {
         &mut self,
         player: PlayerId,
         max_total_power: i32,
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
         let decision = Decision::KeepCreatures {
             player,
             max_total_power,
+            sacrifice,
             kept,
         };
         if !self.keep_candidates(&decision).is_empty() {
@@ -1025,7 +1003,7 @@ impl Game {
         let Decision::KeepCreatures { kept, .. } = decision else {
             unreachable!()
         };
-        self.stop_keeping_creatures(player, max_total_power, kept, frame)
+        self.stop_keeping_creatures(player, max_total_power, sacrifice, kept, frame)
     }
 
     /// The permanents a `Decision::ChooseToExile` may add: matching, controlled
@@ -1103,11 +1081,18 @@ impl Game {
         &mut self,
         player: PlayerId,
         max_total_power: i32,
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
         if player == self.active_player() {
-            return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept, frame);
+            return self.keep_creatures(
+                PlayerId(1 - player.0),
+                max_total_power,
+                sacrifice,
+                kept,
+                frame,
+            );
         }
         let events = [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
@@ -1340,18 +1325,14 @@ impl Game {
                         frame.completion = FrameCompletion::Continue;
                         continue;
                     }
-                    FrameCompletion::Paid {
-                        player,
-                        payment,
-                        spent,
-                    } => {
-                        let Payment::Spell {
+                    FrameCompletion::Paid { player, payment } => {
+                        let Operation::Spell {
                             object,
                             cast,
                             mode,
                             targets,
                             target_req_indices,
-                        } = payment
+                        } = payment.operation
                         else {
                             unreachable!("activation prepared before costs")
                         };
@@ -1361,7 +1342,7 @@ impl Game {
                             self.state.stack_objects_mut().last_mut()
                         {
                             spell.mode = mode;
-                            spell.spent = spent;
+                            spell.spent = payment.receipt;
                         }
                     }
                     FrameCompletion::Activated {
@@ -1403,7 +1384,7 @@ impl Game {
                                                 crate::state::permanent::Counters::default();
                                             counters.change(
                                                 crate::state::permanent::CounterKind::PlusOnePlusOne,
-                                                i32::from(frame.spent.entry_counters),
+                                                i32::from(frame.spent.entry_counters()),
                                             );
                                             counters
                                         },
@@ -1427,6 +1408,23 @@ impl Game {
                             .successor(object)
                             .and_then(|entered| self.state.permanent_of(entered))
                         {
+                            // A keyword the spell gained from mana spent
+                            // on it lasts the turn on the permanent.
+                            let gained = frame.spent.keywords_gained();
+                            if gained != crate::state::card::Keywords::default() {
+                                let entered = self.state.permanents[permanent_id]
+                                    .as_ref()
+                                    .expect("entered")
+                                    .object;
+                                self.record_continuous(
+                                    Some(entered),
+                                    None,
+                                    frame.controller,
+                                    [crate::state::effect::Affected::Object(entered)],
+                                    crate::state::effect::Modification::AddKeywords(gained),
+                                    crate::state::effect::EffectDuration::EndOfTurn,
+                                );
+                            }
                             if attach_to.is_some() {
                                 self.state.permanents[permanent_id]
                                     .as_mut()
@@ -1634,7 +1632,7 @@ impl Game {
                         self.mana_tap_cost_actions(*player),
                     )
                 } else {
-                    let mut actions = self.mana_ability_actions(*player, None);
+                    let mut actions = self.mana_ability_actions(*player);
                     if self.offers_extra_payment_taps(*player) && self.can_pay_mana_upfront(*player)
                     {
                         actions.push(Action::PayCost { player: *player });
@@ -1651,14 +1649,30 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
+                let (cost, help) = match &payment.owed {
+                    // Paying life is one action under manual and automatic
+                    // payment alike.
+                    CostComponent::Life(life) => {
+                        let mut actions = Vec::new();
+                        if self.can_pay_life(player, *life) {
+                            actions.push(Action::PayCost { player });
+                        }
+                        actions.push(Action::Decline { player });
+                        return Some(ActionSpace {
+                            player: Some(player),
+                            kind: ActionSpaceKind::PayOrNot,
+                            actions,
+                            focus: source_focus,
+                        });
+                    }
+                    CostComponent::Mana { cost, help } => (cost, *help),
+                    _ => unreachable!("a resolution payment owes mana or life"),
+                };
+                let waterbend = help.waterbend_left(cost, &payment.receipt);
                 if self.automatic_mana_payment(player) && payment.can_decline() {
-                    let cost = payment.remaining.mana_cost();
-                    let waterbend = match payment.remaining {
-                        PaymentCost::Waterbend { generic } => generic,
-                        PaymentCost::Mana(_) => 0,
-                    };
                     let mut actions = Vec::new();
-                    if self.waterbend_payment_possible(player, &cost, waterbend) {
+                    let pool = self.pooled_mana(player);
+                    if self.payable_with_help(player, &pool, cost, help, waterbend, None) {
                         actions.push(Action::PayCost { player });
                     }
                     actions.push(Action::Decline { player });
@@ -1669,24 +1683,20 @@ impl Game {
                         focus: source_focus,
                     });
                 }
-                let mut actions = self.mana_ability_actions(player, None);
-                if let PaymentCost::Waterbend { generic } = payment.remaining {
-                    if generic > 0 {
-                        let rest =
-                            crate::state::mana::ManaCost::default().with_generic(generic - 1);
-                        // Only offer taps that keep the rest of the cost payable.
-                        for permanent in self.waterbend_taps_keeping_payable(
-                            player,
-                            &rest,
-                            generic - 1,
-                            self.waterbend_candidates(player),
-                            None,
-                        ) {
-                            actions.push(Action::WaterbendTap { player, permanent });
-                        }
-                    }
-                }
-                if self.can_pay_mana_cost(player, &payment.remaining.mana_cost()) {
+                let mut actions = self.mana_ability_actions(player);
+                actions.extend(
+                    self.help_taps(
+                        player,
+                        cost,
+                        help,
+                        waterbend,
+                        &self.waterbend_candidates(player),
+                        None,
+                    )
+                    .into_iter()
+                    .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
+                );
+                if self.can_pay_mana_cost(player, cost) {
                     actions.push(Action::PayCost { player });
                 }
                 if payment.can_decline() {
@@ -1695,9 +1705,10 @@ impl Game {
                 self.append_mana_floats(player, &mut actions);
                 ActionSpace {
                     player: Some(player),
-                    kind: match payment.remaining {
-                        PaymentCost::Mana(_) => ActionSpaceKind::PayOrNot,
-                        PaymentCost::Waterbend { .. } => ActionSpaceKind::Waterbend,
+                    kind: if payment.waterbends() {
+                        ActionSpaceKind::Waterbend
+                    } else {
+                        ActionSpaceKind::PayOrNot
                     },
                     actions,
                     focus: source_focus,
@@ -1778,7 +1789,9 @@ impl Game {
                 ),
                 focus: source_focus,
             },
-            Decision::KeepCreatures { player, .. } => ActionSpace {
+            Decision::KeepCreatures {
+                player, sacrifice, ..
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_objects(
@@ -1786,7 +1799,7 @@ impl Game {
                     self.keep_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().object),
-                    true,
+                    sacrifice.is_none(),
                 ),
                 focus: source_focus,
             },
@@ -2117,7 +2130,7 @@ impl Game {
                 suspended.frame.x = x;
                 let payment = PaymentProgress::new(
                     *player,
-                    PaymentCost::Mana(ManaCost::default().with_generic(x)),
+                    CostComponent::mana(ManaCost::default().with_generic(x)),
                     std::mem::take(if_paid),
                     Vec::new(),
                 );
@@ -2165,31 +2178,43 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (
-                Decision::Payment(PaymentProgress {
-                    player,
-                    remaining: PaymentCost::Waterbend { generic },
-                    waterbend_paid,
-                    ..
-                }),
-                Action::WaterbendTap { permanent, .. },
-            ) if *generic > 0 && self.waterbend_candidates(*player).contains(permanent) => {
-                let object = self
-                    .permanent_object(*permanent)
-                    .expect("waterbend candidate");
-                self.tap_permanent(*permanent, false);
-                *generic -= 1;
-                waterbend_paid.push(object);
+            (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
+                let tapped = match &mut payment.owed {
+                    CostComponent::Mana { cost, help } => self.resolution_help_tap(
+                        payment.player,
+                        *permanent,
+                        cost,
+                        *help,
+                        &mut payment.receipt,
+                    ),
+                    _ => Err(AgentError("no waterbend payment is pending".into())),
+                };
                 *self.state.suspended_decision_mut() = Some(suspended);
-                Ok(())
+                tapped
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
+                let cost = match &payment.owed {
+                    CostComponent::Life(life) => {
+                        let (player, life) = (payment.player, *life);
+                        if !self.can_pay_life(player, life) {
+                            *self.state.suspended_decision_mut() = Some(suspended);
+                            return Err(AgentError("cannot pay life cost".into()));
+                        }
+                        self.pay_life_cost(player, life, &mut payment.receipt);
+                        let Decision::Payment(payment) = suspended.decision else {
+                            unreachable!()
+                        };
+                        self.finish_resolution_payment(payment, suspended.frame);
+                        return Ok(());
+                    }
+                    CostComponent::Mana { cost, .. } => cost.clone(),
+                    _ => unreachable!("a resolution payment owes mana or life"),
+                };
                 if self.automatic_mana_payment(payment.player) && payment.can_decline() {
                     payment.committed = true;
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Ok(());
                 }
-                let cost = payment.remaining.mana_cost();
                 if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
@@ -2240,7 +2265,17 @@ impl Game {
                     && self.pending_choice.is_none()
                     && self.mana_capture(player).is_some())
                 .then(|| self.state.players[player.0].mana_pool.total());
-                self.state.mana_pool_mut(player).add(mana);
+                // Mana made for no nested cost pays toward an announced cost
+                // being paid as it is produced.
+                let start = resume
+                    .is_none()
+                    .then(|| self.state.players[player.0].mana_pool.unit_count());
+                let origin = match production {
+                    ManaProduction::Output { source, .. } => *source,
+                    ManaProduction::Bonus { source, .. } => Some(*source),
+                }
+                .map(|source| self.mana_origin(source));
+                self.state.mana_pool_mut(player).add(mana, origin);
                 // The output is produced: its triggered mana abilities
                 // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
                 let next = match production {
@@ -2269,6 +2304,9 @@ impl Game {
                     let produced = self.state.players[player.0].mana_pool.total() - before;
                     self.mana_capture(player).unwrap().float(produced);
                 }
+                if let Some(start) = start {
+                    self.commit_produced_mana(player, start);
+                }
                 if let Some(next) = next {
                     suspended.decision = *next;
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2279,6 +2317,14 @@ impl Game {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
                     self.state.priority_mut().on_non_pass_action(player);
+                    // The announced payment its output paid toward advances
+                    // as a fixed tap's does.
+                    if start.is_some()
+                        && matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
+                    {
+                        let payment = self.pending_payment(player)?.clone();
+                        return self.advance_payment(player, payment);
+                    }
                 }
                 Ok(())
             }
@@ -2362,15 +2408,22 @@ impl Game {
                 let Decision::KeepCreatures {
                     player,
                     max_total_power,
+                    sacrifice,
                     kept,
                 } = &mut suspended.decision
                 else {
                     unreachable!()
                 };
                 kept.push(selected);
-                let (player, max_total_power, kept) =
-                    (*player, *max_total_power, std::mem::take(kept));
-                let next = self.keep_creatures(player, max_total_power, kept, &mut suspended.frame);
+                let (player, max_total_power, sacrifice, kept) =
+                    (*player, *max_total_power, *sacrifice, std::mem::take(kept));
+                let next = self.keep_creatures(
+                    player,
+                    max_total_power,
+                    sacrifice,
+                    kept,
+                    &mut suspended.frame,
+                );
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
@@ -2415,6 +2468,7 @@ impl Game {
                 Decision::KeepCreatures {
                     player,
                     max_total_power,
+                    sacrifice: None,
                     kept,
                 },
                 Action::Decline { .. },
@@ -2423,6 +2477,7 @@ impl Game {
                 let next = self.stop_keeping_creatures(
                     *player,
                     *max_total_power,
+                    None,
                     kept,
                     &mut suspended.frame,
                 );
@@ -4175,7 +4230,8 @@ mod learn_tests {
 #[cfg(test)]
 mod payment_tests {
     use super::*;
-    use crate::state::ability::EffectValue;
+    use crate::state::ability::{EffectValue, PaymentCost};
+    use crate::state::payment::{How, Toward};
     use crate::{
         search_state::witness,
         state::{
@@ -4426,7 +4482,7 @@ mod payment_tests {
         }
         let waterbend = game.lookup_current_permanent(sources[0]).unwrap();
         let prism = game.lookup_current_permanent(sources[1]).unwrap();
-        game.state.players[0].mana_pool = Mana::parse("1");
+        game.state.players[0].mana_pool = Mana::parse("1").into();
         game.invalidate_mana_cache(player);
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let root = witness(&game);
@@ -4452,8 +4508,23 @@ mod payment_tests {
         let Decision::Payment(payment) = &partial_resolution.decision else {
             panic!("partial waterbend must retain its payment");
         };
-        assert_eq!(payment.remaining, PaymentCost::Waterbend { generic: 1 });
-        assert_eq!(payment.waterbend_paid, vec![sources[0]]);
+        assert_eq!(
+            payment.owed,
+            CostComponent::Mana {
+                cost: ManaCost::parse("{1}"),
+                help: crate::flow::payment::Help {
+                    waterbend: 2,
+                    ..Default::default()
+                },
+            }
+        );
+        assert_eq!(
+            payment
+                .receipt
+                .contributed(How::Tapped, Toward::Waterbend)
+                .collect::<Vec<_>>(),
+            vec![sources[0]]
+        );
         assert!(!payment.can_decline());
         assert!(!branch
             .action_space()

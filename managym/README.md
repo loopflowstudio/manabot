@@ -391,8 +391,79 @@ Any other `world` value is rejected: authored content packs are retired.
 
 Mana feasibility and production share typed costs and pools. `ManaClass`
 retains each class's spending restriction and spend effect; `SpendingContext`
-distinguishes casting, activation and resolving costs. A spell's payment records
-`ManaSpent`, carried to resolution and the entering permanent's own triggers.
+distinguishes casting, activation and resolving costs. A player's `ManaPool`
+keeps, unit for unit, the object that produced its mana (`ManaOrigin`); units
+of one class and color are interchangeable, so the oldest is spent first.
+Among pooled units of different classes that can pay the same pip, the
+automatic payer spends the most specific first (`ManaClass::spend_order`):
+mana only some costs can use, narrowest restriction first, or mana whose rider
+applies to this cost; then ordinary mana; last, mana whose rider this cost
+would waste. Manual payment offers every class in its usual order.
+
+A cast or activation is paid as one `Payment` (`flow/payment.rs`): the announced
+`Operation`, the `CostComponent`s still owed in the order they are paid, and
+the `PaymentReceipt` of what has been paid. `Game::cost_components` fixes the
+total cost once announcement ends; `PendingChoice::Pay` offers the component
+at the front of `owed`, and each choice shrinks or removes it and appends to
+the receipt. The receipt has one entry per unit of mana spent, with its origin
+and applied rider, and one `Contribution` per object tapped, sacrificed,
+discarded or exiled for the cost, naming what was done (`How`) and the part of
+the cost it paid (`Toward`), and the life paid. A chosen sacrifice is recorded
+at once and leaves as the whole cost completes. The components after `Mana`
+have no choice (`Life`, and `Source(How)`: the source's own tap, sacrifice, exile
+or discard): they are paid from `owed` as the payment completes and
+recorded on the same receipt, so a pending payment never reads the definition
+again. A spell's receipt is shared by the stack object,
+its resolution and the entering permanent's own triggers; an activated
+ability keeps its own as `paid`.
+Waterbend, convoke, improvise and delve pay part of a mana cost with something
+other than mana, so they are the `Help` of the `Mana` component and no step of
+their own: while it is owed the payer may tap a creature or artifact, or exile
+a card from their graveyard, each paying {1} and adding a contribution, or pay
+the rest with mana. One rule (`Game::help_taps`) says what a direct tap may
+pay: by convoke an owed pip of the creature's color or {1}, by improvise {1},
+and {1} of the announced waterbend part by any artifact or creature. Each
+payment that leaves the rest payable is offered, and the payer chooses
+(`CostComponent::TapPays`) when a tap has more than one: a white creature may
+convoke {W} or {1}, and under Hama's waterbend a creature may convoke or
+waterbend {1}; the receipt's `Toward` keeps which. That choice's mode names
+the payment, the same in every decision (`TapPayment::mode`): 0-4 one
+{W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise and 7
+{1} of the waterbend part. Only payable modes are offered, so they are sparse,
+and the choice focuses the permanent just tapped. The payment model splits
+a cost's generic mana into what those taps may pay (`help_obligations`), so
+castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
+spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
+Offers and affordability ask the payment model with the help included
+(`payable_with_help`, `while_paying`), so a spell castable only with help is
+offered and a tap that would strand the cost is not; the automatic payer never
+takes help, so when mana alone cannot pay the taps and exiles are the player's
+picks.
+Costs chosen while casting use the kicker choice: bargain
+(`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
+marks the spell kicked, and a conditional alternative
+(`AdditionalCost::AlternativeMana`) replaces the mana cost while its condition
+holds. `PrintedCharacteristics::cast_option` says which of these a card's
+choice is, so the instruction, the offer label and the text observation say
+"bargained" or "cast for its alternative cost" where the flag says `kicked`. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
+whose step offers a Food to sacrifice, the graveyard cards to exile (the first
+commits to three) and the mana instead. "Discard a card" as a spell's
+additional cost (`AdditionalCost::Discard`) is the `Discard` component an
+ability's discard cost uses, offering every card in hand but the spell being
+cast. Crew and saddle are the same
+`TapPower` component, toward `Crew` or `Saddle`; a saddled Mount carries a
+`Modification::Saddled` record until end of turn. Station
+(`ActivatedAbilityDefinition.station`) is a one-creature `Tap` component
+toward `Station` that never offers the source; an activated ability's
+resolving frame carries its receipt, and the station effect reads the tapped
+creature's power from it (`EffectValue::PowerTappedToPay`). A Spacecraft's
+"N+" lines are static abilities conditioned on its charge counters.
+The automatic payer pays only the mana component, and pays it with mana:
+which creatures crew, saddle or station, every other object a cost takes, and
+each convoke or improvise tap or delve exile when mana alone cannot pay, is
+the player's choice under either `mana_payment` setting. With lands for the
+whole cost it asks nothing. Waterbend taps are the exception and are still
+made for the player.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation
@@ -679,8 +750,10 @@ A pending cast or activation payment offers useful fixed-source taps beside
 A tap must make progress and preserve the announced costs and every saved
 payment; funded payments and payments needing every available source retain
 native trivial-decision skipping. These ordinary choices are on by default
-for every consumer. Source taps use the existing `TapForCost` policy action
-with the source as focus; the native Command verb is `tap_for_mana`, distinct
+for every consumer. Source taps and direct taps (convoke, improvise, waterbend)
+share the `TapForCost` policy action with the permanent as focus; its
+`pays_directly` flag tells a tap that pays a pip itself from one that makes
+mana. The native Command verb for a source tap is `tap_for_mana`, distinct
 from waterbend. They do not expose undo, or production at priority unless a
 seat [asks for it](#mana-taps-at-priority-and-during-payment).
 
@@ -725,7 +798,16 @@ or phase, as any floating mana does. There is no undo.
   actions dropped.
 - **Manual payments.** During cast, activation and resolution payments,
   extra fixed-source taps follow the ordinary payment choices. A tap must
-  leave reserved resources available and the committed cost payable.
+  leave reserved resources available and the committed cost payable. Mana
+  made while a cast or activation is being paid pays toward it at once: the
+  cost owed shrinks and the receipt names the unit's source, as a convoke tap
+  does. Mana that was floating before, a source's surplus and mana that can
+  pay nothing still owed stay in the pool for the spend choice, and so does
+  new mana when pooled mana of another class (a rider, a restriction) or
+  another color could pay the same pip. A payment ends as soon as no mana
+  is owed, whatever is still untapped: surplus waits for the priority that
+  follows, and a cost whose mana is {0} from the start never opens its mana
+  step.
 - **Automatic payments.** Once the player accepts a cost, the engine selects
   the sources, their outputs, any waterbend contributions and the units to
   spend. The player still chooses X, optional costs and spell targets.
@@ -735,7 +817,8 @@ or phase, as any floating mana does. There is no undo.
   without a listed spend. `Env.skip_trivial_count()` includes forced passes,
   other skipped single choices and internal automatic payment actions.
 - **Seat order and replay.** Both settings follow the chooser. Fixed-source
-  taps use the existing `TapForCost` policy action with source focus.
+  taps and direct taps use the `TapForCost` policy action with the
+  permanent as focus, told apart by `pays_directly`.
   Choice-output abilities use their activation action. Omitting both fields
   produces the same native setup, game digest and recording bytes as explicit
   manual/off for both seats. Invalid values raise `ValueError`.
@@ -774,9 +857,24 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `state` | Meaning |
 | --- | --- |
 | `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
-| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost. `explanation` names the choice; there are no sources. |
+| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
 | `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability with its own fee. |
+
+The preview reads the cost as the payment owes it (`Payment.owed`). While a
+sacrifice, discard, exile or forage is still the payer's to choose, the state
+is `needs_choice`; once those are paid and only mana is owed, the plan is
+exact. The preview is a forecast only: what is committed to the cost is a fact
+of the pending decision, `decision_context.paid`, one phrase per object in the
+order committed ("tapped Gray Ogre to crew") with the object as it is now, and
+it is there at every step of the payment, including one with no Pay offer. A
+chosen sacrifice leaves as the payment completes, so until then its phrase is
+"Gray Ogre, sacrificed when the payment completes". A waterbend paid as an
+effect resolves lists its taps the same way. A cost with convoke, improvise or delve previews its
+mana route like any other: automatic payment pays mana with mana and never
+picks a creature, artifact or card. When mana alone cannot pay, the state is
+`needs_choice` ("Mana alone cannot pay this cost. Choose what to tap or
+exile.") until the payer's own taps and exiles leave a remainder mana covers.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending
