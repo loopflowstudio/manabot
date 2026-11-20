@@ -16,7 +16,6 @@
     "seed": 1
   },
   "manifest": {
-    "world_version": "w17",
     "schema_version": 1,
     "content_digest": "eb9e7284d834884b585a8fb8dbe4c1196bf009836f5c67e58c79aa6efee2b32d",
     "definitions": [

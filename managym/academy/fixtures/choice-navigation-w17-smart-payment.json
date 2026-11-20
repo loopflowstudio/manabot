@@ -564,9 +564,9 @@
       "digest": "83da2ba97b50886bba2131075f968a90d6db3d36d3e185de45fff1daa86c6c51",
       "frame": {
         "protocol": 1,
-        "match_id": "c1tCvyIoyPAno-jzpP61JQ",
+        "match_id": "QY3s3IZY8ZBW_GL5LhPnWQ",
         "revision": 196,
-        "frame_hash": "4d45f7c1d0dcb9ea24968eb8430e4ca200540ace7cc949a6906d029c40163c23",
+        "frame_hash": "5d00b08c333433ef785d6c387f6a160de1fa157edb7cffc8103432018a550885",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2731,9 +2731,9 @@
       "digest": "e6113de449dd28281876686ee921ff3c28442c6661894313c08d85656dfaf287",
       "frame": {
         "protocol": 1,
-        "match_id": "UuySlknSI1WAp-4yg0LReA",
+        "match_id": "FzIrEsOdj86weFEAaPpnFQ",
         "revision": 72,
-        "frame_hash": "2b6fc75fa067f551ae9b0073d8bbbcafdecb7929e6275dfd44a41c87671c71a4",
+        "frame_hash": "5982c022018bb665b8338a61d71dcdaa49ddeb00001bdf2a4520620fb8f3cc49",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4458,9 +4458,9 @@
       "digest": "02c67aa1ef83544561c1146440f609b090c0701001a96ddc88015e8a1f7429c2",
       "frame": {
         "protocol": 1,
-        "match_id": "3HjrKF_X91eR2TnigGck_g",
+        "match_id": "8j6KxR17kdzMg6mLaYcpng",
         "revision": 7,
-        "frame_hash": "291d5476fc88e1084b1afd2b38a90809088c1f4ccadcf28049541bcb5aa5bd8e",
+        "frame_hash": "44d4d5b740fba97cf2fcead66a2a890c8a7b9bef2664464344d856c5e4018035",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5760,9 +5760,9 @@
       "digest": "ed6aaf6781b999ac1be847fa9e2f84f5b3573cd628fde839e89e526414ef2cbc",
       "frame": {
         "protocol": 1,
-        "match_id": "v4qgBohfnHjHte9mqA03yw",
+        "match_id": "vxj1yv7eSz7i28ruJEsJCg",
         "revision": 40,
-        "frame_hash": "f7483e04ce93451f1bcffa17584162bfe9f1038accd1a8447d96f4d2f9edc0b4",
+        "frame_hash": "03523c1a4ca6f5a2963c237a9de4929d60d75ea9e617c6f2ca328cdbf26c1501",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -7180,9 +7180,9 @@
       "digest": "e772042dff783e47f608a73ea7ed63fe57a85e86ef20a0052b1e7aee51678d18",
       "frame": {
         "protocol": 1,
-        "match_id": "1otm_doUN1HxWEw6QdseAA",
+        "match_id": "DCZF2Sn20B1sFr-E6YxYtg",
         "revision": 64,
-        "frame_hash": "2627d1bba2fc30928131ef4531e397796764f04b0dfd8eb7bd057282cb4f12ac",
+        "frame_hash": "91b0ec894b951dda56faa8f72cc356046fdb1ffd180b66fadd60072d0ae89dfb",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -7191,7 +7191,7 @@
           "actor": 0,
           "kind": "pay_or_not",
           "title": "Payment",
-          "instruction": "Produce mana or finish the announced payment. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately."
+          "instruction": "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed."
         },
         "projection": {
           "schedule": {
@@ -7218,7 +7218,7 @@
             ],
             "actor": 0,
             "stage": "payment",
-            "instruction": "Produce mana or finish the announced payment. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately.",
+            "instruction": "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed.",
             "source": {
               "entity_id": 25,
               "subject": {
