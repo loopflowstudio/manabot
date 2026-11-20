@@ -30,7 +30,7 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import heuristic_source_paths
-from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 import managym
 
 
@@ -169,13 +169,23 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     torch.set_num_threads(1)
-    matchup = AuthoredMatchup(
-        pack_key="ur-lessons-vs-gw-allies",
-        role_a="ur_lessons",
-        role_b="gw_allies",
-        decklists="closed",
-        world=managym.WORLD_SETUP,
+    roles = ("ur_lessons", "gw_allies")
+    first, second = (
+        managym.authored_deck_setup("ur-lessons-vs-gw-allies", role) for role in roles
     )
+    matchup = DeckMatchup(
+        population_sha256="a" * 64,
+        entries=roles,
+        lists=(
+            managym.Deck(first.decklist, first.sideboard),
+            managym.Deck(second.decklist, second.sideboard),
+        ),
+    )
+    assert "decklists" not in matchup.model_dump()
+    closed = matchup.model_copy(update={"decklists": "closed"})
+    assert closed.content_suite != matchup.content_suite
+    matchup = closed
+    assert matchup.match().decklists == "closed"
     space = ObservationSpace(ObservationConfig())
     torch.manual_seed(19)
     model = ActorCritic(
@@ -204,7 +214,9 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
             size_bytes=path.stat().st_size,
         ),
     )
-    heuristic = Code(name="heuristic", source=heuristic_source_paths())
+    heuristic = Code(
+        name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
+    )
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
     match = Match(players=(checkpoint_player(ref), heuristic), games=4)
     tables = pairing.play_pairing(
@@ -222,6 +234,8 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
         assert sum(float(row["score"]) for row in rows if row["game"] == game) == 1.0
 
     retained = tmp_path / "output" / "arena" / match.key
+    request = json.loads((retained / "evaluation.json").read_bytes())["request"]
+    assert request["opponent"]["player_spec"]["max_actions"] == 64
     native = json.loads((retained / "statistics.json").read_bytes())["tables"]["play"]
     checkpoint = [native[2 * leg + leg % 2] for leg in range(4)]
     behaviour = tables["behaviour"]

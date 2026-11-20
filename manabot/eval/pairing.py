@@ -1,4 +1,4 @@
-"""Play a paired authored deal through the replay-checked arena.
+"""Play a paired deal through the replay-checked arena.
 
 The candidate is a checkpoint; the opponent is a checkpoint or the native
 heuristic (`Code(name="heuristic")`). The caller owns the experimental
@@ -23,7 +23,7 @@ from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.evaluation import EvaluationRequest, evaluate, evaluation_play_counts
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 
 
@@ -31,7 +31,7 @@ def play_pairing(
     match: Match,
     agents: Sequence[object],
     *,
-    matchup: AuthoredMatchup,
+    matchup: AuthoredMatchup | DeckMatchup,
     deal: int,
     matchup_mode: Literal["cross", "all"],
     game_seconds: float,
@@ -48,7 +48,12 @@ def play_pairing(
             if player.name != "heuristic":
                 raise ValueError("a pairing's code opponent must be the heuristic")
             players.append(
-                register_anchor(players[0], "heuristic", player_id="opponent")
+                register_anchor(
+                    players[0],
+                    "heuristic",
+                    player_id="opponent",
+                    heuristic_actions=player.config.get("max_actions"),
+                )
             )
             continue
         if not isinstance(player, CheckpointPlayer):
