@@ -9,6 +9,7 @@ need; move one out of it, into the checks below, when it runs.
 
 from collections import Counter
 from dataclasses import replace
+from decimal import Decimal
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
@@ -256,14 +257,17 @@ def _finished_run(
 
 
 def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
-    (train,) = tla_trophies.training_jobs(updates=6, threads=3, streams=64, rows=64)
+    (train,) = tla_trophies.training_jobs()
     assert train.config == tla_trophies.Config(
-        updates=6, threads=3, streams=64, rows=64, checkpoint_every=100
+        updates=400, threads=2, streams=256, rows=512, checkpoint_every=100
     )
     assert {v.name: v.value for v in train.plain().environment} == {
-        "OMP_NUM_THREADS": "3",
-        "MKL_NUM_THREADS": "3",
+        "OMP_NUM_THREADS": "2",
+        "MKL_NUM_THREADS": "2",
     }
+    assert train.max_attempts == 1
+    assert train.max_hours == 10.75
+    assert train.max_usd * len(train.seeds) == Decimal("7.80")
     pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
     raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
     second = replace(
@@ -272,6 +276,7 @@ def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
     )
     state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
     (evaluation,) = tla_trophies.eval_jobs(state)
+    assert evaluation.max_usd == Decimal("1.30")
     assert list(evaluation.checkpoints) == [*raw.checkpoints, *second.checkpoints]
     tournament, gaps = Tournament(
         definition=evaluation.tournament,

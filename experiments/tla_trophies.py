@@ -124,10 +124,10 @@ def train(config: Config) -> None:
 
 def training_jobs(
     revision: str | None = None,
-    updates: int = 30,
+    updates: int = 400,
     seeds: int = 3,
-    hours: float = 1,
-    usd_per_run: float = 2,
+    hours: float = 10.75,
+    usd_per_run: float = 2.60,
     threads: int = 2,
     streams: int = 256,
     rows: int = 512,
@@ -232,7 +232,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             setup=machine_setup(" --extra artifacts --extra evaluation"),
             extras=("artifacts", "evaluation"),
             max_hours=1,
-            max_usd=Decimal("2"),
+            max_usd=Decimal("1.30"),
         )
     ]
 
