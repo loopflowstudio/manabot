@@ -109,7 +109,6 @@ PERMANENT_BLOCKING_INDEX = column("agent_permanents", "blocking")
 # Rank of its timestamp among the observation's timestamps.
 PERMANENT_TIMESTAMP_INDEX = column("agent_permanents", "timestamp")
 PERMANENT_MANA_VALUE_INDEX = column("agent_permanents", "mana_value")
-PERMANENT_TYPES_INDEX = column("agent_permanents", "is_land")  # land..battle
 PERMANENT_DIM = width("agent_permanents")
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
@@ -131,8 +130,6 @@ RELATION_THIS_TURN_INDEX = column("relations", "this_turn")
 # Fact rows: one open-vocabulary fact about a player or permanent, joined to
 # it like relation references. Ids are learning-token values split into 16-bit
 # halves (exact in float32).
-# Model numeric scale for timestamp ranks, independent of row allocation.
-FACT_TIMESTAMP_SCALE = 128
 FACT_OBJECT_INDEX = column("facts", "object")
 FACT_KIND_INDEX = column("facts", "kind")
 FACT_ID_INDEX = column("facts", "id_high")  # high, low

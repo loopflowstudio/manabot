@@ -17,6 +17,7 @@ from manabot.env.observation import (
     FACT_TRANSFORMS,
     FACT_VALID_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.policy.admission import binding
@@ -45,9 +46,7 @@ def _batch(space: ObservationSpace) -> dict[str, np.ndarray]:
     )
     for _ in range(12):
         raw, *_ = env.step(0)
-    buffers = space.allocate()
-    env.encode_observation_into(raw, buffers)
-    return {key: value[None] for key, value in buffers.items()}
+    return {key: value[None] for key, value in encode_observation(space, raw).items()}
 
 
 def _timestamp(space: ObservationSpace) -> int:

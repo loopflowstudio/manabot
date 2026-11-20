@@ -1,7 +1,7 @@
 """What a fresh model's numeric inputs look like on sampled games.
 
-Rows are encoded natively (`Env.encode_observation_into`) from random play of
-Elemental decks and prepared with the model's readings.
+Rows are encoded natively (`encode_observation`) from random play of Elemental
+decks and prepared with the model's readings.
 """
 
 from collections.abc import Iterator
@@ -14,7 +14,11 @@ import torch
 
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.prepare import Layout, Prepared, Tables, prepare
 from manabot.policy.readings import (
@@ -40,9 +44,10 @@ def sampled_batches(
         raw, _ = env.reset(setups)
         for step in range(400):
             if step % stride == 0:
-                buffers = space.allocate()
-                env.encode_observation_into(raw, buffers)
-                yield {key: value[None] for key, value in buffers.items()}
+                yield {
+                    key: value[None]
+                    for key, value in encode_observation(space, raw).items()
+                }
             raw, _, terminated, truncated, _ = env.step(
                 rng.randrange(len(raw.action_space.actions))
             )
