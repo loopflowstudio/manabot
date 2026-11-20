@@ -411,7 +411,7 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
         raise ValueError("invalid decision-memory reference features")
     unknown = references[:, _REFERENCE_ROLE] == 0
     if (
-        references[unknown, :10].any()
+        references[unknown, :_REFERENCE_DETAIL_OFFSET].any()
         or references[unknown, _REFERENCE_DETAIL_COUNT].any()
         or references[unknown, _REFERENCE_DEFINITION_ONLY].any()
     ):
@@ -565,7 +565,7 @@ def _expand_details(
         ]
     explicit = ~catalog
     expanded[explicit] = details[
-        references[owners[explicit], 10].astype(np.int64)
+        references[owners[explicit], _REFERENCE_DETAIL_OFFSET].astype(np.int64)
         + positions[explicit]
         - shortcut_counts[owners[explicit]]
     ]
@@ -1115,19 +1115,27 @@ def _prepare_dense_memory(
     references = (
         np.concatenate(references_list)
         if references_list
-        else np.zeros((0, 14), np.float32)
+        else np.zeros((0, MEMORY_WIDTHS[_REFERENCES]), np.float32)
     )
     details = (
-        np.concatenate(details_list) if details_list else np.zeros((0, 6), np.float32)
+        np.concatenate(details_list)
+        if details_list
+        else np.zeros((0, MEMORY_WIDTHS[_DETAILS]), np.float32)
     )
     numeric = (
-        np.stack([record_word(references[:, i : i + 2], 0) for i in (2, 4)], -1)
+        np.stack(
+            [
+                record_word(references[:, i : i + 2], 0)
+                for i in range(_REFERENCE_WORDS.start, _REFERENCE_WORDS.stop, 2)
+            ],
+            -1,
+        )
         .astype(np.uint32)
         .view(np.int32)
     )
     reference_numbers = np.concatenate(
         (
-            references[:, :1] / 2,
+            references[:, _REFERENCE_ROLE : _REFERENCE_ROLE + 1] / 2,
             _scaled(numeric),
             references[:, _REFERENCE_FLAGS],
             (references[:, _REFERENCE_DEFINITION_SPAN] > 0).astype(np.float32),

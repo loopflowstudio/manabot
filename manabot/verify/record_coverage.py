@@ -6,8 +6,7 @@ it. That vocabulary is native `record_vocabulary`, a list maintained beside
 the encoders, so an encoder that starts hashing a new name without listing it
 would stop training mid-run. This sweep plays seeded random games whose decks
 together hold every eligible world card, encodes each decision at policy input
-v10 (v9 refuses positions with turn state its cards read) and runs a tiny
-catalog policy over the batch, so a missing name fails here
+v11 and runs a tiny catalog policy over the batch, so a missing name fails here
 with the game that produced it. `--decks elemental` instead exercises the curated
 Elemental matchups, whose searches and composed effects retain execution state.
 
@@ -22,7 +21,12 @@ from typing import Literal
 
 import numpy as np
 
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import (
+    FACT_VALID_INDEX,
+    ObservationSpace,
+    column,
+    encode_observation,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import TrainingBackend
@@ -33,6 +37,7 @@ _BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 _SPELLS_PER_DECK = 12
 _MAX_DECISIONS = 600
 _BATCH = 128
+_EFFECT_VALID_INDEX = column("effects", "valid")
 
 
 @dataclass(frozen=True)
@@ -144,8 +149,8 @@ def coverage_sweep(
                 # Training aborts a game past its capacities (`recover_capacity`).
                 overflows += 1
                 break
-            facts += int(encoded["facts"][..., -1].sum())
-            effects += int((encoded["effects"][..., -1] > 0).sum())
+            facts += int(encoded["facts"][..., FACT_VALID_INDEX].sum())
+            effects += int((encoded["effects"][..., _EFFECT_VALID_INDEX] > 0).sum())
             pending.append(encoded)
             if len(pending) == _BATCH:
                 _embed(model, pending, game, first, second)
