@@ -249,7 +249,9 @@ transitions, exposures or dollars.
 
 An experiment's `report()` returns an Etude `Report`. Build it from
 `manabot.training.report`, which knows how manabot jobs are named and which
-comparisons a training study asks, and add only what is specific to the
+comparisons a training study asks, beside `PERF` and `ML` from
+`manabot.training.panels` (or `self_play_report()` for a recipe or training-only
+file with no evaluations of its own), and add only what is specific to the
 experiment. The frontier study's report is four questions:
 
 ```python

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import subprocess
+import sys
 
 from etude.report import Curve, Matches, Report, Score, Series
 from etude.train.read import read
@@ -108,20 +109,19 @@ def test_local_report_draws_sparse_combat_probe_readings(
         assert list(recorded.points(key, "updates").x) == [5, 10]
 
     # Render in the CLI's process so Etude can reload the recipe's neighbours.
+    root = Path(__file__).resolve().parents[2]
     out = tmp_path / "report"
     subprocess.run(
         [
-            "uv",
-            "run",
-            "--no-sync",
-            "etude",
+            str(Path(sys.executable).with_name("etude")),
             "report",
-            "manabot/recipes/local.py",
+            str(root / "manabot/recipes/local.py"),
             "--source",
             str(track),
             "--out",
             str(out),
         ],
+        cwd=root,
         check=True,
     )
     (page,) = out.rglob("*.html")

@@ -217,6 +217,8 @@ def test_bucketed_and_live_token_policy_matches_padded_probe(
         num_attention_heads=2,
         attention_on=True,
         policy_film=True,
+        focus_film=True,
+        stream_norm=True,
     )
     torch.manual_seed(7)
     padded = ActorCritic(space, config)
