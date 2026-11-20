@@ -48,4 +48,93 @@ uv run python -m experiments.tla_corpus experiments/data/mtg409/corpus-v1 --sour
 uv run python -m experiments.tla_pools experiments/data/mtg409/corpus-v1/corpus.json experiments/data/mtg409/pools-v2/corpus.json --held-out 873
 ```
 
-GPU calibration, training and held-out evaluation remain pending.
+## Packed L4 pilot
+
+The solo control ran six updates at revision `197609239`. The packed runs
+use `96a817842`, which adds local evaluation evidence retention to the same
+training code. Each seed trains fresh v11 w64 in float32, with 64 streams,
+one producer, both learning seats, damped updates, closed lists and
+independent deck draws. Checks every five updates probe up to 256 attack
+and 256 block decisions. Every ten updates, each EMA checkpoint plays the
+same two held-out deck pairs against the first-64 heuristic, crossing seats
+and decks for eight replay-verified games per seed. Local Etude evaluation
+uses the delivered checkpoints and incurs no rental charge.
+
+Etude 0.4.2 sets the slot count on the on-demand template. The solo control
+used a 12-vCPU / 80-GB minimum. The two- and three-slot templates request
+one L4 with at least 6 vCPUs and 48 GB each. The solo and packed observations
+come from separate hosts. They measure these rental configurations, including
+their host differences.
+
+### Which packing to use
+
+Two seeds on one L4 gave the best measured return. The table uses updates
+2–6 for every seed, after its first update. Each seed's throughput is the
+increase in learner decisions divided by elapsed wall seconds between the
+first and sixth update records, including the update-5 probe. Aggregate
+throughput is the sum of the simultaneously running seeds' rates. All three
+rentals were priced at USD0.69/hour. The last column expresses steady-state
+throughput at that price. Setup and delivery are included in the launcher
+costs below.
+
+| Seeds per L4 | Wall seconds/update per seed | Aggregate decisions/s | Million decisions/USD |
+| ---: | --- | ---: | ---: |
+| 1 | 45.2 | 332 | 1.73 |
+| 2 | 34.6, 33.1 | 899 | 4.69 |
+| 3 | 53.2, 56.6, 60.8 | 789 | 4.12 |
+
+Median collection time per seed rose from 16–17 seconds at two slots to
+39–47 seconds at three. The largest observed per-process CUDA allocator
+reserve over the six updates was 0.25 GiB, and process RSS reached 6.44 GiB.
+The probe took 1.32–1.35 seconds on the two-slot machine at update 5. The
+three-slot calibration stopped after every seed supplied the six-update
+window. There was no fourth-slot trial.
+
+### Launcher record
+
+| Experiment | Job and seeds | Final updates | Estimated USD |
+| --- | --- | --- | ---: |
+| `tla-trophies-cal-solo` | `trophy-w64` (40901) | 6 | 0.0779 |
+| `tla_trophies` | `trophy-w64` (40901, 40902) | 30, 30 | 0.1911 |
+| `tla-trophies-three` | `trophy-w64` (40901, 40902, 40903) | 9, 9, 9 | 0.1395 |
+
+Etude estimated USD0.41 across all three rentals. The launch passes capped
+the solo control at USD1.25, the two-seed experiment at USD4.50 and the
+three-seed calibration at USD3.75. All rentals ended.
+
+### What the graphs showed
+
+[Open the Etude report](../data/mtg409/report/tla_trophies.html).
+[Checkpoint behaviour screenshot](../data/mtg409/report/behaviour.png).
+[Combat probe screenshot](../data/mtg409/report/combat-probe.png).
+
+The two training seeds finished 30 updates each. Both produced attack and
+block gaps and all eight board-edit shifts at updates 5, 10, 15, 20, 25 and
+30. At update 30, the attack gaps were 2.74 and 3.36 and the block gaps were
+3.24 and 3.15. Neither reached the study's lock threshold of about 9.
+For the opponent's 9/9 untapped creatures, the attack gap shifted by −0.085
+and −0.041 and the block gap by +0.527 and +0.168.
+
+All 11 behaviour curves had observations at updates 0, 10, 20 and 30 for
+both seeds. The eight distinct EMA checkpoint digests produced the same
+action sequence on each of the eight fixed games. Their scores were 0/8 at
+every checkpoint. They declared 50% of offered attacks and 66.7% of blocks,
+and spent 25.4%, 51.5% and 48.6% of available mana across the three turn
+bands. The audit compared retained action sequences across checkpoints for
+each deal and leg. All 64 games passed replay verification. The update probe
+reads the raw learner, while evaluation reads the EMA, advanced once per
+update at rate 0.999. These two held-out pairs give a narrow view of strength.
+
+For the separately budgeted USD100 study, start with two independent seeds
+per L4, repeat the packing check on the allocated hosts, and spend the longer
+window on additional independent seed pairs and a broader fixed held-out
+deal set. Evaluate the raw and EMA exports at matched checkpoints to measure
+how long the behaviour changes take to reach the averaged policy.
+
+The rendered files can be restored or the page regenerated from the run
+records with these commands.
+
+```bash
+uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg409/report
+uv run --extra artifacts --extra evaluation etude report experiments/tla_trophies.py --source r2://manabot/jobs/tla_trophies --out scratch/qa/tla-trophies
+```

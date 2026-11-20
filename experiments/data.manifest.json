@@ -41050,6 +41050,18 @@
    "sha256": "fcf307a506405682936f8310f6eb1059cba23c2ee2ff947e6b137af449004ecb",
    "bytes": 17321701
   },
+  "experiments/data/mtg409/report/behaviour.png": {
+   "sha256": "a2192eb1620ed5039fd7de1fdaa96342c233a4d6a2319e4444f97c53b2110966",
+   "bytes": 59074
+  },
+  "experiments/data/mtg409/report/combat-probe.png": {
+   "sha256": "84222bd0552baac800cacae11739b8da2b79b248b3a75603d67f0a4e52613f0f",
+   "bytes": 73352
+  },
+  "experiments/data/mtg409/report/tla_trophies.html": {
+   "sha256": "b2b8d2c76e3273c4772f3b18fb0cd6d8b092cabcbb37ca5f1a24b23f19a091bc",
+   "bytes": 907072
+  },
   "experiments/data/one_token_layout/costs.json": {
    "sha256": "dbcde3d1ceac7efe618bbdaec50f6605670aa6a650627dd15490d705e1689791",
    "bytes": 553
