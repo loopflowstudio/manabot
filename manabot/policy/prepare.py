@@ -136,10 +136,6 @@ class Layout:
         )
 
     @cached_property
-    def numeric_permanent_columns(self) -> tuple[int, ...]:
-        return numeric_columns(self.readings["agent_permanents"])
-
-    @cached_property
     def link_columns(self) -> tuple[int, ...]:
         """Permanent columns joining another object (attached to, blocking)."""
         return tuple(

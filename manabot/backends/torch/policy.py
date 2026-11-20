@@ -171,7 +171,7 @@ class ActorCritic(nn.Module):
             card_dim += 1
         # Joins (definitions, links, action continuations) and validity
         # columns the mask carries are never numeric features.
-        perm_dim = len(columns.numeric_permanent_columns)
+        perm_dim = columns.numeric_width("agent_permanents")
         action_dim = columns.numeric_width("actions")
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
