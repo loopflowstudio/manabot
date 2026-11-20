@@ -649,7 +649,9 @@ those arrays. It takes any `managym.Observation`: the
 one a step returned, a fixed seat's view from `observation_for_player`, or one
 restored with `Observation.from_json`. No game needs to be open. A restored
 observation retains the public history written by `toJSON()`. Older JSON
-without that field loads with empty public history.
+without that field loads with empty public history. Semantic `viewer_state`,
+decision captures and search witnesses keep the canonical bytes without it; a
+capture carries its own bounded `history`.
 
 To write into arrays you own, call the function underneath:
 

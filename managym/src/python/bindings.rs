@@ -3184,7 +3184,7 @@ impl PyObservation {
 
     #[allow(non_snake_case)]
     fn toJSON(&self) -> String {
-        Observation::from(self.clone()).to_json()
+        Observation::from(self.clone()).to_json_with_history()
     }
 }
 

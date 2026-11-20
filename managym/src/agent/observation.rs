@@ -2309,6 +2309,11 @@ impl Observation {
     pub fn to_json(&self) -> String {
         super::observation_json::to_json(self)
     }
+
+    /// `to_json` plus nonempty public policy history (Python `toJSON()`).
+    pub fn to_json_with_history(&self) -> String {
+        super::observation_json::to_json_with_history(self)
+    }
 }
 
 /// A ward cost's mana value; 0 without ward and for a ward paid in life.

@@ -25,7 +25,16 @@ use std::collections::BTreeMap;
 /// Every map below writes keys lexically; these bytes bind SHA-256 semantic
 /// identities and BLAKE3 viewer witnesses, including omissions and nulls.
 pub(super) fn to_json(observation: &Observation) -> String {
-    serde_json::to_string(&ObservationJson(observation))
+    serde_json::to_string(&ObservationJson(observation, false))
+        .expect("observation fields are JSON serializable")
+}
+
+/// The canonical bytes plus the public policy history, for a standalone
+/// observation that must restore its `events` input. Semantic viewer state,
+/// decision captures and search witnesses keep the canonical bytes: captures
+/// declare their own bounded history, so the viewer state never carries it.
+pub(super) fn to_json_with_history(observation: &Observation) -> String {
+    serde_json::to_string(&ObservationJson(observation, true))
         .expect("observation fields are JSON serializable")
 }
 
@@ -37,7 +46,8 @@ fn sorted_record(value: &impl Serialize) -> serde_json::Value {
     serde_json::to_value(value).expect("observation records are JSON serializable")
 }
 
-struct ObservationJson<'a>(&'a Observation);
+/// The observation and whether to write its nonempty public policy history.
+struct ObservationJson<'a>(&'a Observation, bool);
 
 impl Serialize for ObservationJson<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -61,7 +71,7 @@ impl Serialize for ObservationJson<'_> {
             "opponent_permanents",
             &sorted_record(&value.opponent_permanents),
         )?;
-        if !value.policy_history.is_empty() {
+        if self.1 && !value.policy_history.is_empty() {
             map.serialize_entry("policy_history", &sorted_record(&value.policy_history))?;
         }
         map.serialize_entry("recent_events", &EventsJson(&value.recent_events))?;
@@ -431,7 +441,7 @@ pub fn parse(text: &str) -> Result<Observation, String> {
     let observation: Observation =
         serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
     let roundtrip: serde_json::Value =
-        serde_json::from_str(&observation.to_json()).map_err(|e| e.to_string())?;
+        serde_json::from_str(&to_json_with_history(&observation)).map_err(|e| e.to_string())?;
     if value != roundtrip || !observation.validate() {
         return Err("noncanonical viewer observation".into());
     }

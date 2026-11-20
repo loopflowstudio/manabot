@@ -363,6 +363,14 @@ publish, land or choose the next Graph step from here.
   `-o /tmp/<dir>/wheels`, restore the source at once, unzip the wheel into
   `/tmp/<dir>/site` and run with `PYTHONPATH=/tmp/<dir>/site` (print
   `managym.__file__`); admission must then fail at the first such decision.
+- Tests that fail locally may fail on the base too. Classify them by running
+  the base tree's own tests with this checkout's interpreter: from the base
+  worktree, `PYTHONPATH=<worktree> <checkout>/.venv/bin/python -m pytest <files>`
+  (print `managym.__file__` and `manabot.__file__` first). Viewer JSON changes
+  need a per-decision base comparison of `semantic_observation_json(v)` for
+  both seats and `search_witness_json()`: these bytes bind Academy frames,
+  decision captures and search witnesses, and retained fixtures rarely cover
+  live history.
 - "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
   <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
   /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into

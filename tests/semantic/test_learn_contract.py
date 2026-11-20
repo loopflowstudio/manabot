@@ -230,6 +230,13 @@ def test_world_reader_rejects_incompatible_source_observation(version):
         PossibleWorldSpace.from_engine(IncompatibleEngine(), 0)
 
 
+def _without_history(observation: managym.Observation) -> dict[str, object]:
+    """`toJSON()` adds public history; semantic viewer state never carries it."""
+    standalone = json.loads(observation.toJSON())
+    assert standalone.pop("policy_history")
+    return standalone
+
+
 def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
     from manabot.semantic.learning import BoundSemanticPack
 
@@ -252,7 +259,7 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
     for viewer in (actor, 1 - actor):
         raw = env.observation_for_player(viewer)
         canonical = Observation.from_json(env.semantic_observation_json(viewer))
-        assert json.loads(raw.toJSON()) == canonical.viewer_state
+        assert _without_history(raw) == canonical.viewer_state
         assert raw.validate()
         assert len(raw.agent.zone_counts) == 7
         assert all(not hasattr(card, "zone") for card in raw.agent_sideboard)
@@ -296,7 +303,7 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
     assert observer.opponent.known_hand == after.agent.known_hand
     assert all(int(card.zone) != 1 for card in observer.opponent_cards)
     assert (
-        json.loads(observer.toJSON())
+        _without_history(observer)
         == Observation.from_json(env.semantic_observation_json(1 - actor)).viewer_state
     )
     assert learn_root.search_witness_json() == retained
