@@ -556,8 +556,17 @@ Capacities are configuration; widths are the layout.
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
 | `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
-| `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
+| `actions`, `action_focus`, `name_candidates` | 512 × 23 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
+
+Policy inputs v9 and v10 keep 22 action columns. In v11, column 22
+(`pays_directly`, zero-based) marks taps that directly pay a cost through
+convoke, improvise or waterbend.
+When such a tap could pay more than one thing, the next choice's `mode`
+column names what it pays, the same in every decision: the selector 0-4 is
+one {W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise
+and 7 {1} of the waterbend part (the column holds selector + 1). Only payable
+modes are offered, and the choice's focus is the permanent just tapped.
 
 The game-level `decklists_closed` flag is inverted in the `decklists_open`
 column (73) of each player row: 1
@@ -652,6 +661,11 @@ frequency and expiry. Relation row kind 9 carries frequency in column 28 (1
 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
 objects are kind-8 reference rows, separate from event context. Ordered control
 schedules and delegated decisions use kinds 13 and 14.
+
+A ward that is not paid in mana ("Ward—Pay 7 life.") sets the ward flag with
+a ward cost of 0, and its price is an effect program on the permanent: fact
+kind 11 under the id `Ward`, in the tokens the card's definition uses
+(`PaymentCost::Life`, then the amount). The LLM text says "ward: pay 7 life".
 
 Pooled mana whose spending has an effect (Animal Attendant's "that creature
 enters with an additional +1/+1 counter") counts in its player's ordinary

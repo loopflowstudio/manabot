@@ -454,7 +454,16 @@ columns! { action {
     19: ABILITY => ("ability", ValueLayout::SELECTOR),
     20: CONTINUATION => ("continuation", ValueLayout::new(ValueKind::Reference, "Continuation frame (relation row) index + 1; 0 absent", "nonnegative integers; 0 absent")),
     21: VALID => ("valid", ValueLayout::FLAG),
+    // Input v11 only. Saved 22-column prefixes keep their meaning.
+    22: PAYS_DIRECTLY => ("pays_directly", ValueLayout::FLAG),
 } }
+
+pub fn action_columns(layout: InputLayout) -> &'static [Column] {
+    match layout {
+        InputLayout::OneToken => action::COLUMNS,
+        InputLayout::Legacy => &action::COLUMNS[..action::PAYS_DIRECTLY],
+    }
+}
 
 columns! { name {
     0: NAME => ("name", ValueLayout::new(ValueKind::Reference, "naming_catalog row + 1; 0 absent", "nonnegative integers; 0 absent")),
@@ -769,7 +778,7 @@ fn fact_row_kind(kind: FactKind) -> &'static str {
         FactKind::CopyException => "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance",
         FactKind::Transforms => "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count",
         FactKind::CombatRestriction => "id: frame index + 1; detail: attacker-predicate token",
-        FactKind::EffectProgram => "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance) or PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal",
+        FactKind::EffectProgram => "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance) or Ward (a permanent's ward price that is not a mana value, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal",
         FactKind::EffectiveColor => "id: Color token (Colorless for empty colors); value: 1",
         FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
         FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",
@@ -846,7 +855,7 @@ pub fn observation_layout(
     }
     layout.insert(
         "actions".into(),
-        ArrayLayout::features(&["action"], &[None], action::COLUMNS),
+        ArrayLayout::features(&["action"], &[None], action_columns(layout_kind)),
     );
     layout.insert(
         "events".into(),
@@ -1020,7 +1029,11 @@ mod tests {
                     config.permanent_dim(),
                     if one_token { 51 } else { 38 },
                 ),
-                ("actions", action::WIDTH, 22),
+                (
+                    "actions",
+                    config.action_dim(),
+                    if one_token { 23 } else { 22 },
+                ),
                 (
                     "events",
                     config.event_dim(),
@@ -1060,15 +1073,10 @@ mod tests {
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
-            for key in [
-                "agent_cards",
-                "agent_permanents",
-                "actions",
-                "facts",
-                "effects",
-            ] {
+            for key in ["agent_cards", "agent_permanents", "facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
+            assert_eq!(layout["actions"].columns[action::VALID].name, "valid");
         }
     }
 }

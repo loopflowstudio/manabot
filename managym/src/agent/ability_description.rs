@@ -12,7 +12,7 @@ use crate::state::{
     },
     card::{CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
-    mana::{Color, Mana, ManaCost},
+    mana::{Color, Mana, ManaCost, SpendEffect},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -351,6 +351,10 @@ fn condition_text(condition: &Condition) -> String {
             "you control {count} or more {}s",
             predicate_description(predicate, "permanent")
         ),
+        Condition::BattlefieldAtLeast { count, predicate } => format!(
+            "there are {count} or more {}s on the battlefield",
+            predicate_description(predicate, "permanent")
+        ),
         Condition::ControlsUnownedAtLeast { count } => {
             format!("you control {count} or more permanents you don't own")
         }
@@ -388,6 +392,7 @@ fn condition_text(condition: &Condition) -> String {
             format!("this is {}", predicate_description(predicate, "permanent"))
         }
         Condition::SourceTapped => "this is tapped".into(),
+        Condition::SourceSaddled => "this is saddled".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
         Condition::CardsThisWayMatch(predicate) => format!(
             "a {} was milled or discarded this way",
@@ -802,6 +807,8 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
         EffectValue::ColorsSpentToCast => "the number of colors of mana spent to cast it".into(),
         EffectValue::TriggeringPower => "that creature's power".into(),
+        EffectValue::PowerTappedToPay => "the power of the creatures tapped to pay".into(),
+        EffectValue::TriggeringManaValue => "that spell's mana value".into(),
         EffectValue::TargetToughness => "its toughness".into(),
         EffectValue::AttackingMatching { predicate } => format!(
             "the number of attacking {} you control",
@@ -835,7 +842,7 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
             text.push_str(&format!(" ({} only)", restriction.describe()));
         }
         if let Some(effect) = &class.effect {
-            text.push_str(&format!(" (puts {})", effect.describe()));
+            text.push_str(&format!(" (puts {})", spend_effect_description(effect)));
         }
     }
     text
@@ -845,6 +852,8 @@ fn payment_description(cost: &PaymentCost) -> String {
     match cost {
         PaymentCost::Mana(cost) => cost_description(cost),
         PaymentCost::Waterbend { generic } => format!("waterbend {generic}"),
+        // Read after "pays" and "You may pay": the amount only.
+        PaymentCost::Life(life) => format!("{life} life"),
     }
 }
 
@@ -865,6 +874,25 @@ pub(crate) fn cost_description(cost: &ManaCost) -> String {
         text.push_str("{0}");
     }
     text
+}
+
+/// What spending a unit of mana adds, as the object of "puts": "a +1/+1
+/// counter on a non-Human creature spell it casts".
+pub(crate) fn spend_effect_description(effect: &SpendEffect) -> String {
+    match effect {
+        SpendEffect::CreatureEntersWithPlusOneCounter { without_subtype } => {
+            format!("a +1/+1 counter on a non-{without_subtype} creature spell it casts")
+        }
+        SpendEffect::SpellGainsKeyword { spell, keyword } => format!(
+            "{} until end of turn on {} it casts",
+            keyword.printed(),
+            predicate_description(spell, "spell").trim()
+        ),
+        SpendEffect::CopySpell { spell } => format!(
+            "a copy of {} it casts on the stack",
+            predicate_description(spell, "spell").trim()
+        ),
+    }
 }
 
 fn keywords_description(k: &Keywords) -> String {
@@ -993,6 +1021,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ),
         RestoreController(_) => return None,
         EachPlayerKeepsCreatures { max_total_power } => format!("Each player chooses any number of creatures they control with total power {max_total_power} or less, then sacrifices all other creatures they control"),
+        EachPlayerSacrificesCreatures { count } => format!("Each player sacrifices {count} creatures of their choice"),
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
@@ -1185,6 +1214,7 @@ pub(super) fn continuous_description(
         }
         Modification::CantBeBlocked => format!("{subject} can't be blocked{until}"),
         Modification::CantBlock => format!("{subject} can't block{until}"),
+        Modification::Saddled => format!("{subject} becomes saddled{until}"),
         Modification::DoesntUntap => {
             format!("{subject} doesn't untap during its controller's untap step{until}")
         }

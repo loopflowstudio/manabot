@@ -35,7 +35,11 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
-from manabot.env.observation import PERMANENT_ATTACHED_INDEX, ObservationSpace
+from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
+    PERMANENT_ATTACHED_INDEX,
+    ObservationSpace,
+)
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -302,7 +306,7 @@ def test_backends_refuse_malformed_rows_before_preparing_them(
         ("facts", 0, -1, "invalid fact object"),
         ("effects", 13, -1, "effect CSR"),
         ("name_candidates", 0, -1, "unadmitted card definition"),
-        ("actions", -2, -1, "action continuation"),
+        ("actions", ACTION_CONTINUATION_INDEX, -1, "action continuation"),
     ):
 
         def corrupt(obs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:

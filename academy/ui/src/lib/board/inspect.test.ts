@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PermanentState } from '$lib/types';
 import type { CardFace } from '$lib/card-faces.svelte';
-import { keywordsOf, labelText, ptProvenance, signed } from './inspect';
+import { keywordsOf, labelText, ptProvenance, signed, statusesOf } from './inspect';
 
 const face: CardFace = { cost: '{G}{W}', colors: ['G', 'W'], type_line: 'Creature — Human Soldier Ally', keywords: ['trample'], power: 1, toughness: 1 };
 function permanent(extra: Partial<PermanentState>): PermanentState {
@@ -67,6 +67,14 @@ describe('keywordsOf', () => {
     expect(keywordsOf(permanent({ abilities_lost: true }), face)).toEqual([]);
     expect(keywordsOf(permanent({ effects: [{ modification: 'LoseKeywords', keywords: ['trample'], duration: 'EndOfTurn', timestamp: 3 }] }), face)).toEqual([]);
   });
+});
+
+it('gives a saddled Mount its status in words', () => {
+  expect(statusesOf(permanent({ effects: [
+    { modification: 'Saddled', duration: 'EndOfTurn', source: 'Guidelight Pathmaker', timestamp: 7 },
+    { modification: 'ModifyPt', power: 1, toughness: 1, duration: 'EndOfTurn', timestamp: 8 },
+  ] }))).toEqual(['Saddled until end of turn']);
+  expect(statusesOf(permanent({}))).toEqual([]);
 });
 
 it('signs P/T changes as rules text does', () => {

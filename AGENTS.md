@@ -438,6 +438,11 @@ committed-choice facts. Search clones omit those sinks and their copy provenance
 transactional rollback snapshots must restore them. Training supplies recorder
 paths and phase markers; engine recording never discovers training scope.
 
+`protocol/*.schema.json` has no generator. Patch the files when a protocol
+type changes; the Rust schema tests compare them byte for byte with what
+`schemars` derives. A resolution payment's focus (ward, "unless pays") is the
+permanent's `object_id`, never its permanent id.
+
 ## Forced decisions
 
 Every game runner, benchmark and Academy session uses native trivial-decision
@@ -622,6 +627,13 @@ printed and until-end-of-turn keywords only; assert static grants through the
 observation. `force_permanent_on_battlefield` places a permanent without an
 entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
+
+A forced permanent is not summoning-sick. With exactly enough untapped lands a
+manual payment finishes itself after its last object choice; calling `pay_rest`
+then overruns into the next priority. Read a new card's printing with `curl`
+from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
+apart on `cards/search`, and append its row to
+`managym/tests/fixtures/scryfall_cards.json` with the fixture's eight fields.
 
 Funded fixtures must finish native spending decisions before passing priority
 or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve

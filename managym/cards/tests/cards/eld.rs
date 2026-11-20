@@ -166,3 +166,79 @@ fn the_great_henge_adds_gg_and_gains_two_life_once_per_activation() {
     settle(&mut s);
     assert_eq!(s.life(0), 24);
 }
+
+/// Wildborn Preserver's trigger asks for X as it resolves; paying puts X
+/// counters on it through the reflexive trigger. A Human does not trigger it.
+#[test]
+fn wildborn_preserver_pays_x_for_x_counters_when_a_non_human_creature_enters() {
+    use crate::support::{inspect::tapped, play::fork_choosing};
+    use managym::state::player::ManaPayment;
+    for auto in [false, true] {
+        let mut s = five_color_unfunded_setup(&[
+            "Wildborn Preserver",
+            "Gray Ogre",
+            "Aang, at the Crossroads",
+        ]);
+        let preserver = s.force_permanent_on_battlefield(0, "Wildborn Preserver");
+        let forests = [0; 3].map(|_| s.force_permanent_on_battlefield(0, "Forest"));
+        if auto {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
+        crate::support::game::enters_battlefield_with_triggers(
+            &mut s,
+            0,
+            "Aang, at the Crossroads",
+        );
+        settle(&mut s);
+        assert_eq!(counters_of(&s, preserver, CounterKind::PlusOnePlusOne), 0);
+
+        crate::support::game::enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        s.advance_until(
+            |sc| sc.action_space().kind == ActionSpaceKind::Modal,
+            "the Preserver asks for X".into(),
+        );
+        // "You may pay" is one confirmation under either setting; the lands
+        // then pay without a further choice.
+        let pay = |s: &mut Scenario| {
+            assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+            choose(s, |a| matches!(a, Action::PayCost { .. }));
+            settle(s);
+        };
+        // A fork at the choice of X: the lands tapped and the counters follow it.
+        for x in [1, 2] {
+            let mut fork = fork_choosing(
+                &s,
+                |a| matches!(a, Action::ChooseMode { mode, .. } if *mode == x),
+            );
+            pay(&mut fork);
+            assert_eq!(
+                counters_of(&fork, preserver, CounterKind::PlusOnePlusOne),
+                x as i32,
+                "auto={auto}"
+            );
+            let spent = forests.iter().filter(|land| tapped(&fork, **land)).count();
+            assert_eq!(spent, x, "auto={auto}");
+        }
+        choose_mode(&mut s, 3);
+        pay(&mut s);
+        assert_eq!(
+            counters_of(&s, preserver, CounterKind::PlusOnePlusOne),
+            3,
+            "auto={auto}"
+        );
+        assert!(forests.iter().all(|land| tapped(&s, *land)), "auto={auto}");
+    }
+}
+
+/// Thrill of Possibility's discard is paid as it is cast, from the other cards
+/// in hand; the receipt names the discarded card, and it then draws two.
+#[test]
+fn thrill_of_possibility_discards_a_chosen_card_as_it_is_cast() {
+    for auto in [false, true] {
+        let s =
+            crate::support::play::cast_discarding_a_chosen_card("Thrill of Possibility", 2, auto);
+        // The Ogre and two drawn cards.
+        assert_eq!(s.zone_size(0, ZoneType::Hand), 3);
+    }
+}

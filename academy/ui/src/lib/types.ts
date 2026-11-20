@@ -220,6 +220,13 @@ export interface DecisionTargetView {
   object: DecisionObjectView;
 }
 
+/** One object's payment toward the pending cost: "sacrificed Gray Ogre". */
+export interface PaidView {
+  phrase: string;
+  /** That object as it is now; absent when nothing visible remains of it. */
+  object?: DecisionObjectView;
+}
+
 export interface DecisionContextView {
   pending?: string[];
   recent_facts: string[];
@@ -233,6 +240,8 @@ export interface DecisionContextView {
   chosen_mode: number | null;
   /** `source` is being announced, so it is on the stack by the rules (CR 601.2a, 602.2a). */
   announcing?: 'spell' | 'activated_ability';
+  /** What objects have already paid toward the cost being paid, in paid order. */
+  paid?: PaidView[];
 }
 
 export interface StackEntryView {

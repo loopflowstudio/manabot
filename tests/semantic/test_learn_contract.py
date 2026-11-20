@@ -304,7 +304,7 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
 def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_root):
     import numpy as np
 
-    from manabot.env.observation import ObservationEncoder
+    from manabot.env.observation import ACTION_VALID_INDEX, ObservationEncoder
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
@@ -318,7 +318,7 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
         if kind not in (14, 15):
             continue
         assert scalar["actions"][index, kind] == 1
-        assert scalar["actions"][index, :-1].sum() == 1
+        assert scalar["actions"][index, :ACTION_VALID_INDEX].sum() == 1
         focus = int(scalar["action_focus"][index, 0])
         assert focus >= 2
         row = scalar["agent_cards"][focus - 2]

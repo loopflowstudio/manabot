@@ -33,6 +33,16 @@ const DURATIONS: Record<string, string> = {
   WhileYouControlSource: 'while its source is controlled',
 };
 
+/** Effect records that are a status rather than a change to a characteristic. */
+const STATUSES: Record<string, string> = { Saddled: 'Saddled' };
+
+/** The statuses a permanent's effect records give it: "Saddled until end of turn". */
+export function statusesOf(permanent: PermanentState): string[] {
+  return [...(permanent.effects ?? [])].sort((a, b) => a.timestamp - b.timestamp)
+    .filter(effect => effect.modification in STATUSES)
+    .map(effect => [STATUSES[effect.modification], DURATIONS[effect.duration]].filter(Boolean).join(' '));
+}
+
 function effectLabel(effect: ContinuousEffect): string {
   const duration = DURATIONS[effect.duration];
   return [effect.source ?? 'An effect', duration].filter(Boolean).join(', ');

@@ -1,0 +1,69 @@
+//! Tests for cards filed in `src/dmu.rs`, in card order.
+
+/// Tolarian Terror costs {1} less for each instant and sorcery card in its
+/// caster's graveyard, and no less for a creature card there.
+#[test]
+fn tolarian_terror_costs_less_per_instant_and_sorcery_in_the_graveyard() {
+    use crate::support::game::plant_in_graveyard;
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
+        inspect::top_spell,
+        play::{cast_card, castable},
+    };
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_unfunded_setup(&[
+        "Tolarian Terror",
+        "Lightning Strike",
+        "Consider",
+        "Gray Ogre",
+    ]);
+    force_lands(&mut s, 0, "Island", 5);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let terror = force_new_card_in_hand(&mut s, 0, "Tolarian Terror");
+    plant_in_graveyard(&mut s, 0, "Lightning Strike");
+    plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    assert!(!castable(&mut s, terror), "one instant: {{5}}{{U}}");
+    plant_in_graveyard(&mut s, 0, "Consider");
+    assert!(castable(&mut s, terror), "two spells: {{4}}{{U}}");
+    cast_card(&mut s, terror);
+    assert_eq!(top_spell(&s).spent.total(), 5);
+}
+
+/// Ward {2}: an opponent's spell aimed at Tolarian Terror is countered unless
+/// that player pays {2}.
+#[test]
+fn tolarian_terror_ward_counters_a_spell_unless_two_is_paid() {
+    use crate::support::{
+        game::{clear_hand, five_color_unfunded_setup, force_lands},
+        inspect::permanent,
+        play::cast_only,
+    };
+    use managym::{
+        agent::action::{ActionSpaceKind, ActionType},
+        flow::turn::StepKind,
+        state::game_object::PlayerId,
+    };
+    for pay in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Tolarian Terror", "Lightning Strike"]);
+        let terror = s.force_permanent_on_battlefield(0, "Tolarian Terror");
+        force_lands(&mut s, 1, "Mountain", 4);
+        clear_hand(&mut s, 0);
+        clear_hand(&mut s, 1);
+        s.force_card_in_hand(1, "Lightning Strike");
+        s.advance_to_active_step(1, StepKind::Main);
+        cast_only(&mut s);
+        s.choose_target_named("Tolarian Terror");
+        s.pass_priority();
+        s.pass_priority();
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        assert!(s.take_action_by_type(if pay {
+            ActionType::PayCost
+        } else {
+            ActionType::DeclineChoice
+        }));
+        s.pass_priority();
+        s.pass_priority();
+        assert_eq!(permanent(&s, terror).damage, if pay { 3 } else { 0 });
+    }
+}

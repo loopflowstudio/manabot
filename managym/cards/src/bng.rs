@@ -8,8 +8,15 @@ use managym_state::{
     mana::ManaCost,
 };
 
+use super::ths::temple;
+
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![searing_blood()]
+    vec![
+        searing_blood(),
+        temple_of_enlightenment(),
+        temple_of_malice(),
+        temple_of_plenty(),
+    ]
 }
 
 fn searing_blood() -> CardDefinition {
@@ -42,4 +49,31 @@ fn searing_blood() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn temple_of_enlightenment() -> CardDefinition {
+    temple(
+        "bng.temple_of_enlightenment",
+        "c657a645-f454-4eaf-be0d-15c9989fa4ef",
+        "Temple of Enlightenment",
+        ["W", "U"],
+    )
+}
+
+fn temple_of_malice() -> CardDefinition {
+    temple(
+        "bng.temple_of_malice",
+        "52f50818-aede-4667-883a-e0339d86d870",
+        "Temple of Malice",
+        ["B", "R"],
+    )
+}
+
+fn temple_of_plenty() -> CardDefinition {
+    temple(
+        "bng.temple_of_plenty",
+        "b0830054-b140-49c3-90cb-24e2502757be",
+        "Temple of Plenty",
+        ["G", "W"],
+    )
 }

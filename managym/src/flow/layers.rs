@@ -159,7 +159,9 @@ impl ReadSet {
 
     fn condition(&mut self, condition: &Condition) {
         match condition {
-            Condition::ControlsAtLeast { predicate, .. } | Condition::SourceMatches(predicate) => {
+            Condition::ControlsAtLeast { predicate, .. }
+            | Condition::BattlefieldAtLeast { predicate, .. }
+            | Condition::SourceMatches(predicate) => {
                 self.predicate(predicate);
             }
             Condition::AnyOf(conditions) => {
@@ -840,6 +842,13 @@ impl<'a> Context<'a> {
     }
     fn condition(&self, condition: &Condition, source: PermanentId) -> bool {
         match condition {
+            Condition::BattlefieldAtLeast { count, predicate } => {
+                self.objects
+                    .keys()
+                    .filter(|&&id| self.matches(id, predicate, Some(source)))
+                    .count()
+                    >= *count
+            }
             Condition::ControlsAtLeast { count, predicate } => {
                 self.objects
                     .keys()

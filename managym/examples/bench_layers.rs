@@ -193,9 +193,9 @@ fn payment_root(pool: bool) -> (Env, PermanentId) {
     let source = {
         let game = env.benchmark_game_mut();
         game.state.players[0].mana_pool = if pool {
-            Mana::parse("RR")
+            Mana::parse("RR").into()
         } else {
-            Mana::default()
+            Default::default()
         };
         game.state
             .permanents

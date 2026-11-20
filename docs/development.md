@@ -278,7 +278,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
-| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v5` |
+| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v6` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
 | Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
@@ -666,12 +666,15 @@ increase a known expensive cell just to make it run longer.
 
 **States.** Each uses defined cards or registered tokens and is deterministic.
 `--list` names every state with its cards and known growth; the list lives in
-the harness, not here. They come in three families: many copies of one thing
+the harness, not here. They come in four families: many copies of one thing
 (`duplicate-lands`, `duplicate-creatures`, `duplicate-tokens`), many different
 things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
-`diverse-statics`, `attachments`, `mixed`) and one mechanic at size (`herbalist`,
+`diverse-statics`, `attachments`, `mixed`), one mechanic at size (`herbalist`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
-`names`). Combat states put
+`names`) and one way of paying at size (`convoke-duplicates`, `convoke-diverse`,
+`delve-graveyard`, `improvise-artifacts`, `float-origins`, `crew-saddle`,
+`bargain-forage`), each measured again at the decision where its cost is
+chosen. Combat states put
 creatures on both sides and measure the pass that resolves damage; payment
 states isolate one player. Every state is constructed; none replays a recorded
 game ([the reported game](#the-reported-game) says why).
