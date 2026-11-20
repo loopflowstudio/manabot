@@ -81,7 +81,11 @@ def play_pairing(
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
         evaluation_compute_envelope_id=ETUDE_COMPUTE_CLASS,
     )
-    retained = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
+    retained = (
+        Path(os.environ.get("ETUDE_OUTPUT_DIR") or Path(".runs") / arena)
+        / "arena"
+        / match.key
+    )
     journal_root = "/dev/shm" if Path("/dev/shm").is_dir() else None
     with TemporaryDirectory(dir=journal_root) as journal:
         out = Path(journal) / "deal"
