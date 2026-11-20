@@ -34,7 +34,6 @@ from manabot.env.observation import (
     FACT_DETAIL_INDEX,
     FACT_DURATION_INDEX,
     FACT_EFFECT,
-    FACT_EFFECT_PROGRAM,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_OBJECT_INDEX,
@@ -55,6 +54,7 @@ from manabot.env.observation import (
 from manabot.policy.buckets import has_history_events
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
 from manabot.policy.readings import (
+    PROGRAM_KINDS,
     RANK_SCALE,
     Reading,
     Readings,
@@ -82,7 +82,6 @@ ORDINAL_ID_KINDS = (
     FACT_CONTINUATION_PROGRAM,
     FACT_COMBAT_RESTRICTION,
 )
-PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
 NAMED_DETAIL_KINDS = (FACT_EFFECT, FACT_COPY_EXCEPTION)
 # One-based object joins of a relation row.
 _RELATION_OBJECT_COLUMNS = (6, 24)

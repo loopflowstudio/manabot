@@ -15,8 +15,7 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.policy.checkpoint import layout
-from manabot.policy.prepare import Prepared, Tables, prepare
+from manabot.policy.prepare import Layout, Prepared, Tables, prepare
 from manabot.policy.readings import (
     Readings,
     legacy_readings,
@@ -57,7 +56,7 @@ def creature_rows(
     positions among the numeric columns."""
     tables = Tables.from_buffers(
         {name: value.detach().numpy() for name, value in agent.named_buffers()},
-        layout(readings),
+        Layout(readings),
     )
     names = [column.name for column in published_columns(space)["agent_permanents"]]
     columns = numeric_columns(readings["agent_permanents"])

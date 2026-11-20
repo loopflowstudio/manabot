@@ -227,7 +227,7 @@ class Continuation(nn.Module):
     def __init__(self, dims: Dimensions) -> None:
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Linear(dims.relation - 5 + 4 * dims.hidden, dims.hidden),
+            nn.Linear(dims.relation + 4 * dims.hidden, dims.hidden),
             nn.Tanh(),
             nn.Linear(dims.hidden, dims.hidden),
         )

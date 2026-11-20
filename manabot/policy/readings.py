@@ -24,7 +24,7 @@ This module imports NumPy, the native layout description and the fact kind
 constants only.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -68,6 +68,8 @@ class Reading(StrEnum):
 
 type Readings = Mapping[str, tuple[Reading, ...]]
 
+KNOWN = frozenset(reading.value for reading in Reading)
+
 # Every rank divides by this, whatever the capacity of its rows.
 RANK_SCALE = 128
 # Readings `read_numeric` applies; the others are joins or belong to their
@@ -81,8 +83,9 @@ NUMERIC = frozenset(
         Reading.FACT_VALUE_RAW,
     }
 )
-# Fact kinds whose payload `fact_value` reads as zero, and as a count.
-FACT_PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
+# Fact kinds whose payload `fact_value` reads as zero (their content is a
+# looked-up program), and as a count.
+PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
 FACT_COUNT_KINDS = (FACT_TRANSFORMS,)
 
 # Columns read by their place in a structured row rather than their kind, in
@@ -219,36 +222,33 @@ def kind_reading(kind: str, scale: int | None) -> Reading:
 
 def fresh_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
     """The readings of a model built now, over the runtime's full columns."""
-    return {
-        key: tuple(_fresh_reading(key, column) for column in columns)
-        for key, columns in published_columns(space).items()
-    }
+    return assign_readings(
+        space, lambda key, column: kind_reading(column.kind, column.scale)
+    )
 
 
 def legacy_readings(space: "ObservationSpace") -> dict[str, tuple[Reading, ...]]:
     """The readings of a checkpoint that records none: what every model did
     before readings were recorded. Never extended."""
+    return assign_readings(space, legacy_reading)
+
+
+def assign_readings(
+    space: "ObservationSpace", rule: Callable[[str, ColumnKind], Reading]
+) -> dict[str, tuple[Reading, ...]]:
+    """Each published column's placed reading, `own` in an own-preparation
+    buffer, and otherwise the reading `rule` gives it."""
     return {
-        key: tuple(_legacy_reading(key, column) for column in columns)
+        key: tuple(
+            PLACED_READINGS.get((key, column.name))
+            or (Reading.OWN if key not in READ_BY_READINGS else rule(key, column))
+            for column in columns
+        )
         for key, columns in published_columns(space).items()
     }
 
 
-def _fresh_reading(key: str, column: ColumnKind) -> Reading:
-    placed = PLACED_READINGS.get((key, column.name))
-    if placed is not None:
-        return placed
-    if key not in READ_BY_READINGS:
-        return Reading.OWN
-    return kind_reading(column.kind, column.scale)
-
-
-def _legacy_reading(key: str, column: ColumnKind) -> Reading:
-    placed = PLACED_READINGS.get((key, column.name))
-    if placed is not None:
-        return placed
-    if key not in READ_BY_READINGS:
-        return Reading.OWN
+def legacy_reading(key: str, column: ColumnKind) -> Reading:
     if column.kind == "reference":
         return Reading.GATHER
     if column.kind == "id":
@@ -281,18 +281,13 @@ def recorded_readings(
             raise ValueError(
                 f"checkpoint {key} readings do not match its {len(names)} columns; {location}"
             )
-        try:
-            readings[key] = tuple(Reading(value) for value in values)
-        except ValueError:
-            unknown = next(
-                (name, value)
-                for name, value in zip(names, values, strict=True)
-                if value not in Reading.__members__.values()
-            )
-            raise ValueError(
-                f"checkpoint reads {key}.{unknown[0]} by unknown reading "
-                f"{unknown[1]!r}; {location}"
-            ) from None
+        for name, value in zip(names, values, strict=True):
+            if value not in KNOWN:
+                raise ValueError(
+                    f"checkpoint reads {key}.{name} by unknown reading {value!r}; "
+                    f"{location}"
+                )
+        readings[key] = tuple(Reading(value) for value in values)
     return readings
 
 
@@ -342,5 +337,5 @@ def read_numeric(
             column = out[..., position]
             counts = np.isin(fact_kinds, FACT_COUNT_KINDS)
             column[counts] = signed_log(column[counts])
-            column[np.isin(fact_kinds, FACT_PROGRAM_KINDS)] = 0
+            column[np.isin(fact_kinds, PROGRAM_KINDS)] = 0
     return out

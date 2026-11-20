@@ -148,10 +148,6 @@ class Dimensions:
     links: int
 
 
-def layout(readings: Readings) -> Layout:
-    return Layout(readings)
-
-
 # -- canonical names -----------------------------------------------------------------
 
 
@@ -238,13 +234,12 @@ class PolicyCheckpoint:
         return len(programs) if programs is not None else 0
 
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, layout(self.readings))
+        return Tables.from_buffers(self.buffers, Layout(self.readings))
 
     def dimensions(self) -> Dimensions:
         encoder = self.space.encoder
         model = self.model
-        columns = layout(self.readings)
-        width = columns.widths.get
+        columns = Layout(self.readings)
         return Dimensions(
             hidden=model.hidden_dim,
             heads=model.num_attention_heads,
@@ -256,7 +251,7 @@ class PolicyCheckpoint:
             permanent=len(columns.numeric_permanent_columns),
             action=columns.numeric_width("actions"),
             focus=encoder.max_focus_objects,
-            relation=width("relations", encoder.relation_dim),
+            relation=columns.numeric_width("relations"),
             fact_kinds=FACT_KINDS,
             token_rows=int(
                 self.parameters["semantic_cards.token_embedding.weight"].shape[0]

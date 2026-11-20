@@ -53,13 +53,12 @@ from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     NUMBER_TOKEN_KINDS,
     ORDINAL_ID_KINDS,
-    PROGRAM_KINDS,
     RecordNamespace,
     Tables,
     record_key,
     record_word,
 )
-from manabot.policy.readings import Readings
+from manabot.policy.readings import PROGRAM_KINDS, Readings
 
 
 def binding(model: ModelConfig, space: ObservationSpace, readings: Readings) -> str:

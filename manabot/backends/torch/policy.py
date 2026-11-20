@@ -49,8 +49,7 @@ from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
 from manabot.policy.buckets import row_needs, sizes_of, trim_observation
-from manabot.policy.checkpoint import layout
-from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
+from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
 import managym
@@ -160,8 +159,7 @@ class ActorCritic(nn.Module):
         self.readings: Readings = (
             fresh_readings(observation_space) if readings is None else readings
         )
-        columns = layout(self.readings)
-        width = columns.widths.get
+        columns = Layout(self.readings)
         player_dim = columns.numeric_width("agent_player")
         card_dim = columns.numeric_width("agent_cards")
         # Inputs v10/v11 append each seat's turn-state row to its player row and
@@ -341,7 +339,7 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.bias)
 
         self.continuation = ContinuationEncoder(
-            embed_dim, width("relations", enc.relation_dim)
+            embed_dim, columns.numeric_width("relations")
         )
 
         # The policy input links permanents to other objects: an Aura or
@@ -469,7 +467,7 @@ class ActorCritic(nn.Module):
             self.config,
             self.observation_space,
             replace(
-                Tables.from_buffers(buffers, layout(self.readings)),
+                Tables.from_buffers(buffers, Layout(self.readings)),
                 order_lengths=_catalog_order,
             ),
             self.card_definitions.num_embeddings

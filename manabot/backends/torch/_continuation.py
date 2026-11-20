@@ -13,10 +13,10 @@ from manabot.policy.prepare import Prepared
 
 
 class ContinuationEncoder(nn.Module):
-    def __init__(self, width: int, relation_dim: int) -> None:
+    def __init__(self, width: int, relation_features: int) -> None:
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Linear(relation_dim - 5 + 4 * width, width),
+            nn.Linear(relation_features + 4 * width, width),
             nn.Tanh(),
             nn.Linear(width, width),
         )
