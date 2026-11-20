@@ -125,12 +125,12 @@ def train(config: Config) -> None:
 def training_jobs(
     revision: str | None = None,
     updates: int = 30,
-    seeds: int = 2,
+    seeds: int = 3,
     hours: float = 1,
     usd_per_run: float = 2,
-    threads: int = 3,
-    streams: int = 64,
-    rows: int = 64,
+    threads: int = 2,
+    streams: int = 256,
+    rows: int = 512,
     checkpoint_every: int = 100,
 ) -> list[TrainingJob]:
     return [

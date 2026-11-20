@@ -152,23 +152,49 @@ learner and bootstrap call. Arm B uses 256 streams and 512 rows per call.
 The comparison uses aggregate learner decisions per dollar over updates
 2–6, peak allocated and reserved CUDA memory, and rollout recording time.
 
-The local training smoke registered two checkpoints. At 20:32 UTC on
-November 20, Etude quoted USD0.28 for both arm A seeds together on one L4
-at USD0.69/hour, including startup. The experiment cap was USD0.58.
+All seven seeds completed six updates. Each row uses updates 2–6 for
+steady-state throughput. Decisions per dollar uses USD0.69/hour.
+The decision count covers all six updates, and the final column is
+Etude’s estimate for the whole rental, including setup and shutdown.
 
-Arm A (`tla-trophies-cal-a`, seeds 40901 and 40902) finished six updates
-per seed. It delivered 177,025 learner decisions for USD0.1089 including
-setup and delivery. Over updates 2–6 the seeds averaged 53.9 and 50.9
-seconds per update, or 562 decisions/s together (2.93 million decisions/USD
-at the rental rate). Median rollout recording took 8.40 and 5.01 seconds,
-with median host load 9.06 and 8.58. Peak allocated/reserved CUDA memory
-was 0.182/0.242 GiB and 0.190/0.250 GiB per process.
+| Arm | Slots | Threads/seed | Streams / rows | Decisions in six updates | Decisions/s | Million decisions/USD | Rental USD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 2 | 3 | 64 / 64 | 177,025 | 562 | 2.93 | 0.1196 |
+| B | 2 | 3 | 256 / 512 | 721,697 | 1,307 | 6.82 | 0.1453 |
+| B | 3 | 2 | 256 / 512 | 1,087,736 | 1,979 | 10.33 | 0.1905 |
 
-Arm B (`tla-trophies-cal-b`, same seeds) finished six updates per seed.
-It delivered 721,697 learner decisions for USD0.1387. Over updates 2–6,
-the seeds averaged 94.7 and 89.5 seconds per update, or 1,307 decisions/s
-together (6.82 million decisions/USD). Median rollout recording took
-8.04 and 3.41 seconds, with median host load 14.35 and 16.31. Peak
-allocated/reserved CUDA memory was 0.280/0.359 GiB and 0.280/0.340 GiB.
-The larger batches delivered 2.33 times as many decisions per dollar
-during steady-state training, qualifying arm B for the three-slot trial.
+Values below follow seed order, starting at 40901. Update time is wall
+time between the first and sixth updates divided by five. Recording and
+load are medians over updates 2–6. CUDA memory is the per-process peak
+over all six updates.
+
+| Experiment | Seconds/update | Rollout recording (s) | Host load (1 min) | CUDA allocated / reserved (GiB) |
+| --- | --- | --- | --- | --- |
+| `tla-trophies-cal-a` | 53.9, 50.9 | 8.40, 5.01 | 9.06, 8.58 | 0.182 / 0.242, 0.190 / 0.250 |
+| `tla-trophies-cal-b` | 94.7, 89.5 | 8.04, 3.41 | 14.35, 16.31 | 0.280 / 0.359, 0.280 / 0.340 |
+| `tla-trophies-cal-b-s3` | 89.4, 93.2, 92.0 | 3.69, 3.73, 3.62 | 35.59, 35.59, 36.25 | 0.287 / 0.361, 0.283 / 0.340, 0.277 / 0.348 |
+
+The selected configuration packs three seeds on one L4, each with two
+threads, 256 streams and 512-row learner and bootstrap calls. Larger
+batches gave 2.33 times the throughput per dollar at two slots. Packing
+a third seed then raised it another 51%. These comparisons used separate
+rental hosts. All three rentals ended, for USD0.4554 in calibration and
+about USD0.87 including the original pilot.
+
+## Long-run admission
+
+At the measured 89–93 seconds/update, 400 updates take about ten hours
+per seed. On November 20, Etude 0.4.2 quoted the 10.5-hour training window
+plus its startup allowance at USD7.42 for one L4. The training commitment
+limit was USD7.70, leaving room within the USD10 Task budget for CPU
+evaluation. With USD2.50 per seed Etude rejected the duration. With
+USD7.42 per seed it admitted only the first of the three seeds. Etude
+requires each seed to cover the entire machine alone, then sums those
+limits before packing. Even a prepaid machine only removes the startup
+allowance from that per-seed check.
+
+The two quotes submitted no training. A budgeted launch of the full
+window needs admission against the shared machine cost. The local smoke
+registered two checkpoints, and the resolved schedule test covers all
+32 held-out deals per raw checkpoint per seed. The published pilot graphs
+above are the latest measured behaviour trajectories.

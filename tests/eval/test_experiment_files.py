@@ -62,7 +62,7 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
-    (tla_trophies, (), {"trophy-w64-raw": 2}),
+    (tla_trophies, (), {"trophy-w64-raw": 3}),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
@@ -256,13 +256,13 @@ def _finished_run(
 
 
 def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
-    (train,) = tla_trophies.training_jobs(updates=6, threads=2, streams=256, rows=512)
+    (train,) = tla_trophies.training_jobs(updates=6, threads=3, streams=64, rows=64)
     assert train.config == tla_trophies.Config(
-        updates=6, threads=2, streams=256, rows=512, checkpoint_every=100
+        updates=6, threads=3, streams=64, rows=64, checkpoint_every=100
     )
     assert {v.name: v.value for v in train.plain().environment} == {
-        "OMP_NUM_THREADS": "2",
-        "MKL_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "3",
+        "MKL_NUM_THREADS": "3",
     }
     pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
     raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
