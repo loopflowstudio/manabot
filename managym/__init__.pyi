@@ -971,6 +971,9 @@ class Action:
     # The tap pays part of the cost itself (convoke, improvise, waterbend)
     # rather than making mana; both are TAP_FOR_COST.
     pays_directly: bool
+    # mode_index is an announced number (X, a replicate count, a payment's X)
+    # rather than an option index.
+    announces_x: bool
 
 class ActionSpace:
     action_space_type: ActionSpaceEnum

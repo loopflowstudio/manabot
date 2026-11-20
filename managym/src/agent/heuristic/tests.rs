@@ -40,6 +40,7 @@ fn offer(kind: Action, focus: &[i32], declared: Option<bool>) -> ActionOption {
         ability_index: None,
         continuation_index: None,
         pays_directly: false,
+        announces_x: false,
     }
 }
 fn card(id: i32, name: &str, mv: u8) -> CardData {

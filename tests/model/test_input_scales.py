@@ -204,6 +204,59 @@ def test_a_two_two_and_a_three_three_are_a_flag_apart(
     assert bool((distance >= 1).all()) is apart
 
 
+def test_an_x_decision_offers_numbers_apart_from_modes() -> None:
+    """Choosing X for United Front with three spare mana offers 0..3. Each
+    offer is marked `has_x` and carries its value in `x`, so a fresh model
+    reads X = 1 and X = 3 as different amounts rather than only as mode flags;
+    a spell's cast offer at priority carries neither."""
+    space = ObservationSpace()
+    columns = [c.name for c in published_columns(space)["actions"]]
+    has_x, x = columns.index("has_x"), columns.index("x")
+    env = managym.Env(seed=7, skip_trivial=True)
+    deck = {"Plains": 36, "United Front": 4}
+    env.reset([managym.PlayerConfig(name, dict(deck)) for name in ("a", "b")])
+    env.scenario_clear_hand(0)
+    env.scenario_force_card_in_hand(0, "United Front")
+    for _ in range(5):
+        env.scenario_force_battlefield(0, "Plains", ready=True)
+    obs = env.scenario_refresh()
+
+    def offers() -> np.ndarray:
+        buffers = space.encoder.allocate()
+        env.encode_observation_into(obs, buffers)
+        return buffers["actions"][buffers["actions_valid"].astype(bool)]
+
+    assert not offers()[:, [has_x, x]].any()
+    cast = next(
+        index
+        for index, action in enumerate(obs.action_space.actions)
+        if action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+    )
+    obs, *_ = env.step(cast)
+    assert [a.mode_index for a in obs.action_space.actions] == [0, 1, 2, 3]
+    rows = offers()
+    np.testing.assert_array_equal(rows[:, has_x], 1.0)
+    np.testing.assert_allclose(rows[:, x], [0.0, 0.1, 0.2, 0.3])
+
+    batch = space.encoder.allocate()
+    env.encode_observation_into(obs, batch)
+    prepared = ActorCritic(space, ModelConfig()).prepare(
+        {key: value[None] for key, value in batch.items()}
+    )
+    features = np.asarray(prepared.action_features)
+    one, three = features[1], features[3]
+    without_x = dict(batch)
+    without_x["actions"] = batch["actions"].copy()
+    without_x["actions"][:, [has_x, x]] = 0
+    modes_only = np.asarray(
+        ActorCritic(space, ModelConfig())
+        .prepare({key: value[None] for key, value in without_x.items()})
+        .action_features
+    )
+    # X adds distance between offers beyond what their mode flags give.
+    assert np.linalg.norm(three - one) > np.linalg.norm(modes_only[3] - modes_only[1])
+
+
 # -- scale bound ---------------------------------------------------------------
 
 BOUND = 4.0

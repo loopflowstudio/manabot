@@ -3420,13 +3420,14 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         action_type => [Columns(Action, action::PLAY_LAND, 17)],
         focus => [Rows("action_focus")],
         declared => [column(Action, action::DECLARED)],
-        mode_index => [column(Action, action::MODE)],
+        mode_index => [column(Action, action::MODE), column(Action, action::X)],
         name_definition => [Rows("name_candidates columns 0-1 (v9)")],
         name_index => [Rows("name_candidates columns 0-1 (v9)")],
         name_group => [Rows("name_candidates columns 2-3 (v9)")],
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
+        announces_x => [column(Action, action::HAS_X)],
     }));
     fields.extend(encoding!(EventData {
         event_type => [Rows("events")],
@@ -4003,6 +4004,32 @@ fn stack_x_one_and_three_differ() {
     // The opponent sees the announced X of a spell on the stack too.
     let opponent_x = |s: &Scenario| encoded(s, 1).relations[relation::X];
     assert_eq!((opponent_x(&one), opponent_x(&three)), (1.0, 3.0));
+}
+
+/// Announcing X offers numbers, not options: each offer names its value in
+/// the action row's `has_x`/`x`, as the stack row does once it is cast.
+#[test]
+fn announced_x_offers_carry_their_value() {
+    let mut s = five_color_setup(&["United Front", "Gray Ogre"]);
+    s.set_player_mana_pool(0, "3WW");
+    let priority = encoded(&s, 0);
+    let width = priority.actions.len() / priority.actions_valid.len();
+    assert!(priority
+        .actions
+        .chunks_exact(width)
+        .all(|row| row[action::HAS_X] == 0.0 && row[action::X] == 0.0));
+    cast(&mut s, "United Front");
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let offers = &observation.action_space.actions;
+    assert!(offers.len() > 1 && offers.iter().all(|offer| offer.announces_x));
+    let rows = encoded(&s, 0);
+    for (offer, row) in offers.iter().zip(rows.actions.chunks_exact(width)) {
+        let mode = offer.mode_index.expect("an X offer has its value") as f32;
+        assert_eq!(
+            (row[action::HAS_X], row[action::X], row[action::MODE]),
+            (1.0, mode / 10.0, mode + 1.0)
+        );
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

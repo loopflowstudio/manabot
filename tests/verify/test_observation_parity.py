@@ -14,6 +14,7 @@ from manabot.env.match import Match
 from manabot.env.observation import (
     ACTION_MODE_INDEX,
     ACTION_PAYS_DIRECTLY_INDEX,
+    ACTION_X_INDEX,
     CARD_DIM,
     CARD_PERMISSION_INDEX,
     FACT_COPY,
@@ -407,6 +408,7 @@ def test_native_and_python_encoders_agree_on_t3_games() -> None:
                 ("attached", permanents[:, PERMANENT_ATTACHED_INDEX]),
                 ("granted land", permanents[:, PERMANENT_GRANTED_LAND_INDEX]),
                 ("stack X", actual["relations"][:, RELATION_X_INDEX]),
+                ("offer X", actual["actions"][:, ACTION_X_INDEX]),
                 (
                     "spell grant",
                     actual["relations"][
@@ -427,6 +429,7 @@ def test_native_and_python_encoders_agree_on_t3_games() -> None:
         "attached",
         "granted land",
         "stack X",
+        "offer X",
         "spell grant",
         "face down",
     }
@@ -784,7 +787,7 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
     assert len(capture_text_decision(env).actions) == 5
 
 
-@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 23)])
+@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 25)])
 def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
     version: int, width: int
 ) -> None:

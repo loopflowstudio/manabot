@@ -687,8 +687,9 @@ modes are offered, and the choice's focus is the permanent just tapped.
 The same `mode` column carries every indexed choice: a mode of a modal spell,
 a mana-spend option, a replacement order and a value of X. In v11, columns 23
 and 24 say when the index is a number. `has_x` is 1 on an offer that chooses a
-value for X (for a spell, an activation or a payment), and `x` is that value
-in tenths, named and scaled as the stack row's `has_x` and `x` are:
+value for X (for a spell, an activation or a payment, or a replicate count),
+and `x` is that value in tenths, named and scaled as the stack row's `has_x`
+and `x` are. The native `Action.announces_x` says the same of an offer:
 
 ```python
 # arrays = game.encode_observation(observation), at a decision that chooses X

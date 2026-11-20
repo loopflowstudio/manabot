@@ -461,6 +461,7 @@ class TestObservationEncoder:
                         name_definition=None,
                         name_group=None,
                         pays_directly=False,
+                        announces_x=False,
                     )
                 ]
             )

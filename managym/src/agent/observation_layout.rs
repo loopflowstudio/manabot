@@ -465,6 +465,10 @@ columns! { action {
     21: VALID => ("valid", ValueLayout::FLAG),
     // Input v11 only. Saved 22-column prefixes keep their meaning.
     22: PAYS_DIRECTLY => ("pays_directly", ValueLayout::FLAG),
+    // The offer announces a number (X, a replicate count, a payment's X):
+    // `mode` keeps its index, and these name it as the stack row does.
+    23: HAS_X => ("has_x", ValueLayout::FLAG),
+    24: X => ("x", ValueLayout::COUNT_TENTHS),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -1041,7 +1045,7 @@ mod tests {
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 23 } else { 22 },
+                    if one_token { 25 } else { 22 },
                 ),
                 (
                     "events",

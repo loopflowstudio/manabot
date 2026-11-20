@@ -26,6 +26,25 @@ use crate::{
 };
 
 impl Game {
+    /// Whether `action`'s mode index is an announced number rather than an
+    /// option: X for a spell (or its replicate count), X for an activation,
+    /// or a resolving optional payment's X. Mirrors `action_description`'s
+    /// "X = n" arms.
+    pub(crate) fn announces_x(&self, action: &Action) -> bool {
+        use crate::flow::decision::Decision;
+        matches!(action, Action::ChooseMode { .. })
+            && (matches!(
+                self.pending_choice,
+                Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
+            ) || self
+                .state
+                .suspended_decision
+                .as_ref()
+                .is_some_and(|suspended| {
+                    matches!(suspended.decision, Decision::ChoosePaymentX { .. })
+                }))
+    }
+
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
         use crate::flow::decision::Decision;
         match action {
