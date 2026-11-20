@@ -41042,6 +41042,14 @@
    "sha256": "4f1b6db53d8942296d8caa6437620441c1c95482243dc715cff00ac51f11a668",
    "bytes": 2621440
   },
+  "experiments/data/mtg409/corpus-v1/corpus.json": {
+   "sha256": "c01cd01bd1c7c5680be4b1f668a7804093f9ddf5b5e3d4e8074a212e43c83533",
+   "bytes": 105413393
+  },
+  "experiments/data/mtg409/pools-v2/corpus.json": {
+   "sha256": "fcf307a506405682936f8310f6eb1059cba23c2ee2ff947e6b137af449004ecb",
+   "bytes": 17321701
+  },
   "experiments/data/one_token_layout/costs.json": {
    "sha256": "dbcde3d1ceac7efe618bbdaec50f6605670aa6a650627dd15490d705e1689791",
    "bytes": 553
