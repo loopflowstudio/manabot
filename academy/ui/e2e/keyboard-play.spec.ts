@@ -6,36 +6,61 @@
  * region it was made from rather than falling back to the top of the page.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { CONTROLS } from '../src/lib/board/region';
 
-/** The region holding focus, by its accessible name, and the focused control's name. */
-async function focused(page: Page): Promise<{ region: string | null; label: string }> {
-  return page.evaluate(() => {
+/**
+ * The region holding focus, by its accessible name, and the focused control:
+ * its name and its position among the region's visible controls (the set the
+ * region roves over), with how many there are. Copies of one card share a
+ * name, so movement is judged by position.
+ */
+async function focused(page: Page): Promise<{ region: string | null; label: string; index: number; count: number }> {
+  return page.evaluate(selector => {
     const active = document.activeElement as HTMLElement | null;
     const region = active?.closest<HTMLElement>('[data-region]');
-    return { region: region?.getAttribute('aria-label') ?? null, label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '' };
-  });
+    const controls = region
+      ? [...region.querySelectorAll<HTMLElement>(selector)]
+        .filter(element => element.closest('[data-region]') === region && element.getClientRects().length > 0)
+      : [];
+    return {
+      region: region?.getAttribute('aria-label') ?? null,
+      label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '',
+      index: active ? controls.indexOf(active) : -1,
+      count: controls.length,
+    };
+  }, CONTROLS);
 }
 
-/** Tab to the region whose name matches, then arrow to a control whose name matches. */
+/**
+ * Tab to the region whose name matches, then arrow to a control whose name
+ * matches. Tab enters a region on its first control with an offer, which can
+ * be its last, so the walk first steps left to the region's first control;
+ * a region has no Home key.
+ */
 async function reach(page: Page, region: RegExp, control: RegExp): Promise<boolean> {
   for (let tabs = 0; tabs < 16; tabs += 1) {
     if (region.test((await focused(page)).region ?? '')) break;
     await page.keyboard.press('Tab');
   }
   if (!region.test((await focused(page)).region ?? '')) return false;
-  await page.keyboard.press('Home');
-  const seen = new Set<string>();
+  for (let steps = 0; steps < 40; steps += 1) {
+    const at = (await focused(page)).index;
+    if (at <= 0) break;
+    await page.keyboard.press('ArrowLeft');
+    if ((await focused(page)).index === at) break;
+  }
+  const seen = new Set<number>();
   for (let steps = 0; steps < 40; steps += 1) {
     const now = await focused(page);
     if (control.test(now.label)) return true;
-    if (seen.has(now.label) && steps > 0) {
+    if (seen.has(now.index) && steps > 0) {
       // A row ends: try the next row down before giving up.
       await page.keyboard.press('ArrowDown');
       const below = await focused(page);
-      if (below.label === now.label || seen.has(below.label)) return false;
+      if (below.index === now.index || seen.has(below.index)) return false;
       continue;
     }
-    seen.add(now.label);
+    seen.add(now.index);
     await page.keyboard.press('ArrowRight');
   }
   return false;
@@ -79,11 +104,12 @@ test('a game is played from the keyboard alone', async ({ page }) => {
 
   // Arrows move within a region: the hand's cards one by one.
   expect(await reach(page, /^Your hand/, /./)).toBe(true);
-  const first = (await focused(page)).label;
-  await page.keyboard.press('ArrowRight');
+  const { index: first, count } = await focused(page);
+  expect(count).toBeGreaterThan(1);
+  await page.keyboard.press(first < count - 1 ? 'ArrowRight' : 'ArrowLeft');
   const second = await focused(page);
   expect(second.region).toMatch(/^Your hand/);
-  expect(second.label).not.toBe(first);
+  expect(second.index).not.toBe(first);
 
   // Several decisions: a land from the hand, attacks on the field, Space for the rest.
   let byEnter = 0;
