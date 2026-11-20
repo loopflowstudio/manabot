@@ -706,6 +706,22 @@ both columns before dividing. A zero denominator leaves the rate undefined.
 | `casts_off_turn / casts` | One chosen cast action. The numerator counts choices made on the opponent's turn. |
 | `turns / games` | One completed game. Each seat's row carries the final game turn number. |
 
+Checkpoint evaluations against the heuristic publish a `behaviour` table in
+Etude. Each row describes the checkpoint (`seat=0`) and records its native
+`game_seat`, deck and opposing deck. Benchmark and paired matches use the
+accepted whole deal from its original or continued attempt. Elemental full and
+subset grids label rows with `unit` and `deal` and include each valid game.
+For example, `compare(db, table="behaviour", value="lands_played", per="land_turns")`
+pools the checkpoint's land plays over its opportunities in both seats.
+Older results, checkpoint duels and matches with unavailable play statistics
+have gaps. Game scores remain available independently.
+
+On one local CPU checkpoint–heuristic deal (four Lessons/Allies legs, 793
+decisions), verification took 0.623 s of CPU time alone and 0.646 s with
+`Play` and exposure capture, about 4% more. These are medians of three
+fresh-process replays per condition on identical records, excluding startup,
+gameplay and file reads.
+
 Choice counts cover nontrivial decisions in the recording. A pass followed by
 a land play later in the same turn counts as one opportunity taken. A cast is
 counted when selected, regardless of how the spell resolves.

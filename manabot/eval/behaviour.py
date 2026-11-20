@@ -5,7 +5,7 @@ counts before dividing so games contribute in proportion to opportunities.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 
 from managym import ActionSpaceEnum as Space
 from managym.card_capture import CapturedCards, TurnMana
@@ -38,6 +38,13 @@ class PlayCounts:
     casts_off_turn: int = 0
     games: int = 0
     turns: int = 0
+
+
+def checkpoint_counts(
+    pair: tuple[PlayCounts, PlayCounts], game_seat: int
+) -> dict[str, int | float]:
+    """Select the native seat and label it as Etude's checkpoint participant."""
+    return {**asdict(pair[game_seat]), "seat": 0, "game_seat": game_seat}
 
 
 def mana_use(turns: Sequence[TurnMana]) -> tuple[int, float]:

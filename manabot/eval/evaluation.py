@@ -8,8 +8,9 @@ Only complete replayed deal cohorts produce paired-deal score intervals.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
+from dataclasses import fields
 from functools import partial
 import json
 import math
@@ -20,8 +21,16 @@ from uuid import uuid4
 
 from etude.errors import RetryRequested
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 
+from manabot.eval.behaviour import Play, PlayCounts
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow, RateInterval, bootstrap_mean_interval
@@ -208,6 +217,7 @@ def _execute_attempt(
             matchup_mode=request.matchup_mode,
             authored_matchup=request.authored_matchup,
             card_evidence_dir=card_evidence_dir,
+            reducers={"play": Play()},
         )
         for name, payload in (("rows", rows), ("trace", trace), ("replay", replay)):
             atomic_json(out_dir / f"{name}.json", payload)
@@ -286,6 +296,67 @@ def _retained_result(directory: Path) -> EvaluationResult:
             for row in json.loads((directory / "rows.json").read_bytes())
         ]
     return result
+
+
+type GamePlayCounts = dict[tuple[int, int], tuple[PlayCounts, PlayCounts]]
+
+
+def attempt_play_counts(
+    directory: Path, rows: Sequence[EvaluationRow]
+) -> GamePlayCounts | None:
+    """Join the reducer's native-seat pairs to completed games in replay order."""
+    path = directory / "statistics.json"
+    if not path.is_file():
+        return None
+    statistics = json.loads(path.read_bytes())
+    table = (statistics.get("tables") or {}).get("play")
+    if statistics.get("analysis_error") or table is None:
+        return None
+    completed = [
+        r for r in rows if r.failure is None and r.replay_passed and r.terminated
+    ]
+    # Construction defaults initialize the live counter. An absent saved count
+    # is unavailable and must never be interpreted as a measured zero.
+    columns = {field.name for field in fields(PlayCounts)}
+    if not isinstance(table, list) or any(
+        not isinstance(item, dict) or not columns <= item.keys() for item in table
+    ):
+        return None
+    try:
+        counts = TypeAdapter(list[PlayCounts]).validate_python(table)
+    except ValidationError:
+        return None
+    if len(counts) != 2 * len(completed):
+        return None
+    found: GamePlayCounts = {}
+    for row, first, second in zip(completed, counts[::2], counts[1::2], strict=True):
+        if (first.seat, second.seat) != (0, 1):
+            return None
+        if row.valid:
+            found[row.deal_seed, row.leg] = (first, second)
+    return found
+
+
+def evaluation_play_counts(directory: Path) -> GamePlayCounts | None:
+    """Read behaviour from the attempts that supplied the accepted deal blocks."""
+    found: GamePlayCounts = {}
+    for attempt in [directory, *sorted((directory / "attempts").glob("*/"))]:
+        if not (attempt / "evaluation.json").is_file():
+            continue
+        retained = _retained_result(attempt)
+        blocks = retained._complete_blocks()
+        if blocks:
+            counts = attempt_play_counts(attempt, retained.rows)
+            if counts is None:
+                return None
+            for key, pair in counts.items():
+                if key[0] in blocks:
+                    if key in found:
+                        raise ValueError(
+                            "duplicate completed evaluation block across attempts"
+                        )
+                    found[key] = pair
+    return found
 
 
 def _verify_block(directory: Path, rows: list[EvaluationRow]) -> None:

@@ -1,10 +1,19 @@
 """Authored paired deals preserve disclosure and distinct blanked checkpoint players."""
 
+import json
 from pathlib import Path
 from typing import Literal
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.records import CheckpointPlayer, Code, Match, checkpoint_player
+from etude.eval.query import compare, statsdb
+from etude.eval.records import (
+    CheckpointPlayer,
+    Code,
+    Environment,
+    Match,
+    checkpoint_player,
+)
+from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 import pytest
 import torch
@@ -146,6 +155,7 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
         arena="fixture-pairing",
     )
     rows = tables["plays"]
+    assert "behaviour" not in tables
     assert len(rows) == 8
     assert {row["decklists"] for row in rows} == {disclosure}
     assert {row["game"] for row in rows} == set(range(4))
@@ -209,6 +219,40 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     assert len(rows) == 8 and all(row["valid"] for row in rows)
     for game in range(4):
         assert sum(float(row["score"]) for row in rows if row["game"] == game) == 1.0
+
+    retained = tmp_path / "output" / "arena" / match.key
+    native = json.loads((retained / "statistics.json").read_bytes())["tables"]["play"]
+    checkpoint = [native[2 * leg + leg % 2] for leg in range(4)]
+    behaviour = tables["behaviour"]
+    assert len(behaviour) == 4
+    for leg, (row, expected) in enumerate(zip(behaviour, checkpoint, strict=True)):
+        assert row == {
+            **expected,
+            "seat": 0,
+            "game_seat": leg % 2,
+            "game": leg,
+            "deck": matchup.decks(leg)[leg % 2],
+            "opponent_deck": matchup.decks(leg)[1 - leg % 2],
+            "decklists": "closed",
+        }
+    track = tmp_path / "track"
+    with evaluating(
+        Environment(name="fixture", files="a" * 64),
+        experiment="pairing",
+        matches=[match],
+        directory=track,
+    ) as active:
+        active.store(match, tables)
+    with statsdb("pairing", track) as db:
+        comparisons = compare(
+            db, table="behaviour", value="lands_played", per="land_turns"
+        )
+    [against] = [c for c in comparisons if c.opponent == (heuristic.key,)]
+    assert against.subject == (match.players[0].key,)
+    assert against.value == pytest.approx(
+        sum(row["lands_played"] for row in checkpoint)
+        / sum(row["land_turns"] for row in checkpoint)
+    )
 
 
 def test_blanking_refuses_ambiguous_values() -> None:

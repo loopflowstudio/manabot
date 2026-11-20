@@ -20,7 +20,7 @@ from etude.eval.result import Tables
 from manabot.eval.admission import register_anchor
 from manabot.eval.agents import game_players, registration
 from manabot.eval.benchmark import evaluation_tables
-from manabot.eval.evaluation import EvaluationRequest, evaluate
+from manabot.eval.evaluation import EvaluationRequest, evaluate, evaluation_play_counts
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup
@@ -107,7 +107,14 @@ def play_pairing(
                 shutil.copytree(out, retained, dirs_exist_ok=True)
     if result.error:
         raise ValueError(result.error)
-    tables = evaluation_tables(result.rows, matchup=matchup, legs=legs)
+    tables = evaluation_tables(
+        result.rows,
+        matchup=matchup,
+        legs=legs,
+        play_counts=evaluation_play_counts(retained)
+        if opponent.runner_kind == "code"
+        else None,
+    )
     for rows in tables.values():
         for row in rows:
             row["decklists"] = matchup.decklists
