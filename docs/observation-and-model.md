@@ -383,9 +383,10 @@ they were recorded (`legacy_readings`): references gathered, ids looked up,
 fact and effect timestamps divided by 128 (the effect one by its row
 capacity, which is 128), fact payloads as stored (`fact_value_raw`), the
 placed readings above, and every other column as stored, the permanent timestamp and
-unscaled counts included. It computes what it always did. A warm start,
-memory branch or resume builds its model from the checkpoint and so keeps
-those readings and writes them back. Their
+unscaled counts included. It computes what it always did. A warm start
+or memory branch builds its model from the checkpoint and so keeps those
+readings and writes them back. A resume builds from the rule and is refused
+when the saved state read differently (see "How the network reads a column"). Their
 keys and names come from a writer catalog found by the card digest the file
 records, `manabot/model/writer_catalogs/<world_digest>.json`. The loader
 checks that the ordered naming candidates (name and optional definition row)
