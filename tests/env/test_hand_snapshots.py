@@ -12,7 +12,11 @@ from manabot import managym
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
@@ -29,16 +33,6 @@ def _players(
         ],
         decklists=disclosure,
     )
-
-
-def _buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
-    buffers = space.allocate(size)
-    buffers.update(
-        rewards=np.zeros(size, dtype=np.float64),
-        terminated=np.zeros(size, dtype=np.uint8),
-        truncated=np.zeros(size, dtype=np.uint8),
-    )
-    return buffers
 
 
 def _hand(env: managym.Env, player: int) -> dict[str, int]:
@@ -139,7 +133,7 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         if captured
         else managym.VectorEnv(2, seed=42)
     )
-    buffers = _buffers(ObservationSpace(), 2)
+    buffers = allocate_vector_buffers(ObservationSpace(), 2)
     vector.set_buffers(buffers)
     try:
         vector.reset_each_into_buffers([_players(), _players()[::-1]])

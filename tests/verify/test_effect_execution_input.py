@@ -115,7 +115,7 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
                 json.dumps(capture.observation.viewer_state),
                 continuation_json=json.dumps(record.capture["frames"]),
             )
-            tensors = dict(encode_observation(space, obs))
+            tensors = encode_observation(space, obs)
             for name, width, expected in (
                 ("facts", 12, record.facts),
                 ("relations", 49, record.relations),

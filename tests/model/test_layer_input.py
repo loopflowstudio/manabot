@@ -29,6 +29,7 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     ObservationSpace,
+    allocate_vector_buffers,
     encode_observation,
 )
 from manabot.eval.admission import register_checkpoint
@@ -149,12 +150,7 @@ def test_layer_colors_counter_order_and_signed_program_payload_encode() -> None:
 
 def test_vector_buffers_match_scalar_encoding() -> None:
     space = ObservationSpace(ObservationConfig())
-    vector_buffers = space.allocate(1)
-    vector_buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
+    vector_buffers = allocate_vector_buffers(space, 1)
     players = [
         managym.PlayerConfig(name, {"Mountain": 20, "Gray Ogre": 20})
         for name in ("a", "b")

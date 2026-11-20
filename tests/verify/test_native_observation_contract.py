@@ -41,6 +41,7 @@ from manabot.env.observation import (
     ObservationConfig,
     ObservationSpace,
     ZoneEnum,
+    allocate_vector_buffers,
     encode_observation,
 )
 from manabot.infra.config import UnsupportedPolicyInput
@@ -59,20 +60,6 @@ def make_player_configs() -> list[managym.PlayerConfig]:
 
 def random_valid_action(obs: managym.Observation, rng: np.random.Generator) -> int:
     return int(rng.integers(0, len(obs.action_space.actions)))
-
-
-def allocate_vector_buffers(
-    num_envs: int,
-    config: ObservationConfig,
-) -> dict[str, np.ndarray]:
-    space = ObservationSpace(config)
-    buffers = space.allocate(num_envs)
-    buffers.update(
-        rewards=np.zeros((num_envs,), dtype=np.float64),
-        terminated=np.zeros((num_envs,), dtype=np.uint8),
-        truncated=np.zeros((num_envs,), dtype=np.uint8),
-    )
-    return buffers
 
 
 def assert_buffer_observation_equal(
@@ -236,7 +223,7 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         skip_trivial=True,
         player_policies=("agent", "random"),
     )
-    buffers = allocate_vector_buffers(num_envs, config)
+    buffers = allocate_vector_buffers(space, num_envs)
     hot.set_buffers(buffers)
 
     compat_reset = compat.reset_all(player_configs)
@@ -291,7 +278,7 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         skip_trivial=True,
         player_policies=("agent", "agent"),
     )
-    good = allocate_vector_buffers(num_envs, config)
+    good = allocate_vector_buffers(ObservationSpace(config), num_envs)
 
     env.set_buffers(good)
     env.reset_all_into_buffers(player_configs)
@@ -614,7 +601,7 @@ def test_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     config = ObservationConfig(max_facts=capacity)
     space = ObservationSpace(config)
     env = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
-    buffers = allocate_vector_buffers(1, config)
+    buffers = allocate_vector_buffers(space, 1)
     env.set_buffers(buffers)
     obs, _ = env.reset_all(make_player_configs())[0]
     env.reset_seeds_into_buffers([213])

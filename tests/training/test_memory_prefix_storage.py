@@ -29,7 +29,7 @@ from manabot.env.memory_store import (
     gather_memory,
     restore_memory,
 )
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import ObservationConfig, RewardConfig
 from manabot.training.rollout.collection import (
     Collector,
@@ -387,12 +387,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
             max_decision_members=capacities[3],
         )
     )
-    buffers = space.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, np.float64),
-        terminated=np.zeros(1, np.uint8),
-        truncated=np.zeros(1, np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 1)
     env = managym.VectorEnv(
         1, seed=11, decision_memory=True, player_policies=("agent", "agent")
     )
@@ -434,12 +429,7 @@ def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
             max_decision_members=8192,
         )
     )
-    buffers = space.allocate(2)
-    buffers.update(
-        rewards=np.zeros(2, np.float64),
-        terminated=np.zeros(2, np.uint8),
-        truncated=np.zeros(2, np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 2)
     env = ShardedVectorEnv(2, 11, workers=2, decision_memory=True)
     try:
         env.set_buffers(buffers)

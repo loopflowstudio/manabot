@@ -6,7 +6,11 @@ import torch
 
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 import managym
@@ -23,16 +27,6 @@ def _players(
         ],
         decklists=disclosure,
     )
-
-
-def _step_buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
-    buffers = space.allocate(size)
-    buffers.update(
-        rewards=np.zeros(size, dtype=np.float64),
-        terminated=np.zeros(size, dtype=np.uint8),
-        truncated=np.zeros(size, dtype=np.uint8),
-    )
-    return buffers
 
 
 def _assert_rows(
@@ -71,7 +65,7 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
         else managym.VectorEnv(2, seed=42)
     )
     players = _players(disclosure)
-    execution = _step_buffers(space, 2)
+    execution = allocate_vector_buffers(space, 2)
     vector.set_buffers(execution)
     vector.reset_all_into_buffers(players)
     scalars = [managym.Env(seed=42 + slot) for slot in range(2)]
@@ -180,7 +174,7 @@ def test_fixed_seat_supplied_capacities_and_action_overflow() -> None:
 def test_fixed_seat_reset_reassign_and_replacement_identities() -> None:
     space = ObservationSpace()
     vector = CapturedVector(num_envs=2, seed=42)
-    vector.set_buffers(_step_buffers(space, 2))
+    vector.set_buffers(allocate_vector_buffers(space, 2))
     players = _players()
     vector.reset_all_into_buffers(players)
     buffers = space.allocate(2)

@@ -315,9 +315,21 @@ class ObservationSpace(gym.spaces.Space):
         )
 
 
+def allocate_vector_buffers(
+    obs_space: ObservationSpace, n: int
+) -> dict[str, np.ndarray]:
+    """Allocate observation and step-result arrays for n native vector streams."""
+    return {
+        **obs_space.allocate(n),
+        "rewards": np.zeros(n, dtype=np.float64),
+        "terminated": np.zeros(n, dtype=np.uint8),
+        "truncated": np.zeros(n, dtype=np.uint8),
+    }
+
+
 def encode_observation(
     space: ObservationSpace, obs: managym.Observation
-) -> ObservationBuffers:
+) -> dict[str, np.ndarray]:
     """Fresh buffers for `obs` in `space`, written by the native encoder.
 
     Any observation encodes: live, restored with ``Observation.from_json`` or

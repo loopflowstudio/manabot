@@ -28,7 +28,11 @@ from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
 from manabot.env.memory_store import select_rows
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    allocate_vector_buffers as allocate_buffers,
+)
 from manabot.infra.config import MatchConfig
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
@@ -128,16 +132,6 @@ class RandomBatchController:
 # -----------------------------------------------------------------------------
 # K-stream vectorized game driver (eval / head-to-head)
 # -----------------------------------------------------------------------------
-
-
-def allocate_buffers(obs_space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    buffers = obs_space.allocate(n)
-    buffers.update(
-        rewards=np.zeros((n,), dtype=np.float64),
-        terminated=np.zeros((n,), dtype=np.uint8),
-        truncated=np.zeros((n,), dtype=np.uint8),
-    )
-    return buffers
 
 
 def run_vector_games(

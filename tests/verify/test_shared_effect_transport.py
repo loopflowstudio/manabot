@@ -5,7 +5,11 @@ import json
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
@@ -47,12 +51,7 @@ def test_controlled_drill_prefix_admits_shared_effects(
     scalar_obs, _ = scalar.reset(players)
     assert scalar_obs.decklists_closed is closed
     space = ObservationSpace()
-    buffers = space.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 1)
     vector = managym.VectorEnv(
         num_envs=1,
         seed=game.seed,

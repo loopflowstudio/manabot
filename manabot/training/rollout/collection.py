@@ -48,6 +48,7 @@ from manabot.env.observation import (
     ActionEnum,
     ObservationBuffers,
     ObservationSpace,
+    allocate_vector_buffers,
 )
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
@@ -56,7 +57,6 @@ from manabot.policy.protocol import BackendPolicy
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
-    allocate_buffers,
 )
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import BatchClosure
@@ -647,7 +647,7 @@ def open_collector(
             raise ValueError("unsupported training root")
         env = TargetPracticeVector(observation_space, match, num_envs, seed)
     try:
-        buffers = allocate_buffers(observation_space, num_envs)
+        buffers = allocate_vector_buffers(observation_space, num_envs)
         slots = num_envs * (2 if learning_seats == "both" else 1)
         observation_keys = [
             key for key in observation_space.shapes if key not in ACTION_FIELDS

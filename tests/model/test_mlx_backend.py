@@ -265,8 +265,8 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
 
     torch.set_num_threads(1)
     _, _, agent = _converted(tmp_path)
-    encoder = agent.observation_space
-    obs = {k: torch.zeros((2, *shape)) for k, shape in encoder.shapes.items()}
+    space = agent.observation_space
+    obs = {k: torch.zeros((2, *shape)) for k, shape in space.shapes.items()}
     obs["agent_player_valid"][:] = 1
     obs["opponent_player_valid"][:] = 1
     obs["agent_cards_valid"][:, 1] = 1
@@ -275,15 +275,15 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
     obs["action_focus"].fill_(-1)
     obs["action_focus"][:, 0, 0] = 0
     obs["action_focus"][:, 1, 0] = (
-        2 + 2 * encoder.cards_per_player + encoder.perms_per_player
+        2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
     )
-    sizes = bucket_sizes({k: v.numpy() for k, v in obs.items()}, encoder, objects=True)
+    sizes = bucket_sizes({k: v.numpy() for k, v in obs.items()}, space, objects=True)
     assert sizes is not None and sizes.trims_objects
     trimmed = trim_observation({k: v.numpy() for k, v in obs.items()}, sizes)
     policy = assemble(
         from_torch_state(
             agent.config,
-            encoder.config,
+            space.config,
             {k: v.numpy() for k, v in agent.state_dict().items()},
             parameter_names=dict(agent.named_parameters()),
             readings=agent.readings,
@@ -332,15 +332,15 @@ def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     from manabot.policy.protocol import Settings, Targets
 
     _, _, agent = _converted(tmp_path)
-    encoder = agent.observation_space
-    obs = {k: np.zeros((2, *shape), np.float32) for k, shape in encoder.shapes.items()}
+    space = agent.observation_space
+    obs = {k: np.zeros((2, *shape), np.float32) for k, shape in space.shapes.items()}
     obs["agent_player_valid"][:] = obs["opponent_player_valid"][:] = 1
     obs["actions_valid"][:, :2] = 1
     obs["action_focus"][:] = -1
     policy = assemble(
         from_torch_state(
             agent.config,
-            encoder.config,
+            space.config,
             {k: v.numpy() for k, v in agent.state_dict().items()},
             parameter_names=dict(agent.named_parameters()),
             readings=agent.readings,

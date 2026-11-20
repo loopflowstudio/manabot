@@ -10,13 +10,19 @@ import torch
 
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, column, columns
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    column,
+    columns,
+)
 import managym
 from managym.recording import resolve_player_policies
 
-
 PLAYER_LIFE = column("agent_player", "life")
-PERMANENT_REWARD_COLUMNS = columns("agent_permanents", "is_land", "is_creature", "valid")
+PERMANENT_REWARD_COLUMNS = columns(
+    "agent_permanents", "is_land", "is_creature", "valid"
+)
 _LEGACY_CARD_COLUMNS = managym.observation_layout(legacy=True)["agent_cards"]["columns"]
 LEGACY_BATTLEFIELD_ZONE = _LEGACY_CARD_COLUMNS["zone_battlefield"]["index"]
 LEGACY_CARD_REWARD_COLUMNS = [
@@ -48,7 +54,7 @@ class VectorEnv:
         self.device = torch.device(device)
         self._rust_env = self._build_rust_env(seed=seed)
 
-        self._buffers = self._allocate_buffers()
+        self._buffers = allocate_vector_buffers(self.observation_space, self.num_envs)
         self._rust_env.set_buffers(
             self._buffers, self.observation_space.config.action_overflow
         )
@@ -83,15 +89,6 @@ class VectorEnv:
             skip_trivial=self._skip_trivial,
             player_policies=self._player_policies,
         )
-
-    def _allocate_buffers(self) -> Dict[str, np.ndarray]:
-        buffers = self.observation_space.allocate(self.num_envs)
-        buffers.update(
-            rewards=np.zeros((self.num_envs,), dtype=np.float64),
-            terminated=np.zeros((self.num_envs,), dtype=np.uint8),
-            truncated=np.zeros((self.num_envs,), dtype=np.uint8),
-        )
-        return buffers
 
     def _build_tensor_views(self) -> None:
         self._obs_keys = tuple(self.observation_space.keys())

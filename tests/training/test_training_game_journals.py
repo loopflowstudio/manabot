@@ -19,7 +19,7 @@ from manabot.env.failures import (
     ScalarCapture,
     capture_scope,
 )
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.run_settings import RunSettings
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
@@ -61,13 +61,7 @@ def _roster() -> list[managym.PlayerConfig]:
 
 
 def _buffers(count: int) -> dict[str, np.ndarray]:
-    buffers = ObservationSpace().allocate(count)
-    buffers.update(
-        rewards=np.zeros(count, dtype=np.float64),
-        terminated=np.zeros(count, dtype=np.uint8),
-        truncated=np.zeros(count, dtype=np.uint8),
-    )
-    return buffers
+    return allocate_vector_buffers(ObservationSpace(), count)
 
 
 class _ExitNative:

@@ -3,10 +3,9 @@
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 import managym
 from managym.card_capture import CapturedCards
 from managym.recording import CapturedVector, PlayerSetup, ScalarCapture, read_records
@@ -42,12 +41,7 @@ def players() -> list[managym.PlayerConfig]:
 
 
 def buffers(vector: CapturedVector, count: int) -> None:
-    arrays = ObservationSpace().allocate(count)
-    arrays.update(
-        rewards=np.zeros(count),
-        terminated=np.zeros(count, dtype=np.uint8),
-        truncated=np.zeros(count, dtype=np.uint8),
-    )
+    arrays = allocate_vector_buffers(ObservationSpace(), count)
     vector.set_buffers(arrays)
 
 

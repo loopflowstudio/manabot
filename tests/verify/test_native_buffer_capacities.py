@@ -17,6 +17,7 @@ from manabot.env.observation import (
     ACTION_MODE_INDEX,
     RELATION_ROWS,
     ObservationSpace,
+    allocate_vector_buffers,
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
@@ -24,18 +25,6 @@ from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 from managym.recording import GameInputs
 from tests.current_capacity import capacity_position
-
-
-def _vector_buffers(
-    space: ObservationSpace, num_envs: int = 1
-) -> dict[str, np.ndarray]:
-    buffers = space.allocate(num_envs)
-    buffers.update(
-        rewards=np.zeros(num_envs, dtype=np.float64),
-        terminated=np.zeros(num_envs, dtype=np.uint8),
-        truncated=np.zeros(num_envs, dtype=np.uint8),
-    )
-    return buffers
 
 
 def _players() -> managym.GameSetup:
@@ -57,7 +46,7 @@ def _encode_everywhere(
     Stale preallocated buffers are overwritten completely, padding included,
     and the first vector stream holds the same arrays.
     """
-    expected = dict(encode_observation(space, obs))
+    expected = encode_observation(space, obs)
     into = space.allocate()
     for value in into.values():
         value.fill(-7)
@@ -104,7 +93,7 @@ def test_land_growth_preserves_every_permanent(capacity: int) -> None:
             action_overflow="first-legal",
         )
     )
-    buffers = _vector_buffers(space)
+    buffers = allocate_vector_buffers(space, 1)
     vector.set_buffers(buffers, "first-legal")
     scalar.reset(players)
     vector.reset_all_into_buffers(players)
@@ -151,7 +140,7 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
         else ShardedVectorEnv(num_envs=2, seed=game.seed, workers=workers)
     )
     try:
-        buffers = _vector_buffers(space, num_envs=2)
+        buffers = allocate_vector_buffers(space, 2)
         vector.set_buffers(buffers, "first-legal")
         vector.reset_each_into_buffers([game.setup(), _players()])
         scalar = managym.Env(seed=game.seed, skip_trivial=True)
@@ -206,7 +195,7 @@ def test_nondefault_axes_match_scalar_and_vector_buffers(history: int) -> None:
     space = ObservationSpace(config)
     scalar = managym.Env(seed=213, skip_trivial=True)
     vector = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
-    buffers = _vector_buffers(space)
+    buffers = allocate_vector_buffers(space, 1)
     vector.set_buffers(buffers)
     obs, _ = scalar.reset(_players())
     vector.reset_all_into_buffers(_players())
@@ -282,7 +271,7 @@ def test_affordable_x_modes_reach_scalar_and_vector_buffers(
             max_permanents_per_player=permanents,
         )
     )
-    buffers = _vector_buffers(space)
+    buffers = allocate_vector_buffers(space, 1)
     vector.set_buffers(buffers)
     if permanents == 1:
         assert max(len(obs.agent_permanents), len(obs.opponent_permanents)) > 1
@@ -402,7 +391,7 @@ def test_event_capacity_keeps_legacy_window_and_public_history_bound(
     scalar = managym.Env(seed=213)
     obs, _ = scalar.reset(_players())
     vector = managym.VectorEnv(num_envs=1, seed=213)
-    buffers = _vector_buffers(space)
+    buffers = allocate_vector_buffers(space, 1)
     if history:
         with pytest.raises(ValueError, match="1..32"):
             managym.encode_observation_into(obs, space.allocate())
@@ -446,7 +435,7 @@ def test_card_capacity_overflow_rejected_by_all_paths() -> None:
     scalar = managym.Env(seed=213)
     obs, _ = scalar.reset(_players())
     vector = managym.VectorEnv(num_envs=1, seed=213)
-    vector.set_buffers(_vector_buffers(space))
+    vector.set_buffers(allocate_vector_buffers(space, 1))
     message = "observation capacity exceeded: agent_cards.* > 1"
     with pytest.raises(managym.ObservationCapacity, match=message):
         encode_observation(space, obs)
@@ -465,7 +454,7 @@ def test_explicit_legal_prefix_keeps_first_actions_in_scalar_and_vector_buffers(
     )
     scalar = managym.Env(seed=213, skip_trivial=True)
     vector = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
-    buffers = _vector_buffers(space)
+    buffers = allocate_vector_buffers(space, 1)
     vector.set_buffers(buffers, "first-legal")
     obs, _ = scalar.reset(_players())
     vector.reset_all_into_buffers(_players())
@@ -562,7 +551,7 @@ def test_captured_vector_records_native_support_before_policy_step(
     )
     with capture_scope(CaptureScope(tmp_path)):
         vector = CapturedVector(num_envs=1, seed=213)
-        vector.set_buffers(_vector_buffers(space), "first-legal")
+        vector.set_buffers(allocate_vector_buffers(space, 1), "first-legal")
         vector.reset_all_into_buffers(
             [managym.PlayerConfig(name, {"Mountain": 30}) for name in ("a", "b")]
         )

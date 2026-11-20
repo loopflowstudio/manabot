@@ -15,7 +15,11 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig
 import managym
 from managym.academy import server, trace as trace_store
@@ -132,12 +136,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     vector.reset_all(game.trace.config.to_rust())
                     for event in game.trace.events:
                         vector.step([event.action])
-                    buffers = space.allocate(1)
-                    buffers.update(
-                        rewards=np.zeros(1, dtype=np.float64),
-                        terminated=np.zeros(1, dtype=np.uint8),
-                        truncated=np.zeros(1, dtype=np.uint8),
-                    )
+                    buffers = allocate_vector_buffers(space, 1)
                     vector.set_buffers(buffers)
                     vector.scenario_naming_vocabulary_into_buffers()
                     model = ActorCritic(

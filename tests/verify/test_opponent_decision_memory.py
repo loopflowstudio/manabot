@@ -9,7 +9,11 @@ import pytest
 
 from manabot.env.match import Match
 from manabot.env.memory_store import CompactObservation, MemoryStore, PrefixIdentity
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.infra.config import ObservationConfig
 import managym
 from managym.decision_memory import read_records
@@ -166,12 +170,7 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
     hot = managym.VectorEnv(
         2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
     )
-    buffers = space.allocate(2)
-    buffers.update(
-        rewards=np.zeros(2, np.float64),
-        terminated=np.zeros(2, np.uint8),
-        truncated=np.zeros(2, np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 2)
     hot.set_buffers(buffers)
     reference.reset_all(configs)
     hot.reset_all_into_buffers(configs)

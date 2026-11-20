@@ -23,6 +23,7 @@ from manabot.env.observation import (
     ACTION_MODE_INDEX,
     NAME_DIM,
     ObservationSpace,
+    allocate_vector_buffers,
     encode_observation,
 )
 from manabot.infra.config import ModelConfig
@@ -254,12 +255,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     vector.reset_all(_players())
     for action in naming_trace.actions:
         vector.step([action])
-    buffers = space.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 1)
     vector.set_buffers(buffers)
     vector.scenario_naming_vocabulary_into_buffers()
     for key, expected in values.items():
@@ -508,12 +504,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     space = ObservationSpace()
     vector = managym.VectorEnv(1, seed=165)
     scalar = managym.Env(seed=165)
-    buffers = space.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 1)
     vector.set_buffers(buffers)
     vector.reset_all_into_buffers(_players())
     raw = scalar.reset(_players())[0]
