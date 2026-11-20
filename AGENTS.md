@@ -324,13 +324,11 @@ change already touches it; do not rewrite a module only for style. Rust in
   halves; raw storage identities never enter these tokens. A stacked activation
   owns its chosen effects; catalog joins are observation provenance, never
   resolution lookup authority.
-- Derive every buffer and key from the supplied `ObservationSpace` on both the
-  scalar and vector paths, never from a native default or a global key list.
-  Companion shapes must agree before writes. Fact, relation and capacity
-  overflow is a typed Capacity error, never truncation. The one exception is
-  Jack Heart's 2026-11-04 TLA pilot choice of `action_overflow=first-legal`
-  with 64 policy slots and aggregate replay-linked diagnostics; native legality
-  and Academy retain all choices, and an omitted overflow policy means error.
+- Fact, relation and capacity overflow raise typed capacity errors. Only
+  `action_overflow=first-legal` may truncate policy input. The TLA pilot
+  uses it with 64 policy slots and aggregate replay-linked diagnostics
+  (Jack Heart, 2026-11-04). Native legality and Academy retain all choices,
+  and an omitted overflow policy means error.
 - The model reads each numeric input column by a reading. A fresh model
   derives it from the column's native kind (`ValueLayout` in
   `agent/observation_layout.rs`): unscaled counts get the log squash, a
@@ -351,16 +349,15 @@ change already touches it; do not rewrite a module only for style. Rust in
   their own preparation (decision memory, history events) are not used. A
   run's saved state records its model settings and readings. Resume checks both before
   restoring weights. Older runs supply their model settings from the initial raw policy.
-- New observation state reaches the policy input, the LLM text observation
-  and the learning tokens in the change that adds it; the policy input never
-  silently falls behind. The native encoder (`managym/src/agent/`) is the only
-  one, and native owns the layout (`managym.observation_layout()`,
-  `managym.ObservationLayout`): `encode_observation(space, obs)` and every
-  batch/vector path pass `space.layout`, and `ObservationSpace` is a config
-  plus that layout at its capacities (`layout`, `shapes`, `allocate`). Python
-  reads columns and row kinds by native name (`column("facts", "value")` in
-  `manabot.env.observation`), never by number or a hand-kept copy. Give new
-  columns or rows a directed native test on a constructed position.
+- New observation state reaches the policy input, LLM text and learning
+  tokens in the same change. `ObservationSpace` pairs the config with its
+  native `ObservationLayout`. Pass `space.layout` to scalar, batch and vector
+  encoding and derive buffers from it. Validate the full buffer contract
+  before encoding, including exact keys and companion shapes. The layout
+  supplies the input version, optional blocks and capacities. The sole encoder
+  lives in `managym/src/agent/`. Read columns and row kinds by native name
+  (`column("facts", "value")` in `manabot.env.observation`). Give new columns
+  or rows a directed native test on a constructed position.
   `ObservationSpace.encode`, `space.encoder` and `ObservationEncoder` are
   warning aliases removed in 0.4.0; frozen experiment files keep them.
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
