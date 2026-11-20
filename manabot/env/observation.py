@@ -188,9 +188,8 @@ TURN_STATE_DIM = width("player_turn_state")
 class ObservationSpace(gym.spaces.Space):
     """One `ObservationConfig` and the native layout of its policy input.
 
-    `shapes` and `dtypes` are `managym.observation_layout()` for the config's
-    input version, history and memory, with every `None` extent filled from
-    its capacities. Construction refuses a configuration whose decision-memory
+    `shapes` and `dtypes` come from the configured native `layout`.
+    Construction refuses a configuration whose decision-memory
     capacities are incomplete or that asks for memory under a deprecated
     input. The space writes nothing; `encode_observation` does.
     """

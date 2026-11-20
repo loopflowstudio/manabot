@@ -140,7 +140,7 @@ in `managym/src/agent/` with a directed test that asserts its named columns or
 rows on a constructed position, and its `observability.rs` entry. Python
 names a column it reads by its native name (`column("facts", "value")` in
 `manabot/env/observation.py`), and `ObservationSpace` takes every shape from
-`managym.observation_layout()`, so moving or widening a column needs no
+its native `layout`, so moving or widening a column needs no
 Python edit; renaming one fails the import. Run
 `uv run --extra dev pytest tests/env/test_named_observation_layout.py -q`
 after changing the layout. Action overflow is checked at the

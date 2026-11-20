@@ -285,7 +285,7 @@ pub(crate) fn encode_rows(
             } => {
                 let context = context_id.and_then(&context);
                 [
-                    (*definition + 1) as f32,
+                    (u64::from(*definition) + 1) as f32,
                     role(*owner),
                     zone.map(|zone| (zone as usize + 1) as f32).unwrap_or(0.0),
                     context.map(|v| v as f32).unwrap_or(-1.0),

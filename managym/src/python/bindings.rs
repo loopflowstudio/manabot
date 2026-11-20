@@ -3153,8 +3153,8 @@ impl PyObservation {
     #[staticmethod]
     #[pyo3(signature = (text, *, continuation_json=None))]
     fn from_json(text: &str, continuation_json: Option<&str>) -> PyResult<Self> {
-        let mut observation =
-            crate::agent::observation_json::parse(text).map_err(PyValueError::new_err)?;
+        let mut observation = crate::agent::observation_json::parse_with_history(text)
+            .map_err(PyValueError::new_err)?;
         if let Some(frames) = continuation_json {
             observation.continuation = parse_continuation_frames_json(frames)?;
         }

@@ -292,11 +292,12 @@ def test_public_history_round_trips_for_both_viewers() -> None:
     env = priority_root(("Mountain",), ())
     env.step(0)  # Play the only land. Its arrival has a public object reference.
     layout = managym.ObservationLayout(policy_history=True)
+    source_definition = observation.column("events", "source_definition")
     for viewer in (0, 1):
-        observation = env.observation_for_player(viewer)
+        obs = env.observation_for_player(viewer)
         live, restored = layout.allocate(), layout.allocate()
-        managym.encode_observation_into(observation, layout, live)
-        text = observation.toJSON()
+        managym.encode_observation_into(obs, layout, live)
+        text = obs.toJSON()
         managym.encode_observation_into(
             managym.Observation.from_json(text), layout, restored
         )
@@ -304,6 +305,19 @@ def test_public_history_round_trips_for_both_viewers() -> None:
         for field in ("events", "events_valid"):
             np.testing.assert_array_equal(live[field], restored[field])
         historical = json.loads(text)
+        semantic = json.loads(env.semantic_observation_json(viewer))
+        assert "policy_history" not in semantic["viewer_state"]
+        semantic["viewer_state"]["policy_history"] = historical["policy_history"]
+        with pytest.raises(ValueError, match="noncanonical viewer observation"):
+            managym.validate_observation_json(json.dumps(semantic))
+        oversized = {**historical, "policy_history": historical["policy_history"] * 33}
+        with pytest.raises(ValueError, match="public policy history exceeds"):
+            managym.Observation.from_json(json.dumps(oversized))
+        historical["policy_history"][0]["source"]["Card"]["definition"] = 2**32 - 1
+        managym.encode_observation_into(
+            managym.Observation.from_json(json.dumps(historical)), layout, restored
+        )
+        assert restored["events"][0, source_definition] == 2**32
         del historical["policy_history"]
         managym.encode_observation_into(
             managym.Observation.from_json(json.dumps(historical)), layout, restored

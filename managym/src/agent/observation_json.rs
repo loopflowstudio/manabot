@@ -440,11 +440,28 @@ pub fn optional_mana_cost<'de, D: Deserializer<'de>>(
     mana_cost(deserializer).map(Some)
 }
 pub fn parse(text: &str) -> Result<Observation, String> {
+    parse_observation(text, false)
+}
+
+/// Read a standalone observation, including the history emitted by Python.
+pub fn parse_with_history(text: &str) -> Result<Observation, String> {
+    parse_observation(text, true)
+}
+
+fn parse_observation(text: &str, include_history: bool) -> Result<Observation, String> {
     let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let observation: Observation =
         serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+    let canonical = if include_history {
+        if observation.policy_history.len() > super::policy_history::HISTORY_LIMIT {
+            return Err("public policy history exceeds its native limit".into());
+        }
+        to_json_with_history(&observation)
+    } else {
+        to_json(&observation)
+    };
     let roundtrip: serde_json::Value =
-        serde_json::from_str(&to_json_with_history(&observation)).map_err(|e| e.to_string())?;
+        serde_json::from_str(&canonical).map_err(|e| e.to_string())?;
     if value != roundtrip || !observation.validate() {
         return Err("noncanonical viewer observation".into());
     }
