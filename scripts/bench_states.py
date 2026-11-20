@@ -1,9 +1,8 @@
 """Time the LLM text renderer on the native stress-state corpus.
 
-The Rust harness exports recipes together with their exact acting-player
-observation and decision capture. Decoding is outside three individually
-timed samples; no Python board builder can drift from Rust. Policy-input
-encoding is native and timed by the Rust harness itself.
+The Rust harness exports each recipe's exact decision capture, so no Python
+board builder can drift from Rust; each row is the median of three timed
+renders. Policy-input encoding is native and timed by the Rust harness itself.
 Run from the repository root with ``uv run --extra play python scripts/bench_states.py``.
 """
 
@@ -30,8 +29,6 @@ class Recipe(BaseModel):
 class Checkpoint(BaseModel):
     recipe: Recipe
     checkpoint: str
-    observation: str
-    continuation: str
     capture: str
 
 
