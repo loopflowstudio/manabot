@@ -678,8 +678,8 @@ closed set:
 | `rank` | A one-based order rank; 0 absent |
 | `position` | A one-based position in a zone; 0 absent |
 | `category` | A code from a small fixed set |
-| `selector` | A one-based choice index (a mode, an ability, a continuation frame); 0 absent |
-| `reference` | A one-based row of the padded object table; 0 absent |
+| `selector` | A one-based choice index (a mode, an ability, a frame index a relation row repeats); 0 absent |
+| `reference` | A join to a row of another table: the padded object table, a continuation frame an action continues, the naming catalog; the encoding gives the base |
 | `id` | An identity, such as a card definition or token value; never a magnitude |
 | `tagged` | A value whose meaning depends on its row's kind |
 
