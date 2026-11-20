@@ -42,7 +42,7 @@ def test_library_facts_encode_for_their_owner_and_remain_private(owner: int) -> 
 
     # The shared native writer infers its layout from these supplied buffers.
     buffers = space.allocate(1)
-    managym.encode_observations_into([env], buffers, 1)
+    managym.encode_observations_into([env], space.layout, buffers, 1)
     acting = encode_observation(
         space, env.observation_for_player(env.current_agent_index())
     )

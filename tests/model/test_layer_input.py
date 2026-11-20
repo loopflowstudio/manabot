@@ -156,7 +156,7 @@ def test_vector_buffers_match_scalar_encoding() -> None:
         for name in ("a", "b")
     ]
     vector = managym.VectorEnv(num_envs=1, seed=23)
-    vector.set_buffers(vector_buffers)
+    vector.set_buffers(vector_buffers, layout=space.layout)
     vector.reset_all(players)
     vector.reset_seeds_into_buffers([23])
     scalar = managym.Env(seed=23)

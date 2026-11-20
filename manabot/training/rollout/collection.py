@@ -702,6 +702,7 @@ def open_collector(
         env.set_buffers(
             buffers,
             action_overflow=observation_space.config.action_overflow,
+            layout=observation_space.layout,
         )
         if not uniform_roster:
             collector.stream_matches = stream_matches(

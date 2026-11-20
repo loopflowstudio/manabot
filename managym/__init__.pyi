@@ -56,6 +56,32 @@ class ObservationArrayLayout(TypedDict):
     row_kind_names: dict[str, int]
     element: NotRequired[ObservationValueLayout]
 
+class ObservationLayout:
+    def __init__(
+        self,
+        *,
+        policy_input_version: int = 11,
+        policy_history: bool = False,
+        max_cards_per_player: int = 60,
+        max_permanents_per_player: int = 40,
+        max_stack_objects: int = 32,
+        max_actions: int = 512,
+        max_focus_objects: int = 2,
+        max_events: int = 32,
+        max_facts: int = 512,
+        max_decision_records: int = 0,
+        max_decision_references: int = 0,
+        max_decision_reference_details: int = 0,
+        max_decision_members: int = 0,
+    ) -> None: ...
+    @property
+    def arrays(self) -> dict[str, ObservationArrayLayout]: ...
+    @property
+    def shapes(self) -> dict[str, tuple[int, ...]]: ...
+    @property
+    def dtypes(self) -> dict[str, str]: ...
+    def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]: ...
+
 def observation_layout(
     *,
     policy_history: bool = False,
@@ -396,7 +422,11 @@ class VectorEnv:
         self, actions: List[int]
     ) -> List[Tuple[Observation, float, bool, bool, Dict[str, Any]]]: ...
     def set_buffers(
-        self, buffers: Dict[str, np.ndarray], action_overflow: str = "error"
+        self,
+        buffers: Dict[str, np.ndarray],
+        action_overflow: str = "error",
+        *,
+        layout: ObservationLayout | None = None,
     ) -> None: ...
     def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(
@@ -439,6 +469,8 @@ class VectorEnv:
         players: list[int],
         buffers: dict[str, np.ndarray],
         action_overflow: Literal["error", "first-legal"] = "error",
+        *,
+        layout: ObservationLayout,
     ) -> list[ObservationRead]:
         """Write every fixed-seat view; discard all output rows after an error."""
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
@@ -1146,12 +1178,16 @@ def policy_action_count(
     `action_overflow="first-legal"`, which keeps the first `capacity`.
     """
     ...
+
 def encode_observation_into(
-    obs: Observation, out: Dict[str, np.ndarray], action_overflow: str = "error"
+    obs: Observation,
+    layout: ObservationLayout,
+    out: Dict[str, np.ndarray],
+    action_overflow: str = "error",
 ) -> None:
     """Write any observation (live, restored or a viewer projection) into out.
 
-    The configuration is read from the buffers' shapes. The whole buffer
+    The supplied layout determines every buffer key, shape and dtype. The whole buffer
     contract is checked before encoding: a missing array, wrong shape or
     non-contiguous or read-only array raises `ValueError` and a wrong dtype or
     non-NumPy value `TypeError`, whatever the observation holds, and nothing
@@ -1162,7 +1198,10 @@ def encode_observation_into(
     ...
 
 def encode_observations_into(
-    envs: Sequence[Env], buffers: Dict[str, np.ndarray], capacity: int
+    envs: Sequence[Env],
+    layout: ObservationLayout,
+    buffers: Dict[str, np.ndarray],
+    capacity: int,
 ) -> list[int]:
     """Write each env's acting-player view into rows 0..len(envs) of buffers.
 

@@ -174,7 +174,7 @@ def run_vector_games(
         player_policies=("agent", "agent"),
     )
     buffers = allocate_buffers(obs_space, num_streams)
-    env.set_buffers(buffers)
+    env.set_buffers(buffers, layout=obs_space.layout)
     env.reset_all_into_buffers(match.to_rust())
 
     hero_seat = np.arange(num_streams, dtype=np.int64) % 2
@@ -316,7 +316,7 @@ class PolicyRolloutMCPlayer:
         start = time.perf_counter()
 
         pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
-        pool.set_buffers(self._buffers, self._capacity)
+        pool.set_buffers(self._buffers, self._capacity, layout=self._obs_space.layout)
         num_slots = pool.num_slots
         actions_full = np.zeros(num_slots, dtype=np.int64)
 

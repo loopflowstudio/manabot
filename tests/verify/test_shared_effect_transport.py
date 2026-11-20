@@ -57,7 +57,7 @@ def test_controlled_drill_prefix_admits_shared_effects(
         seed=game.seed,
         skip_trivial=True,
     )
-    vector.set_buffers(buffers)
+    vector.set_buffers(buffers, layout=space.layout)
     ((vector_obs, _),) = vector.reset_all(players)
     assert vector_obs.decklists_closed is closed
     vector.reset_seeds_into_buffers([game.seed])

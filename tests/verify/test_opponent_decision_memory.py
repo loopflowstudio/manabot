@@ -148,10 +148,10 @@ def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
     )
     with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
         encode_observation(space, obs)
-    buffers = dict(ObservationSpace().allocate())
-    buffers["decision_records"] = np.zeros((4, 74), np.float32)
-    with pytest.raises(ValueError, match="companion"):
-        managym.encode_observation_into(obs, buffers)
+    buffers = space.allocate()
+    del buffers["decision_members"]
+    with pytest.raises(ValueError, match="decision_members"):
+        managym.encode_observation_into(obs, space.layout, buffers)
 
 
 def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> None:
@@ -171,7 +171,7 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
         2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
     )
     buffers = allocate_vector_buffers(space, 2)
-    hot.set_buffers(buffers)
+    hot.set_buffers(buffers, layout=space.layout)
     reference.reset_all(configs)
     hot.reset_all_into_buffers(configs)
     retained = []

@@ -14,7 +14,9 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
 from manabot.policy.readings import Reading, fresh_readings, legacy_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
@@ -221,6 +223,29 @@ def test_resume_readings_records_a_new_run_and_accepts_a_legacy_state() -> None:
     resumed = Counts.model_validate({"updates": 3})
     assert loop.resume_readings(resumed, legacy, space) == {
         key: [str(value) for value in values] for key, values in legacy.items()
+    }
+
+
+def test_resume_accepts_historical_memory_readings() -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=8,
+            max_decision_references=16,
+            max_decision_reference_details=32,
+            max_decision_members=16,
+        )
+    )
+    readings = fresh_readings(space)
+    historical = Counts(
+        updates=3,
+        readings={
+            key: [value.value for value in values]
+            for key, values in readings.items()
+            if key not in MEMORY_FIELDS
+        },
+    )
+    assert loop.resume_readings(historical, readings, space) == {
+        key: [value.value for value in values] for key, values in readings.items()
     }
 
 

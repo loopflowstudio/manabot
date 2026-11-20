@@ -256,7 +256,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     for action in naming_trace.actions:
         vector.step([action])
     buffers = allocate_vector_buffers(space, 1)
-    vector.set_buffers(buffers)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.scenario_naming_vocabulary_into_buffers()
     for key, expected in values.items():
         np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
@@ -505,7 +505,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     vector = managym.VectorEnv(1, seed=165)
     scalar = managym.Env(seed=165)
     buffers = allocate_vector_buffers(space, 1)
-    vector.set_buffers(buffers)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(_players())
     raw = scalar.reset(_players())[0]
     # Replay one Command trace through both step APIs so their per-step events

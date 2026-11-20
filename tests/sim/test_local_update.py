@@ -500,27 +500,38 @@ def test_native_frontier_encoding_writes_the_row_encoder_tensors(
     buffers = teacher.space.allocate(len(roots) + 2)
     for value in buffers.values():
         value.fill(7)
-    assert managym.encode_observations_into(roots, buffers, len(roots) + 2) == counts
+    assert (
+        managym.encode_observations_into(
+            roots, teacher.space.layout, buffers, len(roots) + 2
+        )
+        == counts
+    )
     for key, expected in rows.items():
         np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
         assert (buffers[key][len(roots) :] == 7).all(), key
     # A smaller frontier rewrites only its own rows of a reused buffer.
     assert (
-        managym.encode_observations_into(roots[:1], buffers, len(roots) + 2)
+        managym.encode_observations_into(
+            roots[:1], teacher.space.layout, buffers, len(roots) + 2
+        )
         == (counts[:1])
     )
     for key, expected in rows.items():
         np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
     with pytest.raises(ValueError, match="capacity"):
-        managym.encode_observations_into(roots, buffers, 1)
+        managym.encode_observations_into(roots, teacher.space.layout, buffers, 1)
     narrow = teacher.space.allocate(len(roots))
     narrow["actions"] = narrow["actions"][..., :-1].copy()
     with pytest.raises(ValueError):
-        managym.encode_observations_into(roots, narrow, len(roots))
+        managym.encode_observations_into(
+            roots, teacher.space.layout, narrow, len(roots)
+        )
     frozen = teacher.space.allocate(len(roots))
     frozen["agent_cards"].flags.writeable = False
     with pytest.raises(ValueError, match="writable"):
-        managym.encode_observations_into(roots, frozen, len(roots))
+        managym.encode_observations_into(
+            roots, teacher.space.layout, frozen, len(roots)
+        )
 
     native = LocalUpdateTeacher(
         teacher.likelihood.checkpoint,

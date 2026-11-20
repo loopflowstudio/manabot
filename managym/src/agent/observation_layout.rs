@@ -820,6 +820,59 @@ pub fn decision_memory_layout() -> BTreeMap<String, ArrayLayout> {
     ])
 }
 
+/// Resolve each variable extent once, at the capacities the encoder will use.
+pub fn configured_arrays(
+    config: &super::observation_encoder::ObservationEncoderConfig,
+) -> Result<BTreeMap<String, ArrayLayout>, String> {
+    let memory = [
+        config.max_decision_records,
+        config.max_decision_references,
+        config.max_decision_reference_details,
+        config.max_decision_members,
+    ];
+    if memory.contains(&0) && memory.iter().any(|&n| n != 0) {
+        return Err(String::from(
+            "decision memory requires all companion capacities",
+        ));
+    }
+    if config.policy_history && config.max_events > crate::agent::policy_history::HISTORY_LIMIT {
+        return Err(String::from("public history v1 requires 1..32 rows"));
+    }
+    let mut arrays = observation_layout(config.policy_history, config.turn_state, config.layout);
+    if config.max_decision_records > 0 {
+        if config.layout == InputLayout::Legacy {
+            return Err(String::from("decision memory requires policy input v11"));
+        }
+        arrays.extend(decision_memory_layout());
+    }
+    for array in arrays.values_mut() {
+        for (extent, axis) in array.shape.iter_mut().zip(&array.axes) {
+            if extent.is_some() {
+                continue;
+            }
+            let n = match *axis {
+                "card" | "definition" => config.max_cards_per_player,
+                "permanent" => config.max_permanents_per_player,
+                "stack" => config.max_stack_objects,
+                "action" => config.max_actions,
+                "focus" => config.max_focus_objects,
+                "event" => config.max_events,
+                "fact" => config.max_facts,
+                "opponent_record" => config.max_decision_records,
+                "opponent_reference" => config.max_decision_references,
+                "opponent_reference_detail" => config.max_decision_reference_details,
+                "opponent_member" => config.max_decision_members,
+                _ => unreachable!("unknown configurable axis {axis}"),
+            };
+            if n == 0 {
+                return Err(format!("{axis} capacity must be positive"));
+            }
+            *extent = Some(n);
+        }
+    }
+    Ok(arrays)
+}
+
 /// Every array `encode` writes, keyed by its buffer name, without allocating
 /// game buffers. `policy_history` selects the public history rows of `events`;
 /// `turn_state` adds the turn-state buffers, as

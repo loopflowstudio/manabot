@@ -74,7 +74,7 @@ def _assert_encodes(env: managym.Env, obs: managym.Observation) -> None:
         reference = encode_observation(space, obs)
         if obs.agent.player_index == env.current_agent_index():
             buffers = space.allocate(1)
-            managym.encode_observations_into([env], buffers, 1)
+            managym.encode_observations_into([env], space.layout, buffers, 1)
             for key, value in reference.items():
                 np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
 

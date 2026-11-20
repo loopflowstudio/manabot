@@ -312,7 +312,7 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
             # Native gameplay alone cannot reproduce an allocation failure.
             try:
                 managym.encode_observation_into(
-                    observation, buffers, space.config.action_overflow
+                    observation, space.layout, buffers, space.config.action_overflow
                 )
             except managym.ObservationCapacity as error:
                 retained = matches_retained_error(

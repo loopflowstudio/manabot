@@ -87,7 +87,7 @@ def run_census(out: Path, max_decisions: int = 2000) -> None:
         try:
             for viewer in range(2):
                 managym.encode_observation_into(
-                    env.observation_for_player(viewer), buffers
+                    env.observation_for_player(viewer), space.layout, buffers
                 )
                 counts.append(
                     {

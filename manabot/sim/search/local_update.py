@@ -205,7 +205,7 @@ class LocalUpdateTeacher:
             capacity = len(engines)
             self._frontier_buffers = self.space.allocate(capacity)
         counts = managym.encode_observations_into(
-            engines, self._frontier_buffers, capacity
+            engines, self.space.layout, self._frontier_buffers, capacity
         )
         encodings = {
             key: value[: len(engines)] for key, value in self._frontier_buffers.items()
@@ -232,7 +232,7 @@ class LocalUpdateTeacher:
                 raise ValueError("policy cannot represent complete legal offers")
             # Search requires every legal offer, even if a checkpoint permits
             # first-legal truncation during training.
-            managym.encode_observation_into(raw, encoded)
+            managym.encode_observation_into(raw, self.space.layout, encoded)
             if int(encoded["actions_valid"].sum()) != count:
                 raise ValueError("policy cannot represent complete legal offers")
             counts.append(count)

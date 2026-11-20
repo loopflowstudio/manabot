@@ -96,7 +96,7 @@ pub(crate) fn map_encode_err(
 }
 
 #[cfg(feature = "python")]
-fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
+pub(super) fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
     py.import_bound("warnings")?.call_method1(
         "warn",
         (
@@ -4967,19 +4967,22 @@ impl PyEnv {
             "Env.encode_observation_into is deprecated; use \
              managym.encode_observation_into; removal in 0.4.0",
         )?;
-        encode_observation_into(py, obs, out, action_overflow)
+        let config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
+        let layout = super::layout_bindings::ObservationLayout::from_config(config)?;
+        encode_observation_into(py, obs, &layout, out, action_overflow)
     }
 }
 
 /// Write any observation (live, restored or a viewer projection) into
-/// caller-owned buffers. The configuration is read from the buffers' shapes;
+/// caller-owned buffers at the supplied layout;
 /// companion shapes are checked before any write.
 #[cfg(feature = "python")]
 #[pyfunction]
-#[pyo3(signature = (obs, out, action_overflow="error"))]
+#[pyo3(signature = (obs, layout, out, action_overflow="error"))]
 fn encode_observation_into(
     py: Python<'_>,
     obs: PyObservation,
+    layout: &super::layout_bindings::ObservationLayout,
     out: Bound<'_, PyDict>,
     action_overflow: &str,
 ) -> PyResult<()> {
@@ -4990,9 +4993,9 @@ fn encode_observation_into(
     drop(conversion_timer);
     #[cfg(feature = "benchmark")]
     let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
-    let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
+    let mut config = layout.config;
     config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-    crate::python::vector_env_bindings::check_observation_buffers(&out, &config)?;
+    crate::python::vector_env_bindings::check_observation_buffers(&out, layout)?;
     #[cfg(feature = "benchmark")]
     drop(config_timer);
     let encoded =

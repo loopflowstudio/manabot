@@ -42,6 +42,7 @@ from manabot.backends.torch.learner import Learner, apply_matmul_precision, upda
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.random import seed_random
 from manabot.backends.torch.rl import NumericalError
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -491,6 +492,14 @@ def resume_readings(
         saved = {
             key: [value.value for value in legacy[key][: len(values)]]
             for key, values in readings.items()
+        }
+    if space.config.max_decision_records and saved.keys() == built.keys() - set(
+        MEMORY_FIELDS
+    ):
+        # Older run states omitted the separately prepared memory fields.
+        saved = {
+            **saved,
+            **{key: ["own"] * space.shapes[key][-1] for key in MEMORY_FIELDS},
         }
     if saved == built:
         return built

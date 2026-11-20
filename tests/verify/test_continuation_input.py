@@ -280,7 +280,7 @@ def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
     expected = encode_observation(space, observation)
     # Every element is written, padding included.
     out = {key: np.full_like(value, -7) for key, value in expected.items()}
-    managym.encode_observation_into(observation, out)
+    managym.encode_observation_into(observation, space.layout, out)
     for key in out:
         np.testing.assert_array_equal(out[key], expected[key], err_msg=key)
     vector = managym.VectorEnv(1, seed=608, skip_trivial=False)
@@ -295,7 +295,7 @@ def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
             "truncated": np.zeros(1, dtype=np.uint8),
         }
     )
-    vector.set_buffers(buffers)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(players)
     for key in expected:
         np.testing.assert_array_equal(buffers[key][0], expected[key], err_msg=key)

@@ -65,13 +65,12 @@ pub fn require_numpy_array<'py>(
 
     require_ndarray(key, &value)?;
 
-    let dtype_name = value
-        .getattr("dtype")?
-        .getattr("name")?
-        .extract::<String>()?;
-    if dtype_name != expected_dtype_name {
+    let dtype = value.getattr("dtype")?;
+    if dtype.getattr("name")?.extract::<String>()? != expected_dtype_name
+        || !dtype.getattr("isnative")?.is_truthy()?
+    {
         return Err(PyTypeError::new_err(format!(
-            "buffer '{key}' must have dtype {expected_dtype_name}, got {dtype_name}"
+            "buffer '{key}' must have dtype {expected_dtype_name}, got {dtype}"
         )));
     }
 

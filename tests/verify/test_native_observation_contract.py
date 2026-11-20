@@ -107,7 +107,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
     out = space.allocate()
     for value in out.values():
         value.fill(-7)
-    managym.encode_observation_into(restored, out)
+    managym.encode_observation_into(restored, space.layout, out)
     for key, expected_value in expected.items():
         np.testing.assert_array_equal(out[key], expected_value, err_msg=key)
 
@@ -116,12 +116,12 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
         (config.max_actions, space.shapes["actions"][-1]), dtype=np.float64
     )
     with pytest.raises((ValueError, TypeError)):
-        managym.encode_observation_into(restored, bad)
+        managym.encode_observation_into(restored, space.layout, bad)
 
     missing = dict(out)
     del missing["facts"]
     with pytest.raises(ValueError):
-        managym.encode_observation_into(restored, missing)
+        managym.encode_observation_into(restored, space.layout, missing)
 
 
 def _batched(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -143,8 +143,12 @@ def _wrong_dtype(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return dict(buffers, action_focus=buffers["action_focus"].astype(np.float32))
 
 
+def _swapped_byte_order(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    events = buffers["events"]
+    return dict(buffers, events=events.astype(events.dtype.newbyteorder("S")))
+
+
 def _not_numpy(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    # Capacities are read from `events`, so it is checked before the full contract.
     return dict(buffers, events=buffers["events"].tolist())
 
 
@@ -159,6 +163,7 @@ def _missing_mask(buffers: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         (_read_only, ValueError),
         (_strided, ValueError),
         (_wrong_dtype, TypeError),
+        (_swapped_byte_order, TypeError),
         (_not_numpy, TypeError),
         (_missing_mask, ValueError),
     ],
@@ -179,7 +184,7 @@ def test_malformed_buffers_fail_before_a_capacity_overflow(
         if value.flags.writeable:
             value.fill(-7)
     with pytest.raises(error) as raised:
-        managym.encode_observation_into(obs, buffers)
+        managym.encode_observation_into(obs, space.layout, buffers)
     assert not isinstance(raised.value, managym.ObservationCapacity)
     assert all(np.all(value == -7) for value in arrays if value.flags.writeable)
 
@@ -224,7 +229,7 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         player_policies=("agent", "random"),
     )
     buffers = allocate_vector_buffers(space, num_envs)
-    hot.set_buffers(buffers)
+    hot.set_buffers(buffers, layout=space.layout)
 
     compat_reset = compat.reset_all(player_configs)
     hot.reset_all_into_buffers(player_configs)
@@ -278,33 +283,34 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         skip_trivial=True,
         player_policies=("agent", "agent"),
     )
-    good = allocate_vector_buffers(ObservationSpace(config), num_envs)
+    space = ObservationSpace(config)
+    good = allocate_vector_buffers(space, num_envs)
 
-    env.set_buffers(good)
+    env.set_buffers(good, layout=space.layout)
     env.reset_all_into_buffers(player_configs)
     env.step_into_buffers([0, 0])
 
     bad_dtype = dict(good)
     bad_dtype["actions"] = np.zeros_like(good["actions"], dtype=np.float64)
     with pytest.raises((TypeError, ValueError)):
-        env.set_buffers(bad_dtype)
+        env.set_buffers(bad_dtype, layout=space.layout)
 
     bad_shape = dict(good)
     bad_shape["agent_player"] = np.zeros((num_envs, 2, 26), dtype=np.float32)
     with pytest.raises(ValueError):
-        env.set_buffers(bad_shape)
+        env.set_buffers(bad_shape, layout=space.layout)
 
     bad_contiguous = dict(good)
     bad_contiguous["agent_cards"] = np.asfortranarray(good["agent_cards"])
     with pytest.raises(ValueError):
-        env.set_buffers(bad_contiguous)
+        env.set_buffers(bad_contiguous, layout=space.layout)
 
     bad_writable = dict(good)
     read_only = good["agent_cards"].copy()
     read_only.setflags(write=False)
     bad_writable["agent_cards"] = read_only
     with pytest.raises(ValueError):
-        env.set_buffers(bad_writable)
+        env.set_buffers(bad_writable, layout=space.layout)
 
     unconfigured = managym.VectorEnv(
         num_envs=num_envs,
@@ -602,7 +608,7 @@ def test_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     space = ObservationSpace(config)
     env = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
     buffers = allocate_vector_buffers(space, 1)
-    env.set_buffers(buffers)
+    env.set_buffers(buffers, layout=space.layout)
     obs, _ = env.reset_all(make_player_configs())[0]
     env.reset_seeds_into_buffers([213])
     assert buffers["facts"].shape == (1, capacity, 12)
@@ -718,7 +724,7 @@ def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
     space = ObservationSpace(config)
     reference = encode_observation(space, obs)
     batch = space.allocate(1)
-    assert managym.encode_observations_into([env], batch, 1) == [5]
+    assert managym.encode_observations_into([env], space.layout, batch, 1) == [5]
     for key, value in reference.items():
         np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
     actions = reference["actions"]
@@ -779,7 +785,7 @@ def test_tap_pays_choice_names_its_payment_and_focuses_the_tapped_creature() -> 
     space = ObservationSpace()
     reference = encode_observation(space, obs)
     batch = space.allocate(1)
-    assert managym.encode_observations_into([env], batch, 1) == [2]
+    assert managym.encode_observations_into([env], space.layout, batch, 1) == [2]
     for key, value in reference.items():
         np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
     np.testing.assert_array_equal(reference["actions"][:2, ACTION_MODE_INDEX], [1, 6])

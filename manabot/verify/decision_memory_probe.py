@@ -191,7 +191,7 @@ def collect_games(
             try:
                 # Admission/capacity is checked for every decision, not just
                 # reservoir survivors, so long games cannot disappear silently.
-                managym.encode_observation_into(obs, buffers)
+                managym.encode_observation_into(obs, space.layout, buffers)
                 dense = {k: v[None] for k, v in buffers.items()}
                 prefix = store.capture(
                     dense, 0, PrefixIdentity(str(seed), viewer, "root")

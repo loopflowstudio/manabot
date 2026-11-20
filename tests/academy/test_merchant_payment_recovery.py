@@ -125,7 +125,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
         space = ObservationSpace(ObservationConfig())
         vector = managym.VectorEnv(num_envs=1, seed=seed)
         buffers = allocate_vector_buffers(space, 1)
-        vector.set_buffers(buffers)
+        vector.set_buffers(buffers, layout=space.layout)
         vector.reset_all_into_buffers(game.trace.config.to_rust())
         for event in game.trace.events:
             vector.step_into_buffers([event.action])

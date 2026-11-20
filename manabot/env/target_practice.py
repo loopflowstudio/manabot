@@ -12,7 +12,7 @@ import numpy as np
 
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.verify.scenarios import find_cast_action, pass_index
 import managym
@@ -102,18 +102,24 @@ class TargetPracticeVector:
         self.infos: list[dict[str, Any]] = [{} for _ in range(count)]
 
     def set_buffers(
-        self, buffers: dict[str, np.ndarray], action_overflow: str = "error"
+        self,
+        buffers: dict[str, np.ndarray],
+        action_overflow: str = "error",
+        *,
+        layout: managym.ObservationLayout,
     ) -> None:
         if action_overflow != self.space.config.action_overflow:
             raise ValueError("target practice action policy differs from its encoder")
         self.buffers = buffers
+        self.layout = layout
 
     def _reset(self, row: int) -> Env:
         env = target_root(self.match, self.space, self.seeds[row], row % 2)
         self.seeds[row] += self.count
-        encoded = encode_observation(self.space, env.last_raw_obs)
-        for key, value in encoded.items():
-            self.buffers[key][row] = value
+        output = {key: self.buffers[key][row] for key in self.space.keys()}
+        managym.encode_observation_into(
+            env.last_raw_obs, self.layout, output, self.space.config.action_overflow
+        )
         return env
 
     def reset_all_into_buffers(self, configs: object) -> None:

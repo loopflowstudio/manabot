@@ -546,7 +546,7 @@ buffers = space.allocate(2)
 
 players = [0, 1]
 reads = games.write_observations_for_players(
-    players, buffers, action_overflow=space.config.action_overflow
+    players, buffers, layout=space.layout, action_overflow=space.config.action_overflow
 )
 # Row i in every array describes players[i] in slot i.
 
@@ -559,7 +559,7 @@ for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
     assert read.player == 1 - hand.player
 ```
 
-`write_observations_for_players(players, buffers, action_overflow="error")`
+`write_observations_for_players(players, buffers, action_overflow="error", *, layout)`
 writes all slots in one native call, with one explicit native seat (`0` or `1`)
 per slot and no implicit opponent. It returns one `ObservationRead` per slot, in
 slot order, naming the game state each row describes:
@@ -589,9 +589,9 @@ or done arrays are needed. Keep these buffers separate from ordinary step
 buffers and copy rows you need to retain before the next write.
 
 `CapturedVector` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
-method and CPU identity records. For Torch, allocate from the wrapper's
-`observation_space`, then use `torch.from_numpy` and an explicit device transfer
-as needed. Clone shared CPU tensors you need to retain before the next write.
+method and CPU identity records. The Torch wrapper supplies its own layout.
+Pass `layout=consumer_space.layout` for a consumer with different capacities.
+Use `torch.from_numpy` and an explicit device transfer as needed. Clone shared CPU tensors you need to retain before the next write.
 
 The read does not step, reset or consume randomness. After a successful step,
 done slots describe their replacement games, not the terminal states. Reads
@@ -655,20 +655,17 @@ observation's.
 To write into arrays you own, call the function underneath:
 
 ```python
-buffers = space.allocate()
-managym.encode_observation_into(
-    observation, buffers, action_overflow=space.config.action_overflow
-)
+layout = managym.ObservationLayout(max_actions=256, policy_history=True)
+buffers = layout.allocate()
+managym.encode_observation_into(observation, layout, buffers)
 ```
 
-`encode_observation_into(obs, out, action_overflow="error")` reads everything
-it needs from `out`: the row capacities, and from which arrays are present,
-the input version, public history and decision memory. It uses no default
-capacity. Without manabot, build each array from
-[`observation_layout()`](#reading-arrays-by-name)'s `shape` and `dtype`,
-filling every `None` extent with a capacity you choose. Arrays with a missing
-companion, a wrong width or a zero capacity are rejected before anything is
-written.
+The same layout allocates a batch with `layout.allocate(batch_size)`.
+In manabot, pass `space.layout` to use the configured input version, history,
+memory and capacities. Both encoders check every key, shape and dtype before
+writing. Vector stepping also requires the reward and done arrays that
+`allocate_vector_buffers(space, num_envs)` supplies. Register those arrays
+with `games.set_buffers(step_buffers, layout=space.layout)`.
 
 An observation that does not fit raises `managym.ObservationCapacity`, a
 `ValueError` naming the field, the count and the capacity:

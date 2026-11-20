@@ -2,10 +2,16 @@
 // PyO3's #[pyfunction] wrappers trigger false-positive `useless_conversion`.
 #![allow(clippy::useless_conversion)]
 use crate::agent::{
-    observation_encoder::InputLayout,
+    observation_encoder::{InputLayout, ObservationEncoderConfig},
     observation_layout::{self as native_layout, ValueLayout},
 };
-use pyo3::{prelude::*, types::PyDict};
+use native_layout::ArrayLayout;
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::{PyDict, PyTuple},
+};
+use std::collections::BTreeMap;
 
 fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py, PyDict>> {
     let value = PyDict::new_bound(py);
@@ -35,7 +41,6 @@ fn observation_layout(
     legacy: bool,
     decision_memory: bool,
 ) -> PyResult<PyObject> {
-    let out = PyDict::new_bound(py);
     let layout = if legacy {
         InputLayout::Legacy
     } else {
@@ -50,29 +55,170 @@ fn observation_layout(
         }
         arrays.extend(native_layout::decision_memory_layout());
     }
+    arrays_dict(py, &arrays)
+}
+
+fn arrays_dict(py: Python<'_>, arrays: &BTreeMap<String, ArrayLayout>) -> PyResult<PyObject> {
+    let out = PyDict::new_bound(py);
     for (key, array) in arrays {
         let value = PyDict::new_bound(py);
-        value.set_item("axes", array.axes)?;
-        value.set_item("shape", array.shape)?;
+        value.set_item("axes", &array.axes)?;
+        value.set_item("shape", &array.shape)?;
         value.set_item("dtype", array.dtype)?;
         let columns = PyDict::new_bound(py);
-        for column in array.columns {
+        for column in &array.columns {
             let metadata = value_dict(py, &column.value)?;
             metadata.set_item("index", column.index)?;
             columns.set_item(column.name, metadata)?;
         }
         value.set_item("columns", columns)?;
-        value.set_item("row_kinds", array.row_kinds)?;
-        value.set_item("row_kind_names", array.row_kind_names)?;
-        if let Some(element) = array.element {
-            value.set_item("element", value_dict(py, &element)?)?;
+        value.set_item("row_kinds", &array.row_kinds)?;
+        value.set_item("row_kind_names", &array.row_kind_names)?;
+        if let Some(element) = &array.element {
+            value.set_item("element", value_dict(py, element)?)?;
         }
         out.set_item(key, value)?;
     }
     Ok(out.into())
 }
 
+/// Resolved policy input, shared by allocation and native buffer validation.
+#[pyclass(frozen, module = "managym")]
+#[derive(Clone)]
+pub struct ObservationLayout {
+    pub config: ObservationEncoderConfig,
+    pub arrays: BTreeMap<String, ArrayLayout>,
+}
+
+impl ObservationLayout {
+    pub fn from_config(config: ObservationEncoderConfig) -> PyResult<Self> {
+        let arrays = native_layout::configured_arrays(&config).map_err(PyValueError::new_err)?;
+        Ok(Self { config, arrays })
+    }
+}
+
+#[pymethods]
+impl ObservationLayout {
+    #[new]
+    #[pyo3(signature = (*, policy_input_version=11, policy_history=false, max_cards_per_player=60, max_permanents_per_player=40, max_stack_objects=32, max_actions=512, max_focus_objects=2, max_events=32, max_facts=512, max_decision_records=0, max_decision_references=0, max_decision_reference_details=0, max_decision_members=0))]
+    fn new(
+        policy_input_version: u8,
+        policy_history: bool,
+        max_cards_per_player: usize,
+        max_permanents_per_player: usize,
+        max_stack_objects: usize,
+        max_actions: usize,
+        max_focus_objects: usize,
+        max_events: usize,
+        max_facts: usize,
+        max_decision_records: usize,
+        max_decision_references: usize,
+        max_decision_reference_details: usize,
+        max_decision_members: usize,
+    ) -> PyResult<Self> {
+        let layout = match policy_input_version {
+            9 | 10 => InputLayout::Legacy,
+            11 => InputLayout::OneToken,
+            _ => {
+                return Err(PyValueError::new_err(
+                    "supported policy input versions are 9, 10 and 11",
+                ))
+            }
+        };
+        Self::from_config(ObservationEncoderConfig {
+            layout,
+            turn_state: policy_input_version >= 10,
+            policy_history,
+            max_cards_per_player,
+            max_permanents_per_player,
+            max_stack_objects,
+            max_actions,
+            max_focus_objects,
+            max_events,
+            max_facts,
+            max_decision_records,
+            max_decision_references,
+            max_decision_reference_details,
+            max_decision_members,
+            ..Default::default()
+        })
+    }
+
+    // Spaces travel with policies through deepcopy, pickle and spawned workers.
+    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<(PyObject, PyObject)> {
+        let c = self.config;
+        let kwargs = PyDict::new_bound(py);
+        kwargs.set_item(
+            "policy_input_version",
+            if c.layout == InputLayout::OneToken {
+                11
+            } else if c.turn_state {
+                10
+            } else {
+                9
+            },
+        )?;
+        kwargs.set_item("policy_history", c.policy_history)?;
+        kwargs.set_item("max_cards_per_player", c.max_cards_per_player)?;
+        kwargs.set_item("max_permanents_per_player", c.max_permanents_per_player)?;
+        kwargs.set_item("max_actions", c.max_actions)?;
+        kwargs.set_item("max_focus_objects", c.max_focus_objects)?;
+        kwargs.set_item("max_stack_objects", c.max_stack_objects)?;
+        kwargs.set_item("max_events", c.max_events)?;
+        kwargs.set_item("max_facts", c.max_facts)?;
+        kwargs.set_item("max_decision_records", c.max_decision_records)?;
+        kwargs.set_item("max_decision_references", c.max_decision_references)?;
+        kwargs.set_item(
+            "max_decision_reference_details",
+            c.max_decision_reference_details,
+        )?;
+        kwargs.set_item("max_decision_members", c.max_decision_members)?;
+        Ok((PyTuple::empty_bound(py).into(), kwargs.into()))
+    }
+
+    #[getter]
+    fn arrays(&self, py: Python<'_>) -> PyResult<PyObject> {
+        arrays_dict(py, &self.arrays)
+    }
+
+    #[getter]
+    fn shapes(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let out = PyDict::new_bound(py);
+        for (key, array) in &self.arrays {
+            out.set_item(
+                key,
+                PyTuple::new_bound(py, array.shape.iter().map(|extent| extent.unwrap())),
+            )?;
+        }
+        Ok(out.into())
+    }
+
+    #[getter]
+    fn dtypes(&self) -> BTreeMap<String, &str> {
+        self.arrays
+            .iter()
+            .map(|(k, a)| (k.clone(), a.dtype))
+            .collect()
+    }
+
+    #[pyo3(signature=(*leading_dims))]
+    fn allocate(&self, py: Python<'_>, leading_dims: Vec<usize>) -> PyResult<PyObject> {
+        let zeros = py.import_bound("numpy")?.getattr("zeros")?;
+        let out = PyDict::new_bound(py);
+        for (key, array) in &self.arrays {
+            let shape: Vec<_> = leading_dims
+                .iter()
+                .chain(array.shape.iter().flatten())
+                .copied()
+                .collect();
+            out.set_item(key, zeros.call1((shape, array.dtype))?)?;
+        }
+        Ok(out.into())
+    }
+}
+
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<ObservationLayout>()?;
     module.add_function(wrap_pyfunction!(observation_layout, module)?)?;
     Ok(())
 }

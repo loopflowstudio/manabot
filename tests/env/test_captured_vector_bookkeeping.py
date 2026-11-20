@@ -32,8 +32,9 @@ def _captured(
         player_policies=player_policies,
         opponent_policy=opponent_policy,
     )
-    buffers = allocate_vector_buffers(ObservationSpace(), 1)
-    vector.set_buffers(buffers)
+    space = ObservationSpace()
+    buffers = allocate_vector_buffers(space, 1)
+    vector.set_buffers(buffers, layout=space.layout)
     return vector, buffers
 
 

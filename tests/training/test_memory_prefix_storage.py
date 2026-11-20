@@ -391,7 +391,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
     env = managym.VectorEnv(
         1, seed=11, decision_memory=True, player_policies=("agent", "agent")
     )
-    env.set_buffers(buffers)
+    env.set_buffers(buffers, layout=space.layout)
     env.reset_all_into_buffers(Match().to_rust())
     dense_buffers = space.allocate(1)
     store, dense_store = MemoryStore(capacities), MemoryStore(capacities)
@@ -403,7 +403,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
         epoch = env.current_game_generations()[0]
         cursor = env.decision_memory_cursors()[0][viewer]
         counts = cursor[:4]
-        env.write_observations_for_players([viewer], dense_buffers)
+        env.write_observations_for_players([viewer], dense_buffers, layout=space.layout)
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(buffers[key], dense_buffers[key])
         identity = PrefixIdentity(str(env.current_game_seeds()[0]), viewer, "root")
@@ -432,7 +432,7 @@ def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
     buffers = allocate_vector_buffers(space, 2)
     env = ShardedVectorEnv(2, 11, workers=2, decision_memory=True)
     try:
-        env.set_buffers(buffers)
+        env.set_buffers(buffers, layout=space.layout)
         env.reset_all_into_buffers(Match().to_rust())
         generations = env.current_game_generations()
         assert len(set(generations)) == 2

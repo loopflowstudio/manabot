@@ -336,7 +336,7 @@ relabels an existing experiment's receipts or registrations.
 Each teacher keeps frontier buffers from
 `ObservationSpace.allocate(capacity)` for its whole life. Native code writes
 every live branch's acting-player observation into these buffers with one call,
-`managym.encode_observations_into(envs, buffers, capacity)`, which returns each
+`managym.encode_observations_into(envs, space.layout, buffers, capacity)`, which returns each
 row's legal-action count. The buffers grow only when a frontier exceeds their
 capacity, and rows past the live frontier are left untouched. The tensor layout
 is the checkpoint's own, and every legal action is still required. The encoder

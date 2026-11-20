@@ -14,7 +14,11 @@ import pytest
 from manabot.env import observation
 from manabot.env.decision_memory import MEMORY_WIDTHS
 from manabot.env.legacy_input import LEGACY_PERMANENT_DIM
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
 from manabot.verify.representation import kellan_upgrade_root
@@ -249,3 +253,52 @@ def test_world_version_warns_and_names_its_removal() -> None:
     with pytest.warns(DeprecationWarning, match=r"WORLD_VERSION.*0\.4\.0"):
         assert managym.WORLD_VERSION == "w17"
     assert set(managym.world_identity()) == {"card_digest"}
+
+
+def test_managym_layout_rejects_missing_and_extra_memory_before_writing(
+    board: tuple[managym.Env, managym.Observation],
+) -> None:
+    env, obs = board
+    plain = managym.ObservationLayout(max_events=7)
+    memory = managym.ObservationLayout(
+        max_events=7,
+        max_decision_records=8,
+        max_decision_references=16,
+        max_decision_reference_details=32,
+        max_decision_members=16,
+    )
+    for layout, other in ((plain, memory), (memory, plain)):
+        scalar = other.allocate()
+        batch = other.allocate(2)
+        for arrays in (scalar, batch):
+            for array in arrays.values():
+                array.fill(17)
+        with pytest.raises(ValueError, match="decision_"):
+            managym.encode_observation_into(obs, layout, scalar)
+        with pytest.raises(ValueError, match="decision_"):
+            managym.encode_observations_into([env], layout, batch, 2)
+        assert all(
+            (array == 17).all()
+            for arrays in (scalar, batch)
+            for array in arrays.values()
+        )
+
+
+def test_layoutless_vector_registration_warns_and_preserves_memory_configuration() -> (
+    None
+):
+    buffers = allocate_vector_buffers(ObservationSpace(), 1)
+    plain = managym.VectorEnv(1)
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        plain.set_buffers(buffers)
+    with (
+        pytest.warns(DeprecationWarning, match="0.4.0"),
+        pytest.raises(ValueError, match="unexpected buffer"),
+    ):
+        plain.set_buffers(dict(buffers, unknown=buffers["rewards"]))
+    memory = managym.VectorEnv(1, decision_memory=True)
+    with (
+        pytest.warns(DeprecationWarning, match="0.4.0"),
+        pytest.raises(ValueError, match="decision memory"),
+    ):
+        memory.set_buffers(buffers)

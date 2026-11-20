@@ -133,8 +133,9 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         if captured
         else managym.VectorEnv(2, seed=42)
     )
-    buffers = allocate_vector_buffers(ObservationSpace(), 2)
-    vector.set_buffers(buffers)
+    space = ObservationSpace()
+    buffers = allocate_vector_buffers(space, 2)
+    vector.set_buffers(buffers, layout=space.layout)
     try:
         vector.reset_each_into_buffers([_players(), _players()[::-1]])
         before = vector.hand_snapshots([1, 0])

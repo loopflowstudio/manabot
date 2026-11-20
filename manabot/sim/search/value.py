@@ -141,7 +141,7 @@ class _ValueLeafScorer:
         pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
         num_slots = pool.num_slots
         buffers = self._ensure_buffers(num_slots)
-        pool.set_buffers(buffers, self._capacity)
+        pool.set_buffers(buffers, self._capacity, layout=self._obs_space.layout)
         active = pool.encode_active()
 
         for _ in range(self.depth):

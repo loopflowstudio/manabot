@@ -352,7 +352,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
         for key in ("ur_lessons", "gw_allies")
     ]
     vector = managym.VectorEnv(1, seed=0, skip_trivial=False)
-    vector.set_buffers(buffers)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(configs)
     scalar = managym.Env(seed=0, skip_trivial=False)
     obs, _ = scalar.reset(configs)

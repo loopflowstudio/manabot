@@ -13,21 +13,9 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
-    column,
-    columns,
 )
 import managym
 from managym.recording import resolve_player_policies
-
-PLAYER_LIFE = column("agent_player", "life")
-PERMANENT_REWARD_COLUMNS = columns(
-    "agent_permanents", "is_land", "is_creature", "valid"
-)
-_LEGACY_CARD_COLUMNS = managym.observation_layout(legacy=True)["agent_cards"]["columns"]
-LEGACY_BATTLEFIELD_ZONE = _LEGACY_CARD_COLUMNS["zone_battlefield"]["index"]
-LEGACY_CARD_REWARD_COLUMNS = [
-    _LEGACY_CARD_COLUMNS[name]["index"] for name in ("is_land", "is_creature", "valid")
-]
 
 
 class VectorEnv:
@@ -56,22 +44,29 @@ class VectorEnv:
 
         self._buffers = allocate_vector_buffers(self.observation_space, self.num_envs)
         self._rust_env.set_buffers(
-            self._buffers, self.observation_space.config.action_overflow
+            self._buffers,
+            self.observation_space.config.action_overflow,
+            layout=self.observation_space.layout,
         )
         self._build_tensor_views()
 
         # Land and creature counts read the battlefield: input v11's permanent
         # rows, or the deprecated v9/v10 battlefield card rows.
         self._battlefield_zone_index: int | None
+        arrays = observation_space.layout.arrays
+        self._life_index = arrays["agent_player"]["columns"]["life"]["index"]
         if self.observation_space.one_token:
             self._board_keys = ("agent_permanents", "opponent_permanents")
             self._battlefield_zone_index = None
-            reward_columns = PERMANENT_REWARD_COLUMNS
         else:
             self._board_keys = ("agent_cards", "opponent_cards")
-            self._battlefield_zone_index = LEGACY_BATTLEFIELD_ZONE
-            reward_columns = LEGACY_CARD_REWARD_COLUMNS
-        self._land_index, self._creature_index, self._valid_index = reward_columns
+            self._battlefield_zone_index = arrays["agent_cards"]["columns"][
+                "zone_battlefield"
+            ]["index"]
+        board = arrays[self._board_keys[0]]["columns"]
+        self._land_index, self._creature_index, self._valid_index = (
+            board[key]["index"] for key in ("is_land", "is_creature", "valid")
+        )
         self._prev_obs_keys: Tuple[str, ...] = (self._board_keys[0], "opponent_player")
         if self.reward.config.potential_enabled:
             self._prev_obs_keys = (
@@ -218,8 +213,8 @@ class VectorEnv:
             )
 
         if config.opponent_life_loss_reward != 0.0:
-            prev_life = prev_opponent_player[:, 0, PLAYER_LIFE]
-            next_life = next_opponent_player[:, 0, PLAYER_LIFE]
+            prev_life = prev_opponent_player[:, 0, self._life_index]
+            next_life = next_opponent_player[:, 0, self._life_index]
             shaping += config.opponent_life_loss_reward * torch.clamp(
                 prev_life - next_life,
                 min=0.0,
@@ -285,7 +280,8 @@ class VectorEnv:
             )
         if config.potential_life_weight != 0.0:
             phi += config.potential_life_weight * (
-                agent_player[:, 0, PLAYER_LIFE] - opponent_player[:, 0, PLAYER_LIFE]
+                agent_player[:, 0, self._life_index]
+                - opponent_player[:, 0, self._life_index]
             )
         return phi
 
@@ -310,7 +306,9 @@ class VectorEnv:
             self._rust_env.close()
             self._rust_env = self._build_rust_env(seed=seed)
             self._rust_env.set_buffers(
-                self._buffers, self.observation_space.config.action_overflow
+                self._buffers,
+                self.observation_space.config.action_overflow,
+                layout=self.observation_space.layout,
             )
         if options and "match" in options:
             self._player_configs = options["match"].to_rust()
@@ -351,13 +349,18 @@ class VectorEnv:
         players: list[int],
         buffers: dict[str, np.ndarray],
         action_overflow: Literal["error", "first-legal"] = "error",
+        *,
+        layout: managym.ObservationLayout | None = None,
     ) -> list[managym.ObservationRead]:
         """Write viewer-safe NumPy rows; discard every output row after an error.
 
         Execution and capture buffers stay unchanged. Seats are native indices.
         """
         return self._rust_env.write_observations_for_players(
-            players, buffers, action_overflow=action_overflow
+            players,
+            buffers,
+            action_overflow=action_overflow,
+            layout=self.observation_space.layout if layout is None else layout,
         )
 
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:

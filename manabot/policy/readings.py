@@ -36,7 +36,6 @@ from manabot.env.observation import (
     FACT_EFFECT_PROGRAM,
     FACT_TRANSFORMS,
 )
-import managym
 
 if TYPE_CHECKING:
     from manabot.env.observation import ObservationSpace
@@ -229,11 +228,7 @@ def published_columns(space: "ObservationSpace") -> dict[str, list[ColumnKind]]:
     )
     if unread:
         raise ValueError(f"no reading or own preparation for buffers {unread}")
-    layout = managym.observation_layout(
-        policy_history=bool(space.config.policy_history_version),
-        turn_state=space.turn_state,
-        legacy=not space.one_token,
-    )
+    layout = space.layout.arrays
     return {
         key: [
             ColumnKind(name, column["kind"], column.get("scale"))

@@ -60,7 +60,7 @@ def test_v9_refuses_life_lost_only_once_a_visible_card_reads_it() -> None:
     with pytest.raises(
         ValueError, match="policy input v10 required: .*life lost this turn"
     ):
-        managym.encode_observation_into(obs, out)
+        managym.encode_observation_into(obs, space.layout, out)
     assert all(np.all(value == -7) for value in out.values())
 
 

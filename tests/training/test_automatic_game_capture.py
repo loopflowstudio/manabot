@@ -146,8 +146,9 @@ def test_bounded_replay_separates_binding_and_error_agreement(
             env.reset()
             if mode == "search":
                 pool = env.rollout_pool(1, 1, 197, 100)
-                buffers = rollout.allocate_buffers(ObservationSpace(), pool.num_slots)
-                pool.set_buffers(buffers, pool.num_slots)
+                space = ObservationSpace()
+                buffers = rollout.allocate_buffers(space, pool.num_slots)
+                pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
                 pool.encode_active()
                 with pytest.raises(managym.AgentError):
                     pool.step_active([-1] * pool.num_slots)
@@ -309,8 +310,9 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
         env.failure_context.update(game_index=11)
         env.reset(seed=24)
         pool = env.rollout_pool(1, 1, 197, 100)
-        buffers = rollout.allocate_buffers(ObservationSpace(), pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots)
+        space = ObservationSpace()
+        buffers = rollout.allocate_buffers(space, pool.num_slots)
+        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
         assert pool.encode_active()
         with pytest.raises(managym.AgentError):
             pool.step_active([-1] * pool.num_slots)

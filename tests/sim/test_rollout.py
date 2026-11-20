@@ -53,7 +53,7 @@ class TestRolloutPool:
 
         obs_space = ObservationSpace()
         buffers = allocate_buffers(obs_space, pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots)
+        pool.set_buffers(buffers, pool.num_slots, layout=obs_space.layout)
 
         rng = np.random.default_rng(0)
         active = pool.encode_active()
@@ -79,16 +79,18 @@ class TestRolloutPool:
         env, _ = make_env(seed=5)
         pool = env._engine.rollout_pool(1, 1, 7, 2000)
         capacity = pool.num_slots + 8
-        buffers = allocate_buffers(ObservationSpace(), capacity)
-        pool.set_buffers(buffers, capacity)
+        space = ObservationSpace()
+        buffers = allocate_buffers(space, capacity)
+        pool.set_buffers(buffers, capacity, layout=space.layout)
         assert pool.encode_active() is not None
 
     def test_pool_does_not_mutate_source_env(self):
         env, _ = make_env(seed=9)
         before = env._engine.action_count()
         pool = env._engine.rollout_pool(2, 2, 11, 2000)
-        buffers = allocate_buffers(ObservationSpace(), pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots)
+        space = ObservationSpace()
+        buffers = allocate_buffers(space, pool.num_slots)
+        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
         active = pool.encode_active()
         guard = 0
         while active and guard < 3000:

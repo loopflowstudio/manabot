@@ -183,24 +183,6 @@ TURN_STATE_NONARTIFACT_MANA_INDEX = column(
 TURN_STATE_DIM = width("player_turn_state")
 
 
-def capacities(config: ObservationConfig) -> dict[str, int]:
-    """The extent of each native caller-selected axis under `config`."""
-    return {
-        "card": config.max_cards_per_player,
-        "definition": config.max_cards_per_player,
-        "permanent": config.max_permanents_per_player,
-        "stack": config.max_stack_objects,
-        "action": config.max_actions,
-        "focus": config.max_focus_objects,
-        "event": config.max_events,
-        "fact": config.max_facts,
-        "opponent_record": config.max_decision_records,
-        "opponent_reference": config.max_decision_references,
-        "opponent_reference_detail": config.max_decision_reference_details,
-        "opponent_member": config.max_decision_members,
-    }
-
-
 class ObservationSpace(gym.spaces.Space):
     """One `ObservationConfig` and the native layout of its policy input.
 
@@ -214,38 +196,28 @@ class ObservationSpace(gym.spaces.Space):
     def __init__(self, config: ObservationConfig | None = None) -> None:
         super().__init__(shape=None, dtype=None)
         config = config or ObservationConfig()
-        memory = (
-            config.max_decision_records,
-            config.max_decision_reference_details,
-            config.max_decision_references,
-            config.max_decision_members,
-        )
-        if any(memory) and not all(memory):
-            raise ValueError("decision memory requires all companion capacities")
-        # Input v11 lists each game thing once; deprecated v9/v10 rows also
-        # list battlefield objects and spells as cards and have no stack array.
-        self.one_token = config.policy_input_version == 11
-        if config.max_decision_records and not self.one_token:
-            raise ValueError("decision memory requires policy input v11")
         self.config = config
+        self.one_token = config.policy_input_version == 11
         self.turn_state = config.policy_input_version in (10, 11)
-        layout = managym.observation_layout(
+        self.layout = managym.ObservationLayout(
+            policy_input_version=config.policy_input_version,
             policy_history=config.policy_history_version == 1,
-            turn_state=self.turn_state,
-            legacy=not self.one_token,
-            decision_memory=bool(config.max_decision_records),
+            max_cards_per_player=config.max_cards_per_player,
+            max_permanents_per_player=config.max_permanents_per_player,
+            max_stack_objects=config.max_stack_objects,
+            max_actions=config.max_actions,
+            max_focus_objects=config.max_focus_objects,
+            max_events=config.max_events,
+            max_facts=config.max_facts,
+            max_decision_records=config.max_decision_records,
+            max_decision_references=config.max_decision_references,
+            max_decision_reference_details=config.max_decision_reference_details,
+            max_decision_members=config.max_decision_members,
         )
-        extents = capacities(config)
-        self.shapes: dict[str, tuple[int, ...]] = {
-            key: tuple(
-                extents[axis] if extent is None else extent
-                for axis, extent in zip(array["axes"], array["shape"], strict=True)
-            )
-            for key, array in layout.items()
-        }
-        # Numpy scalar types: checkpoints record `str()` of each.
-        self.dtypes: dict[str, type[np.generic]] = {
-            key: np.dtype(array["dtype"]).type for key, array in layout.items()
+        self.shapes = self.layout.shapes
+        # Checkpoints record str() of each NumPy scalar type.
+        self.dtypes = {
+            key: np.dtype(dtype).type for key, dtype in self.layout.dtypes.items()
         }
         self.spaces = gym.spaces.Dict(
             {
@@ -258,10 +230,7 @@ class ObservationSpace(gym.spaces.Space):
 
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
         """Zeroed buffers for this space, with `leading_dims` before each shape."""
-        return {
-            key: np.zeros((*leading_dims, *shape), dtype=self.dtypes[key])
-            for key, shape in self.shapes.items()
-        }
+        return self.layout.allocate(*leading_dims)
 
     @property
     def encoder(self) -> "ObservationSpace":
@@ -338,7 +307,9 @@ def encode_observation(
     represent.
     """
     out = space.allocate()
-    managym.encode_observation_into(obs, out, space.config.action_overflow)
+    managym.encode_observation_into(
+        obs, space.layout, out, space.config.action_overflow
+    )
     return out
 
 

@@ -137,7 +137,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     for event in game.trace.events:
                         vector.step([event.action])
                     buffers = allocate_vector_buffers(space, 1)
-                    vector.set_buffers(buffers)
+                    vector.set_buffers(buffers, layout=space.layout)
                     vector.scenario_naming_vocabulary_into_buffers()
                     model = ActorCritic(
                         space, ModelConfig(hidden_dim=16, attention_on=False)
