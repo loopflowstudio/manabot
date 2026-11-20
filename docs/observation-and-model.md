@@ -380,8 +380,9 @@ another revision using its embedded catalog. Earlier checkpoints can lack any of
 at the recorded width, which holds because columns are only appended. A
 checkpoint without `input_readings` gets the readings every model used before
 they were recorded (`legacy_readings`): references gathered, ids looked up,
-fact order ranks divided by 128, effect timestamps divided by the effect
-capacity, and every other column as stored, the permanent timestamp and
+fact and effect timestamps divided by 128 (the effect one by its row
+capacity, which is 128), fact payloads as stored (`fact_value_raw`), the
+placed readings above, and every other column as stored, the permanent timestamp and
 unscaled counts included. It computes what it always did. A warm start,
 memory branch or resume builds its model from the checkpoint and so keeps
 those readings and writes them back. Their
@@ -631,20 +632,30 @@ sampled Elemental games every number a fresh model receives stays within
 ±4. Life and turn are divided by 20 and have no fixed bound, so a very long
 game or a life-gain deck can exceed that.
 
-One column takes its reading from its place rather than its kind: an action
-row's `valid` flag reads `mask`. The legal-action mask already carries it, so
-the action projection never receives it, as it never has.
+A few columns take their reading from their place in a structured row rather
+than their kind, in fresh and stored models alike (`PLACED_READINGS` in
+`manabot/policy/readings.py`). The `valid` flags of actions, relations, facts
+and effects read `mask`: a mask already carries them, so no projection
+receives them. A fact's `kind` and detail words read `lookup`; its id words
+read `fact_id`, a token row for named kinds and the ordinal / 128 for frame
+and ability indexes; its `duration` reads `duration`, two flags for until end
+of turn and indefinite. An effect's detail and member counts read `gather`
+with their offsets, as the extent of a join.
 
 A column whose kind has no reading stops the model from building, and so does
 a `gather` or `lookup` column asked for as a number. A new column therefore
 needs only its native declaration: give it the kind that says what it holds,
 and `scale` when the encoder divides it.
 
-A few buffers are decoded by their own preparation rather than column by
-column: decision-memory records, recent public events, fact programs and
-shared-effect details. The model names each of them with the function that
-decodes it, and a float buffer that is neither read through the rule nor named
-there also stops the model from building.
+Other buffers are decoded by their own preparation rather than column by
+column: validity tables, known cards and decklists, naming candidates,
+decision-memory records, recent public events and shared-effect details. The
+model names each of them with the function that decodes it
+(`OWN_PREPARATION`), and their columns read `own`; their native kinds are not
+consulted. A float buffer that is neither read through readings nor named
+there stops the model from building. Decision memory's program ordinal is
+divided by 128 and reaches about 6 on sampled games; its preparation records
+no readings, so it stays as it is.
 
 A stored checkpoint never consults the rule. It reads each column the way
 `input_readings` says, so a later correction to a column's kind or to the

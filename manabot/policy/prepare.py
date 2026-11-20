@@ -41,7 +41,6 @@ from manabot.env.observation import (
     FACT_ORDER_INDEX,
     FACT_SET_NAME,
     FACT_SOURCE_INDEX,
-    FACT_TIMESTAMP_SCALE,
     FACT_TRANSFORMS,
     FACT_USED_ABILITY,
     FACT_VALID_INDEX,
@@ -53,10 +52,15 @@ from manabot.env.observation import (
     STACK_SOURCE_INDEX,
     ObservationBuffers,
 )
-from manabot.env.shared_effects import EFFECT_ROWS
 from manabot.policy.buckets import has_history_events
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
-from manabot.policy.readings import Reading, Readings, numeric_columns, read_numeric
+from manabot.policy.readings import (
+    RANK_SCALE,
+    Reading,
+    Readings,
+    numeric_columns,
+    read_numeric,
+)
 
 Array = np.ndarray
 
@@ -618,15 +622,7 @@ def prepare(
     features = clean.copy()
     pending = np.isin(clean[..., 3], (7, 8, 10))
     features[..., 1:3] = np.where(pending[..., None], 0, clean[..., 1:3])
-    relation_features = np.concatenate(
-        [
-            features[..., :5],
-            features[..., 7:23],
-            features[..., 25:RELATION_VALID_INDEX],
-            features[..., RELATION_VALID_INDEX + 1 :],
-        ],
-        -1,
-    ).astype(f32)
+    relation_features = read_numeric(features, layout.readings["relations"])
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
@@ -835,18 +831,25 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         record_word(live, FACT_DETAIL_INDEX),
     )
     ordinal = np.isin(kinds, ORDINAL_ID_KINDS)
-    scale = np.float32(FACT_TIMESTAMP_SCALE)
-    columns = np.stack(
+    # Numeric columns in parameter order: the two payloads, the duration flags,
+    # the timestamp, then the ordinal id (`fact_id`), / 128 like a rank.
+    readings = tables.layout.readings["facts"]
+    payload = slice(FACT_VALUE_INDEX, FACT_VALUE_INDEX + 2)
+    timestamp = slice(FACT_ORDER_INDEX, FACT_ORDER_INDEX + 1)
+    payloads = read_numeric(live[..., payload], readings[payload], kinds)
+    order = read_numeric(live[..., timestamp], readings[timestamp])
+    columns = np.concatenate(
         [
-            live[..., FACT_VALUE_INDEX],
-            live[..., FACT_VALUE_INDEX + 1],
-            (duration == 1).astype(np.float32),
-            (duration == 2).astype(np.float32),
-            live[..., FACT_ORDER_INDEX] / scale,
-            np.where(ordinal, ident, 0).astype(np.float32) / scale,
+            payloads,
+            (duration == 1).astype(np.float32)[:, None],
+            (duration == 2).astype(np.float32)[:, None],
+            order,
+            (np.where(ordinal, ident, 0).astype(np.float32) / np.float32(RANK_SCALE))[
+                :, None
+            ],
         ],
         -1,
-    ).astype(np.float32)
+    )
     named = (kinds > 0) & ~ordinal
     program = np.isin(kinds, PROGRAM_KINDS)
     restriction = kinds == FACT_COMBAT_RESTRICTION
@@ -963,8 +966,7 @@ def _effects(
         np.int64
     )
     records = np.asarray(member_records, dtype=np.int64)
-    numeric = selected[:, 2:10].astype(np.float32)
-    numeric[:, -1] /= np.float32(EFFECT_ROWS)
+    numeric = read_numeric(selected, tables.layout.readings["effects"])
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
     program = kinds > 10

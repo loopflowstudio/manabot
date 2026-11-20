@@ -43,7 +43,8 @@ forward reads the result; no forward reads an observation dictionary.
   `reference_distribution` is the magnet a reverse KL pulls toward, `[B,A]`
   float32 from the legal-action buffers.
   `Layout` holds the reading of every column of every buffer the model
-  reads: `as_is`, `log`, `rank`, `gather`, `lookup`, `mask` or `fact_value`. A fresh
+  reads: `as_is`, `log`, `rank`, `gather`, `lookup`, `mask`, `fact_value`,
+  `fact_id`, `duration` or `own` (decoded by the buffer's own preparation). A fresh
   model derives them from the kinds `managym.observation_layout()` declares; a
   loaded one takes them from its checkpoint's `input_readings`, or
   `legacy_readings(space)` when the checkpoint predates the record. `prepare`

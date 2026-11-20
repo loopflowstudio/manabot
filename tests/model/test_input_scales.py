@@ -113,12 +113,13 @@ BACKEND_READ = {
     "events.counts": "the divisor of a mean",
     "group_counts": "the divisor of a mean",
 }
-# Not yet read by kind: their preparation still applies the legacy readings.
-UNRULED = {
-    "relation_features",
-    "facts.columns",
-    "effects.numeric",
-    "memory.detail_numbers",
+# Fields decoded by their own preparation (`OWN_PREPARATION`) that exceed the
+# common bound, with the bound each keeps. Changing their preparation would
+# change what stored memory checkpoints compute: it records no readings.
+OWN_BOUNDS = {
+    # Program ordinal / 128 (`decision_memory.prepare_memory`); ordinals reach
+    # about 800 on sampled games.
+    "memory.detail_numbers": 16.0,
 }
 CONFIGURATIONS = {
     "default": ({}, {}),
@@ -174,13 +175,14 @@ def sampled_maxima(configuration: str, *, legacy: bool) -> dict[str, float]:
 @pytest.mark.parametrize("configuration", list(CONFIGURATIONS))
 def test_fresh_inputs_stay_within_the_bound(configuration: str) -> None:
     """Every float a fresh model's projections receive stays within |x| <= 4
-    on sampled games; the fields a backend reads itself are named above."""
+    on sampled games; the fields a backend reads itself, and the few decoded by
+    their own preparation with a wider bound, are named above."""
     maxima = sampled_maxima(configuration, legacy=False)
     assert "permanents" in maxima and "action_features" in maxima
     over = {
         key: top
         for key, top in maxima.items()
-        if top > BOUND and key not in BACKEND_READ and key not in UNRULED
+        if top > OWN_BOUNDS.get(key, BOUND) and key not in BACKEND_READ
     }
     assert over == {}
 
@@ -190,3 +192,4 @@ def test_legacy_inputs_exceed_the_bound() -> None:
     maxima = sampled_maxima("default", legacy=True)
     assert maxima["permanents"] > BOUND
     assert maxima["action_features"] > BOUND
+    assert maxima["relation_features"] > BOUND
