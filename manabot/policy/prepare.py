@@ -581,10 +581,12 @@ def prepare(
         else None
     )
     obs = {key: np.asarray(value) for key, value in obs.items()}
-    history = has_history_events(obs)
     for key, width in tables.layout.widths.items():
         if key in obs and obs[key].shape[-1] > width:
             obs[key] = obs[key][..., :width]
+    # After the cut: a model without policy history reads events as its own
+    # layout's, whatever rows it is handed.
+    history = has_history_events(obs)
     facts = obs["facts"]
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
