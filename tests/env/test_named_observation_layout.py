@@ -101,6 +101,14 @@ def test_python_widths_are_the_native_widths(constant: str, array: str) -> None:
     assert getattr(observation, constant) == width == (layout["shape"][-1] or width)
 
 
+def test_every_column_constant_is_mirrored() -> None:
+    listed = {name for name, *_ in (*_MIRRORED_COLUMNS, *_MIRRORED_WIDTHS)}
+    # Imported into the module; held by test_legacy_and_shared_widths_are_native.
+    listed.add("LEGACY_PERMANENT_DIM")
+    named = {name for name in vars(observation) if name.endswith(("_INDEX", "_DIM"))}
+    assert named == listed
+
+
 def test_python_fact_kinds_are_native_row_kinds() -> None:
     kinds = set(managym.observation_layout()["facts"]["row_kinds"])
     assert observation.FACT_KINDS == max(kinds)
