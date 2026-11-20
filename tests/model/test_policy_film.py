@@ -12,6 +12,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.recipes.baseline import BaselineConfig, settings
+from manabot.recipes.builders import elemental_self_play
 from manabot.recipes.local import LocalConfig
 from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
 from tests.model.prepared_routes import device_input
@@ -36,6 +37,18 @@ def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:
     recipe = settings(BaselineConfig(updates=1, device="cpu"))
     assert recipe.model.policy_film
     assert not ModelConfig.model_validate({"hidden_dim": 64}).policy_film
+
+
+def test_living_recipes_norm_streams_and_score_on_focus() -> None:
+    for model in (
+        settings(BaselineConfig(updates=1, device="cpu")).model,
+        elemental_self_play().model,
+    ):
+        assert model.stream_norm and model.focus_film
+        assert model.model_dump()["stream_norm"] is True
+        assert model.model_dump()["focus_film"] is True
+    omitted = ModelConfig.model_validate({"hidden_dim": 64})
+    assert not omitted.stream_norm and not omitted.focus_film
 
 
 def test_film_starts_as_the_additive_policy() -> None:

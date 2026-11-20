@@ -41,6 +41,8 @@ def settings(config: BaselineConfig) -> SelfPlay:
             value_kind="scalar",
             value_aggregation="masked_mean",
             policy_film=True,
+            focus_film=True,
+            stream_norm=True,
         ),
         streams=4,
         transitions=64,
