@@ -158,7 +158,10 @@ selection and health diagnostics, and per minibatch forward and loss, backward
 and gradient clipping, optimizer step and minibatch diagnostics, plus the EMA
 update. A parent's seconds minus its children's are unattributed time, which
 stays visible rather than being spread over the children. Seconds and call
-counts are attempt-local.
+counts are attempt-local. On probed updates, `time/combat_probe` logs the
+[combat probe's](#combat-probe) wall seconds separately from `time/collection`
+and `time/learning`, and appears in the Perf **Update time** chart without
+changing `training_seconds` or transitions-per-second rates.
 
 PPO's `Minibatches/Preparation wait and transfer` measures the caller's wait
 for the next host minibatch and its device upload. Host preparation overlaps the
@@ -243,6 +246,86 @@ See the [numerical health contract](https://github.com/loopflowstudio/manabot/bl
 for units, sampling and failure investigation. A saturated all-win bootstrap may
 also produce a zero-width interval; that is an empirical resampling limitation,
 not certainty of winning future games.
+
+## Combat probe
+
+Every `self_play` run logs attack and block combat probes every 5 updates by
+default (`combat_probe_every` / `combat_probe_rows` on `RunSettings`;
+[update metrics](training.md#combat-probe)). Read probed updates directly from
+Etude rows:
+
+```python
+from etude.train.read import read
+from manabot.reports.update_metrics import updates_from_run
+
+updates = updates_from_run(read(runs_dir, experiment, run_id))
+[
+    (
+        update,
+        round(row["combat/attack/gap"], 2),
+        round(row["combat/attack/shift/my_creatures_9_9"], 2),
+        round(row["combat/attack/shift/their_creatures_9_9_untapped"], 2),
+    )
+    for update, row in updates.items()
+    if "combat/attack/gap" in row
+][:2]
+```
+
+```text
+[(5, 0.42, 0.31, -0.28), (10, 1.15, 0.68, -0.54)]
+```
+
+The `ML` panels (`manabot.training.panels`) draw three `log-odds` charts that
+separate two independent failure modes:
+
+- **Attack and block log-odds** (`combat/attack/gap`, `combat/block/gap`):
+  **is the policy locking?** Each gap is the mean declare logit minus decline
+  logit over two-offer `DECLARE_ATTACKER` or `DECLARE_BLOCKER` decisions
+  (`0` = 50% declare probability, `2.4` = 92%, `9+` = >99.99%, when declines
+  stop being sampled).
+- **Attack gap shift under board edits** and **Block gap shift under board
+  edits**: **is the policy board-blind?** Each chart draws four shifts — the
+  mean change in that gap when the same decisions are re-scored after one edit
+  to the raw permanent buffers before `prepare`:
+  - `combat/<attack|block>/shift/my_creatures_0_1` — my creatures set to 0/1
+  - `combat/<attack|block>/shift/my_creatures_9_9` — my creatures set to 9/9
+  - `combat/<attack|block>/shift/their_creatures_0_1_tapped` — their creatures
+    set to 0/1 and tapped
+  - `combat/<attack|block>/shift/their_creatures_9_9_untapped` — their
+    creatures set to 9/9 and untapped
+
+A policy can remain unlocked (`gap` well below 9) and still be board-blind
+(every shift flat near `0`).
+
+Each probed update scores `learner.agent` after the update on up to
+`combat_probe_rows` (default 256) evenly spaced two-offer decisions per kind
+from that update's collected batch, so update `u` reflects update `u`'s weights
+with no extra games and no RNG draw. Shifts average only the sampled decisions
+where the edited side has at least one creature (`is_creature`), avoiding
+dilution from empty boards. Decision counts stay in the update rows without
+their own chart: `combat/<attack|block>/decisions` for the gap sample and
+`combat/<attack|block>/shift_decisions/<mine|theirs>` for each edited side
+(shared by both edits on that side).
+
+Edits to my side (`my_creatures_0_1` and `my_creatures_9_9`) change power and
+toughness only and leave tap state untouched, so a creature offered as an
+attacker or blocker is never shown tapped. The earlier attack-lock study's probe
+script also toggled tap state on my side, so my-side shift magnitudes are close
+to, not identical with, that study's numbers.
+
+Missing values stay absent (never zero or `NaN`): unprobed updates log no
+`combat/*` or `time/combat_probe` keys; a probed batch with no qualifying
+decisions of a kind omits that kind's keys (leaving a gap on the chart); a
+sample with no creature on an edited side omits that side's shifts and
+`shift_decisions` while keeping the gap; and legacy v9/v10 layouts publish no
+`is_creature`, so runs on them log no `combat/*` keys.
+
+On CPU (Elemental recipe, 32 streams, 256 attack + 237 block decisions), one
+probe took 4.4 s (~7% of a 32-stream CPU update, ~0.2% of a 256-stream recipe
+run at cadence 5); CUDA cost is unmeasured and is reported per run as
+`time/combat_probe` in Perf **Update time**, excluded from `training_seconds`.
+Combat probe curves describe how the policy reacts to board edits on its own
+training positions, not held-out playing strength.
 
 ## Self-play
 
