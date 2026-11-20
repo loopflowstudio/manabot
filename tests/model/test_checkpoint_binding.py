@@ -83,6 +83,7 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     for key in ("agent_player", "opponent_player"):
         binding["input_schema"][key]["shape"][-1] -= 1
         record["input_columns"][key].pop()
+        record["input_readings"][key].pop()
     player = "player_embedding.projection.0.weight"
     state[player] = state[player][:, :-1].contiguous()
     del record["architecture"]
@@ -209,7 +210,7 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
         rows = native_layout(**options)
         for key in growing:
             columns = rows[key]["columns"]
-            columns["appended"] = {"index": len(columns)}
+            columns["appended"] = {"index": len(columns), "kind": "flag"}
         return rows
 
     initialize = ObservationSpace.__init__
@@ -237,7 +238,9 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
         np.testing.assert_array_equal(before, after)
     rebound = tmp_path / "rebound.safetensors"
     save_checkpoint(loaded, runtime, rebound, player_configs=None)
-    assert read_checkpoint(rebound)["input_columns"] == record["input_columns"]
+    rewritten = read_checkpoint(rebound)
+    assert rewritten["input_columns"] == record["input_columns"]
+    assert rewritten["input_readings"] == record["input_readings"]
     again, _ = load_checkpoint(str(rebound))
     np.testing.assert_array_equal(again.evaluate(again.prepare(batch))[0], expected[0])
 

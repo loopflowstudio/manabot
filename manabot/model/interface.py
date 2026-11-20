@@ -14,39 +14,72 @@ from manabot.model.world import (
     written_at,
 )
 from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer_catalog
+from manabot.policy.readings import (
+    Reading,
+    Readings,
+    cut,
+    fresh_readings,
+    legacy_readings,
+    published_columns,
+    recorded_readings,
+)
 import managym
 
 
 def input_columns(space: ObservationSpace) -> dict[str, list[str]]:
-    encoder = space.encoder
-    layout = managym.observation_layout(
-        policy_history=bool(encoder.config.policy_history_version),
-        turn_state=encoder.turn_state,
-        legacy=not encoder.one_token,
-    )
     return {
-        key: sorted(row["columns"], key=lambda name: row["columns"][name]["index"])
-        for key, row in layout.items()
-        if row["columns"]
+        key: [column.name for column in columns]
+        for key, columns in published_columns(space).items()
     }
 
 
 def world_fields(
     space: ObservationSpace,
-    widths: Mapping[str, int],
+    readings: Readings,
     setups: Sequence[managym.PlayerConfig] | None = None,
 ) -> dict[str, Any]:
-    """Record the named input prefixes and catalog rows used by the saved policy."""
+    """Record the named input prefixes, their readings and the catalog rows
+    used by the saved policy. Each buffer's saved width is its readings' length."""
     binding = deck_world(space) if setups is None else checkpoint_world(setups, space)
     columns = input_columns(space)
-    for key, width in widths.items():
-        binding["input_schema"][key]["shape"][-1] = width
-        columns[key] = columns[key][:width]
+    for key, values in readings.items():
+        binding["input_schema"][key]["shape"][-1] = len(values)
+        columns[key] = columns[key][: len(values)]
     return {
         "world_binding": binding,
         "writer_catalog": writer_catalog(),
         "input_columns": columns,
+        "input_readings": {key: list(values) for key, values in readings.items()},
     }
+
+
+def saved_readings(
+    checkpoint: Mapping[str, Any], space: ObservationSpace
+) -> dict[str, tuple[Reading, ...]]:
+    """The readings a checkpoint record was written with.
+
+    A record without `input_readings` predates them and gets
+    `legacy_readings`, cut to its saved column prefixes. A record without a
+    world binding is a model never saved, which reads as a fresh one.
+    """
+    binding = checkpoint.get("world_binding")
+    recorded = checkpoint.get("input_readings")
+    if recorded is not None:
+        columns = checkpoint.get("input_columns")
+        if not isinstance(columns, dict):
+            raise ValueError(
+                f"checkpoint input readings have no columns; {written_at(checkpoint)}"
+            )
+        return recorded_readings(recorded, columns, written_at(checkpoint))
+    if not isinstance(binding, dict):
+        return fresh_readings(space)
+    schema = binding.get("input_schema")
+    widths = {
+        key: entry["shape"][-1]
+        for key, entry in (schema if isinstance(schema, dict) else {}).items()
+        if isinstance(entry, dict) and isinstance(entry.get("shape"), list)
+    }
+    return cut(legacy_readings(space), widths)
 
 
 @dataclass(frozen=True)

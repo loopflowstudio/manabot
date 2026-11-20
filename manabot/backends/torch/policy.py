@@ -56,6 +56,7 @@ from manabot.policy.buckets import row_needs, sizes_of, trim_observation
 from manabot.policy.checkpoint import layout
 from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
+from manabot.policy.readings import Readings, fresh_readings
 import managym
 
 if TYPE_CHECKING:
@@ -126,7 +127,7 @@ class ActorCritic(nn.Module):
         observation_space: ObservationSpace,
         config: ModelConfig,
         *,
-        column_widths: dict[str, int] | None = None,
+        readings: Readings | None = None,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> None:
@@ -159,8 +160,12 @@ class ActorCritic(nn.Module):
             raise ValueError(
                 "history observation contract requires recent_events ActorCritic"
             )
-        self.column_widths = column_widths or {}
-        width = self.column_widths.get
+        # A model built without a checkpoint reads its inputs by kind.
+        self.readings: Readings = (
+            fresh_readings(observation_space) if readings is None else readings
+        )
+        columns = layout(self.readings)
+        width = columns.widths.get
         player_dim = width("agent_player", enc.player_dim)
         card_dim = width("agent_cards", enc.card_dim)
         # Inputs v10/v11 append each seat's turn-state row to its player row and
@@ -172,7 +177,6 @@ class ActorCritic(nn.Module):
             card_dim += 1
         # Definition IDs and permanent links are categorical joins, never
         # numeric permanent features.
-        columns = layout(observation_space, column_widths)
         perm_dim = len(columns.numeric_permanent_columns)
         action_dim = width("actions", enc.action_dim)
         self.max_focus_objects = enc.max_focus_objects
@@ -456,9 +460,7 @@ class ActorCritic(nn.Module):
             )
 
     def _binding(self) -> str:
-        return admission.binding(
-            self.config, self.observation_space, self.column_widths
-        )
+        return admission.binding(self.config, self.observation_space, self.readings)
 
     def _admission_spec(self) -> admission.Spec:
         key = (
@@ -479,9 +481,7 @@ class ActorCritic(nn.Module):
             self.config,
             self.observation_space,
             replace(
-                Tables.from_buffers(
-                    buffers, layout(self.observation_space, self.column_widths)
-                ),
+                Tables.from_buffers(buffers, layout(self.readings)),
                 order_lengths=_catalog_order,
             ),
             self.card_definitions.num_embeddings

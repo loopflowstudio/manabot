@@ -56,6 +56,7 @@ from manabot.env.observation import (
 from manabot.env.shared_effects import EFFECT_ROWS
 from manabot.policy.buckets import has_history_events
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
+from manabot.policy.readings import Reading, Readings, numeric_columns, read_numeric
 
 Array = np.ndarray
 
@@ -98,11 +99,31 @@ OBJECT_VALIDITY_KEYS = (
 
 @dataclass(frozen=True)
 class Layout:
-    """Observation layout the policy reads, from the checkpoint's encoder."""
+    """How the policy reads its input buffers: one reading per column of each
+    buffer's saved prefix (`manabot.policy.readings`). Widths are the lengths."""
 
-    numeric_permanent_columns: tuple[int, ...]
-    link_columns: tuple[int, ...]
-    column_widths: dict[str, int] | None = None
+    readings: Readings
+
+    def __post_init__(self) -> None:
+        if self.readings["agent_permanents"] != self.readings["opponent_permanents"]:
+            raise ValueError("permanent readings differ between seats")
+
+    @cached_property
+    def widths(self) -> dict[str, int]:
+        return {key: len(values) for key, values in self.readings.items()}
+
+    @cached_property
+    def numeric_permanent_columns(self) -> tuple[int, ...]:
+        return numeric_columns(self.readings["agent_permanents"])
+
+    @cached_property
+    def link_columns(self) -> tuple[int, ...]:
+        """Permanent columns joining another object (attached to, blocking)."""
+        return tuple(
+            index
+            for index, reading in enumerate(self.readings["agent_permanents"])
+            if reading is Reading.GATHER
+        )
 
 
 @dataclass(frozen=True)
@@ -538,8 +559,9 @@ def prepare(
     )
     obs = {key: np.asarray(value) for key, value in obs.items()}
     history = has_history_events(obs)
-    for key, width in (tables.layout.column_widths or {}).items():
-        obs[key] = obs[key][..., :width]
+    for key, width in tables.layout.widths.items():
+        if key in obs and obs[key].shape[-1] > width:
+            obs[key] = obs[key][..., :width]
     facts = obs["facts"]
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
@@ -562,7 +584,7 @@ def prepare(
     objects = validity.shape[1]
     f32 = np.float32
     permanents = np.stack([obs[key] for key in _PERMANENT_KEYS], axis=1)
-    numeric = permanents[..., list(layout.numeric_permanent_columns)].astype(f32)
+    numeric = read_numeric(permanents, layout.readings["agent_permanents"])
     knowledge = obs["known_hand"]
     decklists = obs["decklists"]
     # Deprecated v9/v10 carry no positional rows. Current input must supply

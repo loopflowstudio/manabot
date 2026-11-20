@@ -52,7 +52,7 @@ def _observations(
 def _tables(agent: ActorCritic) -> Tables:
     return Tables.from_buffers(
         {name: value.detach().numpy() for name, value in agent.named_buffers()},
-        layout(agent.observation_space),
+        layout(agent.readings),
     )
 
 

@@ -31,22 +31,18 @@ from typing import Any
 
 import numpy as np
 
-from manabot.env.observation import (
-    FACT_KINDS,
-    PERMANENT_DEFINITION_INDEX,
-    PERMANENT_LINK_INDEXES,
-    ObservationSpace,
-)
+from manabot.env.observation import FACT_KINDS, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.architecture import (
     ArchitectureReceipt,
     architecture_receipt,
     validate_architecture_receipt,
 )
-from manabot.model.interface import model_interface, world_fields
+from manabot.model.interface import model_interface, saved_readings, world_fields
 from manabot.model.world import checkpoint_source, written_at
 from manabot.policy.binding import BindingReport, bind_catalog
 from manabot.policy.prepare import Layout, Tables
+from manabot.policy.readings import Readings
 
 type ParameterArrays = Mapping[str, np.ndarray]
 
@@ -76,6 +72,7 @@ _OPTIONAL_METADATA_KEYS = (
     "global_step",
     "writer_catalog",
     "input_columns",
+    "input_readings",
     "belief_schema_identity",
     "belief_content_manifest_identity",
 )
@@ -150,18 +147,8 @@ class Dimensions:
     links: int
 
 
-def layout(
-    space: ObservationSpace, column_widths: dict[str, int] | None = None
-) -> Layout:
-    encoder = space.encoder
-    width = (column_widths or {}).get("agent_permanents", encoder.permanent_dim)
-    links = tuple(c for c in PERMANENT_LINK_INDEXES if c < width)
-    joins = (PERMANENT_DEFINITION_INDEX, *links)
-    return Layout(
-        numeric_permanent_columns=tuple(c for c in range(width) if c not in joins),
-        link_columns=links,
-        column_widths=column_widths,
-    )
+def layout(readings: Readings) -> Layout:
+    return Layout(readings)
 
 
 # -- canonical names -----------------------------------------------------------------
@@ -216,7 +203,9 @@ class PolicyCheckpoint:
     parameters: ParameterArrays
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
-    column_widths: dict[str, int] | None = None
+    # The readings the checkpoint was written with (`saved_readings`); after
+    # admission they are cut to its saved column prefixes.
+    readings: Readings
     report: BindingReport | None = None
 
     def receipt(self) -> ArchitectureReceipt:
@@ -248,13 +237,13 @@ class PolicyCheckpoint:
         return len(programs) if programs is not None else 0
 
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, layout(self.space, self.column_widths))
+        return Tables.from_buffers(self.buffers, layout(self.readings))
 
     def dimensions(self) -> Dimensions:
         encoder = self.space.encoder
         model = self.model
-        width = (self.column_widths or {}).get
-        columns = layout(self.space, self.column_widths)
+        columns = layout(self.readings)
+        width = columns.widths.get
         return Dimensions(
             hidden=model.hidden_dim,
             heads=model.num_attention_heads,
@@ -283,9 +272,11 @@ def from_torch_state(
     metadata: Mapping[str, str] | None = None,
     *,
     parameter_names: Iterable[str],
+    readings: Readings,
 ) -> PolicyCheckpoint:
     """The container contents of a PyTorch state dict (as NumPy arrays).
-    Every tensor becomes one canonical parameter or one lookup buffer."""
+    Every tensor becomes one canonical parameter or one lookup buffer;
+    `readings` are the policy's input readings."""
     names = tuple(parameter_names)
     missing = sorted(set(names) - set(state))
     if missing:
@@ -316,6 +307,7 @@ def from_torch_state(
             if name not in parameter_set
         },
         metadata=meta,
+        readings=readings,
     )
 
 
@@ -343,11 +335,11 @@ def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
     arrays = dict(checkpoint.parameters)
     arrays.update({_BUFFER + k: v for k, v in checkpoint.buffers.items()})
     metadata = dict(checkpoint.metadata)
-    if checkpoint.column_widths is not None:
+    if checkpoint.report is not None:
         # read_container returns runtime-bound arrays. Serializing those arrays
         # makes this runtime their writer, while conversion uses the originals.
         record = {
-            **world_fields(checkpoint.space, checkpoint.column_widths),
+            **world_fields(checkpoint.space, checkpoint.readings),
             "architecture": checkpoint.receipt().model_dump(mode="json"),
             "source": checkpoint_source(),
         }
@@ -405,7 +397,11 @@ def read_saved_container(path: str | Path) -> PolicyCheckpoint:
             f"{path} has no {', '.join(missing)} metadata, so it is not a policy "
             f"checkpoint container; {remedy}"
         )
-    meta = {key: json.loads(metadata[key]) for key in _METADATA_KEYS}
+    meta = {
+        key: json.loads(value)
+        for key, value in metadata.items()
+        if key != "converted_from"
+    }
     hypers = meta["hypers"]
     space = ObservationSpace(
         ObservationConfig.from_checkpoint(hypers["observation_hypers"])
@@ -423,6 +419,7 @@ def read_saved_container(path: str | Path) -> PolicyCheckpoint:
             k[len(_BUFFER) :]: v for k, v in arrays.items() if k.startswith(_BUFFER)
         },
         metadata=metadata,
+        readings=saved_readings(meta, space),
     )
 
 
@@ -446,7 +443,7 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     if projected != width + extra:
         raise ValueError("checkpoint player columns differ from its projection")
     if not checkpoint.model.catalog_records() and interface.writer == interface.current:
-        return replace(checkpoint, column_widths=interface.widths)
+        return checkpoint
     try:
         bound, report = bind_catalog(checkpoint, interface.writer, interface.current)
     except ValueError as error:
@@ -459,7 +456,7 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         checkpoint.space.encoder.player_dim,
         report.summary(),
     )
-    return replace(bound, column_widths=interface.widths, report=report)
+    return replace(bound, report=report)
 
 
 # safetensors: an 8-byte little-endian header length, a JSON header naming each

@@ -508,7 +508,7 @@ class MLXActorCritic(nn.Module):
             binding=admission.binding(
                 self.config,
                 self._static.space,
-                self._static.tables.layout.column_widths,
+                self._static.tables.layout.readings,
             ),
         )
 
@@ -597,7 +597,7 @@ class MLXActorCritic(nn.Module):
             raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
         if batch.binding != admission.binding(
-            self.config, static.space, static.tables.layout.column_widths
+            self.config, static.space, static.tables.layout.readings
         ):
             raise ValueError("prepared batch belongs to another policy configuration")
         dims = self.dims
