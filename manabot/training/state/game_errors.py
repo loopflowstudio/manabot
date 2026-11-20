@@ -311,16 +311,17 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
         if encoder is not None:
             # Native gameplay alone cannot reproduce an allocation failure.
             try:
-                env.encode_observation_into(
+                managym.encode_observation_into(
                     observation, buffers, encoder.config.action_overflow
                 )
-            except ValueError as error:
+            except managym.ObservationCapacity as error:
+                retained = matches_retained_error(
+                    error, attempt.error_class, attempt.error
+                )
                 agreement.matches_error = (
                     None
-                    if attempt.error_class is None or attempt.error is None
-                    else agreement.at_retained_failure
-                    and attempt.error_class == "ObservationCapacity"
-                    and str(error) == attempt.error
+                    if retained is None
+                    else agreement.at_retained_failure and retained
                 )
                 return {
                     **asdict(agreement),

@@ -8,7 +8,6 @@ legality and resolution regression.
 from dataclasses import dataclass
 from typing import Literal
 
-import numpy as np
 import torch
 
 from manabot.env import observation as observation_schema
@@ -60,12 +59,9 @@ def reach(env: managym.Env, kind: int) -> managym.Observation:
     raise AssertionError(f"did not reach decision {kind}")
 
 
-def encode(env: managym.Env, raw: managym.Observation) -> dict[str, torch.Tensor]:
-    native = env.encode_observation(raw)
-    scalar = ObservationSpace().encode(raw)
-    for key in native:
-        np.testing.assert_array_equal(native[key], scalar[key])
-    return {key: torch.as_tensor(value).unsqueeze(0) for key, value in native.items()}
+def encode(raw: managym.Observation) -> dict[str, torch.Tensor]:
+    encoded = ObservationSpace().encode(raw)
+    return {key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()}
 
 
 Family = Literal["attack", "target", "mode", "ability", "land", "learn"]
@@ -254,7 +250,7 @@ def decision_case(
     assert len(candidates) >= 2
     return DecisionCase(
         kind,
-        encode(env, raw),
+        encode(raw),
         candidates,
         preference,
         split,

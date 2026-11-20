@@ -140,10 +140,8 @@ def coverage_sweep(
             obs = env.observation_for_player(player)
             try:
                 encoded = space.encode(obs)
-            except ValueError as error:
+            except managym.ObservationCapacity:
                 # Training aborts a game past its capacities (`recover_capacity`).
-                if "capacity exceeded" not in str(error):
-                    raise
                 overflows += 1
                 break
             facts += int(encoded["facts"][..., -1].sum())

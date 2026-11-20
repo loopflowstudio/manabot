@@ -191,16 +191,12 @@ def collect_games(
             try:
                 # Admission/capacity is checked for every decision, not just
                 # reservoir survivors, so long games cannot disappear silently.
-                env.encode_observation_into(obs, buffers)
+                managym.encode_observation_into(obs, buffers)
                 dense = {k: v[None] for k, v in buffers.items()}
                 prefix = store.capture(
                     dense, 0, PrefixIdentity(str(seed), viewer, "root")
                 )
-            except (managym.AgentError, ValueError) as error:
-                if "Capacity" not in str(error) and not str(error).startswith(
-                    "observation capacity exceeded:"
-                ):
-                    raise
+            except managym.ObservationCapacity as error:
                 corpus.overflows += 1
                 status = "capacity"
                 failure = str(error)

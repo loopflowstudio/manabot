@@ -232,7 +232,7 @@ class LocalUpdateTeacher:
                 raise ValueError("policy cannot represent complete legal offers")
             # Search requires every legal offer, even if a checkpoint permits
             # first-legal truncation during training.
-            engine.encode_observation_into(raw, encoded)
+            managym.encode_observation_into(raw, encoded)
             if int(encoded["actions_valid"].sum()) != count:
                 raise ValueError("policy cannot represent complete legal offers")
             counts.append(count)

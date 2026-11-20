@@ -715,23 +715,19 @@ and `allocated_bytes` instead of `ms`; setup and root forks stay outside the
 counted region. These are allocation requests and traffic, not live heap size.
 Keep counting disabled for timing comparisons.
 
-The Python-side layers read the same states (the Rust harness prints their
-recipes with `--recipes`) and report time only:
+The LLM text renderer reads the same states (the Rust harness prints their
+recipes with `--recipes`) and reports time only:
 
 ```bash
 uv run --extra play python scripts/bench_states.py diverse-mana
 ```
 
-It adds `encode-py` (the Python policy-input encoder) and `text` (the LLM text
-renderer) time rows. `--recipes` exports the exact native observation and
-atomic decision capture beside each recipe, so both consumers see the same
-checkpoint, including separately serialized continuation frames via
-`Observation.from_json(..., continuation_json=...)`. Academy frame construction
-requires a live Academy session and is not measured here.
-`--recipes-file <path>` reuses an export; `--layers encode-py` selects one
-consumer. The script uses the installed extension, so rebuild after Rust changes.
-Both encoders use input v10 with capacities expanded to hold the complete state;
-neither truncates actions or facts.
+It adds `text` time rows. `--recipes` exports the exact native observation and
+atomic decision capture beside each recipe, so the renderer sees the same
+checkpoint as the Rust layers, including separately serialized continuation
+frames. Academy frame construction requires a live Academy session and is not
+measured here. `--recipes-file <path>` reuses an export. The script uses the
+installed extension, so rebuild after Rust changes.
 
 **Using it.** When a change adds or alters payment, choice, targeting,
 enumeration or continuous-effect behavior, run the states whose shape it could

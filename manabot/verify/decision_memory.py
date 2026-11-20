@@ -74,9 +74,7 @@ class Proof:
                 source
                 == self.replay.observation_for_player(viewer).decision_memory_json()
             )
-            expected = self.space.encode(obs)
-            native = self.space.encoder.allocate()
-            self.env.encode_observation_into(obs, native)
+            live = self.space.encode(obs)
             restored = self.space.encode(managym.Observation.from_json(obs.toJSON()))
             for key in (
                 "decision_records",
@@ -84,8 +82,7 @@ class Proof:
                 "actions",
                 "action_focus",
             ):
-                np.testing.assert_array_equal(native[key], expected[key])
-                np.testing.assert_array_equal(restored[key], expected[key])
+                np.testing.assert_array_equal(restored[key], live[key])
             counts[str(viewer)] = len(read_records(source))
             (directory / f"viewer-{viewer}.json").write_text(source + "\n")
         text = capture_text_decision(self.env)
