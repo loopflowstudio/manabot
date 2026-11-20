@@ -15,7 +15,6 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import ObservationSpace
-from manabot.model.interface import input_columns
 from manabot.policy.readings import Reading, fresh_readings, legacy_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
@@ -212,19 +211,15 @@ def test_resume_refuses_a_state_saved_before_readings_were_recorded(
             self_play(settings, run, updates=2)
 
 
-def test_keep_readings_records_a_new_run_and_accepts_a_legacy_state() -> None:
+def test_resume_readings_records_a_new_run_and_accepts_a_legacy_state() -> None:
     space = ObservationSpace(gray_ogre_self_play(horizon=2).observation)
     fresh, legacy = fresh_readings(space), legacy_readings(space)
-    columns = input_columns(space)
-    started = Counts()
-    loop.keep_readings(started, fresh, columns, legacy)
-    assert started.readings == {
+    assert loop.resume_readings(Counts(), fresh, space) == {
         key: [str(value) for value in values] for key, values in fresh.items()
     }
     # A run warm-started from a legacy policy was built with legacy readings.
     resumed = Counts.model_validate({"updates": 3})
-    loop.keep_readings(resumed, legacy, columns, legacy)
-    assert resumed.readings == {
+    assert loop.resume_readings(resumed, legacy, space) == {
         key: [str(value) for value in values] for key, values in legacy.items()
     }
 
@@ -249,6 +244,10 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
         out: Path,
     ) -> dict[str, object]:
         row = original_step(settings, learner, ema, collector, counts, rng, out=out)
+        coordinates = {k: v for k, v in row.items() if k.startswith("coordinates/")}
+        assert coordinates["coordinates/updates"] == 1
+        assert "coordinates/readings" not in coordinates
+        assert all(isinstance(v, (int, float)) for v in coordinates.values())
         stop.touch()
         return row
 

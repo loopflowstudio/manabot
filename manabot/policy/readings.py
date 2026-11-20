@@ -378,15 +378,6 @@ def recorded_readings(
     return readings
 
 
-def cut(
-    readings: Readings, widths: Mapping[str, int]
-) -> dict[str, tuple[ColumnReading, ...]]:
-    """Readings restricted to a checkpoint's saved column prefixes."""
-    return {
-        key: values[: widths.get(key, len(values))] for key, values in readings.items()
-    }
-
-
 # -- applying readings -------------------------------------------------------------
 
 

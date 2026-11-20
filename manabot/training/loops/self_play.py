@@ -10,7 +10,7 @@ use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
 run preserves the retired executor's offsets; resume starts fresh streams.
 """
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
 from itertools import zip_longest
@@ -368,6 +368,10 @@ class Counts(BaseModel):
     optimizer_exposures: int = 0
     readings: dict[str, list[str]] | None = None
 
+    def coordinates(self) -> dict[str, int | float]:
+        """Cumulative work published in policy files and update metrics."""
+        return self.model_dump(exclude={"readings"})
+
 
 def clocks(counts: Counts) -> dict[str, float]:
     """CLOCKS coordinates other than `updates`, which `run.steps` sets for rows."""
@@ -473,32 +477,25 @@ def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | Non
     return learner, ema
 
 
-def keep_readings(
-    counts: Counts,
-    readings: Readings,
-    columns: Mapping[str, Sequence[str]],
-    legacy: Readings,
-) -> None:
-    """Record the model's readings in `counts` in place, or refuse a resume
-    whose model reads a column differently from the run's saved state.
-
-    A resumed run builds its model from the current rule before the saved
-    weights load, so after a kind correction or rule change it would otherwise
-    read some columns differently with nothing said. A state with completed
-    updates and no readings was saved before readings were recorded; its model
-    read `legacy`, as a checkpoint without `input_readings` does. `columns`
-    names each buffer's columns for the refusal.
-    """
-    built = {key: [str(value) for value in values] for key, values in readings.items()}
+def resume_readings(
+    counts: Counts, readings: Readings, space: ObservationSpace
+) -> dict[str, list[str]]:
+    """Return the model's readings for run state, refusing incompatible saved weights."""
+    built = {key: [value.value for value in values] for key, values in readings.items()}
     saved = counts.readings
-    if saved is None and counts.updates == 0:
-        counts.readings = built
-        return
     if saved is None:
+        if counts.updates == 0:
+            return built
+        # Runs predating the record used legacy readings over the model's prefix.
+        legacy = legacy_readings(space)
         saved = {
-            key: [str(value) for value in legacy[key][: len(values)]]
-            for key, values in built.items()
+            key: [value.value for value in legacy[key][: len(values)]]
+            for key, values in readings.items()
         }
+    if saved == built:
+        return built
+
+    columns = input_columns(space)
 
     def name(key: str, index: int) -> str:
         names = columns.get(key, ())
@@ -512,22 +509,20 @@ def keep_readings(
         )
         if was != now
     )
-    if differ:
-        shown = 8
-        listed = ", ".join(differ[:shown]) + (
-            f", and {len(differ) - shown} more" if len(differ) > shown else ""
-        )
-        written = (
-            "the saved run"
-            if counts.readings is not None
-            else "the saved run, which was written before input readings were recorded"
-        )
-        raise ValueError(
-            f"resumed model reads its inputs differently from {written} "
-            f"({listed}); resume from the revision that started the "
-            "run, or warm start from its last published policy"
-        )
-    counts.readings = built
+    shown = 8
+    listed = ", ".join(differ[:shown]) + (
+        f", and {len(differ) - shown} more" if len(differ) > shown else ""
+    )
+    written = (
+        "the saved run"
+        if counts.readings is not None
+        else "the saved run, which was written before input readings were recorded"
+    )
+    raise ValueError(
+        f"resumed model reads its inputs differently from {written} "
+        f"({listed}); resume from the revision that started the "
+        "run, or warm start from its last published policy"
+    )
 
 
 def write_policy(
@@ -566,7 +561,7 @@ def write_policy(
             extra={
                 "weights": weights,
                 "update": counts.updates,
-                "counts": counts.model_dump(mode="json", exclude={"readings"}),
+                "counts": counts.coordinates(),
                 "seed": seed,
                 "value_semantic": "signed_outcome",
                 "averaging": averaging if weights == "ema" else None,
@@ -744,7 +739,7 @@ def step(
     return (
         metric_row(metrics)
         | rates
-        | {f"coordinates/{k}": v for k, v in counts.model_dump().items()}
+        | {f"coordinates/{k}": v for k, v in counts.coordinates().items()}
         | phases
         | resource_metrics(device)
     )
@@ -884,16 +879,13 @@ def self_play(
             objects["ema"] = ema
         # Compare readings before any saved weights load: a model that reads
         # differently can also have a different projection width.
-        space = ObservationSpace(settings.observation)
-        saved = run.resume(extra=Counts())
-        keep_readings(
-            saved,
+        readings = resume_readings(
+            run.resume(extra=Counts()),
             learner.agent.readings,
-            input_columns(space),
-            legacy_readings(space),
+            learner.agent.observation_space,
         )
         counts = run.resume(**objects, extra=Counts())
-        counts.readings = saved.readings
+        counts.readings = readings
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
