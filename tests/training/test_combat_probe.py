@@ -220,3 +220,13 @@ def test_bucketed_and_live_token_policy_matches_padded_probe(
     assert combat_probe(
         packed, batch, space, limit=4, execution_rows=2
     ) == pytest.approx(combat_probe(padded, batch, space, limit=4), abs=1e-5)
+
+
+def test_combat_probe_under_bfloat16_forward_precision(
+    rollout: tuple[RolloutBatch, ObservationSpace],
+) -> None:
+    batch, space = rollout
+    policy = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        metrics = combat_probe(policy, batch, space, limit=2)
+    assert np.isfinite(metrics["combat/attack/gap"])

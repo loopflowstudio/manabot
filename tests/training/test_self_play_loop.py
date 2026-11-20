@@ -15,6 +15,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import ObservationSpace
+from manabot.infra.run_settings import RunSettings
 from manabot.policy.readings import Reading, fresh_readings, legacy_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
@@ -356,3 +357,77 @@ def test_device_memory_observations(monkeypatch: pytest.MonkeyPatch) -> None:
     mps = loop.resource_metrics("mps")
     assert mps["memory/allocated_mps_bytes"] == 12
     assert mps["memory/driver_allocated_mps_bytes"] == 45
+
+
+def test_combat_probe_cadence_and_training_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(Learning(horizon=4, epochs=1, minibatches=1, ema=0.9))
+    states = []
+    for every in (0, 1, 2):
+        name = f"probe-{every}"
+        config = settings.model_copy(
+            update={
+                "run_settings": RunSettings(
+                    combat_probe_every=every, combat_probe_rows=4
+                )
+            }
+        )
+        monkeypatch.setenv("ETUDE_OUT", str(tmp_path / name))
+        track = tmp_path / "track"
+        with recording(
+            experiment="test", run=name, clocks=CLOCKS, directory=track, seed=SEED
+        ) as run:
+            self_play(config, run, updates=4)
+        recorded = read(track, "test", name)
+        expected = list(range(every, 5, every)) if every else []
+        for key in (
+            "combat/attack/gap",
+            "combat/attack/shift/my_creatures_9_9",
+            "time/combat_probe",
+        ):
+            assert list(recorded.points(key, "updates").x) == expected
+        for sample in recorded.points("combat/attack/decisions", "updates").y:
+            assert 1 <= sample <= 4
+        seconds = sum(
+            recorded.points(key, "updates").y
+            for key in ("time/collection", "time/learning")
+        )
+        np.testing.assert_allclose(
+            recorded.points("coordinates/training_seconds", "updates").y,
+            np.cumsum(seconds),
+        )
+        with recording(
+            experiment="test",
+            run=name,
+            clocks=CLOCKS,
+            directory=track,
+            resume=True,
+            seed=SEED,
+        ) as run:
+            learner, ema = loop.create(config, seed=SEED)
+            assert ema is not None
+            run.resume(
+                learner=learner.agent,
+                optimizer=learner.optimizer,
+                ema=ema,
+                extra=Counts(),
+            )
+            states.append(
+                (
+                    learner.agent.state_dict(),
+                    ema.state_dict(),
+                    learner.optimizer.state_dict(),
+                )
+            )
+    for state in states[1:]:
+        torch.testing.assert_close(state, states[0], rtol=0, atol=0)
+
+
+def test_combat_probe_run_settings_preserve_default_serialization() -> None:
+    assert (
+        not {"combat_probe_rows", "combat_probe_every"}
+        & RunSettings().model_dump().keys()
+    )
+    custom = RunSettings(combat_probe_every=0, combat_probe_rows=2)
+    assert RunSettings.model_validate_json(custom.model_dump_json()) == custom

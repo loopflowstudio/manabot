@@ -16,6 +16,7 @@ from copy import deepcopy
 from itertools import zip_longest
 import os
 from pathlib import Path
+from time import perf_counter
 from typing import Literal
 from uuid import uuid4
 
@@ -60,6 +61,7 @@ from manabot.model.world import (
 )
 from manabot.policy.checkpoint import pretrained_memory_branch
 from manabot.policy.readings import Readings, legacy_readings
+from manabot.training.combat_probe import combat_probe
 from manabot.training.corpus import (
     ParentCheckpoint,
     log_corpus_outcomes,
@@ -720,6 +722,20 @@ def step(
     counts.idle_stream_steps += stats.idle_stream_steps - idle
     counts.optimizer_updates += metrics.get("numerical", {}).get("optimizer_steps", 0)
     counts.optimizer_exposures += metrics.get("optimizer_exposures", 0)
+    probe: dict[str, float | int] = {}
+    every = settings.run_settings.combat_probe_every
+    if every and counts.updates % every == 0:
+        with collector.operation("combat_probe"), learner.forward_precision():
+            started = perf_counter()
+            probe = combat_probe(
+                learner.agent,
+                batch,
+                learner.agent.observation_space,
+                settings.run_settings.combat_probe_rows,
+                execution_rows=settings.bootstrap_rows,
+            )
+            synchronize(device)
+            probe["time/combat_probe"] = perf_counter() - started
     rates: dict[str, float] = {}
     # With both seats learning complete games, retained rows count exactly
     # the surfaced choices of the games that contributed terminal targets.
@@ -741,6 +757,7 @@ def step(
         | rates
         | {f"coordinates/{k}": v for k, v in counts.coordinates().items()}
         | phases
+        | probe
         | resource_metrics(device)
     )
 
