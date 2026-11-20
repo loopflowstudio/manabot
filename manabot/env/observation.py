@@ -41,7 +41,13 @@ from managym.enums import (  # noqa: F401
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
 
-# Native action tensor: family, declaration, mode/ability selectors, validity.
+# Column constants manabot reads. Native `observation_layout.rs` owns the
+# layout; `tests/env/test_named_observation_layout.py` holds each constant to
+# the column of that name, so a moved column fails there, not silently here.
+# Add a constant only for a column the model, preparation or a test reads.
+
+# Action rows: one-hot family, declaration, mode/ability selectors,
+# continuation join, validity.
 ACTION_TYPE_DIM = len(ActionEnum)
 ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
 ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
@@ -51,82 +57,43 @@ MAX_ACTION_SELECTOR = (1 << 24) - 1
 # Name candidate columns: name row + 1, definition + 1, then the first and
 # last name rows (+ 1) of a naming group choice.
 NAME_DIM = 4
+
+# Mana restricted to spending on Lesson, Shrine and Ally spells: three blocks
+# of W/U/B/R/G/C.
+PLAYER_RESTRICTED_INDEX = 40
+PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = 59
+PLAYER_DIM = 74
+# Cast-permission terms follow the printed characteristics; validity is last.
+CARD_PERMISSION_INDEX = 40
+CARD_DIM = 56
+
 PERMANENT_DEFINITION_INDEX = 24
-# The policy input encodes every Observation fact; managym's
-# observation_encoder.rs owns the layout and these mirror it exactly.
+PERMANENT_ONCE_EACH_TURN_INDEX = 29
+# Object index + 1 of the attachment's host and of the attacker this creature
+# blocks: joins, never numeric features.
+PERMANENT_ATTACHED_INDEX = 31
+PERMANENT_BLOCKING_INDEX = 33
+# Rank of its timestamp among the observation's timestamps.
+PERMANENT_TIMESTAMP_INDEX = 35
+PERMANENT_MANA_VALUE_INDEX = 37
+PERMANENT_TYPES_INDEX = 38  # land..battle
+PERMANENT_DIM = 51
+# Permanent columns that hold object links (joins), in model parameter order.
+PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
+
+# Input v11 stack rows, top first: one per spell or ability.
+STACK_IS_MINE_INDEX = 0
+STACK_DEFINITION_INDEX = 4
+STACK_SOURCE_INDEX = 5  # object index + 1 of an ability's source: a join
+STACK_DIM = 37
+
 RELATION_ROWS = 64
 RELATION_DIM = 49
-# Row validity sits before target eligibility and the spell terms.
 RELATION_VALID_INDEX = 31
 RELATION_ELIGIBILITY_INDEX = 32
 RELATION_X_INDEX = 33
-RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
 RELATION_THIS_TURN_INDEX = 48  # a waiting delayed trigger ends this turn
-# Restricted-mana column subtypes, in column order (the native
-# `RESTRICTED_SUBTYPE_COLUMNS`); other restrictions are refused, never dropped.
-RESTRICTED_SUBTYPE_COLUMNS = ("Lesson", "Shrine", "Ally")
-PLAYER_RESTRICTED_INDEX = 40
-PLAYER_HAND_ONLY_INDEX = PLAYER_RESTRICTED_INDEX + len(RESTRICTED_SUBTYPE_COLUMNS) * 6
-PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
-PLAYER_TURN_INDEX = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
-PLAYER_SEAT_INDEX = PLAYER_TURN_INDEX + 1
-PLAYER_KEEPS_RED_MANA_INDEX = PLAYER_SEAT_INDEX + 1
-# Turn history: attacked, permanents sacrificed, a land entered, cards drawn.
-PLAYER_ATTACKED_INDEX = PLAYER_KEEPS_RED_MANA_INDEX + 1
-PLAYER_SACRIFICED_INDEX = PLAYER_ATTACKED_INDEX + 1
-PLAYER_LAND_ENTERED_INDEX = PLAYER_SACRIFICED_INDEX + 1
-PLAYER_CARDS_DRAWN_INDEX = PLAYER_LAND_ENTERED_INDEX + 1
-# Bending done this turn: water, earth, fire, air.
-PLAYER_BENT_INDEX = PLAYER_CARDS_DRAWN_INDEX + 1
-# Extra turns this player will take after this one.
-PLAYER_EXTRA_TURNS_INDEX = PLAYER_BENT_INDEX + 4
-# Additional combat phases still to come this turn (active player's row).
-PLAYER_ADDITIONAL_COMBATS_INDEX = PLAYER_EXTRA_TURNS_INDEX + 1
-PLAYER_DECKLISTS_OPEN_INDEX = PLAYER_ADDITIONAL_COMBATS_INDEX + 1
-PLAYER_DIM = PLAYER_DECKLISTS_OPEN_INDEX + 1
-# Cast-permission terms follow the printed characteristics; validity is last.
-CARD_PERMISSION_INDEX = 40
-CARD_X_INDEX = CARD_PERMISSION_INDEX + 13
-CARD_DIM = CARD_X_INDEX + 2 + 1
-# Open-ended vocabularies are fact rows (below), not columns; validity is last.
-PERMANENT_EXHAUSTED_INDEX = 28
-PERMANENT_ONCE_EACH_TURN_INDEX = PERMANENT_EXHAUSTED_INDEX + 1
-PERMANENT_FIREBENDING_INDEX = PERMANENT_ONCE_EACH_TURN_INDEX + 1
-# Object index + 1 of the attachment's host: a join, never a numeric feature.
-PERMANENT_ATTACHED_INDEX = PERMANENT_FIREBENDING_INDEX + 1
-PERMANENT_GRANTED_LAND_INDEX = PERMANENT_ATTACHED_INDEX + 1
-# Object index + 1 of the attacker this creature blocks: a join.
-PERMANENT_BLOCKING_INDEX = PERMANENT_GRANTED_LAND_INDEX + 1
-PERMANENT_ABILITIES_LOST_INDEX = PERMANENT_BLOCKING_INDEX + 1
-# Rank of its timestamp among the observation's timestamps.
-PERMANENT_TIMESTAMP_INDEX = PERMANENT_ABILITIES_LOST_INDEX + 1
-PERMANENT_DEALT_DAMAGE_INDEX = PERMANENT_TIMESTAMP_INDEX + 1
-# Input v11: the characteristics only a card row held before: mana value, six
-# card types, legendary, token, Ally, Lesson, ward flag and cost.
-PERMANENT_MANA_VALUE_INDEX = PERMANENT_DEALT_DAMAGE_INDEX + 1
-PERMANENT_TYPES_INDEX = PERMANENT_MANA_VALUE_INDEX + 1  # land..battle
-PERMANENT_LEGENDARY_INDEX = PERMANENT_TYPES_INDEX + 6
-PERMANENT_TOKEN_INDEX = PERMANENT_LEGENDARY_INDEX + 1
-PERMANENT_ALLY_INDEX = PERMANENT_TOKEN_INDEX + 1
-PERMANENT_LESSON_INDEX = PERMANENT_ALLY_INDEX + 1
-PERMANENT_WARD_INDEX = PERMANENT_LESSON_INDEX + 1  # flag, cost
-PERMANENT_DIM = PERMANENT_WARD_INDEX + 2 + 1
-# Input v11 stack rows, top first: one per spell or ability.
-STACK_IS_MINE_INDEX = 0
-STACK_KIND_INDEX = 1  # spell, activated ability, triggered ability
-STACK_DEFINITION_INDEX = 4
-STACK_SOURCE_INDEX = 5  # object index + 1 of an ability's source: a join
-STACK_ABILITY_INDEX = 6
-STACK_MODE_INDEX = 7
-STACK_X_INDEX = 8  # flag, value
-STACK_KICKED_INDEX = 10
-STACK_COPY_INDEX = 11
-STACK_MANA_VALUE_INDEX = 12
-STACK_POWER_INDEX = 13  # power, toughness
-STACK_TYPES_INDEX = 15  # land..battle
-STACK_LEGENDARY_INDEX = 21
-STACK_KEYWORDS_INDEX = 22  # 14 keywords, KeywordData order
-STACK_DIM = STACK_KEYWORDS_INDEX + 14 + 1
+
 # Fact rows: one open-vocabulary fact about a player or permanent, joined to
 # it like relation references. Ids are learning-token values split into 16-bit
 # halves (exact in float32).
@@ -142,11 +109,9 @@ FACT_ORDER_INDEX = 9  # timestamp rank (1-based)
 FACT_SOURCE_INDEX = 10  # source definition + 1
 FACT_VALID_INDEX = 11
 FACT_DIM = 12
-# FactKind values (observation_encoder.rs).
+# FactKind values (native `observation_encoder::FactKind`).
 FACT_COUNTER = 1
-FACT_ADDED_SUBTYPE = 2
 FACT_SET_NAME = 3
-FACT_SET_CREATURE_TYPE = 4
 FACT_USED_ABILITY = 5
 # Reserved: continuous-effect records are shared-effect rows, never fact rows.
 FACT_EFFECT = 6
@@ -155,27 +120,24 @@ FACT_COPY_EXCEPTION = 8
 FACT_TRANSFORMS = 9
 FACT_COMBAT_RESTRICTION = 10
 FACT_EFFECT_PROGRAM = 11
+FACT_CONTINUATION_PROGRAM = 14
+FACT_KINDS = 14
 # The id of an effect program that states a player's pooled mana with a
 # spend effect or combat expiry (native `observation_encoder::POOLED_MANA`).
 POOLED_MANA = "PooledMana"
-FACT_EFFECTIVE_COLOR = 12
-FACT_KEYWORD_COUNTER_TIMESTAMP = 13
-FACT_CONTINUATION_PROGRAM = 14
-FACT_KINDS = 14
-# Permanent columns that hold object links (joins), in model parameter order.
-PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
+
 # Decklist rows: definition id + 1, then main, unseen, sideboard and
 # remaining-sideboard counts. A closed opponent's rows are all zero.
 DECKLIST_DIM = 5
-# Input v10 turn state (observation_encoder.rs). `player_turn_state` has one
-# row per seat, agent first: life lost this turn / 20, spells cast this turn
-# / 10, then mana that can't be spent to cast nonartifact spells by
-# W/U/B/R/G/C / 10. `card_turn_state` aligns with the seats' card rows: 1 for
-# a graveyard card put there from the battlefield this turn.
+# Input v10/v11 turn state. `player_turn_state` has one row per seat, agent
+# first: life lost this turn / 20, spells cast this turn / 10, then mana that
+# can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10.
+# `card_turn_state` aligns with the seats' card rows: 1 for a graveyard card
+# put there from the battlefield this turn.
 TURN_STATE_LIFE_LOST_INDEX = 0
 TURN_STATE_SPELLS_CAST_INDEX = 1
 TURN_STATE_NONARTIFACT_MANA_INDEX = 2
-TURN_STATE_DIM = TURN_STATE_NONARTIFACT_MANA_INDEX + 6
+TURN_STATE_DIM = 8
 
 
 class ObservationEncoder:

@@ -97,25 +97,25 @@ def expected_focus_indices(
     obs: managym.Observation,
     config: ObservationConfig,
 ) -> np.ndarray:
-    object_to_index: dict[int, int] = {}
+    object_rows: dict[int, int] = {}
     current_object_index = 0
 
-    object_to_index[obs.agent.id] = current_object_index
+    object_rows[obs.agent.id] = current_object_index
     current_object_index += 1
-    object_to_index[obs.opponent.id] = current_object_index
+    object_rows[obs.opponent.id] = current_object_index
     current_object_index += 1
 
     for cards in (obs.agent_cards, obs.opponent_cards):
         ordered = cards[: config.max_cards_per_player]
         for card in ordered:
-            object_to_index[card.id] = current_object_index
+            object_rows[card.id] = current_object_index
             current_object_index += 1
         current_object_index += config.max_cards_per_player - len(ordered)
 
     for permanents in (obs.agent_permanents, obs.opponent_permanents):
         ordered = permanents[: config.max_permanents_per_player]
         for permanent in ordered:
-            object_to_index[permanent.id] = current_object_index
+            object_rows[permanent.id] = current_object_index
             current_object_index += 1
         current_object_index += config.max_permanents_per_player - len(ordered)
 
@@ -130,7 +130,7 @@ def expected_focus_indices(
         for focus_index, object_id in enumerate(
             action.focus[: config.max_focus_objects]
         ):
-            out[action_index, focus_index] = object_to_index.get(object_id, -1)
+            out[action_index, focus_index] = object_rows.get(object_id, -1)
 
     return out
 
