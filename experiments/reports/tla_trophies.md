@@ -163,3 +163,12 @@ seconds per update, or 562 decisions/s together (2.93 million decisions/USD
 at the rental rate). Median rollout recording took 8.40 and 5.01 seconds,
 with median host load 9.06 and 8.58. Peak allocated/reserved CUDA memory
 was 0.182/0.242 GiB and 0.190/0.250 GiB per process.
+
+Arm B (`tla-trophies-cal-b`, same seeds) finished six updates per seed.
+It delivered 721,697 learner decisions for USD0.1387. Over updates 2–6,
+the seeds averaged 94.7 and 89.5 seconds per update, or 1,307 decisions/s
+together (6.82 million decisions/USD). Median rollout recording took
+8.04 and 3.41 seconds, with median host load 14.35 and 16.31. Peak
+allocated/reserved CUDA memory was 0.280/0.359 GiB and 0.280/0.340 GiB.
+The larger batches delivered 2.33 times as many decisions per dollar
+during steady-state training, qualifying arm B for the three-slot trial.
