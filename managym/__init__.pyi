@@ -298,13 +298,15 @@ class Env:
         self,
         obs: Observation,
         max_facts: int | None = None,
-    ) -> Dict[str, np.ndarray]: ...
+    ) -> Dict[str, np.ndarray]:
+        """Deprecated: arrays at native default capacities; removal in 0.4.0."""
     def encode_observation_into(
         self,
         obs: Observation,
         out: Dict[str, np.ndarray],
         action_overflow: str = "error",
-    ) -> None: ...
+    ) -> None:
+        """Deprecated alias of `managym.encode_observation_into`; removal in 0.4.0."""
 
 class StructuredOfferSet:
     def projection_json(self) -> str: ...
@@ -1052,6 +1054,10 @@ class Observation:
 
 class AgentError(RuntimeError): ...
 
+class ObservationCapacity(ValueError):
+    """An observation does not fit its buffers (message
+    ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
+
 # Deprecated: the label of the last numbered world; removed in 0.4.0.
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
@@ -1123,6 +1129,18 @@ def naming_catalog() -> list[NameCandidate]: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...
+def encode_observation_into(
+    obs: Observation, out: Dict[str, np.ndarray], action_overflow: str = "error"
+) -> None:
+    """Write any observation (live, restored or a viewer projection) into out.
+
+    The configuration is read from the buffers' shapes; a missing companion or
+    wrong width raises `ValueError` before any write. An observation that does
+    not fit raises `ObservationCapacity`. More legal actions than slots is an
+    overflow unless `action_overflow="first-legal"`.
+    """
+    ...
+
 def encode_observations_into(
     envs: Sequence[Env], buffers: Dict[str, np.ndarray], capacity: int
 ) -> list[int]:
@@ -1131,7 +1149,8 @@ def encode_observations_into(
     Buffers come from `ObservationEncoder.allocate(capacity)`; later rows are
     untouched. Returns each row's legal-action count. Shape, dtype and
     writability failures raise before any write; an observation exceeding a
-    capacity (every legal action must fit) raises, leaving earlier rows written.
+    capacity (every legal action must fit) raises `ObservationCapacity`,
+    leaving earlier rows written.
     """
     ...
 

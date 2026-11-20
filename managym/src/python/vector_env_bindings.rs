@@ -1244,7 +1244,7 @@ fn encode_observations_into(
                 let observation = env.observation_for_player(actor).map_err(map_agent_err)?;
                 let row = out.encoded_row_mut(index, &config).map_err(map_agent_err)?;
                 encode_into(&observation, &config, row)
-                    .map_err(|err| PyValueError::new_err(err.to_string()))?;
+                    .map_err(crate::python::bindings::map_encode_err)?;
                 Ok(observation.action_space.actions.len())
             })
             .collect()

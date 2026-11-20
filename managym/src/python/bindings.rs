@@ -79,6 +79,36 @@ pub(crate) fn map_agent_err(err: AgentError) -> PyErr {
 }
 
 #[cfg(feature = "python")]
+pyo3::create_exception!(_managym, ObservationCapacity, PyValueError);
+
+/// The one Python form of an encoding failure: `ObservationCapacity` when the
+/// observation does not fit its buffers, `ValueError` otherwise. The message
+/// is the native one.
+#[cfg(feature = "python")]
+pub(crate) fn map_encode_err(
+    err: crate::agent::observation_encoder::ObservationEncodeError,
+) -> PyErr {
+    use crate::agent::observation_encoder::ObservationEncodeError;
+    match err {
+        ObservationEncodeError::Capacity { .. } => ObservationCapacity::new_err(err.to_string()),
+        _ => PyValueError::new_err(err.to_string()),
+    }
+}
+
+#[cfg(feature = "python")]
+fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
+    py.import_bound("warnings")?.call_method1(
+        "warn",
+        (
+            message,
+            py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+    Ok(())
+}
+
+#[cfg(feature = "python")]
 fn to_numpy_array_f32(
     py: Python<'_>,
     np: &Bound<'_, PyModule>,
@@ -5107,6 +5137,7 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
+    /// Deprecated: encode with native default capacities. Removal in 0.4.0.
     #[pyo3(signature = (obs, max_facts=None))]
     fn encode_observation(
         &self,
@@ -5114,6 +5145,12 @@ impl PyEnv {
         obs: PyObservation,
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
+        warn_deprecated(
+            py,
+            "Env.encode_observation is deprecated; allocate buffers from \
+             managym.observation_layout() or ObservationSpace and call \
+             managym.encode_observation_into; removal in 0.4.0",
+        )?;
         let rust_obs = Observation::from(obs);
         if max_facts == Some(0) {
             return Err(PyValueError::new_err(
@@ -5125,11 +5162,12 @@ impl PyEnv {
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
-            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            .map_err(map_encode_err)?;
         let out = encoded_to_dict(py, encoded, &config)?;
         Ok(out.into_any().unbind())
     }
 
+    /// Deprecated alias of `managym.encode_observation_into`. Removal in 0.4.0.
     #[pyo3(signature = (obs, out, action_overflow="error"))]
     fn encode_observation_into(
         &self,
@@ -5138,24 +5176,44 @@ impl PyEnv {
         out: Bound<'_, PyDict>,
         action_overflow: &str,
     ) -> PyResult<()> {
-        #[cfg(feature = "benchmark")]
-        let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
-        let rust_obs = Observation::from(obs);
-        #[cfg(feature = "benchmark")]
-        drop(conversion_timer);
-        #[cfg(feature = "benchmark")]
-        let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
-        let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
-        config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        #[cfg(feature = "benchmark")]
-        drop(config_timer);
-        let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
-            .map_err(|err| PyValueError::new_err(err.to_string()))?;
-
-        #[cfg(feature = "benchmark")]
-        let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
-        fill_encoded_into_existing_buffers(py, &out, encoded, &config)
+        warn_deprecated(
+            py,
+            "Env.encode_observation_into is deprecated; use \
+             managym.encode_observation_into; removal in 0.4.0",
+        )?;
+        encode_observation_into(py, obs, out, action_overflow)
     }
+}
+
+/// Write any observation (live, restored or a viewer projection) into
+/// caller-owned buffers. The configuration is read from the buffers' shapes;
+/// companion shapes are checked before any write.
+#[cfg(feature = "python")]
+#[pyfunction]
+#[pyo3(signature = (obs, out, action_overflow="error"))]
+fn encode_observation_into(
+    py: Python<'_>,
+    obs: PyObservation,
+    out: Bound<'_, PyDict>,
+    action_overflow: &str,
+) -> PyResult<()> {
+    #[cfg(feature = "benchmark")]
+    let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
+    let rust_obs = Observation::from(obs);
+    #[cfg(feature = "benchmark")]
+    drop(conversion_timer);
+    #[cfg(feature = "benchmark")]
+    let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
+    let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
+    config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+    #[cfg(feature = "benchmark")]
+    drop(config_timer);
+    let encoded =
+        crate::agent::observation_encoder::encode(&rust_obs, &config).map_err(map_encode_err)?;
+
+    #[cfg(feature = "benchmark")]
+    let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
+    fill_encoded_into_existing_buffers(py, &out, encoded, &config)
 }
 
 #[cfg(feature = "python")]
@@ -5524,6 +5582,10 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     m.add("NAME_BRANCHING", crate::cards::names::NAME_BRANCHING)?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
+    m.add(
+        "ObservationCapacity",
+        py.get_type_bound::<ObservationCapacity>(),
+    )?;
 
     m.add_class::<ZoneEnum>()?;
     m.add_class::<PhaseEnum>()?;
@@ -5555,6 +5617,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
+    m.add_function(wrap_pyfunction!(encode_observation_into, m)?)?;
     m.add_function(wrap_pyfunction!(input_v10_state, m)?)?;
     m.add_function(wrap_pyfunction!(unrepresentable_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;

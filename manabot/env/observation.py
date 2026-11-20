@@ -1410,7 +1410,16 @@ class ObservationSpace(gym.spaces.Space):
         )
 
     def encode(self, obs: managym.Observation) -> ObservationBuffers:
-        return self.encoder.encode(obs)
+        """Fresh buffers for ``obs``, written by the native encoder.
+
+        Any observation encodes: live, restored with ``Observation.from_json``
+        or a viewer projection. Raises ``managym.ObservationCapacity`` when it
+        does not fit this space and ``ValueError`` for state the configured
+        input cannot represent.
+        """
+        out = self.encoder.allocate()
+        managym.encode_observation_into(obs, out, self.encoder.config.action_overflow)
+        return out
 
     @property
     def shape(self) -> tuple | None:
