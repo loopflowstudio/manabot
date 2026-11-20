@@ -17,7 +17,6 @@ from manabot.model.writer_catalog import WriterCatalog, archived_catalog, writer
 from manabot.policy.readings import (
     Reading,
     Readings,
-    cut,
     fresh_readings,
     legacy_readings,
     published_columns,
@@ -81,7 +80,9 @@ def saved_readings(
         for key, entry in (schema if isinstance(schema, dict) else {}).items()
         if isinstance(entry, dict) and isinstance(entry.get("shape"), list)
     }
-    return cut(legacy_readings(space), widths)
+    return {
+        key: values[: widths.get(key)] for key, values in legacy_readings(space).items()
+    }
 
 
 @dataclass(frozen=True)

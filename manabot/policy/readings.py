@@ -72,8 +72,6 @@ class Reading(StrEnum):
 
 type Readings = Mapping[str, tuple[Reading, ...]]
 
-KNOWN = frozenset(reading.value for reading in Reading)
-
 # Every rank divides by this, whatever the capacity of its rows.
 RANK_SCALE = 128
 # Readings `read_numeric` applies; the others are joins or belong to their
@@ -298,23 +296,16 @@ def recorded_readings(
             raise ValueError(
                 f"checkpoint {key} readings do not match its {len(names)} columns; {location}"
             )
+        parsed = []
         for name, value in zip(names, values, strict=True):
-            if value not in KNOWN:
+            try:
+                parsed.append(Reading(value))
+            except ValueError as error:
                 raise ValueError(
-                    f"checkpoint reads {key}.{name} by unknown reading {value!r}; "
-                    f"{location}"
-                )
-        readings[key] = tuple(Reading(value) for value in values)
+                    f"checkpoint reads {key}.{name} by unknown reading {value!r}; {location}"
+                ) from error
+        readings[key] = tuple(parsed)
     return readings
-
-
-def cut(
-    readings: Readings, widths: Mapping[str, int]
-) -> dict[str, tuple[Reading, ...]]:
-    """Readings restricted to a checkpoint's saved column prefixes."""
-    return {
-        key: values[: widths.get(key, len(values))] for key, values in readings.items()
-    }
 
 
 # -- applying readings -------------------------------------------------------------
@@ -347,7 +338,7 @@ def read_numeric(
     whose readings are all `as_is` computes what it did before readings existed.
     """
     columns = numeric_columns(readings)
-    out = values[..., list(columns)].astype(np.float32)
+    out = values[..., list(columns)].astype(np.float32, copy=False)
     for position, index in enumerate(columns):
         reading = readings[index]
         if reading is Reading.LOG:
