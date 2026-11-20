@@ -100,6 +100,30 @@ def test_checkpoint_without_readings_reads_as_before(tmp_path: Path) -> None:
     assert loaded.readings["agent_permanents"][_timestamp(space)] is Reading.AS_IS
 
 
+def test_legacy_readings_ignore_native_kind_corrections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    space = ObservationSpace()
+    original = legacy_readings(space)
+    observation_layout = managym.observation_layout
+
+    def corrected_layout(
+        **options: bool,
+    ) -> dict[str, "managym.ObservationArrayLayout"]:
+        layout = observation_layout(**options)
+        layout["relations"]["columns"]["parent"]["kind"] = "reference"
+        return layout
+
+    monkeypatch.setattr(managym, "observation_layout", corrected_layout)
+    parent = next(
+        i
+        for i, column in enumerate(published_columns(space)["relations"])
+        if column.name == "parent"
+    )
+    assert fresh_readings(space)["relations"][parent] is Reading.GATHER
+    assert legacy_readings(space) == original
+
+
 def test_unknown_recorded_reading_is_refused(
     saved: tuple[ActorCritic, ObservationSpace, Path],
 ) -> None:
