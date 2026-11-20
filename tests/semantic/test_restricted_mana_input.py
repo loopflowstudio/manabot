@@ -5,7 +5,11 @@ import json
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationEncoder
+from manabot.env.observation import (
+    PLAYER_RESTRICTED_INDEX,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.config import ObservationConfig
 import managym
 
@@ -46,7 +50,7 @@ def _env() -> managym.Env:
         ({"spells": ["Ally", "Lesson"]}, "Ally or Lesson spells"),
     ],
 )
-def test_both_encoders_refuse_restrictions_the_columns_cannot_state(
+def test_policy_input_refuses_restrictions_the_columns_cannot_state(
     restricted: dict[str, object], described: str
 ) -> None:
     env = _env()
@@ -59,15 +63,11 @@ def test_both_encoders_refuse_restrictions_the_columns_cannot_state(
     )
     message = f"cannot represent mana restricted to {described}"
     assert managym.unrepresentable_state(obs) == f"mana restricted to {described}"
-    for encode in (
-        lambda: env.encode_observation(obs),
-        lambda: ObservationEncoder(ObservationConfig()).encode(obs),
-    ):
-        with pytest.raises(ValueError, match=message):
-            encode()
+    with pytest.raises(ValueError, match=message):
+        encode_observation(ObservationSpace(ObservationConfig()), obs)
 
 
-def test_column_restrictions_encode_identically_in_both_encoders() -> None:
+def test_column_restrictions_encode_in_each_subtype_column() -> None:
     env = _env()
     obs = _observation_with(
         env,
@@ -77,7 +77,12 @@ def test_column_restrictions_encode_identically_in_both_encoders() -> None:
         ],
     )
     assert managym.unrepresentable_state(obs) is None
-    expected = ObservationEncoder(ObservationConfig()).encode(obs)
-    actual = env.encode_observation(obs)
-    for key, value in expected.items():
-        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    encoded = encode_observation(ObservationSpace(ObservationConfig()), obs)
+    columns = encoded["agent_player"][0, PLAYER_RESTRICTED_INDEX:][:18].reshape(3, 6)
+    # Lesson, Shrine and Ally columns, each W U B R G C scaled by 1/10: the
+    # Lesson-or-Shrine red counts for both subtypes, the Ally green for Ally.
+    np.testing.assert_allclose(
+        columns,
+        [[0, 0, 0, 0.1, 0, 0], [0, 0, 0, 0.1, 0, 0], [0, 0, 0, 0, 0.2, 0]],
+        rtol=1e-6,
+    )

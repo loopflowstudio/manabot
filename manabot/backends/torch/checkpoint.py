@@ -273,13 +273,13 @@ def save_checkpoint(
         "global_step": 0,
         "hypers": {
             "agent_hypers": agent.config.checkpoint_payload(),
-            "observation_hypers": obs_space.encoder.config.model_dump(),
+            "observation_hypers": obs_space.config.model_dump(),
             "train_hypers": {},
             # The collector applies the policy's decision settings to both seats.
             # Training provenance is independent of strict world/ABI admission.
             "training_setup": {
-                "mana_payment": [obs_space.encoder.config.mana_payment] * 2,
-                "mana_floats": [obs_space.encoder.config.mana_floats] * 2,
+                "mana_payment": [obs_space.config.mana_payment] * 2,
+                "mana_floats": [obs_space.config.mana_floats] * 2,
                 "skip_trivial": True,
             },
         },
@@ -301,7 +301,7 @@ def save_checkpoint(
             )
     container = from_torch_state(
         agent.config,
-        obs_space.encoder.config,
+        obs_space.config,
         {
             name: tensor.detach().cpu().numpy()
             for name, tensor in agent.state_dict().items()

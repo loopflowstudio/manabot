@@ -14,7 +14,7 @@ from typing import Literal, Protocol
 
 import numpy as np
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision, render_decision
@@ -74,18 +74,17 @@ class Proof:
                 source
                 == self.replay.observation_for_player(viewer).decision_memory_json()
             )
-            expected = self.space.encode(obs)
-            native = self.space.encoder.allocate()
-            self.env.encode_observation_into(obs, native)
-            restored = self.space.encode(managym.Observation.from_json(obs.toJSON()))
+            live = encode_observation(self.space, obs)
+            restored = encode_observation(
+                self.space, managym.Observation.from_json(obs.toJSON())
+            )
             for key in (
                 "decision_records",
                 "decision_reference_details",
                 "actions",
                 "action_focus",
             ):
-                np.testing.assert_array_equal(native[key], expected[key])
-                np.testing.assert_array_equal(restored[key], expected[key])
+                np.testing.assert_array_equal(restored[key], live[key])
             counts[str(viewer)] = len(read_records(source))
             (directory / f"viewer-{viewer}.json").write_text(source + "\n")
         text = capture_text_decision(self.env)
@@ -240,8 +239,8 @@ def run_demo(out: Path, backend: DemoBackend) -> None:
         assert actor is not None
         obs = {
             key: value[None]
-            for key, value in proof.space.encode(
-                proof.env.observation_for_player(actor)
+            for key, value in encode_observation(
+                proof.space, proof.env.observation_for_player(actor)
             ).items()
         }
         policies[disclosure] = backend.prove_policies(

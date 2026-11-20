@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     agent::observation::ContinuousEffectData,
+    cards::tokens::TokenKind,
     flow::game::Game,
     state::{
         effect::Affected,
@@ -108,6 +109,22 @@ pub fn project(game: &Game) -> Vec<SharedEffectData> {
 // validity. A membership retains its original one-based record order.
 pub const EFFECT_ROWS: usize = 128;
 pub const EFFECT_DIM: usize = effect::WIDTH;
+
+pub const PROGRAM_DETAIL_KINDS: [(&str, TokenKind); 9] = [
+    ("program_structure", TokenKind::Structure),
+    ("program_field", TokenKind::Field),
+    ("program_variant", TokenKind::Variant),
+    ("program_integer", TokenKind::Integer),
+    ("program_boolean", TokenKind::Boolean),
+    ("program_text", TokenKind::Text),
+    ("program_definition_ref", TokenKind::DefinitionRef),
+    ("program_null", TokenKind::Null),
+    ("program_program_kind", TokenKind::ProgramKind),
+];
+pub fn program_detail_kind(kind: u16) -> u16 {
+    10 + kind
+}
+
 pub const DETAIL_ROWS: usize = 4096;
 pub const DETAIL_DIM: usize = detail::WIDTH;
 pub const MEMBER_ROWS: usize = 2048;
@@ -218,7 +235,7 @@ pub fn encode(
             d += 1;
         }
         for &(kind, value) in &effect.program {
-            details[d * DETAIL_DIM + detail::KIND] = 10.0 + f32::from(kind);
+            details[d * DETAIL_DIM + detail::KIND] = f32::from(program_detail_kind(kind));
             details[d * DETAIL_DIM + detail::VALUE_HIGH..(d + 1) * DETAIL_DIM]
                 .copy_from_slice(&split_id(value));
             d += 1;

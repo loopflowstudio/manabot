@@ -38,7 +38,7 @@ def checkpoint():
         "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
             "agent_hypers": agent.config.checkpoint_payload(),
-            "observation_hypers": space.encoder.config.model_dump(),
+            "observation_hypers": space.config.model_dump(),
         },
         **world_fields(space, agent.readings, selected_match().to_rust()),
     }

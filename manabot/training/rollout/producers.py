@@ -120,7 +120,11 @@ class ShardedVectorEnv:
             raise
 
     def set_buffers(
-        self, buffers: dict[str, Array], action_overflow: str = "error"
+        self,
+        buffers: dict[str, Array],
+        action_overflow: str = "error",
+        *,
+        layout: managym.ObservationLayout,
     ) -> None:
         self._check()
         for value in buffers.values():
@@ -136,6 +140,7 @@ class ShardedVectorEnv:
                         for key, value in buffers.items()
                     },
                     action_overflow,
+                    layout=layout,
                 )
                 for shard in self._shards
             ]

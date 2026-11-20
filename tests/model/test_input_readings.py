@@ -1,6 +1,7 @@
 """A checkpoint is read with the readings it recorded, never with today's rule."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -8,6 +9,7 @@ import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.observation import (
     FACT_COUNTER,
     FACT_DIM,
@@ -17,8 +19,9 @@ from manabot.env.observation import (
     FACT_TRANSFORMS,
     FACT_VALID_INDEX,
     ObservationSpace,
+    encode_observation,
 )
-from manabot.infra.config import ModelConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import binding
 from manabot.policy.readings import (
     OWN_PREPARATION,
@@ -48,9 +51,7 @@ def _batch(space: ObservationSpace) -> dict[str, np.ndarray]:
     )
     for _ in range(12):
         raw, *_ = env.step(0)
-    buffers = space.encoder.allocate()
-    env.encode_observation_into(raw, buffers)
-    return {key: value[None] for key, value in buffers.items()}
+    return {key: value[None] for key, value in encode_observation(space, raw).items()}
 
 
 def _column(space: ObservationSpace, key: str, name: str) -> int:
@@ -113,16 +114,9 @@ def test_legacy_readings_ignore_native_kind_corrections(
 ) -> None:
     space = ObservationSpace()
     original = legacy_readings(space)
-    observation_layout = managym.observation_layout
-
-    def corrected_layout(
-        **options: bool,
-    ) -> dict[str, "managym.ObservationArrayLayout"]:
-        layout = observation_layout(**options)
-        layout["relations"]["columns"]["parent"]["kind"] = "reference"
-        return layout
-
-    monkeypatch.setattr(managym, "observation_layout", corrected_layout)
+    arrays = space.layout.arrays
+    arrays["relations"]["columns"]["parent"]["kind"] = "reference"
+    monkeypatch.setattr(space, "layout", SimpleNamespace(arrays=arrays))
     parent = _column(space, "relations", "parent")
     assert fresh_readings(space)["relations"][parent] is Reading.GATHER
     assert legacy_readings(space) == original
@@ -303,3 +297,24 @@ def test_durations_three_and_four_reach_a_fresh_model_only(duration: int) -> Non
         legacy = fact_rows(facts, objects).columns
     assert not torch.equal(fresh[0, 0], fresh[0, 1])
     torch.testing.assert_close(legacy[0, 0], legacy[0, 1], rtol=0, atol=0)
+
+
+def test_historical_memory_checkpoint_reads_all_memory_columns(tmp_path: Path) -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=8,
+            max_decision_references=16,
+            max_decision_reference_details=32,
+            max_decision_members=16,
+        )
+    )
+    policy = ActorCritic(space, ModelConfig(hidden_dim=8, world="world"))
+    path = tmp_path / "policy.safetensors"
+    save_checkpoint(policy, space, path, player_configs=None)
+    checkpoint = read_checkpoint(path)
+    for key in MEMORY_FIELDS:
+        assert checkpoint["input_columns"].pop(key)
+        assert checkpoint["input_readings"].pop(key) == ["own"] * space.shapes[key][-1]
+    write_checkpoint(checkpoint, path)
+    loaded, _ = load_checkpoint(str(path))
+    assert loaded.readings == policy.readings

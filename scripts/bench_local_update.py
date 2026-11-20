@@ -16,9 +16,6 @@ Native categories are inclusive: witness subcategories overlap construction;
 returned observation build and Python conversion are separate from rules work.
 Semantic categories separate fixed-viewer projection, canonical serialization
 and SHA-256 from composite construction/serialization skipped by direct hashes.
---compare-encoders separately checks exact tensors for every reference-profile
-view and attributes allocation, Python validation/conversion and native encoding.
-Its Python timing includes cProfile overhead; probe times are not speedup claims.
 
 A reference whose config predates the evidence mode is compared with full
 evidence; any other reference uses the defaults.
@@ -248,54 +245,6 @@ def _prediction_error(
     return float(np.max(np.abs(left - right), initial=0.0))
 
 
-def compare_encoders(
-    space: ObservationSpace, observations: list[managym.Observation]
-) -> dict[str, object]:
-    """Encode retained frontier views once per path, outside search timings.
-
-    Exact array equality gates the native alternative. Native timers, when
-    available, split conversion, allocation, encoding and output copying;
-    cProfile here covers only the Python encoder (including its validation).
-    Neither these instrumented times nor comparison work enter decision latency.
-    """
-    engine = managym.Env()
-    costs = {name: Cost() for name in ("python", "allocation", "native")}
-    encode_python = _timed(space.encode, costs["python"])
-    allocate = _timed(space.encoder.allocate, costs["allocation"])
-    encode_native = _timed(engine.encode_observation_into, costs["native"])
-    profiler = cProfile.Profile()
-    with _native_profile() as native:
-        for raw in observations:
-            with profiler:
-                expected = encode_python(raw)
-            actual = allocate()
-            encode_native(raw, actual, space.encoder.config.action_overflow)
-            assert actual.keys() == expected.keys()
-            for key in actual:
-                np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
-    return {
-        "observations": len(observations),
-        "exact_tensor_parity": True,
-        "costs": {key: asdict(cost) for key, cost in costs.items()},
-        "native": native or {},
-        "python_profile": [
-            {
-                "function": (
-                    entry.code
-                    if isinstance(entry.code, str)
-                    else f"{entry.code.co_filename}:{entry.code.co_qualname}"
-                ),
-                "calls": entry.callcount,
-                "seconds": entry.totaltime,
-                "self_seconds": entry.inlinetime,
-            }
-            for entry in sorted(
-                profiler.getstats(), key=lambda entry: entry.inlinetime, reverse=True
-            )[:20]
-        ],
-    }
-
-
 def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
     """Inclusive and self costs, from a separate instrumented search.
 
@@ -335,7 +284,7 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
             name = "semantic_python_parsing"
         elif code.co_qualname == "ObservationSpace.encode":
             name = "observation_encoding"
-        elif code.co_qualname == "ObservationEncoder.allocate":
+        elif code.co_qualname == "ObservationSpace.allocate":
             name = "observation_allocation"
         elif code.co_name == "stack" and "numpy" in code.co_filename:
             name = "tensor_assembly"
@@ -553,11 +502,6 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--worlds", type=int, nargs="+", default=[1, 4, 16])
     parser.add_argument("--position-seeds", type=int, nargs="+", default=[42, 43])
-    parser.add_argument(
-        "--compare-encoders",
-        action="store_true",
-        help="Check every profiled reference view against the native encoder",
-    )
     retention = parser.add_mutually_exclusive_group()
     retention.add_argument(
         "--retain-reference",
@@ -664,7 +608,6 @@ def main() -> None:
         profiles: dict[str, dict[str, Cost]] = {}
         object_profiles: dict[str, dict[str, Cost]] = {}
         native_profiles: dict[str, dict[str, _NativeCost]] = {}
-        encoding_views: list[managym.Observation] = []
         original_timings: list[Timing] = []
         original_runtime_sha256: str | None = None
         for position_seed in args.position_seeds:
@@ -735,24 +678,11 @@ def main() -> None:
                     if name == "before":
                         teacher.config = _reference_config(teacher.config)
                     profiler = cProfile.Profile()
-                    encode = teacher.space.encode
-
-                    def retain_view(
-                        raw: managym.Observation,
-                    ) -> dict[str, NDArray[np.generic]]:
-                        encoding_views.append(raw)
-                        return encode(raw)
-
                     with (
                         _native_profile() as native_costs,
-                        ExitStack() as capture,
                         object_embedding_costs(teacher.agent) as object_costs,
                         profiler,
                     ):
-                        if args.compare_encoders and name == "before":
-                            capture.enter_context(
-                                patch.object(teacher.space, "encode", retain_view)
-                            )
                         teacher.search(engine, history, seed=17)
                     object_profiles[name] = object_costs
                     if native_costs is not None:
@@ -795,11 +725,6 @@ def main() -> None:
                         and singleton.worlds == 1
                     },
                     "native_profile_at_max_worlds": native_profiles,
-                    "encoding_comparison": (
-                        compare_encoders(teachers["after"].space, encoding_views)
-                        if args.compare_encoders
-                        else None
-                    ),
                     "object_embedding_profile_at_max_worlds": {
                         name: {
                             key: {"calls": cost.calls, "seconds": cost.seconds}

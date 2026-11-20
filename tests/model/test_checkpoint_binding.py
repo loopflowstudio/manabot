@@ -10,7 +10,7 @@ import torch
 from manabot.backends.torch.checkpoint import BACKEND, load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import inspect_checkpoint
@@ -135,7 +135,9 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     )
     batch = {
         key: value[None]
-        for key, value in space.encode(env.observation_for_player(0)).items()
+        for key, value in encode_observation(
+            space, env.observation_for_player(0)
+        ).items()
     }
     batch["agent_player"][..., -1] = 1
     prepared = loaded.prepare(batch)
@@ -201,12 +203,15 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
             managym.PlayerConfig("B", {"Forest": 20, "Gray Ogre": 20}),
         ]
     )
-    batch = {key: value[None] for key, value in space.encode(observation).items()}
+    batch = {
+        key: value[None]
+        for key, value in encode_observation(space, observation).items()
+    }
     expected = policy.evaluate(policy.prepare(batch))
 
     # Emulate a later engine with appended columns and an unknown card digest.
     # Without the embedded writer catalog the original file cannot bind here.
-    native_layout = managym.observation_layout
+    native_layout = managym.ObservationLayout
     growing = (
         "agent_cards",
         "opponent_cards",
@@ -216,27 +221,32 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
         "events",
     )
 
-    def extended_layout(**options: bool) -> dict[str, Any]:
-        rows = native_layout(**options)
-        for key in growing:
-            columns = rows[key]["columns"]
-            columns["appended"] = {"index": len(columns), "kind": "flag"}
-        return rows
+    class ExtendedLayout:
+        def __init__(self, **options: Any) -> None:
+            self._inner = native_layout(**options)
 
-    initialize = ObservationSpace.__init__
+        @property
+        def arrays(self) -> dict[str, Any]:
+            rows = self._inner.arrays
+            for key in growing:
+                columns = rows[key]["columns"]
+                columns["appended"] = {"index": len(columns), "kind": "flag"}
+                rows[key]["shape"] = [*rows[key]["shape"][:-1], len(columns)]
+            return rows
 
-    def extended_space(
-        self: ObservationSpace, config: ObservationConfig | None = None
-    ) -> None:
-        initialize(self, config)
-        self.encoder.card_dim += 1
-        self.encoder.action_dim += 1
-        for key in growing:
-            shape = self.shapes[key]
-            self.shapes[key] = (*shape[:-1], shape[-1] + 1)
+        @property
+        def shapes(self) -> dict[str, tuple[int, ...]]:
+            shapes = dict(self._inner.shapes)
+            for key in growing:
+                shapes[key] = (*shapes[key][:-1], shapes[key][-1] + 1)
+            return shapes
 
-    monkeypatch.setattr(managym, "observation_layout", extended_layout)
-    monkeypatch.setattr(ObservationSpace, "__init__", extended_space)
+        @property
+        def dtypes(self) -> dict[str, str]:
+            return self._inner.dtypes
+
+    # The space derives its shapes from the layout, so it grows with it.
+    monkeypatch.setattr(managym, "ObservationLayout", ExtendedLayout)
     monkeypatch.setattr(buckets, "_EVENT_WIDTH", space.shapes["events"][-1] + 1)
     loaded, runtime = load_checkpoint(str(path))
     for key in growing:
@@ -280,7 +290,9 @@ def test_setup_policy_keeps_its_pre_x_action_scores(
     loaded, runtime = load_checkpoint(str(path))
     env = managym.Env(seed=17)
     obs, _ = env.reset(players)
-    batch = {key: value[None] for key, value in runtime.encode(obs).items()}
+    batch = {
+        key: value[None] for key, value in encode_observation(runtime, obs).items()
+    }
     expected = writer.evaluate(writer.prepare(batch))
     batch["actions"][..., 23:] = 1
     actual = loaded.evaluate(loaded.prepare(batch))

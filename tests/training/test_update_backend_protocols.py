@@ -168,7 +168,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
     batch = collect(collector, agent, 2)
     return from_torch_state(
         agent.config,
-        space.encoder.config,
+        space.config,
         state,
         parameter_names=dict(agent.named_parameters()),
         readings=agent.readings,

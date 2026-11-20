@@ -1270,13 +1270,15 @@ class CapturedVector(_Capture):
         players: list[int],
         buffers: dict[str, np.ndarray],
         action_overflow: Literal["error", "first-legal"] = "error",
+        *,
+        layout: managym.ObservationLayout,
     ) -> list[managym.ObservationRead]:
         """Write viewer-safe NumPy rows; discard every output row after an error.
 
         Execution and capture buffers stay unchanged. Seats are native indices.
         """
         return self.native.write_observations_for_players(
-            players, buffers, action_overflow=action_overflow
+            players, buffers, action_overflow=action_overflow, layout=layout
         )
 
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
@@ -1284,14 +1286,18 @@ class CapturedVector(_Capture):
         return self.native.hand_snapshots(players)
 
     def set_buffers(
-        self, buffers: dict[str, Any], action_overflow: str = "error"
+        self,
+        buffers: dict[str, Any],
+        action_overflow: str = "error",
+        *,
+        layout: managym.ObservationLayout | None = None,
     ) -> None:
+        self.native.set_buffers(buffers, action_overflow, layout=layout)
         # NumPy owns these buffers; preserve their native encoding ABI as evidence.
         self.identities["input_buffers"] = {
             key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
             for key, value in buffers.items()
         }
-        self.native.set_buffers(buffers, action_overflow)
         self._action_cutoff = (
             buffers["actions"].shape[1] if action_overflow == "first-legal" else None
         )
@@ -1823,13 +1829,19 @@ class CapturedSearch(_Capture):
         # Native pool counters and observations are read-only PyO3 APIs.
         return getattr(self.native, name)
 
-    def set_buffers(self, buffers: dict[str, Any], capacity: int) -> None:
+    def set_buffers(
+        self,
+        buffers: dict[str, Any],
+        capacity: int,
+        *,
+        layout: managym.ObservationLayout | None = None,
+    ) -> None:
+        self.native.set_buffers(buffers, capacity, layout=layout)
         self.search.buffers = {
             key: BufferSpec(shape=list(value.shape), dtype=str(value.dtype))
             for key, value in buffers.items()
         }
         self.search.capacity = capacity
-        self.native.set_buffers(buffers, capacity)
 
     def step_active(self, actions: list[int]) -> list[int]:
         self.search.operations.append(list(actions))

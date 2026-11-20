@@ -250,7 +250,6 @@ class PolicyCheckpoint:
         return Tables.from_buffers(self.buffers, Layout(self.readings))
 
     def dimensions(self) -> Dimensions:
-        encoder = self.space.encoder
         model = self.model
         columns = Layout(self.readings)
         return Dimensions(
@@ -263,7 +262,7 @@ class PolicyCheckpoint:
             card=columns.numeric_width("agent_cards"),
             permanent=columns.numeric_width("agent_permanents"),
             action=columns.numeric_width("actions"),
-            focus=encoder.max_focus_objects,
+            focus=self.space.config.max_focus_objects,
             relation=columns.numeric_width("relations"),
             effect=columns.numeric_width("effects"),
             fact=columns.fact_width(catalog_ids=True),
@@ -449,9 +448,7 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         )
     projected = projection.shape[1]
     extra = (
-        columns.numeric_width("player_turn_state")
-        if checkpoint.space.encoder.turn_state
-        else 0
+        columns.numeric_width("player_turn_state") if checkpoint.space.turn_state else 0
     )
     if projected != columns.numeric_width("agent_player") + extra:
         raise ValueError("checkpoint player columns differ from its projection")
@@ -465,10 +462,10 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         raise ValueError(f"{error}; {written_at(record)}") from error
     logging.getLogger(__name__).info(
         "Policy input v%s (%s). Player columns %d/%d. %s.",
-        checkpoint.space.encoder.config.policy_input_version,
+        checkpoint.space.config.policy_input_version,
         written_at(record),
         width,
-        checkpoint.space.encoder.player_dim,
+        checkpoint.space.shapes["agent_player"][-1],
         report.summary(),
     )
     return replace(bound, report=report)

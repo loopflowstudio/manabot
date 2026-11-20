@@ -10,6 +10,7 @@ from manabot.env.observation import (
     PERMANENT_LINK_INDEXES,
     ObservationConfig,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.verify.action_cases import reorder_objects
@@ -32,8 +33,8 @@ def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], in
     second.attached_to = first.id
     obs.agent_permanents = [first, second]
     space = ObservationSpace(ObservationConfig())
-    host = 2 + 2 * space.encoder.cards_per_player
-    return space, space.encode(obs), host
+    host = 2 + 2 * space.config.max_cards_per_player
+    return space, encode_observation(space, obs), host
 
 
 def _batch(encoded: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:

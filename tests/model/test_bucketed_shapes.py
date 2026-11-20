@@ -103,7 +103,7 @@ def test_outputs_and_gradients_match_default(history: bool, streams: bool) -> No
             ),
         ).eval()
     agent = _bucketed(reference)
-    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space, objects=True)
     assert buckets is not None and buckets.trims_objects
     outputs = []
     for model in (reference, agent):
@@ -130,7 +130,7 @@ def test_outputs_and_gradients_match_default(history: bool, streams: bool) -> No
         assert (
             sizes_of(
                 np.asarray(prepared.bucket_needs),
-                agent.observation_space.encoder,
+                agent.observation_space,
                 objects=True,
             )
             == buckets
@@ -194,7 +194,7 @@ def test_reference_to_padding_object_is_kept() -> None:
     agent = _bucketed(case.agent)
     objects = case.agent._is_agent_template.shape[1]
     _set_focus(objects - 1)(obs)
-    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space, objects=True)
     assert buckets is not None
     assert buckets.sizes["permanents"] == buckets.capacities["permanents"]
     with torch.no_grad():
@@ -208,7 +208,7 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
     """Needs measured once per row give any grouping of those rows the buckets
     measuring the group directly gives, so later epochs need not measure."""
     case = _policy(history=True)
-    encoder = case.agent.observation_space.encoder
+    space = case.agent.observation_space
     batch = collect(case.collector, case.agent, 24)
     obs = {
         key: torch.from_numpy(value[:, 0]).float()
@@ -217,14 +217,14 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
     # A fractional object reference in one row, which only that row needs.
     _set_fact_object(3.7)(obs)
     host = _host(obs)
-    needs = row_needs(host, encoder)
+    needs = row_needs(host, space)
     assert needs is not None and len(needs) == len(host["actions_valid"])
     rng = np.random.default_rng(0)
     for _ in range(20):
         rows = rng.choice(len(needs), size=rng.integers(1, len(needs)), replace=False)
         group = {key: value[rows] for key, value in host.items()}
-        assert sizes_of(needs[rows], encoder, objects=objects) == bucket_sizes(
-            group, encoder, objects=objects
+        assert sizes_of(needs[rows], space, objects=objects) == bucket_sizes(
+            group, space, objects=objects
         )
 
 
@@ -238,5 +238,4 @@ def test_collection_records_each_rows_measured_needs() -> None:
     recorded = batch.recorded.gather_needs(rows)
     assert recorded is not None
     host = batch.observations(rows).observation
-    encoder = agent.observation_space.encoder
-    assert np.array_equal(recorded, row_needs(host, encoder))
+    assert np.array_equal(recorded, row_needs(host, agent.observation_space))

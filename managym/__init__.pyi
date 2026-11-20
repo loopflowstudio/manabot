@@ -54,7 +54,36 @@ class ObservationArrayLayout(TypedDict):
     dtype: Literal["float32", "int32"]
     columns: dict[str, ObservationColumnLayout]
     row_kinds: dict[int, str]
+    # Each row kind's name (facts), for readers that look kinds up by name.
+    row_kind_names: dict[str, int]
+    program_token_kinds: NotRequired[dict[int, int]]
     element: NotRequired[ObservationValueLayout]
+
+class ObservationLayout:
+    def __init__(
+        self,
+        *,
+        policy_input_version: int = 11,
+        policy_history: bool = False,
+        max_cards_per_player: int = 60,
+        max_permanents_per_player: int = 40,
+        max_stack_objects: int = 32,
+        max_actions: int = 512,
+        max_focus_objects: int = 2,
+        max_events: int = 32,
+        max_facts: int = 512,
+        max_decision_records: int = 0,
+        max_decision_references: int = 0,
+        max_decision_reference_details: int = 0,
+        max_decision_members: int = 0,
+    ) -> None: ...
+    @property
+    def arrays(self) -> dict[str, ObservationArrayLayout]: ...
+    @property
+    def shapes(self) -> dict[str, tuple[int, ...]]: ...
+    @property
+    def dtypes(self) -> dict[str, str]: ...
+    def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]: ...
 
 def observation_layout(
     *,
@@ -65,7 +94,7 @@ def observation_layout(
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
-    Keys match `encode_observation` and the vector env buffers; a None extent
+    Keys match `encode_observation_into` and the vector env buffers; a None extent
     is a caller-selected capacity. `policy_history` selects the public history
     rows of `events` instead of raw events; `turn_state` adds
     `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
@@ -236,6 +265,9 @@ class Env:
     def observation_for_player(self, player_index: int) -> Observation: ...
     def execute_semantic_command_json(self, command_json: str) -> str: ...
     def hidden_hand_constraints_json(self, viewer: int) -> str: ...
+    def rollout_pool(
+        self, worlds: int, rollouts: int, seed: int, max_steps: int = 2000
+    ) -> RolloutPool: ...
     def possible_world_space_json(self, viewer: int) -> str: ...
     def prepare_possible_world_materializer(
         self,
@@ -310,13 +342,15 @@ class Env:
         self,
         obs: Observation,
         max_facts: int | None = None,
-    ) -> Dict[str, np.ndarray]: ...
+    ) -> Dict[str, np.ndarray]:
+        """Deprecated: arrays at native default capacities; removal in 0.4.0."""
     def encode_observation_into(
         self,
         obs: Observation,
         out: Dict[str, np.ndarray],
         action_overflow: str = "error",
-    ) -> None: ...
+    ) -> None:
+        """Deprecated alias of `managym.encode_observation_into`; removal in 0.4.0."""
 
 class StructuredOfferSet:
     def projection_json(self) -> str: ...
@@ -367,6 +401,29 @@ class ObservationRead:
     @property
     def revision(self) -> int: ...
 
+class RolloutPool:
+    @property
+    def num_slots(self) -> int: ...
+    @property
+    def num_actions(self) -> int: ...
+    @property
+    def active_count(self) -> int: ...
+    @property
+    def hero_index(self) -> int: ...
+    def acting_players(self) -> list[int]: ...
+    def root_actions(self) -> list[int]: ...
+    def set_buffers(
+        self,
+        buffers: dict[str, np.ndarray],
+        capacity: int,
+        *,
+        layout: ObservationLayout | None = None,
+    ) -> None: ...
+    def encode_active(self) -> list[int]: ...
+    def step_active(self, actions: Sequence[int]) -> list[int]: ...
+    def finish_random(self) -> int: ...
+    def scores(self) -> tuple[list[float], int, int]: ...
+
 class VectorEnv:
     def enable_statistics(self) -> None: ...
     def statistics(self) -> list[GameStatistics | None]: ...
@@ -394,7 +451,11 @@ class VectorEnv:
         self, actions: List[int]
     ) -> List[Tuple[Observation, float, bool, bool, Dict[str, Any]]]: ...
     def set_buffers(
-        self, buffers: Dict[str, np.ndarray], action_overflow: str = "error"
+        self,
+        buffers: Dict[str, np.ndarray],
+        action_overflow: str = "error",
+        *,
+        layout: ObservationLayout | None = None,
     ) -> None: ...
     def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(
@@ -437,6 +498,8 @@ class VectorEnv:
         players: list[int],
         buffers: dict[str, np.ndarray],
         action_overflow: Literal["error", "first-legal"] = "error",
+        *,
+        layout: ObservationLayout,
     ) -> list[ObservationRead]:
         """Write every fixed-seat view; discard all output rows after an error."""
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
@@ -1059,18 +1122,16 @@ class Observation:
     stack_objects: List[StackObject]
     recent_events: List[EventData]
 
-    def encode_policy_history(
-        self, capacity: int, object_indexes: dict[int, int]
-    ) -> list[list[float]]: ...
-    # Deprecated input v9/v10 views (removed in 0.4.0).
+    # Deprecated input v9/v10 card rows (removed in 0.4.0).
     def legacy_card_lists(self) -> tuple[list[Card], list[Card]]: ...
-    def encode_legacy_policy_history(
-        self, capacity: int, cards_per_player: int
-    ) -> list[list[float]]: ...
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...
 
 class AgentError(RuntimeError): ...
+
+class ObservationCapacity(ValueError):
+    """An observation does not fit its buffers (message
+    ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
 # Deprecated: the label of the last numbered world; removed in 0.4.0.
 WORLD_VERSION: str
@@ -1142,16 +1203,45 @@ class NameCandidate:
 def naming_catalog() -> list[NameCandidate]: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
-) -> int: ...
+) -> int:
+    """How many of `count` legal actions a policy of `capacity` slots reads.
+
+    More actions than slots raises `ObservationCapacity` unless
+    `action_overflow="first-legal"`, which keeps the first `capacity`.
+    """
+    ...
+
+def encode_observation_into(
+    obs: Observation,
+    layout: ObservationLayout,
+    out: Dict[str, np.ndarray],
+    action_overflow: str = "error",
+) -> None:
+    """Write any observation (live, restored or a viewer projection) into out.
+
+    The supplied layout determines every buffer key, shape and dtype. The whole buffer
+    contract is checked before encoding: a missing array, wrong shape or
+    non-contiguous or read-only array raises `ValueError` and a wrong dtype or
+    non-NumPy value `TypeError`, whatever the observation holds, and nothing
+    is written. Only then does an observation that does not fit raise
+    `ObservationCapacity`. More legal actions than slots is an overflow unless
+    `action_overflow="first-legal"`.
+    """
+    ...
+
 def encode_observations_into(
-    envs: Sequence[Env], buffers: Dict[str, np.ndarray], capacity: int
+    envs: Sequence[Env],
+    layout: ObservationLayout,
+    buffers: Dict[str, np.ndarray],
+    capacity: int,
 ) -> list[int]:
     """Write each env's acting-player view into rows 0..len(envs) of buffers.
 
-    Buffers come from `ObservationEncoder.allocate(capacity)`; later rows are
+    Buffers come from `ObservationSpace.allocate(capacity)`; later rows are
     untouched. Returns each row's legal-action count. Shape, dtype and
     writability failures raise before any write; an observation exceeding a
-    capacity (every legal action must fit) raises, leaving earlier rows written.
+    capacity (every legal action must fit) raises `ObservationCapacity`,
+    leaving earlier rows written.
     """
     ...
 

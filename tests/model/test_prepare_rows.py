@@ -18,6 +18,7 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, check
@@ -43,7 +44,7 @@ def _observations(
     rows: list[dict[str, np.ndarray]] = []
     for _ in range(3):
         obs = env.observation_for_player(env.current_agent_index())
-        rows.append(space.encode(obs))
+        rows.append(encode_observation(space, obs))
         env.step(0)
     return space, {key: np.stack([row[key] for row in rows]) for key in rows[0]}
 
@@ -97,9 +98,7 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     check(obs, spec, obs["actions_valid"].astype(bool))
     device_input(agent, tensors)
     buckets = (
-        bucket_sizes(
-            obs, agent.observation_space.encoder, objects=agent.object_trimming()
-        )
+        bucket_sizes(obs, agent.observation_space, objects=agent.object_trimming())
         if bucketed
         else None
     )
@@ -111,7 +110,7 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
         tables,
         bucketed=bucketed,
         binding=spec.binding,
-        action_capacity=space.encoder.max_actions,
+        action_capacity=space.config.max_actions,
         live_tokens=True,
     )
     expected_cards = tables.rows(trimmed["semantic_cards"])
@@ -236,7 +235,9 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
 def test_effect_routes_preserve_memberships_and_padding(catalog: bool) -> None:
     space = ObservationSpace()
     env = shared_effect_root(1)
-    encoded = space.encode(env.observation_for_player(env.current_agent_index()))
+    encoded = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
     obs = {key: np.stack((value, value)) for key, value in encoded.items()}
     config = ModelConfig(
         hidden_dim=8,
@@ -322,7 +323,7 @@ def test_v10_object_buckets_keep_turn_rows_aligned() -> None:
         bucketed_shapes=True,
     )
     obs["card_turn_state"][:, :, 31] = 1
-    buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(obs, agent.observation_space, objects=True)
     assert buckets is not None
     trimmed = trim_observation(obs, buckets)
     assert trimmed["card_turn_state"].shape[2] == trimmed["agent_cards"].shape[1]

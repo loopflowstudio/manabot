@@ -542,11 +542,11 @@ from manabot.env.observation import ObservationSpace
 space = ObservationSpace()
 games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))
 games.reset_all(Match().to_rust())
-buffers = space.encoder.allocate(2)
+buffers = space.allocate(2)
 
 players = [0, 1]
 reads = games.write_observations_for_players(
-    players, buffers, action_overflow=space.encoder.config.action_overflow
+    players, buffers, layout=space.layout, action_overflow=space.config.action_overflow
 )
 # Row i in every array describes players[i] in slot i.
 
@@ -559,7 +559,7 @@ for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
     assert read.player == 1 - hand.player
 ```
 
-`write_observations_for_players(players, buffers, action_overflow="error")`
+`write_observations_for_players(players, buffers, action_overflow="error", *, layout)`
 writes all slots in one native call, with one explicit native seat (`0` or `1`)
 per slot and no implicit opponent. It returns one `ObservationRead` per slot, in
 slot order, naming the game state each row describes:
@@ -583,15 +583,15 @@ not remap it to its controller or grant access to hidden information. Only the
 published chooser sees legal actions. Hand snapshots are separate privileged
 records and must stay out of viewer-safe inputs and exports.
 
-`space.encoder.allocate(num_envs)` supplies every required writable, contiguous
+`space.allocate(num_envs)` supplies every required writable, contiguous
 NumPy array at the selected version's shapes, dtypes and capacities. No reward
 or done arrays are needed. Keep these buffers separate from ordinary step
 buffers and copy rows you need to retain before the next write.
 
 `CapturedVector` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
-method and CPU identity records. For Torch, allocate from the wrapper's
-`observation_space`, then use `torch.from_numpy` and an explicit device transfer
-as needed. Clone shared CPU tensors you need to retain before the next write.
+method and CPU identity records. The Torch wrapper supplies its own layout.
+Pass `layout=consumer_space.layout` for a consumer with different capacities.
+Use `torch.from_numpy` and an explicit device transfer as needed. Clone shared CPU tensors you need to retain before the next write.
 
 The read does not step, reset or consume randomness. After a successful step,
 done slots describe their replacement games, not the terminal states. Reads
@@ -610,10 +610,96 @@ the state before retrying. After a failed step, recover or reset the games first
 
 ## Encoded observations
 
-The native encoder turns an observation into NumPy arrays, one layout per
-engine release. manabot reads the same arrays as its policy input
-(`ObservationConfig.policy_input_version`, v9); how its network reads them is in
-[observations and the policy network](observation-and-model.md#policy-inputs).
+One native encoder turns an observation into NumPy arrays, one layout per
+engine release. Every caller's arrays come from it: a single observation, a
+batch of search branches and the vector environment's step buffers. manabot
+reads the same arrays as its policy input
+(`ObservationConfig.policy_input_version`, v11); how its network reads them is
+in [observations and the policy network](observation-and-model.md#policy-inputs).
+
+### Encoding one observation
+
+```python
+import managym
+from manabot.env.observation import ObservationSpace, encode_observation
+
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+
+space = ObservationSpace()
+arrays = encode_observation(space, observation)
+print(int(arrays["agent_cards_valid"].sum()))
+# 7
+
+restored = managym.Observation.from_json(observation.toJSON())
+del game
+print(int(encode_observation(space, restored)["agent_cards_valid"].sum()))
+# 7
+```
+
+`encode_observation(space, obs)` returns freshly allocated arrays at the
+space's shapes, so a caller may keep them. The space builds `space.layout`
+from its `ObservationConfig`. The native layout resolves the shapes for the
+configured input version, optional blocks and capacities. `space.shapes`
+reads those shapes from the layout, and `space.allocate()` uses the layout's
+allocator. The encoder accepts any `managym.Observation`, including the
+one a step returned, a fixed seat's view from `observation_for_player`, or one
+restored with `Observation.from_json`. No game needs to be open. A restored
+observation retains the public history written by `toJSON()`. Older JSON
+without that field loads with empty public history. Semantic `viewer_state`,
+decision captures and search witnesses keep the canonical bytes without it; a
+capture carries its own bounded `history`.
+
+To write into arrays you own, call the function underneath:
+
+```python
+layout = managym.ObservationLayout(max_actions=256, policy_history=True)
+buffers = layout.allocate()
+managym.encode_observation_into(observation, layout, buffers)
+```
+
+The same layout allocates a batch with `layout.allocate(batch_size)`.
+In manabot, pass `space.layout` to use the configured input version, history,
+memory and capacities. Both encoders check every key, shape and dtype before
+writing. Vector stepping also requires the reward and done arrays that
+`allocate_vector_buffers(space, num_envs)` supplies. Register those arrays
+with `games.set_buffers(step_buffers, layout=space.layout)`.
+
+An observation that does not fit raises `managym.ObservationCapacity`, a
+`ValueError` naming the field, the count and the capacity:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+small = ObservationSpace(ObservationConfig(max_cards_per_player=4))
+try:
+    encode_observation(small, observation)
+except managym.ObservationCapacity as error:
+    print(error)
+# observation capacity exceeded: agent_cards plus sideboard 7 > 4
+```
+
+Catch that type to count or recover from a game that outgrew its buffers;
+`encode_observation_into` and the batch `encode_observations_into` raise it,
+including for more legal actions than slots without
+`action_overflow="first-legal"`. A vector environment's step raises
+`managym.AgentError` with the same message for an unrecovered failure (its
+retained evidence names that class) and records `ObservationCapacity` as the
+failure class when it recovers the game. Any other `ValueError` means the
+buffers or the request are wrong: malformed arrays, or state the selected
+input version cannot hold (`managym.input_v10_state(obs)` and
+`managym.unrepresentable_state(obs)` name it). Nothing is truncated to fit.
+Discard the arrays after a failure.
+
+`Env.encode_observation` and `Env.encode_observation_into` are deprecated
+aliases that warn and are removed in 0.4.0. Replace the first with
+`encode_observation(space, obs)` and the second with
+`managym.encode_observation_into`. In manabot, `ObservationSpace.encode(obs)`,
+`space.encoder` (now the space itself) and `ObservationEncoder` (now
+`ObservationSpace`) warn and are removed in 0.4.0 too.
 
 ### Reading arrays by name
 
@@ -652,17 +738,11 @@ print(frame_kind["kind"], frame_kind["size"])
 # category 14
 ```
 
-The scalar encoder writes the arrays the layout describes. This example starts
-a game with fixed decks and reads only valid permanent rows (the first
-decision can have none):
+The encoder writes the arrays the layout describes. With `arrays` from
+[the example above](#encoding-one-observation), read only valid permanent rows
+(the first decision can have none):
 
 ```python
-game = managym.Env(seed=42)
-observation, info = game.reset([
-    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
-    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
-])
-arrays = game.encode_observation(observation)
 valid = arrays["agent_permanents_valid"].astype(bool)
 references = arrays["agent_permanents"][valid, definition["index"]]
 definition_ids = [int(reference) - 1 for reference in references if reference != 0]
@@ -673,7 +753,7 @@ features. Do not log-scale them or infer similarity from their magnitude.
 Retain the installed world's content identity with saved arrays and catalog
 references.
 
-`observation_layout(*, policy_history=False, turn_state=False)` returns a mapping keyed by the
+`observation_layout(*, policy_history=False, turn_state=True, legacy=False, decision_memory=False)` returns a mapping keyed by the
 encoder's array names. Each array describes its `axes`, `shape` and stored
 `dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
 default. The seat axis is viewer-relative (agent first, opponent second).
@@ -701,7 +781,11 @@ one. The encoding explains join targets, index bases and absence
 sentinels in prose; the range describes stored values, including when no fixed bound
 exists. A `tagged` kind needs its row-kind description before preprocessing.
 Tagged fact, relation and effect rows describe meanings conditional on their
-row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
+row kind in `row_kinds` (integer codes mapped to descriptions); `facts` and
+`effect_details` also name each kind in `row_kind_names` (`"counter"` → 1), and
+`effect_details` maps its program kinds to catalog `TokenKind` codes in
+`program_token_kinds`, so a reader looks kinds up by name rather than copying
+numbers. Masks and
 scalar-valued arrays have empty `columns` and describe their `element` meaning
 without inventing a feature axis. Shared headers own the detail/member slices;
 unused rows are zero. `policy_history=True` describes the 12-column public

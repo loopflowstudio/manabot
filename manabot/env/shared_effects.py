@@ -1,117 +1,44 @@
-"""Shared effect buffers with explicit CSR memberships.
+"""Shared effect buffer shapes: headers with explicit CSR memberships.
 
-Native authority supplies exact provenance. This reference encoder never infers
-it from per-object fragments. Offsets address bounded token/member arrays;
-padding does not count as a record and no capacity failure is truncated.
+Native `agent/shared_effects.rs` writes these arrays from exact provenance.
+Header offsets address the bounded detail and member arrays; padding does not
+count as a record, and a record that does not fit is a capacity failure,
+never truncation.
 """
 
-from collections.abc import Mapping
+from typing import cast
 
 import numpy as np
-from numpy.typing import NDArray
 
-import managym
+from manabot.env.observation import V11_LAYOUT, column, columns
 
-EFFECT_ROWS, EFFECT_DIM = 128, 18
-DETAIL_ROWS, DETAIL_DIM = 4096, 3
-MEMBER_ROWS, MEMBER_DIM = 2048, 2
+# These three tables have two fixed extents in every supported input version.
 SHARED_EFFECT_SHAPES: dict[str, tuple[int, int]] = {
-    "effects": (EFFECT_ROWS, EFFECT_DIM),
-    "effect_details": (DETAIL_ROWS, DETAIL_DIM),
-    "effect_members": (MEMBER_ROWS, MEMBER_DIM),
+    key: cast(tuple[int, int], tuple(V11_LAYOUT[key]["shape"]))
+    for key in ("effects", "effect_details", "effect_members")
 }
-# Header column 8 and the copy-exception fact's duration: the record's
-# `EffectDuration`, as the native encoder writes it.
-DURATION_CODES: dict[str, int] = {
-    "EndOfTurn": 1,
-    "Indefinite": 2,
-    "WhileYouControlSource": 3,
-    "UntilYourNextTurn": 4,
-}
+EFFECT_ROWS, EFFECT_DIM = SHARED_EFFECT_SHAPES["effects"]
+DETAIL_ROWS, DETAIL_DIM = SHARED_EFFECT_SHAPES["effect_details"]
+MEMBER_ROWS, MEMBER_DIM = SHARED_EFFECT_SHAPES["effect_members"]
 
+EFFECT_MODIFICATION = columns("effects", "modification_high", "modification_low")
+EFFECT_LINKS = columns("effects", "controller", "source")
+EFFECT_SOURCE_DEFINITION = column("effects", "source_definition")
+EFFECT_VALID = column("effects", "valid")
+EFFECT_SPANS = columns(
+    "effects", "detail_offset", "detail_count", "member_offset", "member_count"
+)
+DETAIL_KIND = column("effect_details", "kind")
+DETAIL_VALUE = columns("effect_details", "value_high", "value_low")
+MEMBER_OBJECT = column("effect_members", "object")
 
-def _token(name: str) -> tuple[float, float]:
-    value = managym.catalog_token_value(name) & 0xFFFFFFFF
-    return float(value >> 16), float(value & 0xFFFF)
-
-
-def encode_shared_effects(
-    observation: managym.Observation,
-    objects: Mapping[int, int],
-    ranks: Mapping[int, float],
-) -> dict[str, NDArray[np.float32]]:
-    shapes = SHARED_EFFECT_SHAPES
-    records = observation.shared_effects
-    if records is None:
-        raise ValueError("policy input requires native shared-effect provenance")
-    counts = {
-        "effects": len(records),
-        "effect_details": sum(
-            len(r.effect.program)
-            + len(r.effect.keywords)
-            + len(r.effect.subtypes)
-            + (r.effect.color is not None)
-            for r in records
-        ),
-        "effect_members": sum(len(r.members) for r in records),
-    }
-    for name, count in counts.items():
-        capacity = shapes[name][0]
-        if count > capacity:
-            raise ValueError(
-                f"observation capacity exceeded: {name} {count} > {capacity}"
-            )
-
-    def join(ident: int | None) -> float:
-        if ident is None or ident not in objects:
-            raise ValueError("shared effect has an unavailable object join")
-        return float(objects[ident] + 1)
-
-    out = {name: np.zeros(shape, dtype=np.float32) for name, shape in shapes.items()}
-    d = m = 0
-    orders: set[int] = set()
-    for index, record in enumerate(records):
-        effect = record.effect
-        row = out["effects"][index]
-        row[:2] = _token(f"Modification::{effect.modification}")
-        for i, value in enumerate((effect.power, effect.toughness, effect.amount)):
-            row[2 + i] = (value or 0) / 10
-            row[5 + i] = value is not None
-        if effect.duration not in DURATION_CODES or (
-            effect.duration == "WhileYouControlSource" and record.source is None
-        ):
-            raise ValueError("invalid shared effect duration/source")
-        row[8] = DURATION_CODES[effect.duration]
-        row[9] = ranks[effect.timestamp]
-        row[10] = join(record.controller_id)
-        row[11] = (
-            0 if effect.source_registry_key is None else effect.source_registry_key + 1
-        )
-        row[12] = 0 if record.source is None else join(record.source.object_id)
-        row[13] = d
-        tokens = [
-            *((1, name) for name in effect.keywords),
-            *((2, name) for name in effect.subtypes),
-        ]
-        if effect.color is not None:
-            tokens.append((3, f"Color::{effect.color}"))
-        for kind, name in tokens:
-            out["effect_details"][d] = kind, *_token(name)
-            d += 1
-        for kind, value in effect.program:
-            unsigned = value & 0xFFFFFFFF
-            out["effect_details"][d] = (10 + kind, unsigned >> 16, unsigned & 0xFFFF)
-            d += 1
-        row[14] = d - row[13]
-        row[15] = m
-        if not record.members:
-            raise ValueError("shared effect has no memberships")
-        for member in record.members:
-            if not 0 <= member.order < MEMBER_ROWS or member.order in orders:
-                raise ValueError("invalid shared effect membership order")
-            orders.add(member.order)
-            out["effect_members"][m] = join(member.target.object_id), member.order + 1
-            m += 1
-        row[16] = m - row[15]
-        row[17] = 1
-    return out
+_detail = V11_LAYOUT["effect_details"]
+DETAIL_KIND_NAMES = _detail["row_kind_names"]
+DETAIL_KINDS = tuple(DETAIL_KIND_NAMES.values())
+PROGRAM_TOKEN_KIND = np.zeros(max(DETAIL_KINDS) + 1, dtype=np.int64)
+for detail_kind, token_kind in _detail["program_token_kinds"].items():
+    PROGRAM_TOKEN_KIND[detail_kind] = token_kind
+NUMBER_TOKEN_KINDS = tuple(
+    int(PROGRAM_TOKEN_KIND[DETAIL_KIND_NAMES[name]])
+    for name in ("program_integer", "program_boolean")
+)

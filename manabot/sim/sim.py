@@ -233,7 +233,7 @@ def _shared_observation_config(*players: Player) -> ObservationConfig | None:
     cannot meet in one game.
     """
     configs = [
-        player.agent.observation_space.encoder.config
+        player.agent.observation_space.config
         for player in players
         if isinstance(player, ModelPlayer)
     ]
