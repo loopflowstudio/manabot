@@ -641,6 +641,15 @@ print(columns["exhausted_abilities"]["kind"], columns["exhausted_abilities"]["sc
 # count 1
 ```
 
+A category says how many values it has. Its codes run from 1 to `size`, and 0
+means absent:
+
+```python
+frame_kind = layout["relations"]["columns"]["frame_kind"]
+print(frame_kind["kind"], frame_kind["size"])
+# category 14
+```
+
 The scalar encoder writes the arrays the layout describes. This example starts
 a game with fixed decks and reads only valid permanent rows (the first
 decision can have none):

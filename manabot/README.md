@@ -411,6 +411,17 @@ semantic transfer; no previous checkpoint is relabeled compatible.
 state before the policy head, so offer choices that depend on the state stay
 learnable from any start. The local and baseline recipes enable it; the
 ordinary baseline recipe is `baseline-v3`.
+
+`ModelConfig(focus_film=True)` scales each action's features by the objects it
+names, so two offers on one creature differ by a function of that creature
+from the first update
+([scoring an offer on its focus](../docs/observation-and-model.md#scoring-an-offer-on-its-focus)).
+`ModelConfig(stream_norm=True)` normalizes every stream summed into an object
+token and uses pre-normalization attention
+([one scale for every stream](../docs/observation-and-model.md#one-scale-for-every-stream)).
+The baseline and Elemental self-play recipes enable both. Each is omitted from
+a serialized configuration when off, and neither can be changed on a trained
+model.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.

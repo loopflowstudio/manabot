@@ -332,11 +332,16 @@ change already touches it; do not rewrite a module only for style. Rust in
   and Academy retain all choices, and an omitted overflow policy means error.
 - The model reads each numeric input column by a reading. A fresh model
   derives it from the column's native kind (`ValueLayout` in
-  `agent/observation_layout.rs`): unscaled counts, categories and selectors get
-  the log squash, every `rank` is rank / 128 independent of fact and effect
-  capacity, references are gathered and ids looked up. A new column declares
-  its kind (and `scale` when the encoder divides it); add no Python column
-  table and no per-backend scaling. A checkpoint records its readings
+  `agent/observation_layout.rs`): unscaled counts get the log squash, a
+  category of declared `size` n reads `one_hot:n` and a selector `one_hot:15`
+  (the last flag is always "above the size", never a real value), a count or
+  number stored in tenths reads `steps:8`, every `rank` is rank / 128
+  independent of fact and effect capacity, references are gathered and ids
+  looked up. No category or index reaches a projection as a magnitude. A new
+  column declares its kind (`scale` when the encoder divides it, `size` for a
+  category); add no Python column table and no per-backend scaling. A sized
+  reading is recorded as `name:size`, so a stored model keeps its width when a
+  category grows. A checkpoint records its readings
   (`input_readings`) and never consults the rule; one without the record gets
   `legacy_readings`, which is never extended. The native kinds of buffers with
   their own preparation (decision memory, history events) are not used.

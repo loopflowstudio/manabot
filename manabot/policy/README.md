@@ -44,7 +44,10 @@ forward reads the result; no forward reads an observation dictionary.
   float32 from the legal-action buffers.
   `Layout` holds the reading of every column of every buffer the model
   reads: `as_is`, `log`, `rank`, `gather`, `lookup`, `mask`, `fact_value`,
-  `fact_id`, `duration` or `own` (decoded by the buffer's own preparation). A fresh
+  `fact_id`, `duration`, `own` (decoded by the buffer's own preparation), or
+  one of the sized readings `one_hot:n` (n + 1 flags) and `steps:n` (the value
+  and n threshold flags). A reading states how many inputs its column becomes,
+  and a buffer's numeric width is the sum over its columns. A fresh
   model derives them from the kinds `managym.observation_layout()` declares; a
   loaded one takes them from its checkpoint's `input_readings`, or
   `legacy_readings(space)` when the checkpoint predates the record. `prepare`
@@ -80,7 +83,9 @@ What stays in a backend's graph is every float operation whose rounding
 differs between NumPy and the framework. `prepare` does integer bookkeeping,
 masks, casts and the column readings; `Prepared` carries raw known-card
 counts and signed program integers, so the product with a count and the
-`log1p` of a program number are computed by the backend.
+`log1p` of a program number are computed by the backend. How those counts
+are scaled and pooled belongs to the model (`ModelConfig.stream_norm`), not to
+a reading.
 
 Backends live in [`manabot/backends/`](../backends/README.md), which also
 covers [saving and loading a container](../backends/README.md#policy-checkpoints).
