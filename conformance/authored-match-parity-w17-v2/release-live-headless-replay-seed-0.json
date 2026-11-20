@@ -1,6 +1,6 @@
 {
   "identity": {
-    "authority_receipt_sha256": "1e98ed450873c07696d11481356e1887a5b0e4d08932cf8789c03e57adb5d37f",
+    "authority_receipt_sha256": "48f7a8511df4337d52140af5b90f6b783270a370014177d1d35c9b0a2a689175",
     "command_tape_sha256": "9b20ba2eba6aac0cf9ead450c821980cf95f9a21ace4f7960b46925a225f6937",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -8,11 +8,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "1e98ed450873c07696d11481356e1887a5b0e4d08932cf8789c03e57adb5d37f"
+          "sha256": "48f7a8511df4337d52140af5b90f6b783270a370014177d1d35c9b0a2a689175"
         },
         {
           "path": "conformance/authored_match_parity.py",
-          "sha256": "0731310ef129ac0fe39f456299d4940c64678982692a3aa5936ccb50bae1d2d7"
+          "sha256": "d6eb25a42192e14bf0ce162d77a11ee11c434a42a27a100d6d5f027f08a02d05"
         },
         {
           "path": "conformance/authored_match_receipt.py",
@@ -52,7 +52,7 @@
         },
         {
           "path": "managym/academy/server.py",
-          "sha256": "3b557eb5643beff335b1edf274b38c51e69f795aaf1c704e85118ae6af99d752"
+          "sha256": "09f5f1b94bbc39c15012860a93a8ed8a0fb6cae66c4eb7fb4fa8ff8986dd8243"
         },
         {
           "path": "managym/academy/trace.py",
@@ -396,7 +396,7 @@
         },
         {
           "path": "managym/src/agent/action.rs",
-          "sha256": "26004d9642dbe8a5e78bef5d5f1f33c431f6677b4a7debabd152e1f5576c874c"
+          "sha256": "0d435e1b0ee1896df0084880ac88fe50ddc0863a607db6bba71c178a491b42e3"
         },
         {
           "path": "managym/src/agent/continuation.rs",
@@ -412,7 +412,7 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "1fe613de5c48789d4427777395158f9300524e64f1a9c42f484baac440771da5"
+          "sha256": "dcf116bb51d543cb9a0d670c208fbb27fa9d1cc6c14914a73ecd69445ebacec8"
         },
         {
           "path": "managym/src/agent/heuristic/knowledge.rs",
@@ -424,7 +424,7 @@
         },
         {
           "path": "managym/src/agent/heuristic/tests.rs",
-          "sha256": "cacf7d7a9d87b9cfd96d1963be8dc81d600d13c9d7cbb162c30e77dd9de542c0"
+          "sha256": "67b2f7ab16ab9f6792cd47e017cc725236a16e0a430a5e3ea7b3da04f439de8a"
         },
         {
           "path": "managym/src/agent/legacy_input.rs",
@@ -436,19 +436,19 @@
         },
         {
           "path": "managym/src/agent/observation.rs",
-          "sha256": "42ff43ca78be03758980957ced92d7ab2c1a6d176127ca38d2e41ae10cb69c3f"
+          "sha256": "448996095041bf108642c883bc631a0a5494a47496cbf8d37b24fafea7e66b24"
         },
         {
           "path": "managym/src/agent/observation_encoder.rs",
-          "sha256": "414f7275c83f2b128f8aab4ef50ab639a9e8b350275f735c6e0036f8b8d7044b"
+          "sha256": "848d2a77bec869b279de2016f4b5430e9b44a96ea3aae34240e9c31e21f3444a"
         },
         {
           "path": "managym/src/agent/observation_json.rs",
-          "sha256": "2d7da9020202978a796235d34ec96a664b200dc7b34f2be17f53013ebc27b9f4"
+          "sha256": "11f6ba053f081f54bf5f4851fd14ed4a50517ab8413b75fe47e3ad57045a4721"
         },
         {
           "path": "managym/src/agent/observation_layout.rs",
-          "sha256": "22d7a54d3655133a24fff75146a444db5ec96ada189a89573b80889ff0bfc84d"
+          "sha256": "c47da1421e6f8ecfbed8fd60a16e131c370a4fca00157455f2613aace0f29ba7"
         },
         {
           "path": "managym/src/agent/player_policy.rs",
@@ -476,7 +476,7 @@
         },
         {
           "path": "managym/src/agent/vector_env.rs",
-          "sha256": "c9ab31bbf77bfb0c026270321360fd6d0d10a2c613efee8f7e3dc947588cd89a"
+          "sha256": "1f37cd314682a6f0a800aca605cab45030dfb29f1a97fa94c54d0da7638c900d"
         },
         {
           "path": "managym/src/benchmark_allocations.rs",
@@ -504,7 +504,7 @@
         },
         {
           "path": "managym/src/cards/content_pack.rs",
-          "sha256": "2d017ef606828f7becee88fb9abbd71314b017807a41bfbf75befe433750ba00"
+          "sha256": "d03d5fbe26ceda77a07efb8ea168537ff5759dc90180be2de365fcd30e315405"
         },
         {
           "path": "managym/src/cards/deck_admission.rs",
@@ -520,7 +520,7 @@
         },
         {
           "path": "managym/src/cards/mod.rs",
-          "sha256": "5db3ae736df561fe641bb03439d7243492c6b2d3b056065e455e53daf05b3687"
+          "sha256": "f352c1cce0c33da09561d116e5f22c978c3e4b9d86d5a023f52f813fadbd08ad"
         },
         {
           "path": "managym/src/cards/names.rs",
@@ -528,11 +528,15 @@
         },
         {
           "path": "managym/src/cards/pool.rs",
-          "sha256": "cba1bccef7c23aa8a01b4552580cd66b90287c00b8e13542253580cd8f66d962"
+          "sha256": "33fa69b09a53efd91b966c67d4df4e0654b09f16a963f0ee2ac1ffee2eafb6a4"
         },
         {
           "path": "managym/src/cards/setups.rs",
           "sha256": "ea637dc09858554b8a4717481b1db46e23f8a932195068a7085a6897d83d7570"
+        },
+        {
+          "path": "managym/src/cards/token_renames.rs",
+          "sha256": "efd04165c37eb8cf43b2effcedde8f7ff3fc4ecbd4143a3a0ff7867829d01ce8"
         },
         {
           "path": "managym/src/cards/tokens.rs",
@@ -540,7 +544,7 @@
         },
         {
           "path": "managym/src/conformance.rs",
-          "sha256": "b702fc110f9f34226b2cadac4e0077b5b1a008d8d8d6384edd222dd292212341"
+          "sha256": "1eb386aeb7af55a8d1cdf61961451e8d7759cdebbd659ce5083997d01aa61c5d"
         },
         {
           "path": "managym/src/decision.rs",
@@ -548,11 +552,11 @@
         },
         {
           "path": "managym/src/decision_capture.rs",
-          "sha256": "331cba96c15069c51aace17fb10fc0c0d5ee33d04cb426b2d617b2b9335cfc27"
+          "sha256": "bef2d66fbbed8d42f0c1bd0e778880a9a63bc9a06b0d2e82704f7d34fccee0dd"
         },
         {
           "path": "managym/src/decision_context.rs",
-          "sha256": "caa3cc146f011bdec507a84c30bf8012bb2fc762df153e3f03be3c73d0e3e1ea"
+          "sha256": "88276079752e7c74be4f00c0044baa693329ca59bfbe81a5f7b7588e376b1b2f"
         },
         {
           "path": "managym/src/experience.rs",
@@ -560,7 +564,7 @@
         },
         {
           "path": "managym/src/flow/action.rs",
-          "sha256": "7cadeb2c845c11b62ce14546de9c02c3cf57f95fac1dada6d45f4d7eb12f4858"
+          "sha256": "6d1af7165b59c039ce8c92b9c458e7b6ad653c62ac8309cc5c6cb043c9bc5c8f"
         },
         {
           "path": "managym/src/flow/card_capture.rs",
@@ -588,7 +592,7 @@
         },
         {
           "path": "managym/src/flow/decision.rs",
-          "sha256": "f164d9fda8baf2a3ae2e1b21d0d024b297f6f180b231c326a91a7a3cbb5b911d"
+          "sha256": "8d8d9e3d3bb84c173ad3be170b28386d9c233a20f9c18553e90c2fa0f9da3c5b"
         },
         {
           "path": "managym/src/flow/effects.rs",
@@ -616,15 +620,15 @@
         },
         {
           "path": "managym/src/flow/mana.rs",
-          "sha256": "91c236a738b016d23f936c75bad9b95a79ca9f9ffc4c7be2bb7e3818dafcac66"
+          "sha256": "ae9ede474612ae6e74332c37ea4208fe06efa6690058a5864dceb26b5ca4687b"
         },
         {
           "path": "managym/src/flow/mana/autotapper.rs",
-          "sha256": "adc550ec4adcc1a75a68cb396c935d24c23db4bbd5b28c6580783272792a0545"
+          "sha256": "e9942d0ff0bf1a9f050f4582eafcb0bf5d88ea47307c869710fba3b0d9340805"
         },
         {
           "path": "managym/src/flow/mana/help.rs",
-          "sha256": "b6e25c85d900a163a032499c244f3e835342f10e7538581e66a7698cc2d25b25"
+          "sha256": "dbb5e9ee8753582cf45a258a7e89fa4f1e5d3dde9a063e4e32b14faaeba61b6c"
         },
         {
           "path": "managym/src/flow/mana/preview.rs",
@@ -632,7 +636,7 @@
         },
         {
           "path": "managym/src/flow/mana/tests.rs",
-          "sha256": "92d509534c641acc8b74a39881c64453e7741ba5f11d53c6146bd50a9a552bef"
+          "sha256": "4806a7c9ec73c9ddb467e74ac98e29a58846b8cad49fc4753bfc68feef96a284"
         },
         {
           "path": "managym/src/flow/mod.rs",
@@ -644,11 +648,11 @@
         },
         {
           "path": "managym/src/flow/payment.rs",
-          "sha256": "3218c5b5d278ee079ae7e1c1fb9ecc23d4fa264fe707e5c968d022ead9b2ffd2"
+          "sha256": "2228e43e733d82806c1a3a046382a4b9da30faec1ca19b8f11ebf5cb371a3932"
         },
         {
           "path": "managym/src/flow/play.rs",
-          "sha256": "a1a3ac896d36cca2c9d4c2c2cf073830d353423827f05a4fad37f7cf4f61e390"
+          "sha256": "9214f7ea881694f6f26696fcda4342b9faff56b8cef8df6944ff13070d669dd0"
         },
         {
           "path": "managym/src/flow/priority.rs",
@@ -744,7 +748,7 @@
         },
         {
           "path": "managym/src/lib.rs",
-          "sha256": "4028ee8358f35fa67973d63463d941ab1302a1c29fff99c46983dcafd8d1643d"
+          "sha256": "19dbd6aa23d4134e4632d665a3a70d61029b0aa396918af22592c844c11a7233"
         },
         {
           "path": "managym/src/match_fixtures.rs",
@@ -756,7 +760,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "93484a5911d7ca910be111ad82f20c18ac9615485a74e46e47042f60bbb6ad15"
+          "sha256": "6a749f35e49bbcccbe0105c6e2d0e3db0ccaf1b601859ef1e1ddaadff6add640"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -780,7 +784,7 @@
         },
         {
           "path": "managym/src/python/vector_env_bindings.rs",
-          "sha256": "d168b2a2dbb838bb3bad055a04757aa275d833fae4fb5856bba48ae3bb71ce47"
+          "sha256": "36d8fec1c9c04c594b8fa86fdccaf643cf1fc660ae5ce618b75d98a2cfa15c70"
         },
         {
           "path": "managym/src/search_state.rs",
@@ -812,7 +816,7 @@
         },
         {
           "path": "managym/src/world.rs",
-          "sha256": "8538f72fe2c4d74ee49a51d7b8637e18b7754e447035a0d69181cb89dec8bca7"
+          "sha256": "0f466ec17fcbbb2c0ba12d1194d48981965b6a61f2a51e268841c60686cee70c"
         },
         {
           "path": "managym/state/Cargo.toml",
@@ -844,11 +848,11 @@
         },
         {
           "path": "managym/state/src/mana.rs",
-          "sha256": "72b287529ac40e6e73ca7091c41ac056f8ca6b09fbe4d08c4a12948844f33b0b"
+          "sha256": "870bb018deafa1c72a87ce456d6f21e3b1e83a11ff6d173fc67712cff617cdeb"
         },
         {
           "path": "managym/state/src/payment.rs",
-          "sha256": "065a28ae599922034396b7cb5a64763901f12ba90d7db02e4a8cf223fc2f1e1e"
+          "sha256": "dafaf9d1e0956013d050d755b45a84bdaff30db3d77791ac9a3a0a56e632fd2e"
         },
         {
           "path": "managym/state/src/permanent.rs",
@@ -887,7 +891,7 @@
           "sha256": "758abaeba2740bbd49e6f0db8ed231c002ccd1fec52f19b5ec45ce9fcc304965"
         }
       ],
-      "sha256": "4f9af4f2a9b4cc3a6de7bd61f3cc6a63dc74503aa547476143ae06174142c216"
+      "sha256": "0182c22abacc3f6083b8cfa38060062530478f11789bb3a64c9c5e475f2e6644"
     },
     "seed": 0
   },
@@ -1691,11 +1695,11 @@
           "state_witness": "9f37241ba1f5b858a6b7d4b289097cc22ec24523e5f624bce5698213d4c90a4b",
           "viewer_observation_sha256": [
             "315919159a1d22ecef1597db9e734f1f196b1851c3c8fa4dd67f2015792755d8",
-            "87f5b3d1a5e5b854b3ea863ef676770f92949288f80af2e73cfee763c4ce63bd"
+            "5f9e296c47991b252d8c0c9a18442e2a7fbf493bb278d1195116ba63096e556c"
           ],
           "viewer_state_sha256": [
             "6b96769304eaa6a8079c94d7403c682a1f563bdd60f4d6df5869bba2f5d77284",
-            "555ccca3146f93241edd49a126932530f295b84cc2d37ee30a53cb98329ec84f"
+            "2ae494069af6ce4b8d4a81932521e65900de873068a68b082152897ab181bf7c"
           ]
         },
         {
@@ -1705,11 +1709,11 @@
           "state_witness": "77db1416dc2ab0e90dc2d56b2fb3a24fd7f6ff86cf0dab3fb78ba4fff7050deb",
           "viewer_observation_sha256": [
             "24a4d7b64b0739ecbc33e00904c969be9fabef3f07431853437b59865ad6dcb5",
-            "239a611eff124efecb31832c3990bc16db7f2b65533431aa4db9c39f9900005c"
+            "462dbbbb1b79592e70335cecd54d0deb578d0a7bb233ffc7ae5b04f3edafee01"
           ],
           "viewer_state_sha256": [
             "7a85870eba8c020ba3eda19b34f9d41ece1e59b7cbe74716d7bafdebedf2056e",
-            "0ebcc8a007ba943dedb1d8206d0238c01f13391220fc53e5f57b0e4d4d21b2f5"
+            "c5bcfb02428bab879b38d089dbe9be6778347f020cbb3c89291d118cf9b4729d"
           ]
         },
         {
@@ -1915,11 +1919,11 @@
           "state_witness": "c53c4aa0a9fa6b22649027167244a13b84d9f9f35fd132fa24520d6d74290355",
           "viewer_observation_sha256": [
             "dc160e67cdb93192c8b8b3b3adea1dfb1c5727e9639a0cdb32ef6d8f87f1a34b",
-            "0d5bf6261182cb255ebeb7094175612b19857b642f4bdd7ebe3f16133e7a4aae"
+            "5686660a82a40cbc73c11ca1d77fb5c67597455044ce7c3a9cfacc49ba146378"
           ],
           "viewer_state_sha256": [
             "5f878b3600d302da03d35dea33501dfc95668b6fe86333c05e5d5980e0e27a47",
-            "eb1258e05272ebbd0c314127b72f8c3343b83eaccc0029864981eb75b8090614"
+            "4ca8839412cf3b92ecbed1e9155d3896b0a07075ad58405ceee1677b2bddc25f"
           ]
         },
         {
@@ -4384,11 +4388,11 @@
           "state_witness": "9f37241ba1f5b858a6b7d4b289097cc22ec24523e5f624bce5698213d4c90a4b",
           "viewer_observation_sha256": [
             "223413e587ae0b4a6cc323c3040f0b203755216d80eacc48f78237e1151bc69d",
-            "09ad260445b6692c5f0d738ac90dbd5ca24bcfc8bdcccb9078c10d78bb493e36"
+            "13fdd7bda4f6e5aa36517438223fb9e35e94f099a5de69e99916454b627088eb"
           ],
           "viewer_state_sha256": [
             "caa5fa2b1cfc5dc88399778954d88f0ad38493a5c93bc82581eb3f5a838eeec9",
-            "f641b41d4eaf60ab60ea76bc8c9d2d23f4bcacd607f714b031a02b08244efb99"
+            "e244121f8d471c6eef4eda2a8ea406019b4e7e461913c2447890b315dd77618f"
           ]
         },
         {
@@ -4398,11 +4402,11 @@
           "state_witness": "77db1416dc2ab0e90dc2d56b2fb3a24fd7f6ff86cf0dab3fb78ba4fff7050deb",
           "viewer_observation_sha256": [
             "b0a52a76e0bcbed9e5885bb222bb946bf1b69320ebca26f26f89a1180129589a",
-            "5fe17e36fdc0e85ce5c9c96a07a47d99adac93cb21709bfcbe16dc6dfc2709a0"
+            "28dda1a91017aa111cf4f47614214c7cbabced8e0766927ed1bdf848bb587ab9"
           ],
           "viewer_state_sha256": [
             "e786ae2282b4323e883e6744fecc2bcb2efcda104556ef35dfeb0a12024e7ba3",
-            "da04bc28305278e31a179607b434128768bad6ef105f7185ea15e1977f5366a9"
+            "e46eb4b572cd6e360f4ca50e346bf2fd93ffdd236de5a749bacdb985113c699c"
           ]
         },
         {
@@ -4608,11 +4612,11 @@
           "state_witness": "c53c4aa0a9fa6b22649027167244a13b84d9f9f35fd132fa24520d6d74290355",
           "viewer_observation_sha256": [
             "d53d516ac5d63fb21064bf41b76c0c8a339aa6380dd0a2f0b14a78ed7a81bcca",
-            "093d2d2425c5353145dbcb698224e23ada8bff45f8bb222d2629353dc9b69a1f"
+            "92b74895c47d7b24e1244013bd1cc1d67befc904aa4b5e5cf0044bc975324bb7"
           ],
           "viewer_state_sha256": [
             "343c9e5d34d6d950a5b8902b29a0ee3e1d66bcaad8c448e1fa34fb546334765e",
-            "b9a2887a3e48340956acb1e365b9b529a5f0dcd413909f05fdc12947a0c76bcb"
+            "7f255b456baecfc3ea935ac1245458c7bf4aad40cc9db2b03a55fc5d6050cd74"
           ]
         },
         {
@@ -7087,11 +7091,11 @@
           "state_witness": "9f37241ba1f5b858a6b7d4b289097cc22ec24523e5f624bce5698213d4c90a4b",
           "viewer_observation_sha256": [
             "315919159a1d22ecef1597db9e734f1f196b1851c3c8fa4dd67f2015792755d8",
-            "87f5b3d1a5e5b854b3ea863ef676770f92949288f80af2e73cfee763c4ce63bd"
+            "5f9e296c47991b252d8c0c9a18442e2a7fbf493bb278d1195116ba63096e556c"
           ],
           "viewer_state_sha256": [
             "6b96769304eaa6a8079c94d7403c682a1f563bdd60f4d6df5869bba2f5d77284",
-            "555ccca3146f93241edd49a126932530f295b84cc2d37ee30a53cb98329ec84f"
+            "2ae494069af6ce4b8d4a81932521e65900de873068a68b082152897ab181bf7c"
           ]
         },
         {
@@ -7101,11 +7105,11 @@
           "state_witness": "77db1416dc2ab0e90dc2d56b2fb3a24fd7f6ff86cf0dab3fb78ba4fff7050deb",
           "viewer_observation_sha256": [
             "24a4d7b64b0739ecbc33e00904c969be9fabef3f07431853437b59865ad6dcb5",
-            "239a611eff124efecb31832c3990bc16db7f2b65533431aa4db9c39f9900005c"
+            "462dbbbb1b79592e70335cecd54d0deb578d0a7bb233ffc7ae5b04f3edafee01"
           ],
           "viewer_state_sha256": [
             "7a85870eba8c020ba3eda19b34f9d41ece1e59b7cbe74716d7bafdebedf2056e",
-            "0ebcc8a007ba943dedb1d8206d0238c01f13391220fc53e5f57b0e4d4d21b2f5"
+            "c5bcfb02428bab879b38d089dbe9be6778347f020cbb3c89291d118cf9b4729d"
           ]
         },
         {
@@ -7311,11 +7315,11 @@
           "state_witness": "c53c4aa0a9fa6b22649027167244a13b84d9f9f35fd132fa24520d6d74290355",
           "viewer_observation_sha256": [
             "dc160e67cdb93192c8b8b3b3adea1dfb1c5727e9639a0cdb32ef6d8f87f1a34b",
-            "0d5bf6261182cb255ebeb7094175612b19857b642f4bdd7ebe3f16133e7a4aae"
+            "5686660a82a40cbc73c11ca1d77fb5c67597455044ce7c3a9cfacc49ba146378"
           ],
           "viewer_state_sha256": [
             "5f878b3600d302da03d35dea33501dfc95668b6fe86333c05e5d5980e0e27a47",
-            "eb1258e05272ebbd0c314127b72f8c3343b83eaccc0029864981eb75b8090614"
+            "4ca8839412cf3b92ecbed1e9155d3896b0a07075ad58405ceee1677b2bddc25f"
           ]
         },
         {
