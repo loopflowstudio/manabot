@@ -120,6 +120,7 @@ def test_local_report_draws_sparse_combat_probe_readings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     track = tmp_path / "track"
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "run"))
     with recording(
         experiment="local", run="probe", seed=197, clocks=CLOCKS, directory=track
