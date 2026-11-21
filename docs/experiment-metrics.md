@@ -277,7 +277,7 @@ updates = updates_from_run(read(runs_dir, experiment, run_id))
 [(5, 0.42, 0.31, -0.28), (10, 1.15, 0.68, -0.54)]
 ```
 
-The `ML` panels (`manabot.training.panels`) draw three `log-odds` charts that
+The `ML` panels (`manabot.training.panels`) draw combat charts that
 separate two independent failure modes:
 
 - **Attack and block log-odds** (`combat/attack/gap`, `combat/block/gap`):
@@ -285,6 +285,10 @@ separate two independent failure modes:
   logit over two-offer `DECLARE_ATTACKER` or `DECLARE_BLOCKER` decisions.
   For an individual decision, a gap of 0 gives a 50% declare probability,
   2.4 gives about 92%, and 9 gives about 99.99%.
+- **Saturated combat decisions** (`combat/attack/saturated`, `combat/block/saturated`)
+  gives the fraction of those decisions with an absolute gap above 9.2. At that
+  threshold the rarer offer has about a 1 in 10,000 chance under policy sampling.
+  Opposite preferences can cancel in the signed mean while both count here.
 - **Attack gap shift under board edits** and **Block gap shift under board
   edits**: **is the policy board-blind?** Each chart draws four shifts — the
   mean change in that gap when the same decisions are re-scored after one edit

@@ -86,6 +86,11 @@ ML: tuple[MetricPanel, ...] = (
         keys=("combat/attack/gap", "combat/block/gap"),
         unit="log-odds",
     ),
+    Series(
+        title="Saturated combat decisions",
+        keys=("combat/attack/saturated", "combat/block/saturated"),
+        unit="fraction",
+    ),
     *(
         Series(
             title=f"{kind.title()} gap shift under board edits",

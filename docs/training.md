@@ -890,7 +890,8 @@ uv run etude train manabot/recipes/local.py --experiment no-probe \
 
 The probe scores the updated policy on up to `combat_probe_rows` decisions
 per kind from that update's batch. The gap measures the policy's preference
-for declaring. The four shifts measure how that preference changes when either
+for declaring. Saturation counts the share of decisions with an absolute gap
+above 9.2. The four shifts measure how that preference changes when either
 player's creatures are edited. For the metric keys, sample counts, missing
 values and measured CPU cost, see [Combat probe](experiment-metrics.md#combat-probe).
 

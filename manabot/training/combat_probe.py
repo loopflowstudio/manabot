@@ -141,6 +141,8 @@ def combat_samples(
 
     base = gaps(rows)
     yield "gap", "decisions", base
+    # The rarer offer is selected about once in 10,000 at |gap| = 9.2.
+    yield "saturated", "decisions", np.abs(base) > 9.2
     for key, cols, side, weak, strong in (
         (
             "agent_permanents",
