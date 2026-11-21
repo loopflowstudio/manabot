@@ -49,12 +49,10 @@ def checkpoint_counts(
     row = {k: v for k, v in asdict(pair[game_seat]).items() if v is not None}
     # Etude selects a score's cohort by its non-null numerator. Give each
     # corrected rate a numerator present only alongside its committed total.
-    for role, numerator in (
-        ("attackers", "chump_attacks"),
-        ("blockers", "chump_blocks"),
-    ):
-        if f"{role}_committed" in row:
-            row[numerator] = row.pop(f"{role}_lost_for_nothing")
+    if "attackers_committed" in row:
+        row["chump_attacks"] = row.pop("attackers_lost_for_nothing")
+    if "blockers_committed" in row:
+        row["chump_blocks"] = row.pop("blockers_lost_for_nothing")
     return {**row, "seat": 0, "game_seat": game_seat}
 
 

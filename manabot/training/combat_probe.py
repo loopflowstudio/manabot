@@ -13,7 +13,6 @@ import numpy as np
 
 from manabot.env.observation import ObservationSpace
 from manabot.policy.protocol import BackendPolicy
-from manabot.policy.readings import published_columns
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import RolloutBatch
 
@@ -38,30 +37,26 @@ class CombatColumns:
 
 
 def combat_columns(space: ObservationSpace) -> CombatColumns | None:
-    layout = published_columns(space)
-    indexes = {
-        key: {col.name: i for i, col in enumerate(layout[key])}
-        for key in ("actions", "agent_permanents", "opponent_permanents")
-    }
+    arrays = space.layout.arrays
 
     def permanents(key: str) -> PermanentColumns:
-        cols = indexes[key]
+        cols = arrays[key]["columns"]
         power, toughness = cols["power"], cols["toughness"]
         return PermanentColumns(
-            cols["is_creature"],
-            power,
-            toughness,
-            cols["tapped"],
-            layout[key][power].scale or 1,
-            layout[key][toughness].scale or 1,
+            cols["is_creature"]["index"],
+            power["index"],
+            toughness["index"],
+            cols["tapped"]["index"],
+            power.get("scale", 1),
+            toughness.get("scale", 1),
         )
 
-    actions = indexes["actions"]
+    actions = arrays["actions"]["columns"]
     try:
         return CombatColumns(
-            actions["declare_attacker"],
-            actions["declare_blocker"],
-            actions["declared"],
+            actions["declare_attacker"]["index"],
+            actions["declare_blocker"]["index"],
+            actions["declared"]["index"],
             permanents("agent_permanents"),
             permanents("opponent_permanents"),
         )
