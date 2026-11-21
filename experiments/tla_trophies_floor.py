@@ -1,4 +1,8 @@
-"""Compare forward-KL weights on fresh trophy policies and a saturated raw policy."""
+"""Compare forward-KL weights and larger tau on trophy policies.
+
+The fresh and pullback arms vary the forward-KL floor under the trophy tau
+schedule. The tau arms keep that schedule and multiply its scale.
+"""
 
 from decimal import Decimal
 
@@ -12,6 +16,9 @@ from experiments import tla_trophies as trophies
 
 FRESH = {"control": 0.0, "floor-0.002": 0.002, "floor-0.01": 0.01}
 PULLBACK = {"pullback-0": 0.0, "pullback-0.01": 0.01}
+# Arm -> tau_scale, 2x and 4x the trophy schedule's 0.05.
+TAU = {"tau-x2": 0.1, "tau-x4": 0.2}
+TAU_SEEDS = (40901, 40902)
 START_SEED = 40902
 START_RUN = f"{trophies.RAW_JOB}@{START_SEED}"
 START_FILE = "out/policies/00000400-raw.safetensors"
@@ -32,6 +39,8 @@ START = CheckpointRecord(
 class Config(trophies.Config):
     reference_forward_kl: float
     pullback: bool
+    # The tau schedule's scale; None keeps the trophy recipe's.
+    tau_scale: float | None = None
 
 
 def train(config: Config) -> None:
@@ -44,6 +53,11 @@ def train(config: Config) -> None:
                 "pretrained": run.input("start") if config.pullback else None,
                 "learning": base.learning.model_copy(
                     update={"reference_forward_kl": config.reference_forward_kl}
+                    | (
+                        {"tau_scale": config.tau_scale}
+                        if config.tau_scale is not None
+                        else {}
+                    )
                 ),
             }
         )
@@ -82,11 +96,26 @@ def training_jobs(
                 }
             )
         )
+    for name, tau_scale in TAU.items():
+        arm = {"reference_forward_kl": 0.0, "pullback": False, "tau_scale": tau_scale}
+        jobs.append(
+            base.model_copy(
+                update={
+                    "name": name,
+                    "train": train,
+                    "config": Config(**base.config.model_dump(), **arm),
+                    "smoke": Config(**base.smoke.model_dump(), **arm),
+                    "seeds": TAU_SEEDS,
+                }
+            )
+        )
     return jobs
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    return trophies.held_out_jobs([run for run in state.runs if run.launch in FRESH])
+    return trophies.held_out_jobs(
+        [run for run in state.runs if run.launch in FRESH | TAU]
+    )
 
 
 def report() -> Report:

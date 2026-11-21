@@ -74,6 +74,8 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
             "floor-0.01": 3,
             "pullback-0": 1,
             "pullback-0.01": 1,
+            "tau-x2": 2,
+            "tau-x4": 2,
         },
     ),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
