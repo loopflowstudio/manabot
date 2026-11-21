@@ -8,6 +8,7 @@ need; move one out of it, into the checks below, when it runs.
 """
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import replace
 from decimal import Decimal
 from importlib import import_module
@@ -255,7 +256,12 @@ def _checkpoint(
 
 
 def _finished_run(
-    tmp_path: Path, updates: range, *, name: str = "seed-1", job: str = "seed-1"
+    tmp_path: Path,
+    updates: Sequence[int],
+    *,
+    name: str = "seed-1",
+    job: str = "seed-1",
+    seed: int = 0,
 ) -> TrainingRunSummary:
     return TrainingRunSummary(
         name=name,
@@ -268,7 +274,7 @@ def _finished_run(
             _checkpoint(tmp_path, name, ordinal, update)
             for ordinal, update in enumerate(updates, start=1)
         ),
-        seed=0,
+        seed=seed,
     )
 
 
@@ -286,8 +292,11 @@ def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
     assert train.max_usd * len(train.seeds) == Decimal("7.80")
     pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
     raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
-    second = replace(
-        _finished_run(tmp_path, range(0, 201, 100), name="raw-2", job=train.name),
+    second = _finished_run(
+        tmp_path,
+        range(0, 201, 100),
+        name="raw-2",
+        job=train.name,
         seed=1,
     )
     state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
@@ -313,12 +322,20 @@ def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
     ]
 
 
+def test_floor_resume_only_serializes_an_explicit_tau_scale() -> None:
+    for job in tla_trophies_floor.training_jobs(attempts=2):
+        assert job.smoke is not None
+        for config in (job.config, job.smoke):
+            fields = config.model_dump()
+            if job.name.startswith("tau-"):
+                assert fields["tau_scale"] == (0.2 if job.name == "tau-x4" else 0.1)
+            else:
+                assert "tau_scale" not in fields
+
+
 def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) -> None:
     runs = tuple(
-        replace(
-            _finished_run(tmp_path, [100], name=f"{job}@{seed}", job=job),
-            seed=seed,
-        )
+        _finished_run(tmp_path, [100], name=f"{job}@{seed}", job=job, seed=seed)
         for job, seeds in (
             ("control", (1, 2, 3)),
             ("floor-0.01", (1, 2, 3)),
@@ -349,15 +366,10 @@ def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) 
 
 def test_floor_arms_meet_their_own_line_at_half_their_updates(tmp_path: Path) -> None:
     runs = tuple(
-        replace(
-            _finished_run(tmp_path, [0, 100, 200, 300, 400], name=name, job=job),
-            seed=seed,
+        _finished_run(
+            tmp_path, range(0, 401, 100), name=f"{job}@{seed}", job=job, seed=seed
         )
-        for job, seed, name in (
-            ("tau-x2", 1, "tau-x2@1"),
-            ("tau-x2", 2, "tau-x2@2"),
-            ("pullback-0", 2, "pullback-0@2"),
-        )
+        for job, seed in (("tau-x2", 1), ("tau-x2", 2), ("pullback-0", 2))
     )
     state = ExperimentState(experiment="fixture", runs=runs)
     _, half, *_ = tla_trophies_floor.eval_jobs(state)
@@ -387,11 +399,8 @@ def test_treated_floor_arms_meet_each_control_seed_at_matched_updates(
     tmp_path: Path,
 ) -> None:
     runs = tuple(
-        replace(
-            _finished_run(
-                tmp_path, [0, 100, 200, 300, 400], name=f"{job}@{seed}", job=job
-            ),
-            seed=seed,
+        _finished_run(
+            tmp_path, range(0, 401, 100), name=f"{job}@{seed}", job=job, seed=seed
         )
         for job, seeds in (
             ("control", (1, 2, 3)),

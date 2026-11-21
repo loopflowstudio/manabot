@@ -8,31 +8,41 @@ each treated fresh arm also meets every control seed at the same update.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from decimal import Decimal
-from pathlib import Path
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.match import environment
-from etude.eval.records import Aligned, Benchmark, CheckpointSlot, Fraction, Seating
+from etude.eval.records import Aligned, Fraction
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report, Score
 from etude.train.tracking import track
+from pydantic import Field
 
 from experiments import tla_trophies as trophies
 from manabot.training.panels import ML, PERF
 from manabot.training.report import behaviour_curves
 
-FRESH = {"control": 0.0, "floor-0.002": 0.002, "floor-0.01": 0.01}
-PULLBACK = {"pullback-0": 0.0, "pullback-0.01": 0.01}
-# Arm -> (tau_scale, forward-KL weight): 2x and 4x the trophy schedule's
-# 0.05, and 2x with the 0.002 floor.
-TAU = {
-    "tau-x2": (0.1, 0.0),
-    "tau-x4": (0.2, 0.0),
-    "tau-x2-floor-0.002": (0.1, 0.002),
+
+@dataclass(frozen=True)
+class Arm:
+    label: str
+    reference_forward_kl: float = 0.0
+    tau_scale: float | None = None
+    pullback: bool = False
+
+
+ARMS = {
+    "control": Arm("Control"),
+    "floor-0.002": Arm("Forward KL 0.002", 0.002),
+    "floor-0.01": Arm("Forward KL 0.01", 0.01),
+    "pullback-0": Arm("Warm start, control", pullback=True),
+    "pullback-0.01": Arm("Warm start, forward KL 0.01", 0.01, pullback=True),
+    "tau-x2": Arm("Tau x2", tau_scale=0.1),
+    "tau-x4": Arm("Tau x4", tau_scale=0.2),
+    "tau-x2-floor-0.002": Arm("Tau x2, forward KL 0.002", 0.002, tau_scale=0.1),
 }
-FRESH_ARMS = (*FRESH, *TAU)
+FRESH_ARMS = tuple(name for name, arm in ARMS.items() if not arm.pullback)
 TAU_SEEDS = (40901, 40902)
 START_SEED = 40902
 START_RUN = f"{trophies.RAW_JOB}@{START_SEED}"
@@ -54,26 +64,24 @@ START = CheckpointRecord(
 class Config(trophies.Config):
     reference_forward_kl: float
     pullback: bool
-    # The tau schedule's scale; None keeps the trophy recipe's.
-    tau_scale: float | None = None
+    # Etude resumes the original trophy arms by their serialized config.
+    tau_scale: float | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 def train(config: Config) -> None:
     from manabot.training.loops.self_play import CLOCKS, self_play
 
     base = trophies.settings(config)
+    learning = base.learning.model_copy(
+        update=config.model_dump(include={"reference_forward_kl", "tau_scale"})
+    )
     with track(clocks=CLOCKS, config=config) as run:
         settings = base.model_copy(
             update={
                 "pretrained": run.input("start") if config.pullback else None,
-                "learning": base.learning.model_copy(
-                    update={"reference_forward_kl": config.reference_forward_kl}
-                    | (
-                        {"tau_scale": config.tau_scale}
-                        if config.tau_scale is not None
-                        else {}
-                    )
-                ),
+                "learning": learning,
             }
         )
         self_play(settings, run, updates=config.updates)
@@ -92,63 +100,47 @@ def training_jobs(
     (base,) = trophies.training_jobs(revision=revision, usd_per_run=2.54)
     assert base.smoke is not None
     jobs = []
-    for name, weight in (FRESH | PULLBACK).items():
-        pullback = name in PULLBACK
-        config = Config(
-            **base.config.model_dump(), reference_forward_kl=weight, pullback=pullback
-        )
-        smoke = Config(
-            **base.smoke.model_dump(), reference_forward_kl=weight, pullback=pullback
-        )
-        jobs.append(
-            base.model_copy(
-                update={
-                    "name": name,
-                    "train": train,
-                    "config": config.model_copy(update={"updates": pullback_updates})
-                    if pullback
-                    else config,
-                    "smoke": smoke,
-                    "start": START if pullback else None,
-                    "seeds": (START_SEED,) if pullback else base.seeds,
-                    "max_hours": pullback_hours if pullback else base.max_hours,
-                    "max_usd": Decimal("1.06") if pullback else base.max_usd,
-                }
-            )
-        )
-    for name, (tau_scale, weight) in TAU.items():
-        arm = {
-            "reference_forward_kl": weight,
-            "pullback": False,
-            "tau_scale": tau_scale,
+    for name, arm in ARMS.items():
+        config_fields = {
+            "reference_forward_kl": arm.reference_forward_kl,
+            "pullback": arm.pullback,
         }
+        placement = {}
+        updates = base.config.updates
+        if arm.pullback:
+            updates = pullback_updates
+            placement.update(
+                start=START,
+                seeds=(START_SEED,),
+                max_hours=pullback_hours,
+                max_usd=Decimal("1.06"),
+            )
+        elif arm.tau_scale is not None:
+            config_fields["tau_scale"] = arm.tau_scale
+            placement.update(
+                seeds=TAU_SEEDS,
+                max_hours=tau_hours or base.max_hours,
+                max_usd=Decimal(str(tau_usd)) if tau_usd else base.max_usd,
+            )
         jobs.append(
             base.model_copy(
                 update={
+                    **placement,
                     "name": name,
                     "train": train,
-                    "config": Config(**base.config.model_dump(), **arm),
-                    "smoke": Config(**base.smoke.model_dump(), **arm),
-                    "seeds": TAU_SEEDS,
-                    "max_hours": tau_hours or base.max_hours,
-                    "max_usd": Decimal(str(tau_usd)) if tau_usd else base.max_usd,
+                    "config": Config(
+                        **base.config.model_dump(exclude={"updates"}),
+                        updates=updates,
+                        **config_fields,
+                    ),
+                    "smoke": Config(**base.smoke.model_dump(), **config_fields),
+                    "max_attempts": attempts,
                 }
             )
         )
-    # A resume needs a further attempt; the first launch keeps one.
-    return [job.model_copy(update={"max_attempts": attempts}) for job in jobs]
+    return jobs
 
 
-LABELS = {
-    "control": "Control",
-    "floor-0.002": "Forward KL 0.002",
-    "floor-0.01": "Forward KL 0.01",
-    "tau-x2": "Tau x2",
-    "tau-x4": "Tau x4",
-    "tau-x2-floor-0.002": "Tau x2, forward KL 0.002",
-    "pullback-0": "Warm start, control",
-    "pullback-0.01": "Warm start, forward KL 0.01",
-}
 # The floor's own held-out benchmark: the shared trophy benchmark's 96
 # update-zero control games were recorded under an earlier tla_trophies.py.
 HELD_OUT = "tla-trophies-floor-held-out-32"
@@ -159,100 +151,68 @@ HEAD_TO_HEAD_SEATINGS = tuple(f"Matched control deal {i + 1}" for i in range(32)
 HEAD_TO_HEAD_UPDATES = (200, 400)
 
 
-def trophy_benchmark(name: str, seatings: tuple[Seating, ...]) -> Benchmark:
-    """A benchmark on the trophy game, pinned to the files that define its play.
-
-    This file only schedules seatings, so editing its report keeps the keys of
-    games already played.
-    """
-    return Benchmark(
-        name=name,
-        environment=environment(
-            "tla-trophies",
-            files=[
-                Path(trophies.__file__),
-                trophies.ROOT / "manabot/eval/pairing.py",
-            ],
-            config={"pools": trophies.corpus_input().sha256},
-        ),
-        seatings=seatings,
-    )
-
-
-def deal(i: int) -> trophies.Deal:
-    return trophies.Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i)
-
-
 def arm_evaluations(
     runs: Sequence[TrainingRunSummary], arm: str, control_seeds: int
 ) -> list[EvalJob]:
-    """Give each seed one match per deal, including arms with fewer seeds."""
-    held_out_name = f"{HELD_OUT}-{arm}"
-    half_name = f"{HALF_TRAINING}-{arm}"
-    versus_name = f"{HEAD_TO_HEAD}-{arm}"
+    """Reuse the trophy environment and deals so retained matches keep their identities."""
     held_out = trophies.held_out_jobs(runs)
     if not held_out:
         return []
     (shared,) = held_out
-    job = shared.model_copy(
-        update={
-            "name": held_out_name,
-            "tournament": trophy_benchmark(held_out_name, shared.tournament.seatings),
-        }
+    benchmark = shared.tournament
+    name = f"{HELD_OUT}-{arm}"
+    heuristic = shared.model_copy(
+        update={"name": name, "tournament": benchmark.model_copy(update={"name": name})}
     )
-    # Each checkpoint meets its own line at exactly half its updates on the
-    # same held-out deals, seats and decks crossed (200 vs 100, 400 vs 200 at
-    # checkpoints every 100). Without a trained checkpoint there it is a gap.
-    seeds = len({run.seed for run in runs})
-    earlier = Fraction(clock="updates", value=0.5, trained=True)
-    half = job.model_copy(
-        update={
-            "name": half_name,
-            "tournament": trophy_benchmark(
-                half_name,
-                tuple(
-                    Seating(
-                        name=name,
-                        players=(CheckpointSlot(), earlier),
-                        config=deal(i),
-                        games=seeds,
-                    )
-                    for i, name in enumerate(HALF_TRAINING_SEATINGS)
+
+    def against(
+        name: str,
+        seating_names: tuple[str, ...],
+        opponent: Fraction | Aligned,
+        checkpoints: Sequence[CheckpointRecord],
+        opponent_seeds: int = 1,
+    ) -> EvalJob:
+        seatings = tuple(
+            seating.model_copy(
+                update={
+                    "name": label,
+                    "players": (seating.players[0], opponent),
+                    "games": seating.games * opponent_seeds,
+                }
+            )
+            for seating, label in zip(benchmark.seatings, seating_names, strict=True)
+        )
+        return shared.model_copy(
+            update={
+                "name": name,
+                "tournament": benchmark.model_copy(
+                    update={"name": name, "seatings": seatings}
                 ),
-            ),
-        }
+                "checkpoints": checkpoints,
+            }
+        )
+
+    half = against(
+        f"{HALF_TRAINING}-{arm}",
+        HALF_TRAINING_SEATINGS,
+        Fraction(clock="updates", value=0.5, trained=True),
+        shared.checkpoints,
     )
-    # Treated arms at matched updates against each control seed: a held
-    # checkpoint's games split evenly over its seed pairs.
+    jobs = [heuristic, half]
     treated = [
-        c
-        for run in runs
-        for c in run.checkpoints
-        if c.at.get("updates") in HEAD_TO_HEAD_UPDATES
+        c for c in shared.checkpoints if c.at.get("updates") in HEAD_TO_HEAD_UPDATES
     ]
-    if arm == "control" or not treated or not control_seeds:
-        return [job, half]
-    control = Aligned(clock="updates", job="control")
-    versus = job.model_copy(
-        update={
-            "name": versus_name,
-            "checkpoints": treated,
-            "tournament": trophy_benchmark(
-                versus_name,
-                tuple(
-                    Seating(
-                        name=name,
-                        players=(CheckpointSlot(), control),
-                        config=deal(i),
-                        # One match per treated seed x control seed pair.
-                        games=seeds * control_seeds,
-                    )
-                    for i, name in enumerate(HEAD_TO_HEAD_SEATINGS)
-                ),
-            ),
-        }
-    )
-    return [job, half, versus]
+    if arm != "control" and treated and control_seeds:
+        jobs.append(
+            against(
+                f"{HEAD_TO_HEAD}-{arm}",
+                HEAD_TO_HEAD_SEATINGS,
+                Aligned(clock="updates", job="control"),
+                treated,
+                control_seeds,
+            )
+        )
+    return jobs
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
@@ -287,7 +247,7 @@ def report() -> Report:
             *behaviour_curves(matches=held_out),
         ),
         baseline="control",
-        labels=LABELS,
+        labels={name: arm.label for name, arm in ARMS.items()},
         perf=PERF,
         ml=ML,
     )
