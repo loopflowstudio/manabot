@@ -324,8 +324,11 @@ of active wall time. [TLA trophies report](../experiments/reports/tla_trophies.m
 
 Read the eleven curves beside **Score against the heuristic** in the Elemental,
 seat-comparison and TLA trophies reports. The ten rate panels use a fixed
-0–1 scale. **Turns per game** scales to the observed game lengths. At each checkpoint, Etude pools opportunities across
-verified games for each training seed, then averages the seeds within each job.
+0–1 scale. Mana use can exceed 1 when resources gained on the opponent's turn
+are spent in the same mana cycle. Those values extend above the displayed range.
+**Turns per game** scales to the observed game lengths. At each checkpoint,
+Etude pools opportunities across verified games for each training seed, then
+averages the seeds within each job.
 For example, seven declarations across ten attacker decisions give an
 **Attackers declared** value of 0.70. A zero denominator or a checkpoint with
 no recorded behaviour leaves a gap. These curves evaluate the registered checkpoint

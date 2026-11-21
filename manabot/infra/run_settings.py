@@ -1,4 +1,4 @@
-"""Self-play instrumentation: game recording, statistics, diagnostics and the combat probe.
+"""Self-play settings for recording, statistics, stall diagnostics and the combat probe.
 
 `RunSettings` is the value SelfPlay and game capture receive. Recipe configs
 subclass it, so the same options are flat keys of every self-play recipe
