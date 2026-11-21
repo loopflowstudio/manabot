@@ -253,3 +253,25 @@ calibrations, long training run and final CPU pass have USD4.59 in
 identified launcher estimates. Earlier evaluation results were already in
 storage. Their rental charges could not be verified from this launcher's
 records, so the whole-task cost remains unconfirmed.
+
+Etude 0.4.4 renders all ten behaviour rates on a fixed 0–1 axis.
+[Turns per game](../data/mtg409/report/raw-400/turns.png) uses the observed
+game lengths. The page uses the tournament definition recorded with the games.
+
+### Attack lock and the next run, 2026-11-21
+
+The L4 ran the training code recorded in `f9c19a2656`. That commit documents
+the launch at its parent, `4c38775ec499`. The run included main as of launch,
+before the MTG-408 reverse-KL floor had landed. Across the three seeds, the
+mean attack declaration rate rose from 43.3% at initialization to 96.8% at
+update 400, reaching 99.4–99.6% at intermediate checkpoints. Over the same
+400 updates, mean score against the heuristic rose from 5.5% to 69.3%.
+
+A stale Etude session (`1a8b49bddbe7`) prevented placement on the mini.
+Evaluation there ran directly with `etude eval` in
+`~/src/manabot.mtg409-eval`. The final CPU rental completed the remaining
+44 deals.
+
+Further trophy training waits for MTG-408's reverse-KL floor to land.
+The next run will enable the floor for three packed seeds within the
+remaining budget of about USD5.50.
