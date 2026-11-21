@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import TypeAdapter
 import pytest
 
+from manabot.eval.behaviour import Play
 from manabot.eval.match import play_cell
 from manabot.sim.card_evidence import GameTrace, capture_verified_game
 from manabot.sim.replay import read_trace, replay_game
@@ -40,6 +41,7 @@ def evaluation(
             "cards": CardPerformance(),
             "behaviour": Behaviour(),
             "choices": DecisionDistribution(),
+            "play": Play(),
         },
     )
     return output, trace, replay
@@ -52,11 +54,21 @@ def test_evaluation_tables_equal_one_offline_reduction(
     assert replay["passed"] and replay["games"] == 4, replay
     tables = json.loads(Path(trace["statistics_path"]).read_text())
     records = list(read_records(output / "games"))
-    expected = reduce(records, [CardPerformance(), Behaviour(), DecisionDistribution()])
+    expected = reduce(
+        records, [CardPerformance(), Behaviour(), DecisionDistribution(), Play()]
+    )
     expected_json = TypeAdapter(list[list[Any]]).dump_python(expected, mode="json")
     assert tables["tables"] == dict(
-        zip(("cards", "behaviour", "choices"), expected_json, strict=True)
+        zip(("cards", "behaviour", "choices", "play"), expected_json, strict=True)
     )
+    play = tables["tables"]["play"]
+    assert [row["seat"] for row in play] == [0, 1] * 4
+    assert all(row["games"] == 1 and row["turns"] > 0 for row in play)
+    assert any(row["lands_played"] for row in play)
+    assert any(row["mana_turns_early"] > 0 for row in play)
+    for row in play:
+        assert row["attackers_lost_for_nothing"] <= row["attackers_declared"]
+        assert row["blockers_lost_for_nothing"] <= row["blockers_declared"]
     assert tables["tables"]["choices"] == [
         {"decisions": 4},
         {"decisions": replay["decisions"]},

@@ -1,4 +1,4 @@
-"""Play a paired authored deal through the replay-checked arena.
+"""Play a paired deal through the replay-checked arena.
 
 The candidate is a checkpoint; the opponent is a checkpoint or the native
 heuristic (`Code(name="heuristic")`). The caller owns the experimental
@@ -20,10 +20,10 @@ from etude.eval.result import Tables
 from manabot.eval.admission import register_anchor
 from manabot.eval.agents import game_players, registration
 from manabot.eval.benchmark import evaluation_tables
-from manabot.eval.evaluation import EvaluationRequest, evaluate
+from manabot.eval.evaluation import EvaluationRequest, evaluate, evaluation_play_counts
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 
 
@@ -31,7 +31,7 @@ def play_pairing(
     match: Match,
     agents: Sequence[object],
     *,
-    matchup: AuthoredMatchup,
+    matchup: AuthoredMatchup | DeckMatchup,
     deal: int,
     matchup_mode: Literal["cross", "all"],
     game_seconds: float,
@@ -39,7 +39,9 @@ def play_pairing(
 ) -> Tables:
     """Play all legs; an incomplete or invalid pairing raises after retaining evidence."""
     legs = 4 if matchup_mode == "cross" else 8
-    if match.games != legs or len(match.players) != 2:
+    # An indexed Etude match is one deal. A legacy multi-game match declares legs.
+    expected_games = legs if match.index is None else 1
+    if match.games != expected_games or len(match.players) != 2:
         raise ValueError("a pairing requires two players and every declared leg")
     players: list[PlayerRegistration] = []
     paths: dict[str, str] = {}
@@ -48,7 +50,12 @@ def play_pairing(
             if player.name != "heuristic":
                 raise ValueError("a pairing's code opponent must be the heuristic")
             players.append(
-                register_anchor(players[0], "heuristic", player_id="opponent")
+                register_anchor(
+                    players[0],
+                    "heuristic",
+                    player_id="opponent",
+                    heuristic_actions=player.config.get("max_actions"),
+                )
             )
             continue
         if not isinstance(player, CheckpointPlayer):
@@ -74,7 +81,11 @@ def play_pairing(
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
         evaluation_compute_envelope_id=ETUDE_COMPUTE_CLASS,
     )
-    retained = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
+    retained = (
+        Path(os.environ.get("ETUDE_OUTPUT_DIR") or Path(".runs") / arena)
+        / "arena"
+        / match.key
+    )
     journal_root = "/dev/shm" if Path("/dev/shm").is_dir() else None
     with TemporaryDirectory(dir=journal_root) as journal:
         out = Path(journal) / "deal"
@@ -107,7 +118,14 @@ def play_pairing(
                 shutil.copytree(out, retained, dirs_exist_ok=True)
     if result.error:
         raise ValueError(result.error)
-    tables = evaluation_tables(result.rows, matchup=matchup, legs=legs)
+    tables = evaluation_tables(
+        result.rows,
+        matchup=matchup,
+        legs=legs,
+        play_counts=evaluation_play_counts(retained)
+        if opponent.runner_kind == "code"
+        else None,
+    )
     for rows in tables.values():
         for row in rows:
             row["decklists"] = matchup.decklists

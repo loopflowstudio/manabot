@@ -9,13 +9,15 @@ need; move one out of it, into the checks below, when it runs.
 
 from collections import Counter
 from dataclasses import replace
+from decimal import Decimal
+from importlib import import_module
 from pathlib import Path
 from types import ModuleType
 
 from etude.checkpoints import CheckpointRecord
 from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
-from etude.eval.records import Match
+from etude.eval.records import Match, Tournament
 from etude.experiment_file import defined_functions
 from etude.jobs import (
     Checkpoints,
@@ -27,7 +29,7 @@ from etude.jobs import (
 )
 from etude.page import experiment_files
 from etude.records import ArtifactRef
-from etude.report import Curve, Matches, Ranking
+from etude.report import Curve, Matches, Ranking, Series
 import pytest
 
 from experiments import (
@@ -39,6 +41,7 @@ from experiments import (
     opponent_memory,
     seat_comparison,
     tla_frontier,
+    tla_trophies,
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
@@ -60,6 +63,7 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
+    (tla_trophies, (), {"trophy-w64-raw": 3}),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
@@ -87,8 +91,80 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "opponent_memory",
         "seat_comparison",
         "tla_frontier",
+        "tla_trophies",
     }
     assert NOT_YET_RUNNABLE <= found
+
+
+@pytest.mark.parametrize(
+    ("experiment", "matches"),
+    [
+        (elemental, Matches(tag="heuristic")),
+        (seat_comparison, None),
+        (tla_trophies, Matches(tournament="tla-trophies-held-out-32")),
+    ],
+)
+def test_checkpoint_report_shows_behaviour_next_to_strength(
+    experiment: ModuleType, matches: Matches | None
+) -> None:
+    strength, *rest = experiment.report().evals
+    assert strength.title == "Score against the heuristic" and strength.score is None
+    curves = rest[:11]
+    assert all(
+        isinstance(c, Curve) and c.matches == matches and c.score.table == "behaviour"
+        for c in curves
+    )
+    assert {c.score.value: c.score.per for c in curves} == {
+        "lands_played": "land_turns",
+        "casts_made": "cast_turns",
+        "mana_use_early": "mana_turns_early",
+        "mana_use_mid": "mana_turns_mid",
+        "mana_use_late": "mana_turns_late",
+        "attackers_declared": "attackers_offered",
+        "blockers_declared": "blockers_offered",
+        "attackers_lost_for_nothing": "attackers_declared",
+        "blockers_lost_for_nothing": "blockers_declared",
+        "casts_off_turn": "casts",
+        "turns": "games",
+    }
+
+
+def test_self_play_experiments_and_recipes_report_the_combat_probe() -> None:
+    files = [
+        path
+        for path in experiment_files(EXPERIMENTS)
+        if "training_jobs" in defined_functions(path)
+    ]
+    files.extend(
+        ROOT / "manabot/recipes" / f"{name}.py"
+        for name in ("baseline", "belief_policy", "elemental", "local")
+    )
+    for path in files:
+        assert "report" in defined_functions(path), path
+        module = import_module(".".join(path.relative_to(ROOT).with_suffix("").parts))
+        report = module.report()
+        ml = {
+            panel.title: panel.keys for panel in report.ml if isinstance(panel, Series)
+        }
+        assert ml["Attack and block log-odds"] == (
+            "combat/attack/gap",
+            "combat/block/gap",
+        )
+        for kind in ("attack", "block"):
+            assert set(ml[f"{kind.title()} gap shift under board edits"]) == {
+                f"combat/{kind}/shift/{edit}"
+                for edit in (
+                    "my_creatures_0_1",
+                    "my_creatures_9_9",
+                    "their_creatures_0_1_tapped",
+                    "their_creatures_9_9_untapped",
+                )
+            }
+        (update_time,) = (
+            p for p in report.perf if isinstance(p, Series) and p.title == "Update time"
+        )
+        assert "time/combat_probe" in update_time.keys
+    assert belief.report().other_metrics
 
 
 def test_no_experiment_file_keeps_a_retired_declaration() -> None:
@@ -178,6 +254,47 @@ def _finished_run(
         ),
         seed=0,
     )
+
+
+def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
+    (train,) = tla_trophies.training_jobs()
+    assert train.config == tla_trophies.Config(
+        updates=400, threads=2, streams=256, rows=512, checkpoint_every=100
+    )
+    assert {v.name: v.value for v in train.plain().environment} == {
+        "OMP_NUM_THREADS": "2",
+        "MKL_NUM_THREADS": "2",
+    }
+    assert train.max_attempts == 1
+    assert train.max_hours == 10.75
+    assert train.max_usd * len(train.seeds) == Decimal("7.80")
+    pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
+    raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
+    second = replace(
+        _finished_run(tmp_path, range(0, 201, 100), name="raw-2", job=train.name),
+        seed=1,
+    )
+    state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
+    (evaluation,) = tla_trophies.eval_jobs(state)
+    assert evaluation.max_usd == Decimal("1.30")
+    assert evaluation.max_attempts == 1
+    assert list(evaluation.checkpoints) == [*raw.checkpoints, *second.checkpoints]
+    tournament, gaps = Tournament(
+        definition=evaluation.tournament,
+        checkpoints=evaluation.recorded().checkpoints,
+    ).resolve(state.lines)
+    assert not gaps
+    assert Counter(m.checkpoint for m in tournament.schedule()) == {
+        checkpoint.key: 32 for checkpoint in evaluation.checkpoints
+    }
+    assert tla_trophies.report().evals[0].matches == Matches(tournament=evaluation.name)
+    assert [
+        tla_trophies.Deal.model_validate(s.config)
+        for s in evaluation.tournament.seatings
+    ] == [
+        tla_trophies.Deal(first=2 * i, second=2 * i + 1, seed=40900 + i)
+        for i in range(32)
+    ]
 
 
 # ---------------------------------------------------------------------------

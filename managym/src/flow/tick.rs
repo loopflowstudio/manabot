@@ -97,6 +97,7 @@ impl Game {
         loop {
             let action_space = self.turn_tick();
             if self.is_game_over() {
+                self.finish_combat_capture();
                 self.publish_action_space(ActionSpace::game_over());
                 return true;
             }
@@ -242,6 +243,9 @@ impl Game {
         self.restart_priority_round();
         if step == StepKind::Untap {
             let player = self.active_player();
+            if let Some(exposure) = self.exposure_mut() {
+                exposure.mana_turns[player.0].push(Default::default());
+            }
             let event = GameEvent::TurnStarted {
                 player,
                 turn_number: self.state.turn.turn_number,
@@ -287,6 +291,7 @@ impl Game {
                         .attacking = false;
                 }
             }
+            self.finish_combat_capture();
             self.state.combat = None;
             // Until-end-of-combat mana (firebending) empties now.
             self.clear_combat_mana_pools();
@@ -534,6 +539,7 @@ impl Game {
             }
 
             let player = self.state.priority.holder;
+            self.capture_priority_mana(player);
             let actions = self.compute_player_actions(player);
             if self.skip_trivial && actions.len() == 1 {
                 self.skipped_priority_passes += 1;

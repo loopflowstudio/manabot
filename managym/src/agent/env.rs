@@ -370,17 +370,12 @@ impl Env {
             self.seed,
             self.skip_trivial,
             self.capture_cards,
+            self.capture_exposure,
             self.collect_statistics,
         );
         game.decision_memory_enabled =
             self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
-        if self.capture_exposure {
-            game.card_capture
-                .as_mut()
-                .expect("card capture enabled")
-                .exposure = Some(crate::flow::card_capture::ExposureCapture::default());
-        }
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);

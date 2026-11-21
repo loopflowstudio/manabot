@@ -937,6 +937,7 @@ impl Game {
             let pooled = self.state.players[player.0].mana_pool.total();
             if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
                 exposure.mana[player.0].remove(1, pooled, false);
+                exposure.paid(player, 1);
             }
             let Some(PendingChoice::Pay { payment, .. }) = &mut self.pending_choice else {
                 unreachable!("an announced payment is being paid")

@@ -689,6 +689,63 @@ same traversal. Each reducer's `finish` runs once across all deal blocks, not
 once per worker. The card table uses native seats; participant mapping,
 eligibility and bootstrap intervals remain evaluation responsibilities.
 
+For per-game play counts, pass `reducers={"play": Play()}` with `Play`
+from `manabot.eval.behaviour`. The `play` table in `statistics.json` has one
+row per native seat per completed game. Pool each pair of columns by summing
+both columns before dividing. A zero denominator leaves the rate undefined.
+
+| Numerator / denominator | What one opportunity means |
+| --- | --- |
+| `lands_played / land_turns` | An own turn with a land play offered. Playing any offered land counts once. |
+| `casts_made / cast_turns` | An own turn with a spell cast offered. Choosing a cast counts once even if several spells are cast. |
+| `attackers_declared / attackers_offered` | One attacker declaration decision. The selected offer's declaration flag records the choice. |
+| `blockers_declared / blockers_offered` | One blocker declaration decision, including when several attackers are legal targets. |
+| `attackers_lost_for_nothing / attackers_declared` | A declared attacker died during combat and none of its blockers died during that combat. |
+| `blockers_lost_for_nothing / blockers_declared` | A declared blocker died during combat and the attacker it blocked survived that combat. |
+| `mana_use_early / mana_turns_early`, `mana_use_mid / mana_turns_mid`, `mana_use_late / mana_turns_late` | Mean fraction of available mana paid on own turn cycles 1–3, 4–6 and 7 onward. Each turn with positive availability contributes equally. |
+| `casts_off_turn / casts` | One chosen cast action. The numerator counts choices made on the opponent's turn. |
+| `turns / games` | One completed game. Each seat's row carries the final game turn number. |
+
+Checkpoint evaluations against the heuristic publish a `behaviour` table in
+Etude. Each row describes the checkpoint (`seat=0`) and records its native
+`game_seat`, deck and opposing deck (plus `matchup` and `on_play` in benchmark
+and paired deals). Benchmark and paired matches use the
+accepted whole deal from its original or continued attempt. Elemental full and
+subset grids label rows with `unit` and `deal` and include each valid game.
+For example, `compare(db, table="behaviour", value="lands_played", per="land_turns")`
+pools the checkpoint's land plays over its opportunities in both seats.
+Older results, checkpoint duels and matches with unavailable play statistics
+have gaps. Game scores remain available independently.
+
+On one local CPU checkpoint–heuristic deal (four Lessons/Allies legs, 793
+decisions), verification took 0.623 s of CPU time alone and 0.646 s with
+`Play` and exposure capture, about 4% more. These are medians of three
+fresh-process replays per condition on identical records, excluding startup,
+gameplay and file reads.
+
+Choice counts cover nontrivial decisions in the recording. A pass followed by
+a land play later in the same turn counts as one opportunity taken. A cast is
+counted when selected, regardless of how the spell resolves.
+
+Combat losses include tokens and deaths to spells or abilities, including in the
+final combat. If player loss ends the game before a creature moves to the
+graveyard, lethal damage alone contributes no death. A blocker that saves its controller by dying can count.
+
+At each own priority window, mana availability includes mana already paid that
+turn, floating mana (including firebending), and an upper bound on net production
+from current sources. Modal sources contribute their best output. Mana paid
+after passing the turn counts toward that same cycle until the next own turn.
+An unused Treasure contributes on every turn it survives. Resources gained
+on the opponent’s turn can put a cycle above 100%. Convoke and waterbend
+taps do not spend mana, so tapping a mana creature this way can lower the
+fraction. Read alongside cast opportunities to distinguish holding mana from
+having nothing to cast.
+
+An earlier priority pass cannot establish that an attack is safe. Razor Rings
+can first gain a legal target after attackers are declared. Blocker count and
+attacker power alone also cannot establish lethal damage. At 2 life, a 2/2
+lifelink blocker can keep its controller alive against two attacking 2/2s.
+
 Only complete, successfully audited games contribute reducer rows. Rejected
 games remain in the evaluation's original records and outcome diagnostics.
 A catchable reducer exception stops custom analysis and publishes no custom

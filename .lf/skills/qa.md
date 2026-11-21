@@ -460,6 +460,16 @@ publish, land or choose the next Graph step from here.
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
   `experiments/regimes/tla-frontier-c5fba4-w64.json`; `experiments/tla_frontier.py` trains that record on the current loop.
+- Update-row metrics and their Etude panels (`manabot/training/panels.py`):
+  train with `ETUDE_HOME=<ignored .runs dir>`, read rows with
+  `updates_from_run(read(<home>/track, <exp>, <exp>))` (a local run's id is
+  its experiment name), then `uv run etude report manabot/recipes/<recipe>.py
+  --experiment <exp> --source <home>/track --out <dir>` and screenshot the
+  HTML file with Playwright (`file://`; find a panel by its title text, as
+  headings are not leaf elements). Elemental with `{"updates": 30,
+  "streams": 4}` takes about 7 minutes on CPU. Checkpoints from older
+  revisions (such as the attack-lock study's) are refused by content binding,
+  so a run can only show what this revision trains.
 - Old checkpoints in a local evaluation: a checkpoint from a TLA
   frontier run (such as u1952 at `.runs/qa/final.pt` or the
   `experiments/best_player_on_main.py` artifact) refuses the CLI's default

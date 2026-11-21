@@ -1,8 +1,8 @@
 """Freeze 17Lands trophy events and admit whole lists for the TLA pilot.
 
 The public CC BY 4.0 game dump is the source, not the restricted trophy API.
-`prefetch` retains its exact compressed bytes; `build_corpus` selects the first
-N events with seven observed wins in source order and retains the seventh-win
+`prefetch` retains its exact compressed bytes; `build_corpus` selects either the first N events
+with seven observed wins or every completed trophy through EOF. It retains the final winning
 main/sideboard through managym's existing counted-list import authority.
 No downloading or re-admission occurs in a game/reset/learner hot path.
 """
@@ -71,8 +71,10 @@ class Trophy(StrictModel):
 
 class Corpus(StrictModel):
     schema_version: Literal[1] = 1
-    selection: Literal["first-observed-trophies-v1"] = "first-observed-trophies-v1"
-    target: int = Field(default=1000, ge=1)
+    selection: Literal["first-observed-trophies-v1", "complete-premier-trophies-v1"] = (
+        "first-observed-trophies-v1"
+    )
+    target: int | None = Field(default=1000, ge=1)
     source: Source
     world: dict[str, object]
     scanned_rows: int = Field(ge=0)
@@ -139,15 +141,34 @@ def _decklist(row: dict[str, str], event_id: str) -> Decklist:
     return Decklist("\n".join(lines) + "\n", f"{event_id}.txt")
 
 
-def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
+def admit_trophy(
+    event_id: str, row: dict[str, str], games: dict[int, GameEvidence]
+) -> Trophy:
+    imported_source = _decklist(row, event_id)
+    try:
+        (admitted,) = managym.admit_decklists([(event_id, imported_source)])
+        decklist, deck = admitted.decklist, admitted.deck
+    except DeckImportError as error:
+        decklist, deck = error.decklists[event_id], None
+    return Trophy(
+        event_id=event_id,
+        draft_time=row["draft_time"],
+        games=tuple(games[n] for n in sorted(games)),
+        decklist=decklist,
+        deck=deck,
+    )
+
+
+def build_corpus(path: Path, source: Source, target: int | None = 1000) -> Corpus:
     """Freeze whole-deck admission, including sideboards; never repair a list.
 
     One event contributes once, even if it used several builds. Identical lists
     from different events remain separate population members. The first target
     trophies are selected before admission, so unsupported cards cannot change
-    the source population or cause additional fetching/resampling.
+    the source population or cause additional fetching/resampling. A target of
+    None selects every completed trophy after validating the entire history.
     """
-    if target < 1:
+    if target is not None and target < 1:
         raise ValueError("target must be positive")
     if file_sha256(path) != source.sha256:
         raise ValueError("source digest mismatch")
@@ -197,7 +218,7 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
             if game.match_number in games:
                 raise ValueError(f"duplicate match in source event {event_id}")
             games[game.match_number] = game
-            if sum(g.won for g in games.values()) != 7:
+            if target is None or sum(g.won for g in games.values()) != 7:
                 continue
             # The selected build is from the actual seventh win, not a partial
             # or out-of-order event's last encountered row. Missing losses are
@@ -206,24 +227,36 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
                 raise ValueError(f"seven wins after three recorded losses: {event_id}")
             if game.match_number != max(games) or not game.won:
                 raise ValueError(f"unordered trophy event {event_id}")
-            imported_source = _decklist(row, event_id)
-            try:
-                (admitted,) = managym.admit_decklists([(event_id, imported_source)])
-                decklist, deck = admitted.decklist, admitted.deck
-            except DeckImportError as error:
-                decklist, deck = error.decklists[event_id], None
-            trophies[event_id] = Trophy(
-                event_id=event_id,
-                draft_time=row["draft_time"],
-                games=tuple(games[n] for n in sorted(games)),
-                decklist=decklist,
-                deck=deck,
-            )
+            trophies[event_id] = admit_trophy(event_id, row, games)
             del events[event_id]
             if len(trophies) == target:
                 exhausted = False
                 break
+    if target is None:
+        # Match number orders the history even when rows arrive out of order.
+        # Recover only the selected builds on a second pass over the frozen bytes.
+        selected: dict[int, dict[int, GameEvidence]] = {}
+        for games in events.values():
+            final = games[max(games)]
+            if (
+                final.match_number <= 9
+                and final.won
+                and sum(g.won for g in games.values()) == 7
+            ):
+                selected[final.row] = games
+        del events
+        with gzip.open(path, "rt", encoding="utf-8", newline="") as stream:
+            rows = csv.reader(stream)
+            columns = next(rows)
+            for number, values in enumerate(filter(None, rows), 1):
+                if number in selected:
+                    row = dict(zip(columns, values, strict=True))
+                    event_id = row["draft_id"]
+                    trophies[event_id] = admit_trophy(event_id, row, selected[number])
     return Corpus(
+        selection="complete-premier-trophies-v1"
+        if target is None
+        else "first-observed-trophies-v1",
         target=target,
         source=source,
         world=managym.world_identity(),
@@ -236,13 +269,32 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("out", type=Path)
-    parser.add_argument("--target", type=int, default=1000)
+    parser.add_argument(
+        "--source-dir",
+        type=Path,
+        help="Directory containing the retained source receipt and dump",
+    )
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--target", type=int, default=1000)
+    selection.add_argument(
+        "--all-trophies",
+        dest="target",
+        action="store_const",
+        const=None,
+        help="Validate every draft through the end of the source",
+    )
     args = parser.parse_args()
     snapshot = args.out / "corpus.json"
     if snapshot.exists():
         raise ValueError("corpus is frozen; choose a new version directory")
-    source = prefetch(args.out)
-    corpus = build_corpus(args.out / "games.csv.gz", source, args.target)
+    directory = args.source_dir or args.out
+    source = (
+        Source.model_validate_json((directory / "source.json").read_bytes())
+        if args.source_dir is not None
+        else prefetch(directory)
+    )
+    corpus = build_corpus(directory / "games.csv.gz", source, args.target)
+    args.out.mkdir(parents=True, exist_ok=True)
     atomic_json(snapshot, corpus.model_dump(mode="json"))
     print(
         f"{len(corpus.trophies)} trophies; {len(corpus.eligible)} eligible; sha256={corpus.digest}"

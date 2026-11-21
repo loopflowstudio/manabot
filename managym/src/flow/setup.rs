@@ -22,7 +22,14 @@ impl Game {
     /// A match on the catalog. Panics when a deck submitted to the world fails
     /// admission; [`crate::agent::env::Env::reset`] checks that first.
     pub fn new(player_configs: impl Into<GameSetup>, seed: u64, skip_trivial: bool) -> Self {
-        Self::construct(player_configs.into(), seed, skip_trivial, false, false)
+        Self::construct(
+            player_configs.into(),
+            seed,
+            skip_trivial,
+            false,
+            false,
+            false,
+        )
     }
 
     #[cfg(test)]
@@ -31,7 +38,14 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
     ) -> Self {
-        Self::construct(player_configs.into(), seed, skip_trivial, true, false)
+        Self::construct(
+            player_configs.into(),
+            seed,
+            skip_trivial,
+            true,
+            false,
+            false,
+        )
     }
 
     pub(crate) fn construct(
@@ -39,6 +53,7 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
         capture: bool,
+        exposure: bool,
         statistics: bool,
     ) -> Self {
         let disclosure = player_configs.decklists.resolve(seed);
@@ -176,7 +191,9 @@ impl Game {
         };
 
         if capture {
-            game.card_capture = Some(crate::flow::card_capture::CardCapture::new(&game));
+            let mut cards = crate::flow::card_capture::CardCapture::new(&game);
+            cards.exposure = exposure.then(Default::default);
+            game.card_capture = Some(cards);
         }
         if capture || statistics {
             game.capture_originals = crate::flow::card_capture::snapshots(&game)
