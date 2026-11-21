@@ -317,13 +317,12 @@ sample with no creature on an edited side omits that side's shifts and
 `is_creature`, so runs on them log no `combat/*` keys.
 
 One Elemental CPU probe took 4.4 seconds for 256 attack and 237 block
-decisions. In the three-seed L4 run, 80 probes per seed took 0.28–0.31%
-of active wall time. [TLA trophies report](../experiments/reports/tla_trophies.md#three-seed-training-run)
+decisions.
 
 ## Checkpoint behaviour against the heuristic
 
-Read the eleven curves beside **Score against the heuristic** in the Elemental,
-seat-comparison and TLA trophies reports. The ten rate panels use a fixed
+Read the eleven curves beside **Score against the heuristic** in the Elemental
+and seat-comparison reports. The ten rate panels use a fixed
 0–1 scale. Mana use can exceed 1 when resources gained on the opponent's turn
 are spent in the same mana cycle. Those values extend above the displayed range.
 **Turns per game** scales to the observed game lengths. At each checkpoint,

@@ -9,7 +9,6 @@ need; move one out of it, into the checks below, when it runs.
 
 from collections import Counter
 from dataclasses import replace
-from decimal import Decimal
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
@@ -17,7 +16,7 @@ from types import ModuleType
 from etude.checkpoints import CheckpointRecord
 from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
-from etude.eval.records import Match, Tournament
+from etude.eval.records import Match
 from etude.experiment_file import defined_functions
 from etude.jobs import (
     Checkpoints,
@@ -41,7 +40,6 @@ from experiments import (
     opponent_memory,
     seat_comparison,
     tla_frontier,
-    tla_trophies,
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
@@ -63,7 +61,6 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
-    (tla_trophies, (), {"trophy-w64-raw": 3}),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
@@ -91,7 +88,6 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "opponent_memory",
         "seat_comparison",
         "tla_frontier",
-        "tla_trophies",
     }
     assert NOT_YET_RUNNABLE <= found
 
@@ -101,7 +97,6 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     [
         (elemental, Matches(tag="heuristic")),
         (seat_comparison, None),
-        (tla_trophies, Matches(tournament="tla-trophies-held-out-32")),
     ],
 )
 def test_checkpoint_report_shows_behaviour_next_to_strength(
@@ -254,47 +249,6 @@ def _finished_run(
         ),
         seed=0,
     )
-
-
-def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
-    (train,) = tla_trophies.training_jobs()
-    assert train.config == tla_trophies.Config(
-        updates=400, threads=2, streams=256, rows=512, checkpoint_every=100
-    )
-    assert {v.name: v.value for v in train.plain().environment} == {
-        "OMP_NUM_THREADS": "2",
-        "MKL_NUM_THREADS": "2",
-    }
-    assert train.max_attempts == 1
-    assert train.max_hours == 10.75
-    assert train.max_usd * len(train.seeds) == Decimal("7.80")
-    pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
-    raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
-    second = replace(
-        _finished_run(tmp_path, range(0, 201, 100), name="raw-2", job=train.name),
-        seed=1,
-    )
-    state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
-    (evaluation,) = tla_trophies.eval_jobs(state)
-    assert evaluation.max_usd == Decimal("1.30")
-    assert evaluation.max_attempts == 1
-    assert list(evaluation.checkpoints) == [*raw.checkpoints, *second.checkpoints]
-    tournament, gaps = Tournament(
-        definition=evaluation.tournament,
-        checkpoints=evaluation.recorded().checkpoints,
-    ).resolve(state.lines)
-    assert not gaps
-    assert Counter(m.checkpoint for m in tournament.schedule()) == {
-        checkpoint.key: 32 for checkpoint in evaluation.checkpoints
-    }
-    assert tla_trophies.report().evals[0].matches == Matches(tournament=evaluation.name)
-    assert [
-        tla_trophies.Deal.model_validate(s.config)
-        for s in evaluation.tournament.seatings
-    ] == [
-        tla_trophies.Deal(first=2 * i, second=2 * i + 1, seed=40900 + i)
-        for i in range(32)
-    ]
 
 
 # ---------------------------------------------------------------------------

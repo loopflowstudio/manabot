@@ -720,8 +720,7 @@ For example, `compare(db, table="behaviour", value="lands_played", per="land_tur
 pools the checkpoint's land plays over its opportunities in both seats.
 The Etude columns `chump_attacks` and `chump_blocks` carry the loss counts
 paired with `attackers_committed` and `blockers_committed`. Historical rows
-lack these pairs and contribute only to the other curves. The published
-400-update TLA trophy report used recorded declarations for both denominators.
+lack these pairs and contribute only to the other curves.
 Older results, checkpoint duels and matches with unavailable play statistics
 have gaps. Game scores remain available independently.
 
