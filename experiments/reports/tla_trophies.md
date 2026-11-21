@@ -211,3 +211,45 @@ USD3.63 for the whole rental.
 At update 400, making its own creatures larger increased the attack gap
 for every seed. Block preferences varied substantially across seeds. Two
 had mean block gaps above 17, while the third remained below 1.
+
+### Held-out evaluation through update 400
+
+Each of the 15 raw checkpoints completed all 32 scheduled deals against the
+heuristic. The four crossed games per deal give 128 replay-verified games per
+checkpoint and 1,920 overall. The fresh Etude render showed zero failed or
+unplayed deals. Every point on the strength curve and all 11 behaviour curves
+has 128 games per seed. [Open the final Etude report](../data/mtg409/report/raw-400/tla_trophies.html).
+
+| Mean across three seeds | Init | 100 | 200 | 300 | 400 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Score against the heuristic | 5.5% | 58.3% | 63.3% | 62.8% | 69.3% |
+| Land played when able | 84.85% | 100% | 100% | 99.96% | 100% |
+| Cast a spell when able | 84.1% | 95.9% | 96.2% | 97.3% | 95.7% |
+| Mana spent, turns 1–3 | 35.3% | 49.5% | 50.4% | 51.5% | 52.1% |
+| Mana spent, turns 4–6 | 71.8% | 78.7% | 79.3% | 79.9% | 80.8% |
+| Mana spent, turns 7+ | 71.6% | 67.6% | 71.2% | 70.3% | 71.4% |
+| Attackers declared | 43.3% | 99.4% | 99.6% | 99.4% | 96.8% |
+| Blockers declared | 60.0% | 99.7% | 95.1% | 94.0% | 88.0% |
+| Chump attacks | 18.3% | 9.5% | 8.0% | 8.5% | 7.3% |
+| Chump blocks | 41.9% | 32.7% | 24.5% | 24.7% | 20.9% |
+| Spells cast on the opponent's turn | 3.5% | 4.3% | 3.7% | 3.6% | 3.8% |
+| Turns per game | 19.59 | 19.01 | 18.89 | 18.88 | 18.69 |
+
+The block declaration average at update 400 hides a split. Seeds 40901 and
+40902 declared every offered block on the held-out deals. Seed 40903
+declared 64.1%, consistent with its lower self-play block gap. The probe ran
+80 times per seed and used 53–54 seconds, or 0.28–0.31% of active wall time.
+[Strength](../data/mtg409/report/raw-400/score.png) ·
+[Land plays](../data/mtg409/report/raw-400/behaviour.png) ·
+[Chump attacks](../data/mtg409/report/raw-400/chumps.png) ·
+[Combat log-odds](../data/mtg409/report/raw-400/combat-probe.png) ·
+[Attack shifts](../data/mtg409/report/raw-400/attack-shifts.png) ·
+[Block shifts](../data/mtg409/report/raw-400/block-shifts.png).
+
+The final CPU pass completed its 44 outstanding deals on its first attempt.
+Etude confirmed shutdown of `07c490-cpu32-61bccc01213a` at 05:23 UTC on
+November 21 and estimated USD0.0927 for the whole rental. The pilot,
+calibrations, long training run and final CPU pass have USD4.59 in
+identified launcher estimates. Earlier evaluation results were already in
+storage. Their rental charges could not be verified from this launcher's
+records, so the whole-task cost remains unconfirmed.
