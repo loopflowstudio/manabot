@@ -140,13 +140,16 @@ HEAD_TO_HEAD_UPDATES = (200, 400)
 
 
 def trophy_benchmark(name: str, seatings: tuple[Seating, ...]) -> Benchmark:
-    """A benchmark on the trophy game, its environment pinned by this file too."""
+    """A benchmark on the trophy game, pinned to the files that define its play.
+
+    This file only schedules seatings, so editing its report keeps the keys of
+    games already played.
+    """
     return Benchmark(
         name=name,
         environment=environment(
             "tla-trophies",
             files=[
-                Path(__file__),
                 Path(trophies.__file__),
                 trophies.ROOT / "manabot/eval/pairing.py",
             ],
