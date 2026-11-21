@@ -73,7 +73,10 @@ def training_jobs(
     revision: str | None = None,
     pullback_updates: int = 100,
     pullback_hours: float = 2.75,
+    tau_hours: float | None = None,
+    tau_usd: float | None = None,
 ) -> list[TrainingJob]:
+    """`tau_hours` and `tau_usd` size the tau arms for their own placement."""
     (base,) = trophies.training_jobs(revision=revision, usd_per_run=2.54)
     assert base.smoke is not None
     jobs = []
@@ -111,6 +114,8 @@ def training_jobs(
                     "config": Config(**base.config.model_dump(), **arm),
                     "smoke": Config(**base.smoke.model_dump(), **arm),
                     "seeds": TAU_SEEDS,
+                    "max_hours": tau_hours or base.max_hours,
+                    "max_usd": Decimal(str(tau_usd)) if tau_usd else base.max_usd,
                 }
             )
         )
