@@ -13,7 +13,6 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.protocol import BackendPolicy
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.combat_probe import (
-    CombatColumns,
     combat_columns,
     combat_probe,
     combat_rows,
@@ -40,8 +39,11 @@ def rollout() -> tuple[RolloutBatch, ObservationSpace]:
     return batch, learner.agent.observation_space
 
 
-def scoring_policy(columns: CombatColumns, board_aware: bool) -> Mock:
+def scoring_policy(space: ObservationSpace, board_aware: bool) -> Mock:
     """Declare with gap 3, optionally adding my power minus their untapped power."""
+
+    columns = combat_columns(space)
+    assert columns is not None
 
     def evaluate(rows: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         declared = rows["actions"][..., columns.declared]
@@ -59,7 +61,7 @@ def scoring_policy(columns: CombatColumns, board_aware: bool) -> Mock:
                 gap += sign * (available * power).sum(axis=1)
         return declared * gap[:, None], np.zeros(len(gap))
 
-    policy = Mock(spec=BackendPolicy)
+    policy = Mock(spec=BackendPolicy, observation_space=space)
     policy.prepare.side_effect = lambda rows: rows
     policy.evaluate.side_effect = evaluate
     return policy
@@ -71,8 +73,8 @@ def test_played_combat_distinguishes_lock_from_board_dependence(
     batch, space = rollout
     columns = combat_columns(space)
     assert columns is not None
-    blind = combat_probe(scoring_policy(columns, False), batch, space, limit=16)
-    aware = combat_probe(scoring_policy(columns, True), batch, space, limit=16)
+    blind = combat_probe(scoring_policy(space, False), batch, limit=16)
+    aware = combat_probe(scoring_policy(space, True), batch, limit=16)
     for kind, column in (
         ("attack", columns.declare_attacker),
         ("block", columns.declare_blocker),
@@ -112,7 +114,7 @@ def test_gap_uses_original_slots_and_omits_empty_side(
     rows["actions"][..., columns.declared] = 0
     rows["actions"][:, 4, columns.declared] = 1
     original = rows["agent_permanents"].copy()
-    metrics = gap_shifts(scoring_policy(columns, False), [rows], columns)
+    metrics = gap_shifts(scoring_policy(space, False), [rows], columns)
     assert metrics == {
         "gap": 3,
         "decisions": 1,
@@ -132,11 +134,12 @@ def test_no_combat_or_legacy_layout_omits_metrics(
         packed,
         fields={**packed.fields, "actions": np.zeros_like(packed.fields["actions"])},
     )
-    assert combat_probe(Mock(), replace(batch, action_data=noncombat), space) == {}
+    empty = replace(batch, action_data=noncombat)
+    assert combat_probe(Mock(observation_space=space), empty) == {}
     for version in (9, 10):
         with pytest.warns(DeprecationWarning):
             legacy = ObservationSpace(ObservationConfig(policy_input_version=version))
-        assert combat_probe(Mock(), batch, legacy) == {}
+        assert combat_probe(Mock(observation_space=legacy), batch) == {}
 
 
 def test_shifts_in_game_units_condition_on_boards_with_creatures(
@@ -178,7 +181,8 @@ def test_shifts_in_game_units_condition_on_boards_with_creatures(
             ).sum(axis=1)
         return obs["actions"][..., cols.declared] * gap[:, None], np.zeros(len(gap))
 
-    policy = scoring_policy(cols, False)
+    policy = Mock(spec=BackendPolicy)
+    policy.prepare.side_effect = lambda rows: rows
     policy.evaluate.side_effect = evaluate
     expected = {
         "gap": 9,
@@ -222,9 +226,9 @@ def test_bucketed_and_live_token_policy_matches_padded_probe(
     packed = ActorCritic(space, config, bucketed_shapes=True, live_tokens=True)
     packed.load_state_dict(padded.state_dict())
     sampled = Mock(wraps=batch, action_data=batch.action_data)
-    assert combat_probe(
-        packed, sampled, space, limit=4, execution_rows=2
-    ) == pytest.approx(combat_probe(padded, batch, space, limit=4), abs=1e-5)
+    assert combat_probe(packed, sampled, limit=4, execution_rows=2) == pytest.approx(
+        combat_probe(padded, batch, limit=4), abs=1e-5
+    )
     assert max(len(call.args[0]) for call in sampled.observations.call_args_list) <= 2
 
 
@@ -234,5 +238,5 @@ def test_combat_probe_under_bfloat16_forward_precision(
     batch, space = rollout
     policy = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
     with torch.autocast("cpu", dtype=torch.bfloat16):
-        metrics = combat_probe(policy, batch, space, limit=2)
+        metrics = combat_probe(policy, batch, limit=2)
     assert np.isfinite(metrics["combat/attack/gap"])

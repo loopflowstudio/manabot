@@ -16,6 +16,13 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+/// Both modes retain card movements. Exposure also records decisions and turn facts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CaptureMode {
+    Cards,
+    Exposure,
+}
+
 /// One consumed, nontrivial native choice. Focus is the shared action projection,
 /// not a claim that each focused card caused or benefited from the action.
 #[derive(Clone, Debug, Serialize)]
@@ -205,11 +212,11 @@ pub(crate) fn snapshots(game: &Game) -> Vec<CardSnapshot> {
 }
 
 impl CardCapture {
-    pub(crate) fn new(game: &Game) -> Self {
+    pub(crate) fn new(game: &Game, initial: Vec<CardSnapshot>, mode: CaptureMode) -> Self {
         Self {
             version: 1,
             content_digest: default_content_pack().content_digest(),
-            initial: snapshots(game),
+            initial,
             opening: std::array::from_fn(|seat| {
                 game.state
                     .zones
@@ -219,7 +226,7 @@ impl CardCapture {
                     .collect()
             }),
             moves: Vec::new(),
-            exposure: None,
+            exposure: (mode == CaptureMode::Exposure).then(Default::default),
         }
     }
 }
@@ -437,7 +444,8 @@ mod tests {
                 ("Prophetic Prism".into(), 1),
             ]),
         );
-        let mut game = Game::construct(players.into(), 17, true, true, true, false);
+        let mut game =
+            Game::construct(players.into(), 17, true, Some(CaptureMode::Exposure), false);
         game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
             .unwrap();
         game.create_token("token.treasure", payer, false).unwrap();
@@ -477,7 +485,13 @@ mod tests {
     fn combat_counts_partners_and_committed_deaths_in_a_terminal_combat() {
         use crate::flow::turn::PhaseKind;
         let (active, defender) = (PlayerId(0), PlayerId(1));
-        let mut game = Game::construct(configs().into(), 17, true, true, true, false);
+        let mut game = Game::construct(
+            configs().into(),
+            17,
+            true,
+            Some(CaptureMode::Exposure),
+            false,
+        );
         game.state.turn.current_phase = PhaseKind::Combat as usize;
         game.state.turn.current_step = 3; // combat damage
         game.state.turn.step_initialized = false;
@@ -604,12 +618,9 @@ mod tests {
             game.state[object_id]
                 .keywords
                 .insert(crate::state::card::Keyword::Flash);
-            game.card_capture = Some(CardCapture::new(&game));
-            game.statistics = Some(crate::flow::statistics::Statistics::new(
-                &snapshots(&game),
-                true,
-            ));
-            game.card_capture.as_mut().unwrap().exposure = Some(ExposureCapture::default());
+            let initial = snapshots(&game);
+            game.statistics = Some(crate::flow::statistics::Statistics::new(&initial, true));
+            game.card_capture = Some(CardCapture::new(&game, initial, CaptureMode::Exposure));
             game.publish_action_space(ActionSpace {
                 player: Some(PlayerId(0)),
                 kind: ActionSpaceKind::Priority,

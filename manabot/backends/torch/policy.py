@@ -609,9 +609,7 @@ class ActorCritic(nn.Module):
         modes = [(module, module.training) for module in self.modules()]
         self.eval()
         try:
-            logits, values = self(on_device(batch, device_of(self)))
-            # NumPy cannot represent a bfloat16 critic output from autocast.
-            return logits, values.float() if values.dtype == torch.bfloat16 else values
+            return self(on_device(batch, device_of(self)))
         finally:
             for module, training in modes:
                 module.training = training

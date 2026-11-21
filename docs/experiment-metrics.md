@@ -258,17 +258,10 @@ Etude rows:
 from etude.train.read import read
 from manabot.reports.update_metrics import updates_from_run
 
-row = updates_from_run(read(runs_dir, experiment, run_id))[400]
-for key in ("gap", "shift/my_creatures_9_9", "shift/their_creatures_9_9_untapped"):
-    print(key, round(row[f"combat/attack/{key}"], 2))
-```
-
-For TLA trophy seed 40901 at update 400, this gives:
-
-```text
-gap 6.87
-shift/my_creatures_9_9 3.64
-shift/their_creatures_9_9_untapped -4.25
+updates = updates_from_run(read(runs_dir, experiment, run_id))
+for update, row in updates.items():
+    if "combat/attack/gap" in row:
+        print(update, row["combat/attack/gap"], row.get("combat/attack/shift/my_creatures_9_9"))
 ```
 
 The `ML` panels (`manabot.training.panels`) draw three `log-odds` charts that
