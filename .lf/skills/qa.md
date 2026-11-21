@@ -259,7 +259,11 @@ publish, land or choose the next Graph step from here.
   on their saved prefix.
 - Model or training-path changes: use `uv run etude train manabot/recipes/local.py`
   for the local CPU smoke. Inspect update rows for per-phase collection and
-  learning seconds. When saved training state gains a field, check that
+  learning seconds: `etude.train.read.read(<home>/track, <experiment>,
+  <run>).points(metric, clock="updates")` (`.metrics()` lists names). To try a
+  learning field the recipe does not expose, copy `local.py` into `.runs/`
+  with config fields that `model_copy` `settings(config).learning`; such a
+  single-job file refuses `--seed` other than 0. When saved training state gains a field, check that
   emitted `coordinates/` values are scalar numbers. When adjusting input or
   embedding scales, perturb the feature at initialization and measure the
   resulting change in the full object token with its usual streams enabled.
