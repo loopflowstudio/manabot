@@ -94,9 +94,11 @@ def training_jobs(
     tau_hours: float | None = None,
     tau_usd: float | None = None,
     attempts: int = 1,
+    hours: float | None = None,
 ) -> list[TrainingJob]:
     """`tau_hours` and `tau_usd` size the tau arms for their own placement;
-    `attempts` lets a resume run again after a stopped attempt."""
+    `attempts` and `hours` let a resume of a fresh arm run again in what its
+    remaining job dollars cover after a stopped attempt."""
     (base,) = trophies.training_jobs(revision=revision, usd_per_run=2.54)
     assert base.smoke is not None
     jobs = []
@@ -106,7 +108,7 @@ def training_jobs(
             "pullback": arm.pullback,
             "tau_scale": arm.tau_scale,
         }
-        placement = {}
+        placement = {} if hours is None else {"max_hours": hours}
         updates = base.config.updates
         if arm.pullback:
             updates = pullback_updates
