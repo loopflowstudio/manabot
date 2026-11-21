@@ -81,7 +81,11 @@ def behaviour_curves(
             title=title,
             matches=matches,
             score=Score(
-                table="behaviour", value=taken, per=opportunities, unit="games"
+                table="behaviour",
+                value=taken,
+                per=opportunities,
+                unit="games",
+                range=None if taken == "turns" else (0.0, 1.0),
             ),
         )
         for title, taken, opportunities in (
