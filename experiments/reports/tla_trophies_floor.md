@@ -58,3 +58,17 @@ eight runs entered the same rental queue. The run addresses in experiment
 `tla_trophies_floor` are `control@40901` through `control@40903`, the same
 three seeds under `floor-0.002` and `floor-0.01`, and `pullback-0@40902`
 and `pullback-0.01@40902`.
+
+### Held-out controls at initialization
+
+All three update-zero controls played each of the 32 distinct deals once,
+with four seat/deck assignments per deal. The 96 matches completed without
+a failure (`tla-trophies-held-out-32-3dc0bcc7f65f`). The rendered per-seed
+cells each contain 128 games. Declaration rates divide declarations by the
+number offered.
+
+| Seed | Score vs heuristic | Attackers declared | Blockers declared |
+| --- | ---: | ---: | ---: |
+| 40901 | 7/128 | 43.40% | 59.87% |
+| 40902 | 7/128 | 43.30% | 60.13% |
+| 40903 | 7/128 | 43.32% | 60.00% |
