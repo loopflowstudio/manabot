@@ -163,15 +163,14 @@ def combat_samples(
 def combat_probe(
     policy: BackendPolicy,
     batch: RolloutBatch,
-    space: ObservationSpace,
-    limit: int = 256,
     *,
+    limit: int = 256,
     execution_rows: int | None = None,
 ) -> dict[str, float | int]:
     """Measure each available kind on at most limit collected decisions per kind."""
     if execution_rows is not None and execution_rows < 1:
         raise ValueError("execution_rows must be positive")
-    columns = combat_columns(space)
+    columns = combat_columns(policy.observation_space)
     metrics: dict[str, float | int] = {}
     if columns is None:
         return metrics

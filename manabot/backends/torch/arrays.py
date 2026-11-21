@@ -2,8 +2,7 @@
 
 `from_numpy` shares memory with its input on CPU and copies to another
 device; `to_numpy` detaches and copies to the host (a CPU tensor is viewed).
-Neither changes a dtype, so a float64 operand stays float64 and an integer
-index keeps its width.
+Conversions preserve dtype except for bfloat16, which `to_numpy` widens to float32.
 """
 
 from __future__ import annotations
@@ -34,7 +33,10 @@ def from_numpy(array: np.ndarray, device: torch.device | str = "cpu") -> Tensor:
 
 
 def to_numpy(tensor: Tensor) -> np.ndarray:
-    return tensor.detach().cpu().numpy()
+    host = tensor.detach().cpu()
+    if host.dtype == torch.bfloat16:
+        host = host.float()
+    return host.numpy()
 
 
 def float32(tensor: Tensor) -> Tensor:

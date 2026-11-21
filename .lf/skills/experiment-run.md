@@ -12,9 +12,10 @@ Run the experiment through Etude and the existing manabot owners.
    a person's go-ahead naming the amount is required; when it is absent, stop
    before renting and say what amount is needed. An approval already given is
    not asked for again.
-3. Look at the experiment's existing runs before launching. Resume or finish
-   them; never duplicate a run because an earlier step stopped. Etude owns jobs
-   and recovery.
+3. Inspect existing runs and resume unfinished work in Etude. For checkpoint
+   curves, schedule explicit `etude eval` passes when the checkpoints are
+   available. Declaring `eval_jobs` alone queues no evaluation. Verify the
+   intended checkpoint and deal coverage before reporting.
 4. A change that keeps the question (a capacity limit, a crash fix, a device,
    a machine type, a retry) is fixed, relaunched and recorded as one dated line
    in the report. It is not a new protocol or a new version. A change to a

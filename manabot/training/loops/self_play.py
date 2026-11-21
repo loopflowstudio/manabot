@@ -761,8 +761,7 @@ def step(
             probe = combat_probe(
                 learner.agent,
                 batch,
-                learner.agent.observation_space,
-                settings.run_settings.combat_probe_rows,
+                limit=settings.run_settings.combat_probe_rows,
                 execution_rows=settings.bootstrap_rows,
             )
             synchronize(device)

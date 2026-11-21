@@ -493,12 +493,17 @@ def test_continuation_uses_play_counts_from_the_accepted_attempt(
     assert baseline["turns"] == 1090 and "blockers_lost_for_nothing" in baseline
     assert "chump_blocks" not in baseline and "blockers_committed" not in baseline
     for unavailable in (
+        [],
         {"analysis_error": "failed", "tables": None},
+        {"tables": ["play"]},
         {"tables": {"play": []}},
     ):
         atomic_json(path, unavailable)
         assert evaluation_play_counts(out) is None
         assert evaluation_status(out).status == "completed"
+    path.write_text('{"tables":')
+    assert evaluation_play_counts(out) is None
+    assert evaluation_status(out).status == "completed"
     path.unlink()
     assert evaluation_play_counts(out) is None
 

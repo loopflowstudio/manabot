@@ -312,12 +312,16 @@ def attempt_play_counts(
 ) -> GamePlayCounts | None:
     """Join the reducer's native-seat pairs to completed games in replay order."""
     path = directory / "statistics.json"
-    if not path.is_file():
+    try:
+        statistics = json.loads(path.read_bytes())
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
         return None
-    statistics = json.loads(path.read_bytes())
-    table = (statistics.get("tables") or {}).get("play")
-    if statistics.get("analysis_error") or table is None:
+    if not isinstance(statistics, dict) or statistics.get("analysis_error"):
         return None
+    tables = statistics.get("tables")
+    if not isinstance(tables, dict):
+        return None
+    table = tables.get("play")
     completed = [
         r for r in rows if r.failure is None and r.replay_passed and r.terminated
     ]
