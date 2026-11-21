@@ -181,30 +181,19 @@ a third seed then raised it another 51%. These comparisons used separate
 rental hosts. All three rentals ended, for USD0.4554 in calibration and
 about USD0.87 including the original pilot.
 
-## Long-run admission
+## Three-seed training run
 
-At the measured 89–93 seconds/update, 400 updates take about ten hours
-per seed. On November 20, the quoted 10.5-hour window plus 15 minutes
-of startup cost USD7.4175 for one L4, or USD2.4725 per slot at full
-occupancy. RunPod uses no reservation increment.
+Etude 0.4.3 admitted seeds 40901–40903 together on one L4 at USD0.69/hour.
+The quote was USD7.59 for 10.75 training hours plus 15 minutes of setup.
+The job caps total USD7.80. Each seed gets one attempt. The launcher placed
+all three on `mtg265-l4-s3-22b1fe1ca732` at revision `4c38775ec499`.
 
-Etude 0.4.2 rejected the USD2.50 and USD2.75 per-seed quotes because its
-admission check budgets the whole machine against each seed's cap. At
-USD7.42 per seed, the quote fit only one seed under the experiment limit.
-Queued attempts also use the whole-machine rate to bound their duration.
-The rental itself is budgeted from the pooled caps, and runtime charges
-are split by occupancy.
+Each seed targets 400 updates, with raw checkpoints at initialization and
+every 100 updates. The evaluation reserves up to USD1.30 for one CPU32
+rental. Each raw checkpoint plays the same 32 held-out deals, with four
+seat and deck assignments per deal.
 
-A local Etude 0.4.2 fake-provider check changed the new-rental admission
-price to one third of the machine rate. At USD0.69/hour with zero setup,
-each seed requested one hour for USD0.23. Three seeds received the full
-hour together. A lone seed was also admitted, but received only 20 minutes.
-With four seeds and two available machines, the first three received 40
-minutes together and the fourth received 20 minutes. The scheduler divided
-the pending dollars evenly between machines. Admission must check that the
-seeds placed together fund the rental window it promises them.
-
-The long run awaits the Etude fix. The local smoke registered two
-checkpoints, and the resolved schedule test covers all 32 held-out deals
-per raw checkpoint per seed. The pilot graphs above are the latest
-measured behaviour trajectories.
+On the six-vCPU L4, three calibration seeds reserved about 1.05 GiB of
+CUDA memory combined while one-minute host load reached 35.6. The earlier
+rise in collection time with a third seed points to a CPU bottleneck. A
+host with more vCPUs per GPU may support more seeds.
