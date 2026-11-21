@@ -67,8 +67,8 @@ def test_evaluation_tables_equal_one_offline_reduction(
     assert any(row["lands_played"] for row in play)
     assert any(row["mana_turns_early"] > 0 for row in play)
     for row in play:
-        assert row["attackers_lost_for_nothing"] <= row["attackers_declared"]
-        assert row["blockers_lost_for_nothing"] <= row["blockers_declared"]
+        assert row["attackers_lost_for_nothing"] <= row["attackers_committed"]
+        assert row["blockers_lost_for_nothing"] <= row["blockers_committed"]
     assert tables["tables"]["choices"] == [
         {"decisions": 4},
         {"decisions": replay["decisions"]},

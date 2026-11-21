@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import fields
 from functools import partial
+from itertools import batched
 import json
 import math
 from pathlib import Path
@@ -284,6 +285,11 @@ def evaluate(
         )
 
 
+def attempt_directories(directory: Path) -> list[Path]:
+    """The original attempt lives at the root and retries in numbered directories."""
+    return [directory, *sorted((directory / "attempts").glob("*/"))]
+
+
 def _retained_result(directory: Path) -> EvaluationResult:
     result = EvaluationResult.model_validate_json(
         (directory / "evaluation.json").read_bytes()
@@ -318,8 +324,11 @@ def attempt_play_counts(
     # Construction defaults initialize the live counter. An absent saved count
     # is unavailable and must never be interpreted as a measured zero.
     columns = {field.name for field in fields(PlayCounts)}
+    historical = columns - {"attackers_committed", "blockers_committed"}
     if not isinstance(table, list) or any(
-        not isinstance(item, dict) or not columns <= item.keys() for item in table
+        not isinstance(item, dict)
+        or (item.keys() & columns) not in (historical, columns)
+        for item in table
     ):
         return None
     try:
@@ -329,7 +338,7 @@ def attempt_play_counts(
     if len(counts) != 2 * len(completed):
         return None
     found: GamePlayCounts = {}
-    for row, first, second in zip(completed, counts[::2], counts[1::2], strict=True):
+    for row, (first, second) in zip(completed, batched(counts, 2), strict=True):
         if (first.seat, second.seat) != (0, 1):
             return None
         if row.valid:
@@ -340,22 +349,20 @@ def attempt_play_counts(
 def evaluation_play_counts(directory: Path) -> GamePlayCounts | None:
     """Read behaviour from the attempts that supplied the accepted deal blocks."""
     found: GamePlayCounts = {}
-    for attempt in [directory, *sorted((directory / "attempts").glob("*/"))]:
+    for attempt in attempt_directories(directory):
         if not (attempt / "evaluation.json").is_file():
             continue
         retained = _retained_result(attempt)
-        blocks = retained._complete_blocks()
-        if blocks:
-            counts = attempt_play_counts(attempt, retained.rows)
-            if counts is None:
-                return None
-            for key, pair in counts.items():
-                if key[0] in blocks:
-                    if key in found:
-                        raise ValueError(
-                            "duplicate completed evaluation block across attempts"
-                        )
-                    found[key] = pair
+        deals = set(retained.complete_deals())
+        if not deals:
+            continue
+        counts = attempt_play_counts(attempt, retained.rows)
+        if counts is None:
+            return None
+        accepted = {key: pair for key, pair in counts.items() if key[0] in deals}
+        if found.keys() & accepted.keys():
+            raise ValueError("duplicate completed evaluation block across attempts")
+        found.update(accepted)
     return found
 
 
@@ -402,8 +409,7 @@ def evaluation_status(directory: Path) -> EvaluationResult:
         card_evidence_dir=original.card_evidence_dir,
     )
     completed: set[int] = set()
-    attempts = [directory, *sorted((directory / "attempts").glob("*/"))]
-    for attempt in attempts:
+    for attempt in attempt_directories(directory):
         if not (attempt / "evaluation.json").exists():
             continue  # killed before admission; no published block can exist
         retained = original if attempt == directory else _retained_result(attempt)
@@ -460,7 +466,7 @@ def continue_evaluation(
     not an object-store lease or an automatic retry after machine loss.
     """
     with exclusive_file_lock(directory / ".evaluation.lock"), ExitStack() as claims:
-        prior = [directory, *sorted((directory / "attempts").glob("*/"))]
+        prior = attempt_directories(directory)
         for attempt in prior:
             claims.enter_context(exclusive_file_lock(attempt / ".execution.lock"))
         result = evaluation_status(directory)

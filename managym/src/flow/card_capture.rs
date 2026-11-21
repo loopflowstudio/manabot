@@ -50,7 +50,9 @@ pub struct ExposureCapture {
     pub resolutions: Vec<ExposureResolution>,
     pub mana: [ManaUse; 2],
     pub mana_turns: [Vec<TurnMana>; 2],
+    pub attackers_committed: [u64; 2],
     pub attackers_lost_for_nothing: [u64; 2],
+    pub blockers_committed: [u64; 2],
     pub blockers_lost_for_nothing: [u64; 2],
     #[serde(skip)]
     pub(crate) combat: CombatDeclarations,
@@ -79,6 +81,8 @@ impl ExposureCapture {
 
     pub(crate) fn finish_combat(&mut self, attacking: PlayerId, defending: PlayerId) {
         let combat = std::mem::take(&mut self.combat);
+        self.attackers_committed[attacking.0] += combat.attackers.len() as u64;
+        self.blockers_committed[defending.0] += combat.blocks.len() as u64;
         for attacker in combat.attackers {
             if combat.deaths.contains(&attacker)
                 && !combat

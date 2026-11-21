@@ -23,7 +23,7 @@ from etude.eval.records import (
     Match,
     Seating,
 )
-from etude.eval.result import Row, Tables
+from etude.eval.result import Row, Tables, Value
 from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import BaseModel
@@ -234,38 +234,37 @@ def evaluation_tables(
         for seat in (0, 1):
             game_seat = (row.leg + seat) % 2
             deck, opponent_deck = decks[game_seat], decks[1 - game_seat]
+            participant: dict[str, Value] = {
+                "seat": seat,
+                "game": row.leg,
+                "deck": deck,
+                "opponent_deck": opponent_deck,
+                "matchup": labels[deck, opponent_deck]
+                if matchup is None
+                else f"{deck} v {opponent_deck}",
+                "game_seat": game_seat,
+                "on_play": game_seat == 0,
+            }
+            if matchup is not None:
+                participant["decklists"] = matchup.decklists
             plays.append(
                 {
-                    "seat": seat,
-                    "game": row.leg,
+                    **participant,
                     "score": score if seat == 0 or score is None else 1.0 - score,
-                    "deck": deck,
-                    "opponent_deck": opponent_deck,
-                    "matchup": labels[(deck, opponent_deck)]
-                    if matchup is None
-                    else f"{deck} v {opponent_deck}",
-                    "game_seat": game_seat,
-                    "on_play": game_seat == 0,
                     "valid": row.valid,
                     "failure": row.failure,
                 }
             )
-        if play_counts and row.valid and (row.deal_seed, row.leg) in play_counts:
-            game_seat = row.leg % 2
-            deck, opponent_deck = decks[game_seat], decks[1 - game_seat]
-            behaviour.append(
-                {
-                    **checkpoint_counts(play_counts[row.deal_seed, row.leg], game_seat),
-                    "game": row.leg,
-                    "deck": deck,
-                    "opponent_deck": opponent_deck,
-                    "matchup": labels[(deck, opponent_deck)]
-                    if matchup is None
-                    else f"{deck} v {opponent_deck}",
-                    "on_play": game_seat == 0,
-                }
-            )
-    return {"plays": plays, **({"behaviour": behaviour} if behaviour else {})}
+            if seat == 0 and row.valid and play_counts:
+                pair = play_counts.get((row.deal_seed, row.leg))
+                if pair is not None:
+                    behaviour.append(
+                        {**checkpoint_counts(pair, game_seat), **participant}
+                    )
+    tables = {"plays": plays}
+    if behaviour:
+        tables["behaviour"] = behaviour
+    return tables
 
 
 def evaluate(manifest: MonitorResult, directory: Path) -> None:

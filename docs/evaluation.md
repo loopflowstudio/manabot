@@ -700,11 +700,15 @@ both columns before dividing. A zero denominator leaves the rate undefined.
 | `casts_made / cast_turns` | An own turn with a spell cast offered. Choosing a cast counts once even if several spells are cast. |
 | `attackers_declared / attackers_offered` | One attacker declaration decision. The selected offer's declaration flag records the choice. |
 | `blockers_declared / blockers_offered` | One blocker declaration decision, including when several attackers are legal targets. |
-| `attackers_lost_for_nothing / attackers_declared` | A declared attacker died during combat and none of its blockers died during that combat. |
-| `blockers_lost_for_nothing / blockers_declared` | A declared blocker died during combat and the attacker it blocked survived that combat. |
+| `attackers_lost_for_nothing / attackers_committed` | A declared attacker died during combat and none of its blockers died during that combat. |
+| `blockers_lost_for_nothing / blockers_committed` | A declared blocker died during combat and the attacker it blocked survived that combat. |
 | `mana_use_early / mana_turns_early`, `mana_use_mid / mana_turns_mid`, `mana_use_late / mana_turns_late` | Mean fraction of available mana paid on own turn cycles 1–3, 4–6 and 7 onward. Each turn with positive availability contributes equally. |
 | `casts_off_turn / casts` | One chosen cast action. The numerator counts choices made on the opponent's turn. |
 | `turns / games` | One completed game. Each seat's row carries the final game turn number. |
+
+Combat loss rates count every committed attacker or blocker. A forced block
+counts even when the engine skips its decision. A lone assignment cleared by
+menace contributes only to the recorded choice counts.
 
 Checkpoint evaluations against the heuristic publish a `behaviour` table in
 Etude. Each row describes the checkpoint (`seat=0`) and records its native
@@ -714,6 +718,10 @@ accepted whole deal from its original or continued attempt. Elemental full and
 subset grids label rows with `unit` and `deal` and include each valid game.
 For example, `compare(db, table="behaviour", value="lands_played", per="land_turns")`
 pools the checkpoint's land plays over its opportunities in both seats.
+The Etude columns `chump_attacks` and `chump_blocks` carry the loss counts
+paired with `attackers_committed` and `blockers_committed`. Historical rows
+lack these pairs and contribute only to the other curves. The published
+400-update TLA trophy report used recorded declarations for both denominators.
 Older results, checkpoint duels and matches with unavailable play statistics
 have gaps. Game scores remain available independently.
 

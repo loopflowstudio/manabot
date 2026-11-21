@@ -41058,6 +41058,38 @@
    "sha256": "84222bd0552baac800cacae11739b8da2b79b248b3a75603d67f0a4e52613f0f",
    "bytes": 73352
   },
+  "experiments/data/mtg409/report/raw-400/attack-shifts.png": {
+   "sha256": "fa695fd18d05a56c418d494da9ac385123c573a8593f52cfd9462cba8236316a",
+   "bytes": 24442
+  },
+  "experiments/data/mtg409/report/raw-400/behaviour.png": {
+   "sha256": "67b88d2109843bebf1f30185be1d62983a76796d266858a5381507deb56ce64e",
+   "bytes": 18302
+  },
+  "experiments/data/mtg409/report/raw-400/block-shifts.png": {
+   "sha256": "d0ed6f45a2f05a144259317afe3fc78fde661999c19e47cb5752b5e5645f5544",
+   "bytes": 24565
+  },
+  "experiments/data/mtg409/report/raw-400/chumps.png": {
+   "sha256": "1feba0079ebd61a7c78687451c3d7250c66bdf93ccf695d1eeeedf6f9bd9ed09",
+   "bytes": 20267
+  },
+  "experiments/data/mtg409/report/raw-400/combat-probe.png": {
+   "sha256": "531abc1f89c19f5545e4a67aea899038c9ce007a5c23060307054f607fb53d45",
+   "bytes": 12935
+  },
+  "experiments/data/mtg409/report/raw-400/score.png": {
+   "sha256": "3b2abf2ede41d0d1639d0e6b599e515e8f5dca415ea436fc1e78439fb8a9b704",
+   "bytes": 18594
+  },
+  "experiments/data/mtg409/report/raw-400/tla_trophies.html": {
+   "sha256": "bcf1ea5510e45b3742bc37c34d2f8188cd8ac4bfa0ad74e2d0f917fdd84b6e30",
+   "bytes": 3937366
+  },
+  "experiments/data/mtg409/report/raw-400/turns.png": {
+   "sha256": "50d5da68634eae7221cf381d548f308b97e73c5480ac6dc2eaf745ae746055a6",
+   "bytes": 20316
+  },
   "experiments/data/mtg409/report/tla_trophies.html": {
    "sha256": "b2b8d2c76e3273c4772f3b18fb0cd6d8b092cabcbb37ca5f1a24b23f19a091bc",
    "bytes": 907072

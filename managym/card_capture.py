@@ -93,7 +93,13 @@ class ExposureCapture(StrictModel):
     mana_turns: tuple[tuple[TurnMana, ...], tuple[TurnMana, ...]] | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
+    attackers_committed: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     attackers_lost_for_nothing: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    blockers_committed: tuple[int, int] | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
     blockers_lost_for_nothing: tuple[int, int] | None = Field(

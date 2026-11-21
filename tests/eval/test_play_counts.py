@@ -1,12 +1,17 @@
 """Exact counts for repeated offers and distinct declarations in replay."""
 
 import json
+from pathlib import Path
 
-from manabot.eval.behaviour import Play, PlayCounts
+import pytest
+
+from manabot.eval.behaviour import Play, PlayCounts, checkpoint_counts
 import managym
 from managym.card_capture import CapturedCards
 from managym.enums import ActionEnum as Action, ActionSpaceEnum as Space
+from managym.recording import ScalarCapture, read_records
 from managym.replay import RecordedDecision, ReplayStop
+from managym.statistics import reduce
 
 
 def test_play_counts_one_opportunity_per_own_turn() -> None:
@@ -66,7 +71,9 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
                 "exposure": {
                     "choices": [],
                     "resolutions": [],
+                    "attackers_committed": [1, 0],
                     "attackers_lost_for_nothing": [1, 0],
+                    "blockers_committed": [0, 1],
                     "blockers_lost_for_nothing": [0, 1],
                     "mana_turns": [
                         [
@@ -96,6 +103,8 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
             casts_made=1,
             attackers_offered=2,
             attackers_declared=1,
+            blockers_committed=0,
+            attackers_committed=1,
             attackers_lost_for_nothing=1,
             mana_turns_early=2,
             mana_use_early=0.5,
@@ -111,6 +120,8 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
             1,
             blockers_offered=2,
             blockers_declared=1,
+            attackers_committed=0,
+            blockers_committed=1,
             blockers_lost_for_nothing=1,
             casts=1,
             casts_off_turn=1,
@@ -119,3 +130,70 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
         ),
     ]
     assert play.end(ReplayStop("interrupted", 10), capture) == []
+
+
+@pytest.mark.parametrize("mandatory", [True, False], ids=["mandatory-block", "menace"])
+def test_replayed_chump_blocks_count_committed_assignments(
+    tmp_path: Path, mandatory: bool
+) -> None:
+    # Each deck casts one creature. The Spider attacks under Taunting Challenge;
+    # the Inspector has menace and the lone Lions' chosen assignment is cleared.
+    attack_turn, attacker, deck = (
+        (9, "Giant Spider", {"Forest": 9, "Giant Spider": 3, "Taunting Challenge": 3})
+        if mandatory
+        else (5, "Callous Inspector", {"Swamp": 11, "Callous Inspector": 3})
+    )
+    setup = managym.GameSetup(
+        [
+            managym.PlayerConfig("attacker", deck),
+            managym.PlayerConfig("blocker", {"Plains": 9, "Savannah Lions": 4}),
+        ]
+    )
+    path = tmp_path / "combat.jsonl"
+    env = managym.Env(seed=3)
+    recording = ScalarCapture(seed=3, games_path=path)
+    obs, _ = recording.reset(env, setup)
+    while not env.is_game_over():
+        actions = obs.action_space.actions
+        turn = obs.turn.turn_number
+        cards = {c.id: c.characteristics.name for c in obs.agent_cards}
+        creatures = {p.characteristics.name: p.id for p in obs.agent_permanents}
+        for i, action in enumerate(actions):
+            kind = action.action_type
+            if kind in (Action.PRIORITY_PLAY_LAND, Action.PAY_COST):
+                break
+            if kind == Action.PRIORITY_CAST_SPELL:
+                name = cards[action.focus[0]]
+                if name == "Taunting Challenge" and turn == attack_turn:
+                    break
+                if name in (attacker, "Savannah Lions") and name not in creatures:
+                    break
+            if kind == Action.CHOOSE_TARGET and action.focus == [
+                creatures.get(attacker)
+            ]:
+                break
+            if kind == Action.DECLARE_ATTACKER and action.declared == (
+                turn == attack_turn
+            ):
+                break
+            if kind == Action.DECLARE_BLOCKER and action.declared:
+                break
+            if kind == Action.PRIORITY_PASS_PRIORITY:
+                break
+        else:
+            pytest.fail(
+                f"unexpected fixture decision {obs.action_space.action_space_type}"
+            )
+        obs, *_ = recording.step(env, i)
+    recording.close()
+
+    [seats] = reduce(read_records(path), [Play()])
+    attack, block = seats
+    checkpoint = checkpoint_counts((attack, block), game_seat=1)
+    assert attack.attackers_committed == attack.attackers_declared == 1
+    assert checkpoint["seat"] == 0 and checkpoint["game_seat"] == 1
+    assert block.blockers_offered == block.blockers_declared == int(not mandatory)
+    assert checkpoint["blockers_committed"] == int(mandatory)
+    assert checkpoint["chump_blocks"] == int(mandatory)
+    if mandatory:
+        assert checkpoint["chump_blocks"] / checkpoint["blockers_committed"] == 1

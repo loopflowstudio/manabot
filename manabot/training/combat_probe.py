@@ -5,16 +5,14 @@ materializing observations. gap_shifts scores each edit against the same
 unmodified positions with the same policy.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from copy import copy
 from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationSpace
 from manabot.policy.protocol import BackendPolicy
-from manabot.policy.readings import published_columns
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import RolloutBatch
 
@@ -39,30 +37,26 @@ class CombatColumns:
 
 
 def combat_columns(space: ObservationSpace) -> CombatColumns | None:
-    layout = published_columns(space)
-    indexes = {
-        key: {col.name: i for i, col in enumerate(layout[key])}
-        for key in ("actions", "agent_permanents", "opponent_permanents")
-    }
+    arrays = space.layout.arrays
 
     def permanents(key: str) -> PermanentColumns:
-        cols = indexes[key]
+        cols = arrays[key]["columns"]
         power, toughness = cols["power"], cols["toughness"]
         return PermanentColumns(
-            cols["is_creature"],
-            power,
-            toughness,
-            cols["tapped"],
-            layout[key][power].scale or 1,
-            layout[key][toughness].scale or 1,
+            cols["is_creature"]["index"],
+            power["index"],
+            toughness["index"],
+            cols["tapped"]["index"],
+            power.get("scale", 1),
+            toughness.get("scale", 1),
         )
 
-    actions = indexes["actions"]
+    actions = arrays["actions"]["columns"]
     try:
         return CombatColumns(
-            actions["declare_attacker"],
-            actions["declare_blocker"],
-            actions["declared"],
+            actions["declare_attacker"]["index"],
+            actions["declare_blocker"]["index"],
+            actions["declared"]["index"],
             permanents("agent_permanents"),
             permanents("opponent_permanents"),
         )
@@ -93,33 +87,18 @@ def combat_rows(
 
 def gap_shifts(
     policy: BackendPolicy,
-    rows: dict[str, np.ndarray],
+    chunks: Iterable[dict[str, np.ndarray]],
     columns: CombatColumns,
-    *,
-    execution_rows: int | None = None,
 ) -> dict[str, float | int]:
-    """Score a nonempty batch of two-offer combat rows in original action slots."""
-    if execution_rows is not None and execution_rows < 1:
-        raise ValueError("execution_rows must be positive")
-    count = len(rows["actions_valid"])
-    if count == 0:
-        raise ValueError(
-            "gap_shifts requires a nonempty batch of two-offer declare/decline rows"
-        )
-    width = execution_rows or count
+    """Pool per-decision readings across chunks, including partial final chunks."""
     samples: dict[tuple[str, str], list[np.ndarray]] = {}
-    for start in range(0, count, width):
-        chunk = (
-            rows
-            if width >= count
-            else select_rows(rows, np.arange(start, min(start + width, count)))
-        )
+    for chunk in chunks:
         for key, count_key, values in combat_samples(policy, chunk, columns):
             samples.setdefault((key, count_key), []).append(values)
 
     metrics: dict[str, float | int] = {}
-    for (key, count_key), chunks in samples.items():
-        values = np.concatenate(chunks)
+    for (key, count_key), parts in samples.items():
+        values = np.concatenate(parts)
         metrics[key] = float(values.mean())
         metrics[count_key] = len(values)
     return metrics
@@ -201,10 +180,11 @@ def combat_probe(
         ("block", columns.declare_blocker),
     ):
         selected = combat_rows(batch.action_data, index, columns.declared, limit)
-        if selected.size:
-            rows = batch.observations(selected).observation
-            for name, value in gap_shifts(
-                policy, rows, columns, execution_rows=execution_rows
-            ).items():
-                metrics[f"combat/{kind}/{name}"] = value
+        width = execution_rows or limit
+        chunks = (
+            batch.observations(selected[start : start + width]).observation
+            for start in range(0, len(selected), width)
+        )
+        for name, value in gap_shifts(policy, chunks, columns).items():
+            metrics[f"combat/{kind}/{name}"] = value
     return metrics
