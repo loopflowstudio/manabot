@@ -1,10 +1,19 @@
 """Authored paired deals preserve disclosure and distinct blanked checkpoint players."""
 
+import json
 from pathlib import Path
 from typing import Literal
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.records import CheckpointPlayer, Code, Match, checkpoint_player
+from etude.eval.query import compare, statsdb
+from etude.eval.records import (
+    CheckpointPlayer,
+    Code,
+    Environment,
+    Match,
+    checkpoint_player,
+)
+from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 import pytest
 import torch
@@ -21,7 +30,7 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import heuristic_source_paths
-from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 import managym
 
 
@@ -146,6 +155,7 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
         arena="fixture-pairing",
     )
     rows = tables["plays"]
+    assert "behaviour" not in tables
     assert len(rows) == 8
     assert {row["decklists"] for row in rows} == {disclosure}
     assert {row["game"] for row in rows} == set(range(4))
@@ -159,13 +169,23 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     torch.set_num_threads(1)
-    matchup = AuthoredMatchup(
-        pack_key="ur-lessons-vs-gw-allies",
-        role_a="ur_lessons",
-        role_b="gw_allies",
-        decklists="closed",
-        world=managym.WORLD_SETUP,
+    roles = ("ur_lessons", "gw_allies")
+    first, second = (
+        managym.authored_deck_setup("ur-lessons-vs-gw-allies", role) for role in roles
     )
+    matchup = DeckMatchup(
+        population_sha256="a" * 64,
+        entries=roles,
+        lists=(
+            managym.Deck(first.decklist, first.sideboard),
+            managym.Deck(second.decklist, second.sideboard),
+        ),
+    )
+    assert "decklists" not in matchup.model_dump()
+    closed = matchup.model_copy(update={"decklists": "closed"})
+    assert closed.content_suite != matchup.content_suite
+    matchup = closed
+    assert matchup.match().decklists == "closed"
     space = ObservationSpace(ObservationConfig())
     torch.manual_seed(19)
     model = ActorCritic(
@@ -187,15 +207,18 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
         job="pairing",
         seed=19,
         name="fixture-19",
+        at={"updates": 0},
         artifact=ArtifactRef(
             uri=path.as_uri(),
             sha256=file_sha256(path),
             size_bytes=path.stat().st_size,
         ),
     )
-    heuristic = Code(name="heuristic", source=heuristic_source_paths())
+    heuristic = Code(
+        name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
+    )
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
-    match = Match(players=(checkpoint_player(ref), heuristic), games=4)
+    match = Match(players=(checkpoint_player(ref), heuristic), index=0)
     tables = pairing.play_pairing(
         match,
         [load(ref), build(heuristic, {})],
@@ -209,6 +232,57 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     assert len(rows) == 8 and all(row["valid"] for row in rows)
     for game in range(4):
         assert sum(float(row["score"]) for row in rows if row["game"] == game) == 1.0
+
+    retained = tmp_path / "output" / "arena" / match.key
+    request = json.loads((retained / "evaluation.json").read_bytes())["request"]
+    assert request["opponent"]["player_spec"]["max_actions"] == 64
+    native = json.loads((retained / "statistics.json").read_bytes())["tables"]["play"]
+    checkpoint = [native[2 * leg + leg % 2] for leg in range(4)]
+    behaviour = tables["behaviour"]
+    assert len(behaviour) == 4
+    for leg, (row, expected) in enumerate(zip(behaviour, checkpoint, strict=True)):
+        deck = matchup.decks(leg)[leg % 2]
+        opponent_deck = matchup.decks(leg)[1 - leg % 2]
+        expected = dict(expected)
+        expected["chump_attacks"] = expected.pop("attackers_lost_for_nothing")
+        expected["chump_blocks"] = expected.pop("blockers_lost_for_nothing")
+        assert row == {
+            **expected,
+            "seat": 0,
+            "game_seat": leg % 2,
+            "game": leg,
+            "deck": deck,
+            "opponent_deck": opponent_deck,
+            "matchup": f"{deck} v {opponent_deck}",
+            "on_play": leg % 2 == 0,
+            "decklists": "closed",
+        }
+    track = tmp_path / "track"
+    with evaluating(
+        Environment(name="fixture", files="a" * 64),
+        experiment="pairing",
+        matches=[match],
+        directory=track,
+    ) as active:
+        active.store(match, tables)
+    with statsdb("pairing", track) as db:
+        comparisons = compare(
+            db, table="behaviour", value="lands_played", per="land_turns"
+        )
+        blocks = compare(
+            db, table="behaviour", value="chump_blocks", per="blockers_committed"
+        )
+    [block_rate] = [c for c in blocks if c.opponent == (heuristic.key,)]
+    assert block_rate.value == pytest.approx(
+        sum(row["blockers_lost_for_nothing"] for row in checkpoint)
+        / sum(row["blockers_committed"] for row in checkpoint)
+    )
+    [against] = [c for c in comparisons if c.opponent == (heuristic.key,)]
+    assert against.subject == (match.players[0].key,)
+    assert against.value == pytest.approx(
+        sum(row["lands_played"] for row in checkpoint)
+        / sum(row["land_turns"] for row in checkpoint)
+    )
 
 
 def test_blanking_refuses_ambiguous_values() -> None:

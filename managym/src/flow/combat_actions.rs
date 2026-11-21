@@ -69,6 +69,9 @@ impl Game {
         if let Some(combat) = self.state.combat.as_mut() {
             combat.attackers.push(permanent_id);
             combat.attacker_to_blockers.entry(permanent_id).or_default();
+            if let Some(exposure) = self.exposure_mut() {
+                exposure.combat.attackers.push(permanent_id);
+            }
         }
         Ok(())
     }
@@ -90,6 +93,9 @@ impl Game {
                     .entry(attacker_id)
                     .or_default()
                     .push(blocker);
+                if let Some(exposure) = self.exposure_mut() {
+                    exposure.combat.blocks.push((blocker, attacker_id));
+                }
             }
         }
         Ok(())
@@ -412,6 +418,12 @@ impl Game {
             };
             if blockers.len() == 1 {
                 blockers.clear();
+                if let Some(exposure) = self.exposure_mut() {
+                    exposure
+                        .combat
+                        .blocks
+                        .retain(|&(_, target)| target != attacker_id);
+                }
             }
         }
     }

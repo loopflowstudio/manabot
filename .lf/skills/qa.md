@@ -460,6 +460,15 @@ publish, land or choose the next Graph step from here.
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
   `experiments/regimes/tla-frontier-c5fba4-w64.json`; `experiments/tla_frontier.py` trains that record on the current loop.
+- To check combat metrics and their Etude panels, run the five-update
+  `probe-demo` in [the training guide](../../docs/training.md#combat-probe) with
+  `ETUDE_HOME` under `.runs/`. Read the update row with
+  `updates_from_run(read(<home>/track, "probe-demo", "probe-demo"))`.
+  Render it with `uv run etude report manabot/recipes/local.py
+  --experiment probe-demo --source <home>/track --out <dir>`. Locate the
+  attack and block panels by title when taking a Playwright screenshot.
+  For chunk-size parity on the same positions and weights, run
+  `tests/training/test_combat_probe.py`.
 - Old checkpoints in a local evaluation: a checkpoint from a TLA
   frontier run (such as u1952 at `.runs/qa/final.pt` or the
   `experiments/best_player_on_main.py` artifact) refuses the CLI's default

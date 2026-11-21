@@ -1,6 +1,7 @@
 """Local evidence uses the shared arena without training or cloud execution."""
 
 from collections.abc import Iterator
+from dataclasses import asdict
 import json
 import os
 from pathlib import Path
@@ -11,11 +12,13 @@ import pytest
 import torch
 
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
+from manabot.eval.behaviour import PlayCounts, checkpoint_counts
 from manabot.eval.evaluation import (
     EvaluationRequest,
     EvaluationResult,
     continue_evaluation,
     evaluate,
+    evaluation_play_counts,
     evaluation_status,
 )
 from manabot.eval.local import checkpoint_request, main as local_main
@@ -434,6 +437,75 @@ def test_continuation_finishes_missing_sixty_without_replacing_evidence(
     fresh = evaluate(request, out_dir=tmp_path / "repeat")
     assert fresh.evaluation_id != first.evaluation_id
     assert cohorts[-1] == tuple(range(100))
+
+
+def test_continuation_uses_play_counts_from_the_accepted_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = _anchor_request((11, 9))
+    out = tmp_path / "evaluation"
+
+    def runner(
+        **kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+        directory = kwargs["out_dir"]
+        rows = _replayed_rows(
+            request.model_copy(update={"deal_seeds": kwargs["deal_seeds"]})
+        )
+        if directory == out:
+            # The first leg has a verified replay but its sibling failed.
+            rows[1].failure = "fixture"
+        verified = [r for r in rows if r.failure is None]
+        play = [
+            asdict(
+                PlayCounts(
+                    seat=seat,
+                    games=1,
+                    turns=(1000 if directory == out else 0) + 10 * r.deal_seed + r.leg,
+                )
+            )
+            for r in verified
+            for seat in (0, 1)
+        ]
+        atomic_json(directory / "statistics.json", {"tables": {"play": play}})
+        _publish_blocks(directory, rows)
+        return [r.model_dump(mode="json") for r in rows], {}, {"passed": True}
+
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", runner)
+    assert evaluate(request, out_dir=out).complete_deals() == (9,)
+    assert continue_evaluation(out).status == "completed"
+    counts = evaluation_play_counts(out)
+    assert counts is not None
+    assert {key: pair[0].turns for key, pair in counts.items()} == {
+        (9, 0): 1090,
+        (9, 1): 1091,
+        (11, 0): 110,
+        (11, 1): 111,
+    }
+    path = out / "statistics.json"
+    historical = json.loads(path.read_bytes())
+    for row in historical["tables"]["play"]:
+        del row["attackers_committed"], row["blockers_committed"]
+    atomic_json(path, historical)
+    counts = evaluation_play_counts(out)
+    assert counts is not None
+    baseline = checkpoint_counts(counts[9, 0], game_seat=0)
+    assert baseline["turns"] == 1090 and "blockers_lost_for_nothing" in baseline
+    assert "chump_blocks" not in baseline and "blockers_committed" not in baseline
+    for unavailable in (
+        [],
+        {"analysis_error": "failed", "tables": None},
+        {"tables": ["play"]},
+        {"tables": {"play": []}},
+    ):
+        atomic_json(path, unavailable)
+        assert evaluation_play_counts(out) is None
+        assert evaluation_status(out).status == "completed"
+    path.write_text('{"tables":')
+    assert evaluation_play_counts(out) is None
+    assert evaluation_status(out).status == "completed"
+    path.unlink()
+    assert evaluation_play_counts(out) is None
 
 
 def test_continuation_rejects_contract_drift_corruption_and_competing_writers(

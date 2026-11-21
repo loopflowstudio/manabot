@@ -158,7 +158,10 @@ selection and health diagnostics, and per minibatch forward and loss, backward
 and gradient clipping, optimizer step and minibatch diagnostics, plus the EMA
 update. A parent's seconds minus its children's are unattributed time, which
 stays visible rather than being spread over the children. Seconds and call
-counts are attempt-local.
+counts are attempt-local. On probed updates, `time/combat_probe` logs the
+[combat probe's](#combat-probe) wall seconds separately from `time/collection`
+and `time/learning`, and appears in the Perf **Update time** chart without
+changing `training_seconds` or transitions-per-second rates.
 
 PPO's `Minibatches/Preparation wait and transfer` measures the caller's wait
 for the next host minibatch and its device upload. Host preparation overlaps the
@@ -243,6 +246,99 @@ See the [numerical health contract](https://github.com/loopflowstudio/manabot/bl
 for units, sampling and failure investigation. A saturated all-win bootstrap may
 also produce a zero-width interval; that is an empirical resampling limitation,
 not certainty of winning future games.
+
+## Combat probe
+
+Every `self_play` run logs attack and block combat probes every 5 updates by
+default (`combat_probe_every` / `combat_probe_rows` on `RunSettings`;
+[update metrics](training.md#combat-probe)). Read probed updates directly from
+Etude rows:
+
+```python
+from etude.train.read import read
+from manabot.reports.update_metrics import updates_from_run
+
+updates = updates_from_run(read(runs_dir, experiment, run_id))
+for update, row in updates.items():
+    if "combat/attack/gap" in row:
+        print(update, row["combat/attack/gap"], row.get("combat/attack/shift/my_creatures_9_9"))
+```
+
+The `ML` panels (`manabot.training.panels`) draw three `log-odds` charts that
+separate two independent failure modes:
+
+- **Attack and block log-odds** (`combat/attack/gap`, `combat/block/gap`):
+  **is the policy locking?** Each gap is the mean declare logit minus decline
+  logit over two-offer `DECLARE_ATTACKER` or `DECLARE_BLOCKER` decisions.
+  For an individual decision, a gap of 0 gives a 50% declare probability,
+  2.4 gives about 92%, and 9 gives about 99.99%.
+- **Attack gap shift under board edits** and **Block gap shift under board
+  edits**: **is the policy board-blind?** Each chart draws four shifts — the
+  mean change in that gap when the same decisions are re-scored after one edit
+  to the raw permanent buffers before `prepare`:
+  - `combat/<attack|block>/shift/my_creatures_0_1` — my creatures set to 0/1
+  - `combat/<attack|block>/shift/my_creatures_9_9` — my creatures set to 9/9
+  - `combat/<attack|block>/shift/their_creatures_0_1_tapped` — their creatures
+    set to 0/1 and tapped
+  - `combat/<attack|block>/shift/their_creatures_9_9_untapped` — their
+    creatures set to 9/9 and untapped
+
+A policy can remain unlocked (`gap` well below 9) and still be board-blind
+(every shift flat near `0`).
+
+Each probed update scores `learner.agent` after the update on up to
+`combat_probe_rows` (default 256) evenly spaced two-offer decisions per kind
+from that update's collected batch, so update `u` reflects update `u`'s weights
+with no extra games and no RNG draw. Shifts average only the sampled decisions
+where the edited side has at least one creature (`is_creature`), avoiding
+dilution from empty boards. Decision counts stay in the update rows without
+their own chart: `combat/<attack|block>/decisions` for the gap sample and
+`combat/<attack|block>/shift_decisions/<mine|theirs>` for each edited side
+(shared by both edits on that side).
+
+Edits to my side (`my_creatures_0_1` and `my_creatures_9_9`) change power and
+toughness only and leave tap state untouched, so a creature offered as an
+attacker or blocker is never shown tapped. The earlier attack-lock study's probe
+script also toggled tap state on my side, so my-side shift magnitudes are close
+to, not identical with, that study's numbers.
+
+Missing values stay absent (never zero or `NaN`): unprobed updates log no
+`combat/*` or `time/combat_probe` keys; a probed batch with no qualifying
+decisions of a kind omits that kind's keys (leaving a gap on the chart); a
+sample with no creature on an edited side omits that side's shifts and
+`shift_decisions` while keeping the gap; and legacy v9/v10 layouts publish no
+`is_creature`, so runs on them log no `combat/*` keys.
+
+One Elemental CPU probe took 4.4 seconds for 256 attack and 237 block
+decisions.
+
+## Checkpoint behaviour against the heuristic
+
+Read the eleven curves beside **Score against the heuristic** in the Elemental
+and seat-comparison reports. The ten rate panels use a fixed
+0–1 scale. Mana use can exceed 1 when resources gained on the opponent's turn
+are spent in the same mana cycle. Those values extend above the displayed range.
+**Turns per game** scales to the observed game lengths. At each checkpoint,
+Etude pools opportunities across verified games for each training seed, then
+averages the seeds within each job.
+For example, seven declarations across ten attacker decisions give an
+**Attackers declared** value of 0.70. A zero denominator or a checkpoint with
+no recorded behaviour leaves a gap. These curves evaluate the registered checkpoint
+(EMA by default, raw with `checkpoint_weights="raw"`). The combat probe reads
+the raw learner, so it can move before the EMA curves.
+
+Land and cast rates count own turns on which the play was offered. Mana spent
+shows the average fraction of available mana paid in turn cycles 1–3, 4–6 and
+7 onward. A spend on the opponent's turn belongs to the preceding own turn.
+Read these alongside off-turn casting to see when a checkpoint holds mana.
+
+Compare declaration rates with **Chump attacks** and **Chump blocks**. Those
+curves count declared creatures that died in combat while their opposing
+combatant survived (for attackers, all their blockers survived). The denominator
+includes forced blocks and excludes lone blocks cleared by menace. A block
+that prevents lethal damage can count. **Turns per game** gives the game
+length behind these rates. See the [measurement definitions](evaluation.md#custom-statistics-for-every-evaluation-game)
+for mana availability, combat deaths and replay coverage.
 
 ## Self-play
 

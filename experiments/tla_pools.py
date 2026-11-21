@@ -31,7 +31,12 @@ def _entries(event_id: str, decklist: managym.Decklist) -> list[managym.DeckEntr
 
 def derive_pools(source_path: Path, held_out: int = 100) -> PoolCorpus:
     source = Corpus.model_validate_json(source_path.read_bytes())
-    if len(source.trophies) != source.target:
+    complete = (
+        source.target is None and source.exhausted
+        if source.selection == "complete-premier-trophies-v1"
+        else len(source.trophies) == source.target
+    )
+    if not complete:
         raise ValueError(
             "retained source does not contain its entire selected population"
         )

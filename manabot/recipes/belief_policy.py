@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from etude.report import Report
 from etude.train.tracking import track
 from pydantic import Field
 
@@ -9,6 +10,7 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import gray_ogre_match, gray_ogre_self_play
 from manabot.training.loops.self_play import CLOCKS, self_play
+from manabot.training.panels import self_play_report
 
 
 class PolicyConfig(RunSettings):
@@ -18,6 +20,10 @@ class PolicyConfig(RunSettings):
 
 def match() -> MatchConfig:
     return gray_ogre_match()
+
+
+def report() -> Report:
+    return self_play_report()
 
 
 def train(config: PolicyConfig) -> None:

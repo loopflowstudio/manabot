@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal
 
 from etude.checkpoints import CheckpointRef
 from etude.jobs import TrainingJob
+from etude.report import Report
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -35,6 +36,12 @@ def settings(config: Config) -> "SelfPlay":
     if config.workload == "baseline":
         return baseline(BaselineConfig(updates=config.updates, device=config.device))
     return elemental_self_play().model_copy(update={"device": config.device})
+
+
+def report() -> Report:
+    from manabot.training.panels import self_play_report
+
+    return self_play_report()
 
 
 def train(config: Config) -> None:

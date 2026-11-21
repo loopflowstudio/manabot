@@ -7,8 +7,10 @@ use rand_chacha::ChaCha8Rng;
 use crate::{
     cards::{content_pack::default_content_pack, deck_admission::admit_submitted},
     flow::{
+        card_capture::{snapshots, CaptureMode, CardCapture},
         game::{Game, GameState, TrackedState},
         priority::PriorityState,
+        statistics::Statistics,
         turn::TurnState,
     },
     state::{
@@ -22,7 +24,7 @@ impl Game {
     /// A match on the catalog. Panics when a deck submitted to the world fails
     /// admission; [`crate::agent::env::Env::reset`] checks that first.
     pub fn new(player_configs: impl Into<GameSetup>, seed: u64, skip_trivial: bool) -> Self {
-        Self::construct(player_configs.into(), seed, skip_trivial, false, false)
+        Self::construct(player_configs.into(), seed, skip_trivial, None, false)
     }
 
     #[cfg(test)]
@@ -31,14 +33,20 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
     ) -> Self {
-        Self::construct(player_configs.into(), seed, skip_trivial, true, false)
+        Self::construct(
+            player_configs.into(),
+            seed,
+            skip_trivial,
+            Some(CaptureMode::Cards),
+            false,
+        )
     }
 
     pub(crate) fn construct(
         player_configs: GameSetup,
         seed: u64,
         skip_trivial: bool,
-        capture: bool,
+        capture: Option<CaptureMode>,
         statistics: bool,
     ) -> Self {
         let disclosure = player_configs.decklists.resolve(seed);
@@ -175,20 +183,13 @@ impl Game {
             capture_originals: Default::default(),
         };
 
-        if capture {
-            game.card_capture = Some(crate::flow::card_capture::CardCapture::new(&game));
-        }
-        if capture || statistics {
-            game.capture_originals = crate::flow::card_capture::snapshots(&game)
-                .into_iter()
-                .map(|card| (card.copy, card))
-                .collect();
-        }
-        if statistics {
-            game.statistics = Some(crate::flow::statistics::Statistics::new(
-                &crate::flow::card_capture::snapshots(&game),
-                true,
-            ));
+        if capture.is_some() || statistics {
+            let initial = snapshots(&game);
+            if statistics {
+                game.statistics = Some(Statistics::new(&initial, true));
+            }
+            game.card_capture = capture.map(|mode| CardCapture::new(&game, initial.clone(), mode));
+            game.capture_originals = initial.into_iter().map(|card| (card.copy, card)).collect();
         }
         let _ = game.tick();
         game
