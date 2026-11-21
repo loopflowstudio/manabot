@@ -27,6 +27,7 @@ FRESH = {"control": 0.0, "floor-0.002": 0.002, "floor-0.01": 0.01}
 PULLBACK = {"pullback-0": 0.0, "pullback-0.01": 0.01}
 # Arm -> tau_scale, 2x and 4x the trophy schedule's 0.05.
 TAU = {"tau-x2": 0.1, "tau-x4": 0.2}
+FRESH_ARMS = (*FRESH, *TAU)
 TAU_SEEDS = (40901, 40902)
 START_SEED = 40902
 START_RUN = f"{trophies.RAW_JOB}@{START_SEED}"
@@ -139,9 +140,9 @@ LABELS = {
 # update-zero control games were recorded under an earlier tla_trophies.py.
 HELD_OUT = "tla-trophies-floor-held-out-32"
 HALF_TRAINING = "tla-trophies-floor-half-training-32"
-HALF_TRAINING_SEATINGS = tuple(f"Half-training pair {i + 1}" for i in range(32))
+HALF_TRAINING_SEATINGS = tuple(f"Half-training deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD = "tla-trophies-floor-vs-control-32"
-HEAD_TO_HEAD_SEATINGS = tuple(f"Against control pair {i + 1}" for i in range(32))
+HEAD_TO_HEAD_SEATINGS = tuple(f"Matched control deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD_UPDATES = (200, 400)
 
 
@@ -213,11 +214,10 @@ def arm_evaluations(
     treated = [
         c
         for run in runs
-        if arm != "control"
         for c in run.checkpoints
         if c.at.get("updates") in HEAD_TO_HEAD_UPDATES
     ]
-    if not treated or not control_seeds:
+    if arm == "control" or not treated or not control_seeds:
         return [job, half]
     control = Aligned(clock="updates", job="control")
     versus = job.model_copy(
@@ -242,9 +242,6 @@ def arm_evaluations(
     return [job, half, versus]
 
 
-FRESH_ARMS = (*FRESH, *TAU)
-
-
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     controls = {run.seed for run in state.runs if run.launch == "control"}
     return [
@@ -261,20 +258,11 @@ def report() -> Report:
     # Named seatings draw the held checkpoint's score, one line per arm.
     against_half = Curve(
         title="Against itself at half its updates",
-        matches=tuple(
-            Matches(tournament=f"{HALF_TRAINING}-{arm}", seating=name)
-            for arm in FRESH_ARMS
-            for name in HALF_TRAINING_SEATINGS
-        ),
+        matches=tuple(Matches(seating=name) for name in HALF_TRAINING_SEATINGS),
     )
     against_control = Curve(
         title="Against the control at the same update",
-        matches=tuple(
-            Matches(tournament=f"{HEAD_TO_HEAD}-{arm}", seating=name)
-            for arm in FRESH_ARMS
-            if arm != "control"
-            for name in HEAD_TO_HEAD_SEATINGS
-        ),
+        matches=tuple(Matches(seating=name) for name in HEAD_TO_HEAD_SEATINGS),
     )
     return Report(
         clock="updates",
