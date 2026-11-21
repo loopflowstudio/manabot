@@ -80,8 +80,10 @@ def training_jobs(
     pullback_hours: float = 2.75,
     tau_hours: float | None = None,
     tau_usd: float | None = None,
+    attempts: int = 1,
 ) -> list[TrainingJob]:
-    """`tau_hours` and `tau_usd` size the tau arms for their own placement."""
+    """`tau_hours` and `tau_usd` size the tau arms for their own placement;
+    `attempts` lets a resume run again after a stopped attempt."""
     (base,) = trophies.training_jobs(revision=revision, usd_per_run=2.54)
     assert base.smoke is not None
     jobs = []
@@ -124,7 +126,8 @@ def training_jobs(
                 }
             )
         )
-    return jobs
+    # A resume needs a further attempt; the first launch keeps one.
+    return [job.model_copy(update={"max_attempts": attempts}) for job in jobs]
 
 
 LABELS = {
