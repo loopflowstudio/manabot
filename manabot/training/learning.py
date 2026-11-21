@@ -62,7 +62,7 @@ class IterationSchedule(Strict):
     steps: int = Field(ge=1, strict=True)
     reference_steps: int = Field(default=10_000, ge=2, strict=True)
 
-    def at(self, iteration: int) -> float:
+    def at(self, iteration: float) -> float:
         if iteration < 1:
             raise ValueError("iteration must be positive")
         if self.steps == 1:
@@ -115,6 +115,14 @@ class DampedPolicyLearning(Strict):
     learning_rate_max: float = Field(default=1e-4, gt=0)
     tau_scale: float = Field(default=0.05, ge=0)
     tau_power: float = Field(default=0.3, ge=0)
+    # Advance tau's schedule by learned decisions: tau reads iteration
+    # 1 + learned decisions / tau_reference_batch through the iteration
+    # schedule, so an update of exactly this many decisions keeps the
+    # per-update curve and a larger update advances it proportionally more.
+    # The learning rate stays per update. None reads the update count.
+    tau_reference_batch: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda value: value is None
+    )
     max_grad_norm: float = Field(default=0.267, gt=0)
     ema: float | None = Field(default=0.999, ge=0, lt=1)
     iteration_schedule: IterationSchedule | None = Field(
@@ -130,6 +138,8 @@ class DampedPolicyLearning(Strict):
             raise ValueError("learning rate minimum exceeds maximum")
         if self.iteration_schedule is not None and self.decision_schedule is not None:
             raise ValueError("choose an iteration or learner-decision schedule")
+        if self.tau_reference_batch is not None and self.decision_schedule is not None:
+            raise ValueError("a learner-decision schedule already counts decisions")
         return self
 
     def rates(
@@ -138,7 +148,8 @@ class DampedPolicyLearning(Strict):
         """Rates at the start of an update, including skipped optimizer work.
 
         `iteration` is the one-based collection/update iteration. A decision
-        schedule reads `learner_transitions`, the decisions learned before it.
+        schedule or tau reference batch reads `learner_transitions`, the
+        decisions learned before it.
         """
         if iteration < 1:
             raise ValueError("Damped policy iteration must be positive")
@@ -155,6 +166,15 @@ class DampedPolicyLearning(Strict):
                 else iteration
             )
         rate = self.learning_rate_scale / position**self.learning_rate_power
+        if self.tau_reference_batch is not None:
+            if learner_transitions is None:
+                raise ValueError("a tau reference batch requires completed transitions")
+            tau_iteration = 1 + learner_transitions / self.tau_reference_batch
+            position = (
+                self.iteration_schedule.at(tau_iteration)
+                if self.iteration_schedule is not None
+                else tau_iteration
+            )
         return (
             min(self.learning_rate_max, max(self.learning_rate_min, rate)),
             self.tau_scale / position**self.tau_power,
