@@ -70,31 +70,33 @@ def train(
     return path, load_checkpoint(path)[1].config.max_decision_records
 
 
-def test_tau_reference_batch_scales_tau_with_update_size() -> None:
+def test_reference_batch_moves_both_schedules_with_update_size() -> None:
     per_update = DampedPolicyLearning(
-        gradient="damped_policy", iteration_schedule=IterationSchedule(steps=400)
+        gradient="damped_policy",
+        iteration_schedule=IterationSchedule(steps=400),
+        learning_rate_min=1e-12,
     )
     batch = 16_384
-    by_batch = per_update.model_copy(update={"tau_reference_batch": batch})
-    # Updates of exactly the reference batch keep the per-update curve.
+    by_batch = per_update.model_copy(update={"reference_batch": batch})
+    # Updates of exactly the reference batch keep the per-update curves.
     for update in (1, 2, 200, 400):
         assert by_batch.rates(update, learner_transitions=(update - 1) * batch) == (
             per_update.rates(update)
         )
-    # Updates twice as large reach update 400's tau by update 200.5, while the
-    # learning rate stays on the update count.
-    rate, tau = by_batch.rates(200, learner_transitions=399 * batch)
-    assert tau == per_update.rates(400)[1]
-    assert rate == per_update.rates(200)[0]
+    # Updates twice as large reach update 400's rates by update 200.5.
+    assert by_batch.rates(200, learner_transitions=399 * batch) == (
+        per_update.rates(400)
+    )
+    assert per_update.rates(400)[0] < per_update.rates(200)[0]
     with pytest.raises(ValueError, match="completed transitions"):
         by_batch.rates(1)
     with pytest.raises(ValueError, match="already counts decisions"):
         DampedPolicyLearning(
             gradient="damped_policy",
             decision_schedule=LearnerDecisionSchedule(transitions=1000),
-            tau_reference_batch=batch,
+            reference_batch=batch,
         )
-    assert "tau_reference_batch" not in per_update.model_dump()
+    assert "reference_batch" not in per_update.model_dump()
 
 
 def test_rates_follow_decisions_independently_of_update_count() -> None:
