@@ -333,11 +333,16 @@ actions. The reverse KL and the optional forward KL both sum over legal actions.
 
 On a two-offer choice with probability π of one offer and logit gap g, the
 reverse-KL gradient on its logit is τ·π(1−π)·g for a uniform magnet.
-Its magnitude decays as |g|·exp(−|g|) at large gaps. In float32 the dominant
+The restoring gradient peaks at about 0.224τ when |g| = 1.54 (the more
+likely offer has probability 0.824). At large gaps its magnitude decays
+as τ·|g|·exp(−|g|). In float32 the dominant
 probability can round to one while the rare offer still has a small restoring
 gradient. The forward KL's pull,
 ε·(π − ½) on a two-offer choice and ε·(π_a − q_a) per legal offer in general,
-does not vanish there: a saturated choice is pulled back at about ε/2.
+is zero at the magnet and approaches magnitude ε/2 at a saturated two-offer
+choice. In a many-offer decision, a rare offer receives a pull of about ε·q_a.
+The magnet shares mass within each action type, so two rare offers can
+receive different pulls.
 
 Turn it on with one field of the learning record:
 
