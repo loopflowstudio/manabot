@@ -359,19 +359,20 @@ def clipped_surrogate(log_ratio: Tensor, advantages: Tensor, clip: float) -> Ten
     )
 
 
+def legal_kl(left: Tensor, right: Tensor, valid: Tensor) -> Tensor:
+    """KL(left || right) per row, masking log padding before subtraction."""
+    difference = left.masked_fill(~valid, 0) - right.masked_fill(~valid, 0)
+    return (left.exp() * difference).sum(-1)
+
+
 def reverse_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
-    """KL(current || frozen target) [B], zero terms on padding without 0 * -inf."""
-    difference = logs.masked_fill(~valid, 0) - target_logs.detach().masked_fill(
-        ~valid, 0
-    )
-    return (logs.exp() * difference).sum(-1)
+    """KL(current || frozen target) [B] over legal offers."""
+    return legal_kl(logs, target_logs.detach(), valid)
 
 
 def forward_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
     """KL(frozen target || current) [B] over legal offers."""
-    target_logs = target_logs.detach()
-    difference = target_logs.masked_fill(~valid, 0) - logs.masked_fill(~valid, 0)
-    return (target_logs.exp() * difference).sum(-1)
+    return legal_kl(target_logs.detach(), logs, valid)
 
 
 def squared_value_loss(values: Tensor, targets: Tensor) -> Tensor:

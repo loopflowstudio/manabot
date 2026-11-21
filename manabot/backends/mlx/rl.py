@@ -200,19 +200,20 @@ def clipped_surrogate(
     )
 
 
+def legal_kl(left: mx.array, right: mx.array, valid: mx.array) -> mx.array:
+    """KL(left || right) per row, masking log padding before subtraction."""
+    difference = mx.where(valid, left, 0.0) - mx.where(valid, right, 0.0)
+    return (mx.exp(left) * difference).sum(-1)
+
+
 def reverse_kl(logs: mx.array, target_logs: mx.array, valid: mx.array) -> mx.array:
-    """KL(current || frozen target) [B], zero terms on padding without 0 * -inf."""
-    difference = mx.where(valid, logs, 0.0) - mx.where(
-        valid, mx.stop_gradient(target_logs), 0.0
-    )
-    return (mx.exp(logs) * difference).sum(-1)
+    """KL(current || frozen target) [B] over legal offers."""
+    return legal_kl(logs, mx.stop_gradient(target_logs), valid)
 
 
 def forward_kl(logs: mx.array, target_logs: mx.array, valid: mx.array) -> mx.array:
     """KL(frozen target || current) [B] over legal offers."""
-    target_logs = mx.stop_gradient(target_logs)
-    difference = mx.where(valid, target_logs, 0.0) - mx.where(valid, logs, 0.0)
-    return (mx.exp(target_logs) * difference).sum(-1)
+    return legal_kl(mx.stop_gradient(target_logs), logs, valid)
 
 
 def squared_value_loss(values: mx.array, targets: mx.array) -> mx.array:

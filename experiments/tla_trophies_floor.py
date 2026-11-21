@@ -21,7 +21,7 @@ from pydantic import Field
 
 from experiments import tla_trophies as trophies
 from manabot.training.panels import ML, PERF
-from manabot.training.report import behaviour_curves
+from manabot.training.report import behaviour_curves, head_to_head
 
 
 @dataclass(frozen=True)
@@ -104,6 +104,7 @@ def training_jobs(
         config_fields = {
             "reference_forward_kl": arm.reference_forward_kl,
             "pullback": arm.pullback,
+            "tau_scale": arm.tau_scale,
         }
         placement = {}
         updates = base.config.updates
@@ -116,7 +117,6 @@ def training_jobs(
                 max_usd=Decimal("1.06"),
             )
         elif arm.tau_scale is not None:
-            config_fields["tau_scale"] = arm.tau_scale
             placement.update(
                 seeds=TAU_SEEDS,
                 max_hours=tau_hours or base.max_hours,
@@ -229,21 +229,15 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
 def report() -> Report:
     held_out = tuple(Matches(tournament=f"{HELD_OUT}-{arm}") for arm in FRESH_ARMS)
     # Named seatings draw the held checkpoint's score, one line per arm.
-    against_half = Curve(
-        title="Against itself at half its updates",
-        matches=tuple(Matches(seating=name) for name in HALF_TRAINING_SEATINGS),
-    )
-    against_control = Curve(
-        title="Against the control at the same update",
-        matches=tuple(Matches(seating=name) for name in HEAD_TO_HEAD_SEATINGS),
-    )
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5, range=(0.0, 1.0)),
         evals=(
             Curve(title="Score against the heuristic", matches=held_out),
-            against_half,
-            against_control,
+            head_to_head("Against itself at half its updates", HALF_TRAINING_SEATINGS),
+            head_to_head(
+                "Against the control at the same update", HEAD_TO_HEAD_SEATINGS
+            ),
             *behaviour_curves(matches=held_out),
         ),
         baseline="control",
