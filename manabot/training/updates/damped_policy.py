@@ -229,6 +229,7 @@ def update_damped_iteration(
         "schedule_clock": (
             "learner_transitions"
             if learning.decision_schedule is not None
+            or learning.reference_batch is not None
             else "collection-update-iteration"
         ),
         "reference": learning.reference,

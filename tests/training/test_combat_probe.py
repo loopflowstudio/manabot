@@ -143,9 +143,10 @@ def test_saturation_counts_both_tails_across_unequal_chunks(
     def evaluate(obs: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         return obs["actions"][..., cols.declare_attacker], np.zeros(len(obs["actions"]))
 
-    policy = scoring_policy(cols, False)
+    policy = scoring_policy(space, False)
     policy.evaluate.side_effect = evaluate
-    metrics = gap_shifts(policy, rows, cols, execution_rows=3)
+    chunks = [{k: v[:3] for k, v in rows.items()}, {k: v[3:] for k, v in rows.items()}]
+    metrics = gap_shifts(policy, chunks, cols)
     assert metrics["gap"] == 0.5
     assert metrics["saturated"] == 0.5
 
