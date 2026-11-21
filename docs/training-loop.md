@@ -135,6 +135,7 @@ None of these change the update; call them when you want the numbers.
 | `OptimizerHealth(health, iteration, profiler=None, *, backend)` | `manabot.training.updates.health` | The player's step recorder. Pass as `learner.step(loss, max_grad_norm, recorder=observer)` (or to torch's `gradient_step`) to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
 | `clip_fraction(log_ratio, clip)` | `backend.rl` | The fraction of rows whose likelihood ratio left `1 ± clip`, the record's `clip_fraction`. |
 | `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). Every argument is `[T,E]` host rows (NumPy, or CPU tensors): `ends` is `batch.dones` and `action_types` is `batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)` (`manabot.env.observation`). |
+| `combat_probe(policy, batch, *, limit=256, execution_rows=None)` | `manabot.training.combat_probe` | Attack and block declare/decline log-odds (`gap`) and board-edit `shift` metrics on evenly spaced two-offer decisions from `batch`, through `policy.prepare` and `policy.evaluate` ([combat probe](experiment-metrics.md#combat-probe)). |
 
 ## Standard methods, kept local
 

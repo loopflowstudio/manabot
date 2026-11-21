@@ -239,7 +239,8 @@ The config holds only what varies between runs of the recipe, and never the
 seed. Everything else is code in the function. This is the Elemental recipe
 (abridged: its optional CUDA numerics gate, `validate_numerics`, is left out).
 Subclassing `RunSettings` adds the instrumentation keys (`record_games`,
-`statistics`, `diagnostics`, `stall_seconds`):
+`statistics`, `diagnostics`, `stall_seconds`, `combat_probe_every`,
+`combat_probe_rows`):
 
 ```python
 # manabot/recipes/elemental.py
@@ -369,8 +370,9 @@ Report labels are optional: without them or Etude declaration labels, the
 training-time report shows the run as `unclassified`; the local recipe supplies
 `kind="smoke"` and `recipe="manabot.recipes.local"` so it is excluded by default.
 
-It returns the policy it trained: the EMA checkpoint of its last update when
-the learning record keeps an EMA, the raw one otherwise. There is no resume
+The loop records and returns the EMA checkpoint by default when averaging is
+enabled. Set `checkpoint_weights="raw"` to evaluate the raw learner while
+keeping both exports. Without averaging, the loop always records the raw learner. There is no resume
 branch, stop check or state file in it. Those are the run's:
 
 | From Etude | What the loop gets |
@@ -805,9 +807,10 @@ uv run etude report experiments/elemental.py --open                           # 
 uv run etude report experiments/elemental.py --source r2://manabot/jobs --open
 ```
 
-Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
-phase seconds under `time/` (`time/collection`,
-`time/learning/minibatches/forward_and_loss`), CUDA high-water marks
+Rows use flat names: `loss`, `numerical/...`, `combat/...`,
+`coordinates/learner_transitions`, phase seconds under `time/`
+(`time/collection`, `time/learning/minibatches/forward_and_loss`,
+`time/combat_probe`), CUDA high-water marks
 (`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
 MPS current tensor/driver allocations (`memory/allocated_mps_bytes`,
 `memory/driver_allocated_mps_bytes`), process RSS (`coordinates/rss_bytes`),
@@ -855,7 +858,10 @@ Selection and belief summaries are written beside the step's output.
 The Perf panel's "Update time" series shows where an update goes:
 `environment_step_and_encoding`, which compares a run to retained ones, divides by
 the engine's own clock into `native_stepping` and `observation_encoding`, beside
-preparation, inference, `stream_bookkeeping`, assembly and learning.
+preparation, inference, `stream_bookkeeping`, assembly, learning and, on probed
+updates, `time/combat_probe`. `time/combat_probe` sits outside `time/collection`
+and `time/learning`, so `training_seconds` and transitions-per-second rates stay
+comparable with earlier runs.
 Etude's attempt record names the machine each attempt got. With one producer
 (`workers` 1) training occupies one CPU thread, so host single-thread
 speed sets its pace, not vCPU count or GPU size; see
@@ -867,6 +873,26 @@ PPO value loss is half the squared lambda-target residual; categorical move
 learning records its own. Loss, entropy and KL describe the last optimized
 minibatch. RSS, device allocation and host load are resource observations, not
 learning quality. Throughput is cumulative work over observed elapsed cost.
+
+#### Combat probe
+
+`self_play` probes combat decisions every 5 updates (updates 5, 10, 15, …) by
+default and logs the results in the update row; `etude report` draws them in the
+`ML` and `PERF` panels with no extra games. Adjust the cadence or cap — or turn
+it off with `0` — through `RunSettings`:
+
+```bash
+uv run etude train manabot/recipes/local.py --experiment probe-demo \
+  --config '{"updates": 5, "combat_probe_every": 5, "combat_probe_rows": 256}'
+uv run etude train manabot/recipes/local.py --experiment no-probe \
+  --config '{"combat_probe_every": 0}'
+```
+
+The probe scores the updated policy on up to `combat_probe_rows` decisions
+per kind from that update's batch. The gap measures the policy's preference
+for declaring. The four shifts measure how that preference changes when either
+player's creatures are edited. For the metric keys, sample counts, missing
+values and measured cost, see [Combat probe](experiment-metrics.md#combat-probe).
 
 ### Checkpoint cadence
 
@@ -1271,9 +1297,9 @@ state digests and the collector's annotations. Selection hashes the game's
 seed and stream, so it draws on no training randomness and the same run
 records the same games. An unselected game adds no native read; a selected one
 reads one state digest per decision. All shipped self-play recipe configs
-accept `record_games`, `statistics`, `diagnostics` and `stall_seconds`; Python
-callers set `SelfPlay.run_settings`, a `RunSettings` from
-`manabot.infra.run_settings`. `statistics: true` collects native counters for
+accept `record_games`, `statistics`, `diagnostics`, `stall_seconds`,
+`combat_probe_every` and `combat_probe_rows`; Python callers set
+`SelfPlay.run_settings`, a `RunSettings` from `manabot.infra.run_settings`. `statistics: true` collects native counters for
 every game, written privately to `out/statistics/`, independently of recording.
 These are runtime options: outside the learner digest and checkpoint bindings.
 Etude still compares recipe configs on resume, so choose them when declaring a

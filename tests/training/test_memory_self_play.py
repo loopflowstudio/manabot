@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
+from etude.train.read import read
 import pytest
 import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import gray_ogre_match
 from manabot.training.learning import (
     DampedPolicyLearning,
@@ -168,3 +170,19 @@ def test_update_ceiling_does_not_claim_the_decision_target(
         pytest.raises(RuntimeError, match="before learner-decision target"),
     ):
         self_play(recipe, run, updates=1)
+
+
+def test_combat_probe_scores_decision_memory_in_bounded_chunks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recipe = settings(
+        "gru", run_settings=RunSettings(combat_probe_every=1, combat_probe_rows=4)
+    )
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    with recording(
+        experiment="test", run="memory", clocks=CLOCKS, directory=tmp_path, seed=197
+    ) as run:
+        self_play(recipe, run, updates=1)
+    recorded = read(tmp_path, "test", "memory")
+    assert recorded.points("combat/attack/decisions", "updates").y.tolist() == [4]
+    assert recorded.points("time/combat_probe", "updates").y[0] > 0

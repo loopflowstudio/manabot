@@ -78,6 +78,9 @@ class DeckMatchup(StrictModel):
     population_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     entries: tuple[str, str]
     lists: tuple[Deck, Deck]
+    decklists: DecklistDisclosure = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
 
     @property
     def content_suite(self) -> str:
@@ -91,6 +94,7 @@ class DeckMatchup(StrictModel):
         first, second = _deck_pair(self.lists, leg)
         return MatchConfig(
             world=WORLD_SETUP,
+            decklists=self.decklists,
             hero=hero,
             villain=villain,
             hero_deck=first.main,

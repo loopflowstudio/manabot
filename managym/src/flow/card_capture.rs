@@ -10,11 +10,18 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::game::Game,
     state::{
-        game_object::{ObjectId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
 use serde::{Deserialize, Serialize};
+
+/// Both modes retain card movements. Exposure also records decisions and turn facts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CaptureMode {
+    Cards,
+    Exposure,
+}
 
 /// One consumed, nontrivial native choice. Focus is the shared action projection,
 /// not a claim that each focused card caused or benefited from the action.
@@ -49,6 +56,56 @@ pub struct ExposureCapture {
     pub choices: Vec<ExposureChoice>,
     pub resolutions: Vec<ExposureResolution>,
     pub mana: [ManaUse; 2],
+    pub mana_turns: [Vec<TurnMana>; 2],
+    pub attackers_committed: [u64; 2],
+    pub attackers_lost_for_nothing: [u64; 2],
+    pub blockers_committed: [u64; 2],
+    pub blockers_lost_for_nothing: [u64; 2],
+    #[serde(skip)]
+    pub(crate) combat: CombatDeclarations,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct TurnMana {
+    pub available: u64,
+    pub paid: u64,
+}
+
+/// Permanent ids identify battlefield incarnations even across a blink.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct CombatDeclarations {
+    pub attackers: Vec<PermanentId>,
+    pub blocks: Vec<(PermanentId, PermanentId)>,
+    pub deaths: std::collections::BTreeSet<PermanentId>,
+}
+
+impl ExposureCapture {
+    pub(crate) fn paid(&mut self, player: PlayerId, amount: u64) {
+        if let Some(turn) = self.mana_turns[player.0].last_mut() {
+            turn.paid += amount;
+        }
+    }
+
+    pub(crate) fn finish_combat(&mut self, attacking: PlayerId, defending: PlayerId) {
+        let combat = std::mem::take(&mut self.combat);
+        self.attackers_committed[attacking.0] += combat.attackers.len() as u64;
+        self.blockers_committed[defending.0] += combat.blocks.len() as u64;
+        for attacker in combat.attackers {
+            if combat.deaths.contains(&attacker)
+                && !combat
+                    .blocks
+                    .iter()
+                    .any(|(blocker, target)| *target == attacker && combat.deaths.contains(blocker))
+            {
+                self.attackers_lost_for_nothing[attacking.0] += 1;
+            }
+        }
+        for (blocker, attacker) in combat.blocks {
+            if combat.deaths.contains(&blocker) && !combat.deaths.contains(&attacker) {
+                self.blockers_lost_for_nothing[defending.0] += 1;
+            }
+        }
+    }
 }
 
 /// A pooled unit's origin names its source, not whether it was floated at
@@ -155,11 +212,11 @@ pub(crate) fn snapshots(game: &Game) -> Vec<CardSnapshot> {
 }
 
 impl CardCapture {
-    pub(crate) fn new(game: &Game) -> Self {
+    pub(crate) fn new(game: &Game, initial: Vec<CardSnapshot>, mode: CaptureMode) -> Self {
         Self {
             version: 1,
             content_digest: default_content_pack().content_digest(),
-            initial: snapshots(game),
+            initial,
             opening: std::array::from_fn(|seat| {
                 game.state
                     .zones
@@ -169,12 +226,26 @@ impl CardCapture {
                     .collect()
             }),
             moves: Vec::new(),
-            exposure: None,
+            exposure: (mode == CaptureMode::Exposure).then(Default::default),
         }
     }
 }
 
 impl Game {
+    pub(crate) fn exposure_mut(&mut self) -> Option<&mut ExposureCapture> {
+        self.card_capture.as_mut()?.exposure.as_mut()
+    }
+
+    pub(crate) fn finish_combat_capture(&mut self) {
+        // Combat attribution is read before turn progression expires any control.
+        // Attribute losses to the same chooser as the declaration denominator.
+        let attacking = self.decision_controller(self.active_player());
+        let defending = self.decision_controller(self.non_active_player());
+        if let Some(exposure) = self.exposure_mut() {
+            exposure.finish_combat(attacking, defending);
+        }
+    }
+
     pub(crate) fn mana_capture(&mut self, player: PlayerId) -> Option<&mut ManaUse> {
         Some(&mut self.card_capture.as_mut()?.exposure.as_mut()?.mana[player.0])
     }
@@ -359,6 +430,114 @@ mod tests {
     }
 
     #[test]
+    fn turn_budget_includes_modal_and_pooled_mana_and_counts_only_real_spends() {
+        use crate::{
+            flow::decision::SpendCompletion,
+            state::mana::{Mana, ManaCost},
+        };
+        let payer = PlayerId(0);
+        let mut players = configs();
+        players[0] = PlayerConfig::new(
+            "a",
+            BTreeMap::from([
+                ("Izzet Guildgate".into(), 20),
+                ("Prophetic Prism".into(), 1),
+            ]),
+        );
+        let mut game =
+            Game::construct(players.into(), 17, true, Some(CaptureMode::Exposure), false);
+        game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
+            .unwrap();
+        game.create_token("token.treasure", payer, false).unwrap();
+        let prism = game
+            .scenario_force_battlefield(payer, "Prophetic Prism", true)
+            .unwrap();
+        // This creature can convoke or waterbend but produces no mana.
+        game.create_token("token.ally", payer, false).unwrap();
+        game.state
+            .combat_mana_pool_mut(payer)
+            .add(&Mana::parse("R"), None);
+        game.capture_priority_mana(payer);
+        let hand = game.state.zones.zone_objects(ZoneType::Hand, payer);
+        let card = game.state.card_id(hand[0]).unwrap();
+        // Foretell's special-action payment here consumes the combat pool.
+        game.begin_mana_spend(
+            payer,
+            ManaCost::parse("R"),
+            SpendCompletion::Foretell(card),
+            EffectFrame::new(payer, Vec::new()),
+        )
+        .unwrap();
+        // A second source arriving on the same turn increases the peak.
+        game.create_token("token.treasure", payer, false).unwrap();
+        game.capture_priority_mana(payer);
+        let turn = &game.exposure_mut().unwrap().mana_turns[0][0];
+        assert_eq!((turn.available, turn.paid), (4, 1));
+
+        // The filter turns a pooled unit into another color at no net gain.
+        game.state.mana_pool_mut(payer).add(&Mana::parse("W"), None);
+        game.activate_mana_ability(payer, prism, 0).unwrap();
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+        assert_eq!(game.exposure_mut().unwrap().mana_turns[0][0].paid, 1);
+    }
+
+    #[test]
+    fn combat_counts_partners_and_committed_deaths_in_a_terminal_combat() {
+        use crate::flow::turn::PhaseKind;
+        let (active, defender) = (PlayerId(0), PlayerId(1));
+        let mut game = Game::construct(
+            configs().into(),
+            17,
+            true,
+            Some(CaptureMode::Exposure),
+            false,
+        );
+        game.state.turn.current_phase = PhaseKind::Combat as usize;
+        game.state.turn.current_step = 3; // combat damage
+        game.state.turn.step_initialized = false;
+        game.state.combat = Some(Default::default());
+        let attackers: Vec<_> = (0..4)
+            .map(|_| game.create_token("token.ally", active, false).unwrap())
+            .collect();
+        let blockers: Vec<_> = (0..4)
+            .map(|_| game.create_token("token.ally", defender, false).unwrap())
+            .collect();
+        game.mark_permanents_not_summoning_sick(active);
+        for &attacker in &attackers {
+            game.declare_attacker(attacker, true).unwrap();
+        }
+        for (&blocker, attacker) in blockers.iter().zip([0, 0, 1, 2]) {
+            game.declare_blocker(blocker, Some(attackers[attacker]))
+                .unwrap();
+        }
+        // A trade with one of two blockers, a sacrificed blocker, and a removed
+        // attacker. The unblocked fourth attacker deals lethal player damage.
+        for id in [attackers[0], blockers[1], blockers[2], attackers[2]] {
+            game.move_object(game.permanent_object(id).unwrap(), ZoneType::Graveyard);
+        }
+        // Ending the turn during combat also settles the ledger.
+        let mut surviving = game.rollback_snapshot();
+        surviving.end_the_turn();
+        let facts = surviving.exposure_mut().unwrap();
+        assert_eq!(facts.attackers_lost_for_nothing, [1, 0]);
+        assert_eq!(facts.blockers_lost_for_nothing, [0, 1]);
+
+        // One more blocker receives lethal damage in the same batch as its
+        // controller. Only earlier, committed deaths count on this branch.
+        let extra = game.create_token("token.ally", active, false).unwrap();
+        game.mark_permanents_not_summoning_sick(active);
+        game.declare_attacker(extra, true).unwrap();
+        let last = game.create_token("token.ally", defender, false).unwrap();
+        game.declare_blocker(last, Some(extra)).unwrap();
+        *game.state.life_mut(defender).unwrap() = 1;
+        assert!(game.tick());
+        assert!(game.state.permanents[last].is_some());
+        let facts = game.exposure_mut().unwrap();
+        assert_eq!(facts.attackers_lost_for_nothing, [1, 0]);
+        assert_eq!(facts.blockers_lost_for_nothing, [0, 1]);
+    }
+
+    #[test]
     fn capture_preserves_rules_and_excludes_forks() {
         let plain = Game::new(configs(), 17, true);
         let mut captured = Game::new_capturing(configs(), 17, true);
@@ -439,12 +618,9 @@ mod tests {
             game.state[object_id]
                 .keywords
                 .insert(crate::state::card::Keyword::Flash);
-            game.card_capture = Some(CardCapture::new(&game));
-            game.statistics = Some(crate::flow::statistics::Statistics::new(
-                &snapshots(&game),
-                true,
-            ));
-            game.card_capture.as_mut().unwrap().exposure = Some(ExposureCapture::default());
+            let initial = snapshots(&game);
+            game.statistics = Some(crate::flow::statistics::Statistics::new(&initial, true));
+            game.card_capture = Some(CardCapture::new(&game, initial, CaptureMode::Exposure));
             game.publish_action_space(ActionSpace {
                 player: Some(PlayerId(0)),
                 kind: ActionSpaceKind::Priority,

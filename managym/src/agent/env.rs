@@ -21,7 +21,7 @@ use crate::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
     },
-    flow::{game::Game, search::mix_seed},
+    flow::{card_capture::CaptureMode, game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
@@ -194,8 +194,7 @@ pub struct Env {
     retained_statistics: Vec<crate::flow::statistics::GameStatistics>,
     drained_generation: Option<u64>,
     pub(crate) record_terminal: bool,
-    capture_cards: bool,
-    capture_exposure: bool,
+    capture: Option<CaptureMode>,
     retained_exposure: Vec<String>,
     skip_trivial: bool,
     decision_memory_enabled: bool,
@@ -291,8 +290,7 @@ impl Env {
             retained_statistics: Vec::new(),
             drained_generation: None,
             record_terminal: false,
-            capture_cards: false,
-            capture_exposure: false,
+            capture: None,
             retained_exposure: Vec::new(),
             skip_trivial,
             decision_memory_enabled: false,
@@ -346,7 +344,7 @@ impl Env {
         crate::cards::deck_admission::admit_submitted(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
-        if self.capture_exposure && self.game.is_some() {
+        if self.capture == Some(CaptureMode::Exposure) && self.game.is_some() {
             self.retained_exposure.push(self.exposure_json()?);
         }
         if self.drained_generation != Some(self.capture_generation) {
@@ -369,18 +367,12 @@ impl Env {
             player_configs,
             self.seed,
             self.skip_trivial,
-            self.capture_cards,
+            self.capture,
             self.collect_statistics,
         );
         game.decision_memory_enabled =
             self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
-        if self.capture_exposure {
-            game.card_capture
-                .as_mut()
-                .expect("card capture enabled")
-                .exposure = Some(crate::flow::card_capture::ExposureCapture::default());
-        }
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);
@@ -402,8 +394,7 @@ impl Env {
             .with_decision_memory(self.decision_memory_enabled)
             .with_decision_memory_include_own(self.decision_memory_include_own);
         replacement.collect_statistics = self.collect_statistics;
-        replacement.capture_cards = self.capture_cards;
-        replacement.capture_exposure = self.capture_exposure;
+        replacement.capture = self.capture;
         replacement.record_terminal = self.record_terminal;
         replacement.retained_statistics = self.retained_statistics.clone();
         if self.drained_generation != Some(self.capture_generation) {
@@ -412,7 +403,7 @@ impl Env {
             }
         }
         replacement.retained_exposure = self.retained_exposure.clone();
-        if self.capture_exposure && self.game.is_some() {
+        if self.capture == Some(CaptureMode::Exposure) && self.game.is_some() {
             replacement.retained_exposure.push(self.exposure_json()?);
         }
         if self.profiler.is_enabled() {
@@ -459,14 +450,14 @@ impl Env {
                 "card capture must be enabled before reset".into(),
             ));
         }
-        self.capture_cards = true;
+        self.capture.get_or_insert(CaptureMode::Cards);
         Ok(())
     }
 
     /// Training uses the same card capture, adding consumed choices and completed frames.
     pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
         self.enable_card_capture()?;
-        self.capture_exposure = true;
+        self.capture = Some(CaptureMode::Exposure);
         Ok(())
     }
 

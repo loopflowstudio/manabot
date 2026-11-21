@@ -1,7 +1,9 @@
 """Self-play uses real Etude saves and preserves published policy evidence."""
 
+import hashlib
 import json
 from pathlib import Path
+from typing import Literal
 
 from etude.train.read import read
 from etude.train.tracking import Stopped
@@ -17,6 +19,7 @@ from manabot.backends.torch.rl import NumericalError
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
+from manabot.infra.run_settings import RunSettings
 from manabot.policy.readings import Reading, fresh_readings, legacy_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
@@ -61,13 +64,19 @@ def test_settings_refuse_what_the_loop_cannot_run(
         SelfPlay.model_validate({**values, **fields})
 
 
-@pytest.mark.parametrize("averaging", [None, 0.9])
+@pytest.mark.parametrize(
+    ("averaging", "weights"), [(None, "ema"), (0.9, "ema"), (0.9, "raw")]
+)
 def test_resume_keeps_adam_ema_counts_and_immutable_policies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, averaging: float | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    averaging: float | None,
+    weights: Literal["raw", "ema"],
 ) -> None:
     settings = gray_ogre_self_play(horizon=2).model_copy(
         update={
             "checkpoint_every": 1,
+            "checkpoint_weights": weights,
             "learning": Learning(horizon=2, epochs=1, minibatches=1, ema=averaging),
         }
     )
@@ -87,9 +96,8 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     ) as run:
         final = self_play(settings, run, updates=2)
     assert earlier.read_bytes() == before
-    assert final.name == (
-        "00000002-raw.safetensors" if averaging is None else "00000002-ema.safetensors"
-    )
+    selected = "raw" if averaging is None else weights
+    assert final.name == f"00000002-{selected}.safetensors"
     (reported,) = load_time_sources([str(tmp_path / "track")]).runs
     with recording(
         experiment="test",
@@ -114,7 +122,9 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         for name, value in learner.agent.state_dict().items():
             torch.testing.assert_close(value, saved[name], rtol=0, atol=0)
     if ema is not None:
-        averaged = load_checkpoint(final)[0].state_dict()
+        averaged = load_checkpoint(final.with_name("00000002-ema.safetensors"))[
+            0
+        ].state_dict()
         for name, value in ema.state_dict().items():
             torch.testing.assert_close(value, averaged[name], rtol=0, atol=0)
     recorded = read(tmp_path / "track", "test", "policy")
@@ -137,6 +147,13 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert any("observed attempts only" in w for w in after_inspection.warnings)
     assert list(recorded.points("coordinates/updates", "updates").x) == [1, 2]
     assert {cp.at["updates"] for cp in recorded.checkpoints} == {0, 1, 2}
+    for checkpoint in recorded.checkpoints:
+        update = int(checkpoint.at["updates"])
+        export = final.with_name(f"{update:08d}-{selected}.safetensors")
+        assert (
+            checkpoint.artifact.sha256
+            == hashlib.sha256(export.read_bytes()).hexdigest()
+        )
     # The training-time report reads work and active time from the loop's clocks.
     assert reported.updates == 2
     assert reported.learner_transitions == counts.learner_transitions > 0
@@ -421,3 +438,77 @@ def test_device_memory_observations(monkeypatch: pytest.MonkeyPatch) -> None:
     mps = loop.resource_metrics("mps")
     assert mps["memory/allocated_mps_bytes"] == 12
     assert mps["memory/driver_allocated_mps_bytes"] == 45
+
+
+def test_combat_probe_cadence_and_training_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(Learning(horizon=4, epochs=1, minibatches=1, ema=0.9))
+    states = []
+    for every in (0, 1, 2):
+        name = f"probe-{every}"
+        config = settings.model_copy(
+            update={
+                "run_settings": RunSettings(
+                    combat_probe_every=every, combat_probe_rows=4
+                )
+            }
+        )
+        monkeypatch.setenv("ETUDE_OUT", str(tmp_path / name))
+        track = tmp_path / "track"
+        with recording(
+            experiment="test", run=name, clocks=CLOCKS, directory=track, seed=SEED
+        ) as run:
+            self_play(config, run, updates=4)
+        recorded = read(track, "test", name)
+        expected = list(range(every, 5, every)) if every else []
+        for key in (
+            "combat/attack/gap",
+            "combat/attack/shift/my_creatures_9_9",
+            "time/combat_probe",
+        ):
+            assert list(recorded.points(key, "updates").x) == expected
+        for sample in recorded.points("combat/attack/decisions", "updates").y:
+            assert 1 <= sample <= 4
+        seconds = sum(
+            recorded.points(key, "updates").y
+            for key in ("time/collection", "time/learning")
+        )
+        np.testing.assert_allclose(
+            recorded.points("coordinates/training_seconds", "updates").y,
+            np.cumsum(seconds),
+        )
+        with recording(
+            experiment="test",
+            run=name,
+            clocks=CLOCKS,
+            directory=track,
+            resume=True,
+            seed=SEED,
+        ) as run:
+            learner, ema = loop.create(config, seed=SEED)
+            assert ema is not None
+            run.resume(
+                learner=learner.agent,
+                optimizer=learner.optimizer,
+                ema=ema,
+                extra=Counts(),
+            )
+            states.append(
+                (
+                    learner.agent.state_dict(),
+                    ema.state_dict(),
+                    learner.optimizer.state_dict(),
+                )
+            )
+    for state in states[1:]:
+        torch.testing.assert_close(state, states[0], rtol=0, atol=0)
+
+
+def test_combat_probe_run_settings_preserve_default_serialization() -> None:
+    assert (
+        not {"combat_probe_rows", "combat_probe_every"}
+        & RunSettings().model_dump().keys()
+    )
+    custom = RunSettings(combat_probe_every=0, combat_probe_rows=2)
+    assert RunSettings.model_validate_json(custom.model_dump_json()) == custom

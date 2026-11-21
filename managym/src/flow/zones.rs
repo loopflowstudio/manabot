@@ -627,6 +627,11 @@ impl Game {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_ref() {
                     event_controller = permanent.controller;
                 }
+                if to_zone == ZoneType::Graveyard && self.state.combat.is_some() {
+                    if let Some(exposure) = self.exposure_mut() {
+                        exposure.combat.deaths.insert(permanent_id);
+                    }
+                }
                 self.state.permanents[permanent_id] = None;
             }
         }
