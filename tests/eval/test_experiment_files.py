@@ -42,6 +42,7 @@ from experiments import (
     seat_comparison,
     tla_frontier,
     tla_trophies,
+    tla_trophies_floor,
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
@@ -64,6 +65,17 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
     (tla_trophies, (), {"trophy-w64-raw": 3}),
+    (
+        tla_trophies_floor,
+        (),
+        {
+            "control": 3,
+            "floor-0.002": 3,
+            "floor-0.01": 3,
+            "pullback-0": 1,
+            "pullback-0.01": 1,
+        },
+    ),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
@@ -92,6 +104,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "seat_comparison",
         "tla_frontier",
         "tla_trophies",
+        "tla_trophies_floor",
     }
     assert NOT_YET_RUNNABLE <= found
 
@@ -295,6 +308,36 @@ def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
         tla_trophies.Deal(first=2 * i, second=2 * i + 1, seed=40900 + i)
         for i in range(32)
     ]
+
+
+def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) -> None:
+    runs = tuple(
+        replace(
+            _finished_run(tmp_path, [100], name=f"{job}@{seed}", job=job),
+            seed=seed,
+        )
+        for job, seeds in (
+            ("control", (1, 2)),
+            ("floor-0.01", (1, 2)),
+            ("pullback-0", (2,)),
+        )
+        for seed in seeds
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    (evaluation,) = tla_trophies_floor.eval_jobs(state)
+    tournament, gaps = Tournament(
+        definition=evaluation.tournament, checkpoints=evaluation.recorded().checkpoints
+    ).resolve(state.lines)
+    assert not gaps
+    assert Counter(
+        (m.checkpoint, tla_trophies.Deal.model_validate(m.match.config).seed)
+        for m in tournament.schedule()
+    ) == {
+        (run.checkpoints[0].key, deal): 1
+        for run in runs
+        if run.launch != "pullback-0"
+        for deal in range(40900, 40932)
+    }
 
 
 # ---------------------------------------------------------------------------
