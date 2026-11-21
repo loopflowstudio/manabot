@@ -269,7 +269,7 @@ def report() -> Report:
     )
     return Report(
         clock="updates",
-        score=Score(table="plays", value="score", reference=0.5),
+        score=Score(table="plays", value="score", reference=0.5, range=(0.0, 1.0)),
         evals=(
             Curve(title="Score against the heuristic", matches=held_out),
             against_half,

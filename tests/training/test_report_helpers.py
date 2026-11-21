@@ -60,9 +60,8 @@ def test_comparisons_draw_one_chart_per_question_across_jobs() -> None:
         and c.score.unit == "games"
         for c in behaviour
     )
-    assert {c.title for c in behaviour if c.score and c.score.range is None} == {
-        "Turns per game"
-    }
+    (turns,) = [c for c in behaviour if c.title == "Turns per game"]
+    assert turns.score is not None and turns.score.range == (0.0, 30.0)
     assert all(
         c.score and c.score.range == (0.0, 1.0)
         for c in behaviour

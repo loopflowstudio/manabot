@@ -85,7 +85,9 @@ def behaviour_curves(
                 value=taken,
                 per=opportunities,
                 unit="games",
-                range=None if taken == "turns" else (0.0, 1.0),
+                # Rates share 0-1; game length starts at zero so a change of
+                # a turn reads at its true size (trophy games run about 19).
+                range=(0.0, 30.0) if taken == "turns" else (0.0, 1.0),
             ),
         )
         for title, taken, opportunities in (
