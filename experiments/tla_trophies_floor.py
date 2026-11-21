@@ -123,6 +123,15 @@ def training_jobs(
     return jobs
 
 
+LABELS = {
+    "control": "Control",
+    "floor-0.002": "Forward KL 0.002",
+    "floor-0.01": "Forward KL 0.01",
+    "tau-x2": "Tau x2",
+    "tau-x4": "Tau x4",
+    "pullback-0": "Warm start, control",
+    "pullback-0.01": "Warm start, forward KL 0.01",
+}
 HALF_TRAINING = "tla-trophies-floor-half-training-32"
 HALF_TRAINING_SEATINGS = tuple(f"Half-training pair {i + 1}" for i in range(32))
 HEAD_TO_HEAD = "tla-trophies-floor-vs-control-32"
@@ -226,5 +235,9 @@ def report() -> Report:
     )
     strength, *rest = shared.evals
     return shared.model_copy(
-        update={"evals": (strength, against_half, against_control, *rest)}
+        update={
+            "evals": (strength, against_half, against_control, *rest),
+            "baseline": "control",
+            "labels": LABELS,
+        }
     )
