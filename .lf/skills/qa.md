@@ -529,6 +529,20 @@ publish, land or choose the next Graph step from here.
   <checkout>` there, then `cmp` its files with the checkout's. Recompute the
   report's table cells from the fetched CSVs.
 
+- Combat probe and checkpoint behaviour (`manabot/training/combat_probe.py`,
+  `manabot/eval/behaviour.py`): the docs' `probe-demo` command logs 17
+  `combat/*` keys at update 5 in about 20 s on CPU. To check execution
+  chunking, copy `manabot/recipes/local.py` into `.runs/` with
+  `"bootstrap_rows": 5` added to its `model_copy`. Its update-5 probe must
+  equal the unchunked run's to within float order. `uv run --extra artifacts
+  --extra evaluation etude smoke experiments/tla_trophies.py --keep` covers
+  training, 64 four-leg heuristic deals and the report in about 3.5 minutes.
+  Query `<kept>/track/tla_trophies/*/blocks/*/behaviour.parquet` with duckdb.
+  The smoke trains one update, so the report omits the ML combat panels;
+  render the probe-demo run with `etude report manabot/recipes/local.py
+  --experiment probe-demo --out <dir>` to see them. Screenshot with
+  `uv run --with playwright python` using `channel="chrome"`.
+
 - Combat drafts (`[data-testid=combat-draft]`, `POST
   /api/sessions/<id>/combat-preview`): the draft appears only after the
   preview answers, so wait for it before clicking creatures; without a preview
