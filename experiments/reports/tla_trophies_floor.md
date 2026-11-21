@@ -2,7 +2,7 @@
 
 This exploratory comparison asks whether adding a forward KL to the damped
 update pulls a saturated combat policy back and changes its held-out play.
-The full training and held-out comparison is pending.
+Etude admitted all eleven full training runs on 2026-11-21 UTC.
 
 ## CPU smoke, 2026-11-20
 
@@ -30,7 +30,10 @@ arm's update-one raw policy. Saturation counts decisions with |declare logit
 These counts describe one seed, one update and one small batch. Each of the
 three fresh policies also played one held-out deal at update one, crossing
 decks and seats. Etude completed three matches with zero failures and rendered
-the behaviour and score panels.
+the behaviour and score panels with the corrected smoke tracking directory.
+Each arm lost all four games, declared 40% of offered attackers and declared
+68.75% of offered blockers. The first render read an older local tournament
+alongside the smoke and left the panels empty.
 
 ## Full comparison
 
@@ -47,3 +50,11 @@ against USD24.98 in declared job caps and a USD25 experiment ceiling. Only
 the three control seeds had immediate placements. A separate quote placed
 both warm starts together at USD1.035 each for 2.75 hours plus startup. The
 evaluation runs locally. Rental spend for this implementation smoke was USD0.
+
+At 05:37 UTC on November 21, Etude admitted all eleven runs at revision
+`6ae723eb8421` under the refreshed USD23.69 quote and USD25 ceiling.
+The three control seeds started on `mtg265-l4-s3-9fe9ece0494c`. The other
+eight runs entered the same rental queue. The run addresses in experiment
+`tla_trophies_floor` are `control@40901` through `control@40903`, the same
+three seeds under `floor-0.002` and `floor-0.01`, and `pullback-0@40902`
+and `pullback-0.01@40902`.
