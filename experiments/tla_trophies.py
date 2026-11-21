@@ -9,12 +9,12 @@ from decimal import Decimal
 from functools import cache
 import os
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from etude.eval.match import environment
 from etude.eval.records import Benchmark, CheckpointSlot, Code, Match, Seating
 from etude.eval.result import Tables
-from etude.jobs import EvalJob, ExperimentState, TrainingJob
+from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Report, Score
 from etude.spec import Input, Variable
 from etude.train.tracking import track
@@ -34,6 +34,10 @@ from manabot.training.panels import ML, PERF
 from manabot.training.report import behaviour_curves
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
+
+if TYPE_CHECKING:
+    from manabot.training.loops.self_play import SelfPlay
+
 
 ROOT = Path(__file__).resolve().parents[1]
 POOLS = "experiments/data/mtg409/pools-v2/corpus.json"
@@ -82,12 +86,12 @@ class Config(StrictModel):
     device: Literal["cuda", "cpu"] = "cuda"
 
 
-def train(config: Config) -> None:
-    from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+def settings(config: Config) -> "SelfPlay":
+    from manabot.training.loops.self_play import SelfPlay
 
     pools = playable("train")
     local = config.device == "cpu"
-    settings = SelfPlay(
+    return SelfPlay(
         deck_source=UniformDecks(
             decks=tuple(map(deck, pools)),
             entry_ids=tuple(p.id for p in pools),
@@ -118,8 +122,13 @@ def train(config: Config) -> None:
             recover_capacity=True,
         ),
     )
+
+
+def train(config: Config) -> None:
+    from manabot.training.loops.self_play import CLOCKS, self_play
+
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(settings, run, updates=config.updates)
+        self_play(settings(config), run, updates=config.updates)
 
 
 def training_jobs(
@@ -196,7 +205,10 @@ def play(match: Match, agents: Sequence[object]) -> Tables:
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    runs = [run for run in state.runs if run.launch == RAW_JOB]
+    return held_out_jobs([run for run in state.runs if run.launch == RAW_JOB])
+
+
+def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
     checkpoints = [c for run in runs for c in run.checkpoints]
     if not checkpoints:
         return []
