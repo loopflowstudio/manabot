@@ -7,10 +7,11 @@ The full training and held-out comparison is pending.
 ## CPU smoke, 2026-11-20
 
 At update 400 of MTG-409's raw trophy run (`4c38775ec499`), seed 40902 had
-larger mean attack and block gaps (11.33 and 21.19) than seed 40901 (6.87 and
-17.64). The earlier probe recorded signed means only. Both pullback arms
-therefore start from `trophy-w64-raw@40902/out/policies/00000400-raw.safetensors`
-in experiment `tla_trophies`.
+the largest mean attack and block gaps (11.33 and 21.19) across the three
+seeds. The earlier probe recorded signed means. Both pullback arms start
+from `trophy-w64-raw@40902/out/policies/00000400-raw.safetensors` in experiment
+`tla_trophies`. The other seeds' gaps are in the
+[MTG-409 report](tla_trophies.md#three-seed-training-run).
 
 Each of the five jobs completed one local CPU update at seed 40902 with two
 streams. Etude verified the delivered warm-start file against SHA-256
