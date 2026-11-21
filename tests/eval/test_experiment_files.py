@@ -122,8 +122,8 @@ def test_checkpoint_report_shows_behaviour_next_to_strength(
         "mana_use_late": "mana_turns_late",
         "attackers_declared": "attackers_offered",
         "blockers_declared": "blockers_offered",
-        "attackers_lost_for_nothing": "attackers_declared",
-        "blockers_lost_for_nothing": "blockers_declared",
+        "chump_attacks": "attackers_committed",
+        "chump_blocks": "blockers_committed",
         "casts_off_turn": "casts",
         "turns": "games",
     }

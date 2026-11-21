@@ -12,7 +12,7 @@ import pytest
 import torch
 
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
-from manabot.eval.behaviour import PlayCounts
+from manabot.eval.behaviour import PlayCounts, checkpoint_counts
 from manabot.eval.evaluation import (
     EvaluationRequest,
     EvaluationResult,
@@ -483,6 +483,15 @@ def test_continuation_uses_play_counts_from_the_accepted_attempt(
         (11, 1): 111,
     }
     path = out / "statistics.json"
+    historical = json.loads(path.read_bytes())
+    for row in historical["tables"]["play"]:
+        del row["attackers_committed"], row["blockers_committed"]
+    atomic_json(path, historical)
+    counts = evaluation_play_counts(out)
+    assert counts is not None
+    baseline = checkpoint_counts(counts[9, 0], game_seat=0)
+    assert baseline["turns"] == 1090 and "blockers_lost_for_nothing" in baseline
+    assert "chump_blocks" not in baseline and "blockers_committed" not in baseline
     for unavailable in (
         {"analysis_error": "failed", "tables": None},
         {"tables": {"play": []}},

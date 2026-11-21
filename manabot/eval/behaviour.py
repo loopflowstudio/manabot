@@ -38,13 +38,24 @@ class PlayCounts:
     casts_off_turn: int = 0
     games: int = 0
     turns: int = 0
+    attackers_committed: int | None = None
+    blockers_committed: int | None = None
 
 
 def checkpoint_counts(
     pair: tuple[PlayCounts, PlayCounts], game_seat: int
 ) -> dict[str, int | float]:
     """Select the native seat and label it as Etude's checkpoint participant."""
-    return {**asdict(pair[game_seat]), "seat": 0, "game_seat": game_seat}
+    row = {k: v for k, v in asdict(pair[game_seat]).items() if v is not None}
+    # Etude selects a score's cohort by its non-null numerator. Give each
+    # corrected rate a numerator present only alongside its committed total.
+    for role, numerator in (
+        ("attackers", "chump_attacks"),
+        ("blockers", "chump_blocks"),
+    ):
+        if f"{role}_committed" in row:
+            row[numerator] = row.pop(f"{role}_lost_for_nothing")
+    return {**row, "seat": 0, "game_seat": game_seat}
 
 
 def mana_use(turns: Sequence[TurnMana]) -> tuple[int, float]:
@@ -113,7 +124,9 @@ class Play(Reducer[PlayCounts]):
         if (
             facts is None
             or facts.mana_turns is None
+            or facts.attackers_committed is None
             or facts.attackers_lost_for_nothing is None
+            or facts.blockers_committed is None
             or facts.blockers_lost_for_nothing is None
         ):
             raise ValueError("play counts require combat and turn mana exposure")
@@ -125,7 +138,9 @@ class Play(Reducer[PlayCounts]):
                 counts,
                 games=1,
                 turns=capture.turn,
+                attackers_committed=facts.attackers_committed[seat],
                 attackers_lost_for_nothing=facts.attackers_lost_for_nothing[seat],
+                blockers_committed=facts.blockers_committed[seat],
                 blockers_lost_for_nothing=facts.blockers_lost_for_nothing[seat],
             )
             row.mana_turns_early, row.mana_use_early = mana_use(turns[:3])

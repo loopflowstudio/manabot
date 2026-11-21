@@ -96,8 +96,8 @@ def behaviour_curves(
             ("Mana spent, turns 7+", "mana_use_late", "mana_turns_late"),
             ("Attackers declared", "attackers_declared", "attackers_offered"),
             ("Blockers declared", "blockers_declared", "blockers_offered"),
-            ("Chump attacks", "attackers_lost_for_nothing", "attackers_declared"),
-            ("Chump blocks", "blockers_lost_for_nothing", "blockers_declared"),
+            ("Chump attacks", "chump_attacks", "attackers_committed"),
+            ("Chump blocks", "chump_blocks", "blockers_committed"),
             ("Spells cast on the opponent's turn", "casts_off_turn", "casts"),
             ("Turns per game", "turns", "games"),
         )

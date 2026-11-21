@@ -243,6 +243,9 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     for leg, (row, expected) in enumerate(zip(behaviour, checkpoint, strict=True)):
         deck = matchup.decks(leg)[leg % 2]
         opponent_deck = matchup.decks(leg)[1 - leg % 2]
+        expected = dict(expected)
+        expected["chump_attacks"] = expected.pop("attackers_lost_for_nothing")
+        expected["chump_blocks"] = expected.pop("blockers_lost_for_nothing")
         assert row == {
             **expected,
             "seat": 0,
@@ -266,6 +269,14 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
         comparisons = compare(
             db, table="behaviour", value="lands_played", per="land_turns"
         )
+        blocks = compare(
+            db, table="behaviour", value="chump_blocks", per="blockers_committed"
+        )
+    [block_rate] = [c for c in blocks if c.opponent == (heuristic.key,)]
+    assert block_rate.value == pytest.approx(
+        sum(row["blockers_lost_for_nothing"] for row in checkpoint)
+        / sum(row["blockers_committed"] for row in checkpoint)
+    )
     [against] = [c for c in comparisons if c.opponent == (heuristic.key,)]
     assert against.subject == (match.players[0].key,)
     assert against.value == pytest.approx(

@@ -318,8 +318,11 @@ def attempt_play_counts(
     # Construction defaults initialize the live counter. An absent saved count
     # is unavailable and must never be interpreted as a measured zero.
     columns = {field.name for field in fields(PlayCounts)}
+    historical = columns - {"attackers_committed", "blockers_committed"}
     if not isinstance(table, list) or any(
-        not isinstance(item, dict) or not columns <= item.keys() for item in table
+        not isinstance(item, dict)
+        or (item.keys() & columns) not in (historical, columns)
+        for item in table
     ):
         return None
     try:
