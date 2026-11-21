@@ -892,7 +892,7 @@ The probe scores the updated policy on up to `combat_probe_rows` decisions
 per kind from that update's batch. The gap measures the policy's preference
 for declaring. The four shifts measure how that preference changes when either
 player's creatures are edited. For the metric keys, sample counts, missing
-values and measured CPU cost, see [Combat probe](experiment-metrics.md#combat-probe).
+values and measured cost, see [Combat probe](experiment-metrics.md#combat-probe).
 
 ### Checkpoint cadence
 

@@ -112,7 +112,7 @@ def test_gap_uses_original_slots_and_omits_empty_side(
     rows["actions"][..., columns.declared] = 0
     rows["actions"][:, 4, columns.declared] = 1
     original = rows["agent_permanents"].copy()
-    metrics = gap_shifts(scoring_policy(columns, False), rows, columns)
+    metrics = gap_shifts(scoring_policy(columns, False), [rows], columns)
     assert metrics == {
         "gap": 3,
         "decisions": 1,
@@ -190,19 +190,17 @@ def test_shifts_in_game_units_condition_on_boards_with_creatures(
         "shift/their_creatures_0_1_tapped": -4,
         "shift/their_creatures_9_9_untapped": 12,
     }
-    assert gap_shifts(policy, rows, cols) == pytest.approx(expected)
-    policy.reset_mock()
-    assert gap_shifts(policy, rows, cols, execution_rows=1) == pytest.approx(expected)
-    assert all(
-        len(call.args[0]["actions_valid"]) == 1
-        for call in policy.prepare.call_args_list
-    )
+    assert gap_shifts(policy, [rows], cols) == pytest.approx(expected)
+    chunks = [
+        {key: values[i : i + 1] for key, values in rows.items()} for i in range(2)
+    ]
+    assert gap_shifts(policy, chunks, cols) == pytest.approx(expected)
 
     bad = {**rows, "actions": rows["actions"].copy()}
     bad["actions"][0, :, cols.declared] = 1
     bad["actions"][1, :, cols.declared] = 0
     with pytest.raises(ValueError, match="two-offer declare/decline"):
-        gap_shifts(policy, bad, cols)
+        gap_shifts(policy, [bad], cols)
 
 
 def test_bucketed_and_live_token_policy_matches_padded_probe(
@@ -223,9 +221,11 @@ def test_bucketed_and_live_token_policy_matches_padded_probe(
     padded = ActorCritic(space, config)
     packed = ActorCritic(space, config, bucketed_shapes=True, live_tokens=True)
     packed.load_state_dict(padded.state_dict())
+    sampled = Mock(wraps=batch, action_data=batch.action_data)
     assert combat_probe(
-        packed, batch, space, limit=4, execution_rows=2
+        packed, sampled, space, limit=4, execution_rows=2
     ) == pytest.approx(combat_probe(padded, batch, space, limit=4), abs=1e-5)
+    assert max(len(call.args[0]) for call in sampled.observations.call_args_list) <= 2
 
 
 def test_combat_probe_under_bfloat16_forward_precision(

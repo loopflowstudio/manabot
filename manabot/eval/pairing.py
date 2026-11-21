@@ -3,8 +3,7 @@
 The candidate is a checkpoint; the opponent is a checkpoint or the native
 heuristic (`Code(name="heuristic")`). The caller owns the experimental
 schedule; Etude owns the model forwards and supplies the built agents. This
-module owns player admission, retained arena evidence and disclosure labels on
-the resulting tables.
+module owns player admission and retained arena evidence.
 """
 
 from collections.abc import Sequence
@@ -20,7 +19,7 @@ from etude.eval.result import Tables
 from manabot.eval.admission import register_anchor
 from manabot.eval.agents import game_players, registration
 from manabot.eval.benchmark import evaluation_tables
-from manabot.eval.evaluation import EvaluationRequest, evaluate, evaluation_play_counts
+from manabot.eval.evaluation import EvaluationRequest, attempt_play_counts, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
@@ -113,20 +112,16 @@ def play_pairing(
                     )
                 ),
             )
+            if result.error:
+                raise ValueError(result.error)
+            counts = (
+                attempt_play_counts(out, result.rows)
+                if opponent.runner_kind == "code" and result.status == "completed"
+                else None
+            )
+            return evaluation_tables(
+                result.rows, matchup=matchup, legs=legs, play_counts=counts
+            )
         finally:
             if out.is_dir():
                 shutil.copytree(out, retained, dirs_exist_ok=True)
-    if result.error:
-        raise ValueError(result.error)
-    tables = evaluation_tables(
-        result.rows,
-        matchup=matchup,
-        legs=legs,
-        play_counts=evaluation_play_counts(retained)
-        if opponent.runner_kind == "code"
-        else None,
-    )
-    for rows in tables.values():
-        for row in rows:
-            row["decklists"] = matchup.decklists
-    return tables

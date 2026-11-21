@@ -258,22 +258,17 @@ Etude rows:
 from etude.train.read import read
 from manabot.reports.update_metrics import updates_from_run
 
-updates = updates_from_run(read(runs_dir, experiment, run_id))
-[
-    (
-        update,
-        round(row["combat/attack/gap"], 2),
-        round(row["combat/attack/shift/my_creatures_9_9"], 2),
-        round(row["combat/attack/shift/their_creatures_9_9_untapped"], 2),
-    )
-    for update, row in updates.items()
-    if "combat/attack/shift/my_creatures_9_9" in row
-    and "combat/attack/shift/their_creatures_9_9_untapped" in row
-][:2]
+row = updates_from_run(read(runs_dir, experiment, run_id))[400]
+for key in ("gap", "shift/my_creatures_9_9", "shift/their_creatures_9_9_untapped"):
+    print(key, round(row[f"combat/attack/{key}"], 2))
 ```
 
+For TLA trophy seed 40901 at update 400, this gives:
+
 ```text
-[(5, 0.42, 0.31, -0.28), (10, 1.15, 0.68, -0.54)]
+gap 6.87
+shift/my_creatures_9_9 3.64
+shift/their_creatures_9_9_untapped -4.25
 ```
 
 The `ML` panels (`manabot.training.panels`) draw three `log-odds` charts that
@@ -321,12 +316,9 @@ sample with no creature on an edited side omits that side's shifts and
 `shift_decisions` while keeping the gap; and legacy v9/v10 layouts publish no
 `is_creature`, so runs on them log no `combat/*` keys.
 
-On CPU (Elemental recipe, 32 streams, 256 attack + 237 block decisions), one
-probe took 4.4 s (~7% of a 32-stream CPU update, ~0.2% of a 256-stream recipe
-run at cadence 5); CUDA cost is unmeasured and is reported per run as
-`time/combat_probe` in Perf **Update time**, excluded from `training_seconds`.
-Combat probe curves describe how the policy reacts to board edits on its own
-training positions, not held-out playing strength.
+One Elemental CPU probe took 4.4 seconds for 256 attack and 237 block
+decisions. In the three-seed L4 run, 80 probes per seed took 0.28–0.31%
+of active wall time. [TLA trophies report](../experiments/reports/tla_trophies.md#three-seed-training-run)
 
 ## Checkpoint behaviour against the heuristic
 
