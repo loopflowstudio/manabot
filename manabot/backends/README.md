@@ -199,7 +199,7 @@ backend against them:
   and `float32` for a forward output.
 - `backend.rl`: the policy terms (`legal_mask`, `policy_logs`,
   `action_logs`, `reference_logs`, `damped_policy_loss`), the losses
-  (`clipped_surrogate`, `reverse_kl`, `squared_value_loss`,
+  (`clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`,
   `categorical_value_loss`, `entropy`, `clip_fraction`), returns
   (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`,
   `outcome_probabilities`, `expected_outcome`), selection (`selected_rows`,
@@ -278,7 +278,7 @@ require their original revision; retained captures remain readable.
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
 | `manabot.backends.torch.capture` | bounded real-call and learner-input capture for backend comparisons |
-| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
+| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `device_of`, `on_device` |

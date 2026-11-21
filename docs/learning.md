@@ -278,7 +278,7 @@ Filtered rows are removed within the window, and an empty window is skipped.
 Per retained row, with $r$ the ratio of current to behavior probability for the
 chosen action:
 
-$$L_\pi = -\min\big(rA,\ \mathrm{clip}(r, 0.8, 1.2)\,A\big) + 0.1\,\mathrm{KL}(\pi \,\|\, \pi_{\text{behavior}}) + \tau_i\,\mathrm{KL}(\pi \,\|\, \pi_{\text{magnet}})$$
+$$L_\pi = -\min\big(rA,\ \mathrm{clip}(r, 0.8, 1.2)\,A\big) + 0.1\,\mathrm{KL}(\pi \,\|\, \pi_{\text{behavior}}) + \tau_i\,\mathrm{KL}(\pi \,\|\, \pi_{\text{magnet}}) + \varepsilon\,\mathrm{KL}(\pi_{\text{magnet}} \,\|\, \pi)$$
 
 The total loss is the mean of $L_\pi$ over retained rows plus the value loss:
 cross-entropy for a categorical head, squared error for a scalar one. Each term
@@ -292,6 +292,10 @@ has a separate job:
 - **KL to the magnet** pulls toward a fixed reference: uniform over action
   types, then uniform within a type. A spell with dozens of target choices then
   gets no more prior weight than a single attack. Its strength τ decays.
+- **The forward-KL floor** keeps every legal offer in play. An offer worse
+  than the best by δ in advantage keeps probability about ε·q/δ, where q is
+  its magnet weight, at a cost of at most about ε of expected outcome per
+  decision. ε is `reference_forward_kl`, 0 by default, which removes the term.
   [Influences](#influences) says where each term comes from.
 
 The **behavior policy** is the frozen weights that played the batch, and the
@@ -324,6 +328,38 @@ return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
 
 Each action type present gets equal mass, split evenly among that type's legal
 actions, and the penalty is a reverse KL summed over all legal actions.
+
+### Why the floor is a forward KL
+
+The reverse KL cannot undo a choice the policy has locked. On a two-offer
+choice with probability π of one offer and logit gap g, its pull on the gap is
+τ·π(1−π)·g, which peaks near g = 2.4 and falls as e^(−g) after it; the
+surrogate's push carries the same π(1−π) factor. Once the surrogate has driven
+a gap past ΔA/τ, nothing brings the rarer offer back, and past a gap of about
+16.6 float32 rounds the pull to exactly zero. The forward KL's pull,
+ε·(π − ½) on a two-offer choice and ε·(π_a − q_a) per legal offer in general,
+does not vanish there: a saturated choice is pulled back at about ε/2.
+
+Turn it on with one field of the learning record:
+
+```python
+from manabot.training.learning import DampedPolicyLearning
+
+learning = DampedPolicyLearning(gradient="damped_policy", reference_forward_kl=0.002)
+```
+
+Each update row then carries `reference_forward_kl_coefficient` (ε) and
+`reference_forward_kl` (the measured mean KL(magnet ‖ π) over retained rows,
+in nats), drawn beside the other divergences in the report's KL panel. The
+measured value is logged with the floor off too. The weight is constant, not
+scheduled: it is a floor under the decaying τ. A negative weight is refused. A
+stored learning record or capture row without the key reads 0, and a record at
+0 serializes without it, so recorded recipes keep their bytes.
+
+At ε = 0.002 a two-offer choice with a constant advantage of 0.06 at τ = 0.0063
+settles at a gap of about 3.6, where the rarer offer is still sampled about 2.6%
+of the time; without the floor it settles near 9.5 (0.01%). These are balance
+points for one decision with a fixed advantage, not predictions for a run.
 
 ![Constants from collection feed the policy, damping and value terms. Gradients reach only the live network, through one shared encoder.](images/gradient-flow.svg)
 
@@ -467,7 +503,8 @@ objective and `update_damped_iteration` in
 regimes are rejected and need their pinned source; frozen evidence keeps the
 old tag. Per retained observation the policy loss is the negative clipped-ratio
 advantage surrogate plus `collection_kl * KL(current || behavior)` and
-`tau * KL(current || magnet)`, summed over all legal offers. Advantages use
+`tau * KL(current || magnet)`, summed over all legal offers, plus
+`reference_forward_kl * KL(magnet || current)` when that weight is nonzero. Advantages use
 signed expected outcomes with their own lambda. Outcome targets are three-way
 lambda mixtures stored in **loss, draw, win** order with one-hot terminals; the
 critic gets cross-entropy, equally weighted with the policy loss. The scalar
@@ -494,6 +531,7 @@ outputs are selected explicitly at arena registration.
 | --- | --- | --- |
 | S3.4 eq. (6), clipped surrogate | `damped_policy_loss`; both clipping branches tested | Same loss |
 | Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and magnet | Finite legal log support required; rounded zeros counted, no smoothing |
+| Forward-KL floor (not in the source) | `reference_forward_kl * KL(magnet ‖ current)` over legal offers of retained rows | Departure, default 0: the reverse KL's pull vanishes at a locked choice |
 | Magnet, S3.4 | `reference_distribution`, action-type uniform by default; uniform-offer control | MTG action types replace piece-then-move groups |
 | Scalar advantage, S3.4 | Transition-end GAE, gamma=1, lambda=.5; detached collection values | Learner decisions replace same-player positions |
 | Outcome estimator, eq. (5) | Vector lambda=.8, terminal one-hot, paused-tail bootstrap | Loss/draw/win storage order is a permutation |
@@ -534,7 +572,7 @@ each piece they are made of as a public function.
 | Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
-| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
 | Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
 | Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |

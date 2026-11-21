@@ -115,7 +115,8 @@ in the layout simulation uses
 | `policy_logs(logits, valid)` | `backend.rl` | Log likelihoods `[B,A]`, `-inf` off the legal mask; every policy term reads these. |
 | `action_logs(logs, actions)` | `backend.rl` | Each row's entry at its sampled action `[B]`. |
 | `reference_distribution(obs, kind)` | `manabot.policy.prepare` | The magnet a reverse KL pulls toward, in NumPy `[B,A]` float32 from the `actions_valid` and `actions` buffers of the NumPy observation rows: `"uniform"` over legal offers or `"action_type_uniform"`. `reference_logs(reference, valid)` (`backend.rl`) is its log, zero off the legal mask. |
-| `damped_policy_loss(logits, actions, advantages, behavior_logs, reference, valid, *, clip, collection_kl, tau)` | `backend.rl` | The damped policy objective per row: the clipped surrogate plus both reverse KL penalties. |
+| `damped_policy_loss(logits, actions, advantages, behavior_logs, reference, valid, *, clip, collection_kl, tau, reference_forward_kl=0.0)` | `backend.rl` | The damped policy objective per row: the clipped surrogate plus both reverse KL penalties, plus the forward-KL floor when `reference_forward_kl` is nonzero ([why](learning.md#why-the-floor-is-a-forward-kl)). |
+| `forward_kl(logs, target_logs, valid)` | `backend.rl` | KL(target ‖ π) per row `[B]`, summed over legal offers and zero on padding; the floor reads it against the magnet. |
 
 `backend.rl` is `manabot.backends.torch.rl` for the PyTorch model.
 Reduced precision is a context around the forward only:
