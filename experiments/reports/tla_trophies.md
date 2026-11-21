@@ -197,3 +197,17 @@ On the six-vCPU L4, three calibration seeds reserved about 1.05 GiB of
 CUDA memory combined while one-minute host load reached 35.6. The earlier
 rise in collection time with a third seed points to a CPU bottleneck. A
 host with more vCPUs per GPU may support more seeds.
+
+All three seeds reached update 400 on their first attempt. The launcher
+confirmed deletion of the L4 at 05:14 UTC on November 21 and estimated
+USD3.63 for the whole rental.
+
+| Seed | Attack gap at 400 | Block gap at 400 | Attack gap shift, own creatures 9/9 | Attack gap shift, opposing creatures 9/9 untapped |
+| --- | ---: | ---: | ---: | ---: |
+| 40901 | 6.87 | 17.64 | +3.64 | −4.25 |
+| 40902 | 11.33 | 21.19 | +5.92 | +0.57 |
+| 40903 | 6.68 | 0.76 | +3.52 | −1.12 |
+
+At update 400, making its own creatures larger increased the attack gap
+for every seed. Block preferences varied substantially across seeds. Two
+had mean block gaps above 17, while the third remained below 1.
