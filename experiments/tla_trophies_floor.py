@@ -3,7 +3,8 @@
 The fresh and pullback arms vary the forward-KL floor under the trophy tau
 schedule. The tau arms keep that schedule and multiply its scale. Each fresh
 checkpoint plays the held-out deals against the heuristic and, in its own
-benchmark, against its own line at half its updates.
+benchmark, against its own line at half its updates. At updates 200 and 400
+each treated fresh arm also meets every control seed at the same update.
 """
 
 from decimal import Decimal
@@ -11,7 +12,7 @@ from pathlib import Path
 
 from etude.checkpoints import CheckpointRecord
 from etude.eval.match import environment
-from etude.eval.records import Benchmark, CheckpointSlot, Fraction, Seating
+from etude.eval.records import Aligned, Benchmark, CheckpointSlot, Fraction, Seating
 from etude.jobs import EvalJob, ExperimentState, TrainingJob
 from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report
@@ -124,6 +125,30 @@ def training_jobs(
 
 HALF_TRAINING = "tla-trophies-floor-half-training-32"
 HALF_TRAINING_SEATINGS = tuple(f"Half-training pair {i + 1}" for i in range(32))
+HEAD_TO_HEAD = "tla-trophies-floor-vs-control-32"
+HEAD_TO_HEAD_SEATINGS = tuple(f"Against control pair {i + 1}" for i in range(32))
+HEAD_TO_HEAD_UPDATES = (200, 400)
+
+
+def trophy_benchmark(name: str, seatings: tuple[Seating, ...]) -> Benchmark:
+    """A benchmark on the trophy game, its environment pinned by this file too."""
+    return Benchmark(
+        name=name,
+        environment=environment(
+            "tla-trophies",
+            files=[
+                Path(__file__),
+                Path(trophies.__file__),
+                trophies.ROOT / "manabot/eval/pairing.py",
+            ],
+            config={"pools": trophies.corpus_input().sha256},
+        ),
+        seatings=seatings,
+    )
+
+
+def deal(i: int) -> trophies.Deal:
+    return trophies.Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i)
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
@@ -139,33 +164,53 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     earlier = Fraction(clock="updates", value=0.5, trained=True)
     half = job.model_copy(
         update={
-            "tournament": Benchmark(
-                name=HALF_TRAINING,
-                environment=environment(
-                    "tla-trophies",
-                    files=[
-                        Path(__file__),
-                        Path(trophies.__file__),
-                        trophies.ROOT / "manabot/eval/pairing.py",
-                    ],
-                    config={"pools": trophies.corpus_input().sha256},
-                ),
-                seatings=tuple(
+            "name": HALF_TRAINING,
+            "tournament": trophy_benchmark(
+                HALF_TRAINING,
+                tuple(
                     Seating(
                         name=name,
                         players=(CheckpointSlot(), earlier),
-                        config=trophies.Deal(
-                            first=i * 2, second=i * 2 + 1, seed=40900 + i
-                        ),
+                        config=deal(i),
                         games=seeds,
                     )
                     for i, name in enumerate(HALF_TRAINING_SEATINGS)
                 ),
             ),
-            "name": HALF_TRAINING,
         }
     )
-    return [job, half]
+    # Treated arms at matched updates against each control seed: a held
+    # checkpoint's games split evenly over its seed pairs.
+    treated = [
+        c
+        for run in fresh
+        if run.launch != "control"
+        for c in run.checkpoints
+        if c.at.get("updates") in HEAD_TO_HEAD_UPDATES
+    ]
+    if not treated:
+        return [job, half]
+    control = Aligned(clock="updates", job="control")
+    versus = job.model_copy(
+        update={
+            "name": HEAD_TO_HEAD,
+            "checkpoints": treated,
+            "tournament": trophy_benchmark(
+                HEAD_TO_HEAD,
+                tuple(
+                    Seating(
+                        name=name,
+                        players=(CheckpointSlot(), control),
+                        config=deal(i),
+                        # One match per treated seed x control seed pair.
+                        games=9,
+                    )
+                    for i, name in enumerate(HEAD_TO_HEAD_SEATINGS)
+                ),
+            ),
+        }
+    )
+    return [job, half, versus]
 
 
 def report() -> Report:
@@ -175,5 +220,11 @@ def report() -> Report:
         title="Against itself at half its updates",
         matches=tuple(Matches(seating=name) for name in HALF_TRAINING_SEATINGS),
     )
+    against_control = Curve(
+        title="Against the control at the same update",
+        matches=tuple(Matches(seating=name) for name in HEAD_TO_HEAD_SEATINGS),
+    )
     strength, *rest = shared.evals
-    return shared.model_copy(update={"evals": (strength, against_half, *rest)})
+    return shared.model_copy(
+        update={"evals": (strength, against_half, against_control, *rest)}
+    )
