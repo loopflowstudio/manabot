@@ -63,7 +63,11 @@ ML: tuple[MetricPanel, ...] = (
     ),
     Series(title="Losses", keys=("loss", "policy_loss", "value_loss")),
     Series(title="Policy entropy", keys=("entropy",), unit="nats"),
-    Series(title="KL divergence", keys=("collection_kl", "reference_kl"), scale="log"),
+    Series(
+        title="KL divergence",
+        keys=("collection_kl", "reference_kl", "reference_forward_kl"),
+        scale="log",
+    ),
     Series(
         title="Gradient norm",
         keys=("numerical/gradient_norm_before", "numerical/gradient_norm_after"),
@@ -81,6 +85,11 @@ ML: tuple[MetricPanel, ...] = (
         title="Attack and block log-odds",
         keys=("combat/attack/gap", "combat/block/gap"),
         unit="log-odds",
+    ),
+    Series(
+        title="Saturated combat decisions",
+        keys=("combat/attack/saturated", "combat/block/saturated"),
+        unit="fraction",
     ),
     *(
         Series(

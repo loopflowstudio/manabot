@@ -208,6 +208,13 @@ def reverse_kl(logs: mx.array, target_logs: mx.array, valid: mx.array) -> mx.arr
     return (mx.exp(logs) * difference).sum(-1)
 
 
+def forward_kl(logs: mx.array, target_logs: mx.array, valid: mx.array) -> mx.array:
+    """KL(frozen target || current) [B] over legal offers."""
+    target_logs = mx.stop_gradient(target_logs)
+    difference = mx.where(valid, target_logs, 0.0) - mx.where(valid, logs, 0.0)
+    return (mx.exp(target_logs) * difference).sum(-1)
+
+
 def squared_value_loss(values: mx.array, targets: mx.array) -> mx.array:
     """Squared error [B] of a scalar critic's `[B]` or `[B,1]` predictions."""
     if values.shape != targets.shape:
@@ -233,9 +240,11 @@ def damped_policy_loss(
     clip: float,
     collection_kl: float,
     tau: float,
+    reference_forward_kl: float = 0.0,
 ) -> mx.array:
     """The damped policy objective, equation (6), per row [B] over offers [B,A].
 
+    An optional forward KL keeps a restoring gradient on rare legal offers.
     Sources and departures: docs/learning.md#fidelity-to-the-sources. Ratios
     use the actual action likelihood at collection; the reverse KLs sum all
     legal actions.
@@ -244,7 +253,7 @@ def damped_policy_loss(
         raise ValueError("policy logits require [B,A] legal support")
     if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
         raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
+    if not 0 < clip < 1 or collection_kl < 0 or tau < 0 or reference_forward_kl < 0:
         raise ValueError("invalid damping coefficients")
     check_logs(behavior_logs, valid)
     check_probabilities(reference, valid, positive=True)
@@ -262,11 +271,15 @@ def damped_policy_loss(
     behavior_logs = mx.stop_gradient(behavior_logs)
     # Each side is gathered before the difference: on padding both are -inf.
     ratio_logs = action_logs(logs, actions) - action_logs(behavior_logs, actions)
-    return (
+    magnet_logs = reference_logs(reference, valid)
+    loss = (
         clipped_surrogate(ratio_logs, advantages, clip)
         + collection_kl * reverse_kl(logs, behavior_logs, valid)
-        + tau * reverse_kl(logs, reference_logs(reference, valid), valid)
+        + tau * reverse_kl(logs, magnet_logs, valid)
     )
+    if reference_forward_kl:
+        loss = loss + reference_forward_kl * forward_kl(logs, magnet_logs, valid)
+    return loss
 
 
 def clip_fraction(log_ratio: mx.array, clip: float) -> float:

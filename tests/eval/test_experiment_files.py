@@ -9,6 +9,7 @@ need; move one out of it, into the checks below, when it runs.
 
 from collections import Counter
 from dataclasses import replace
+from decimal import Decimal
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
@@ -16,7 +17,7 @@ from types import ModuleType
 from etude.checkpoints import CheckpointRecord
 from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
-from etude.eval.records import Match
+from etude.eval.records import Match, Tournament
 from etude.experiment_file import defined_functions
 from etude.jobs import (
     Checkpoints,
@@ -40,6 +41,8 @@ from experiments import (
     opponent_memory,
     seat_comparison,
     tla_frontier,
+    tla_trophies,
+    tla_trophies_floor,
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
@@ -61,6 +64,20 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
+    (tla_trophies, (), {"trophy-w64-raw": 3}),
+    (
+        tla_trophies_floor,
+        (),
+        {
+            "control": 3,
+            "floor-0.002": 3,
+            "floor-0.01": 3,
+            "pullback-0": 1,
+            "pullback-0.01": 1,
+            "tau-x2": 2,
+            "tau-x4": 2,
+        },
+    ),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
@@ -88,6 +105,8 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "opponent_memory",
         "seat_comparison",
         "tla_frontier",
+        "tla_trophies",
+        "tla_trophies_floor",
     }
     assert NOT_YET_RUNNABLE <= found
 
@@ -97,6 +116,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     [
         (elemental, Matches(tag="heuristic")),
         (seat_comparison, None),
+        (tla_trophies, Matches(tournament="tla-trophies-held-out-32")),
     ],
 )
 def test_checkpoint_report_shows_behaviour_next_to_strength(
@@ -249,6 +269,163 @@ def _finished_run(
         ),
         seed=0,
     )
+
+
+def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
+    (train,) = tla_trophies.training_jobs()
+    assert train.config == tla_trophies.Config(
+        updates=400, threads=2, streams=256, rows=512, checkpoint_every=100
+    )
+    assert {v.name: v.value for v in train.plain().environment} == {
+        "OMP_NUM_THREADS": "2",
+        "MKL_NUM_THREADS": "2",
+    }
+    assert train.max_attempts == 1
+    assert train.max_hours == 10.75
+    assert train.max_usd * len(train.seeds) == Decimal("7.80")
+    pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
+    raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
+    second = replace(
+        _finished_run(tmp_path, range(0, 201, 100), name="raw-2", job=train.name),
+        seed=1,
+    )
+    state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
+    (evaluation,) = tla_trophies.eval_jobs(state)
+    assert evaluation.max_usd == Decimal("1.30")
+    assert evaluation.max_attempts == 1
+    assert list(evaluation.checkpoints) == [*raw.checkpoints, *second.checkpoints]
+    tournament, gaps = Tournament(
+        definition=evaluation.tournament,
+        checkpoints=evaluation.recorded().checkpoints,
+    ).resolve(state.lines)
+    assert not gaps
+    assert Counter(m.checkpoint for m in tournament.schedule()) == {
+        checkpoint.key: 32 for checkpoint in evaluation.checkpoints
+    }
+    assert tla_trophies.report().evals[0].matches == Matches(tournament=evaluation.name)
+    assert [
+        tla_trophies.Deal.model_validate(s.config)
+        for s in evaluation.tournament.seatings
+    ] == [
+        tla_trophies.Deal(first=2 * i, second=2 * i + 1, seed=40900 + i)
+        for i in range(32)
+    ]
+
+
+def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) -> None:
+    runs = tuple(
+        replace(
+            _finished_run(tmp_path, [100], name=f"{job}@{seed}", job=job),
+            seed=seed,
+        )
+        for job, seeds in (
+            ("control", (1, 2, 3)),
+            ("floor-0.01", (1, 2, 3)),
+            ("tau-x2", (1, 2)),
+            ("pullback-0", (2,)),
+        )
+        for seed in seeds
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    counts = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.HELD_OUT):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            counts.update(
+                (m.checkpoint, tla_trophies.Deal.model_validate(m.match.config).seed)
+                for m in tournament.schedule()
+            )
+    assert counts == {
+        (run.checkpoints[0].key, deal): 1
+        for run in runs
+        if run.launch != "pullback-0"
+        for deal in range(40900, 40932)
+    }
+
+
+def test_floor_arms_meet_their_own_line_at_half_their_updates(tmp_path: Path) -> None:
+    runs = tuple(
+        replace(
+            _finished_run(tmp_path, [0, 100, 200, 300, 400], name=name, job=job),
+            seed=seed,
+        )
+        for job, seed, name in (
+            ("tau-x2", 1, "tau-x2@1"),
+            ("tau-x2", 2, "tau-x2@2"),
+            ("pullback-0", 2, "pullback-0@2"),
+        )
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    _, half, *_ = tla_trophies_floor.eval_jobs(state)
+    assert half.tournament.name == f"{tla_trophies_floor.HALF_TRAINING}-tau-x2"
+    tournament, gaps = Tournament(
+        definition=half.tournament, checkpoints=half.recorded().checkpoints
+    ).resolve(state.lines)
+    assert gaps
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter(
+        (by_key[m.checkpoint], by_key[m.match.players[1].checkpoint.key])
+        for m in tournament.schedule()
+    )
+    # Every pairing stays within one line, at exactly half, once per deal.
+    assert pairs == {
+        ((run, update), (run, update // 2)): 32
+        for run in ("tau-x2@1", "tau-x2@2")
+        for update in (200, 400)
+    }
+    curve = tla_trophies_floor.report().evals[1]
+    assert curve.title == "Against itself at half its updates"
+
+
+def test_treated_floor_arms_meet_each_control_seed_at_matched_updates(
+    tmp_path: Path,
+) -> None:
+    runs = tuple(
+        replace(
+            _finished_run(
+                tmp_path, [0, 100, 200, 300, 400], name=f"{job}@{seed}", job=job
+            ),
+            seed=seed,
+        )
+        for job, seeds in (
+            ("control", (1, 2, 3)),
+            ("floor-0.01", (1, 2, 3)),
+            ("tau-x2", (1, 2)),
+        )
+        for seed in seeds
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.HEAD_TO_HEAD):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            pairs.update(
+                (
+                    by_key[m.checkpoint],
+                    by_key[m.match.players[1].checkpoint.key],
+                    tla_trophies.Deal.model_validate(m.match.config).seed,
+                )
+                for m in tournament.schedule()
+            )
+    assert pairs == {
+        ((run.name, update), (f"control@{control}", update), deal): 1
+        for run in runs
+        if run.launch != "control"
+        for update in (200, 400)
+        for control in (1, 2, 3)
+        for deal in range(40900, 40932)
+    }
 
 
 # ---------------------------------------------------------------------------

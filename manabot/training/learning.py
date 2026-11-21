@@ -62,7 +62,7 @@ class IterationSchedule(Strict):
     steps: int = Field(ge=1, strict=True)
     reference_steps: int = Field(default=10_000, ge=2, strict=True)
 
-    def at(self, iteration: int) -> float:
+    def at(self, iteration: float) -> float:
         if iteration < 1:
             raise ValueError("iteration must be positive")
         if self.steps == 1:
@@ -106,12 +106,23 @@ class DampedPolicyLearning(Strict):
     reference: Literal["uniform", "action_type_uniform"] = "action_type_uniform"
     clip: float = Field(default=0.2, gt=0, lt=1)
     collection_kl: float = Field(default=0.1, ge=0)
+    reference_forward_kl: float = Field(
+        default=0, ge=0, exclude_if=lambda value: value == 0
+    )
     learning_rate_scale: float = Field(default=0.5, gt=0)
     learning_rate_power: float = Field(default=1.1, ge=0)
     learning_rate_min: float = Field(default=5e-6, gt=0)
     learning_rate_max: float = Field(default=1e-4, gt=0)
     tau_scale: float = Field(default=0.05, ge=0)
     tau_power: float = Field(default=0.3, ge=0)
+    # Advance both schedules by learned decisions rather than updates: they
+    # read iteration 1 + learned decisions / reference_batch through the
+    # iteration schedule, so an update of exactly this many decisions keeps the
+    # per-update curves and a larger update advances them proportionally more.
+    # None reads the update count.
+    reference_batch: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda value: value is None
+    )
     max_grad_norm: float = Field(default=0.267, gt=0)
     ema: float | None = Field(default=0.999, ge=0, lt=1)
     iteration_schedule: IterationSchedule | None = Field(
@@ -127,6 +138,8 @@ class DampedPolicyLearning(Strict):
             raise ValueError("learning rate minimum exceeds maximum")
         if self.iteration_schedule is not None and self.decision_schedule is not None:
             raise ValueError("choose an iteration or learner-decision schedule")
+        if self.reference_batch is not None and self.decision_schedule is not None:
+            raise ValueError("a learner-decision schedule already counts decisions")
         return self
 
     def rates(
@@ -135,10 +148,16 @@ class DampedPolicyLearning(Strict):
         """Rates at the start of an update, including skipped optimizer work.
 
         `iteration` is the one-based collection/update iteration. A decision
-        schedule reads `learner_transitions`, the decisions learned before it.
+        schedule or reference batch reads `learner_transitions`, the decisions
+        learned before it.
         """
         if iteration < 1:
             raise ValueError("Damped policy iteration must be positive")
+        clock: float = iteration
+        if self.reference_batch is not None:
+            if learner_transitions is None:
+                raise ValueError("a reference batch requires completed transitions")
+            clock = 1 + learner_transitions / self.reference_batch
         if self.decision_schedule is not None:
             if learner_transitions is None:
                 raise ValueError(
@@ -147,9 +166,9 @@ class DampedPolicyLearning(Strict):
             position = self.decision_schedule.at(learner_transitions)
         else:
             position = (
-                self.iteration_schedule.at(iteration)
+                self.iteration_schedule.at(clock)
                 if self.iteration_schedule is not None
-                else iteration
+                else clock
             )
         rate = self.learning_rate_scale / position**self.learning_rate_power
         return (

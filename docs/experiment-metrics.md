@@ -192,18 +192,19 @@ reconstruction of unrecorded minibatches.
 
 For Ataraxos move updates, each learner timestep is an optimized minibatch across
 selected environments. The loop overwrites `loss`, `policy_loss`, `value_loss`,
-`entropy`, `collection_kl` and `reference_kl` each time. The saved values therefore
-come from the **last optimized timestep minibatch**, evaluated before that
-minibatch's optimizer step. They are neither update-wide means nor evaluations on
-fixed positions. The sampled positions and number of legal offers change over time.
+`entropy`, `collection_kl`, `reference_kl` and `reference_forward_kl` each time.
+The saved values come from the **last optimized timestep minibatch**, evaluated
+before its optimizer step. Positions and legal offers vary by minibatch, so the
+values describe that minibatch alone.
 Empty actor/critic filters skip optimization and retain no loss or entropy.
 
 `policy_loss` is the clipped surrogate **plus** weighted collection/reference
-reverse KL in this recipe. The unregularized surrogate was not saved separately;
-the report does not subtract guessed penalties. The KL panels show unweighted
-nats. Scalar value loss is MSE against lambda targets; categorical value loss is
-cross-entropy against outcome-distribution lambda targets. Neither is an independent
-terminal-outcome test.
+reverse KL and, when `reference_forward_kl_coefficient` is nonzero, the weighted
+forward-KL floor. The report uses the recorded policy loss because the surrogate
+was not saved separately. The KL panels show unweighted nats. Scalar value loss
+is MSE against lambda targets. Categorical value loss is cross-entropy against
+outcome-distribution lambda targets. Neither is an independent terminal-outcome
+test.
 
 `rows` and `retained` cover the collection batch, unlike the last-minibatch losses.
 The report totals these only where both are present, names the record count, and
@@ -264,7 +265,7 @@ for update, row in updates.items():
         print(update, row["combat/attack/gap"], row.get("combat/attack/shift/my_creatures_9_9"))
 ```
 
-The `ML` panels (`manabot.training.panels`) draw three `log-odds` charts that
+The `ML` panels (`manabot.training.panels`) draw combat charts that
 separate two independent failure modes:
 
 - **Attack and block log-odds** (`combat/attack/gap`, `combat/block/gap`):
@@ -272,6 +273,10 @@ separate two independent failure modes:
   logit over two-offer `DECLARE_ATTACKER` or `DECLARE_BLOCKER` decisions.
   For an individual decision, a gap of 0 gives a 50% declare probability,
   2.4 gives about 92%, and 9 gives about 99.99%.
+- **Saturated combat decisions** (`combat/attack/saturated`, `combat/block/saturated`)
+  gives the fraction of those decisions with an absolute gap above 9.2. At that
+  threshold the rarer offer has about a 1 in 10,000 chance under policy sampling.
+  Opposite preferences can cancel in the signed mean while both count here.
 - **Attack gap shift under board edits** and **Block gap shift under board
   edits**: **is the policy board-blind?** Each chart draws four shifts — the
   mean change in that gap when the same decisions are re-scored after one edit
@@ -310,12 +315,13 @@ sample with no creature on an edited side omits that side's shifts and
 `is_creature`, so runs on them log no `combat/*` keys.
 
 One Elemental CPU probe took 4.4 seconds for 256 attack and 237 block
-decisions.
+decisions. In the three-seed L4 run, 80 probes per seed took 0.28–0.31%
+of active wall time. [TLA trophies report](../experiments/reports/tla_trophies.md#three-seed-training-run)
 
 ## Checkpoint behaviour against the heuristic
 
-Read the eleven curves beside **Score against the heuristic** in the Elemental
-and seat-comparison reports. The ten rate panels use a fixed
+Read the eleven curves beside **Score against the heuristic** in the Elemental,
+seat-comparison and TLA trophies reports. The ten rate panels use a fixed
 0–1 scale. Mana use can exceed 1 when resources gained on the opponent's turn
 are spent in the same mana cycle. Those values extend above the displayed range.
 **Turns per game** scales to the observed game lengths. At each checkpoint,

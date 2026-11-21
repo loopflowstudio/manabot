@@ -278,7 +278,7 @@ Filtered rows are removed within the window, and an empty window is skipped.
 Per retained row, with $r$ the ratio of current to behavior probability for the
 chosen action:
 
-$$L_\pi = -\min\big(rA,\ \mathrm{clip}(r, 0.8, 1.2)\,A\big) + 0.1\,\mathrm{KL}(\pi \,\|\, \pi_{\text{behavior}}) + \tau_i\,\mathrm{KL}(\pi \,\|\, \pi_{\text{magnet}})$$
+$$L_\pi = -\min\big(rA,\ \mathrm{clip}(r, 0.8, 1.2)\,A\big) + 0.1\,\mathrm{KL}(\pi \,\|\, \pi_{\text{behavior}}) + \tau_i\,\mathrm{KL}(\pi \,\|\, \pi_{\text{magnet}}) + \varepsilon\,\mathrm{KL}(\pi_{\text{magnet}} \,\|\, \pi)$$
 
 The total loss is the mean of $L_\pi$ over retained rows plus the value loss:
 cross-entropy for a categorical head, squared error for a scalar one. Each term
@@ -292,6 +292,10 @@ has a separate job:
 - **KL to the magnet** pulls toward a fixed reference: uniform over action
   types, then uniform within a type. A spell with dozens of target choices then
   gets no more prior weight than a single attack. Its strength τ decays.
+- **The forward-KL floor** pulls each legal offer toward its magnet weight q.
+  In a two-offer balance with a fixed advantage gap δ, a rare offer has
+  probability about ε·q/δ when the forward KL dominates the reverse KL.
+  Set ε with `reference_forward_kl`. Its default is 0.
   [Influences](#influences) says where each term comes from.
 
 The **behavior policy** is the frozen weights that played the batch, and the
@@ -323,7 +327,42 @@ return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
 ```
 
 Each action type present gets equal mass, split evenly among that type's legal
-actions, and the penalty is a reverse KL summed over all legal actions.
+actions. The reverse KL and the optional forward KL both sum over legal actions.
+
+### Why the floor is a forward KL
+
+On a two-offer choice with probability π of one offer and logit gap g, the
+reverse-KL gradient on its logit is τ·π(1−π)·g for a uniform magnet.
+The restoring gradient peaks at about 0.224τ when |g| = 1.54 (the more
+likely offer has probability 0.824). At large gaps its magnitude decays
+as τ·|g|·exp(−|g|). In float32 the dominant
+probability can round to one while the rare offer still has a small restoring
+gradient. The forward KL's pull,
+ε·(π − ½) on a two-offer choice and ε·(π_a − q_a) per legal offer in general,
+is zero at the magnet and approaches magnitude ε/2 at a saturated two-offer
+choice. In a many-offer decision, a rare offer receives a pull of about ε·q_a.
+The magnet shares mass within each action type, so two rare offers can
+receive different pulls.
+
+Turn it on with one field of the learning record:
+
+```python
+from manabot.training.learning import DampedPolicyLearning
+
+learning = DampedPolicyLearning(gradient="damped_policy", reference_forward_kl=0.002)
+```
+
+Each update records `reference_forward_kl_coefficient` (ε). The KL panel
+shows `reference_forward_kl`, the mean KL(magnet ‖ π) in nats over actor
+rows in the last optimized minibatch, including when the floor is off. The
+weight stays constant as τ decays. A negative weight is refused. A stored
+learning record or capture row without the key reads 0. At 0 the learning
+record omits the key, preserving the serialized settings of existing recipes.
+
+At ε = 0.002 a two-offer choice with a constant advantage of 0.06 at τ = 0.0063
+settles at a gap of about 3.6, where the rarer offer is still sampled about 2.6%
+of the time; without the floor it settles near 9.5 (0.01%). These are balance
+points for one decision with a fixed advantage, not predictions for a run.
 
 ![Constants from collection feed the policy, damping and value terms. Gradients reach only the live network, through one shared encoder.](images/gradient-flow.svg)
 
@@ -467,7 +506,8 @@ objective and `update_damped_iteration` in
 regimes are rejected and need their pinned source; frozen evidence keeps the
 old tag. Per retained observation the policy loss is the negative clipped-ratio
 advantage surrogate plus `collection_kl * KL(current || behavior)` and
-`tau * KL(current || magnet)`, summed over all legal offers. Advantages use
+`tau * KL(current || magnet)`, summed over all legal offers, plus
+`reference_forward_kl * KL(magnet || current)` when that weight is nonzero. Advantages use
 signed expected outcomes with their own lambda. Outcome targets are three-way
 lambda mixtures stored in **loss, draw, win** order with one-hot terminals; the
 critic gets cross-entropy, equally weighted with the policy loss. The scalar
@@ -494,6 +534,7 @@ outputs are selected explicitly at arena registration.
 | --- | --- | --- |
 | S3.4 eq. (6), clipped surrogate | `damped_policy_loss`; both clipping branches tested | Same loss |
 | Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and magnet | Finite legal log support required; rounded zeros counted, no smoothing |
+| Forward-KL floor (not in the source) | `reference_forward_kl * KL(magnet ‖ current)` over legal offers of retained rows | Departure, default 0: the reverse KL's pull vanishes at a locked choice |
 | Magnet, S3.4 | `reference_distribution`, action-type uniform by default; uniform-offer control | MTG action types replace piece-then-move groups |
 | Scalar advantage, S3.4 | Transition-end GAE, gamma=1, lambda=.5; detached collection values | Learner decisions replace same-player positions |
 | Outcome estimator, eq. (5) | Vector lambda=.8, terminal one-hot, paused-tail bootstrap | Loss/draw/win storage order is a permutation |
@@ -501,6 +542,7 @@ outputs are selected explicitly at arena registration.
 | Filtering, S3.4/Table S7 | Inclusive .75 quantile and .01 minimum; ties included | Torch linear quantile; source interpolation unspecified |
 | Optimizer damping, Table S7 | Adam, clip=.2, collection KL=.1, max norm=.267, value weight=1 | Adam betas .9/.999, epsilon 1e-5 (source unspecified) |
 | Schedules, Table S7 | LR clip(.5 / iteration^1.1, 5e-6, 1e-4); tau=.05 / iteration^.3 | One-based iterations; no elapsed-budget substitution |
+| Schedules by update size (not in the source) | `reference_batch`: learning rate and tau read iteration 1 + learned decisions / batch through the iteration schedule | Departure, default off: an update of the reference size keeps the per-update curves, a larger one advances both proportionally, as environment-step schedules do |
 | Batch reuse, S3.4 | One epoch, increasing timestep batches, no shuffle | CPU streams replace 202-step GPU batches of 1536 |
 | EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation output by default, `behavior="ema-self"` opts in |
 | S3.3 setup learning | Not implemented | MTG has no learned setup |
@@ -534,7 +576,7 @@ each piece they are made of as a public function.
 | Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
-| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
 | Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
 | Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |

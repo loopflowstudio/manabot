@@ -817,6 +817,9 @@ Etude tracking by its recipe/stage, including training in a subprocess. Etude
 rejects a mismatch with `experiment_differs_from_launch` before the first update;
 changing the launch label does not rename the recipe's tracking label.
 
+For a training warm start, `run.input("start")` inside `with track(...) as run`
+returns the delivered `Path` directly (Etude 0.4.3).
+
 Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
 checkpoint through the SDK, rather than assuming the file ends in `.pt`.
 
@@ -851,6 +854,9 @@ or `etude.controller.declarations.read_training_jobs` for a file's `training_job
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
 create the directory before starting local evaluation because Etude writes progress
 there before calling the experiment. Launched jobs receive it automatically.
+Local evaluation and reporting also read the default tracking directory alongside
+`--source`. Set `ETUDE_TRACK_DIR` to a study-specific directory for both commands
+when smoke and full tournaments share a name.
 Etude imports evaluation callbacks by module and qualified name, including local
 runs; callbacks take `play(match, agents)`. A closure or callable instance is
 not a portable entry point. Managed jobs share `manabot.eval.agents.AGENTS`;

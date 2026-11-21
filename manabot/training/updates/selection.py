@@ -170,6 +170,8 @@ class UpdateDiagnostics(TypedDict, total=False):
     policy_lambda: float
     value_lambda: float
     reference: str
+    reference_forward_kl: float
+    reference_forward_kl_coefficient: float
     collection_kl_coefficient: float
     retained_fraction: float
     return_mean: float

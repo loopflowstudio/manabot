@@ -200,3 +200,71 @@ def test_quantile_filter_keeps_ties_without_advantage_normalization() -> None:
     assert selected_moves(advantages, 0.75, 0.01).tolist() == [False, True, True, True]
     assert not selected_moves(torch.zeros(4), 0.75, 0.01).any()
     assert selected_moves(advantages, 0.75, 0.3).sum() == 0
+
+
+@pytest.mark.parametrize("gap", [20.0, 120.0])
+def test_forward_floor_restores_rare_offers(gap: float) -> None:
+    # Two offers of one action type and one of another split the magnet 1:1:2.
+    logits = torch.tensor([[gap, 0.0, 0.0, 900.0]], requires_grad=True)
+    valid = torch.tensor([[True, True, True, False]])
+    magnet = torch.tensor([[0.25, 0.25, 0.5, 0.0]], requires_grad=True)
+    args = (
+        logits,
+        torch.tensor([0]),
+        torch.zeros(1),
+        magnet.detach().log(),
+        magnet,
+        valid,
+    )
+    loss = damped_policy_loss(
+        *args, clip=0.2, collection_kl=0, tau=0, reference_forward_kl=0.002
+    )
+    loss.sum().backward()
+    target = magnet.detach()[valid].double()
+    legal_logs = logits.detach()[valid].double().log_softmax(0)
+    assert loss.item() == pytest.approx(
+        0.002 * (target * (target.log() - legal_logs)).sum().item()
+    )
+    probabilities = logits.detach().masked_fill(~valid, -torch.inf).softmax(-1)
+    torch.testing.assert_close(logits.grad, 0.002 * (probabilities - magnet.detach()))
+    assert magnet.grad is None
+    default = damped_policy_loss(*args, clip=0.2, collection_kl=0.1, tau=0.05)
+    explicit = damped_policy_loss(
+        *args, clip=0.2, collection_kl=0.1, tau=0.05, reference_forward_kl=0
+    )
+    assert torch.equal(default, explicit)
+    with pytest.raises(ValueError, match="invalid damping coefficients"):
+        damped_policy_loss(
+            *args, clip=0.2, collection_kl=0, tau=0, reference_forward_kl=-1
+        )
+
+
+@pytest.mark.parametrize("coefficient", [0.0, 0.002])
+def test_forward_floor_reopens_two_offer_choice_within_60_steps(
+    coefficient: float,
+) -> None:
+    logits = torch.tensor([[20.0, 0.0]], requires_grad=True)
+    optimizer = torch.optim.Adam([logits], lr=0.1)
+    magnet = torch.full_like(logits, 0.5)
+    valid = torch.ones_like(logits, dtype=torch.bool)
+    for _ in range(60):
+        optimizer.zero_grad()
+        loss = damped_policy_loss(
+            logits,
+            torch.tensor([0]),
+            torch.zeros(1),
+            logits.detach().log_softmax(-1),
+            magnet,
+            valid,
+            clip=0.2,
+            collection_kl=0,
+            tau=0.05,
+            reference_forward_kl=coefficient,
+        )
+        loss.sum().backward()
+        optimizer.step()
+    gap = (logits[0, 0] - logits[0, 1]).item()
+    if coefficient:
+        assert gap < 9.2
+    else:
+        assert gap > 9.2
