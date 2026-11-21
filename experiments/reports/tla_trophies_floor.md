@@ -72,3 +72,39 @@ number offered.
 | 40901 | 7/128 | 43.40% | 59.87% |
 | 40902 | 7/128 | 43.30% | 60.13% |
 | 40903 | 7/128 | 43.32% | 60.00% |
+
+### Does the zero-weight control reproduce MTG-409?
+
+At initialization the two studies agreed for each seed on score, attack
+declarations and block declarations. By update 100, all six policies
+declared at least 98% of offered attackers and 99% of offered blockers.
+At 400, the same two seeds in each study still declared every blocker.
+Seed 40903 recovered a smaller block gap and declined many blocks in both
+studies. Each value below uses 32 held-out deals and 128 crossed games per
+seed, or the corresponding learner's update-400 combat probe. The historical
+run is `tla_trophies/trophy-w64-raw` at `f9c19a2656` and the fresh control is
+`tla_trophies_floor/control` at `6ae723eb8421`.
+
+| Seed | Study | Score | Attack declared | Block declared | Attack gap | Block gap |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 40901 | MTG-409 | 71.9% | 91.8% | 100% | 6.87 | 17.64 |
+| 40901 | Fresh control | 67.2% | 93.5% | 100% | 9.84 | 15.38 |
+| 40902 | MTG-409 | 68.0% | 99.7% | 100% | 11.33 | 21.19 |
+| 40902 | Fresh control | 60.2% | 99.9% | 100% | 10.88 | 24.01 |
+| 40903 | MTG-409 | 68.0% | 99.0% | 64.1% | 6.68 | 0.76 |
+| 40903 | Fresh control | 65.6% | 97.3% | 57.0% | 7.71 | −0.82 |
+
+The fresh control reproduced the combat pattern. Its mean final score was
+64.3%, five percentage points below the historical 69.3%. The zero-weight
+loss regression checks numerical compatibility directly. The training runs
+show how much their learned outcomes differed even with matched seeds.
+[MTG-409 report and archived curves](tla_trophies.md#held-out-evaluation-through-update-400)
+
+### Training window for ε = 0.002
+
+On November 21, Etude recorded exit 75 for `floor-0.002@40901` at update
+321 after assigning it a 13,252-second placement with limit kind
+`over_budget`. Its deadline was 13:59 UTC. The job log also retained a
+native trigger-mode panic. The launcher recorded a saved stop, and the
+last scheduled raw checkpoint from that attempt is update 300. Seeds
+40902 and 40903 both reached 400 on their seven-hour shared placements.
