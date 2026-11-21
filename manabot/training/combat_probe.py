@@ -102,8 +102,8 @@ def gap_shifts(
             samples.setdefault((key, count_key), []).append(values)
 
     metrics: dict[str, float | int] = {}
-    for (key, count_key), chunks in samples.items():
-        values = np.concatenate(chunks)
+    for (key, count_key), parts in samples.items():
+        values = np.concatenate(parts)
         metrics[key] = float(values.mean())
         metrics[count_key] = len(values)
     return metrics
