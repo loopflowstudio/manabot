@@ -327,7 +327,7 @@ return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
 ```
 
 Each action type present gets equal mass, split evenly among that type's legal
-actions, and the penalty is a reverse KL summed over all legal actions.
+actions. The reverse KL and the optional forward KL both sum over legal actions.
 
 ### Why the floor is a forward KL
 

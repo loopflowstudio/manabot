@@ -189,19 +189,19 @@ reconstruction of unrecorded minibatches.
 
 For Ataraxos move updates, each learner timestep is an optimized minibatch across
 selected environments. The loop overwrites `loss`, `policy_loss`, `value_loss`,
-`entropy`, `collection_kl`, `reference_kl` and `reference_forward_kl` each time. The saved values therefore
-come from the **last optimized timestep minibatch**, evaluated before that
-minibatch's optimizer step. They are neither update-wide means nor evaluations on
-fixed positions. The sampled positions and number of legal offers change over time.
+`entropy`, `collection_kl`, `reference_kl` and `reference_forward_kl` each time.
+The saved values come from the **last optimized timestep minibatch**, evaluated
+before its optimizer step. Positions and legal offers vary by minibatch, so the
+values describe that minibatch alone.
 Empty actor/critic filters skip optimization and retain no loss or entropy.
 
 `policy_loss` is the clipped surrogate **plus** weighted collection/reference
-reverse KL in this recipe, and the weighted forward-KL floor when
-`reference_forward_kl_coefficient` is nonzero. The unregularized surrogate was not saved separately;
-the report does not subtract guessed penalties. The KL panels show unweighted
-nats. Scalar value loss is MSE against lambda targets; categorical value loss is
-cross-entropy against outcome-distribution lambda targets. Neither is an independent
-terminal-outcome test.
+reverse KL and, when `reference_forward_kl_coefficient` is nonzero, the weighted
+forward-KL floor. The report uses the recorded policy loss because the surrogate
+was not saved separately. The KL panels show unweighted nats. Scalar value loss
+is MSE against lambda targets. Categorical value loss is cross-entropy against
+outcome-distribution lambda targets. Neither is an independent terminal-outcome
+test.
 
 `rows` and `retained` cover the collection batch, unlike the last-minibatch losses.
 The report totals these only where both are present, names the record count, and
