@@ -41042,6 +41042,82 @@
    "sha256": "4f1b6db53d8942296d8caa6437620441c1c95482243dc715cff00ac51f11a668",
    "bytes": 2621440
   },
+  "experiments/data/mtg408/report/attack-shifts.png": {
+   "sha256": "63666bfae291a9270bf3229770ca32ed186a7c693f7a014c8f2425f8acfdd4cc",
+   "bytes": 41130
+  },
+  "experiments/data/mtg408/report/attackers.png": {
+   "sha256": "fd3390b11bcbce9bf3b4e36f7f82f954e0033e3bf2d13558098dd36042d2b00e",
+   "bytes": 34823
+  },
+  "experiments/data/mtg408/report/block-shifts.png": {
+   "sha256": "9b441e6c43761381171593d70bc1323b36e3a9913cc83342c38413ed83c70962",
+   "bytes": 44864
+  },
+  "experiments/data/mtg408/report/blockers.png": {
+   "sha256": "000a526ad7a008536aa0fc8cdfae085d28c4c770c057b3efba0fd87cf93ec740",
+   "bytes": 34984
+  },
+  "experiments/data/mtg408/report/chump-attacks.png": {
+   "sha256": "8c68bdf9d521b8a30e6af90cb05dbd93391bb88d5d02b1eed9ec0c4340e9d446",
+   "bytes": 30298
+  },
+  "experiments/data/mtg408/report/chump-blocks.png": {
+   "sha256": "352b411ddba0e66728d824e2659876a452fd9439e9c340c61464aa4e76e01f99",
+   "bytes": 32892
+  },
+  "experiments/data/mtg408/report/combat-probe.png": {
+   "sha256": "d5b113a1cf0bebbe27b843d1de458a1555ad55532a7da44317d41c9ba8ce5c6c",
+   "bytes": 24284
+  },
+  "experiments/data/mtg408/report/entropy.png": {
+   "sha256": "9fa3d9739a604d74e4128bd884e2d3d2ecb61a29fda573f10427dd49813664f8",
+   "bytes": 55554
+  },
+  "experiments/data/mtg408/report/grad-norm.png": {
+   "sha256": "c9c5d87934f75f4b81ecfd52398b2dacca4e8150b85bc0ed3e01370863b2965c",
+   "bytes": 18721
+  },
+  "experiments/data/mtg408/report/half-training.png": {
+   "sha256": "f7f65f3e2b1ddd0287c57b6181193d26c6d2a4f0ef933686078fcf2280f76b3b",
+   "bytes": 40271
+  },
+  "experiments/data/mtg408/report/kl.png": {
+   "sha256": "c4990abe98513f2a474d9bd626b67adaa557f31f24d87527c1ff95037acf81a4",
+   "bytes": 32946
+  },
+  "experiments/data/mtg408/report/lands.png": {
+   "sha256": "835ba74386012ce20ad134477e0c6f696633ab9491e5707eea30f10a38da9413",
+   "bytes": 28933
+  },
+  "experiments/data/mtg408/report/legend.png": {
+   "sha256": "dc5a199034a738297c1070280e3ad90d1e68fb54dd4842906e370dc3add8c743",
+   "bytes": 12961
+  },
+  "experiments/data/mtg408/report/losses.png": {
+   "sha256": "4f4ff1b2ac8c056f2e65bb53ade89fa4de4cfe3b3e49aa785f5bada625e91880",
+   "bytes": 23036
+  },
+  "experiments/data/mtg408/report/saturation.png": {
+   "sha256": "223842d97cefbfc4d875914a105f5cae0bdbc3886054d34d347a175075f4e59e",
+   "bytes": 21364
+  },
+  "experiments/data/mtg408/report/score.png": {
+   "sha256": "38dd93b05f650d02a9df1b43176808f3191464d4aa8023f81dc7569eb48fe75c",
+   "bytes": 31005
+  },
+  "experiments/data/mtg408/report/tau.png": {
+   "sha256": "ca69a995dfab61c2467bf2b3e0dcc037c3f0cf4e7ff617efdbee6ac31cd21cc5",
+   "bytes": 34009
+  },
+  "experiments/data/mtg408/report/turns.png": {
+   "sha256": "5f34ed2bf44b7e6afc23e4851ea44badb7c782a9b71be108b599384962c7b510",
+   "bytes": 27921
+  },
+  "experiments/data/mtg408/report/vs-control.png": {
+   "sha256": "7a4305e84f852255e13b34077c3ab01e22be57b20bdd7cc98460c00dca1f47b1",
+   "bytes": 42966
+  },
   "experiments/data/mtg409/corpus-v1/corpus.json": {
    "sha256": "c01cd01bd1c7c5680be4b1f668a7804093f9ddf5b5e3d4e8074a212e43c83533",
    "bytes": 105413393
