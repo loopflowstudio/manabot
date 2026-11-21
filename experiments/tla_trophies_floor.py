@@ -25,8 +25,13 @@ from manabot.training.report import behaviour_curves
 
 FRESH = {"control": 0.0, "floor-0.002": 0.002, "floor-0.01": 0.01}
 PULLBACK = {"pullback-0": 0.0, "pullback-0.01": 0.01}
-# Arm -> tau_scale, 2x and 4x the trophy schedule's 0.05.
-TAU = {"tau-x2": 0.1, "tau-x4": 0.2}
+# Arm -> (tau_scale, forward-KL weight): 2x and 4x the trophy schedule's
+# 0.05, and 2x with the 0.002 floor.
+TAU = {
+    "tau-x2": (0.1, 0.0),
+    "tau-x4": (0.2, 0.0),
+    "tau-x2-floor-0.002": (0.1, 0.002),
+}
 FRESH_ARMS = (*FRESH, *TAU)
 TAU_SEEDS = (40901, 40902)
 START_SEED = 40902
@@ -111,8 +116,12 @@ def training_jobs(
                 }
             )
         )
-    for name, tau_scale in TAU.items():
-        arm = {"reference_forward_kl": 0.0, "pullback": False, "tau_scale": tau_scale}
+    for name, (tau_scale, weight) in TAU.items():
+        arm = {
+            "reference_forward_kl": weight,
+            "pullback": False,
+            "tau_scale": tau_scale,
+        }
         jobs.append(
             base.model_copy(
                 update={
@@ -136,6 +145,7 @@ LABELS = {
     "floor-0.01": "Forward KL 0.01",
     "tau-x2": "Tau x2",
     "tau-x4": "Tau x4",
+    "tau-x2-floor-0.002": "Tau x2, forward KL 0.002",
     "pullback-0": "Warm start, control",
     "pullback-0.01": "Warm start, forward KL 0.01",
 }
