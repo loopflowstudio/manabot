@@ -7,13 +7,14 @@ benchmark, against its own line at half its updates. At updates 200 and 400
 each treated fresh arm also meets every control seed at the same update.
 """
 
+from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import Path
 
 from etude.checkpoints import CheckpointRecord
 from etude.eval.match import environment
 from etude.eval.records import Aligned, Benchmark, CheckpointSlot, Fraction, Seating
-from etude.jobs import EvalJob, ExperimentState, TrainingJob
+from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report, Score
 from etude.train.tracking import track
@@ -168,28 +169,33 @@ def deal(i: int) -> trophies.Deal:
     return trophies.Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i)
 
 
-def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    fresh = [run for run in state.runs if run.launch in FRESH | TAU]
-    held_out = trophies.held_out_jobs(fresh)
+def arm_evaluations(
+    runs: Sequence[TrainingRunSummary], arm: str, control_seeds: int
+) -> list[EvalJob]:
+    """Give each seed one match per deal, including arms with fewer seeds."""
+    held_out_name = f"{HELD_OUT}-{arm}"
+    half_name = f"{HALF_TRAINING}-{arm}"
+    versus_name = f"{HEAD_TO_HEAD}-{arm}"
+    held_out = trophies.held_out_jobs(runs)
     if not held_out:
         return []
     (shared,) = held_out
     job = shared.model_copy(
         update={
-            "name": HELD_OUT,
-            "tournament": trophy_benchmark(HELD_OUT, shared.tournament.seatings),
+            "name": held_out_name,
+            "tournament": trophy_benchmark(held_out_name, shared.tournament.seatings),
         }
     )
     # Each checkpoint meets its own line at exactly half its updates on the
     # same held-out deals, seats and decks crossed (200 vs 100, 400 vs 200 at
     # checkpoints every 100). Without a trained checkpoint there it is a gap.
-    seeds = len({run.seed for run in fresh})
+    seeds = len({run.seed for run in runs})
     earlier = Fraction(clock="updates", value=0.5, trained=True)
     half = job.model_copy(
         update={
-            "name": HALF_TRAINING,
+            "name": half_name,
             "tournament": trophy_benchmark(
-                HALF_TRAINING,
+                half_name,
                 tuple(
                     Seating(
                         name=name,
@@ -206,27 +212,27 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     # checkpoint's games split evenly over its seed pairs.
     treated = [
         c
-        for run in fresh
-        if run.launch != "control"
+        for run in runs
+        if arm != "control"
         for c in run.checkpoints
         if c.at.get("updates") in HEAD_TO_HEAD_UPDATES
     ]
-    if not treated:
+    if not treated or not control_seeds:
         return [job, half]
     control = Aligned(clock="updates", job="control")
     versus = job.model_copy(
         update={
-            "name": HEAD_TO_HEAD,
+            "name": versus_name,
             "checkpoints": treated,
             "tournament": trophy_benchmark(
-                HEAD_TO_HEAD,
+                versus_name,
                 tuple(
                     Seating(
                         name=name,
                         players=(CheckpointSlot(), control),
                         config=deal(i),
                         # One match per treated seed x control seed pair.
-                        games=9,
+                        games=seeds * control_seeds,
                     )
                     for i, name in enumerate(HEAD_TO_HEAD_SEATINGS)
                 ),
@@ -236,16 +242,39 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     return [job, half, versus]
 
 
+FRESH_ARMS = (*FRESH, *TAU)
+
+
+def eval_jobs(state: ExperimentState) -> list[EvalJob]:
+    controls = {run.seed for run in state.runs if run.launch == "control"}
+    return [
+        job
+        for arm in FRESH_ARMS
+        for job in arm_evaluations(
+            [r for r in state.runs if r.launch == arm], arm, len(controls)
+        )
+    ]
+
+
 def report() -> Report:
-    held_out = Matches(tournament=HELD_OUT)
+    held_out = tuple(Matches(tournament=f"{HELD_OUT}-{arm}") for arm in FRESH_ARMS)
     # Named seatings draw the held checkpoint's score, one line per arm.
     against_half = Curve(
         title="Against itself at half its updates",
-        matches=tuple(Matches(seating=name) for name in HALF_TRAINING_SEATINGS),
+        matches=tuple(
+            Matches(tournament=f"{HALF_TRAINING}-{arm}", seating=name)
+            for arm in FRESH_ARMS
+            for name in HALF_TRAINING_SEATINGS
+        ),
     )
     against_control = Curve(
         title="Against the control at the same update",
-        matches=tuple(Matches(seating=name) for name in HEAD_TO_HEAD_SEATINGS),
+        matches=tuple(
+            Matches(tournament=f"{HEAD_TO_HEAD}-{arm}", seating=name)
+            for arm in FRESH_ARMS
+            if arm != "control"
+            for name in HEAD_TO_HEAD_SEATINGS
+        ),
     )
     return Report(
         clock="updates",

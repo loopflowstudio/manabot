@@ -319,22 +319,26 @@ def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) 
             seed=seed,
         )
         for job, seeds in (
-            ("control", (1, 2)),
-            ("floor-0.01", (1, 2)),
+            ("control", (1, 2, 3)),
+            ("floor-0.01", (1, 2, 3)),
+            ("tau-x2", (1, 2)),
             ("pullback-0", (2,)),
         )
         for seed in seeds
     )
     state = ExperimentState(experiment="fixture", runs=runs)
-    evaluation, *_ = tla_trophies_floor.eval_jobs(state)
-    tournament, gaps = Tournament(
-        definition=evaluation.tournament, checkpoints=evaluation.recorded().checkpoints
-    ).resolve(state.lines)
-    assert not gaps
-    assert Counter(
-        (m.checkpoint, tla_trophies.Deal.model_validate(m.match.config).seed)
-        for m in tournament.schedule()
-    ) == {
+    counts = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.HELD_OUT):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            counts.update(
+                (m.checkpoint, tla_trophies.Deal.model_validate(m.match.config).seed)
+                for m in tournament.schedule()
+            )
+    assert counts == {
         (run.checkpoints[0].key, deal): 1
         for run in runs
         if run.launch != "pullback-0"
@@ -356,7 +360,7 @@ def test_floor_arms_meet_their_own_line_at_half_their_updates(tmp_path: Path) ->
     )
     state = ExperimentState(experiment="fixture", runs=runs)
     _, half, *_ = tla_trophies_floor.eval_jobs(state)
-    assert half.tournament.name == tla_trophies_floor.HALF_TRAINING
+    assert half.tournament.name == f"{tla_trophies_floor.HALF_TRAINING}-tau-x2"
     tournament, gaps = Tournament(
         definition=half.tournament, checkpoints=half.recorded().checkpoints
     ).resolve(state.lines)
@@ -396,30 +400,32 @@ def test_treated_floor_arms_meet_each_control_seed_at_matched_updates(
         for seed in seeds
     )
     state = ExperimentState(experiment="fixture", runs=runs)
-    *_, versus = tla_trophies_floor.eval_jobs(state)
-    assert versus.tournament.name == tla_trophies_floor.HEAD_TO_HEAD
-    tournament, _ = Tournament(
-        definition=versus.tournament, checkpoints=versus.recorded().checkpoints
-    ).resolve(state.lines)
     by_key = {
         c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
     }
-    pairs = Counter(
-        (by_key[m.checkpoint], by_key[m.match.players[1].checkpoint.key])
-        for m in tournament.schedule()
-    )
-    # Floor arms play every seed pair once per deal at 200 and 400, against
-    # the control at the same update; nothing holds a control checkpoint.
-    for update in (200, 400):
-        for mine in (1, 2, 3):
-            for theirs in (1, 2, 3):
-                key = ((f"floor-0.01@{mine}", update), (f"control@{theirs}", update))
-                assert pairs[key] == 32
-    assert all(held[1] == opponent[1] for held, opponent in pairs)
-    assert {held[0].split("@")[0] for held, _ in pairs} == {"floor-0.01", "tau-x2"}
-    assert sum(n for (held, _), n in pairs.items() if held[0].startswith("tau")) == (
-        2 * 9 * 32
-    )
+    pairs = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.HEAD_TO_HEAD):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            pairs.update(
+                (
+                    by_key[m.checkpoint],
+                    by_key[m.match.players[1].checkpoint.key],
+                    tla_trophies.Deal.model_validate(m.match.config).seed,
+                )
+                for m in tournament.schedule()
+            )
+    assert pairs == {
+        ((run.name, update), (f"control@{control}", update), deal): 1
+        for run in runs
+        if run.launch != "control"
+        for update in (200, 400)
+        for control in (1, 2, 3)
+        for deal in range(40900, 40932)
+    }
 
 
 # ---------------------------------------------------------------------------
