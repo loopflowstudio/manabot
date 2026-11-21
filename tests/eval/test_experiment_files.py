@@ -326,7 +326,7 @@ def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) 
         for seed in seeds
     )
     state = ExperimentState(experiment="fixture", runs=runs)
-    (evaluation,) = tla_trophies_floor.eval_jobs(state)
+    evaluation, _ = tla_trophies_floor.eval_jobs(state)
     tournament, gaps = Tournament(
         definition=evaluation.tournament, checkpoints=evaluation.recorded().checkpoints
     ).resolve(state.lines)
@@ -340,6 +340,42 @@ def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) 
         if run.launch != "pullback-0"
         for deal in range(40900, 40932)
     }
+
+
+def test_floor_arms_meet_their_own_line_at_half_their_updates(tmp_path: Path) -> None:
+    runs = tuple(
+        replace(
+            _finished_run(tmp_path, [0, 100, 200, 300, 400], name=name, job=job),
+            seed=seed,
+        )
+        for job, seed, name in (
+            ("tau-x2", 1, "tau-x2@1"),
+            ("tau-x2", 2, "tau-x2@2"),
+            ("pullback-0", 2, "pullback-0@2"),
+        )
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    _, half = tla_trophies_floor.eval_jobs(state)
+    assert half.tournament.name == tla_trophies_floor.HALF_TRAINING
+    tournament, gaps = Tournament(
+        definition=half.tournament, checkpoints=half.recorded().checkpoints
+    ).resolve(state.lines)
+    assert gaps
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter(
+        (by_key[m.checkpoint], by_key[m.match.players[1].checkpoint.key])
+        for m in tournament.schedule()
+    )
+    # Every pairing stays within one line, at exactly half, once per deal.
+    assert pairs == {
+        ((run, update), (run, update // 2)): 32
+        for run in ("tau-x2@1", "tau-x2@2")
+        for update in (200, 400)
+    }
+    curve = tla_trophies_floor.report().evals[1]
+    assert curve.title == "Against itself at half its updates"
 
 
 # ---------------------------------------------------------------------------

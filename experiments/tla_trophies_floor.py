@@ -1,15 +1,20 @@
 """Compare forward-KL weights and larger tau on trophy policies.
 
 The fresh and pullback arms vary the forward-KL floor under the trophy tau
-schedule. The tau arms keep that schedule and multiply its scale.
+schedule. The tau arms keep that schedule and multiply its scale. Each fresh
+checkpoint plays the held-out deals against the heuristic and, in its own
+benchmark, against its own line at half its updates.
 """
 
 from decimal import Decimal
+from pathlib import Path
 
 from etude.checkpoints import CheckpointRecord
+from etude.eval.match import environment
+from etude.eval.records import Benchmark, CheckpointSlot, Fraction, Seating
 from etude.jobs import EvalJob, ExperimentState, TrainingJob
 from etude.records import ArtifactRef
-from etude.report import Report
+from etude.report import Curve, Matches, Report
 from etude.train.tracking import track
 
 from experiments import tla_trophies as trophies
@@ -112,11 +117,58 @@ def training_jobs(
     return jobs
 
 
+HALF_TRAINING = "tla-trophies-floor-half-training-32"
+HALF_TRAINING_SEATINGS = tuple(f"Half-training pair {i + 1}" for i in range(32))
+
+
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    return trophies.held_out_jobs(
-        [run for run in state.runs if run.launch in FRESH | TAU]
+    fresh = [run for run in state.runs if run.launch in FRESH | TAU]
+    held_out = trophies.held_out_jobs(fresh)
+    if not held_out:
+        return []
+    (job,) = held_out
+    # Each checkpoint meets its own line at exactly half its updates on the
+    # same held-out deals, seats and decks crossed (200 vs 100, 400 vs 200 at
+    # checkpoints every 100). Without a trained checkpoint there it is a gap.
+    seeds = len({run.seed for run in fresh})
+    earlier = Fraction(clock="updates", value=0.5, trained=True)
+    half = job.model_copy(
+        update={
+            "tournament": Benchmark(
+                name=HALF_TRAINING,
+                environment=environment(
+                    "tla-trophies",
+                    files=[
+                        Path(__file__),
+                        Path(trophies.__file__),
+                        trophies.ROOT / "manabot/eval/pairing.py",
+                    ],
+                    config={"pools": trophies.corpus_input().sha256},
+                ),
+                seatings=tuple(
+                    Seating(
+                        name=name,
+                        players=(CheckpointSlot(), earlier),
+                        config=trophies.Deal(
+                            first=i * 2, second=i * 2 + 1, seed=40900 + i
+                        ),
+                        games=seeds,
+                    )
+                    for i, name in enumerate(HALF_TRAINING_SEATINGS)
+                ),
+            ),
+            "name": HALF_TRAINING,
+        }
     )
+    return [job, half]
 
 
 def report() -> Report:
-    return trophies.report()
+    shared = trophies.report()
+    # Named seatings draw the held checkpoint's score, one line per arm.
+    against_half = Curve(
+        title="Against itself at half its updates",
+        matches=tuple(Matches(seating=name) for name in HALF_TRAINING_SEATINGS),
+    )
+    strength, *rest = shared.evals
+    return shared.model_copy(update={"evals": (strength, against_half, *rest)})
