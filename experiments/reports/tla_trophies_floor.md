@@ -15,7 +15,9 @@ update 150. Cells marked — are not yet played.
 
 ## Answer so far
 
-Every treatment removes the lock and none costs strength. The two tau arms
+Every treatment removes the lock and none costs strength. Forward KL 0.01
+also unlocks an already locked policy within 25 updates, which the damped
+update alone does not. The two tau arms
 and forward KL 0.002 score higher against the heuristic than the control at
 update 400, and they play the control evenly head to head. Forward KL 0.01
 removes rare offers entirely but trails the other arms in strength.
@@ -55,6 +57,22 @@ In held-out play the control declares 97–99% of offered attackers from update
 
 ![Attackers declared](../data/mtg408/report/attackers.png)
 ![Blockers declared](../data/mtg408/report/blockers.png)
+
+## Does the floor pull an already locked policy back?
+
+Yes, within 25 updates. Both warm starts begin from MTG-409's update-400
+seed 40902 policy, whose probe gaps were 11.3 (attack) and 21.2 (block).
+Without the floor the policy stays locked; with forward KL 0.01 it opens and
+stays open.
+
+| Warm start, 100 updates | Attack gap, 25 / 100 | Block gap, 25 / 100 | Saturated attacks, 100 | Saturated blocks, 100 |
+| --- | ---: | ---: | ---: | ---: |
+| ε = 0 | 6.2 / 6.6 | 12.5 / 11.2 | 16% | 61% |
+| ε = 0.01 | 2.2 / 2.4 | 0.9 / 0.3 | 0% | 0% |
+
+After unlocking, the ε = 0.01 warm start attacks less into an untapped 9/9 as
+training continues (shift −0.4 at update 25, −1.1 at 100). The warm starts
+are one seed each and have no held-out evaluation.
 
 ## Do the choices still follow the board?
 
