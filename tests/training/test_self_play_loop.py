@@ -421,3 +421,32 @@ def test_device_memory_observations(monkeypatch: pytest.MonkeyPatch) -> None:
     mps = loop.resource_metrics("mps")
     assert mps["memory/allocated_mps_bytes"] == 12
     assert mps["memory/driver_allocated_mps_bytes"] == 45
+
+
+def test_damped_forward_floor_records_two_updates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    default = DampedPolicyLearning(gradient="damped_policy")
+    assert "reference_forward_kl" not in default.model_dump()
+    with pytest.raises(ValueError):
+        DampedPolicyLearning(gradient="damped_policy", reference_forward_kl=-1)
+    learning = DampedPolicyLearning(
+        gradient="damped_policy",
+        reference_forward_kl=0.002,
+        advantage_quantile=0,
+        min_advantage=0,
+    )
+    assert learning.model_dump()["reference_forward_kl"] == 0.002
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="floor", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(_settings(learning), run, updates=2)
+    data = read(tmp_path / "track", "test", "floor")
+    assert list(
+        data.points("reference_forward_kl_coefficient", "updates").y
+    ) == pytest.approx([0.002] * 2)
+    measured = data.points("reference_forward_kl", "updates")
+    assert list(measured.x) == [1, 2]
+    assert np.isfinite(measured.y).all() and np.any(np.asarray(measured.y) > 0)

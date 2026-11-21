@@ -292,10 +292,10 @@ has a separate job:
 - **KL to the magnet** pulls toward a fixed reference: uniform over action
   types, then uniform within a type. A spell with dozens of target choices then
   gets no more prior weight than a single attack. Its strength τ decays.
-- **The forward-KL floor** keeps every legal offer in play. An offer worse
-  than the best by δ in advantage keeps probability about ε·q/δ, where q is
-  its magnet weight, at a cost of at most about ε of expected outcome per
-  decision. ε is `reference_forward_kl`, 0 by default, which removes the term.
+- **The forward-KL floor** pulls each legal offer toward its magnet weight q.
+  In a two-offer balance with a fixed advantage gap δ, a rare offer has
+  probability about ε·q/δ when the forward KL dominates the reverse KL.
+  Set ε with `reference_forward_kl`. Its default is 0.
   [Influences](#influences) says where each term comes from.
 
 The **behavior policy** is the frozen weights that played the batch, and the
@@ -331,12 +331,11 @@ actions, and the penalty is a reverse KL summed over all legal actions.
 
 ### Why the floor is a forward KL
 
-The reverse KL cannot undo a choice the policy has locked. On a two-offer
-choice with probability π of one offer and logit gap g, its pull on the gap is
-τ·π(1−π)·g, which peaks near g = 2.4 and falls as e^(−g) after it; the
-surrogate's push carries the same π(1−π) factor. Once the surrogate has driven
-a gap past ΔA/τ, nothing brings the rarer offer back, and past a gap of about
-16.6 float32 rounds the pull to exactly zero. The forward KL's pull,
+On a two-offer choice with probability π of one offer and logit gap g, the
+reverse-KL gradient on its logit is τ·π(1−π)·g for a uniform magnet.
+Its magnitude decays as |g|·exp(−|g|) at large gaps. In float32 the dominant
+probability can round to one while the rare offer still has a small restoring
+gradient. The forward KL's pull,
 ε·(π − ½) on a two-offer choice and ε·(π_a − q_a) per legal offer in general,
 does not vanish there: a saturated choice is pulled back at about ε/2.
 
@@ -348,13 +347,12 @@ from manabot.training.learning import DampedPolicyLearning
 learning = DampedPolicyLearning(gradient="damped_policy", reference_forward_kl=0.002)
 ```
 
-Each update row then carries `reference_forward_kl_coefficient` (ε) and
-`reference_forward_kl` (the measured mean KL(magnet ‖ π) over retained rows,
-in nats), drawn beside the other divergences in the report's KL panel. The
-measured value is logged with the floor off too. The weight is constant, not
-scheduled: it is a floor under the decaying τ. A negative weight is refused. A
-stored learning record or capture row without the key reads 0, and a record at
-0 serializes without it, so recorded recipes keep their bytes.
+Each update records `reference_forward_kl_coefficient` (ε). The KL panel
+shows `reference_forward_kl`, the mean KL(magnet ‖ π) in nats over actor
+rows in the last optimized minibatch, including when the floor is off. The
+weight stays constant as τ decays. A negative weight is refused. A stored
+learning record or capture row without the key reads 0. At 0 the learning
+record omits the key, preserving the serialized settings of existing recipes.
 
 At ε = 0.002 a two-offer choice with a constant advantage of 0.06 at τ = 0.0063
 settles at a gap of about 3.6, where the rarer offer is still sampled about 2.6%

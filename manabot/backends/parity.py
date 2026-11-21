@@ -161,6 +161,7 @@ def minibatch_loss(
             clip=settings.clip,
             collection_kl=settings.collection_kl,
             tau=settings.tau,
+            reference_forward_kl=settings.reference_forward_kl,
         )
 
     return learner.loss(objective)[0]
@@ -277,6 +278,7 @@ def minibatches(
             clip=row["clip"],
             collection_kl=row["collection_kl"],
             tau=row["tau"],
+            reference_forward_kl=row.get("reference_forward_kl", 0.0),
             max_grad_norm=row["max_grad_norm"],
         )
         yield obs, targets, settings, row

@@ -367,6 +367,13 @@ def reverse_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
     return (logs.exp() * difference).sum(-1)
 
 
+def forward_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
+    """KL(frozen target || current) [B] over legal offers."""
+    target_logs = target_logs.detach()
+    difference = target_logs.masked_fill(~valid, 0) - logs.masked_fill(~valid, 0)
+    return (target_logs.exp() * difference).sum(-1)
+
+
 def squared_value_loss(values: Tensor, targets: Tensor) -> Tensor:
     """Squared error [B] of a scalar critic's `[B]` or `[B,1]` predictions."""
     if values.shape != targets.shape:
@@ -406,9 +413,11 @@ def damped_policy_loss(
     clip: float,
     collection_kl: float,
     tau: float,
+    reference_forward_kl: float = 0.0,
 ) -> Tensor:
     """The damped policy objective, equation (6), per row [B] over offers [B,A].
 
+    An optional forward KL keeps a restoring gradient on rare legal offers.
     Sources and departures: docs/learning.md#fidelity-to-the-sources.
 
     Ratios use the actual action likelihood at collection, even after earlier
@@ -421,7 +430,7 @@ def damped_policy_loss(
         raise ValueError("policy logits require [B,A] legal support")
     if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
         raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
+    if not 0 < clip < 1 or collection_kl < 0 or tau < 0 or reference_forward_kl < 0:
         raise ValueError("invalid damping coefficients")
     check_logs(behavior_logs, valid)
     check_probabilities(reference, valid, positive=True)
@@ -438,12 +447,17 @@ def damped_policy_loss(
     logs = policy_logs(logits, valid)
     ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
     surrogate = clipped_surrogate(ratio_logs, advantages, clip)
-    return (
+    magnet_logs = reference_logs(reference, valid)
+    loss = (
         surrogate
         + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
-        + tau
-        * float64_operand(reverse_kl(logs, reference_logs(reference, valid), valid))
+        + tau * float64_operand(reverse_kl(logs, magnet_logs, valid))
     )
+    if reference_forward_kl:
+        loss = loss + reference_forward_kl * float64_operand(
+            forward_kl(logs, magnet_logs, valid)
+        )
+    return loss
 
 
 @torch.no_grad()

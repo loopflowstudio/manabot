@@ -106,6 +106,9 @@ class DampedPolicyLearning(Strict):
     reference: Literal["uniform", "action_type_uniform"] = "action_type_uniform"
     clip: float = Field(default=0.2, gt=0, lt=1)
     collection_kl: float = Field(default=0.1, ge=0)
+    reference_forward_kl: float = Field(
+        default=0, ge=0, exclude_if=lambda value: value == 0
+    )
     learning_rate_scale: float = Field(default=0.5, gt=0)
     learning_rate_power: float = Field(default=1.1, ge=0)
     learning_rate_min: float = Field(default=5e-6, gt=0)
