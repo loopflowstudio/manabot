@@ -817,6 +817,9 @@ Etude tracking by its recipe/stage, including training in a subprocess. Etude
 rejects a mismatch with `experiment_differs_from_launch` before the first update;
 changing the launch label does not rename the recipe's tracking label.
 
+For a training warm start, `run.input("start")` inside `with track(...) as run`
+returns the delivered `Path` directly (Etude 0.4.3).
+
 Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
 checkpoint through the SDK, rather than assuming the file ends in `.pt`.
 
