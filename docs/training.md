@@ -550,6 +550,8 @@ DampedPolicyLearning(gradient="damped_policy", iteration_schedule=IterationSched
 DampedPolicyLearning(gradient="damped_policy", decision_schedule=LearnerDecisionSchedule(transitions=8_800_000))
 ```
 
+To advance the learning rate and τ by one reference iteration per batch of B learner decisions, set `transitions = B × (reference_steps − 1)`.
+
 | Learning record | What its rates read | Past the horizon |
 | --- | --- | --- |
 | `DampedPolicyLearning` | The absolute iteration, or that iteration mapped onto `iteration_schedule.steps` when a schedule is declared ([step sizes](learning.md#4-update)) | The mapped iteration stays at its last value |

@@ -542,7 +542,6 @@ outputs are selected explicitly at arena registration.
 | Filtering, S3.4/Table S7 | Inclusive .75 quantile and .01 minimum; ties included | Torch linear quantile; source interpolation unspecified |
 | Optimizer damping, Table S7 | Adam, clip=.2, collection KL=.1, max norm=.267, value weight=1 | Adam betas .9/.999, epsilon 1e-5 (source unspecified) |
 | Schedules, Table S7 | LR clip(.5 / iteration^1.1, 5e-6, 1e-4); tau=.05 / iteration^.3 | One-based iterations; no elapsed-budget substitution |
-| Schedules by update size (not in the source) | `reference_batch`: learning rate and tau read iteration 1 + learned decisions / batch through the iteration schedule | Departure, default off: an update of the reference size keeps the per-update curves, a larger one advances both proportionally, as environment-step schedules do |
 | Batch reuse, S3.4 | One epoch, increasing timestep batches, no shuffle | CPU streams replace 202-step GPU batches of 1536 |
 | EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation output by default, `behavior="ema-self"` opts in |
 | S3.3 setup learning | Not implemented | MTG has no learned setup |

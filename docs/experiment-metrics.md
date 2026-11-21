@@ -324,7 +324,8 @@ Read the eleven curves beside **Score against the heuristic** in the Elemental,
 seat-comparison and TLA trophies reports. The ten rate panels use a fixed
 0–1 scale. Mana use can exceed 1 when resources gained on the opponent's turn
 are spent in the same mana cycle. Those values extend above the displayed range.
-**Turns per game** scales to the observed game lengths. At each checkpoint,
+**Turns per game** uses a fixed 0–30 scale. Mean game lengths above 30 extend
+beyond the displayed range. At each checkpoint,
 Etude pools opportunities across verified games for each training seed, then
 averages the seeds within each job.
 For example, seven declarations across ten attacker decisions give an
