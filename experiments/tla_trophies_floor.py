@@ -15,10 +15,12 @@ from etude.eval.match import environment
 from etude.eval.records import Aligned, Benchmark, CheckpointSlot, Fraction, Seating
 from etude.jobs import EvalJob, ExperimentState, TrainingJob
 from etude.records import ArtifactRef
-from etude.report import Curve, Matches, Report
+from etude.report import Curve, Matches, Report, Score
 from etude.train.tracking import track
 
 from experiments import tla_trophies as trophies
+from manabot.training.panels import ML, PERF
+from manabot.training.report import behaviour_curves
 
 FRESH = {"control": 0.0, "floor-0.002": 0.002, "floor-0.01": 0.01}
 PULLBACK = {"pullback-0": 0.0, "pullback-0.01": 0.01}
@@ -132,6 +134,9 @@ LABELS = {
     "pullback-0": "Warm start, control",
     "pullback-0.01": "Warm start, forward KL 0.01",
 }
+# The floor's own held-out benchmark: the shared trophy benchmark's 96
+# update-zero control games were recorded under an earlier tla_trophies.py.
+HELD_OUT = "tla-trophies-floor-held-out-32"
 HALF_TRAINING = "tla-trophies-floor-half-training-32"
 HALF_TRAINING_SEATINGS = tuple(f"Half-training pair {i + 1}" for i in range(32))
 HEAD_TO_HEAD = "tla-trophies-floor-vs-control-32"
@@ -168,7 +173,13 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     held_out = trophies.held_out_jobs(fresh)
     if not held_out:
         return []
-    (job,) = held_out
+    (shared,) = held_out
+    job = shared.model_copy(
+        update={
+            "name": HELD_OUT,
+            "tournament": trophy_benchmark(HELD_OUT, shared.tournament.seatings),
+        }
+    )
     # Each checkpoint meets its own line at exactly half its updates on the
     # same held-out deals, seats and decks crossed (200 vs 100, 400 vs 200 at
     # checkpoints every 100). Without a trained checkpoint there it is a gap.
@@ -226,7 +237,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
 
 
 def report() -> Report:
-    shared = trophies.report()
+    held_out = Matches(tournament=HELD_OUT)
     # Named seatings draw the held checkpoint's score, one line per arm.
     against_half = Curve(
         title="Against itself at half its updates",
@@ -236,11 +247,17 @@ def report() -> Report:
         title="Against the control at the same update",
         matches=tuple(Matches(seating=name) for name in HEAD_TO_HEAD_SEATINGS),
     )
-    strength, *rest = shared.evals
-    return shared.model_copy(
-        update={
-            "evals": (strength, against_half, against_control, *rest),
-            "baseline": "control",
-            "labels": LABELS,
-        }
+    return Report(
+        clock="updates",
+        score=Score(table="plays", value="score", reference=0.5),
+        evals=(
+            Curve(title="Score against the heuristic", matches=held_out),
+            against_half,
+            against_control,
+            *behaviour_curves(matches=held_out),
+        ),
+        baseline="control",
+        labels=LABELS,
+        perf=PERF,
+        ml=ML,
     )
