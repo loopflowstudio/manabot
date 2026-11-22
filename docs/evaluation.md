@@ -494,40 +494,14 @@ The report viewer never sums overlapping clocks.
 native recorder runs during Command replay, outside observations, rule hashes,
 RNG and search clones.
 
-Benchmarks built on `manabot.eval.pairing.play_pairing` keep card tables and
-per-game evidence blobs automatically—no flag on `play_pairing`, no rollup
-declaration on the `Benchmark`, and no separate card benchmark:
+A benchmark that returns `play_pairing(...)` keeps card data automatically.
+Each declared leg must have an outcome and an evidence blob before Etude can
+store the match. An invalid leg keeps its null score, and a failed match keeps
+its arena diagnostics. For a working benchmark callback, see
+[the opponent-memory pilot](../experiments/opponent_memory.py).
 
-```python
-from collections.abc import Sequence
-
-from etude.eval.records import Match
-from etude.eval.result import Result
-
-import managym
-from manabot.eval.pairing import play_pairing
-from manabot.sim.matchup import AuthoredMatchup
-
-
-def play(match: Match, agents: Sequence[object]) -> Result:
-    return play_pairing(
-        match,
-        agents,
-        matchup=AuthoredMatchup(
-            pack_key="elemental-world-v2",
-            role_a="elemental_ur",
-            role_b="elemental_gw",
-            world=managym.WORLD_SETUP,
-        ),
-        deal=int(match.config["deal"]),
-        matchup_mode="cross",
-        game_seconds=300.0,
-        arena="my-benchmark",
-    )
-```
-
-Once matches are stored, read the experiment's card table, render its
-self-contained HTML card page, or audit retained evidence blobs by replay:
+Read the card table, render a self-contained HTML page, or audit the blobs by
+replaying the games.
 
 ```sh
 uv run --extra evaluation python -m manabot.eval.cards data --experiment EXP --source .runs/eval
@@ -535,39 +509,22 @@ uv run --extra evaluation python -m manabot.eval.cards data --experiment EXP --s
 uv run --extra evaluation python -m manabot.eval.cards audit --experiment EXP --source .runs/eval --replay
 ```
 
-`data` prints a summary header and one tab-separated row per card (`card`,
-`# GIH`, `GIH WR`, `95% deal interval`, `# GNS`, `GNS WR`, `IWD`), writes JSON
-with `--json`, or writes the interactive HTML card page with `--html` and
-prints its path. Filter with `--subject`/`--opponent` (name, Etude identity or
-8+ characters of checkpoint digest), `--position`, `--deck`, `--opponent-deck`,
-`--run`, `--commit`; `--rebuild` rereads all blocks.
+`data` prints tab-separated rows by default and writes JSON with `--json`.
+Filter with `--subject` or `--opponent` (name, Etude identity or 8+ characters
+of checkpoint digest), `--position`, `--deck`, `--opponent-deck`, `--run` or
+`--commit`. Use `--rebuild` to reread all blocks.
 
-To run a standalone eight-leg card evaluation outside a custom benchmark, use
-`evaluate` with a `CardEvaluationSpec` (`manabot/eval/card_evaluation.py`),
-which names experiment and run, registrations, checkpoint paths, unique deal
-seeds, limits and an optional `AuthoredMatchup` (default Lessons/Allies;
-resuming requires identical players and conditions):
+For a standalone eight-leg evaluation, supply a `CardEvaluationSpec` with the
+experiment, run, registrations, checkpoint paths, unique deal seeds, limits
+and optional authored matchup (default Lessons/Allies). Resuming requires the
+same players and conditions.
 
 ```sh
-uv run --extra evaluation python -m manabot.eval.cards evaluate --spec evaluation.json --out .runs/cards
+uv run --extra evaluation python -m manabot.eval.cards evaluate --spec evaluation.json --out .runs/eval
 ```
 
-Any other evaluation calling `play_cell` directly can deliver card data by
-passing `card_evidence_dir` and merging `trace_card_tables(...)` tables and
-blobs into its Etude `Result`. Declaring `rollups=CARD_ROLLUPS`
-(`manabot.eval.card_metrics`) on a new `Benchmark` computes per-deal rollups at
-store time; omitting it still works because `card_db` sums blocks stored
-without those rollups once into the local stats database without modifying the
-store. An existing eval run keeps the rollups it was created with. On a
-retained benchmark that already has older blocks stored without card tables,
-those earlier games stay absent and the card page reports the games played
-since (`game_deals` counts reflect the games with card data); an experiment
-whose blocks all lack card tables still reports no card evaluations.
-
-`play_pairing` requires every declared leg and its evidence blob before it
-returns the match. An invalid leg in a complete deal keeps its null score.
-The arena directory is retained even if the match fails. Etude stores the
-card evidence as blobs of the match.
+Evaluations that call `play_cell` directly can pass `card_evidence_dir` and
+merge the tables and blobs from `trace_card_tables` into their Etude `Result`.
 
 **Columns.** GP (games with the card in deck), OH (opening-hand copies), GD
 (copies drawn later), GIH = OH + GD with GIH WR = winning qualifying copies /
@@ -579,16 +536,21 @@ GIH interval is a deterministic 95% percentile bootstrap over whole deal seeds,
 one draw of deal weights per filter selection.
 
 **Tables.** Each match delivers `card_plays` (per game and player),
-`card_counts`, `cards` and the shared `plays`; `seat` indexes `Match.players`,
-`game_seat` is the native seat (0 on the play). Queries read `CARD_ROLLUPS`
-(`card_deals`, `game_deals`) through `manabot.eval.card_query.card_db`, summing
-any block stored without them once in the kept database; a changed rollup takes
-a new name. Games pool across source commits, which are provenance and a
-filter. A crashed or unreplayed game is an ineligible row; its deal's other
-games still count. Evidence is a private blob per game read with Etude's
-`read_blobs`; `etude convert-eval` makes older per-file runs readable.
+`card_counts`, `cards` and the shared `plays`. The `seat` column indexes
+`Match.players`, and `game_seat` is the native seat (0 on the play). Games
+pool across source commits, which are also available as a filter. A crashed
+or unreplayed game with evidence is ineligible. Its deal's other games still
+count. Read the private evidence blobs with Etude's `read_blobs`. Use
+`etude convert-eval` to read older per-file runs.
 
-**Arena logs.** `cards export-log --experiment EXP --source .runs/cards --run RUN
+`card_db` computes `card_deals` and `game_deals` once in the local database
+for blocks stored without those rollups. A new benchmark can precompute them
+at store time with `rollups=CARD_ROLLUPS` from `manabot.eval.card_metrics`.
+An existing run keeps its declared rollups, and a changed rollup needs a new
+name. Only games stored with card tables appear on the page. An experiment
+with no such games reports “this experiment has no card evaluations”.
+
+**Arena logs.** `cards export-log --experiment EXP --source .runs/eval --run RUN
 --game GAME --viewer 0|1 --out game.log` writes the game's
 [Arena-style log](engine-python.md#export-an-arena-style-log) through managym's
 exporter, which any recorded game can use without manabot. Arena ids come from

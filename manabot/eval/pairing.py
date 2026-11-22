@@ -47,29 +47,29 @@ def play_pairing(
         raise ValueError("a pairing requires two players and every declared leg")
     players: list[PlayerRegistration] = []
     paths: dict[str, str] = {}
-    for index, player in enumerate(match.players):
-        if index == 1 and isinstance(player, Code):
+    participants = ("candidate", "opponent")
+    for name, player in zip(participants, match.players, strict=True):
+        if name == "opponent" and isinstance(player, Code):
             if player.name != "heuristic":
                 raise ValueError("a pairing's code opponent must be the heuristic")
             players.append(
                 register_anchor(
                     players[0],
                     "heuristic",
-                    player_id="opponent",
+                    player_id=name,
                     heuristic_actions=player.config.get("max_actions"),
                 )
             )
             continue
         if not isinstance(player, CheckpointPlayer):
             raise ValueError("pairing players are checkpoints or a heuristic opponent")
-        name = "candidate" if index == 0 else "opponent"
         players.append(
             registration(
                 player,
                 name=name,
                 match=matchup.match(),
                 content_suite=matchup.content_suite,
-                role="challenger" if index == 0 else "anchor",
+                role="challenger" if name == "candidate" else "anchor",
             )
         )
         paths[name] = str(player.checkpoint.path)
@@ -91,8 +91,8 @@ def play_pairing(
     journal_root = "/dev/shm" if Path("/dev/shm").is_dir() else None
     with TemporaryDirectory(dir=journal_root) as journal:
         out = Path(journal) / "deal"
+        # Only the deal directory is retained. Etude stores card evidence as blobs.
         cards = Path(journal) / "cards"
-        participants = (candidate.player_id, opponent.player_id)
         try:
             result = evaluate(
                 EvaluationRequest(
@@ -111,11 +111,7 @@ def play_pairing(
                 out_dir=out,
                 card_evidence_dir=cards,
                 agents=dict(
-                    zip(
-                        participants,
-                        game_players(match.players, agents),
-                        strict=True,
-                    )
+                    zip(participants, game_players(match.players, agents), strict=True)
                 ),
             )
             if result.error:
