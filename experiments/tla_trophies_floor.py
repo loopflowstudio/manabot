@@ -157,6 +157,15 @@ HALF_TRAINING_SEATINGS = tuple(f"Half-training deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD = "tla-trophies-floor-vs-control-32"
 HEAD_TO_HEAD_SEATINGS = tuple(f"Matched control deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD_UPDATES = (200, 400)
+# Treated arms that also meet another treated arm, every seed pair, at 200 and 400.
+TREATED_HEAD_TO_HEAD = "tla-trophies-floor-vs-treated-32"
+TREATED_OPPONENTS = {"tau-x2-floor-0.002": "tau-x4"}
+
+
+def treated_seatings(opponent: str) -> tuple[str, ...]:
+    return tuple(f"Matched {opponent} deal {i + 1}" for i in range(32))
+
+
 # Past update 400 only seed 40902 of the tau arms continues. Its games are
 # their own benchmarks with `seeds="one"` seatings, so the page draws the one
 # seed rather than waiting for a seed that stopped at 400.
@@ -179,7 +188,7 @@ def extension_seatings(opponent: str) -> tuple[str, ...]:
 
 
 def arm_evaluations(
-    runs: Sequence[TrainingRunSummary], arm: str, control_seeds: int
+    runs: Sequence[TrainingRunSummary], arm: str, seeds: dict[str, int]
 ) -> list[EvalJob]:
     """Reuse the trophy environment and deals so retained matches keep their identities."""
     held_out = trophies.held_out_jobs(runs)
@@ -236,14 +245,25 @@ def arm_evaluations(
         against(f"{HALF_TRAINING}-{arm}", compared, HALF_TRAINING_SEATINGS, half),
     ]
     treated = [c for c in compared if c.at.get("updates") in HEAD_TO_HEAD_UPDATES]
-    if arm != "control" and treated and control_seeds:
+    if arm != "control" and treated and seeds.get("control"):
         jobs.append(
             against(
                 f"{HEAD_TO_HEAD}-{arm}",
                 treated,
                 HEAD_TO_HEAD_SEATINGS,
                 Aligned(clock="updates", job="control"),
-                control_seeds,
+                seeds["control"],
+            )
+        )
+    rival = TREATED_OPPONENTS.get(arm)
+    if rival and treated and seeds.get(rival):
+        jobs.append(
+            against(
+                f"{TREATED_HEAD_TO_HEAD}-{arm}-vs-{rival}",
+                treated,
+                treated_seatings(rival),
+                Aligned(clock="updates", job=rival),
+                seeds[rival],
             )
         )
     if extended:
@@ -271,12 +291,15 @@ def arm_evaluations(
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    controls = {run.seed for run in state.runs if run.launch == "control"}
+    seeds = {
+        arm: len({run.seed for run in state.runs if run.launch == arm})
+        for arm in FRESH_ARMS
+    }
     return [
         job
         for arm in FRESH_ARMS
         for job in arm_evaluations(
-            [r for r in state.runs if r.launch == arm], arm, len(controls)
+            [r for r in state.runs if r.launch == arm], arm, seeds
         )
     ]
 
@@ -292,6 +315,10 @@ def report() -> Report:
             head_to_head("Against itself at half its updates", HALF_TRAINING_SEATINGS),
             head_to_head(
                 "Against the control at the same update", HEAD_TO_HEAD_SEATINGS
+            ),
+            head_to_head(
+                "Against tau ×4 at the same update",
+                treated_seatings("tau-x4"),
             ),
             Curve(
                 title="Seed 40902 past update 400: against the heuristic",

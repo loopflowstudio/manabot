@@ -779,3 +779,41 @@ def test_floor_seed_past_update_400_has_its_own_one_seed_benchmarks(
     assert updates[f"{tla_trophies_floor.HALF_TRAINING}-tau-x4"] == early
     assert updates[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x4"] == late
     assert updates[f"{tla_trophies_floor.SEED_HALF_TRAINING}-tau-x4"] == late
+
+
+def test_combined_arm_meets_every_tau_x4_seed_at_matched_updates(
+    tmp_path: Path,
+) -> None:
+    runs = tuple(
+        _finished_run(
+            tmp_path, range(0, 401, 100), name=f"{job}@{seed}", job=job, seed=seed
+        )
+        for job, seeds in (("tau-x2-floor-0.002", (1, 2)), ("tau-x4", (1, 2)))
+        for seed in seeds
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.TREATED_HEAD_TO_HEAD):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            pairs.update(
+                (
+                    by_key[m.checkpoint],
+                    by_key[m.match.players[1].checkpoint.key],
+                    tla_trophies.Deal.model_validate(m.match.config).seed,
+                )
+                for m in tournament.schedule()
+            )
+    assert pairs == {
+        ((f"tau-x2-floor-0.002@{seed}", update), (f"tau-x4@{rival}", update), deal): 1
+        for seed in (1, 2)
+        for update in (200, 400)
+        for rival in (1, 2)
+        for deal in range(40900, 40932)
+    }
