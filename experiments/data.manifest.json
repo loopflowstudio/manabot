@@ -41074,6 +41074,10 @@
    "sha256": "c9916c5afb30f15d972bae7f594c13f4f9dbb1254692054108c8a2b249f22649",
    "bytes": 55100
   },
+  "experiments/data/mtg408/report/extensions.png": {
+   "sha256": "5c26d535cca8ede71ebf0327237195e49d07d5fcb2515f7931f412855e8c1c26",
+   "bytes": 196818
+  },
   "experiments/data/mtg408/report/grad-norm.png": {
    "sha256": "61a76ac850a8b9e4399e1f37a68e373b7e6f82cf08fe7d08f793435e4602f326",
    "bytes": 20036

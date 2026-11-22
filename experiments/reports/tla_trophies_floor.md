@@ -8,17 +8,17 @@ vanishes at large gaps. This exploratory study asks whether a small forward
 KL to the reference (ε · KL(q ‖ π)) or a larger tau keeps those choices open,
 and what that costs in playing strength. It makes no committed prediction.
 
-**Status, 2026-11-22 03:45 UTC.** All 19 runs reached update 400. Held-out
-evaluation is complete except the second combined-arm seed at update 400.
-Seed 40902 of tau ×2 + forward KL 0.002, tau ×2 and tau ×4 is extending to
-update 1,000 as a follow-up.
+**Status, 2026-11-22 06:40 UTC.** All 19 runs reached update 400 and every
+held-out evaluation through 400 is complete. Seed 40902 of tau ×2 + forward
+KL 0.002, tau ×2 and tau ×4 is extending to update 1,000; it has reached
+610–650, and the section on longer training reports it through 600.
 
 ## Answer
 
 Every treatment removes the lock and none costs strength. Each treated arm
 scores 0.70–0.75 against the heuristic at update 400, against the control's
 0.64, and plays the control about evenly head to head. Tau ×2 + forward KL
-0.002 is the most open and the strongest: no saturated decisions, 0.74–0.75
+0.002 is the most open and the strongest: no saturated decisions, 0.74
 against the heuristic and 0.53 against the control. Tau ×2 alone is starting
 to re-lock by update 400 (9–25% of probe attacks saturated), so the floor
 matters most as tau keeps decaying. Forward KL 0.01 also unlocks an already
@@ -35,7 +35,7 @@ forward-KL floor, pending the 1,000-update extensions.
 | Forward KL 0.01 | 3 | 0.70 | 0.46 | 0.81 | 0.68 | 0% | 0.0% |
 | Tau ×2 (τ 0.1) | 2 | 0.73 | 0.50 | 0.78 | 0.75 | 9–25% | 16.5% |
 | Tau ×4 (τ 0.2) | 2 | 0.72 | 0.52 | 0.77 | 0.71 | 1–2% | 7.9% |
-| Tau ×2 + forward KL 0.002 | 2 | 0.75 (1 seed; 0.74 at 300) | 0.53 | 0.85 | 0.71 | 0% | not measured |
+| Tau ×2 + forward KL 0.002 | 2 | 0.74 | 0.53 | 0.85 | 0.71 | 0% | not measured |
 
 Scores are the held-out checkpoint's share of points over 32 deals with both
 seats and both decks (128 games per seed). "vs control" pairs each treated
@@ -103,9 +103,7 @@ scores 0.70–0.75, against the control's 0.64. Head to head with the control
 at update 400, forward KL 0.002, tau ×2, tau ×4 and the combined arm score
 0.50–0.53. Forward KL 0.01 learned more slowly — 0.60 and 0.63 against the
 heuristic at updates 200 and 300 before reaching 0.70 at 400 — and still
-trails the control head to head (0.43 at 200, 0.46 at 400). The combined
-arm's update-400 point is drawn only once both seeds are evaluated; its one
-evaluated seed scores 0.75.
+trails the control head to head (0.43 at 200, 0.46 at 400).
 
 ![Score against the heuristic](../data/mtg408/report/score.png)
 ![Against the control at the same update](../data/mtg408/report/vs-control.png)
@@ -114,6 +112,32 @@ Every arm beats its own checkpoint from half as many updates, 0.55–0.59 at
 update 400, so all of them were still improving.
 
 ![Against itself at half its updates](../data/mtg408/report/half-training.png)
+
+## What happens with longer training?
+
+Seed 40902 of the three tau arms continues past update 400 (dotted line).
+Through update 600 every arm still holds 0.70–0.77 against the heuristic,
+and tau ×2 alone keeps its partial lock rather than deepening it: 20–34% of
+its probe attacks are saturated from update 400 on, against none for the
+combined arm. Tau ×4 begins to drift toward a lock near update 600 (attack
+gap up to 4.7, up to 11% saturated) as its tau decays to 0.019; the combined
+arm's attack gap stays at 1–3 with no saturated attacks and under 3% of
+blocks saturated.
+
+![Seed 40902 past update 400](../data/mtg408/report/extensions.png)
+
+| Seed 40902 | vs heuristic, 400 / 500 / 600 | vs half its updates, 400 / 600 | Attack gap, 600 | Saturated attacks, 600 | Saturated blocks, 600 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Tau ×2 + forward KL 0.002 | 0.75 / 0.70 / 0.73 | 0.63 / pending | 2.0 | 0% | 3% |
+| Tau ×2 | 0.72 / 0.77 / 0.75 | 0.57 / 0.55 | 5.2 | 27% | 3% |
+| Tau ×4 | 0.71 / 0.73 / 0.77 | 0.58 / 0.58 | 4.1 | 6% | 3% |
+
+Each held-out point is 128 games of one seed, so differences of 0.05 are
+within noise; tau ×2's update-600 point has 48 games so far. Against the
+half-update checkpoint the arms still score above 0.5, so all three are
+still improving at 600. These panels are drawn from the seed's own records:
+the Etude page's curves average a job's seeds and would jump at update 400
+where seed 40901 stops.
 
 ## Does the zero-weight control reproduce MTG-409?
 
@@ -151,17 +175,16 @@ run mapped onto a 10,000-step curve; the tau arms scale it by two and four.
 USD35 approved for the experiment. The 19 training runs to update 400 cost
 USD25.61 by Etude's per-run estimates, on rented L4s; evaluation ran on
 owned machines. The 1,000-update extensions share one L4 rental capped at
-USD6.60.
+USD6.60 to 11:11 UTC, with a second short rental to finish the remaining
+updates.
 
 ## Limits
 
 - Seeds: three per forward-KL arm, two per tau arm. Differences of a few
   points in score are within seed spread; the head-to-head games, which pair
   every treated seed with every control seed, are the tighter comparison.
-- Length: 400 updates. The policies are still improving. Seed 40902 of tau
-  ×2 + forward KL 0.002, tau ×2 and tau ×4 continues to update 1,000 to test
-  whether tau ×2's creeping saturation grows and whether the floor holds
-  strength over longer training.
+- Length: 400 updates for the comparison, 600 so far for one seed of three
+  arms. The policies are still improving.
 - Rare offers were measured at update 200, before the combined arm existed.
 - Evaluation failures: about a dozen of ~3,000 matches failed and are
   excluded — a card-capture bug on cards entering from outside the game
