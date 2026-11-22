@@ -716,3 +716,36 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     # 36 head-to-heads plus the 84 heuristic-curve seatings.
     assert len(interiors) == 36 + 84
     assert all("final" not in seating.name for seating in interiors)
+
+
+def test_extended_floor_arms_meet_each_other_past_update_400(tmp_path: Path) -> None:
+    runs = tuple(
+        _finished_run(tmp_path, range(0, 1001, 100), name=f"{job}@2", job=job, seed=2)
+        for job in ("tau-x2-floor-0.002", "tau-x2", "tau-x4")
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.EXTENSION):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            pairs.update(
+                (
+                    by_key[m.checkpoint],
+                    by_key[m.match.players[1].checkpoint.key],
+                    tla_trophies.Deal.model_validate(m.match.config).seed,
+                )
+                for m in tournament.schedule()
+            )
+    assert pairs == {
+        ((f"{arm}@2", update), (f"{opponent}@2", update), deal): 1
+        for arm, opponents in tla_trophies_floor.EXTENSION_OPPONENTS.items()
+        for opponent in opponents
+        for update in range(500, 1001, 100)
+        for deal in range(40900, 40932)
+    }

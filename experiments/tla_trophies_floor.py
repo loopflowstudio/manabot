@@ -5,6 +5,8 @@ schedule. The tau arms keep that schedule and multiply its scale. Each fresh
 checkpoint plays the held-out deals against the heuristic and, in its own
 benchmark, against its own line at half its updates. At updates 200 and 400
 each treated fresh arm also meets every control seed at the same update.
+Past update 400, where only the extended seed continues, the extended arms
+meet each other at the same update.
 """
 
 from collections.abc import Sequence
@@ -154,6 +156,17 @@ HALF_TRAINING_SEATINGS = tuple(f"Half-training deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD = "tla-trophies-floor-vs-control-32"
 HEAD_TO_HEAD_SEATINGS = tuple(f"Matched control deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD_UPDATES = (200, 400)
+# Extended arms meet each other past update 400, one seed per arm.
+EXTENSION = "tla-trophies-floor-extended-32"
+EXTENSION_UPDATES = tuple(range(500, 1001, 100))
+EXTENSION_OPPONENTS = {
+    "tau-x2-floor-0.002": ("tau-x2", "tau-x4"),
+    "tau-x4": ("tau-x2",),
+}
+
+
+def extension_seatings(opponent: str) -> tuple[str, ...]:
+    return tuple(f"Matched {opponent} deal {i + 1}" for i in range(32))
 
 
 def arm_evaluations(
@@ -217,6 +230,19 @@ def arm_evaluations(
                 control_seeds,
             )
         )
+    extended = [
+        c for c in shared.checkpoints if c.at.get("updates") in EXTENSION_UPDATES
+    ]
+    if extended:
+        jobs.extend(
+            against(
+                f"{EXTENSION}-{arm}-vs-{opponent}",
+                extension_seatings(opponent),
+                Aligned(clock="updates", job=opponent),
+                extended,
+            )
+            for opponent in EXTENSION_OPPONENTS.get(arm, ())
+        )
     return jobs
 
 
@@ -242,6 +268,14 @@ def report() -> Report:
             head_to_head("Against itself at half its updates", HALF_TRAINING_SEATINGS),
             head_to_head(
                 "Against the control at the same update", HEAD_TO_HEAD_SEATINGS
+            ),
+            head_to_head(
+                "Against tau ×2 at the same update, past 400",
+                extension_seatings("tau-x2"),
+            ),
+            head_to_head(
+                "Against tau ×4 at the same update, past 400",
+                extension_seatings("tau-x4"),
             ),
             *behaviour_curves(matches=held_out),
         ),
