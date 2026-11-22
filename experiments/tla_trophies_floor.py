@@ -13,8 +13,12 @@ arms meet each other at the same update.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
+from functools import cache
+from pathlib import Path
+import random
 
 from etude.checkpoints import CheckpointRecord
+from etude.eval.match import environment
 from etude.eval.records import Aligned, Environment, Fraction, Seating
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.records import ArtifactRef
@@ -197,6 +201,43 @@ EXTENSION_OPPONENTS = {
 EXTENSION_ARMS = ("tau-x2-floor-0.002", "tau-x2", "tau-x4")
 
 
+# The final round: each extended arm at update 1000 meets the heuristic and the
+# other extended arms on 2,000 deals drawn from every held-out pool, so the
+# head-to-heads are decisive and every Manabot seat feeds the card page.
+FINAL_UPDATE = 1000
+FINAL_DEALS = 2000
+FINAL = "tla-trophies-floor-final"
+
+
+@cache
+def final_deals() -> tuple[trophies.Deal, ...]:
+    pools = len(trophies.playable("held_out"))
+    rng = random.Random(408)
+    return tuple(
+        trophies.Deal(first=first, second=second, seed=41000 + j)
+        for j, (first, second) in enumerate(
+            rng.sample(range(pools), 2) for _ in range(FINAL_DEALS)
+        )
+    )
+
+
+def final_seatings(template: Seating, opponent: str) -> tuple[Seating, ...]:
+    return tuple(
+        template.model_copy(
+            update={"name": f"Final {opponent} deal {j + 1}", "config": deal}
+        )
+        for j, deal in enumerate(final_deals())
+    )
+
+
+def final_environment() -> Environment:
+    return environment(
+        "tla-trophies",
+        files=[Path(trophies.__file__), trophies.ROOT / "manabot/eval/pairing.py"],
+        config={"pools": trophies.corpus_input().sha256, "cards": True},
+    )
+
+
 def extension_seatings(opponent: str) -> tuple[str, ...]:
     return tuple(f"One-seed {opponent} deal {i + 1}" for i in range(SEED_DEALS))
 
@@ -243,6 +284,7 @@ def arm_evaluations(
         one_seed: bool = False,
         base: tuple[Seating, ...] = benchmark.seatings,
         cards: bool = False,
+        environment_: Environment = CARD_ENVIRONMENT,
     ) -> EvalJob:
         names = seating_names or tuple(s.name for s in base)
         seatings = tuple(
@@ -261,7 +303,7 @@ def arm_evaluations(
             for seating, label in zip(base, names, strict=True)
         )
         card_fields = (
-            {"environment": CARD_ENVIRONMENT, "rollups": CARD_ROLLUPS} if cards else {}
+            {"environment": environment_, "rollups": CARD_ROLLUPS} if cards else {}
         )
         return shared.model_copy(
             update={
@@ -336,6 +378,31 @@ def arm_evaluations(
                 )
                 for opponent in EXTENSION_OPPONENTS.get(arm, ())
             ),
+        ]
+    final = [c for c in extended if c.at.get("updates") == FINAL_UPDATE]
+    if final and arm in EXTENSION_ARMS:
+        template = benchmark.seatings[0]
+        jobs.append(
+            against(
+                f"{FINAL}-{arm}",
+                final,
+                one_seed=True,
+                base=final_seatings(template, "heuristic"),
+                cards=True,
+                environment_=final_environment(),
+            )
+        )
+        jobs += [
+            against(
+                f"{FINAL}-{arm}-vs-{opponent}",
+                final,
+                opponent=Aligned(clock="updates", job=opponent),
+                one_seed=True,
+                base=final_seatings(template, opponent),
+                cards=True,
+                environment_=final_environment(),
+            )
+            for opponent in EXTENSION_OPPONENTS.get(arm, ())
         ]
     return jobs
 

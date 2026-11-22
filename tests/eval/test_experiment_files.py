@@ -847,3 +847,31 @@ def test_floor_seed_plays_128_more_deals_on_fresh_pools(tmp_path: Path) -> None:
     assert more_job.play is tla_trophies.play
     assert more_job.tournament.rollups == CARD_ROLLUPS
     assert jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].play is tla_trophies.play
+
+
+def test_final_round_meets_heuristic_and_arms_on_every_held_out_pool(
+    tmp_path: Path,
+) -> None:
+    runs = tuple(
+        _finished_run(tmp_path, range(0, 1001, 100), name=f"{arm}@2", job=arm, seed=2)
+        for arm in tla_trophies_floor.EXTENSION_ARMS
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    jobs = {job.name: job for job in tla_trophies_floor.eval_jobs(state)}
+    final = {
+        name: job
+        for name, job in jobs.items()
+        if name.startswith("tla-trophies-floor-final-")
+    }
+    assert len(final) == 6
+    for job in final.values():
+        assert [c.at["updates"] for c in job.checkpoints] == [1000]
+        assert job.tournament.rollups == CARD_ROLLUPS
+        assert len(job.tournament.seatings) == tla_trophies_floor.FINAL_DEALS
+        assert {s.seeds for s in job.tournament.seatings} == {"one"}
+    deals = [
+        tla_trophies.Deal.model_validate(s.config)
+        for s in final["tla-trophies-floor-final-tau-x4"].tournament.seatings
+    ]
+    assert all(d.first != d.second for d in deals)
+    assert len({p for d in deals for p in (d.first, d.second)}) > 800
