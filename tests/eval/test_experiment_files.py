@@ -43,10 +43,12 @@ from experiments import (
     seat_comparison,
     tla_frontier,
     tla_trophies,
+    tla_trophies_cards,
     tla_trophies_floor,
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
+from manabot.eval.card_metrics import CARD_ROLLUPS
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = ROOT / "experiments"
@@ -837,3 +839,9 @@ def test_floor_seed_plays_128_more_deals_on_fresh_pools(tmp_path: Path) -> None:
     assert sorted(pools) == list(range(320))
     assert len({d.seed for d in deals}) == 160
     assert {s.seeds for s in more} == {"one"}
+    more_job = jobs[
+        f"{tla_trophies_floor.SEED_HEURISTIC}-{tla_trophies_floor.SEED_MORE}-tau-x2"
+    ]
+    assert more_job.play is tla_trophies_cards.play
+    assert more_job.tournament.rollups == CARD_ROLLUPS
+    assert jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].play is tla_trophies.play

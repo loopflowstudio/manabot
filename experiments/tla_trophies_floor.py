@@ -23,6 +23,8 @@ from etude.train.tracking import track
 from pydantic import Field
 
 from experiments import tla_trophies as trophies
+from experiments.tla_trophies_cards import card_environment, play as play_with_cards
+from manabot.eval.card_metrics import CARD_ROLLUPS
 from manabot.training.panels import ML, PERF
 from manabot.training.report import behaviour_curves, head_to_head
 
@@ -174,8 +176,9 @@ SEED_HALF_TRAINING = "tla-trophies-floor-seed-half-training-32"
 SEED_HEAD_TO_HEAD = "tla-trophies-floor-seed-vs-32"
 # Past update 400 the one seed also plays 128 more held-out deals, on pools
 # 64-319, in benchmarks of their own so the first 32 deals' games still count.
+# Those games also keep card evidence for the card page.
 MORE_DEALS = 128
-SEED_MORE = "128-more"
+SEED_MORE = "128-more-cards"
 SEED_DEALS = 32 + MORE_DEALS
 SEED_HALF_TRAINING_SEATINGS = tuple(
     f"One-seed half-training deal {i + 1}" for i in range(SEED_DEALS)
@@ -233,6 +236,7 @@ def arm_evaluations(
         opponent_seeds: int = 1,
         one_seed: bool = False,
         base: tuple[Seating, ...] = benchmark.seatings,
+        cards: bool = False,
     ) -> EvalJob:
         names = seating_names or tuple(s.name for s in base)
         seatings = tuple(
@@ -250,13 +254,19 @@ def arm_evaluations(
             )
             for seating, label in zip(base, names, strict=True)
         )
+        card_fields = (
+            {"environment": card_environment(), "rollups": CARD_ROLLUPS}
+            if cards
+            else {}
+        )
         return shared.model_copy(
             update={
                 "name": name,
                 "tournament": benchmark.model_copy(
-                    update={"name": name, "seatings": seatings}
+                    update={"name": name, "seatings": seatings, **card_fields}
                 ),
                 "checkpoints": checkpoints,
+                **({"play": play_with_cards} if cards else {}),
             }
         )
 
@@ -288,15 +298,19 @@ def arm_evaluations(
             )
         )
     more = more_held_out_seatings(benchmark.seatings[0])
-    for suffix, base, picked in (
-        ("", benchmark.seatings, slice(0, 32)),
-        (f"-{SEED_MORE}", more, slice(32, SEED_DEALS)),
+    for suffix, base, picked, cards in (
+        ("", benchmark.seatings, slice(0, 32), False),
+        (f"-{SEED_MORE}", more, slice(32, SEED_DEALS), True),
     ):
         if not extended:
             break
         jobs += [
             against(
-                f"{SEED_HEURISTIC}{suffix}-{arm}", extended, one_seed=True, base=base
+                f"{SEED_HEURISTIC}{suffix}-{arm}",
+                extended,
+                one_seed=True,
+                base=base,
+                cards=cards,
             ),
             against(
                 f"{SEED_HALF_TRAINING}{suffix}-{arm}",
@@ -305,6 +319,7 @@ def arm_evaluations(
                 half,
                 one_seed=True,
                 base=base,
+                cards=cards,
             ),
             *(
                 against(
@@ -314,6 +329,7 @@ def arm_evaluations(
                     Aligned(clock="updates", job=opponent),
                     one_seed=True,
                     base=base,
+                    cards=cards,
                 )
                 for opponent in EXTENSION_OPPONENTS.get(arm, ())
             ),
