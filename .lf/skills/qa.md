@@ -768,17 +768,17 @@ publish, land or choose the next Graph step from here.
   one reading renamed must show in `/api/opponents` as unavailable, naming
   the column.
 - Benchmarks on `play_pairing` and the card page: as the author, train
-  `etude train manabot/recipes/local.py --experiment NAME --until updates=2`
+  `uv run etude train manabot/recipes/local.py --experiment NAME --until updates=2`
   (about 8 s) with `ETUDE_HOME` under `.runs/`, then write two files in a
   `.runs/` directory on `PYTHONPATH`: a callback module (`play(match, agents)`
   returning `play_pairing(...)` with `AuthoredMatchup("ur-lessons-vs-gw-allies",
   "ur_lessons", "gw_allies", world=managym.WORLD_SETUP)`), and `NAME.py`
   importing it, whose `eval_jobs` seats each run's last checkpoint against
   `Code(name="heuristic")` in a `Benchmark` with a literal
-  `Environment(files="0"*64)` (ignored files cannot be digested). A callback
+  `Environment(name="fixture", files="0"*64)` (ignored files cannot be digested). A callback
   defined in the discovered file itself is `<run_path>` and cannot be
-  imported. `etude eval NAME.py --source $ETUDE_HOME/track` with
-  `ETUDE_OUTPUT_DIR` set played two deals in about 4 s; then run the three
+  imported. `uv run --extra evaluation etude eval NAME.py --source "$ETUDE_HOME/track"`
+  with `ETUDE_OUTPUT_DIR` set to an existing directory played two deals in about 4 s; then run the three
   `manabot.eval.cards` commands in `docs/evaluation.md#card-data`. For games
   stored before a change, put the base's `pairing.py` in that directory under
   another module name. Changing an existing seating's configs raises

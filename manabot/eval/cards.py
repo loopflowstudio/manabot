@@ -17,6 +17,7 @@ import time
 from etude.storage import default_root
 
 from manabot.eval.card_evaluation import (
+    VERIFY_EXPERIMENT,
     CardEvaluationSpec,
     evaluate_cards,
     verification_spec,
@@ -134,6 +135,7 @@ def main() -> None:
     export.add_argument("--mapping", type=Path, required=True)
     export.add_argument("--out", type=Path, required=True)
     verification = commands.add_parser("verify")
+    verification.set_defaults(experiment=VERIFY_EXPERIMENT)
     verification.add_argument("--games", type=int, default=1024)
     verification.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()

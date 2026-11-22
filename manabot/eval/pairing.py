@@ -39,7 +39,11 @@ def play_pairing(
     game_seconds: float,
     arena: str,
 ) -> Result:
-    """Return the paired deal's outcome, behaviour and replay-derived card data."""
+    """Return the paired deal's outcome, behaviour and replay-derived card data.
+
+    Missing legs or card evidence raise after the arena diagnostics are retained.
+    An invalid leg with evidence keeps its null score.
+    """
     legs = 4 if matchup_mode == "cross" else 8
     # An indexed Etude match is one deal. A legacy multi-game match declares legs.
     expected_games = legs if match.index is None else 1

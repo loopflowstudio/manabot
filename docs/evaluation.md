@@ -550,8 +550,9 @@ An existing run keeps its declared rollups, and a changed rollup needs a new
 name. Only games stored with card tables appear on the page. An experiment
 with no such games reports “this experiment has no card evaluations”.
 
-**Arena logs.** `cards export-log --experiment EXP --source .runs/eval --run RUN
---game GAME --viewer 0|1 --out game.log` writes the game's
+**Arena logs.** `uv run --extra evaluation python -m manabot.eval.cards export-log
+--experiment EXP --source .runs/eval --run RUN --game GAME --viewer 0
+--mapping printings.json --out game.log` writes seat 0's
 [Arena-style log](engine-python.md#export-an-arena-style-log) through managym's
 exporter, which any recorded game can use without manabot. Arena ids come from
 the table shipped with managym, joined by Scryfall id and never by name; cards
