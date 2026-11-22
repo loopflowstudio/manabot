@@ -646,6 +646,9 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     )
     assert len(jobs) == 1
     seatings = jobs[0].tournament.seatings
+    assert jobs[0].tournament.environment.identity == (
+        "6d8bfa592ede2a97a25660b028a8bd2af8bbd3a82c835535b7a9595dc4b2ead2"
+    )
     assert len(seatings) == 168
     assert jobs[0].max_hours == 3 and jobs[0].max_usd == 4
     curves = [

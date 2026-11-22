@@ -311,14 +311,11 @@ def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> 
 def trace_card_tables(
     root: Path, trace: Mapping[str, object], participants: tuple[str, str]
 ) -> Result:
-    """Card tables and evidence blobs for the games one `play_cell(card_evidence_dir=root)` call retained.
+    """Return card tables and blobs for the games in one `play_cell` trace.
 
-    This lets any evaluation deliver card data beside its own outcome tables:
-    merge the result's tables and blobs into the `Result` its `play` returns,
-    and declare `CARD_ROLLUPS` with the run. `root` is a scratch folder (see
-    `_handed_over`). `participants` names the two registered players in Etude
-    row order. Games are not bound to a card-evaluation schedule; each must
-    seat exactly these players.
+    Read and remove the evidence files from the call's `card_evidence_dir`.
+    Each game must seat the two `participants`, given here in Etude row order.
+    Merge these tables and blobs into the evaluation's own `Result`.
     """
     tables: dict[str, list[Row]] = {}
     blobs = []
