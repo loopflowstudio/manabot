@@ -8,28 +8,34 @@ vanishes at large gaps. This exploratory study asks whether a small forward
 KL to the reference (ε · KL(q ‖ π)) or a larger tau keeps those choices open,
 and what that costs in playing strength. It makes no committed prediction.
 
-**Status, 2026-11-21 22:15 UTC.** Control, forward KL 0.002, tau ×2 and both
-warm starts are complete. Forward KL 0.01 and tau ×4 seed 40902 are resuming
-to update 400, and the combined tau ×2 + forward KL 0.002 arm is at about
-update 150. Cells marked — are not yet played.
+**Status, 2026-11-22 03:45 UTC.** All 19 runs reached update 400. Held-out
+evaluation is complete except the second combined-arm seed at update 400.
+Seed 40902 of tau ×2 + forward KL 0.002, tau ×2 and tau ×4 is extending to
+update 1,000 as a follow-up.
 
-## Answer so far
+## Answer
 
-Every treatment removes the lock and none costs strength. Forward KL 0.01
-also unlocks an already locked policy within 25 updates, which the damped
-update alone does not. The two tau arms
-and forward KL 0.002 score higher against the heuristic than the control at
-update 400, and they play the control evenly head to head. Forward KL 0.01
-removes rare offers entirely but trails the other arms in strength.
+Every treatment removes the lock and none costs strength. Each treated arm
+scores 0.70–0.75 against the heuristic at update 400, against the control's
+0.64, and plays the control about evenly head to head. Tau ×2 + forward KL
+0.002 is the most open and the strongest: no saturated decisions, 0.74–0.75
+against the heuristic and 0.53 against the control. Tau ×2 alone is starting
+to re-lock by update 400 (9–25% of probe attacks saturated), so the floor
+matters most as tau keeps decaying. Forward KL 0.01 also unlocks an already
+locked policy within 25 updates, but on fresh runs it over-regularizes: it
+learned more slowly and trails the control head to head.
 
-| Arm | Seeds | Score vs heuristic, 400 | vs control, 400 | Attackers declared, 400 | Blockers declared, 400 | Saturated attacks, probe | Rare offers, 8+ offers, 200 |
+**Recommended default for new trophy runs:** tau_scale 0.1 with a 0.002
+forward-KL floor, pending the 1,000-update extensions.
+
+| Arm | Seeds | Score vs heuristic, 400 | vs control, 400 | Attackers declared, 400 | Blockers declared, 400 | Saturated attacks, probe 400 | Rare offers, 8+ offers, 200 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Control (ε = 0, τ 0.05) | 3 | 0.64 | — | 0.97 | 0.86 | 0.36–0.65 | 27.5% |
-| Forward KL 0.002 | 3 | 0.69 | 0.50 | 0.82 | 0.69 | 0.00–0.02 | 8.8% |
-| Forward KL 0.01 | 3 | 0.63 (300) | 0.43 (200) | 0.81 (300) | 0.67 (300) | 0 | 0.0% |
-| Tau ×2 (τ 0.1) | 2 | 0.73 | 0.50 | 0.78 | 0.75 | 0 | 16.5% |
-| Tau ×4 (τ 0.2) | 2 | 0.73 (1 seed) | 0.53 | 0.84 | 0.67 | 0 | 7.9% |
-| Tau ×2 + forward KL 0.002 | 2 | — | — | — | — | — | — |
+| Control (ε = 0, τ 0.05) | 3 | 0.64 | — | 0.97 | 0.86 | 36–65% | 27.5% |
+| Forward KL 0.002 | 3 | 0.71 | 0.51 | 0.84 | 0.69 | 0% | 8.8% |
+| Forward KL 0.01 | 3 | 0.70 | 0.46 | 0.81 | 0.68 | 0% | 0.0% |
+| Tau ×2 (τ 0.1) | 2 | 0.73 | 0.50 | 0.78 | 0.75 | 9–25% | 16.5% |
+| Tau ×4 (τ 0.2) | 2 | 0.72 | 0.52 | 0.77 | 0.71 | 1–2% | 7.9% |
+| Tau ×2 + forward KL 0.002 | 2 | 0.75 (1 seed; 0.74 at 300) | 0.53 | 0.85 | 0.71 | 0% | not measured |
 
 Scores are the held-out checkpoint's share of points over 32 deals with both
 seats and both decks (128 games per seed). "vs control" pairs each treated
@@ -46,14 +52,17 @@ Seeds average equally; arms with one seed at a checkpoint say so.
 
 Yes. During training the control's mean attack gap reaches 8–11 log-odds and
 its block gap 12–24 in two of three seeds; 36–65% of its probe attacks and
-up to 96% of its blocks are saturated. Every treated arm holds both gaps near
-1–3 with essentially no saturated decisions.
+up to 96% of its blocks are saturated. The treated arms hold both gaps near
+1–4. One exception: tau ×2 alone peaks at an attack gap of 5.3–5.5 near
+update 300 and has 9–25% of its probe attacks saturated at 400, so larger
+tau alone delays the lock rather than removing it. Tau ×2 + forward KL 0.002
+stays the most open (attack 1.7–2.7, block 0.1–0.6, no saturation).
 
 ![Attack and block log-odds](../data/mtg408/report/combat-probe.png)
 ![Saturated combat decisions](../data/mtg408/report/saturation.png)
 
 In held-out play the control declares 97–99% of offered attackers from update
-100 on. The treated arms declare 78–87%.
+100 on. The treated arms declare 77–89%.
 
 ![Attackers declared](../data/mtg408/report/attackers.png)
 ![Blockers declared](../data/mtg408/report/blockers.png)
@@ -89,17 +98,20 @@ attacks less into an untapped opposing 9/9 than the control (−3.5 against
 
 ## What does it cost in strength?
 
-Nothing measurable for forward KL 0.002 or either tau arm. Against the
-heuristic at update 400 they score 0.69–0.73, against the control's 0.64.
-Head to head with the control at matched updates they score 0.47–0.53.
-Forward KL 0.01 learned more slowly: 0.60 and 0.63 against the heuristic at
-updates 200 and 300, and 0.43 against the control at 200.
+Nothing measurable. Against the heuristic at update 400 every treated arm
+scores 0.70–0.75, against the control's 0.64. Head to head with the control
+at update 400, forward KL 0.002, tau ×2, tau ×4 and the combined arm score
+0.50–0.53. Forward KL 0.01 learned more slowly — 0.60 and 0.63 against the
+heuristic at updates 200 and 300 before reaching 0.70 at 400 — and still
+trails the control head to head (0.43 at 200, 0.46 at 400). The combined
+arm's update-400 point is drawn only once both seeds are evaluated; its one
+evaluated seed scores 0.75.
 
 ![Score against the heuristic](../data/mtg408/report/score.png)
 ![Against the control at the same update](../data/mtg408/report/vs-control.png)
 
-Every arm beats its own checkpoint from half as many updates, 0.56–0.60, so
-all of them were still improving at 400.
+Every arm beats its own checkpoint from half as many updates, 0.55–0.59 at
+update 400, so all of them were still improving.
 
 ![Against itself at half its updates](../data/mtg408/report/half-training.png)
 
@@ -136,17 +148,21 @@ run mapped onto a 10,000-step curve; the tau arms scale it by two and four.
 
 ## Cost
 
-USD35 approved for the experiment. Etude's per-run estimates total about
-USD22 so far across 17 runs on rented L4s; evaluation ran on owned
-machines.
+USD35 approved for the experiment. The 19 training runs to update 400 cost
+USD25.61 by Etude's per-run estimates, on rented L4s; evaluation ran on
+owned machines. The 1,000-update extensions share one L4 rental capped at
+USD6.60.
 
 ## Limits
 
-- Seeds: three per forward-KL arm, two per tau arm; tau ×4 has one seed at
-  update 400 so far. Differences of a few points in score are within seed
-  spread.
-- Length: 400 updates. The policies are still improving; a 1,000-update
-  follow-up on one seed of the leading arms is the next step.
+- Seeds: three per forward-KL arm, two per tau arm. Differences of a few
+  points in score are within seed spread; the head-to-head games, which pair
+  every treated seed with every control seed, are the tighter comparison.
+- Length: 400 updates. The policies are still improving. Seed 40902 of tau
+  ×2 + forward KL 0.002, tau ×2 and tau ×4 continues to update 1,000 to test
+  whether tau ×2's creeping saturation grows and whether the floor holds
+  strength over longer training.
+- Rare offers were measured at update 200, before the combined arm existed.
 - Evaluation failures: about a dozen of ~3,000 matches failed and are
   excluded — a card-capture bug on cards entering from outside the game
   (Task a383b2), one interrupted match and one observation over the 32-slot
@@ -188,6 +204,9 @@ from their saved state to update 400: `floor-0.002@40901` at 321, the three
 `floor-0.01` seeds at 313–318 and `tau-x4@40902` at 298. `tau-x2@40901` was
 cancelled at update 215 by an operator reading stale status and resumed from
 214. The job log of `floor-0.002@40901` retained a native trigger-mode panic.
+All 19 runs reached update 400 by 01:10 UTC on November 22. The extensions
+to 1,000 resumed seed 40902 of three arms from their update-400 state at
+about 02:30 UTC on one rented three-slot L4.
 
 ### Held-out controls at initialization
 
