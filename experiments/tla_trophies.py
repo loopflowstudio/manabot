@@ -11,9 +11,15 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from etude.eval.match import environment
-from etude.eval.records import Benchmark, CheckpointSlot, Code, Match, Seating
-from etude.eval.result import Tables
+from etude.eval.records import (
+    Benchmark,
+    CheckpointSlot,
+    Code,
+    Environment,
+    Match,
+    Seating,
+)
+from etude.eval.result import Result
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Report, Score
 from etude.spec import Input, Variable
@@ -43,6 +49,7 @@ ROOT = Path(__file__).resolve().parents[1]
 POOLS = "experiments/data/mtg409/pools-v2/corpus.json"
 RAW_JOB = "trophy-w64-raw"
 BENCHMARK = "tla-trophies-held-out-32"
+ENVIRONMENT_FILES = "d7dab787f31f7e2ff651cf9092c6c9d39a5530ad95ea0e20bf03b64b688e09e8"
 
 
 def corpus_input() -> Input:
@@ -184,7 +191,7 @@ class Deal(StrictModel):
     seed: int
 
 
-def play(match: Match, agents: Sequence[object]) -> Tables:
+def play(match: Match, agents: Sequence[object]) -> Result:
     deal = Deal.model_validate(match.config)
     pools = playable("held_out")
     a, b = pools[deal.first], pools[deal.second]
@@ -233,9 +240,10 @@ def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
             checkpoints=checkpoints,
             tournament=Benchmark(
                 name=BENCHMARK,
-                environment=environment(
-                    "tla-trophies",
-                    files=[Path(__file__), ROOT / "manabot/eval/pairing.py"],
+                environment=Environment(
+                    name="tla-trophies",
+                    # This file and pairing.py when the stored games were played.
+                    files=ENVIRONMENT_FILES,
                     config={"pools": corpus_input().sha256},
                 ),
                 seatings=seatings,

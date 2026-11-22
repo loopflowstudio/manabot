@@ -43,7 +43,6 @@ from experiments import (
     seat_comparison,
     tla_frontier,
     tla_trophies,
-    tla_trophies_cards,
     tla_trophies_floor,
 )
 from experiments.elemental_grid import DECKS
@@ -845,6 +844,6 @@ def test_floor_seed_plays_128_more_deals_on_fresh_pools(tmp_path: Path) -> None:
     more_job = jobs[
         f"{tla_trophies_floor.SEED_HEURISTIC}-{tla_trophies_floor.SEED_MORE}-tau-x2"
     ]
-    assert more_job.play is tla_trophies_cards.play
+    assert more_job.play is tla_trophies.play
     assert more_job.tournament.rollups == CARD_ROLLUPS
     assert jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].play is tla_trophies.play

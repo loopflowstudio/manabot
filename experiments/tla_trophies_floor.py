@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.records import Aligned, Fraction, Seating
+from etude.eval.records import Aligned, Environment, Fraction, Seating
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report, Score
@@ -23,7 +23,6 @@ from etude.train.tracking import track
 from pydantic import Field
 
 from experiments import tla_trophies as trophies
-from experiments.tla_trophies_cards import card_environment, play as play_with_cards
 from manabot.eval.card_metrics import CARD_ROLLUPS
 from manabot.training.panels import ML, PERF
 from manabot.training.report import behaviour_curves, head_to_head
@@ -183,6 +182,13 @@ SEED_DEALS = 32 + MORE_DEALS
 SEED_HALF_TRAINING_SEATINGS = tuple(
     f"One-seed half-training deal {i + 1}" for i in range(SEED_DEALS)
 )
+# The 128 more deals were first played by a copy of the pairing that kept card
+# evidence; play_pairing now keeps it, and their environment keeps that identity.
+CARD_ENVIRONMENT = Environment(
+    name="tla-trophies",
+    files="f8c0538ba83d6c05c642fb375c999cfcd1d3ca9f3cd51b312f548720700f40ed",
+    config={"pools": trophies.corpus_input().sha256, "cards": True},
+)
 EXTENSION_UPDATES = tuple(range(500, 1001, 100))
 EXTENSION_OPPONENTS = {
     "tau-x2-floor-0.002": ("tau-x2", "tau-x4"),
@@ -255,9 +261,7 @@ def arm_evaluations(
             for seating, label in zip(base, names, strict=True)
         )
         card_fields = (
-            {"environment": card_environment(), "rollups": CARD_ROLLUPS}
-            if cards
-            else {}
+            {"environment": CARD_ENVIRONMENT, "rollups": CARD_ROLLUPS} if cards else {}
         )
         return shared.model_copy(
             update={
@@ -266,7 +270,6 @@ def arm_evaluations(
                     update={"name": name, "seatings": seatings, **card_fields}
                 ),
                 "checkpoints": checkpoints,
-                **({"play": play_with_cards} if cards else {}),
             }
         )
 
