@@ -142,6 +142,13 @@ def _players(db: duckdb.DuckDBPyConnection, values: Sequence[str]) -> list[str]:
     return found
 
 
+class NoCardEvaluations(ValueError):
+    """The experiment's stored matches carry no card tables."""
+
+    def __init__(self) -> None:
+        super().__init__("this experiment has no card evaluations")
+
+
 def _has_cards(db: duckdb.DuckDBPyConnection) -> bool:
     tables = {row[0] for row in db.execute("show tables").fetchall()}
     return {rollup.name for rollup in CARD_ROLLUPS} | {"cards"} <= tables
@@ -410,7 +417,7 @@ def card_variants(
     combination's is `card_data(db, selection)`.
     """
     if not _has_cards(db):
-        raise ValueError("this experiment has no card evaluations")
+        raise NoCardEvaluations
     if unknown := set(dimensions) - set(DIMENSIONS):
         raise ValueError(f"unknown card dimensions: {sorted(unknown)}")
     _select(db, selection, "game_deals", "picked_games")
@@ -742,6 +749,8 @@ def load_game(
 
     `source` is the store `db` was opened from.
     """
+    if not _has_cards(db):
+        raise NoCardEvaluations
     found = db.execute(
         "select distinct evidence_sha256, evidence_bytes from card_plays"
         " where run = ? and game = ?",
@@ -771,6 +780,8 @@ def audit(
     participants its rows name. `replay` also re-runs each trace. `source` is
     the store `db` was opened from; blobs are read in pack order, one at a time.
     """
+    if not _has_cards(db):
+        raise NoCardEvaluations
     store = as_storage(source)
     columns = {r[0] for r in db.execute("describe card_plays").fetchall()}
     play_fields = tuple(

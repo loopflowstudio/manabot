@@ -833,7 +833,9 @@ def test_invalid_outcomes_never_receive_win_rate_credit(outcome: str) -> None:
     assert all(not row.eligible and row.win is None for row in rows)
 
 
-def test_outcome_only_experiment_has_no_card_data(tmp_path: Path) -> None:
+def test_outcome_only_experiment_has_no_card_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     def outcome_only(match: Match, agents: Sequence[object]) -> Tables:
         return {"plays": [{"seat": 0, "score": 1.0}]}
 
@@ -848,6 +850,33 @@ def test_outcome_only_experiment_has_no_card_data(tmp_path: Path) -> None:
     with card_db("old", tmp_path) as db:
         with pytest.raises(ValueError, match="no card evaluations"):
             card_data(db, CardSelection(experiment="old"))
+    # The reader sees one line naming the experiment, not a traceback.
+    for command in ("data", "audit"):
+        monkeypatch.setattr(
+            "sys.argv",
+            ["cards", command, "--experiment", "old", "--source", str(tmp_path)],
+        )
+        with pytest.raises(SystemExit) as exited:
+            cards_cli.main()
+        assert exited.value.code == "old: this experiment has no card evaluations"
+
+
+def test_verify_cli_names_the_experiment_when_card_data_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def empty_evaluation(spec: evaluation.CardEvaluationSpec, directory: Path) -> None:
+        pass
+
+    monkeypatch.setattr(cards_cli, "evaluate_cards", empty_evaluation)
+    monkeypatch.setattr(
+        "sys.argv", ["cards", "verify", "--games", "8", "--out", str(tmp_path)]
+    )
+    with pytest.raises(SystemExit) as exited:
+        cards_cli.main()
+    assert (
+        exited.value.code
+        == "card-verification: this experiment has no card evaluations"
+    )
 
 
 def test_verifier_fails_when_the_audit_finds_a_problem(
