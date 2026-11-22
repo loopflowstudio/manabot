@@ -718,7 +718,9 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     assert all("final" not in seating.name for seating in interiors)
 
 
-def test_extended_floor_arms_meet_each_other_past_update_400(tmp_path: Path) -> None:
+def test_extended_floor_seed_meets_the_other_arms_past_update_400(
+    tmp_path: Path,
+) -> None:
     runs = tuple(
         _finished_run(tmp_path, range(0, 1001, 100), name=f"{job}@2", job=job, seed=2)
         for job in ("tau-x2-floor-0.002", "tau-x2", "tau-x4")
@@ -729,7 +731,8 @@ def test_extended_floor_arms_meet_each_other_past_update_400(tmp_path: Path) -> 
     }
     pairs = Counter()
     for job in tla_trophies_floor.eval_jobs(state):
-        if job.name.startswith(tla_trophies_floor.EXTENSION):
+        if job.name.startswith(tla_trophies_floor.SEED_HEAD_TO_HEAD):
+            assert {s.seeds for s in job.tournament.seatings} == {"one"}
             tournament, gaps = Tournament(
                 definition=job.tournament, checkpoints=job.recorded().checkpoints
             ).resolve(state.lines)
@@ -749,3 +752,30 @@ def test_extended_floor_arms_meet_each_other_past_update_400(tmp_path: Path) -> 
         for update in range(500, 1001, 100)
         for deal in range(40900, 40932)
     }
+
+
+def test_floor_seed_past_update_400_has_its_own_one_seed_benchmarks(
+    tmp_path: Path,
+) -> None:
+    runs = (
+        _finished_run(
+            tmp_path, range(0, 401, 100), name="tau-x4@1", job="tau-x4", seed=1
+        ),
+        _finished_run(
+            tmp_path, range(0, 1001, 100), name="tau-x4@2", job="tau-x4", seed=2
+        ),
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    updates = {
+        job.name: (
+            {c.at["updates"] for c in job.checkpoints},
+            {s.seeds for s in job.tournament.seatings},
+        )
+        for job in tla_trophies_floor.eval_jobs(state)
+    }
+    early = (set(range(0, 401, 100)), {"every"})
+    late = (set(range(500, 1001, 100)), {"one"})
+    assert updates[f"{tla_trophies_floor.HELD_OUT}-tau-x4"] == early
+    assert updates[f"{tla_trophies_floor.HALF_TRAINING}-tau-x4"] == early
+    assert updates[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x4"] == late
+    assert updates[f"{tla_trophies_floor.SEED_HALF_TRAINING}-tau-x4"] == late

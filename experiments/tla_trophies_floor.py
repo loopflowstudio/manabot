@@ -5,8 +5,9 @@ schedule. The tau arms keep that schedule and multiply its scale. Each fresh
 checkpoint plays the held-out deals against the heuristic and, in its own
 benchmark, against its own line at half its updates. At updates 200 and 400
 each treated fresh arm also meets every control seed at the same update.
-Past update 400, where only the extended seed continues, the extended arms
-meet each other at the same update.
+Past update 400, where only one seed of the tau arms continues, that seed
+plays the same benchmarks in its own one-seed tournaments and the extended
+arms meet each other at the same update.
 """
 
 from collections.abc import Sequence
@@ -156,17 +157,25 @@ HALF_TRAINING_SEATINGS = tuple(f"Half-training deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD = "tla-trophies-floor-vs-control-32"
 HEAD_TO_HEAD_SEATINGS = tuple(f"Matched control deal {i + 1}" for i in range(32))
 HEAD_TO_HEAD_UPDATES = (200, 400)
-# Extended arms meet each other past update 400, one seed per arm.
-EXTENSION = "tla-trophies-floor-extended-32"
+# Past update 400 only seed 40902 of the tau arms continues. Its games are
+# their own benchmarks with `seeds="one"` seatings, so the page draws the one
+# seed rather than waiting for a seed that stopped at 400.
+SEED_HEURISTIC = "tla-trophies-floor-seed-held-out-32"
+SEED_HALF_TRAINING = "tla-trophies-floor-seed-half-training-32"
+SEED_HALF_TRAINING_SEATINGS = tuple(
+    f"One-seed half-training deal {i + 1}" for i in range(32)
+)
+SEED_HEAD_TO_HEAD = "tla-trophies-floor-seed-vs-32"
 EXTENSION_UPDATES = tuple(range(500, 1001, 100))
 EXTENSION_OPPONENTS = {
     "tau-x2-floor-0.002": ("tau-x2", "tau-x4"),
     "tau-x4": ("tau-x2",),
 }
+EXTENSION_ARMS = ("tau-x2-floor-0.002", "tau-x2", "tau-x4")
 
 
 def extension_seatings(opponent: str) -> tuple[str, ...]:
-    return tuple(f"Matched {opponent} deal {i + 1}" for i in range(32))
+    return tuple(f"One-seed {opponent} deal {i + 1}" for i in range(32))
 
 
 def arm_evaluations(
@@ -178,27 +187,38 @@ def arm_evaluations(
         return []
     (shared,) = held_out
     benchmark = shared.tournament
-    name = f"{HELD_OUT}-{arm}"
-    heuristic = shared.model_copy(
-        update={"name": name, "tournament": benchmark.model_copy(update={"name": name})}
-    )
+    compared = [
+        c
+        for c in shared.checkpoints
+        if c.at.get("updates", 0) <= HEAD_TO_HEAD_UPDATES[-1]
+    ]
+    extended = [
+        c for c in shared.checkpoints if c.at.get("updates") in EXTENSION_UPDATES
+    ]
 
     def against(
         name: str,
-        seating_names: tuple[str, ...],
-        opponent: Fraction | Aligned,
         checkpoints: Sequence[CheckpointRecord],
+        seating_names: tuple[str, ...] | None = None,
+        opponent: Fraction | Aligned | None = None,
         opponent_seeds: int = 1,
+        one_seed: bool = False,
     ) -> EvalJob:
+        names = seating_names or tuple(s.name for s in benchmark.seatings)
         seatings = tuple(
             seating.model_copy(
                 update={
                     "name": label,
-                    "players": (seating.players[0], opponent),
                     "games": seating.games * opponent_seeds,
+                    **(
+                        {}
+                        if opponent is None
+                        else {"players": (seating.players[0], opponent)}
+                    ),
+                    **({"seeds": "one"} if one_seed else {}),
                 }
             )
-            for seating, label in zip(benchmark.seatings, seating_names, strict=True)
+            for seating, label in zip(benchmark.seatings, names, strict=True)
         )
         return shared.model_copy(
             update={
@@ -210,39 +230,43 @@ def arm_evaluations(
             }
         )
 
-    half = against(
-        f"{HALF_TRAINING}-{arm}",
-        HALF_TRAINING_SEATINGS,
-        Fraction(clock="updates", value=0.5, trained=True),
-        shared.checkpoints,
-    )
-    jobs = [heuristic, half]
-    treated = [
-        c for c in shared.checkpoints if c.at.get("updates") in HEAD_TO_HEAD_UPDATES
+    half = Fraction(clock="updates", value=0.5, trained=True)
+    jobs = [
+        against(f"{HELD_OUT}-{arm}", compared),
+        against(f"{HALF_TRAINING}-{arm}", compared, HALF_TRAINING_SEATINGS, half),
     ]
+    treated = [c for c in compared if c.at.get("updates") in HEAD_TO_HEAD_UPDATES]
     if arm != "control" and treated and control_seeds:
         jobs.append(
             against(
                 f"{HEAD_TO_HEAD}-{arm}",
+                treated,
                 HEAD_TO_HEAD_SEATINGS,
                 Aligned(clock="updates", job="control"),
-                treated,
                 control_seeds,
             )
         )
-    extended = [
-        c for c in shared.checkpoints if c.at.get("updates") in EXTENSION_UPDATES
-    ]
     if extended:
-        jobs.extend(
+        jobs += [
+            against(f"{SEED_HEURISTIC}-{arm}", extended, one_seed=True),
             against(
-                f"{EXTENSION}-{arm}-vs-{opponent}",
-                extension_seatings(opponent),
-                Aligned(clock="updates", job=opponent),
+                f"{SEED_HALF_TRAINING}-{arm}",
                 extended,
-            )
-            for opponent in EXTENSION_OPPONENTS.get(arm, ())
-        )
+                SEED_HALF_TRAINING_SEATINGS,
+                half,
+                one_seed=True,
+            ),
+            *(
+                against(
+                    f"{SEED_HEAD_TO_HEAD}-{arm}-vs-{opponent}",
+                    extended,
+                    extension_seatings(opponent),
+                    Aligned(clock="updates", job=opponent),
+                    one_seed=True,
+                )
+                for opponent in EXTENSION_OPPONENTS.get(arm, ())
+            ),
+        ]
     return jobs
 
 
@@ -269,12 +293,23 @@ def report() -> Report:
             head_to_head(
                 "Against the control at the same update", HEAD_TO_HEAD_SEATINGS
             ),
+            Curve(
+                title="Seed 40902 past update 400: against the heuristic",
+                matches=tuple(
+                    Matches(tournament=f"{SEED_HEURISTIC}-{arm}")
+                    for arm in EXTENSION_ARMS
+                ),
+            ),
             head_to_head(
-                "Against tau ×2 at the same update, past 400",
+                "Seed 40902 past update 400: against itself at half its updates",
+                SEED_HALF_TRAINING_SEATINGS,
+            ),
+            head_to_head(
+                "Seed 40902 past update 400: against tau ×2 at the same update",
                 extension_seatings("tau-x2"),
             ),
             head_to_head(
-                "Against tau ×4 at the same update, past 400",
+                "Seed 40902 past update 400: against tau ×4 at the same update",
                 extension_seatings("tau-x4"),
             ),
             *behaviour_curves(matches=held_out),
