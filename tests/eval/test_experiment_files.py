@@ -750,7 +750,7 @@ def test_extended_floor_seed_meets_the_other_arms_past_update_400(
         for arm, opponents in tla_trophies_floor.EXTENSION_OPPONENTS.items()
         for opponent in opponents
         for update in range(500, 1001, 100)
-        for deal in range(40900, 40932)
+        for deal in range(40900, 40900 + tla_trophies_floor.SEED_DEALS)
     }
 
 
@@ -817,3 +817,23 @@ def test_combined_arm_meets_every_tau_x4_seed_at_matched_updates(
         for rival in (1, 2)
         for deal in range(40900, 40932)
     }
+
+
+def test_floor_seed_plays_128_more_deals_on_fresh_pools(tmp_path: Path) -> None:
+    runs = (
+        _finished_run(
+            tmp_path, range(0, 1001, 100), name="tau-x2@2", job="tau-x2", seed=2
+        ),
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    jobs = {job.name: job for job in tla_trophies_floor.eval_jobs(state)}
+    first = jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].tournament.seatings
+    more = jobs[
+        f"{tla_trophies_floor.SEED_HEURISTIC}-{tla_trophies_floor.SEED_MORE}-tau-x2"
+    ].tournament.seatings
+    deals = [tla_trophies.Deal.model_validate(s.config) for s in first + more]
+    pools = [p for d in deals for p in (d.first, d.second)]
+    assert len(deals) == 160
+    assert sorted(pools) == list(range(320))
+    assert len({d.seed for d in deals}) == 160
+    assert {s.seeds for s in more} == {"one"}

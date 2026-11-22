@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.records import Aligned, Fraction
+from etude.eval.records import Aligned, Fraction, Seating
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report, Score
@@ -171,10 +171,15 @@ def treated_seatings(opponent: str) -> tuple[str, ...]:
 # seed rather than waiting for a seed that stopped at 400.
 SEED_HEURISTIC = "tla-trophies-floor-seed-held-out-32"
 SEED_HALF_TRAINING = "tla-trophies-floor-seed-half-training-32"
-SEED_HALF_TRAINING_SEATINGS = tuple(
-    f"One-seed half-training deal {i + 1}" for i in range(32)
-)
 SEED_HEAD_TO_HEAD = "tla-trophies-floor-seed-vs-32"
+# Past update 400 the one seed also plays 128 more held-out deals, on pools
+# 64-319, in benchmarks of their own so the first 32 deals' games still count.
+MORE_DEALS = 128
+SEED_MORE = "128-more"
+SEED_DEALS = 32 + MORE_DEALS
+SEED_HALF_TRAINING_SEATINGS = tuple(
+    f"One-seed half-training deal {i + 1}" for i in range(SEED_DEALS)
+)
 EXTENSION_UPDATES = tuple(range(500, 1001, 100))
 EXTENSION_OPPONENTS = {
     "tau-x2-floor-0.002": ("tau-x2", "tau-x4"),
@@ -184,7 +189,22 @@ EXTENSION_ARMS = ("tau-x2-floor-0.002", "tau-x2", "tau-x4")
 
 
 def extension_seatings(opponent: str) -> tuple[str, ...]:
-    return tuple(f"One-seed {opponent} deal {i + 1}" for i in range(32))
+    return tuple(f"One-seed {opponent} deal {i + 1}" for i in range(SEED_DEALS))
+
+
+def more_held_out_seatings(template: Seating) -> tuple[Seating, ...]:
+    """Deals 33-160: fresh pool pairs after the 64 pools of the first 32 deals."""
+    return tuple(
+        template.model_copy(
+            update={
+                "name": f"Held-out pair {33 + j}",
+                "config": trophies.Deal(
+                    first=64 + 2 * j, second=65 + 2 * j, seed=40932 + j
+                ),
+            }
+        )
+        for j in range(MORE_DEALS)
+    )
 
 
 def arm_evaluations(
@@ -212,8 +232,9 @@ def arm_evaluations(
         opponent: Fraction | Aligned | None = None,
         opponent_seeds: int = 1,
         one_seed: bool = False,
+        base: tuple[Seating, ...] = benchmark.seatings,
     ) -> EvalJob:
-        names = seating_names or tuple(s.name for s in benchmark.seatings)
+        names = seating_names or tuple(s.name for s in base)
         seatings = tuple(
             seating.model_copy(
                 update={
@@ -227,7 +248,7 @@ def arm_evaluations(
                     **({"seeds": "one"} if one_seed else {}),
                 }
             )
-            for seating, label in zip(benchmark.seatings, names, strict=True)
+            for seating, label in zip(base, names, strict=True)
         )
         return shared.model_copy(
             update={
@@ -266,23 +287,33 @@ def arm_evaluations(
                 seeds[rival],
             )
         )
-    if extended:
+    more = more_held_out_seatings(benchmark.seatings[0])
+    for suffix, base, picked in (
+        ("", benchmark.seatings, slice(0, 32)),
+        (f"-{SEED_MORE}", more, slice(32, SEED_DEALS)),
+    ):
+        if not extended:
+            break
         jobs += [
-            against(f"{SEED_HEURISTIC}-{arm}", extended, one_seed=True),
             against(
-                f"{SEED_HALF_TRAINING}-{arm}",
+                f"{SEED_HEURISTIC}{suffix}-{arm}", extended, one_seed=True, base=base
+            ),
+            against(
+                f"{SEED_HALF_TRAINING}{suffix}-{arm}",
                 extended,
-                SEED_HALF_TRAINING_SEATINGS,
+                SEED_HALF_TRAINING_SEATINGS[picked],
                 half,
                 one_seed=True,
+                base=base,
             ),
             *(
                 against(
-                    f"{SEED_HEAD_TO_HEAD}-{arm}-vs-{opponent}",
+                    f"{SEED_HEAD_TO_HEAD}{suffix}-{arm}-vs-{opponent}",
                     extended,
-                    extension_seatings(opponent),
+                    extension_seatings(opponent)[picked],
                     Aligned(clock="updates", job=opponent),
                     one_seed=True,
+                    base=base,
                 )
                 for opponent in EXTENSION_OPPONENTS.get(arm, ())
             ),
@@ -323,8 +354,9 @@ def report() -> Report:
             Curve(
                 title="Seed 40902 past update 400: against the heuristic",
                 matches=tuple(
-                    Matches(tournament=f"{SEED_HEURISTIC}-{arm}")
+                    Matches(tournament=f"{SEED_HEURISTIC}{suffix}-{arm}")
                     for arm in EXTENSION_ARMS
+                    for suffix in ("", f"-{SEED_MORE}")
                 ),
             ),
             head_to_head(
