@@ -564,11 +564,10 @@ those earlier games stay absent and the card page reports the games played
 since (`game_deals` counts reflect the games with card data); an experiment
 whose blocks all lack card tables still reports no card evaluations.
 
-In `play_pairing`, an incomplete or invalid pairing raises after retaining its
-arena directory and stores no card rows, and a pairing whose card capture fails
-also fails its match rather than storing outcomes silently missing card data.
-Evidence leaves as Etude blobs rather than staying in the retained arena
-directory.
+`play_pairing` requires every declared leg and its evidence blob before it
+returns the match. An invalid leg in a complete deal keeps its null score.
+The arena directory is retained even if the match fails. Etude stores the
+card evidence as blobs of the match.
 
 **Columns.** GP (games with the card in deck), OH (opening-hand copies), GD
 (copies drawn later), GIH = OH + GD with GIH WR = winning qualifying copies /

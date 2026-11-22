@@ -1,16 +1,20 @@
 """Authored paired deals preserve disclosure and distinct blanked checkpoint players."""
 
+from collections.abc import Iterator
+from hashlib import sha256
 import json
 from pathlib import Path
 from typing import Literal
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.query import compare, statsdb
+from etude.eval.query import compare, read_blobs
 from etude.eval.records import (
+    Benchmark,
     CheckpointPlayer,
     Code,
     Environment,
     Match,
+    Seating,
     checkpoint_player,
 )
 from etude.eval.tournament import evaluating
@@ -25,6 +29,7 @@ from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.eval import pairing
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import blank_decision_memory, build
+from manabot.eval.card_query import CardSelection, card_data, card_db
 from manabot.eval.evaluation import EvaluationRequest, EvaluationResult
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
@@ -32,6 +37,14 @@ from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 import managym
+
+
+@pytest.fixture
+def cpu_threads() -> Iterator[None]:
+    previous = torch.get_num_threads()
+    torch.set_num_threads(1)
+    yield
+    torch.set_num_threads(previous)
 
 
 @pytest.mark.parametrize(
@@ -46,12 +59,12 @@ import managym
 def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    cpu_threads: None,
     disclosure: Literal["open", "closed"],
     blank: bool,
     world: Literal["world"] | None,
 ) -> None:
     """A world matchup admits world-bound checkpoints, as trained recipes write them."""
-    torch.set_num_threads(1)
     # Vanilla decks exercise disclosure, checkpoint identity and all four legs
     # with bounded decision histories for the recurrent test policies.
     matchup = AuthoredMatchup(
@@ -120,7 +133,11 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     original = pairing.evaluate
 
     def evaluate(
-        request: EvaluationRequest, *, out_dir: Path, agents: dict[str, GamePlayer]
+        request: EvaluationRequest,
+        *,
+        out_dir: Path,
+        agents: dict[str, GamePlayer],
+        card_evidence_dir: Path,
     ) -> EvaluationResult:
         assert request.authored_matchup is not None
         env = managym.Env(seed=123)
@@ -136,12 +153,14 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
             )
             assert request.candidate.identity_sha256 != request.opponent.identity_sha256
         assert agents["opponent"].blank_decision_memory == blank
-        return original(request, out_dir=out_dir, agents=agents)
+        return original(
+            request, out_dir=out_dir, agents=agents, card_evidence_dir=card_evidence_dir
+        )
 
     monkeypatch.setattr(pairing, "evaluate", evaluate)
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
     match = Match(players=tuple(players), games=4)
-    tables = pairing.play_pairing(
+    result = pairing.play_pairing(
         match,
         agents,
         matchup=matchup,
@@ -154,8 +173,8 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
         game_seconds=60,
         arena="fixture-pairing",
     )
-    rows = tables["plays"]
-    assert "behaviour" not in tables
+    rows = result.tables["plays"]
+    assert "behaviour" not in result.tables
     assert len(rows) == 8
     assert {row["decklists"] for row in rows} == {disclosure}
     assert {row["game"] for row in rows} == set(range(4))
@@ -166,9 +185,8 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
 
 
 def test_pairing_plays_a_checkpoint_against_the_heuristic(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cpu_threads: None
 ) -> None:
-    torch.set_num_threads(1)
     roles = ("ur_lessons", "gw_allies")
     first, second = (
         managym.authored_deck_setup("ur-lessons-vs-gw-allies", role) for role in roles
@@ -217,28 +235,43 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     heuristic = Code(
         name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
     )
-    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "output"))
-    match = Match(players=(checkpoint_player(ref), heuristic), index=0)
-    tables = pairing.play_pairing(
-        match,
-        [load(ref), build(heuristic, {})],
-        matchup=matchup,
-        deal=123,
-        matchup_mode="cross",
-        game_seconds=60,
-        arena="fixture-pairing",
+    output = tmp_path / "output"
+    output.mkdir()
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(output))
+    benchmark = Benchmark(
+        name="pairing",
+        environment=Environment(name="fixture", files="a" * 64),
+        seatings=(
+            Seating(
+                name="fixture", players=(checkpoint_player(ref), heuristic), games=1
+            ),
+        ),
     )
-    rows = tables["plays"]
+    track = tmp_path / "track"
+    with evaluating(benchmark, experiment="pairing", directory=track) as active:
+        [match] = active.matches
+        result = pairing.play_pairing(
+            match,
+            [load(ref), build(heuristic, {})],
+            matchup=matchup,
+            deal=123,
+            matchup_mode="cross",
+            game_seconds=60,
+            arena="fixture-pairing",
+        )
+        active.store(match, result)
+    rows = result.tables["plays"]
     assert len(rows) == 8 and all(row["valid"] for row in rows)
     for game in range(4):
         assert sum(float(row["score"]) for row in rows if row["game"] == game) == 1.0
 
-    retained = tmp_path / "output" / "arena" / match.key
+    retained = output / "arena" / match.key
+    assert not (retained / "cards").exists()
     request = json.loads((retained / "evaluation.json").read_bytes())["request"]
     assert request["opponent"]["player_spec"]["max_actions"] == 64
     native = json.loads((retained / "statistics.json").read_bytes())["tables"]["play"]
     checkpoint = [native[2 * leg + leg % 2] for leg in range(4)]
-    behaviour = tables["behaviour"]
+    behaviour = result.tables["behaviour"]
     assert len(behaviour) == 4
     for leg, (row, expected) in enumerate(zip(behaviour, checkpoint, strict=True)):
         deck = matchup.decks(leg)[leg % 2]
@@ -257,15 +290,18 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
             "on_play": leg % 2 == 0,
             "decklists": "closed",
         }
-    track = tmp_path / "track"
-    with evaluating(
-        Environment(name="fixture", files="a" * 64),
-        experiment="pairing",
-        matches=[match],
-        directory=track,
-    ) as active:
-        active.store(match, tables)
-    with statsdb("pairing", track) as db:
+    with card_db("pairing", track) as db:
+        data = card_data(db, CardSelection(experiment="pairing"))
+        assert data.games == 8 and data.cards
+        blobs = {sha256(body).hexdigest(): body for body in result.blobs}
+        assert len(result.blobs) == len(blobs) == 4
+        plays = db.execute(
+            "select evidence_sha256, participant from card_plays"
+        ).fetchall()
+        assert sorted(plays) == sorted(
+            (digest, player) for digest in blobs for player in ("candidate", "opponent")
+        )
+        assert dict(read_blobs(db, track, blobs)) == blobs
         comparisons = compare(
             db, table="behaviour", value="lands_played", per="land_turns"
         )

@@ -314,8 +314,9 @@ def trace_card_tables(
     """Card tables and evidence blobs for the games one `play_cell(card_evidence_dir=root)` call retained.
 
     This lets any evaluation deliver card data beside its own outcome tables:
-    merge the result's tables and blobs into the `Result` its `play` returns,
-    and declare `CARD_ROLLUPS` with the run. `root` is a scratch folder (see
+    merge the result's tables and blobs into the `Result` its `play` returns.
+    Declaring `CARD_ROLLUPS` computes totals at store time. Otherwise
+    `card_db` computes them when it reads the blocks. `root` is a scratch folder (see
     `_handed_over`). `participants` names the two registered players in Etude
     row order. Games are not bound to a card-evaluation schedule; each must
     seat exactly these players.

@@ -3,10 +3,12 @@
 The candidate is a checkpoint; the opponent is a checkpoint or the native
 heuristic (`Code(name="heuristic")`). The caller owns the experimental
 schedule; Etude owns the model forwards and supplies the built agents. This
-module owns player admission and retained arena evidence.
+module admits players, retains the arena trace and returns each game's card
+evidence as a blob of the Etude match.
 """
 
 from collections.abc import Sequence
+import json
 import os
 from pathlib import Path
 import shutil
@@ -14,11 +16,12 @@ from tempfile import TemporaryDirectory
 from typing import Literal
 
 from etude.eval.records import CheckpointPlayer, Code, Match
-from etude.eval.result import Tables
+from etude.eval.result import Result
 
 from manabot.eval.admission import register_anchor
 from manabot.eval.agents import game_players, registration
 from manabot.eval.benchmark import evaluation_tables
+from manabot.eval.card_evaluation import trace_card_tables
 from manabot.eval.evaluation import EvaluationRequest, attempt_play_counts, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
@@ -35,8 +38,8 @@ def play_pairing(
     matchup_mode: Literal["cross", "all"],
     game_seconds: float,
     arena: str,
-) -> Tables:
-    """Play all legs; an incomplete or invalid pairing raises after retaining evidence."""
+) -> Result:
+    """Return the paired deal's outcome, behaviour and replay-derived card data."""
     legs = 4 if matchup_mode == "cross" else 8
     # An indexed Etude match is one deal. A legacy multi-game match declares legs.
     expected_games = legs if match.index is None else 1
@@ -88,6 +91,8 @@ def play_pairing(
     journal_root = "/dev/shm" if Path("/dev/shm").is_dir() else None
     with TemporaryDirectory(dir=journal_root) as journal:
         out = Path(journal) / "deal"
+        cards = Path(journal) / "cards"
+        participants = (candidate.player_id, opponent.player_id)
         try:
             result = evaluate(
                 EvaluationRequest(
@@ -104,9 +109,10 @@ def play_pairing(
                     purpose=arena,
                 ),
                 out_dir=out,
+                card_evidence_dir=cards,
                 agents=dict(
                     zip(
-                        ("candidate", "opponent"),
+                        participants,
                         game_players(match.players, agents),
                         strict=True,
                     )
@@ -119,9 +125,14 @@ def play_pairing(
                 if opponent.runner_kind == "code" and result.status == "completed"
                 else None
             )
-            return evaluation_tables(
+            tables = evaluation_tables(
                 result.rows, matchup=matchup, legs=legs, play_counts=counts
             )
+            trace = json.loads((out / "trace.json").read_bytes())
+            evidence = trace_card_tables(cards, trace, participants)
+            if len(evidence.blobs) != legs:
+                raise ValueError("pairing requires card evidence for every leg")
+            return Result(tables={**tables, **evidence.tables}, blobs=evidence.blobs)
         finally:
             if out.is_dir():
                 shutil.copytree(out, retained, dirs_exist_ok=True)
