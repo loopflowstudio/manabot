@@ -74,13 +74,13 @@ The catalog adds `fdn.fiendish_panda` and `m21.heartfire_immolator`. Panda and S
 
 At `73f608af`, retargeting reads the announced clause for each slot directly. Sibling distinctness and combined mana-value bounds stay scoped to that clause. Panda and Immolator close the two additional object-lifetime witnesses. Four of 81 primary FDN rows are delivered.
 
-### Behavior review at 11f107c0
+### Behavior review and pending power
 
 Four directed debug fixtures passed again: Panda snapshot and Command replay, live source-power rechecks during retargeting and resolution, Immolator damage after source reentry, and Sandbender reanimation. Panda’s two viewer frames agreed across restores. This checks deterministic projection; the hidden-hand permutation and stale Command checks remain integrated obligations. The pair uses existing cost and token expressions.
 
-**Immolator's pending damage.** The stack observation reads the same exact source as resolution. With history disabled, the base and prowess activations showed source power two and three to both viewers, including the v11 stack tensor and Academy decision surface. The acting viewer’s LLM prompt showed the same power. Craw Wurm took the corresponding damage. The M21 native fixture also checked both values after the source returned.
+The review at `11f107c0` found “Its pending activation still omits that public value.” The correction at `f9a251a9` reads power through `permanent_power_or_lki` for a pending activation with a direct source-power damage instruction. The M21 fixture checks the value after source reentry. In `tests/verify/test_immolator_source_power.py`, base and prowess activations showed two and three to both viewers in the native observation, JSON round trip, v11 tensor and Academy stack label. The acting viewer’s history-free text showed the same value. Craw Wurm took two and three damage respectively. The fixture at `e2e8318d` leaves one untapped Mountain for either activation.
 
-The working phase remains open for 77 primary rows. Lunar Convocation is the next authored interaction. Gate owns the broad suites and the later performance and integrated checks below.
+The observation matches the damage expression to decide when to expose power. If another pending instruction needs that value, move recognition of the expression into the shared query vocabulary before extending the stack projection. The exact-source lookup already owns the value.
 
 ## Next slice · Lunar Convocation
 
@@ -94,7 +94,7 @@ The 77 remaining primary rows, integrated replay/privacy checks and Engine Budge
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 
-Checkpoint construction at `7334e781` uses the saved fact embedding width. The merge at `a41f9b08` brought in live game snapshots. Its existing restore checks live in `tests/env/test_game_snapshot.py`. The slice results above predate that merge.
+Checkpoint construction at `7334e781` uses the saved fact embedding width. The merge at `a41f9b08` brought in live game snapshots. Its existing restore checks live in `tests/env/test_game_snapshot.py`. The Fumigate, Exsanguinate, Collector and Connoisseur results above predate that merge. The Panda fixture exercises the merged snapshot path.
 
 ## Remaining native work
 
