@@ -73,7 +73,7 @@ class GameRecord:
 
 
 def simulation_summary(games: Sequence[GameRecord]) -> dict[str, Any]:
-    """Win, timeout and length rates over every recorded game."""
+    """Outcome counts, win rates and average lengths over every recorded game."""
     total_games = len(games)
     if total_games == 0:
         return {"total_games": 0}

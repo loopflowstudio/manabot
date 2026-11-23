@@ -6,7 +6,7 @@ The implemented cohort covers six Foundations primary rows and the cross-set wit
 
 ## Next slice
 
-Simulation parity is complete. The simulation records the absolute winning seat or native draw, including on the final permitted step. A live protected game at the cap counts as a timeout. Five focused checks passed, including seed-23 Pact Command replay, both winning seats, simultaneous loss and the four-game win-rate denominator.
+At `5390217b`, simulation began reading the committed native result before classifying a step-limit timeout. At `a2ac104a`, each worker returns its GameRecord directly to the summary and CLI. Five focused checks passed. In `tests/env/test_game_snapshot.py`, seed-23 Pact Command replay and indexed play both reported seat 1 winning at positive life. Four one-step simulations produced one win per seat, one simultaneous draw and one Herald-protected timeout. Each seat won 25% of all games.
 
 Run the paired Engine Budget. Build the candidate and reference on the dedicated runner, run the sample and compare commands below, and reconcile the changed ordinary-game decision digests against real opening choices before judging the 10% limit. The local candidate measurements justify carrying the current implementation into review. A relative performance result is still missing.
 
@@ -190,7 +190,6 @@ No baseline update or relative speed claim follows from the local instrumented s
 
 ### Performance review at d972bed7
 
-Return to `implement` for simulation outcome parity. The seed-23 Pact receipt establishes an absolute winner at positive life. The simulation reader still tests the step limit first and looks for a different winner field. Withhold simulation outcome and win-rate comparisons until the reader passes the cases in Next slice. The native benchmark receipts remain observations of their recorded workloads.
 
 The reviewed reference is `932a1bb9`. Its 512-game workload took 123,517 steps with digest 6877553498864102521. The candidate took 118,255 steps and all three search seed digests changed. Opening choices change the paths through those games. The local instrumented release and the hosted reference also have different build and machine profiles. These receipts establish neither a speedup nor a regression. Gate must reconcile the changed paths and run the paired release Engine Budget on its ubuntu-24.04 runner. Reference adoption remains a separate reviewed operation.
 
