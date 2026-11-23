@@ -82,6 +82,8 @@ The review at `11f107c0` found “Its pending activation still omits that public
 
 The observation matches the damage expression to decide when to expose power. If another pending instruction needs that value, move recognition of the expression into the shared query vocabulary before extending the stack projection. The exact-source lookup already owns the value.
 
+Behavior review at `64eaa87c` reproduced both M21 damage outcomes after reentry and both history-free Python projection cases. The Panda engine snapshot test also passed with both target outcomes. The pending-power defect is closed. Payment rules and authored tokens did not change in this correction. Continue the working phase with Lunar Convocation. Its definition and end-step interaction are still missing. Integrated stale-Command and hidden-card permutation checks and gate suites remain open.
+
 ## Next slice · Lunar Convocation
 
 Use Cat Collector’s Food and Lunar Convocation’s life payment to exercise the two end-step conditions in the [BLB ledger](../.lf/wave/coverage/research/standard-2026-11/sets/blb.jsonl). Compare gain alone, loss alone, and equal gain and loss on the controller’s turn. Check opponent life loss and Bat creation separately, then cross the turn boundary. The existing `PlayerTurnHistory.life_gains` and `life_lost` in `managym/src/flow/turn.rs` already answer both occurrence questions. Reuse those fields in the conditions and viewer projections. Derive each intervening-if condition from the controller’s turn record when matching the end-step event and when resolving the ability. A card-local history flag would duplicate that record.
