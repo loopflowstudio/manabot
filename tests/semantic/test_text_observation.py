@@ -1529,11 +1529,14 @@ def test_lightshell_duo_replays_every_surveil_choice() -> None:
     names = ("Gray Ogre", "Hill Giant")
     root = _lightshell_surveil(*names)
     mill_first, mill_second, keep = capture_text_decision(root).actions
-    for name, action in zip(names, (mill_first, mill_second), strict=True):
+    for milled, kept, action in (
+        (*names, mill_first),
+        (*names[::-1], mill_second),
+    ):
         branch = _replay_text_choice(root, action.reference)
-        assert name not in branch.semantic_observation_json(1)
+        assert milled not in branch.semantic_observation_json(1)
         mill_other, finish = capture_text_decision(branch).actions
-        for choice, expected in [(mill_other, set(names)), (finish, {name})]:
+        for choice, expected in [(mill_other, set(names)), (finish, {milled})]:
             committed = _replay_text_choice(branch, choice.reference)
             assert {
                 c.characteristics.name
@@ -1541,18 +1544,14 @@ def test_lightshell_duo_replays_every_surveil_choice() -> None:
                 if c.zone == managym.ZoneEnum.GRAVEYARD
             } == expected
             if choice == finish:
-                _assert_private_library(
-                    committed, {0: next(n for n in names if n != name)}
-                )
+                _assert_private_library(committed, {0: kept})
 
     order = _replay_text_choice(root, keep.reference)
-    cards = order.observation_for_player(0).agent_cards
-    definitions = {c.characteristics.name: c.registry_key for c in cards}
-    for name, choice in zip(names, capture_text_decision(order).actions, strict=True):
+    for ordered, choice in zip(
+        (names, names[::-1]), capture_text_decision(order).actions, strict=True
+    ):
         branch = _replay_text_choice(order, choice.reference)
-        assert (
-            branch.observation_for_player(0).agent.known_library[0] == definitions[name]
-        )
+        _assert_private_library(branch, dict(enumerate(ordered)))
 
 
 def test_suki_hand_power_reaches_text_and_policy_input() -> None:
