@@ -1,15 +1,19 @@
-at: 0e35f039d9473531b5482178b8bc91c9ba973877
+at: 1250b6f1a152730e741dfdc39f44739b9c2fb126
 first:
   - path: scratch/plan.md
     why: Locate the movement evidence and remaining probes.
+  - path: docs/engine.md
+    why: Read the private choice and both library edge cases.
+  - path: managym/cards/src/dsk.rs
+    why: Find the sorcery and its resolving effect.
   - path: managym/cards/tests/cards/dsk.rs
-    why: Compare both hidden printings at opponent priority.
+    why: Follow both restored Commands through opponent priority.
   - path: managym/src/agent/observation.rs
     why: Read the viewer-specific permanent projection.
   - path: managym/cards/tests/cards/fin.rs
     why: Trace both physical fronts through restored order choices.
   - path: managym/src/flow/resolution.rs
-    why: Follow Airbend from selection into the retained batch.
+    why: Inspect the top two before suspending resolution.
   - path: managym/src/flow/cast_permission.rs
     why: Bind each permission to its exact exile arrival.
   - path: managym/cards/src/fin.rs
@@ -21,7 +25,7 @@ first:
   - path: managym/src/flow/zones.rs
     why: Follow one departure into two arrivals.
   - path: managym/src/flow/decision.rs
-    why: Carry the resolving controller through the pending move.
+    why: Bind each private Command to its selected card.
   - path: managym/tests/rules/cr_400_identity.rs
     why: Check that separated exile identities stay stale.
   - path: managym/state/src/ability.rs
