@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.arrays import array_fields, on_device
+from manabot.backends.torch.arrays import array_fields, transfer
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic, sample_rows
 from manabot.env.match import Match
@@ -96,9 +96,13 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
 
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
     case = _policy()
+    case.agent.bucketed_shapes = True
     host = case.agent.prepare(host_inputs(case.obs))
     arrays = array_fields(host, np.ndarray)
-    moved = array_fields(on_device(host, "meta"), torch.Tensor)
+    device, transferred, copies = transfer(host, "meta")
+    assert host.bucket_needs is not None and device.bucket_needs is host.bucket_needs
+    assert transferred == sum(value.nbytes for value in arrays.values())
+    moved = array_fields(device, torch.Tensor)
     assert {
         key: (value.shape, value.dtype, value.device.type)
         for key, value in moved.items()
@@ -107,9 +111,10 @@ def test_packed_transfer_makes_one_copy_per_dtype() -> None:
         for key, value in arrays.items()
     }
     # Every dtype group shares exactly one transferred allocation.
-    assert len({value.untyped_storage()._cdata for value in moved.values()}) == len(
-        {value.dtype for value in moved.values()}
-    )
-    cpu = array_fields(on_device(host, "cpu"), torch.Tensor)
+    assert copies == len({value.dtype for value in moved.values()})
+    assert copies == len({value.untyped_storage()._cdata for value in moved.values()})
+    shared, transferred, copies = transfer(host, "cpu")
+    assert (transferred, copies) == (0, 0)
+    cpu = array_fields(shared, torch.Tensor)
     for key, value in cpu.items():
         np.testing.assert_array_equal(value.numpy(), arrays[key])

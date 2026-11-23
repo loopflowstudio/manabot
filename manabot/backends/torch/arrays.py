@@ -8,6 +8,7 @@ Conversions preserve dtype except for bfloat16, which `to_numpy` widens to float
 from __future__ import annotations
 
 from dataclasses import fields, is_dataclass, replace
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast, overload
 
 import numpy as np
@@ -16,16 +17,6 @@ from torch import Tensor, nn
 
 if TYPE_CHECKING:
     from manabot.policy.prepare import CatalogPrograms, Prepared
-
-
-_SCALAR_TYPES = (int, float, complex, bool, str, bytes, type(None))
-
-
-def _host_scalars(value: tuple[object, ...]) -> bool:
-    """Schedule metadata (packed sizes and lengths): a tuple of
-    plain scalars holds no array leaf, and visiting each integer dominated
-    the transfer of large minibatches."""
-    return all(type(item) in _SCALAR_TYPES for item in value)
 
 
 def from_numpy(array: np.ndarray, device: torch.device | str = "cpu") -> Tensor:
@@ -49,19 +40,19 @@ def device_of(module: nn.Module) -> torch.device:
     return next(module.parameters()).device
 
 
+@lru_cache(maxsize=64)
+def device_fields(record: type) -> tuple[str, ...]:
+    """Skip host metadata by field, including entire packed schedules of integers."""
+    return tuple(f.name for f in fields(record) if not f.metadata.get("host_only"))
+
+
 def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str, A]:
     """Flatten the dataclass tree; tuples preserve their field coordinates."""
     if isinstance(value, leaf):
         return {prefix: value}
     if is_dataclass(value) and not isinstance(value, type):
-        children = (
-            (f.name, getattr(value, f.name))
-            for f in fields(value)
-            if not f.metadata.get("host_only")
-        )
+        children = ((name, getattr(value, name)) for name in device_fields(type(value)))
     elif isinstance(value, tuple):
-        if _host_scalars(value):
-            return {}
         children = ((str(i), child) for i, child in enumerate(value))
     else:
         return {}
@@ -79,16 +70,11 @@ def _replace_arrays(value: Any, moved: dict[str, Tensor], prefix: str = "") -> A
         return replace(
             value,
             **{
-                f.name: _replace_arrays(
-                    getattr(value, f.name), moved, f"{prefix}/{f.name}"
-                )
-                for f in fields(value)
-                if not f.metadata.get("host_only")
+                name: _replace_arrays(getattr(value, name), moved, f"{prefix}/{name}")
+                for name in device_fields(type(value))
             },
         )
     if isinstance(value, tuple):
-        if _host_scalars(value):
-            return value
         return tuple(
             _replace_arrays(child, moved, f"{prefix}/{i}")
             for i, child in enumerate(value)

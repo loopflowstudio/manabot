@@ -109,7 +109,7 @@ class ObservationRows:
     copies used rows once. Beside the observation fields it keeps each row's
     bucket needs as admission measured them for the acting policy
     (`manabot.policy.buckets.row_needs`; -1 where none were measured), so the
-    learner regroups them instead of measuring the rows again. Opponent memory
+    learner can preserve the original extents after packing legal actions. Opponent memory
     is retained only as immutable prefix references in the collector's shared
     MemoryStore; it never enters these dense per-update arrays.
     """
@@ -1561,11 +1561,7 @@ def _sample_learning_rows(
             else (),
         )
         packed = PackedActions.pack(
-            {
-                key: collector._buffers[key][rows]
-                for key in ACTION_FIELDS
-                if key in collector._buffers
-            },
+            observation,
             sampled.log_probabilities,
             validator=collector.numerics,
         )

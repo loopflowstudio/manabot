@@ -7,7 +7,7 @@ never become numeric features. Selected prefixes retain ordered repeated members
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -137,9 +137,13 @@ class MemoryFold[A]:
     levels: tuple[MemoryLevel[A], ...]
     tails: A
     node_count: int
-    keys: tuple[str, ...] = ()
-    reference_slices: tuple[tuple[int, int], ...] = ()
-    record_slices: tuple[tuple[int, int], ...] = ()
+    keys: tuple[str, ...] = field(default=(), metadata={"host_only": True})
+    reference_slices: tuple[tuple[int, int], ...] = field(
+        default=(), metadata={"host_only": True}
+    )
+    record_slices: tuple[tuple[int, int], ...] = field(
+        default=(), metadata={"host_only": True}
+    )
     root_nodes: A | None = None
     root_states: A | None = None
     root_references: A | None = None
@@ -154,7 +158,7 @@ class MemoryRows[A](MemoryFeatures[A]):
     record_slots: A
     nonempty_batches: A
     schedule: Packed[A]
-    lengths: tuple[int, ...]
+    lengths: tuple[int, ...] = field(metadata={"host_only": True})
     width: int
     fold: MemoryFold[A] | None = None
 

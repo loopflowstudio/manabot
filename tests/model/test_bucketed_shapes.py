@@ -202,7 +202,7 @@ def test_outputs_and_gradients_match_default(history: bool, streams: bool) -> No
         assert isinstance(prepared.bucket_needs, np.ndarray)
         assert (
             sizes_of(
-                np.asarray(prepared.bucket_needs),
+                prepared.bucket_needs,
                 agent.observation_space,
                 objects=True,
             )
@@ -290,7 +290,7 @@ def test_reconfigured_fact_capacity_checks_original_buffer_shape() -> None:
             model.prepare(case.obs)
 
 
-def test_trimmed_effect_partitions_keep_full_order_bounds_and_batch_strides() -> None:
+def test_bucketed_admission_keeps_effect_order_bounds_and_batch_strides() -> None:
     case = _policy()
     env = shared_effect_root(1)
     encoded = encode_observation(

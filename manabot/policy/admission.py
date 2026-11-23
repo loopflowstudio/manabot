@@ -265,21 +265,19 @@ def check(
         prefix=sizes.get("facts"),
     )
     shared_effects(
-        obs["effects"],
-        obs["effect_details"],
-        obs["effect_members"],
+        raw["effects"],
+        raw["effect_details"],
+        raw["effect_members"],
         objects,
         catalog,
-        header_rows=sizes.get("effects", EFFECT_ROWS),
-        detail_rows=sizes.get("details", DETAIL_ROWS),
-        member_rows=sizes.get("members", MEMBER_ROWS),
+        prefix=sizes.get("effects"),
     )
     definition_ids(obs["relations"][..., _RELATION_DEFINITIONS], size, lookup)
     relations(
-        obs["relations"],
+        raw["relations"],
         spec.space.shapes["relations"][-1],
         objects,
-        sizes.get("relations", RELATION_ROWS),
+        prefix=sizes.get("relations"),
     )
     if spec.model.recent_events:
         assert lookup is not None
@@ -363,8 +361,7 @@ def facts(
     """Validate fact joins, kinds, catalog ids and consecutive program runs."""
     if rows.shape[1:] != (max_facts, FACT_DIM):
         raise ValueError(f"expected [batch, {max_facts}, {FACT_DIM}] facts")
-    if prefix is not None:
-        rows = rows[:, :prefix]
+    rows = rows[:, :prefix]
     valid = rows[..., FACT_VALID_INDEX]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("fact validity must be binary")
@@ -435,14 +432,13 @@ def shared_effects(
     objects: int,
     catalog: Catalog | None,
     *,
-    header_rows: int = EFFECT_ROWS,
-    detail_rows: int = DETAIL_ROWS,
-    member_rows: int = MEMBER_ROWS,
+    prefix: int | None = None,
 ) -> None:
     """Validate live headers and their complete CSR detail/member partitions."""
-    if headers.ndim != 3 or headers.shape[1:] != (header_rows, EFFECT_DIM):
+    if headers.ndim != 3 or headers.shape[1:] != (EFFECT_ROWS, EFFECT_DIM):
         raise ValueError(f"expected [batch, {EFFECT_ROWS}, {EFFECT_DIM}] state records")
-    valid = headers[..., EFFECT_VALID]
+    # Each live header selects its detail and member spans in the original buffers.
+    valid = headers[:, :prefix, EFFECT_VALID]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("state record validity must be binary")
     positions = np.argwhere(valid)
@@ -450,9 +446,9 @@ def shared_effects(
     if not np.isfinite(live).all():
         raise ValueError("state records must be finite")
     batch = len(headers)
-    if details.shape != (batch, detail_rows, DETAIL_DIM) or members.shape != (
+    if details.shape != (batch, DETAIL_ROWS, DETAIL_DIM) or members.shape != (
         batch,
-        member_rows,
+        MEMBER_ROWS,
         MEMBER_DIM,
     ):
         raise ValueError("invalid shared effect buffer shape")
@@ -482,28 +478,30 @@ def shared_effects(
         if (
             d != d_end
             or m != m_end
-            or d + count > detail_rows
+            or d + count > DETAIL_ROWS
             or targets == 0
-            or m + targets > member_rows
+            or m + targets > MEMBER_ROWS
         ):
             raise ValueError("invalid effect CSR partition")
         d_end, m_end = d + count, m + targets
-        detail_indexes.extend(range(b * detail_rows + d, b * detail_rows + d_end))
-        member_indexes.extend(range(b * member_rows + m, b * member_rows + m_end))
+        detail_indexes.extend(range(d, d_end))
+        member_indexes.extend(range(m, m_end))
         member_records.extend([i] * targets)
-    detail = details.reshape(-1, DETAIL_DIM)[detail_indexes]
+    detail_batches = np.repeat(positions[:, 0], offsets[:, 1])
+    detail = details[detail_batches, detail_indexes]
     kinds = _indexes(detail[:, DETAIL_KIND], max(DETAIL_KINDS), "effect detail kind")
     ids = _indexes(detail[:, DETAIL_VALUE], 65535, "effect detail half")
     if not np.isin(kinds, DETAIL_KINDS).all():
         raise ValueError("live effect detail has no kind")
-    member = members.reshape(-1, MEMBER_DIM)[member_indexes]
+    member_batches = positions[member_records, 0]
+    member = members[member_batches, member_indexes]
     _indexes(member[:, MEMBER_OBJECT], objects, "effect member")
     orders = _indexes(member[:, _MEMBER_ORDER], MEMBER_ROWS, "effect membership order")
     if (member[:, MEMBER_OBJECT] == 0).any():
         raise ValueError("effect membership is absent")
     if (orders == 0).any():
         raise ValueError("effect membership order is absent")
-    global_orders = positions[:, 0][member_records] * (MEMBER_ROWS + 1) + orders
+    global_orders = member_batches * (MEMBER_ROWS + 1) + orders
     if len(np.unique(global_orders)) != len(global_orders):
         raise ValueError("duplicate effect membership order")
     if catalog is not None:
@@ -519,11 +517,12 @@ def shared_effects(
 
 
 def relations(
-    rows: np.ndarray, width: int, objects: int, row_count: int = RELATION_ROWS
+    rows: np.ndarray, width: int, objects: int, *, prefix: int | None = None
 ) -> None:
     """Validate continuation validity, finite payloads, object joins and frames."""
-    if rows.shape[1:] != (row_count, width):
+    if rows.shape[1:] != (RELATION_ROWS, width):
         raise ValueError(f"expected [batch, 64, {width}] relations")
+    rows = rows[:, :prefix]
     valid = rows[..., RELATION_VALID_INDEX]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("relation validity must be binary")

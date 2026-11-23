@@ -31,8 +31,6 @@ capacity is zero and its keys are absent.
 from collections.abc import Iterator, Mapping
 from copy import copy
 from dataclasses import dataclass
-from itertools import groupby
-from operator import itemgetter
 
 import numpy as np
 
@@ -42,9 +40,6 @@ from manabot.env.observation import ObservationBuffers, ObservationSpace, column
 import managym
 
 MIN_BUCKET = 8
-
-# Keys only input v11 carries.
-STACK_KEYS = ("stack", "stack_valid")
 
 # Keys trimmed along axis 1, by axis; seat-major keys ([B, 2, rows, ...])
 # are trimmed along axis 2.
@@ -68,7 +63,7 @@ ROW_KEYS: dict[str, tuple[str, ...]] = {
         "agent_permanents_valid",
         "opponent_permanents_valid",
     ),
-    "stack": STACK_KEYS,
+    "stack": ("stack", "stack_valid"),
 }
 SEAT_KEYS: dict[str, tuple[str, ...]] = {
     # `card_turn_state` (inputs v10 and v11) aligns with the card rows.
@@ -80,26 +75,19 @@ SEAT_KEYS: dict[str, tuple[str, ...]] = {
 # column cannot silently shift what is remapped. Policy history v1 is the
 # event layout whose context columns are object references.
 # Object-table references, one-based (0: none) or zero-based (-1: none):
-# (key, column). `action_focus` is a whole zero-based reference buffer.
-ONE_BASED_REFERENCES: tuple[tuple[str, int], ...] = tuple(
-    (key, column(key, name))
-    for key, name in (
-        ("facts", "object"),
-        ("effects", "controller"),
-        ("effects", "source"),
-        ("effect_members", "object"),
-        ("relations", "source"),
-        ("relations", "reference"),
-        ("agent_permanents", "attached_to"),
-        ("agent_permanents", "blocking"),
-        ("opponent_permanents", "attached_to"),
-        ("opponent_permanents", "blocking"),
-        ("stack", "source"),
+# (buffer, columns, base). `action_focus` is a whole zero-based reference buffer.
+OBJECT_REFERENCES = tuple(
+    (key, tuple(column(key, name) for name in names), base)
+    for key, names, base in (
+        ("facts", ("object",), 1),
+        ("effects", ("controller", "source"), 1),
+        ("effect_members", ("object",), 1),
+        ("relations", ("source", "reference"), 1),
+        ("agent_permanents", ("attached_to", "blocking"), 1),
+        ("opponent_permanents", ("attached_to", "blocking"), 1),
+        ("stack", ("source",), 1),
+        ("events", ("source_context", "target_context"), 0),
     )
-)
-ZERO_BASED_REFERENCES: tuple[tuple[str, int], ...] = (
-    ("events", column("events", "source_context")),
-    ("events", column("events", "target_context")),
 )
 _EVENT_WIDTH = width("events")
 # Row joins into other variable axes.
@@ -181,10 +169,9 @@ def object_reference_columns(
     obs: ObservationBuffers,
 ) -> Iterator[tuple[str, tuple[int, ...], int]]:
     """Group live reference columns so trimming copies each buffer once."""
-    for fields, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
-        for key, group in groupby(fields, key=itemgetter(0)):
-            if key in obs and (key != "events" or has_history_events(obs)):
-                yield key, tuple(index for _, index in group), base
+    for key, indices, base in OBJECT_REFERENCES:
+        if key in obs and (key != "events" or has_history_events(obs)):
+            yield key, indices, base
 
 
 def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]:
@@ -246,9 +233,7 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
         return None
     count = len(mask)
     if any(
-        key not in obs
-        or obs[key].ndim != len(shape) + 1
-        or obs[key].shape != (count, *shape)
+        key not in obs or obs[key].shape != (count, *shape)
         for key, shape in shapes.items()
         if not (
             isinstance(obs, PrefixObservation)

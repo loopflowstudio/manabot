@@ -71,12 +71,9 @@ from manabot.policy.readings import (
     DURATION_FLAGS,
     PROGRAM_KINDS,
     RANK_SCALE,
-    READ_BY_READINGS,
     Reading,
-    ReadingPlan,
     Readings,
     duration_flags,
-    input_width,
     read_numeric,
     reading_plan,
 )
@@ -160,18 +157,10 @@ class Layout:
     def widths(self) -> dict[str, int]:
         return {key: len(values) for key, values in self.readings.items()}
 
-    @cached_property
-    def numeric(self) -> dict[str, ReadingPlan]:
-        return {
-            key: reading_plan(readings)
-            for key, readings in self.readings.items()
-            if key in READ_BY_READINGS
-        }
-
     def numeric_width(self, key: str) -> int:
         """How many inputs a buffer's projection receives: the sum of its
         columns' input widths."""
-        return sum(input_width(reading) for reading in self.readings[key])
+        return reading_plan(self.readings[key]).width
 
     def fact_width(self, *, catalog_ids: bool) -> int:
         """Inputs of the fact projection: the numeric payloads and timestamp,
@@ -385,10 +374,10 @@ class Packed[A]:
     """
 
     gather: A
-    sizes: tuple[int, ...]
+    sizes: tuple[int, ...] = field(metadata={"host_only": True})
     unpack: A
     restore: A
-    lengths: tuple[int, ...]
+    lengths: tuple[int, ...] = field(metadata={"host_only": True})
 
 
 def pack(
@@ -603,6 +592,7 @@ def prepare(
     *,
     inference: bool = False,
     bucketed: bool = False,
+    bucket_needs: Array | None = None,
     live_tokens: bool = False,
     value_token: bool = False,
     memory_summaries: int = 0,
@@ -652,7 +642,7 @@ def prepare(
     objects = validity.shape[1]
     f32 = np.float32
     permanents = np.stack([obs[key] for key in _PERMANENT_KEYS], axis=1)
-    numeric = layout.numeric["agent_permanents"].read(permanents)
+    numeric = read_numeric(permanents, layout.readings["agent_permanents"])
     knowledge = obs["known_hand"]
     decklists = obs["decklists"]
     # Deprecated v9/v10 carry no positional rows. Current input must supply
@@ -682,7 +672,7 @@ def prepare(
     features[..., _RELATION_FRAME_IDS] = np.where(
         pending[..., None], 0, clean[..., _RELATION_FRAME_IDS]
     )
-    relation_features = layout.numeric["relations"].read(features)
+    relation_features = read_numeric(features, layout.readings["relations"])
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
@@ -703,7 +693,7 @@ def prepare(
     positions = np.zeros(legal.shape, dtype=np.int64)
     positions[legal_batches, legal_slots] = np.arange(len(legal_batches))
     action_rows = obs["actions"][legal_batches, legal_slots]
-    action_features = layout.numeric["actions"].read(action_rows)
+    action_features = read_numeric(action_rows, layout.readings["actions"])
     frames = action_rows[:, ACTION_CONTINUATION_INDEX].astype(np.int64)
     candidates = obs["name_candidates"][legal_batches, legal_slots].astype(np.int64)
     focus = obs["action_focus"][legal_batches, legal_slots].astype(np.int64)
@@ -713,13 +703,17 @@ def prepare(
         first = last = np.zeros(len(candidates), np.int64)
 
     players = [
-        layout.numeric[f"{seat}_player"].read(obs[f"{seat}_player"]) for seat in SEATS
+        read_numeric(obs[f"{seat}_player"], layout.readings[f"{seat}_player"])
+        for seat in SEATS
     ]
     cards = [
-        layout.numeric[f"{seat}_cards"].read(obs[f"{seat}_cards"]) for seat in SEATS
+        read_numeric(obs[f"{seat}_cards"], layout.readings[f"{seat}_cards"])
+        for seat in SEATS
     ]
     if "player_turn_state" in obs:
-        turn_state = layout.numeric["player_turn_state"].read(obs["player_turn_state"])
+        turn_state = read_numeric(
+            obs["player_turn_state"], layout.readings["player_turn_state"]
+        )
         players = [
             np.concatenate((row, turn_state[:, seat : seat + 1]), -1)
             for seat, row in enumerate(players)
@@ -729,18 +723,12 @@ def prepare(
             for seat, row in enumerate(cards)
         ]
     c, p = cards[0].shape[1], permanents.shape[2]
-    ownership = np.broadcast_to(
-        np.repeat([True, False, True, False, True, False], [1, 1, c, c, p, p]),
-        (batch, 2 + 2 * c + 2 * p),
-    )
+    seat_ownership = np.repeat([True, False] * 3, [1, 1, c, c, p, p])
+    ownership = [np.broadcast_to(seat_ownership, (batch, len(seat_ownership)))]
     if stack is not None:
-        ownership = np.concatenate((ownership, stack[..., STACK_IS_MINE_INDEX] > 0), 1)
+        ownership.append(stack[..., STACK_IS_MINE_INDEX] > 0)
     if belief is not None:
-        ownership = np.concatenate(
-            (ownership, belief.owners == 0, np.zeros((batch, 1), bool)), 1
-        )
-    if not ownership.flags.writeable:
-        ownership = ownership.copy()
+        ownership.extend((belief.owners == 0, np.zeros((batch, 1), bool)))
     present = validity != 0
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
@@ -766,7 +754,9 @@ def prepare(
         deck_rows=tables.rows(decklists[..., _DECK_DEFINITION]),
         deck_counts=(decklists[..., _DECK_MAIN:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
-        stack=layout.numeric["stack"].read(stack) if stack is not None else None,
+        stack=read_numeric(stack, layout.readings["stack"])
+        if stack is not None
+        else None,
         stack_rows=tables.rows(stack[..., STACK_DEFINITION_INDEX])
         if stack is not None
         else None,
@@ -806,7 +796,8 @@ def prepare(
         focus_mask=(focus != -1).astype(f32),
         attention_columns=columns,
         binding=binding,
-        is_agent=ownership,
+        bucket_needs=bucket_needs,
+        is_agent=np.concatenate(ownership, axis=1),
         # Full-catalog preparation skips the scan for referenced definitions.
         programs=tables.programs(
             _referenced_definitions(
@@ -995,7 +986,6 @@ def _effects(
     headers = obs["effects"]
     details = obs["effect_details"]
     members = obs["effect_members"]
-    detail_rows, member_rows = details.shape[1], members.shape[1]
     live_batches, live_slots = np.nonzero(headers[..., EFFECT_VALID] == 1)
     if len(live_batches) == 0:
         return None
@@ -1011,25 +1001,22 @@ def _effects(
     token_indexes: list[int] = []
     lengths: list[int] = []
     header_tokens = 3 * len(live)
-    for i, (b, (d, count, m, targets)) in enumerate(
-        zip(live_batches.tolist(), live[:, EFFECT_SPANS].tolist(), strict=True)
-    ):
+    spans = live[:, EFFECT_SPANS]
+    for i, (d, count, m, targets) in enumerate(spans.tolist()):
         detail_start = header_tokens + len(detail_indexes)
         token_indexes.extend(range(3 * i, 3 * i + 3))
         token_indexes.extend(range(detail_start, detail_start + count))
         lengths.append(3 + count)
-        detail_indexes.extend(range(b * detail_rows + d, b * detail_rows + d + count))
-        member_indexes.extend(range(b * member_rows + m, b * member_rows + m + targets))
+        detail_indexes.extend(range(d, d + count))
+        member_indexes.extend(range(m, m + targets))
         member_records.extend([i] * targets)
-    detail_host = details.reshape(-1, details.shape[-1])[detail_indexes].astype(
-        np.int64
-    )
+    detail_batches = np.repeat(live_batches, spans[:, 1])
+    detail_host = details[detail_batches, detail_indexes].astype(np.int64)
     kinds, ids = detail_host[:, DETAIL_KIND], detail_host[:, DETAIL_VALUE]
-    targets = members.reshape(-1, members.shape[-1])[
-        member_indexes, MEMBER_OBJECT
-    ].astype(np.int64)
     records = np.asarray(member_records, dtype=np.int64)
-    numeric = tables.layout.numeric["effects"].read(selected)
+    member_batches = live_batches[records]
+    targets = members[member_batches, member_indexes, MEMBER_OBJECT].astype(np.int64)
+    numeric = read_numeric(selected, tables.layout.readings["effects"])
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
     token_kinds = PROGRAM_TOKEN_KIND[kinds]
@@ -1062,7 +1049,7 @@ def _effects(
         detail_is_number=np.isin(token_kinds, NUMBER_TOKEN_KINDS).astype(np.float32),
         token_indexes=np.asarray(token_indexes, dtype=np.int64),
         schedule=pack(lengths),
-        routes=live_batches[records] * objects + targets - 1,
+        routes=member_batches * objects + targets - 1,
         member_records=records,
     )
 

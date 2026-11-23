@@ -234,6 +234,14 @@ def test_one_hot_and_steps_read_as_documented() -> None:
     assert np.linalg.norm(steps[1] - steps[0]) >= 1
 
 
+def test_one_hot_overflow_slot_can_exceed_the_source_dtype() -> None:
+    rows = np.array([[0], [1], [255]], dtype=np.uint8)
+    encoded = read_numeric(rows, [Sized(Reading.ONE_HOT, 255)])
+    expected = np.zeros((3, 256), dtype=np.float32)
+    expected[1, 0] = expected[2, 254] = 1
+    np.testing.assert_array_equal(encoded, expected)
+
+
 def test_mixed_numeric_columns_preserve_bits_on_strided_rows() -> None:
     # Float64 ties in tenths distinguish rounding before and after narrowing.
     entries = np.array([np.nan, np.inf, -np.inf, -0.0, 0.05, 0.15, 0.25, 1.9, 12.0])

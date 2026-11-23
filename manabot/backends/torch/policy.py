@@ -613,11 +613,12 @@ class ActorCritic(nn.Module):
         capacity = obs["actions_valid"].shape[1]
         if bucketed is not None:
             obs = remap_objects(bucketed.rows, bucketed.buckets)
-        batch = prepare(
+        return prepare(
             obs,
             self._admission_spec().tables,
             inference=inference and device_of(self).type == "cpu",
             bucketed=self.bucketed_shapes,
+            bucket_needs=bucketed.needs if bucketed is not None else None,
             live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
@@ -626,12 +627,6 @@ class ActorCritic(nn.Module):
             binding=self._binding(),
             action_capacity=capacity,
             select_programs=not inference and not self.bucketed_shapes,
-        )
-
-        return (
-            replace(batch, bucket_needs=bucketed.needs)
-            if bucketed is not None
-            else batch
         )
 
     def _evaluate_outputs(

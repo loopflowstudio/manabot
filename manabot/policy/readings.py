@@ -433,7 +433,7 @@ class ReadingPlan:
                     out[..., targets[:, None] + flags] = counts[..., None] >= flags
                 else:
                     # Codes below one (including NaN) set no flag.
-                    codes = np.trunc(np.minimum(stored, reading.size + 1))
+                    codes = np.trunc(np.clip(stored, 0, reading.size + 1))
                     flags = np.arange(1, reading.size + 2)
                     out[..., targets[:, None] + flags - 1] = codes[..., None] == flags
                 continue

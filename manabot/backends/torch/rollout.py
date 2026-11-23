@@ -44,9 +44,7 @@ class AdmittedRollout:
         self.agent = agent
         self.batch = batch
         self._admitted = np.zeros(batch.actions.size, dtype=bool)
-        # Bucket needs of admitted rows, recorded at collection or measured
-        # once, so every epoch's minibatches take their maximum instead of
-        # measuring again.
+        # Each epoch regroups the extents measured at learner admission.
         self._needs: np.ndarray | None = None
         self._measured = np.zeros(batch.actions.size, dtype=bool)
 
@@ -83,10 +81,7 @@ class AdmittedRollout:
         if size < 1:
             raise ValueError("bootstrap rows must be positive")
         for start in range(0, len(self.batch.next_done), size):
-            raw = select_rows(
-                self.batch.next_obs,
-                np.arange(start, min(start + size, len(self.batch.next_done))),
-            )
+            raw = select_rows(self.batch.next_obs, slice(start, start + size))
             prepared = self.agent.prepare(raw, inference=True)
             del raw
             yield on_device(prepared, device)
