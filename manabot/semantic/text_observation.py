@@ -616,12 +616,15 @@ class _Renderer:
                 if len(focus) == 2
                 else f"Do not block with {first}"
             )
+        elif kind == "activate_ability":
+            label = f"Activate ability of {first}"
+            if len(focus) == 2:
+                label += f"; exile {focus[1]} as the cost"
         else:
             verb = {
                 "play_land": "Play land",
                 "cast": "Cast",
                 "pass_priority": "Pass priority",
-                "activate_ability": "Activate ability of",
                 "choose_target": "Target",
                 "scry_keep": "Keep on top",
                 "scry_bottom": "Put on bottom",

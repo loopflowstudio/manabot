@@ -73,12 +73,13 @@ impl Game {
                 if !ability.exile_grantor {
                     return None;
                 }
-                let grantor = &self.state[ability.granted_by?.grantor];
+                let grantor = self.state.permanent_of(ability.granted_by?.grantor)?;
                 Some(format!(
-                    "Pay {} and exile {} (object {}) — {}",
+                    "Activate ability of {}: pay {} and exile {} (permanent {}) — {}",
+                    view.name,
                     crate::agent::ability_description::cost_description(&ability.mana_cost),
-                    grantor.name,
-                    grantor.id.0,
+                    self.characteristics(grantor).name,
+                    self.state.permanents[grantor].as_ref()?.id.0,
                     crate::agent::ability_description::effects_description(&ability.effects)
                 ))
             }

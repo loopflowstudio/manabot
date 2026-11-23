@@ -324,29 +324,60 @@ fn dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price() {
         }
         s.game_mut().scenario_refresh_priority().unwrap();
         let obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+        use managym::agent::observation_encoder::{encode, ObservationEncoderConfig};
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&obs, &config).unwrap();
+        let frame = s.game().semantic_decision_frame().unwrap();
         for bracelet in bracelets {
+            let grantor = s.game().state.permanent_of(bracelet).unwrap();
             let expected = format!(
-                "exile The Dominion Bracelet (object {})",
-                s.game().state[bracelet].id.0
+                "exile The Dominion Bracelet (permanent {})",
+                s.game().state.permanents[grantor].as_ref().unwrap().id.0
             );
-            let offer = obs
+            let action_index = obs
                 .action_space
                 .actions
                 .iter()
-                .find(|a| {
+                .position(|a| {
                     a.description
                         .as_ref()
                         .is_some_and(|d| d.contains(&expected))
                 })
                 .unwrap();
-            let grantor = s.game().state.permanent_of(bracelet).unwrap();
+            let offer = &obs.action_space.actions[action_index];
+            let label = &frame.offers[action_index].label;
+            assert!(label.starts_with("Activate ability of Gray Ogre:"));
+            assert!(label.contains(&expected));
+            let offset = action_index * config.max_focus_objects;
+            for (slot, id) in offer.focus.iter().enumerate() {
+                let row = obs
+                    .agent_permanents
+                    .iter()
+                    .position(|p| p.id == *id)
+                    .unwrap();
+                assert_eq!(
+                    encoded.action_focus[offset + slot] as usize,
+                    2 + 2 * config.max_cards_per_player + row
+                );
+            }
             assert_eq!(
                 offer.focus,
                 [ogre, grantor]
                     .map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32)
             );
         }
-        activate(&mut s, ogre, index);
+        let action_index = s.action_space().actions.iter().position(|action| matches!(action,
+            Action::ActivateAbility { permanent, ability_index, .. } if *permanent == ogre && *ability_index == index)).unwrap();
+        let mut indexed = crate::support::play::fork_stepping(&s, action_index);
+        let command = managym::decision::Command {
+            command_id: format!("bracelet-{selected}"),
+            expected_revision: frame.revision,
+            offer_id: frame.offers[action_index].id.0,
+            answers: vec![],
+            object_preconditions: vec![],
+        };
+        s.game_mut().execute_semantic_command(&command).unwrap();
+        assert!(indexed.choose_target(Target::Player(PlayerId(1))));
         assert!(s.choose_target(Target::Player(PlayerId(1))));
         if selected == 0 {
             let root = s.game().state.deterministic_hash();
@@ -380,10 +411,19 @@ fn dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price() {
             assert_eq!(colors, [1, 5]);
             assert_eq!(s.game().state.deterministic_hash(), root);
             s.step_action(0);
+            indexed.step_action(0);
         } else {
             assert_eq!(top_activation(&s).paid.mana()[0].color, 5);
         }
         let ability = top_activation(&s);
+        assert_eq!(ability.paid, top_activation(&indexed).paid);
+        assert_eq!(
+            s.game().state.players[0].mana_pool,
+            indexed.game().state.players[0].mana_pool
+        );
+        for bracelet in bracelets {
+            assert_eq!(zone_of(&s, bracelet), zone_of(&indexed, bracelet));
+        }
         assert_eq!(
             ability
                 .paid
