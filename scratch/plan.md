@@ -2,9 +2,9 @@
 
 ## Working progress
 
-**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, five have confirmed deferrals and 213 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
+**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, seven have confirmed deferrals and 211 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
 
-### Behavior review at `b522de30c4`
+### Behavior after the shared repair at `12096ae8`
 
 **Surveil knowledge after resolution.** Milling either inspected card shifts the other to known position 0 for the chooser. Keeping both and reversing their order changes only positions 0 and 1. Hill Giant and Forest, previously placed by Accumulate Wisdom, remain known at positions 3 and 4. Four Lightshell cases passed on the rebuilt extension, covering native observations, v11, text, closed-opponent privacy and replay on independent forks.
 
@@ -15,7 +15,9 @@
 - A separate `GameSession.current_recovery("reconnect")` probe at the constructed Lightshell root recovered both named mill offers and **Keep on top**. Submitting **Keep on top** recovered the two bound ordering offers. Choosing Hill Giant first put it on top. The Academy session returned the duplicate receipt and rejected a new Command using the old revision at each transition. The committed Python fixture directly exercises `decision_surface_view`; this session probe exercised the envelope.
 - Debug tests passed for the shared surveil completion event, ordered continuation and private fork behavior. The prowess fixtures passed for Swiftspear, the Monk token and Sokka's grant, including the own-noncreature control in the Iguana/Boar fixture. The constructor and predicate produce the existing rules structures. The catalog returned two triggered program spans for Duo, and its prowess span matched Swiftspear token for token. Nine learning-token observability checks and the registered-card Scryfall conformance check passed. The two text fixtures that now share the replay helper also passed. This slice changes no payment or receipt semantics.
 
-Slice 2 audit resumed. Five rows have confirmed deferrals. Joraga Invocation requires declaration-wide block requirements, Confiscate requires continuous control, and Knight of Grace, Knight of Malice and Elenda require source-qualified hexproof. The remaining 213 rows await classification. The complete debug suite, pinned-pilot compatibility suite and browser checks remain gate evidence. Decomposition and performance measurement follow working behavior.
+The merge at `24ddbe76` adds snapshot library-order pins on shuffle and movement alongside the shared knowledge updates. The four-case result above predates that merge.
+
+Slice 2 audit resumed. Taurean Mauler needs Changeling across zones. Soulstone Sanctuary needs every creature type only while animated. Both are Bucket C: definition matching checks explicit subtype membership in `managym/state/src/effect.rs`, and battlefield layers add and match individual subtypes in `managym/src/flow/layers.rs`. The complete debug suite, pinned-pilot compatibility suite and browser checks remain gate evidence. Decomposition and performance measurement follow working behavior.
 
 ## Experience and model to build
 
@@ -61,13 +63,16 @@ Use the 517-row [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets
 | `replacement_events` | 13 | Diregraf Ghoul, Doubling Season (base), Twinflame Tyrant, Gratuitous Violence, Fog Bank, Authority of the Consuls |
 | `combat_constraints` | 4 | Vampire Interloper, Stromkirk Noble, Juggernaut, Joraga Invocation |
 
-### Expected Bucket C deferrals (verify in Step 0 audit)
+### Bucket C deferrals and audit candidates
 
 Leave pending in `fdn.jsonl` with exact missing authority and owning track:
 - **Global block-requirement solver (CR 509.1c):** `Joraga Invocation`.
 - **Layer 2 static control change:** `Confiscate`.
 - **Quality-scoped hexproof:** `Knight of Grace`, `Knight of Malice`, `Elenda, Saint of Dusk`.
-- **All-zones Changeling / all creature types:** `Taurean Mauler`, `Soulstone Sanctuary`.
+- **Every creature type (all zones for Mauler, animated battlefield characteristics for Sanctuary):** `Taurean Mauler`, `Soulstone Sanctuary`.
+
+Candidates still to verify:
+
 - **Private pile partition with opponent choice:** `Curator of Destinies`.
 - **All-zone graveyard replacement (stack/hand/library):** `Dryad Militant`, `Darksteel Colossus`.
 - **Cross-target relational constraints:** `Run Away Together` (different controllers), `Drakuseth, Maw of Flames` (primary + up to 2 distinct other targets).
@@ -80,7 +85,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Triage + Token/Static/Lifegain Model Proof (run next)
 This slice tests the entire redesigned model immediately:
-1. **Step 0 audit & ledger sync:** Mark `Kellan, Planar Trailblazer`, `Imprisoned in the Moon`, and `Doubling Season` as `source definition found` with their actual paths. Audit all remaining 218 rows against `managym-state` and record the exact Bucket A / B / C partition in `scratch/questions.md` (and Bucket C notes in `fdn.jsonl`).
+1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and seven deferrals documented. Audit the remaining 211 rows against native rules, starting with Curator of Destinies: trace private pile formation, opponent selection and the resulting zone moves. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
 2. **Tokens + `StaticAbility::Continuous` proof:** Add `token.cat_1_1_w` and `token.cat_1_1_w_lifelink` in `tokens.rs`. Author **Arahbo, the First Fang**, **Helpful Hunter**, **Prideful Parent**, **Regal Caracal**, and **Anthem of Champions** using `StaticAbility::Continuous`. Verify:
    - Arahbo + Helpful Hunter: Hunter draws 1, Arahbo creates 1 ordinary Cat (`token.cat_1_1_w`) that gets Arahbo's lord bonus and does *not* recursively trigger Arahbo; test both trigger orders.
    - Regal Caracal: creates 2 `token.cat_1_1_w_lifelink` tokens; remove Caracal and confirm those tokens retain lifelink while Arahbo's Cat does not.
