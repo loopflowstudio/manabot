@@ -15,7 +15,7 @@ use std::{
 };
 
 use crate::{
-    agent::action::{ActionSpace, ActionSpaceKind, AgentError},
+    agent::action::{ActionSpaceKind, AgentError},
     cards::names::{NameCandidate, NameVocabulary},
     flow::{decision::Decision, game::Game},
     state::{
@@ -229,13 +229,7 @@ impl Game {
             .ok_or_else(|| {
                 AgentError("scenario_refresh_priority: priority space has no player".to_string())
             })?;
-        let actions = self.compute_player_actions(player);
-        self.publish_action_space(ActionSpace {
-            player: Some(player),
-            kind: ActionSpaceKind::Priority,
-            actions,
-            focus: Vec::new(),
-        });
+        self.publish_action_space(self.priority_action_space(player));
         Ok(())
     }
 }

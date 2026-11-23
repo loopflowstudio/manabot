@@ -708,27 +708,6 @@ impl VectorEnv {
                 if !self.fresh_roots[index] {
                     return Err(AgentError("cannot reassign a live game".into()));
                 }
-                Self::validate_player_configs(setup.len())?;
-                // Game creation panics on these; reject them as errors first.
-                crate::cards::deck_admission::admit_submitted(&setup)
-                    .map_err(|error| AgentError(error.to_string()))?;
-                let content = crate::cards::content_pack::default_content_pack();
-                for player in setup.iter() {
-                    for name in player.deck.main.keys() {
-                        if content.definition_id(name).is_none() {
-                            return Err(AgentError(format!("unknown card in decklist: {name}")));
-                        }
-                    }
-                    for (name, count) in &player.deck.sideboard {
-                        let valid = content
-                            .definition_id(name)
-                            .and_then(|id| content.definition(id))
-                            .is_some_and(|definition| !definition.is_token);
-                        if *count == 0 || !valid {
-                            return Err(AgentError(format!("invalid sideboard card: {name}")));
-                        }
-                    }
-                }
                 let mut env = self.envs[index].replacement_root()?;
                 let (obs, info) = env.reset(setup.clone())?;
                 validate(index, &obs)?;

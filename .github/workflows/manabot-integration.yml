@@ -71,7 +71,7 @@ jobs:
             tests/training/test_scenario_validation.py \
             tests/belief/test_sampling_data.py tests/belief/test_sampling_report.py tests/belief/test_sampling_fit.py \
             tests/belief/test_runtime.py tests/belief/test_prepared_likelihood.py \
-            tests/bench/test_structured_policy_benchmark.py
+            tests/bench/
 
       - name: Training tests
         if: matrix.group == 'training'

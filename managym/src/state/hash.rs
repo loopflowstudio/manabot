@@ -202,6 +202,8 @@ impl<'a> CanonicalMatchState<'a> {
             disclosure,
             // Immutable roster facts already occur in the v16 object rows.
             cards: _,
+            // Sampling history has no effect on ordinary rules execution.
+            library_order_pins: _,
             objects,
             permanents,
             object_to_permanent,
