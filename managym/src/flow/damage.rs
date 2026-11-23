@@ -1,7 +1,7 @@
 // damage.rs
 // Damage application, life changes, and cleanup.
 
-use crate::state::card::Keyword;
+use crate::state::card::{Keyword, Keywords};
 use crate::{
     flow::{
         event::{DamageTarget, EventSubject, GameEvent},
@@ -33,10 +33,8 @@ impl Game {
             return 0;
         }
         let remaining = (characteristics.toughness - permanent.damage).max(0);
-        let deathtouch = source.is_some_and(|object| {
-            self.source_keywords(object)
-                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
-        });
+        let deathtouch =
+            source.is_some_and(|object| self.source_keywords(object).has(Keyword::Deathtouch));
         let lethal = if deathtouch {
             remaining.min(1)
         } else {
@@ -56,16 +54,13 @@ impl Game {
         if amount <= 0 {
             return false;
         }
-        let source_has_deathtouch = source.is_some_and(|object_ref| {
-            self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
-        });
-        let lifelink_controller = source.and_then(|object_ref| {
-            self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.has(Keyword::Lifelink))
-                .then(|| self.source_controller(object_ref))
-                .flatten()
-        });
+        let keywords = source
+            .map(|object| self.source_keywords(object))
+            .unwrap_or_default();
+        let source_has_deathtouch = keywords.has(Keyword::Deathtouch);
+        let lifelink_source = source
+            .filter(|_| keywords.has(Keyword::Lifelink))
+            .and_then(|object| Some((object, self.source_controller(object)?)));
         let combat_source = combat
             .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
             .flatten();
@@ -146,8 +141,8 @@ impl Game {
             }
         }
 
-        if let (Some(source), Some(controller)) = (source, lifelink_controller) {
-            let total = lifelink.entry((source, controller)).or_default();
+        if let Some(source) = lifelink_source {
+            let total = lifelink.entry(source).or_default();
             *total = total.saturating_add(amount);
         }
         true
@@ -198,17 +193,17 @@ impl Game {
     /// Damage-source keywords include until-EOT grants while the source is
     /// on the battlefield (Enter the Avatar State's lifelink), and static
     /// grants to a resolving spell (Lo and Li's Lesson spells).
-    fn source_keywords(&self, source: ObjectId) -> Option<crate::state::card::Keywords> {
+    fn source_keywords(&self, source: ObjectId) -> Keywords {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return Some(self.characteristics(permanent_id).keywords);
+            return self.characteristics(permanent_id).keywords;
         }
         if let Some(lki) = self.object_lki(source) {
-            return Some(lki.keywords);
+            return lki.keywords;
         }
         if let Some(controller) = self.stack_spell_controller(source) {
-            return Some(self.spell_keywords(source, controller));
+            return self.spell_keywords(source, controller);
         }
-        Some(self.state.source_base(source).1.keywords)
+        self.state.source_base(source).1.keywords
     }
 
     fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {

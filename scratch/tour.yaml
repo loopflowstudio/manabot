@@ -1,9 +1,9 @@
-at: 13fa3e328ab8f3b5ad4a3f5c0cce5811f3cb180f
+at: 0edaee6eb496cd8e811c8a9a5649a6d1cf052f0c
 first:
-  - path: managym/src/flow/proposed_event.rs
-    why: Follow the damage batch and both Pridemate outcomes
   - path: managym/src/flow/damage.rs
-    why: Only committed damage contributes to each source’s gain
+    why: Read source keywords once before committing damage
+  - path: managym/src/flow/proposed_event.rs
+    why: Group damage by source and verify both Pridemate outcomes
   - path: managym/cards/src/m11.rs
     why: Pridemate turns each gain into one counter
   - path: scratch/plan.md
