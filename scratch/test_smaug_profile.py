@@ -3,6 +3,7 @@
 import managym
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
+from managym.experience_projection import decision_surface_view
 
 
 def choose(env: managym.Env, wording: str) -> None:
@@ -43,6 +44,10 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
     choose(countered, "Pass priority")
     choose(countered, "Pass priority")
     after_counter = capture_text_decision(countered)
+    counter_board = decision_surface_view(countered, actor)
+    assert any(
+        card["name"] == target for card in counter_board["opponent"]["battlefield"]
+    )
     assert not any(creature in action.description for action in after_counter.actions)
     assert any(
         creature in line and "zone graveyard" in line
@@ -51,6 +56,11 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
 
     choose(env, "Pass priority")
     exile = capture_text_decision(env)
+    resolved_board = decision_surface_view(env, actor)
+    assert any(card["name"] == creature for card in resolved_board["agent"]["exile"])
+    assert any(
+        card["name"] == target for card in resolved_board["opponent"]["graveyard"]
+    )
     [recast] = [
         action for action in exile.actions if action.description.startswith("Cast ")
     ]
