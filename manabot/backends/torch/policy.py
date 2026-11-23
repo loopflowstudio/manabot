@@ -42,6 +42,7 @@ from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.belief.range import BeliefError
 from manabot.env.observation import (
+    FACT_KINDS,
     ObservationBuffers,
     ObservationSpace,
 )
@@ -124,6 +125,7 @@ class ActorCritic(nn.Module):
         config: ModelConfig,
         *,
         readings: Readings | None = None,
+        fact_kinds: int = FACT_KINDS,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> None:
@@ -380,6 +382,7 @@ class ActorCritic(nn.Module):
         )
         self.facts = FactEncoder(
             embed_dim,
+            fact_kinds=fact_kinds,
             numeric=columns.fact_width(catalog_ids=record_vocabulary == "catalog"),
             vocabulary=record_vocabulary,
         )

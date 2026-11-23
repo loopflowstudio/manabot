@@ -1,5 +1,7 @@
-at: 965cc919b43d1019d1f366e01a1df3a5a2332827
+at: 38425bf5cf237af705709cf133be2a4665391450
 first:
+  - path: docs/engine.md
+    why: Explains event ordinals and ability resolution counts
   - path: managym/src/flow/turn.rs
     why: Turn history owns both counts
   - path: managym/src/flow/zones.rs
@@ -20,6 +22,8 @@ first:
     why: Priority Commands replay both incarnations
   - path: managym/cards/tests/cards/tla.rs
     why: Returning Voyager draws on its second resolution
+  - path: manabot/backends/torch/checkpoint.py
+    why: Stored embedding width governs historical policy inputs
 hide:
   - path: protocol/
     why: Schema projections of the native viewer records
