@@ -22,6 +22,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         ballistic_boulder(),
         bear(),
         cat(),
+        lifelink_cat(),
         clue(),
         dragon(),
         elf_warrior(),
@@ -93,6 +94,18 @@ fn cat() -> TokenDefinition {
             1,
             [Color::White],
         ),
+    )
+}
+
+fn lifelink_cat() -> TokenDefinition {
+    let base = PrintedCharacteristics {
+        keywords: Keywords::of(&[Keyword::Lifelink]),
+        ..face("Cat", [CardType::Creature], &["Cat"], "Lifelink")
+    };
+    token(
+        "token.cat_1_1_w_lifelink",
+        "af0086cd-56b5-450e-818c-e54f45d1a104",
+        creature(base, 1, 1, [Color::White]),
     )
 }
 

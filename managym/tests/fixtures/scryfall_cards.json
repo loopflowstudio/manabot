@@ -5431,6 +5431,18 @@
       "U"
     ]
   },
+  "Regal Caracal": {
+    "name": "Regal Caracal",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Creature — Cat",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Other Cats you control get +1/+1 and have lifelink. (Damage dealt by those creatures also causes you to gain that much life.)\nWhen this creature enters, create two 1/1 white Cat creature tokens with lifelink.",
+    "colors": [
+      "W"
+    ]
+  },
   "Return of the Wildspeaker": {
     "name": "Return of the Wildspeaker",
     "mana_cost": "{4}{G}",

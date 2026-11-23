@@ -14,6 +14,7 @@
 
 mod aer;
 mod afr;
+mod akh;
 mod atq;
 mod bfz;
 mod blb;
@@ -122,6 +123,7 @@ pub fn token_catalog() -> &'static [TokenDefinition] {
 const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
+    akh::cards,
     atq::cards,
     blb::cards,
     bfz::cards,
