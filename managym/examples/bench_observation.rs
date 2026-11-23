@@ -202,9 +202,9 @@ fn main() {
                     }
                 }
                 let seconds = start.elapsed().as_secs_f64();
-                managym::benchmark_allocations::start();
+                managym::allocator::start();
                 encode_into(observation, &config, buffers[0].buffers_mut()).unwrap();
-                let (allocations, allocated_bytes) = managym::benchmark_allocations::stop();
+                let (allocations, allocated_bytes) = managym::allocator::stop();
                 let count = repeats * batch;
                 println!(
                     "{}",

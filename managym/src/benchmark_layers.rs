@@ -1,6 +1,6 @@
 //! Opt-in layer attribution for bounded fixtures, never enabled in wheels.
 //! Timers are inclusive and overlap (board includes dependency and clone time).
-//! Allocation traffic is measured separately by `benchmark_allocations`.
+//! Allocation traffic is measured separately by `allocator`.
 
 use std::{cell::RefCell, time::Instant};
 
@@ -46,7 +46,7 @@ pub fn probe(game: &mut crate::Game, id: crate::state::game_object::PermanentId)
             let mut branch = game.clone();
             branch.characteristics(id);
             reset();
-            crate::benchmark_allocations::start();
+            crate::allocator::start();
             let start = Instant::now();
             if operation == "mana" {
                 *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR").into();
@@ -55,7 +55,7 @@ pub fn probe(game: &mut crate::Game, id: crate::state::game_object::PermanentId)
             }
             branch.characteristics(id);
             let elapsed = start.elapsed().as_nanos();
-            let traffic = crate::benchmark_allocations::stop();
+            let traffic = crate::allocator::stop();
             println!(
                 "{}",
                 serde_json::json!({"probe":operation, "sample":sample,

@@ -69,6 +69,7 @@ impl Game {
     /// Called only for cards the owner has inspected, in their resulting
     /// order. True positions are private; this never changes the public view.
     pub(crate) fn remember_library_objects(&mut self, owner: PlayerId, objects: &[ObjectId]) {
+        self.state.library_order_pins_mut(owner).extend(objects);
         let facts = self.library_positions_of(owner, objects);
         let knowledge = self.state.known_library_mut(owner);
         knowledge.own.extend(facts);
@@ -92,6 +93,7 @@ impl Game {
             if visible[owner.0] {
                 if let Some(object) = self.state.zones.top(ZoneType::Library, owner) {
                     let definition = self.state[object].definition_id;
+                    self.state.library_order_pins_mut(owner).insert(object);
                     let knowledge = self.state.known_library_mut(owner);
                     knowledge.own.insert(0, definition);
                     LibraryKnowledge::bound(&mut knowledge.own);
@@ -217,6 +219,31 @@ impl Game {
         let opponent = PlayerId(1 - viewer.0);
         if !self.shares_information(viewer, opponent) {
             let public = self.state.players[opponent.0].known_library.public.clone();
+            // Rebind surviving facts to the sampled physical witnesses. The
+            // displaced opponent's private placements belong to the old deal.
+            if !self.state.library_order_pins[opponent.0].is_empty() || !public.is_empty() {
+                let mut pins = self.pinned_objects(viewer);
+                pins.retain(|object| {
+                    self.state
+                        .zones
+                        .contains(*object, ZoneType::Library, opponent)
+                });
+                if let Some(suspended) = &self.state.suspended_decision {
+                    for (_, objects) in suspended
+                        .decisions()
+                        .filter_map(Decision::inspected_library_objects)
+                        .filter(|(owner, _)| *owner == opponent)
+                    {
+                        pins.extend_from_slice(objects);
+                    }
+                }
+                pins.extend(
+                    self.library_from_top(opponent)
+                        .enumerate()
+                        .filter_map(|(rank, object)| public.contains_key(&rank).then_some(object)),
+                );
+                *self.state.library_order_pins_mut(opponent) = pins.into_iter().collect();
+            }
             self.state.known_library_mut(opponent).own = public;
         }
     }
