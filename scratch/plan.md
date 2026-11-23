@@ -52,6 +52,8 @@ The unresolved assumption is in `managym/src/flow/decision.rs`: a resolution-tim
 
 Use an Etali attack that exiles Twinmaw and another castable nonland card, with a legal Charring Bite target. Exercise both card orders and stopping. Fork and cold-restore at the Bite target, submit the original Command, and compare the remaining offers, spell order and completed parent. Verify free payment and that no player gets priority between Etali’s cast offers. Preparation links, modal faces, remaining ledger rows and integrated budget validation follow.
 
+The cast commit owns the return to the suspended frame. Store the parent once in forkable native state, retain its remaining object identities, and derive current profile offers on resumption. Remove the forwarding-only entry point when both callers reach ordinary announcement directly. Compare rejection of a stale target Command with the untouched fork before accepting the original Command. Run Cascade alongside Etali as the counterexample: its parent owns bottoming the uncast remainder, including seeded order and RNG. Later countering a child spell must never resume either parent again.
+
 ## Scope
 
 The Task brief requires “one shared casting-profile and play-permission model” and says “Preserve complete legal choices, observations, learning tokens, LLM text, replay/forks, and the 10% Engine Budget.” The single-route fixture establishes exact-object access. The overlap fixture distinguishes the selected permission on legal actions. Board inspection exposes all visible exact-object grants and spent type allowances.

@@ -1,25 +1,26 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>What did the caller cast?</title><style>
-:root{color-scheme:light dark;font:1rem/1.55 system-ui}main{max-width:56rem;margin:auto;padding:1rem}h1,h2{line-height:1.2}table{border-collapse:collapse}th,td{padding:.55rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}aside{border-inline-start:.25rem solid GrayText;padding-inline:1rem}code{overflow-wrap:anywhere}
-</style></head><body><main><p>Managym · MTG-419 · reviewed at 7c38d118</p>
-<h1>Do the caller’s casting concepts and the engine’s records line up?</h1>
-<p>Search chooses a spell and a permission together, then makes decisions that depend on that choice. A replay must recover the precise pending decision. A policy needs to read the same public properties the rules use to test a target.</p>
-<aside><h2>Biggest mismatch · what is this spell’s mana value?</h2>
-<p><b>Existing.</b> A target predicate reads <code>Game::object_mana_value</code>, which includes announced X. The v11 stack encoder reads the base value of the printed mana cost. Choosing a larger X can change which spells a target predicate accepts while that column stays fixed.</p>
-<p><b>Proposed.</b> Give the stack observation its effective mana value from the native calculation. With one X symbol and base value B, each branch should read as follows.</p>
-<table><tr><th>Cast</th><th>Printed base</th><th>Mana spent, absent modifiers</th><th>Stack value</th></tr>
-<tr><td>Paid, X = 2</td><td>B</td><td>B + 2</td><td>B + 2</td></tr>
-<tr><td>Free, X fixed at 0</td><td>B</td><td>0</td><td>B</td></tr></table>
-<p>Keep the existing column for saved pilots. Append the effective value for new models. Compute it from the stack entry during projection so encoding a stack needs one pass.</p></aside>
-<h2>From deck to resolution</h2><table><tr><th>Caller concept</th><th>Record or API</th><th>Fit today</th></tr>
-<tr><td>One deck card, two spells</td><td>Physical definition and SpellProfile on CastChoices and SpellOnStack</td><td>Yes for Adventure and Omen. Vizier offers only Twinmaw on top and both spells are legal from hand.</td></tr>
-<tr><td>Which permission pays or spends an allowance?</td><td>PlayRoute, exact grants and source-specific quotas</td><td>Yes for the tested Muldrotha and Zul branches. The original payment Command survives cold restore.</td></tr>
-<tr><td>What can target the announced spell?</td><td>Native target predicate and the v11 stack row</td><td>No. Their mana-value readings diverge for positive X.</td></tr>
-<tr><td>What happens when the spell leaves?</td><td>Selected stack program, resolution and replacement choice</td><td>Yes for the tested branches. Bilbo and Adventure can both exile Smaug, yet only one grants access. A resolving Omen copy can shuffle while the physical spell loses its target.</td></tr>
-<tr><td>Which prepared spell can this player cast?</td><td>Proposed link from the exact permanent to an exile copy</td><td>No implementation yet. A shared spell name cannot distinguish two copies when control of one source changes.</td></tr></table>
-<h2>Proposed witness · Exude Toxin</h2>
-<p>Cast the Omen from hand. Save at the X choice. Choose a payable positive X, inspect both viewers’ stack rows and test a mana-value threshold between the printed and effective values. Resolve the weakening effect and record the library order. A free grant fixes X at zero and supplies a second branch with a distinct receipt.</p>
-<p>For failure, counter the paid Omen. The payment stands, the card reaches the graveyard and the shuffle RNG stays put. For recovery, restore the pending choice from ordinary-play history and submit its original Command. Compare the stack, receipt, library order and RNG with the original successful branch. The existing Twinmaw witness covers live forks and failure. Cold Omen replay remains open.</p>
-<h2>Questions for review</h2><ol><li>How should saved models see stack value? <b>1a · Chosen.</b> Append effective value and preserve the printed reading. <b>1b.</b> Change the existing column, altering saved-model inputs.</li>
-<li>What should exercise the next profile? <b>2a · Chosen.</b> Use the second Omen to compare target legality, projection and replay at different X values. <b>2b.</b> Start the preparation link first and defer the cross-consumer check.</li></ol></main></body></html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who resumes Etali’s attack trigger?</title>
+<style>:root{color-scheme:light dark;font:1rem/1.55 system-ui}body{max-width:55rem;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}h1,h2{line-height:1.15}strong{font-weight:700}</style>
+<main><p>Managym · MTG-419 · Concept review</p>
+<h1>Do the caller’s casting choices line up with the engine’s records?</h1>
+<p>Search should be able to choose Charring Bite during Etali’s attack trigger, fork at its target decision, then choose whether to cast the other exiled card. The target Command belongs to Bite. The next cast offer still belongs to Etali.</p>
+<h2>Where the concepts line up today</h2>
+<table><thead><tr><th>Caller’s question<th>Native owner<th>Match?</tr></thead><tbody>
+<tr><td>Which spell can I cast?<td>The physical definition supplies the printed profile. Vizier offers Twinmaw from the library. The hand also offers Charring Bite.<td>Yes</tr>
+<tr><td>Which permission am I spending?<td>The selected route determines the cost and quota. Countering a committed Muldrotha cast leaves its selected type spent.<td>Yes</tr>
+<tr><td>What did I announce?<td><code>CastChoices</code> binds the profile through announcement. For Exude Toxin at X=2 the stack shows effective mana value 4. Saved v11 prefixes still read printed value 2.<td>Yes</tr>
+<tr><td>Where does the card go?<td>Adventure’s chosen replacement can grant access to the new exile object. A resolving Omen shuffles. A countered Omen leaves the shuffle RNG untouched.<td>Yes</tr>
+<tr><td>Who acts after I cast during an effect?<td><code>Decision::CastDuringResolution</code> runs the parent frame before <code>begin_resolution_cast</code> enters ordinary casting.<td><strong>No.</strong> The caller can still owe choices to an effect the dispatcher has already finished.</tr>
+<tr><td>Which prepared spell am I using?<td>The planned link joins a particular preparation to its permanent. Two permanents with the same printed spell name must be independently usable.<td>No. This link is still planned.</tr>
+</tbody></table>
+<h2>Biggest mismatch · finishing the parent</h2>
+<p><strong>Existing order</strong> &nbsp; Select card and profile → run the remaining parent instructions → begin the spell. The assertion in <code>flow/decision.rs</code> assumes the parent cannot ask another question. A last-instruction cast can conceal this assumption.</p>
+<p><strong>Proposed order</strong> &nbsp; Select Charring Bite → choose target → commit free spell → offer Etali’s remaining card or stop → finish trigger → grant priority. If both spells are cast, the second lies above Bite and resolves first after passes. Choosing stop immediately leaves both cards in exile.</p>
+<p>Keep the resolving frame and its remaining exact objects in native forkable state. At commit, resume that frame once. Recompute legal profiles from the current position. Cache neither a second list of legal actions nor a copy of the parent per offer. Ordinary priority casts need no remaining-object list. Academy, policy rows and semantic Commands all project the current native decision.</p>
+<h2>Break it, then recover it</h2>
+<p>Fork at Bite’s target decision. Submit a stale Command on one branch. The same target offer, untaken card, stack and RNG must survive rejection. Cold-restore the pending decision and submit the original Command. Compare remaining offers, stack order and the first priority holder with the uninterrupted branch. Repeat with the opposite cast order and with stop after one spell.</p>
+<p>Cascade is the counterexample to a universal “remaining cards stay in exile” rule. Its uncast remainder goes to the bottom in random order. Let each resolving instruction own that disposition and test the seeded order and RNG after the cast. A later counter to the child spell cannot restart its parent.</p>
+<h2>Review choices</h2>
+<ol><li>Who resumes resolution? <b>1a · chosen</b> Resume the native frame at cast commit. <b>1b</b> Give Etali a separate cast loop. That duplicates state search must recover.</li>
+<li>Which witness comes first? <b>2a · chosen</b> Etali with Twinmaw and a second spell exposes ordering and target recovery together. <b>2b</b> Add another single-spell cast first. It leaves the early parent completion untested.</li></ol></main></html>
