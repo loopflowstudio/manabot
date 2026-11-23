@@ -3399,14 +3399,37 @@ impl Game {
         else {
             unreachable!("surveil selection");
         };
+        // A private selection can change any position in the inspected prefix.
+        // The public suffix still shifts predictably with each actual departure.
+        if !graveyard.is_empty() {
+            self.state
+                .known_library_mut(*player)
+                .public
+                .retain(|position, _| *position >= looked.len());
+        }
         let events = graveyard
             .iter()
-            .map(|object| self.zone_move_proposal(*object, ZoneType::Graveyard, Default::default()))
+            .map(|object| {
+                self.zone_move_proposal(
+                    *object,
+                    ZoneType::Graveyard,
+                    crate::flow::proposed_event::ZoneEntry {
+                        inspected_library_departure: true,
+                        ..Default::default()
+                    },
+                )
+            })
             .collect();
         let batch = self.event_batch(events);
         looked.retain(|object| !graveyard.contains(object));
-        let next =
-            self.library_order_decision(*player, std::mem::take(looked), LibraryEnd::Top, false);
+        // A single kept card is already in order. The batch shifts its known
+        // position when the selected cards actually leave the library.
+        let next = (looked.len() > 1).then(|| Decision::OrderLibrary {
+            player: *player,
+            object_ids: std::mem::take(looked),
+            next: 0,
+            end: LibraryEnd::Top,
+        });
         suspended.frame.batch = Some(batch);
         self.continue_resolution(suspended.frame, next);
     }
@@ -3414,9 +3437,14 @@ impl Game {
     /// Reorder inspected library cards, first to draw first. Their exact
     /// objects survive: placement within a zone emits no zone-change events.
     fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId]) {
-        self.state.known_library_mut(player).forget_order();
+        let knowledge = self.state.known_library_mut(player);
+        knowledge
+            .public
+            .retain(|position, _| *position >= objects.len());
         for object in objects.iter().rev() {
-            self.reposition_library_object(player, *object, usize::MAX);
+            self.state
+                .zones
+                .reposition(ZoneType::Library, player, *object, usize::MAX);
         }
         self.remember_library_objects(player, objects);
         self.assert_library_knowledge();

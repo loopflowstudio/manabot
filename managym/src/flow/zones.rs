@@ -622,6 +622,14 @@ impl Game {
         let known_top = if old_zone == Some(ZoneType::Library) {
             if entry.library_top_departure {
                 self.state.known_library_mut(owner).remove_top()
+            } else if entry.inspected_library_departure {
+                let position = self
+                    .library_from_top(owner)
+                    .position(|object| object == object_id)
+                    .expect("departing inspected card in library");
+                self.state
+                    .known_library_mut(owner)
+                    .remove_position(position)
             } else {
                 self.state.known_library_mut(owner).forget_order();
                 None

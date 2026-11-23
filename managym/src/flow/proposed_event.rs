@@ -45,6 +45,9 @@ pub(crate) struct ZoneEntry {
     /// The instruction removes the publicly identified top position.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub library_top_departure: bool,
+    /// The owner selected this departure from a privately inspected prefix.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub inspected_library_departure: bool,
 }
 
 impl ZoneEntry {
@@ -62,6 +65,7 @@ impl ZoneEntry {
             },
             _ => Self::default(),
         };
+        entry.inspected_library_departure = self.inspected_library_departure;
         entry.library_top_departure = self.library_top_departure;
         entry
     }

@@ -1398,9 +1398,14 @@ def test_accumulate_wisdom_ordering_reaches_text_commands_and_policy_input() -> 
         _replay_text_choice(env, action.reference)
 
 
-def _lightshell_surveil(first: str, second: str) -> managym.Env:
+def _lightshell_position(
+    library: tuple[str, ...], *, wisdom: bool = False
+) -> managym.Env:
     env = managym.Env(seed=23)
-    deck = {"Lightshell Duo": 1, "Island": 5, first: 1, second: 1}
+    lands = 6 if wisdom else 4
+    spells = ("Lightshell Duo", "Accumulate Wisdom") if wisdom else ("Lightshell Duo",)
+    deck = dict.fromkeys((*spells, *library), 1)
+    deck["Island"] = lands + 1
     env.reset(
         managym.GameSetup(
             [
@@ -1411,18 +1416,20 @@ def _lightshell_surveil(first: str, second: str) -> managym.Env:
             mana_payment=("auto", "auto"),
         )
     )
-    # Clearing a hand puts its cards on the library bottom in draw order.
-    # Once the Duo and Islands are placed, only this ordered pair remains.
     env.scenario_clear_hand(0)
-    for name in (first, second):
+    for name in library:
         env.scenario_force_card_in_hand(0, name)
     env.scenario_clear_hand(0)
-    for _ in range(4):
+    for _ in range(lands):
         env.scenario_force_battlefield(0, "Island", ready=True)
-    env.scenario_force_card_in_hand(0, "Lightshell Duo")
-    # A land play keeps priority from skipping past the result of surveil.
-    env.scenario_force_card_in_hand(0, "Island")
+    for name in (*spells, "Island"):
+        env.scenario_force_card_in_hand(0, name)
     env.scenario_refresh()
+    return env
+
+
+def _lightshell_surveil(first: str, second: str) -> managym.Env:
+    env = _lightshell_position((first, second))
     _choose(env, "Cast ")
     return env
 
@@ -1470,6 +1477,54 @@ def test_lightshell_duo_private_choices_reach_each_viewer(
         np.testing.assert_array_equal(left_rows[key], right_rows[key], err_msg=key)
 
 
+def _assert_private_library(env: managym.Env, expected: dict[int, str]) -> None:
+    decision = capture_text_decision(env)
+    definitions = DecisionInput.model_validate_json(decision.capture_json).definitions
+    keys = {card.name: int(key) for key, card in definitions.items()}
+    facts = {position: keys[name] for position, name in expected.items()}
+    space = ObservationSpace()
+    own = env.observation_for_player(0)
+    assert own.agent.known_library == facts
+    rows = encode_observation(space, own)["known_library"][0]
+    assert [(key, pos) for key, pos in rows if pos] == [
+        (key + 1, pos + 1) for pos, key in sorted(facts.items())
+    ]
+    for pos, name in expected.items():
+        label = next(
+            line.split(" — ")[0]
+            for line in decision.text.splitlines()
+            if f" — {name}." in line
+        )
+        assert f"Known library position {pos + 1} from top: {label}." in decision.text
+    other = env.observation_for_player(1)
+    assert not other.opponent.known_library
+    assert not encode_observation(space, other)["known_library"][1].any()
+    table = decision_surface_view(env, 1)
+    assert not table["agent"].get("inspected")
+    for name in set(expected.values()) - {"Mountain"}:  # Seat 1 plays Mountains.
+        assert name not in env.semantic_observation_json(1)
+        assert name not in json.dumps(table)
+
+
+def test_lightshell_duo_reorders_only_the_inspected_prefix() -> None:
+    library = ("Gray Ogre", "Hill Giant", "Forest", "Plains", "Mountain", "Swamp")
+    env = _lightshell_position(library, wisdom=True)
+    for wording in (
+        "Accumulate Wisdom",
+        "Gray Ogre",
+        "Hill Giant",
+        "Lightshell Duo",
+        "Keep on top",
+    ):
+        _choose(env, wording)
+    for index, action in enumerate(capture_text_decision(env).actions):
+        branch = _replay_text_choice(env, action.reference)
+        top = ("Plains", "Mountain")
+        _assert_private_library(
+            branch, {0: top[index], 1: top[1 - index], 3: "Hill Giant", 4: "Forest"}
+        )
+
+
 def test_lightshell_duo_replays_every_surveil_choice() -> None:
     names = ("Gray Ogre", "Hill Giant")
     root = _lightshell_surveil(*names)
@@ -1485,6 +1540,10 @@ def test_lightshell_duo_replays_every_surveil_choice() -> None:
                 for c in committed.observation_for_player(1).opponent_cards
                 if c.zone == managym.ZoneEnum.GRAVEYARD
             } == expected
+            if choice == finish:
+                _assert_private_library(
+                    committed, {0: next(n for n in names if n != name)}
+                )
 
     order = _replay_text_choice(root, keep.reference)
     cards = order.observation_for_player(0).agent_cards
