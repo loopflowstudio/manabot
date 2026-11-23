@@ -12,7 +12,7 @@ The update is written once over a backend module (`manabot.backends.torch`,
 `backend.rl`, `backend.learner` and `backend.arrays`, observations are
 admitted by `backend.rollout`, and row bookkeeping and diagnostics (which rows train,
 minibatch indexes, selection groups, value scale) are NumPy. The minibatch
-loss is `minibatch_objective`, equation (6) in `backend.rl.damped_policy_loss`
+loss is `minibatch_objective`, equation (6) in `updates.objective.damped_policy_loss`
 plus the critic's loss; the learner differentiates it as a closure over the
 policy forward (`Learner.loss`), which is how a functional framework takes a
 gradient.
@@ -28,7 +28,6 @@ from manabot.policy.prepare import reference_distribution
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.backend import (
-    RL,
     AdmittedRollout,
     Array,
     Learner,
@@ -44,6 +43,7 @@ from manabot.training.updates.health import (
     failure_tensors,
     minibatch_tensors,
 )
+from manabot.training.updates.objective import minibatch_objective
 from manabot.training.updates.selection import (
     UpdateDiagnostics,
     selection_diagnostics,
@@ -56,64 +56,6 @@ class DampedTargets:
     advantages: Array
     values: Array
     selected: Array
-
-
-def minibatch_objective(
-    rl: RL,
-    logits: Array,
-    value_logits: Array,
-    valid: Array,
-    *,
-    actions: Array,
-    advantages: Array,
-    value_targets: Array,
-    behavior_logs: Array,
-    reference: Array,
-    actor_mask: Array,
-    categorical: bool,
-    clip: float,
-    collection_kl: float,
-    tau: float,
-    reference_forward_kl: float = 0.0,
-    policy_weight: float = 1.0,
-    value_weight: float = 1.0,
-) -> tuple[Array, Array, Array]:
-    """The damped rule's loss on one minibatch: (loss, policy loss, value loss).
-
-    `rl` is a backend's `rl` module and every array is that backend's:
-    float32 `logits` [B,A] and critic output ([B,1], or [B,3] outcome logits
-    when `categorical`) from the current forward, the legal mask [B,A], and
-    the constants `actions` [B], `advantages` [B], `value_targets` ([B] or
-    [B,3]), `behavior_logs` [B,A], `reference` probabilities [B,A] and the
-    actor-selected rows [B]. The policy term averages equation (6) over the
-    actor's rows; the critic term averages every row. Gradients reach only
-    `logits` and `value_logits`.
-    """
-    policy_loss = rl.selected_mean(
-        rl.damped_policy_loss(
-            logits,
-            actions,
-            advantages,
-            behavior_logs,
-            reference,
-            valid,
-            clip=clip,
-            collection_kl=collection_kl,
-            tau=tau,
-            reference_forward_kl=reference_forward_kl,
-        ),
-        actor_mask,
-    )
-    if categorical:
-        value_loss = (
-            categorical_rl(rl).categorical_value_loss(value_logits, value_targets)
-        ).mean()
-    else:
-        # Representation ablation, not the paper's outcome objective.
-        value_loss = rl.squared_value_loss(value_logits, value_targets).mean()
-    policy_loss = policy_loss * policy_weight
-    value_loss = value_loss * value_weight
-    return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
 
 
 def compute_targets(

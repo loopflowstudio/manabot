@@ -16,12 +16,24 @@ refuses a categorical checkpoint (`manabot.backends.mlx.checkpoint.require_suppo
 """
 
 from collections.abc import Mapping
+from functools import partial
+import sys
 from typing import Literal
 
 import mlx.core as mx
 import numpy as np
+from typing_extensions import deprecated
 
 from manabot.policy import returns
+from manabot.training.updates.objective import (
+    damped_policy_loss as shared_damped_policy_loss,
+)
+
+damped_policy_loss = deprecated(
+    "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
+    "The backend-bound function will be removed in 0.4.0."
+)(partial(shared_damped_policy_loss, sys.modules[__name__]))
+
 
 # -- Numerical refusals --------------------------------------------------------
 
@@ -65,6 +77,8 @@ def constant(tensor: mx.array) -> mx.array:
 
 def legal_mask(mask: mx.array) -> mx.array:
     """The boolean legal support of a 0/1 mask [*,A]."""
+    if mask.dtype == mx.bool_:
+        return mask
     require(
         mx.isfinite(mask) & ((mask == 0) | (mask == 1)),
         "invalid_action_mask",
@@ -228,59 +242,6 @@ def squared_value_loss(values: mx.array, targets: mx.array) -> mx.array:
 def entropy(logs: mx.array, valid: mx.array) -> mx.array:
     """Policy entropy [B] of normalized log-probabilities `[B,A]` over `valid` entries."""
     return -(mx.exp(logs) * mx.where(valid, logs, 0.0)).sum(-1)
-
-
-def damped_policy_loss(
-    logits: mx.array,
-    actions: mx.array,
-    advantages: mx.array,
-    behavior_logs: mx.array,
-    reference: mx.array,
-    valid: mx.array,
-    *,
-    clip: float,
-    collection_kl: float,
-    tau: float,
-    reference_forward_kl: float = 0.0,
-) -> mx.array:
-    """The damped policy objective, equation (6), per row [B] over offers [B,A].
-
-    An optional forward KL keeps a restoring gradient on rare legal offers.
-    Sources and departures: docs/learning.md#fidelity-to-the-sources. Ratios
-    use the actual action likelihood at collection; the reverse KLs sum all
-    legal actions.
-    """
-    if logits.ndim != 2 or logits.shape != valid.shape:
-        raise ValueError("policy logits require [B,A] legal support")
-    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
-        raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0 or reference_forward_kl < 0:
-        raise ValueError("invalid damping coefficients")
-    check_logs(behavior_logs, valid)
-    check_probabilities(reference, valid, positive=True)
-    require(
-        mx.isfinite(advantages),
-        "nonfinite_advantages",
-        advantages=advantages,
-        valid=valid,
-    )
-    if bool(((actions < 0) | (actions >= logits.shape[-1])).any()):
-        raise ValueError("action index outside legal support")
-    if not bool(mx.take_along_axis(valid, actions[:, None], axis=-1).all()):
-        raise ValueError("sampled action is not legal")
-    logs = policy_logs(logits, valid)
-    behavior_logs = mx.stop_gradient(behavior_logs)
-    # Each side is gathered before the difference: on padding both are -inf.
-    ratio_logs = action_logs(logs, actions) - action_logs(behavior_logs, actions)
-    magnet_logs = reference_logs(reference, valid)
-    loss = (
-        clipped_surrogate(ratio_logs, advantages, clip)
-        + collection_kl * reverse_kl(logs, behavior_logs, valid)
-        + tau * reverse_kl(logs, magnet_logs, valid)
-    )
-    if reference_forward_kl:
-        loss = loss + reference_forward_kl * forward_kl(logs, magnet_logs, valid)
-    return loss
 
 
 def clip_fraction(log_ratio: mx.array, clip: float) -> float:

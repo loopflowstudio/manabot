@@ -70,7 +70,7 @@ from manabot.policy.protocol import (
     Targets,
 )
 from manabot.training.updates.backend import Learner, Policy, UpdateBackend
-from manabot.training.updates.damped_policy import minibatch_objective
+from manabot.training.updates.objective import minibatch_objective
 
 
 class ParityPolicy(BackendPolicy, Policy, Protocol):

@@ -48,6 +48,7 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates import damped_policy, ppo
+from manabot.training.updates.objective import damped_policy_loss
 import managym
 from tests.model.prepared_routes import effect_rows, fact_rows
 
@@ -67,6 +68,36 @@ def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:
     actual_grad = torch.autograd.grad(actual.sum(), logs)[0]
     expected_grad = torch.autograd.grad(expected.sum(), logs)[0]
     assert torch.equal(actual_grad, expected_grad)
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+def test_damped_loss_preserves_extended_ratios_and_mps_gradients() -> None:
+    # The ratio exceeds float32 range. The adverse advantage keeps this branch
+    # unclipped, and scales its derivative back into the MPS gradient range.
+    logits = torch.zeros((1, 2), device="mps", requires_grad=True)
+    loss = damped_policy_loss(
+        torch_backend.rl,
+        logits,
+        torch.tensor([1], device="mps"),
+        torch.tensor([-1e-12], device="mps"),
+        torch.tensor([[0.0, -100.0]], device="mps"),
+        torch.full_like(logits, 0.5),
+        torch.ones_like(logits, dtype=torch.bool),
+        clip=0.2,
+        collection_kl=0.1,
+        tau=0.05,
+        reference_forward_kl=0.002,
+    )
+    expected = math.exp(100) * 0.5e-12
+    assert loss.item() == pytest.approx(expected, rel=1e-5)
+    loss.sum().backward()
+    assert logits.grad is not None
+    torch.testing.assert_close(
+        logits.grad.cpu(),
+        torch.tensor([[-expected / 2, expected / 2]]),
+        rtol=1e-5,
+        atol=0,
+    )
 
 
 def _assert_finite(value: object) -> None:

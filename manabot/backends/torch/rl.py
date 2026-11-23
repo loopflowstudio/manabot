@@ -2,11 +2,11 @@
 
 The masked policy distribution (legal mask, normalized logs and the checks on
 collected behavior), returns (GAE, standardized advantages, categorical lambda
-returns), per-row loss terms including the damped policy objective, advantage
+returns), per-row loss terms for the shared damped policy objective, advantage
 selection and the named numerical refusals they raise. The updates in
 `manabot.training.updates` reach these as `backend.rl`.
 They read tensors and small typed records and import nothing else from
-manabot beyond the framework-free host recursions in `manabot.policy.returns`
+manabot beyond framework-free numerical code
 (`tests/test_package_boundaries.py` enforces it), so another role reuses them
 unchanged. Other backends expose matching functions over their own arrays
 for the operations they support; the gradient step and EMA live in
@@ -14,15 +14,27 @@ for the operations they support; the gradient step and EMA live in
 """
 
 from collections.abc import Mapping
+from functools import partial
 import math
+import sys
 from typing import Literal
 
 import torch
 from torch import Tensor
 from torch.nn import functional as F
+from typing_extensions import deprecated
 
 from manabot.backends.torch.arrays import from_numpy, to_numpy
 import manabot.policy.returns as returns
+from manabot.training.updates.objective import (
+    damped_policy_loss as shared_damped_policy_loss,
+)
+
+damped_policy_loss = deprecated(
+    "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
+    "The backend-bound function will be removed in 0.4.0."
+)(partial(shared_damped_policy_loss, sys.modules[__name__]))
+
 
 # -- Numerical refusals --------------------------------------------------------
 # Named numerical refusals, and the host boundary for float64 arithmetic.
@@ -80,6 +92,8 @@ def constant(tensor: Tensor) -> Tensor:
 
 
 def legal_mask(mask: Tensor) -> Tensor:
+    if mask.dtype == torch.bool:
+        return mask
     require(
         torch.isfinite(mask) & ((mask == 0) | (mask == 1)),
         "invalid_action_mask",
@@ -401,64 +415,6 @@ def categorical_value_loss(value_logits: Tensor, targets: Tensor) -> Tensor:
 def entropy(logs: Tensor, valid: Tensor) -> Tensor:
     """Policy entropy [B] of normalized log-probabilities `[B,A]` over `valid` entries."""
     return -(logs.exp() * logs.masked_fill(~valid.bool(), 0)).sum(-1)
-
-
-def damped_policy_loss(
-    logits: Tensor,
-    actions: Tensor,
-    advantages: Tensor,
-    behavior_logs: Tensor,
-    reference: Tensor,
-    valid: Tensor,
-    *,
-    clip: float,
-    collection_kl: float,
-    tau: float,
-    reference_forward_kl: float = 0.0,
-) -> Tensor:
-    """The damped policy objective, equation (6), per row [B] over offers [B,A].
-
-    An optional forward KL keeps a restoring gradient on rare legal offers.
-    Sources and departures: docs/learning.md#fidelity-to-the-sources.
-
-    Ratios use the actual action likelihood at collection, even after earlier
-    minibatches change the learner. The reverse KLs sum all legal actions.
-    This is per-action reuse correction, not trajectory importance weighting.
-    MPS combines these terms on the host to retain float64 surrogate range.
-    """
-    valid = valid.bool()
-    if logits.ndim != 2 or logits.shape != valid.shape:
-        raise ValueError("policy logits require [B,A] legal support")
-    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
-        raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0 or reference_forward_kl < 0:
-        raise ValueError("invalid damping coefficients")
-    check_logs(behavior_logs, valid)
-    check_probabilities(reference, valid, positive=True)
-    require(
-        torch.isfinite(advantages),
-        "nonfinite_advantages",
-        advantages=advantages,
-        valid=valid,
-    )
-    if ((actions < 0) | (actions >= logits.shape[-1])).any():
-        raise ValueError("action index outside legal support")
-    if not valid.gather(-1, actions[:, None]).all():
-        raise ValueError("sampled action is not legal")
-    logs = policy_logs(logits, valid)
-    ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
-    surrogate = clipped_surrogate(ratio_logs, advantages, clip)
-    magnet_logs = reference_logs(reference, valid)
-    loss = (
-        surrogate
-        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
-        + tau * float64_operand(reverse_kl(logs, magnet_logs, valid))
-    )
-    if reference_forward_kl:
-        loss = loss + reference_forward_kl * float64_operand(
-            forward_kl(logs, magnet_logs, valid)
-        )
-    return loss
 
 
 @torch.no_grad()

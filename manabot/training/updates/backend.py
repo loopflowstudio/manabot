@@ -35,6 +35,7 @@ from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, ActionValidator
+from manabot.training.updates.objective import Array, CategoricalValueLoss, LossTerms
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import RolloutBatch
@@ -42,7 +43,6 @@ if TYPE_CHECKING:
 # A backend's array, device and admitted observation minibatch. `Any` because
 # the update applies the framework's own operators to arrays, and only the
 # backend that produced a device or observation batch reads it.
-type Array = Any
 type Device = Any
 type Observations = Prepared[Array]
 
@@ -53,7 +53,7 @@ type FilterKind = Literal["top_count", "quantile"]
 
 
 @runtime_checkable
-class RL(Protocol):
+class RL(LossTerms, Protocol):
     """`backend.rl`: masks, likelihoods, returns, losses and selection over
     the backend's arrays. Shapes are in each backend's docstrings."""
 
@@ -63,18 +63,6 @@ class RL(Protocol):
         ...
 
     def require_finite(self, invariant: str, **arrays: Array) -> None: ...
-
-    def float64_operand(self, tensor: Array) -> Array: ...
-
-    def constant(self, tensor: Array) -> Array: ...
-
-    def legal_mask(self, mask: Array) -> Array: ...
-
-    def policy_logs(self, logits: Array, valid: Array) -> Array: ...
-
-    def action_logs(self, logs: Array, actions: Array) -> Array: ...
-
-    def reference_logs(self, reference: Array, valid: Array) -> Array: ...
 
     def transition_gae(
         self,
@@ -86,32 +74,7 @@ class RL(Protocol):
         lam: float,
     ) -> tuple[Array, Array]: ...
 
-    def clipped_surrogate(
-        self, log_ratio: Array, advantages: Array, clip: float
-    ) -> Array: ...
-
-    def reverse_kl(self, logs: Array, target_logs: Array, valid: Array) -> Array: ...
-
-    def forward_kl(self, logs: Array, target_logs: Array, valid: Array) -> Array: ...
-
-    def squared_value_loss(self, values: Array, targets: Array) -> Array: ...
-
     def entropy(self, logs: Array, valid: Array) -> Array: ...
-
-    def damped_policy_loss(
-        self,
-        logits: Array,
-        actions: Array,
-        advantages: Array,
-        behavior_logs: Array,
-        reference: Array,
-        valid: Array,
-        *,
-        clip: float,
-        collection_kl: float,
-        tau: float,
-        reference_forward_kl: float = 0.0,
-    ) -> Array: ...
 
     def clip_fraction(self, log_ratio: Array, clip: float) -> float: ...
 
@@ -119,11 +82,9 @@ class RL(Protocol):
         self, advantages: Array, kind: FilterKind, fraction: float, minimum: float
     ) -> Array: ...
 
-    def selected_mean(self, values: Array, selected: Array) -> Array: ...
-
 
 @runtime_checkable
-class CategoricalRL(RL, Protocol):
+class CategoricalRL(RL, CategoricalValueLoss, Protocol):
     """`rl` of a backend with a win/draw/loss critic."""
 
     def expected_outcome(self, probabilities: Array) -> Array: ...
@@ -138,8 +99,6 @@ class CategoricalRL(RL, Protocol):
         bootstrap: Array,
         trace_lambda: float,
     ) -> Array: ...
-
-    def categorical_value_loss(self, value_logits: Array, targets: Array) -> Array: ...
 
 
 def categorical_rl(rl: RL) -> CategoricalRL:

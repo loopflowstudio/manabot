@@ -431,6 +431,7 @@ _GENERIC_ALLOWED = (
     "manabot.backends.torch.arrays",
     "manabot.infra.profiler",
     "manabot.policy.returns",
+    "manabot.training.updates.objective",
 )
 
 
@@ -469,6 +470,8 @@ class _RefuseRoles(importlib.abc.MetaPathFinder):
             "manabot.backends.torch",
             "manabot.infra",
             "manabot.policy",
+            "manabot.training",
+            "manabot.training.updates",
             *_GENERIC_ALLOWED,
         }
         if root in {"managym", "academy", "etude"} or (
@@ -499,6 +502,7 @@ def test_generic_learning_pieces_import_without_the_player() -> None:
 # neither a framework nor a backend, not even for annotations.
 _WRITTEN_ONCE = (
     "manabot/training/updates/backend.py",
+    "manabot/training/updates/objective.py",
     "manabot/training/updates/damped_policy.py",
     "manabot/training/updates/ppo.py",
 )
