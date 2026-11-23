@@ -33,7 +33,12 @@ from manabot.training.updates.health import (
 )
 from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
-from manabot.training.updates.weights import actor_term, critic_term, logical_weights
+from manabot.training.updates.weights import (
+    actor_term,
+    batch_weights,
+    critic_term,
+    logical_weights,
+)
 
 
 def update_iteration(
@@ -141,6 +146,9 @@ def update_iteration(
         advantages = rl.standardized_advantages(advantages, to_device(retained, dev))
     learner.set_learning_rate(diagnostics["learning_rate"])
     size = max(1, math.ceil(len(training_rows) / learning.minibatches))
+    normalized = batch_weights(
+        batch, training_rows, actor_rows, learning.root_actor_weight
+    )
     with track("Minibatches"):
         admitted.admit_rows(training_rows, min(size, learner.execution_rows or size))
         for _ in range(learning.epochs):
@@ -149,10 +157,8 @@ def update_iteration(
                 logical_rows = order[start : start + size]
                 execution_rows = learner.execution_rows or size
                 split = len(logical_rows) > execution_rows
-                weights = logical_weights(
-                    batch, logical_rows, actor_rows, learning.root_actor_weight
-                )
                 actor_count = int(actor_rows[logical_rows].sum())
+                weights = logical_weights(normalized, logical_rows, actor_count)
                 totals = dict(
                     loss=0.0,
                     policy_loss=0.0,

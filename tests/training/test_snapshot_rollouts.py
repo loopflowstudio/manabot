@@ -949,6 +949,106 @@ def test_weighted_steps_match_hand_weighted_actor_and_critic(rule: str) -> None:
     assert result["loss"] == pytest.approx(expected_loss.item(), abs=1e-6)
 
 
+@pytest.mark.parametrize("framework", ["torch", "mlx"])
+def test_damped_minibatches_preserve_source_and_root_weights(framework: str) -> None:
+    if framework == "mlx":
+        pytest.importorskip("mlx.core")
+    agent = scalar_backend_agent()
+    recipe, _ = replay_root(agent.observation_space)
+    branch = SnapshotBranch(7, recipe, horizon=2)
+    with replay_collector(agent.observation_space, recipe) as collector:
+        batch = collect(collector, agent, 4, snapshot_starts=[branch, branch])
+    batch = replace(
+        batch,
+        episode_source=np.array([0, 0, 1, 1], np.int8)[:, None],
+        snapshot_id=np.array([-1, -1, 7, 7], np.int64)[:, None],
+        is_root_decision=np.array([False, False, True, False])[:, None],
+        sample_weight=np.array([0.1, 0.1, 1, 1], np.float32)[:, None],
+    )
+    with torch.no_grad():
+        agent.policy_head[-1].weight.mul_(8)
+    reference = Learner(deepcopy(agent), "cpu", minibatch_rows=2)
+    learning = DampedPolicyLearning(
+        gradient="damped_policy",
+        advantage_quantile=0,
+        min_advantage=0,
+        root_actor_weight=4,
+        max_grad_norm=100,
+    )
+    targets = compute_batch_targets(
+        backend, reference, AdmittedRollout(reference.agent, batch), learning
+    )
+    rate, tau = learning.rates(1)
+    reference.set_learning_rate(rate)
+    actor_weights = torch.tensor([0.1, 0.1, 4, 1])
+    critic_weights = torch.tensor([0.1, 0.1, 1, 1])
+    for ids in (np.array([0, 1]), np.array([2, 3])):
+        rows = batch.observations(ids)
+        logits, values = reference.agent(
+            device_input(reference.agent, rows.observation)
+        )
+        mask = torch.tensor(rows.observation["actions_valid"], dtype=torch.bool)
+        behavior = torch.tensor(rows.log_probabilities)
+        magnet = torch.tensor(
+            reference_distribution(rows.observation, learning.reference)
+        )
+        actor_loss = backend.rl.damped_policy_loss(
+            logits,
+            torch.tensor(batch.actions[ids, 0]),
+            targets.advantages[ids, 0],
+            behavior,
+            magnet,
+            mask,
+            clip=learning.clip,
+            collection_kl=learning.collection_kl,
+            tau=tau,
+            reference_forward_kl=learning.reference_forward_kl,
+        )
+        critic_loss = (values - targets.value_targets[ids, 0]).square()
+        expected = (
+            actor_loss * actor_weights[ids] / actor_weights.mean()
+            + critic_loss * critic_weights[ids] / critic_weights.mean()
+        ).mean()
+        logs = backend.rl.policy_logs(logits, mask)
+        collection_kl = backend.rl.reverse_kl(logs, behavior, mask).mean().item()
+        reference_kl = (
+            backend.rl.reverse_kl(logs, backend.rl.reference_logs(magnet, mask), mask)
+            .mean()
+            .item()
+        )
+        reference.step(expected, learning.max_grad_norm)
+
+    runtime = resolve(framework)
+    checkpoint = scalar_checkpoint(agent)
+    learner = runtime.learner.Learner(
+        runtime.load(checkpoint)[0], "cpu", minibatch_rows=2
+    )
+    result = update_damped_iteration(runtime, learner, batch, learning, 1)
+    assert result["numerical"]["optimizer_steps"] == 2
+    assert result["loss"] == pytest.approx(expected.item(), abs=1e-6)
+    assert result["collection_kl"] == pytest.approx(collection_kl, abs=1e-6)
+    assert result["reference_kl"] == pytest.approx(reference_kl, abs=1e-6)
+    expected_params = reference.parameters()
+    if framework == "mlx":
+        expected_params = runtime.parameter_layout(
+            canonical_parameters(expected_params)
+        )
+    for name, actual in learner.parameters().items():
+        np.testing.assert_allclose(actual, expected_params[name], atol=1e-6, rtol=0)
+
+    uniform = runtime.learner.Learner(
+        runtime.load(checkpoint)[0], "cpu", minibatch_rows=2
+    )
+    control = update_damped_iteration(
+        runtime,
+        uniform,
+        replace(batch, sample_weight=None),
+        learning.model_copy(update={"root_actor_weight": 1}),
+        1,
+    )
+    assert result["loss"] != pytest.approx(control["loss"])
+
+
 @pytest.mark.parametrize("rule", ["ppo", "damped"])
 def test_zero_weight_discovery_preserves_live_adam_and_ema(rule: str) -> None:
     learning = (

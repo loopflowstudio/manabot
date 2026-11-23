@@ -1,4 +1,4 @@
-"""Per-head coefficients for one logical minibatch, before execution chunking."""
+"""Per-head coefficients for a weighted rollout, its logical minibatches and execution chunks."""
 
 import numpy as np
 
@@ -6,37 +6,45 @@ from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.backend import RL, Array
 
 
-def logical_weights(
+def batch_weights(
     batch: RolloutBatch,
-    rows: np.ndarray,
-    selected: np.ndarray,
+    training_rows: np.ndarray,
+    actor_rows: np.ndarray,
     root_actor_weight: float,
 ) -> np.ndarray | None:
-    """Normalized [logical rows, actor/critic] weights, or ordinary count reductions.
+    """Scale each head's participating weights to mean one across the update.
 
-    All rows already passed the critic's filter. Actors with empty support
-    contribute a differentiable zero. Normalize on the host before transfer.
+    Actor selection has already excluded zero-weight roots. A common scale
+    cancels in the mean, so even large root multipliers need no large product.
     """
     if batch.sample_weight is None and root_actor_weight == 1:
         return None
     critic = (
-        np.ones(len(rows))
+        np.ones(batch.actions.size)
         if batch.sample_weight is None
-        else batch.sample_weight.ravel()[rows].astype(np.float64)
+        else batch.sample_weight.ravel().astype(np.float64)
     )
-    actor = critic * selected[rows]
-    if batch.is_root_decision is not None and root_actor_weight != 1:
-        roots = batch.is_root_decision.ravel()[rows]
-        if actor[roots].any() and actor[~roots].any():
-            # Only the ratio matters. Scale down to keep finite config values finite.
-            if root_actor_weight > 1:
-                actor[~roots] /= root_actor_weight
-            else:
-                actor[roots] *= root_actor_weight
-    actor_total = actor.sum()
-    if actor_total:
-        actor /= actor_total
-    return np.column_stack((actor, critic / critic.sum())).astype(np.float32)
+    actor = np.where(actor_rows, critic, 0)
+    if actor_rows.any():
+        if batch.is_root_decision is not None and root_actor_weight != 1:
+            roots = batch.is_root_decision.ravel()
+            if roots[actor_rows].any() and not roots[actor_rows].all():
+                if root_actor_weight > 1:
+                    actor[~roots] /= root_actor_weight
+                else:
+                    actor[roots] *= root_actor_weight
+        actor /= actor[actor_rows].mean()
+    critic /= critic[training_rows].mean()
+    return np.column_stack((actor, critic))
+
+
+def logical_weights(
+    normalized: np.ndarray | None, rows: np.ndarray, actor_count: int
+) -> np.ndarray | None:
+    """Each row's contribution to its logical minibatch, before execution splits."""
+    if normalized is None:
+        return None
+    return (normalized[rows] / (max(actor_count, 1), len(rows))).astype(np.float32)
 
 
 def actor_term(

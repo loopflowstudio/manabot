@@ -50,7 +50,12 @@ from manabot.training.updates.selection import (
     value_scale,
 )
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
-from manabot.training.updates.weights import actor_term, critic_term, logical_weights
+from manabot.training.updates.weights import (
+    actor_term,
+    batch_weights,
+    critic_term,
+    logical_weights,
+)
 
 
 @dataclass(frozen=True)
@@ -107,8 +112,8 @@ def minibatch_objective(
     when `categorical`) from the current forward, the legal mask [B,A], and
     the constants `actions` [B], `advantages` [B], `value_targets` ([B] or
     [B,3]), `behavior_logs` [B,A], `reference` probabilities [B,A] and the
-    actor-selected rows [B]. Optional weights [B,2] are normalized over the
-    whole logical minibatch for the actor and critic respectively. Equation
+    actor-selected rows [B]. Optional coefficients [B,2] include each head's batch
+    weight scale and logical minibatch denominator. Equation
     (6) trains the selected actor rows. Gradients reach only
     `logits` and `value_logits`.
     """
@@ -266,10 +271,12 @@ def update_damped_iteration(
         return diagnostics
     # Rows each minibatch trains: the actor's under actor_critic scope, else all.
     learner.set_learning_rate(rate)
+    training_rows = np.flatnonzero(trained)
+    normalized = batch_weights(
+        batch, training_rows, actor_rows, learning.root_actor_weight
+    )
     with track("Minibatches"):
-        admitted.admit_rows(
-            np.flatnonzero(trained), min(width, learner.execution_rows or width)
-        )
+        admitted.admit_rows(training_rows, min(width, learner.execution_rows or width))
         for start in range(0, len(actor_rows), width):
             window = trained[start : start + width]
             if not window.any():
@@ -278,10 +285,8 @@ def update_damped_iteration(
             logical_rows = np.arange(start, start + len(window))[window]
             execution_rows = learner.execution_rows or len(logical_rows)
             split = len(logical_rows) > execution_rows
-            weights = logical_weights(
-                batch, logical_rows, actor_rows, learning.root_actor_weight
-            )
             actor_count = int(actor_rows[logical_rows].sum())
+            weights = logical_weights(normalized, logical_rows, actor_count)
             totals = dict(
                 loss=0.0,
                 policy_loss=0.0,
@@ -394,11 +399,7 @@ def update_damped_iteration(
                         ("reference_kl", magnet_logs),
                     ):
                         divergence = rl.reverse_kl(logs, target_logs, valid)
-                        totals[name] += (
-                            float(divergence.mean()) * value_weight
-                            if coefficients is None
-                            else float(rl.weighted_sum(divergence, coefficients[:, 0]))
-                        )
+                        totals[name] += float(divergence.mean()) * value_weight
                     totals["reference_forward_kl"] += float(
                         actor_term(
                             rl,
