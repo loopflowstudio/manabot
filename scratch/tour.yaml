@@ -1,4 +1,4 @@
-at: 650f8791159238842c7893ac5af0dd8f42fdef05
+at: 0ea0c204a09868069695c71ebcaddba949276f03
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
@@ -16,4 +16,14 @@ first:
     why: Compare Pact results across restored branches
   - path: managym/cards/tests/cards/dgm.rs
     why: Exercise Maze from land entry through victory
+  - path: managym/cards/src/eoe.rs
+    why: Read the Bracelet grant and its costs
+  - path: managym/src/flow/payment.rs
+    why: Trace the paid Equipment into the receipt
+  - path: managym/cards/src/msh.rs
+    why: Follow the Cube sacrifice into turn control
+  - path: managym/cards/tests/cards/eoe.rs
+    why: Compare manual and automatic payment branches
+  - path: managym/cards/tests/cards/msh.rs
+    why: Replay payment on the delegated turn
 hide: []
