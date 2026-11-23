@@ -2,7 +2,7 @@
 
 The Task brief gives the design constraint: “Explore one-card transform, two-card meld, and hidden face-down characteristics against contrasting real cards before fixing the representation, preserving exact physical-card identity and viewer-safe observations.”
 
-Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. The departed Clone copy witnesses now cover Joo Dee and Homunculus Horde. Cecil exercises transformation in place. Fang’s graveyard trigger is playable. Vanille and Fang now form Ragnarok. A genuine departure produces both physical arrivals, and Lost Days retains the order choice before the Clue. Epic Downfall preserves the opponent’s chosen exile order. Lethal damage gives the owner both graveyard orders and resolves Ragnarok’s death trigger once. Immediate movement callers, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
+Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. The departed Clone copy witnesses now cover Joo Dee and Homunculus Horde. Cecil exercises transformation in place. Fang’s graveyard trigger is playable. Vanille and Fang now form Ragnarok. A genuine departure produces both physical arrivals, and Lost Days retains the order choice before the Clue. Epic Downfall preserves the opponent’s chosen exile order. Lethal damage gives the owner both graveyard orders and resolves Ragnarok’s death trigger once. Airbending Lesson now waits for the exiling opponent’s order and grants both fronts before drawing. Other immediate movement callers, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
 
 ## Cohort and interaction fixtures
 
@@ -96,15 +96,17 @@ The Blasphemous Act fixture restored both owner Commands from the same pending l
 
 ### Airbending Lesson on Ragnarok
 
-An opponent can cast Airbending Lesson targeting Ragnarok. Its next instruction draws a card (`managym/cards/src/tla.rs`). In `flow/resolution.rs`, the Airbend effect has the controller and the resolution frame. It calls `airbend_permanent` in `flow/cast_permission.rs`, which moves the object immediately and applies a cast grant to the single returned arrival. That call supplies no exiling player to the movement batch. This source trace identifies a playable case for the missing order and second grant. At `2aa56de2` a temporary constructed probe used `form_ragnarok(&["Airbending Lesson"])`, gave seat 1 the Lesson and {2}{W} on its main phase, targeted Ragnarok, paid and resolved the spell. Owner exile grew from zero to two and the caster’s hand from two to three. The next offer was priority with three land plays and pass. Ragnarok had already left, so neither order Command existed for any consumer to submit. The single-grant conclusion comes from tracing `exile_with_play_grant`; the probe did not attempt a recast. All four existing `fin::ragnarok` debug tests passed in the same checkout. This blocks working-phase advancement.
+At `2aa56de2`, the Airbending Lesson probe put both fronts into exile and drew the caster’s card before offering priority. The opponent never received an ordering Command. Source inspection found that the immediate move returned only one arrival for the cast grant. The probe did not attempt a recast. All four Ragnarok fixtures then present passed.
 
-Airbend now retains every selected battlefield or stack move in the resolution frame’s event batch. A nonempty batch records bending once even when a token leaves no card in exile. The existing zone movement code orders the exact arrivals. Batch completion grants each surviving exiled card its owner’s {2} permission before the frame reaches the draw.
+At `13b90041`, Airbend adopted the retained movement batch. The shared ordering and replacement path in `flow/zones.rs` already supplied the exact arrivals. Batch completion in `flow/decision.rs` applies the owner’s {2} grant to each surviving exile arrival before `flow/resolution.rs` resumes the Lesson.
 
 The directed debug test `fin::ragnarok_airbend_orders_both_cast_grants_before_the_lesson_draw` passed. Both restored Commands start with Ragnarok present, no grants and the draw pending. Each produces the chosen pair in exile and draws the previous top card exactly once. A spent Command leaves the hand, grants and events intact. On the owner’s main phase both cards cast in the chosen order from four colorless mana, spending two each time.
 
-Review the remaining immediate battlefield move callers, including linked entry follow-ups, before migrating them. Hand discards and library draws already have restricted source zones.
+### Next slice · Manifest Dread
 
-Lost Days checks the event ledger, library order and single Clue after each spent Command is rejected. Owner-only library-order visibility and recorded replay remain open. Continue with Manifest Dread before settling the shared form representation.
+Exercise the private selection through the turn-face-up decision and a copy of the face-down permanent, using the constructed positions above. Cecil and Ragnarok already distinguish physical backing from the current face. Manifest tests the remaining design assumption: a copy can acquire the public form while only the controller of the original can inspect its hidden printing. Compare the two viewers before settling the shared representation.
+
+Keep the remaining immediate movement callers under review, including linked entry follow-ups. Trace each caller’s legal source zones before migrating it. Airbend needed a retained batch because one selected permanent produced two arrivals. A top-of-library move in `flow/cast_permission.rs` takes one card. Lost Days still needs owner-only library-order visibility and recorded replay checks.
 
 ## Native implementation and deletions
 
