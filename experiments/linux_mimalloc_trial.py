@@ -10,7 +10,6 @@ import sys
 import zipfile
 
 from etude.jobs import TrainingJob
-from etude.records import Clock
 from etude.train.tracking import track
 from pydantic import BaseModel
 
@@ -78,7 +77,7 @@ def train(config: Config) -> None:
     maturin = str(Path(sys.executable).parent / "maturin")
     manifest = str(repo / "managym" / "Cargo.toml")
 
-    with track(clocks=(Clock("phase", unit="phases"),), config=config) as run:
+    with track(clocks=("phase",), config=config) as run:
         out = run.out
         out.mkdir(parents=True, exist_ok=True)
 
@@ -323,7 +322,7 @@ def training_jobs() -> list[TrainingJob[Config]]:
             name="linux-mimalloc-trial",
             train=train,
             config=Config(),
-            seeds=(1,),
+            seeds=(2,),
             repo=str(ROOT),
             setup=SETUP,
             extras=("play",),
