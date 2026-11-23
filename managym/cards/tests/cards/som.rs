@@ -107,3 +107,40 @@ fn steel_hellkite_spends_its_own_activation_and_destroys_exact_mana_value() {
     settle(&mut s);
     assert!(s.game().state.permanents[fresh].is_some());
 }
+
+#[test]
+fn steel_hellkite_offers_only_payable_x_values() {
+    use crate::support::{game::five_color_unfunded_setup, play::activate};
+    use managym::agent::action::Action;
+
+    for with_mountain in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Steel Hellkite"]);
+        let source = s.force_permanent_on_battlefield(0, "Steel Hellkite");
+        let mountain = with_mountain.then(|| s.force_permanent_on_battlefield(0, "Mountain"));
+        activate(&mut s, source, 1);
+        let offered: Vec<_> = s
+            .action_space()
+            .actions
+            .iter()
+            .map(|action| match action {
+                Action::ChooseMode { mode, .. } => *mode,
+                _ => panic!("expected an X announcement"),
+            })
+            .collect();
+        assert_eq!(offered, if with_mountain { vec![0, 1] } else { vec![0] });
+        let decision = s.game().clone();
+        for x in offered {
+            *s.game_mut() = decision.clone();
+            choose_mode(&mut s, x);
+            settle(&mut s);
+            let hellkite = s.game().state.permanents[source].as_ref().unwrap();
+            assert!(!hellkite.tapped);
+            if let Some(land) = mountain {
+                assert_eq!(
+                    s.game().state.permanents[land].as_ref().unwrap().tapped,
+                    x == 1
+                );
+            }
+        }
+    }
+}

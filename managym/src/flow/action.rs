@@ -505,8 +505,8 @@ impl Game {
                         receipt: Default::default(),
                     };
                     self.tap_activation_payment_possible(player, &payment, None)
-                } else if ability.waterbend {
-                    self.can_pay_waterbend_activation(player, permanent_id, ability)
+                } else if ability.waterbend || ability.mana_cost.x > 0 {
+                    self.activation_x_payable(player, permanent_id, ability_index, ability.x_min)
                 } else {
                     self.can_pay_announced_activation(player, &ability.mana_cost, &operation, None)
                 };

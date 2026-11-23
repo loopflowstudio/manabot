@@ -1202,8 +1202,7 @@ impl Game {
         )
     }
 
-    /// Values of X from the ability's least X that its waterbend cost can
-    /// pay (CR 602.2b, 601.2f).
+    /// Payable announcements from the ability's least X (CR 602.2b, 601.2f).
     pub(crate) fn legal_activation_x_values(
         &self,
         player: PlayerId,
@@ -1219,7 +1218,7 @@ impl Game {
             return Vec::new();
         };
         payable_x_values(ability.x_min, |x| {
-            self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x), None)
+            self.activation_x_payable(player, permanent, ability_index, x)
         })
     }
 

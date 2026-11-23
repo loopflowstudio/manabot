@@ -2400,6 +2400,36 @@ impl Game {
         }
     }
 
+    /// Price the announced X with the same mana component used to pay the activation.
+    pub(crate) fn activation_x_payable(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+        x: u8,
+    ) -> bool {
+        let operation = Operation::Activation {
+            source: ActivationSource::Permanent(permanent),
+            ability_index,
+            targets: Vec::new(),
+            x,
+        };
+        let Some(model) = self.announced_model(player, &operation) else {
+            return false;
+        };
+        let payment = Payment {
+            owed: self.cost_components(player, &operation),
+            operation,
+            receipt: Default::default(),
+        };
+        let (cost, waterbend) = payment.mana();
+        model.payable(
+            self.pooled_mana(player),
+            self.help_obligations(player, cost, payment.help(), waterbend),
+            SourcePolicy::All,
+        )
+    }
+
     /// Whether `operation`, considered at priority, can pay `cost` beside
     /// its source's own costs and a `sacrifice` chosen for it.
     pub(crate) fn can_pay_announced_activation(

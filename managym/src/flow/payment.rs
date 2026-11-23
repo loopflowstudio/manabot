@@ -1170,34 +1170,6 @@ impl Game {
         candidates
     }
 
-    /// Can `source`'s waterbend ability be paid, its own {T} included?
-    pub(crate) fn can_pay_waterbend_activation(
-        &self,
-        player: PlayerId,
-        source: PermanentId,
-        ability: &ActivatedAbilityDefinition,
-    ) -> bool {
-        // An X cost is payable when its least X is.
-        let cost = ability.mana_cost.with_x(ability.x_min);
-        self.can_pay_with_waterbend(player, &cost, ability.tap_source.then_some(source))
-    }
-
-    /// Can `player` cover `cost` with untapped artifacts and creatures ({1}
-    /// each, generic only) plus available mana, `tapped` tapped anyway?
-    pub(crate) fn can_pay_with_waterbend(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        tapped: Option<PermanentId>,
-    ) -> bool {
-        let help = Help {
-            waterbend: cost.generic(),
-            ..Default::default()
-        };
-        let pool = self.pooled_mana(player);
-        self.payable_with_help(player, &pool, cost, help, help.waterbend, tapped)
-    }
-
     /// Pay `life` as a cost (CR 119.4) and record it on `receipt`. The
     /// caller has offered it only to a player who can pay it.
     pub(crate) fn pay_life_cost(
