@@ -147,6 +147,8 @@ The unequal-hit fixture in `managym/cards/tests/cards/fdn.rs` checks both native
 
 The catalog fixture update at `ef9a8011` supplied reference data. Count delivery from executable definitions and directed fixtures. The merge at `58896721` includes upstream MLX self-play work. Integrated consumer and budget checks remain open on the merged revision.
 
+Behavior review at `a36dcdb2`: both `drake_hatcher` debug card tests and the native snapshot test passed. Three focused text tests passed: Hatcher pending damage, manual mana-source Commands (including stale rejection with unchanged digest), and hidden-hand permutations. Hatcher spends only counters, so the earlier pooled-mana and receipt controls still apply. The Hatcher slice meets its working obligations. Continue the working phase with Hunter; the 73 primary rows, integrated replay/privacy parity and Engine Budget checks remain open.
+
 ## Next slice · High-Society Hunter
 
 From the same attack trigger, take the optional sacrifice and decline it in a sibling. Use a creature token to distinguish paying the sacrifice from qualifying for a death draw. Then destroy Hunter, another friendly nontoken creature and an opposing nontoken creature together. Expect two draws. Inspect the existing departure and trigger matching paths before adding a query. The deciding facts are which creatures died, their token status at departure and which one was Hunter. Link the passing fixture in the FDN cost-payment row.
