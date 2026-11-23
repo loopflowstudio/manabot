@@ -74,9 +74,7 @@ impl CastChoices {
         object: ObjectId,
     ) -> Option<&crate::flow::cast_permission::PlayGrant> {
         match self.route {
-            Some(PlayRoute::Grant(index)) => {
-                game.grants_naming(object).find(|grant| grant.key == index)
-            }
+            Some(PlayRoute::Grant(key)) => game.grant_by_key(object, key),
             _ => None,
         }
     }
@@ -215,13 +213,14 @@ impl Game {
                         if matches!(kind, Instant | Sorcery | Kindred) || (land && kind != Land) {
                             continue;
                         }
+                        let route = PlayRoute::GraveyardType { source, kind };
                         if !self
                             .state
                             .cast_permissions
                             .spent_types
-                            .contains(&(player, PlayRoute::GraveyardType { source, kind }))
+                            .contains(&(player, route))
                         {
-                            routes.push(PlayRoute::GraveyardType { source, kind });
+                            routes.push(route);
                         }
                     }
                 }

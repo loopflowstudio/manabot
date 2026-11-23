@@ -64,8 +64,8 @@ impl Game {
                         "using {} (object {}, {kind:?} for this turn)",
                         self.state[*source].name, self.state[*source].id.0
                     ),
-                    PlayRoute::Grant(index) => {
-                        let grant = self.grants_naming(*object).find(|g| g.key == *index)?;
+                    PlayRoute::Grant(key) => {
+                        let grant = self.grant_by_key(*object, *key)?;
                         let price = self.grant_cast_cost(grant).map(|cost| {
                             if cost.mana_value == 0 && cost.x == 0 {
                                 "{0}".into()
@@ -79,7 +79,7 @@ impl Game {
                                 .origin
                                 .and_then(|id| default_content_pack().definition(id))
                                 .map(|def| def.name.clone())
-                                .unwrap_or_else(|| format!("permission {}", index + 1)),
+                                .unwrap_or_else(|| format!("permission {}", key + 1)),
                             price.map(|cost| format!(" for {cost}")).unwrap_or_default()
                         )
                     }

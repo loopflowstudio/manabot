@@ -391,7 +391,7 @@ impl Game {
     }
 
     /// The grants naming this exact card in its current zone appearance (CR 400.7).
-    pub(super) fn grants_naming(&self, object_id: ObjectId) -> impl Iterator<Item = &PlayGrant> {
+    fn grants_naming(&self, object_id: ObjectId) -> impl Iterator<Item = &PlayGrant> {
         self.state
             .cast_permissions
             .grants
@@ -399,6 +399,10 @@ impl Game {
             .filter(move |grant| {
                 grant.object == object_id && self.state.zones.zone_of(object_id).is_some()
             })
+    }
+
+    pub(super) fn grant_by_key(&self, object: ObjectId, key: usize) -> Option<&PlayGrant> {
+        self.grants_naming(object).find(|grant| grant.key == key)
     }
 
     /// The live grant letting `player` play this exact card now.

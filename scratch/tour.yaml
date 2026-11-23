@@ -1,4 +1,4 @@
-at: 13c81a90e4c9ab88e7aaf5335a35e9a10bcc8d00
+at: 7298598c473daec594b07bd82b16de0d6bb0f5e9
 first:
   - path: managym/README.md
     why: Which permission spends Muldrotha’s allowance
@@ -7,7 +7,7 @@ first:
   - path: managym/cards/src/fdn.rs
     why: Zul Ashur grants one targeted Zombie
   - path: managym/src/flow/cast_permission.rs
-    why: Exact grants and stable permission keys
+    why: Bind exact objects to stable grant keys
   - path: managym/src/flow/play.rs
     why: Enumerate permissions and bind announcement terms
   - path: managym/src/flow/action.rs
