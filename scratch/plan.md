@@ -2,11 +2,11 @@
 
 ## Working progress
 
-**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, ten have confirmed deferrals and 208 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
+**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, eleven have confirmed deferrals and 207 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
 
 ### Behavior after the shared repair at `12096ae8`
 
-**Surveil knowledge after resolution.** Milling either inspected card shifts the other to known position 0 for the chooser. Keeping both and reversing their order changes only positions 0 and 1. Hill Giant and Forest, previously placed by Accumulate Wisdom, remain known at positions 3 and 4. Four Lightshell cases passed on the rebuilt extension, covering native observations, v11, text, closed-opponent privacy and replay on independent forks.
+**Surveil knowledge after resolution.** Milling either inspected card shifts the other to known position 0 for the chooser. Keeping both and reversing their order changes only positions 0 and 1. Hill Giant and Forest, previously placed by Accumulate Wisdom, remain known at positions 3 and 4. Four Lightshell cases passed on the release extension rebuilt from merged snapshot `8aef2be7`, covering native observations, v11, text, closed-opponent privacy and replay on independent forks.
 
 **Focused evidence from constructed positions**
 
@@ -75,8 +75,10 @@ Leave pending in `fdn.jsonl` with exact missing authority and owning track:
 
 - **All-zone graveyard replacement:** Discard uses `move_object` and mill batches zone-move proposals. Stack departures also use the zone-move boundary, which handles flashback. In `flow/proposed_event.rs`, graveyard redirection in `normalize_proposal` is restricted to battlefield departures. Replacement discovery has no graveyard-destination arm for either Dryad Militant’s battlefield ability or Darksteel Colossus’s own reveal-and-shuffle instruction. Both belong to the replacement-events track.
 
+- **Different controllers:** Run Away Together needs one two-creature targeting clause. In `flow/play.rs`, `remaining_legal_targets` excludes previously chosen objects but accepts another creature with the same controller. In `flow/resolution.rs`, `resolution_targets` rechecks each slot and has a group check only for shared creature type. Separate caster-relative clauses would wrongly reject a pair whose creatures exchanged controllers before resolution. Defer to choice continuations.
+
 Candidates still to verify:
-- **Cross-target relational constraints:** `Run Away Together` (different controllers), `Drakuseth, Maw of Flames` (primary + up to 2 distinct other targets).
+- **Cross-target relational constraints:** `Drakuseth, Maw of Flames` (primary + up to 2 distinct other targets).
 - **Reveal-until-matching with random bottom:** `Spinner of Souls`.
 - Any additional row identified in Step 0 whose printed text requires a substantial new authority from a parallel track (e.g., verify `Elenda` starting-life threshold, `Circuitous Route` basic-or-Gate union search, `Campus Guide` search-shuffle-then-top, `Goblin Oriflamme` / `Kitesail Corsair` while-attacking static, `Pirate's Cutlass` entry attach).
 
@@ -86,7 +88,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Triage + Token/Static/Lifegain Model Proof (run next)
 This slice tests the entire redesigned model immediately:
-1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and ten deferrals documented. Audit the remaining 208 rows against native rules, starting with Run Away Together. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
+1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and eleven deferrals documented. Audit the remaining 207 rows against native rules, starting with Drakuseth, Maw of Flames. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
 2. **Tokens + `StaticAbility::Continuous` proof:** Add `token.cat_1_1_w` and `token.cat_1_1_w_lifelink` in `tokens.rs`. Author **Arahbo, the First Fang**, **Helpful Hunter**, **Prideful Parent**, **Regal Caracal**, and **Anthem of Champions** using `StaticAbility::Continuous`. Verify:
    - Arahbo + Helpful Hunter: Hunter draws 1, Arahbo creates 1 ordinary Cat (`token.cat_1_1_w`) that gets Arahbo's lord bonus and does *not* recursively trigger Arahbo; test both trigger orders.
    - Regal Caracal: creates 2 `token.cat_1_1_w_lifelink` tokens; remove Caracal and confirm those tokens retain lifelink while Arahbo's Cat does not.
