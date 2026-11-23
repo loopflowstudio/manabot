@@ -1,27 +1,17 @@
-at: 7298598c473daec594b07bd82b16de0d6bb0f5e9
+at: 08702060a7bd67c1e3213aaa6e2303bf335e48f8
 first:
-  - path: managym/README.md
-    why: Which permission spends Muldrotha’s allowance
-  - path: managym/cards/src/dom.rs
-    why: Muldrotha grants each permanent type
-  - path: managym/cards/src/fdn.rs
-    why: Zul Ashur grants one targeted Zombie
-  - path: managym/src/flow/cast_permission.rs
-    why: Bind exact objects to stable grant keys
-  - path: managym/src/flow/play.rs
-    why: Enumerate permissions and bind announcement terms
-  - path: managym/src/flow/action.rs
-    why: Price each route before offering it
-  - path: managym/src/flow/zones.rs
-    why: Commitment spends the selected quota
-  - path: managym/src/agent/structured_offer.rs
-    why: Targeted Commands retain the selected permission
-  - path: managym/src/agent/observation.rs
-    why: Project the cost, type and source
   - path: managym/cards/tests/cards/fdn.rs
-    why: Fork both permissions and counter the Ghoul
+    why: Inspect both grants and fork the quota choice
+  - path: managym/src/flow/cast_permission.rs
+    why: Enumerate grants independently of timing and payment
+  - path: managym/src/agent/observation.rs
+    why: Project public terms and each committed allowance
+  - path: managym/src/agent/observation_encoder.rs
+    why: Join grant and allowance programs to objects
+  - path: managym/src/agent/observation_json.rs
+    why: Preserve singleton grant bytes in saved captures
   - path: tests/semantic/test_text_observation.py
-    why: Execute both offers through the text player
-hide:
-  - path: protocol/
-    why: Schema descriptions mirror Rust field documentation
+    why: Inspect costs and allowances across consumers
+  - path: tests/env/test_game_snapshot.py
+    why: Execute an issued payment Command after reload
+hide: []
