@@ -8,44 +8,15 @@ The stale-object fixture bound the battlefield Ghoul through Lightning Bolt, mov
 
 Focused checks passed: the FDN overlap, counter and stale-address fixtures, native foretell, observation-field coverage, the experience protocol schema, and the Python snapshot, text, Academy projection and bundled pinned-pilot cases. The optional frontier checkpoint was unavailable. Academy coverage exercised the board payload. The Python two-grant capture cases vary wire order on a recorded Zul position; the native fixture constructs both real grants.
 
-**Next slice.** Carry the first additional printed spell profile through a legal offer, payment, stack resolution and exact post-resolution permission. The remaining card ledger and Engine Budget stay open.
+The inspection fix landed on this branch at `08702060`. The native overlap fixture in `managym/cards/tests/cards/fdn.rs` creates both grants. Inspection reads `Game::play_grants_on` for the visible object before affordability filtering. The player's spent allowances survive an empty graveyard. Academy projects the same grant list, keeping the singleton wire form for older captures. The cold payment witness is `test_pending_cast_payment_command_survives_save_and_reload` in `tests/env/test_game_snapshot.py`. The integrated base now includes self-play from captured mid-game snapshots (`871315f5`).
 
-## Implemented slice · Overlapping casting permissions
+## Earlier permission evidence
 
-The same Hungry Ghoul now has separate priority offers for Zul Ashur and Muldrotha. Each offer prices its own route and carries it through announcement, payment preview and commitment. Muldrotha charges the chosen permanent type to its exact battlefield incarnation. The policy can read the base mana value, quota type and granting permanent on overlapping actions. A single-route Command retains its existing shape.
+Zul Ashur's activation resolved after Zul left play and granted only the targeted Hungry Ghoul access for the turn. The two-grant forks paid their selected costs in both orders. After a counter, the second Ghoul remained castable only on the Zul branch. Scarecrow Guide exposed both permanent-type choices, a returned Muldrotha had a fresh allowance, and a graveyard land play consumed the ordinary land allowance. Single-route Commands kept their existing shape. At `6bd5645d`, fifteen focused native cases and three Python consumer cases passed, including restricted mana, converge, foretell and the nested-filter receipt controls.
 
-Five directed native cases passed with the following filter. The two-grant fixture reverses storage order after registration and tests both insertion orders with zero and sufficient mana. In the counter forks, the second Hungry Ghoul was legal only after casting the first through Zul. Scarecrow Guide exercised both of its permanent types. A returned Muldrotha could grant another creature cast, and its graveyard land play used the regular land allowance.
+## Next slice
 
-```sh
-cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards -- muldrotha overlapping_grants_price_each_cast_in_both_orders flashback_is_exiled_when_countered_after_iroh_leaves zul_ashur_grants_one_exact_zombie_for_the_turn
-```
-
-The rebuilt CPython 3.13 extension passed both text-player variants, including native Command submission for both routes and the Academy action labels. The numeric-reading check and both bundled pinned pilots passed. The optional frontier checkpoint was unavailable. Three observability guards passed for the new static, its learning tokens and action columns. The registered-card Scryfall comparison and runtime token catalog check passed.
-
-**Behavior review at `6bd5645d`.** The earlier grant-order defect is closed. Fifteen focused debug cases and three Python consumer cases passed on this revision. The paid/free forks checked remaining pool totals in both insertion orders. The Zul/Muldrotha counter forks checked the second Ghoul's legality. Existing payment controls exercised restricted-before-ordinary automatic spending, manual pooled choices, different converge receipts and exclusion of a nested filter fee. Foretell supplied the private-exile control. The consumer run was `uv run --no-sync pytest -q tests/semantic/test_text_observation.py -k 'zul_ashur or foretold_card_and_its_permission'`.
-
-## Implemented slice · Zul Ashur
-
-At `97593abf6c9f1224f515f1cc5ea1fb6c0e819760`, Zul Ashur resolves its tap ability into the same exact-object grant record used by exile effects. The cast records whether flashback was used before announcement. Both viewers can see who may cast the Zombie and for what cost and duration. A same-named Zombie in the same graveyard has no such permission. The fixture covers a single public grant.
-
-Airbend on spells and permanents now uses one exile path. Foretell and airbend bind the object returned by the zone move, and casting and observation derive the cost from that grant's object (`f30fa54e`, `managym/src/flow/cast_permission.rs`). The FDN ledger records Zul Ashur's implementation and fixtures. The integrated base adds saved game positions and a new native allocator (`f7d353b8`, `52f8f2e4`). Use the integrated base for the pending Engine Budget comparison.
-
-The native fixture selected one of two eligible Hungry Ghouls, removed Zul while its activation was on the stack, and paid {1}{B} after resolution. Forks ended with the Ghoul on the battlefield or, when countered, back in the graveyard with no permission. Waiting until the next turn also removed permission. Commands from both the target and cast decision replayed and rejected stale submissions. A Lightning Bolt killed Zul after its caster paid 2 life. In the CPython 3.13 fixture, the text player cast the Ghoul, its permission columns were set, and both Academy viewer projections showed {1}{B} and this-turn expiry.
-
-Focused checks:
-
-```sh
-cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards -- zul_ashur every_effect_variant_reaches_the_learning_tokens flashback_is_exiled_when_countered_after_iroh_leaves airbend_permission sozins_comet_foretell_spending_choices_preserve_color_and_private_identity
-cargo test --manifest-path managym/Cargo.toml -p managym --lib runtime_only_programs_have_catalog_tokens
-cargo test --manifest-path managym/Cargo.toml -p managym --test conformance_tests every_registered_real_card_matches_scryfall
-uv run --extra play --extra dev pytest -q tests/semantic/test_text_observation.py -k 'zul_ashur or foretold_card_and_its_permission'
-```
-
-Nine native tests and both Python cases passed (the Zul text test passed on rerun after scoping its action selector to the legal-action list). The wheel was rebuilt for CPython 3.13 and its extension installed atomically in this checkout.
-
-## Earlier controls
-
-At `0fdc98ca` review identified the grant-order defect by inspection. The later overlap fixtures above exercise that case. Eleven focused cases passed with the existing debug binary, including restricted mana, manual spending, converge and nested-filter receipts. Both Zul and foretell text fixtures passed. The offline Cargo index lacked mimalloc on that run.
+Use Smaug, the Great Calamity // Spew Flame from hand as the first Adventure. Follow one physical card from the two native offers through profile-specific cost, target, payment and stack characteristics. Fork successful Spew Flame resolution and a counter. Verify the resulting exile incarnation alone grants a subsequent Smaug cast, then cast it. Inspect both profiles through policy input, text and Academy and replay the selected Command. Reuse the exact-object grant for the resulting access and carry the selected printed program on the existing cast transaction. The Bilbo competing-replacement fixture below remains part of integrated acceptance.
 
 ## Scope
 

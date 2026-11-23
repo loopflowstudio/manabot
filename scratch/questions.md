@@ -9,3 +9,5 @@ Concept review chooses direct native offers for consequential permission and pro
 Exact-object grants receive local keys when granted. Cleanup can reorder the surviving records without changing the meaning of a selected offer. An unambiguous priority action omits the route from its Command.
 
 Singleton grants keep their existing wire shape for retained captures. The public Python list covers any number of grants. The cold-payment fixture uses a normally played Gray Ogre because a replay file needs a recoverable action history.
+
+The next slice starts Smaug // Spew Flame in hand to exercise a second printed program before adding Bilbo’s competing exile replacement.
