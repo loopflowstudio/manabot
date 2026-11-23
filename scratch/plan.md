@@ -2,7 +2,7 @@
 
 ## Working progress
 
-Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions, Ajani's Pridemate, Drogskol Reaver, Marauding Blight-Priest, Twinflame Tyrant, Fog Bank and Gratuitous Violence. Twelve cards have documented deferrals and 195 await audit.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (“Kellan, Planar Trailblazer”, “Imprisoned in the Moon” and “Doubling Season”). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions, Ajani's Pridemate, Drogskol Reaver, Marauding Blight-Priest, Twinflame Tyrant, Fog Bank and Gratuitous Violence. Twelve cards have documented deferrals and 195 await audit.
 
 **Arahbo and Helpful Hunter.** Both native trigger orders resolve from the same position. Foggy Swamp Visions exiled Arahbo from the graveyard. Its token copy entered alone and created exactly one 2/2 Cat. The learning-token streams differed with and without the self-entry alternative. With Scout's Warning available, both text Commands put the named source on the stack first, below the other trigger. Each replay reproduced the digest and rejected stale resubmission. Both choices were valid in v11. The draw was visible in the owner's hand and hidden from the closed opponent's observation and Academy projection.
 
@@ -131,10 +131,13 @@ The closed-deck fixture in `managym/cards/tests/cards/dka.rs` checks both seats 
 
 **Gratuitous Violence.** Three directed Onslaught tests passed. Mongoose Lizard dealt 2 to a friendly Wall of Stone and Lightning Bolt dealt 3. A sacrificed friendly Fanatical Firebrand dealt 2 to its controller, while an opposing Firebrand or a friendly one made an artifact before payment dealt 1. Each stacked activation resolved with the same damage on a fork where the card returned with the opposite creature status.
 
-**Next slice.** Implement opponent-scoped entry tapped for Authority of the Consuls and preserve Zhao’s pinned tokens.
+At `2cc29796`, `damage_source_facts` in `managym/src/flow/proposed_event.rs` reads controller and effective creature status once per proposal. The lookup follows the source object through the battlefield, stack or last known information. The returned Firebrand has a different object identity. Keep the three Onslaught fixtures as the source-matching regression checks.
 
 ### Slice 3 — Composable Replacements & Token-Multiplier Proof
-1. Controller-scoped damage modification is implemented. Fog Bank’s endpoint-scoped prevention is implemented. Gratuitous Violence source matching is implemented. Add opponent-scoped entry-tapped replacement while preserving Zhao’s pinned tokens.
+
+**Next slice — Authority of the Consuls.** Exercise an opponent’s creature entering from the entry proposal through trigger resolution. Check that it arrives tapped before the Authority controller gains 1 life. A friendly creature should arrive untapped and cause no gain. Include an opposing noncreature as the predicate control.
+
+1. Extend the battlefield source’s static entry restriction in `flow/proposed_event.rs`. Zhao’s `StaticAbility::EntersTapped(nonbasic_land())` in `cards/src/tla.rs` already matches entrants under either controller. Preserve its behavior and frozen tokens. Diregraf Ghoul can use the existing self-entry replacement.
 2. Add remaining FDN token faces needed for this slice (`token.goblin_1_1_r`, `token.knight_1_1_w`, `token.soldier_1_1_w`, `token.dragon_4_4_r_flying`, `token.elf_warrior_1_1_g`, `token.zombie_2_2_b`, `token.dog_1_1_w`, `token.beast_4_4_g`, `token.insect_1_1_bg_flying`, `token.faerie_1_1_u_flying`).
 3. Twinflame Tyrant, Fog Bank and Gratuitous Violence are implemented. Author **Authority of the Consuls**, **Diregraf Ghoul**, **Dragon Fodder**, **Impact Tremors**, **Heroic Reinforcements**, and remaining ready replacement cards (`Elspeth's Smite`, `Scorching Dragonfire`, `Obliterating Bolt`, `Grappling Kraken`, `Fleeting Flight` if local).
 4. Verify:
