@@ -1,4 +1,4 @@
-at: 72d87467cea0bf705d61954b0326bdae5646be98
+at: 5a43ee032a8f71ce4bf59fd601793592c3f2f78c
 first:
   - path: managym/src/flow/resolution_tests.rs
     why: Follow both suspended Time Stop cleanup choices
@@ -42,4 +42,6 @@ first:
     why: Compare manual and automatic payment branches
   - path: managym/cards/tests/cards/msh.rs
     why: Fork sacrifice, countering and delegated payment
+  - path: managym/examples/bench_states.rs
+    why: Compare identical Herald boards at twenty and zero life
 hide: []
