@@ -18,5 +18,7 @@ Judge measured gains against preserved semantics and the remaining useful opport
    regression threshold as proof that optimization is complete. Missing capable
    hardware is a named gate/CI check, not fabricated measurement.
 
-Update existing findings for the navigation decision. Preserve performance budget
-reference adoption as its existing reviewed operation, not automatic regeneration.
+Update existing findings and `scratch/plan.md` for the navigation decision.
+Don't change code; leave fixes for `implement` so the loop re-reviews the final
+diff. Preserve performance budget reference adoption as its existing reviewed
+operation, not automatic regeneration.
