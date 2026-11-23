@@ -4,12 +4,23 @@
 use super::bindings::{map_agent_err, ActionSpaceEnum, PhaseEnum, PyEnv};
 use crate::agent::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};
 use pyo3::prelude::*;
+use std::sync::Arc;
 
 #[pyclass(name = "GameSnapshot", frozen)]
-pub(super) struct PyGameSnapshot(pub(super) GameSnapshot);
+pub(super) struct PyGameSnapshot(pub(super) Arc<GameSnapshot>);
 
 #[pymethods]
 impl PyGameSnapshot {
+    #[getter]
+    fn state_digest(&self, py: Python<'_>) -> String {
+        py.allow_threads(|| self.0.state_digest().to_owned())
+    }
+
+    #[getter]
+    fn seed(&self) -> u64 {
+        self.0.seed()
+    }
+
     #[pyo3(signature = (options=None))]
     fn restore(&self, py: Python<'_>, options: Option<&PyRestoreOptions>) -> PyResult<PyEnv> {
         let options = options.map(|o| o.0).unwrap_or_default();
@@ -36,13 +47,13 @@ impl PyGameSnapshot {
     #[staticmethod]
     fn from_replay_json(py: Python<'_>, raw: &str) -> PyResult<Self> {
         py.allow_threads(|| GameSnapshot::from_replay_json(raw))
-            .map(Self)
+            .map(|snapshot| Self(Arc::new(snapshot)))
             .map_err(map_agent_err)
     }
 }
 
 #[pyclass(name = "RestoreOptions", frozen)]
-pub(super) struct PyRestoreOptions(RestoreOptions);
+pub(super) struct PyRestoreOptions(pub(super) RestoreOptions);
 #[pymethods]
 impl PyRestoreOptions {
     #[new]
@@ -100,7 +111,7 @@ impl PyRestoreOptions {
 }
 
 #[pyclass(name = "SnapshotMetadata", frozen)]
-pub(super) struct PySnapshotMetadata(SnapshotMetadata);
+pub(super) struct PySnapshotMetadata(pub(super) SnapshotMetadata);
 #[pymethods]
 impl PySnapshotMetadata {
     #[getter]

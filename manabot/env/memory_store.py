@@ -540,7 +540,7 @@ class MemoryStore:
                 if isinstance(old, Prefix)
                 and old.native_epoch == int(selected_epochs[index])
                 and selected_seeds[index] == self._live_metadata[row, seat, 1]
-                else PrefixIdentity(str(seeds[row]), seat, str(seeds[row]))
+                else PrefixIdentity(str(seeds[row]), seat, str(int(selected_epochs[index])))
             )
             previous[index] = self._capture_live_admitted(
                 buffers,

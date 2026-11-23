@@ -99,7 +99,7 @@ class BufferedStreams:
 
     def write_observations_for_players(
         self,
-        players: list[int],
+        players: Sequence[int | None],
         buffers: dict[str, Array],
         action_overflow: Literal["error", "first-legal"] = "error",
         *,
@@ -109,6 +109,11 @@ class BufferedStreams:
         self._rows(len(players))
         for value in buffers.values():
             self._rows(len(value))
+        selected = [
+            shard
+            for shard in self._shards
+            if any(player is not None for player in players[shard.start : shard.stop])
+        ]
         reads = self._run(
             [
                 partial(
@@ -121,7 +126,7 @@ class BufferedStreams:
                     action_overflow,
                     layout=layout,
                 )
-                for shard in self._shards
+                for shard in selected
             ]
         )
         return [
@@ -132,7 +137,7 @@ class BufferedStreams:
                 read.seed,
                 read.revision,
             )
-            for shard, local in zip(self._shards, reads, strict=True)
+            for shard, local in zip(selected, reads, strict=True)
             for read in local
         ]
 
@@ -169,11 +174,12 @@ class BufferedStreams:
 
     def current_matchup_indices(self) -> list[tuple[int, int]]:
         self._check()
-        return [
+        pairs = [
             pair
             for shard in self._shards
             for pair in shard.native.current_matchup_indices()
         ]
+        return pairs if len(pairs) == self.num_envs else []
 
     def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self._run(
@@ -296,6 +302,44 @@ class BufferedStreams:
         return [
             seed for shard in self._shards for seed in shard.native.current_game_seeds()
         ]
+
+    def next_fresh_seeds(self) -> list[int]:
+        self._check()
+        return [
+            seed for shard in self._shards for seed in shard.native.next_fresh_seeds()
+        ]
+
+    def _read_slots[T](
+        self,
+        mask: Sequence[bool],
+        read: Callable[[CapturedVector, Sequence[bool]], list[T | None]],
+    ) -> list[T | None]:
+        self._rows(len(mask))
+        selected = [
+            shard for shard in self._shards if any(mask[shard.start : shard.stop])
+        ]
+        batches = self._run(
+            [
+                partial(read, shard.native, mask[shard.start : shard.stop])
+                for shard in selected
+            ]
+        )
+        result: list[T | None] = [None] * self.num_envs
+        for shard, rows in zip(selected, batches, strict=True):
+            result[shard.start : shard.stop] = rows
+        return result
+
+    def snapshot_slots(self, mask: Sequence[bool]) -> list[managym.GameSnapshot | None]:
+        return self._read_slots(
+            mask, lambda native, selected: native.snapshot_slots(selected)
+        )
+
+    def slot_metadata(
+        self, mask: Sequence[bool]
+    ) -> list[managym.SnapshotMetadata | None]:
+        return self._read_slots(
+            mask, lambda native, selected: native.slot_metadata(selected)
+        )
 
     def current_game_generations(self) -> list[int]:
         self._check()

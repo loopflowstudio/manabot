@@ -14,12 +14,13 @@ use crate::{
     },
     state::{card::CardDefId, game_object::ObjectId},
 };
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::OnceLock};
 
 mod replay;
 
 /// A detached live position shareable by any number of restoring threads.
 pub struct GameSnapshot {
+    digest: OnceLock<String>,
     state: TrackedState,
     decision_memory: [DecisionLog; 2],
     memory_enabled: bool,
@@ -92,12 +93,24 @@ pub struct SnapshotMetadata {
 }
 
 impl Env {
+    pub fn snapshot_metadata(&self) -> Result<SnapshotMetadata, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("snapshot before reset".into()))?;
+        Ok(SnapshotMetadata::from_position(
+            &game.state,
+            game.current_action_space.as_ref(),
+        ))
+    }
+
     pub fn snapshot(&self) -> Result<GameSnapshot, AgentError> {
         let game = self
             .game
             .as_ref()
             .ok_or_else(|| AgentError("snapshot before reset".into()))?;
         Ok(GameSnapshot {
+            digest: OnceLock::new(),
             state: game.state.clone(),
             decision_memory: game.decision_memory.clone(),
             memory_enabled: game.decision_memory_enabled,
@@ -185,7 +198,10 @@ impl GameSnapshot {
     fn live_env(&self) -> Env {
         let game = Game {
             state: self.state.clone(),
-            decision_memory: self.decision_memory.clone(),
+            decision_memory: self
+                .decision_memory
+                .each_ref()
+                .map(DecisionLog::fork_lineage),
             decision_memory_enabled: self.memory_enabled,
             decision_memory_include_own: self.include_own,
             policy_history: self.history.clone(),
@@ -221,33 +237,72 @@ impl GameSnapshot {
     }
 
     pub fn metadata(&self) -> SnapshotMetadata {
+        SnapshotMetadata::from_position(&self.state, self.action_space.as_ref())
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.reset_seed
+    }
+
+    pub fn state_digest(&self) -> &str {
+        self.digest.get_or_init(|| {
+            state_digest(
+                &self.state,
+                &self.action_space,
+                &self.pending_choice,
+                self.skip_trivial,
+                self.skipped,
+            )
+        })
+    }
+
+    pub(crate) fn compatible(
+        &self,
+        options: RestoreOptions,
+        policies: [PlayerPolicy; 2],
+        skip_trivial: bool,
+        memory: bool,
+        include_own: bool,
+    ) -> bool {
+        self.policies == policies
+            && self.skip_trivial == skip_trivial
+            && options
+                .enable_decision_memory
+                .unwrap_or(self.memory_enabled)
+                == (memory || include_own)
+            && self.include_own == include_own
+    }
+}
+
+impl SnapshotMetadata {
+    fn from_position(state: &TrackedState, space: Option<&ActionSpace>) -> Self {
         let mut definitions = BTreeSet::new();
         let mut board_counts = [0; 2];
         for seat in [PlayerId(0), PlayerId(1)] {
-            for &object in self.state.zones.battlefield_objects(seat) {
-                if let Some(id) = self.state.permanent_of(object) {
-                    let permanent = self.state.permanents[id]
+            for &object in state.zones.battlefield_objects(seat) {
+                if let Some(id) = state.permanent_of(object) {
+                    let permanent = state.permanents[id]
                         .as_ref()
                         .expect("live battlefield permanent");
                     board_counts[permanent.controller.0] += 1;
-                    definitions.insert(self.state[object].definition_id);
+                    definitions.insert(state[object].definition_id);
                 }
             }
         }
         definitions.extend(
-            self.state
+            state
                 .stack_objects
                 .iter()
                 .map(|obj| obj.source_definition_id()),
         );
-        let terminal = self.state.is_game_over();
-        let space = self.action_space.as_ref().filter(|_| !terminal);
+        let terminal = state.is_game_over();
+        let space = space.filter(|_| !terminal);
         SnapshotMetadata {
-            turn: self.state.turn.turn_number,
-            phase: self.state.turn.current_phase_kind(),
-            life: self.state.players.each_ref().map(|p| p.life),
+            turn: state.turn.turn_number,
+            phase: state.turn.current_phase_kind(),
+            life: state.players.each_ref().map(|p| p.life),
             board_counts,
-            stack_len: self.state.stack_objects.len(),
+            stack_len: state.stack_objects.len(),
             action_count: space.map_or(0, |s| s.actions.len()),
             action_kind: space.map(|s| s.kind),
             acting_player: space.and_then(|s| s.player).map(|p| p.0),
@@ -279,6 +334,38 @@ pub(super) fn state_digest(
 mod tests {
     use super::*;
     use std::thread;
+
+    #[test]
+    fn every_materialized_branch_starts_a_new_incremental_memory_write() {
+        use crate::agent::decision_memory::{encode_suffix, MemoryEncoding};
+
+        let mut source = Env::new(42, true, false, false).with_decision_memory_include_own(true);
+        source
+            .reset(
+                ["a", "b"]
+                    .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 12)])))
+                    .to_vec(),
+            )
+            .unwrap();
+        source.step(0).unwrap();
+        let snapshot = source.snapshot().unwrap();
+        for viewer in 0..2 {
+            let mut cursor = MemoryEncoding::default();
+            for env in [
+                &source,
+                &snapshot.restore(Default::default()).unwrap(),
+                &snapshot.restore(Default::default()).unwrap(),
+                &source.fork().unwrap(),
+            ] {
+                let log = &env.game.as_ref().unwrap().decision_memory[viewer];
+                let (starts, rows) = encode_suffix(log, &mut cursor);
+                assert_eq!(starts, [0; 4]);
+                assert!(rows.reset && !rows.records.is_empty());
+                let (_, repeated) = encode_suffix(&log.clone(), &mut cursor);
+                assert!(!repeated.reset && repeated.records.is_empty());
+            }
+        }
+    }
 
     #[test]
     fn concurrent_exact_snapshots_preserve_the_witness_and_live_decision_memory() {

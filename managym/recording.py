@@ -5,7 +5,7 @@ supply destinations and context; no training run or phase is discovered here.
 Journals publish intent before native reads, then acknowledge observed returns.
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import cache
@@ -1187,6 +1187,9 @@ _VECTOR_READS = frozenset(
         "decision_memory_counts",
         "decision_memory_cursors",
         "current_game_seeds",
+        "next_fresh_seeds",
+        "snapshot_slots",
+        "slot_metadata",
         "current_matchup_indices",
         "current_player_configs",
         "get_last_info",
@@ -1315,7 +1318,7 @@ class CapturedVector(_Capture):
 
     def write_observations_for_players(
         self,
-        players: list[int],
+        players: Sequence[int | None],
         buffers: dict[str, np.ndarray],
         action_overflow: Literal["error", "first-legal"] = "error",
         *,
