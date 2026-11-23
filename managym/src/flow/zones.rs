@@ -427,10 +427,24 @@ impl Game {
 
     /// Allocate a newly created token or spell copy outside every zone.
     /// All companion stores grow here, in the same creation order.
-    pub(crate) fn add_object(&mut self, object: Object) -> ObjectId {
+    fn add_object(&mut self, object: Object) -> ObjectId {
         self.state.objects.push(object);
         self.state.object_to_permanent.push(None);
         self.state.zones.allocate()
+    }
+
+    /// An object created in a zone starts at its first incarnation. Record its
+    /// entry for capture without emitting a rules zone-change event.
+    pub(crate) fn add_object_in_zone(
+        &mut self,
+        object: Object,
+        holder: PlayerId,
+        zone: ZoneType,
+    ) -> ObjectId {
+        let id = self.add_object(object);
+        self.state.place_object(id, holder, zone);
+        self.capture_object_move(id, None, Some(zone), holder);
+        id
     }
 
     /// Count permanents a player controls matching a predicate (e.g.

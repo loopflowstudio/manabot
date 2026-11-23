@@ -13,6 +13,7 @@ use crate::{
         ability::{effect_target_requirements, TargetRequirement},
         game_object::{PlayerId, Target},
         stack_object::StackObject,
+        zone::ZoneType,
     },
 };
 
@@ -175,9 +176,7 @@ impl Game {
                     id,
                     controller,
                 );
-                let copied = self.add_object(copy);
-                self.state
-                    .place_object(copied, controller, crate::state::zone::ZoneType::Stack);
+                let copied = self.add_object_in_zone(copy, controller, ZoneType::Stack);
                 spell.id = id;
                 spell.object = copied;
                 spell.controller = controller;

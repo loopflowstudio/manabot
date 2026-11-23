@@ -430,6 +430,61 @@ mod tests {
     }
 
     #[test]
+    fn capture_tracks_a_copied_spell_from_stack_entry_until_it_ceases() {
+        use crate::state::game_object::Target;
+        use ZoneType::{Graveyard, Stack};
+
+        let (caster, copier) = (PlayerId(0), PlayerId(1));
+        let mut players = configs();
+        players[0] = PlayerConfig::new("a", BTreeMap::from([("Lightning Bolt".into(), 20)]));
+        let mut game = Game::new_capturing(players, 17, true);
+        let card = game.state.zones.zone_objects(ZoneType::Hand, caster)[0];
+        let spell = game.push_spell_to_stack(
+            card,
+            caster,
+            vec![Target::Player(caster)],
+            vec![0],
+            Default::default(),
+        );
+        let Some(Target::StackSpell(copy)) =
+            game.copy_stack_object(Target::StackSpell(spell), copier)
+        else {
+            panic!("expected a spell copy");
+        };
+        assert_ne!(copy.slot(), spell.slot());
+        game.resolve_top_of_stack();
+        game.perform_state_based_actions();
+
+        let moves: Vec<_> = game
+            .card_capture
+            .as_ref()
+            .unwrap()
+            .moves
+            .iter()
+            .filter(|m| m.object.copy == copy.slot())
+            .collect();
+        let chain: Vec<_> = moves
+            .iter()
+            .map(|m| (m.from, m.object.zone, m.object.incarnation))
+            .collect();
+        assert_eq!(
+            chain,
+            [
+                (None, Some(Stack), 0),
+                (Some(Stack), Some(Graveyard), 1),
+                (Some(Graveyard), None, 1)
+            ]
+        );
+        assert_eq!(moves[0].object.name, "Lightning Bolt");
+        assert_eq!(moves[0].object.origin, "generated");
+        assert_eq!(
+            (moves[0].object.owner, moves[0].controller),
+            (copier.0, copier.0)
+        );
+        assert_eq!(moves[0].cause, "move");
+    }
+
+    #[test]
     fn turn_budget_includes_modal_and_pooled_mana_and_counts_only_real_spends() {
         use crate::{
             flow::decision::SpendCompletion,
