@@ -13,6 +13,7 @@ import numpy as np
 
 from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch, TrajectorySpan
+from manabot.training.rollout.signals import BatchSignals
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Array,
@@ -24,17 +25,6 @@ from manabot.training.updates.backend import (
 )
 from manabot.training.updates.bootstrap import bootstrap_predictions
 from manabot.training.updates.selection import SourceSelection, select_sources
-
-
-@dataclass(frozen=True)
-class BatchSignals:
-    """Read-only host arrays [N] in flat rollout order, including discovery rows."""
-
-    critic_residual: np.ndarray
-    positive_value_loss: np.ndarray
-    policy_entropy: np.ndarray
-    wdl_entropy: np.ndarray | None
-    action_value_spread: np.ndarray | None
 
 
 @dataclass(frozen=True)

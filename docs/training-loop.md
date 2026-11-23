@@ -302,7 +302,9 @@ uninterrupted hot-cached bank.
   captures on decisions with at least `min_legal_actions` (default `2`),
   capped by `max_captures_per_batch` and restricted to fresh games when
   `fresh_only=True` (the default). Pass an optional Python `capture_predicate`
-  to `self_play` or `open_collector` for runtime filtering. Captures are taken
+  to `self_play` or `open_collector` for runtime filtering. It receives a
+  `CaptureDecision` with the slot, chooser, one-based episode decision number,
+  legal action count and optional branch. Captures are taken
   before stepping the chosen action and staged per live episode; if an episode
   fails under `GameErrorPolicy` ([game failures](training.md#game-failures)),
   its staged captures are discarded with its rows.
@@ -312,7 +314,9 @@ uninterrupted hot-cached bank.
   rate of `min(replay_fraction, 1 - fresh_floor)`. The scheduler runs a fresh
   game whenever the bank is empty or the next whole `K`-sibling group would
   exceed its remaining replay allowance; unused empty-bank allowance expires so
-  warmup never causes a replay burst.
+  warmup never causes a replay burst. With isolated game-error recovery, the
+  scheduler keeps replay allowance for up to `max_group_retries` extra starts
+  per concurrent group so it can retry after the row floor is met.
 - **Group draining:** Drawing a snapshot group enqueues all `K` siblings
   `(group_id, branch_index=0..K-1)`. Free streams pull pending siblings before
   starting new work. Once the batch meets its row floor, no new episodes or
@@ -432,9 +436,15 @@ batch and learning rule into the update. Supply the collection policy as
 ```python
 from manabot.training.updates.targets import compute_batch_targets
 
-admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
-targets = compute_batch_targets(backend, learner, admitted, learning, bootstrap_agent)
-metrics = update_damped_iteration(backend, learner, batch, learning, iteration, targets=targets)
+with bank.begin_batch() as plan:
+    batch = collect(collector, behavior_agent, num_steps, snapshot_plan=plan)
+    admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
+    targets = compute_batch_targets(backend, learner, admitted, learning, behavior_agent)
+    metrics = update_damped_iteration(
+        backend, learner, batch, learning, iteration, targets=targets
+    )
+    assert plan.receipt is not None
+    bank.commit(plan.receipt, targets.signals)
 ```
 
 PPO accepts the same `targets=` argument. Each available array in
@@ -442,7 +452,10 @@ PPO accepts the same `targets=` argument. Each available array in
 zero-weight rows. To score action-value spread, supply `action_values=` to
 `compute_batch_targets` with one value per legal offer in
 `batch.action_data.slots` order. A bank commits its receipt and these signals
-after the update succeeds.
+after the update succeeds. Exiting the plan releases uncommitted captures.
+Call `bank.close()` before closing the vector to release cached handles.
+The Python vector caches the resolved native setup and replays the saved
+actions on each install. Both hot and cold installs verify the resulting digest.
 
 ### Requirements, accounting and recovery
 
@@ -462,10 +475,11 @@ after the update succeeds.
   copies scheduler cursors, RNG and fractional replay allowance into an
   isolated `BatchPlan` for `collect()`. Committed bank state mutates only
   inside `SnapshotBank.commit(receipt, signals)` after `learn()` succeeds,
-  guarded by `receipt.base_generation == bank.generation`. Any collection
-  error, game failure or `NumericalError` leaves the committed bank untouched
-  in memory and on disk. `self_play` saves `Counts.snapshot_bank` (schema v1
-  JSON with cold `SnapshotRecipe` entries) on `run.save()` and restores it
+  guarded by `receipt.base_generation == bank.generation`. An aborted update
+  preserves the previous generation. A recovered game failure consumes its
+  episode start and contributes no captures or scoring rows to the eventual
+  commit. `self_play` saves `Counts.snapshot_bank` (schema v1 JSON with cold
+  `SnapshotRecipe` entries) on `run.save()` and restores it
   before opening streams on `--resume` ([recovery](training.md#recovery)).
 
 ## Write your own loop

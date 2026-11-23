@@ -1,10 +1,10 @@
 """Packed seat trajectories bootstrap at their viewer's frozen game revision."""
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import replace
-from typing import Literal
+from typing import Any, Literal
 from unittest.mock import patch
 
 import numpy as np
@@ -16,8 +16,8 @@ import manabot.backends.torch as backend
 from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
-from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation
 from manabot.env.observation import (
@@ -49,10 +49,17 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.snapshot_vector import (
-    InstalledSlot,
-    SlotInstall,
+    InMemorySnapshotVector,
     SnapshotBranch,
     SnapshotRecipe,
+)
+from manabot.training.rollout.snapshots import (
+    CapturePolicy,
+    EntrySignals,
+    SnapshotBank,
+    SnapshotBankState,
+    SnapshotConfig,
+    root_id,
 )
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -80,25 +87,6 @@ def bounded_torch() -> Iterator[None]:
             yield
     finally:
         torch.set_num_threads(previous)
-
-
-class ReplayVector(CapturedVector):
-    """One native stream restores a root by replaying its exact action prefix."""
-
-    def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]:
-        [request] = installs
-        assert request.slot == 0
-        if request.recipe is None:
-            self.reset_seeds_into_buffers([55])
-        else:
-            game = request.recipe
-            self.reset_all_into_buffers(Match(game.match).to_rust())
-            self.reset_seeds_into_buffers([game.seed])
-            for action in game.actions:
-                self.step_into_buffers([int(action)])
-        [digest] = self.native.state_digests()
-        assert digest is not None
-        return [InstalledSlot(0, digest, self.current_agent_indices()[0])]
 
 
 def replay_root(
@@ -139,20 +127,16 @@ def replay_collector(
     space: ObservationSpace,
     recipe: SnapshotRecipe,
     *,
+    num_envs: int = 1,
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
 ) -> Iterator[Collector]:
-    vector = ReplayVector(
-        num_envs=1,
-        seed=11,
-        decision_memory=recipe.decision_memory,
-        decision_memory_include_own=recipe.decision_memory_include_own,
-    )
+    vector = InMemorySnapshotVector.factory(space, Match(recipe.match), num_envs, 42)
     collector = open_collector(
         space,
         Match(recipe.match),
         Reward(RewardConfig()),
-        num_envs=1,
+        num_envs=num_envs,
         opponent_mode="self",
         snapshot_vector=vector,
         game_errors=game_errors,
@@ -162,7 +146,11 @@ def replay_collector(
     try:
         # Fix the random draw to the first legal offer on this retained line.
         with patch.object(
-            torch, "multinomial", return_value=torch.zeros((1, 1), dtype=torch.long)
+            torch,
+            "multinomial",
+            side_effect=lambda probs, *args, **kwargs: torch.zeros(
+                (len(probs), 1), dtype=torch.long
+            ),
         ):
             yield collector
     finally:
@@ -1017,3 +1005,451 @@ def test_mlx_scalar_critic_only_step_and_zero_weight_adam_state() -> None:
         np.testing.assert_array_equal(value, after[key])
     for key, value in mlx.arrays.flat_numpy(learner.optimizer.state).items():
         np.testing.assert_array_equal(value, adam[key])
+
+
+def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> None:
+    agent = scalar_backend_agent()
+    space = agent.observation_space
+    recipe, _ = replay_root(space)
+    config = SnapshotConfig(
+        capacity=2,
+        replay_fraction=1,
+        fresh_floor=0,
+        group_size=5,
+        horizon=2,
+        fresh_weight=0,
+        score_half_life=0.1,
+        capture=CapturePolicy(
+            every_n_decisions=2, max_captures_per_batch=8, fresh_only=False
+        ),
+    )
+    learning = DampedPolicyLearning(gradient="damped_policy")
+    learner = Learner(agent, "cpu", minibatch_rows=16)
+    # Both native vectors follow the same fresh stream; only one bank forgets its handles.
+    with (
+        replay_collector(space, recipe, num_envs=2) as left,
+        replay_collector(space, recipe, num_envs=2) as right,
+    ):
+        banks = [SnapshotBank(config), SnapshotBank(config)]
+        warm_ids: set[int] = set()
+        for generation in range(1, 4):
+            retained = []
+            assignments = []
+            for i, (bank, collector) in enumerate(
+                zip(banks, (left, right), strict=True)
+            ):
+                with (
+                    bank.begin_batch() as plan,
+                    patch.object(
+                        collector._env,
+                        "install_slots",
+                        wraps=collector._env.install_slots,
+                    ) as installs,
+                ):
+                    batch = collect(collector, agent, 1, snapshot_plan=plan)
+                    receipt = plan.receipt
+                    assert receipt is not None
+                    targets = compute_batch_targets(
+                        backend, learner, AdmittedRollout(agent, batch), learning
+                    )
+                    if generation == 1:
+                        assert not np.any(batch.sample_weight)
+                        metrics = update_damped_iteration(
+                            backend, learner, batch, learning, 1, targets=targets
+                        )
+                        assert metrics["optimizer_exposures"] == 0
+                        # Every pre-step capture maps to its actual packed chooser row.
+                        for candidate in receipt.captures:
+                            captured = candidate.snapshot
+                            span = next(
+                                s
+                                for s in batch.trajectories
+                                if s.start <= candidate.row < s.stop
+                            )
+                            assert span.seat == captured.root_chooser
+                            assert candidate.row in candidate.episode_rows
+                            game = captured.recipe
+                            scalar = managym.Env(
+                                seed=game.seed,
+                                decision_memory=game.decision_memory,
+                                decision_memory_include_own=game.decision_memory_include_own,
+                            )
+                            observation, _ = scalar.reset(Match(game.match).to_rust())
+                            for action in game.actions:
+                                observation, *_ = scalar.step(action)
+                            assert scalar.state_digest() == game.root_digest
+                            expected = encode_observation(space, observation)
+                            actual = batch.observations(
+                                np.array([candidate.row])
+                            ).observation
+                            for key in actual:
+                                np.testing.assert_array_equal(
+                                    actual[key][0], expected[key]
+                                )
+                        assert len(receipt.captures) > config.capacity
+                    else:
+                        [visit] = receipt.visited_groups
+                        assert len(visit.roots) == 5 and len(visit.rows) == 10
+                        assert np.all(batch.is_root_decision.ravel()[list(visit.roots)])
+                        assert batch.actions.size == 10 and np.all(
+                            batch.sample_weight == 1
+                        )
+                        # A row floor of two drains K=5 on both slots in three waves.
+                        requests = [call.args[0] for call in installs.call_args_list]
+                        assert [len(wave) for wave in requests] == [2, 2, 1]
+                        if generation == 2:
+                            assert all(
+                                (req.hot_handle is None) == (i == 1)
+                                for wave in requests
+                                for req in wave
+                            )
+                    assignments.append(
+                        [
+                            (v.snapshot_id, v.group_id, v.roots)
+                            for v in receipt.visited_groups
+                        ]
+                    )
+                    bank.commit(receipt, targets.signals)
+                    with pytest.raises(ValueError, match="stale"):
+                        bank.commit(receipt, targets.signals)
+                    state = bank.state()
+                    assert (
+                        state.generation == generation
+                        and len(state.entries) == config.capacity
+                    )
+                    retained.append(state.model_dump_json())
+            assert retained[0] == retained[1] and assignments[0] == assignments[1]
+            if generation == 2:
+                assert warm_ids - {e.snapshot_id for e in banks[0].state().entries}
+            if generation == 1:
+                warm_ids = {e.snapshot_id for e in banks[0].state().entries}
+                banks[1].close()
+                banks[1] = SnapshotBank.from_state(
+                    config, SnapshotBankState.model_validate_json(retained[0])
+                )
+        for bank in banks:
+            bank.close()
+
+
+def test_failed_episodes_discard_captures_siblings_and_frozen_views() -> None:
+    agent = scalar_backend_agent()
+    space = agent.observation_space
+    recipe, _ = replay_root(space)
+    config = SnapshotConfig(
+        capacity=4,
+        replay_fraction=1,
+        fresh_floor=0,
+        group_size=2,
+        horizon=1,
+        max_group_retries=1,
+        capture=CapturePolicy(
+            every_n_decisions=1, max_captures_per_batch=5, fresh_only=False
+        ),
+    )
+    bank = SnapshotBank(config)
+    policy = GameErrorPolicy()
+    attempts: list[GameAttempt] = []
+
+    def record(state: GameErrorState, attempt: GameAttempt) -> GameErrorState:
+        attempts.append(attempt)
+        return settle(state, attempt, policy)
+
+    with replay_collector(
+        space, recipe, game_errors=policy, record_attempt=record
+    ) as collector:
+        info = collector._env.get_last_info
+
+        def fail_selected() -> list[dict[str, Any]]:
+            result = info()
+            branch = collector._episodes[0].branch
+            if not attempts or (
+                branch and branch.branch_group_id == 0 and branch.branch_index == 1
+            ):
+                result[0] = dict(result[0], game_error="injected game failure")
+            return result
+
+        with (
+            patch.object(collector._env, "get_last_info", side_effect=fail_selected),
+            patch.object(
+                collector._env, "release_handles", wraps=collector._env.release_handles
+            ) as release,
+        ):
+            learner = Learner(agent, "cpu", minibatch_rows=16)
+            for generation in (1, 2):
+                with bank.begin_batch() as plan:
+                    batch = collect(collector, agent, 1, snapshot_plan=plan)
+                    receipt = plan.receipt
+                    assert receipt is not None
+                    if generation == 1:
+                        failure, success = attempts
+                        assert (
+                            failure.outcome == "engine_error"
+                            and success.outcome == "completed"
+                        )
+                        assert {c.snapshot.recipe.seed for c in receipt.captures} == {
+                            success.seed
+                        }
+                        assert success.seed != failure.seed
+                        assert len(receipt.captures) == 4
+                        assert any(
+                            len(call.args[0]) == 1 for call in release.call_args_list
+                        )
+                    else:
+                        assert [a.outcome for a in attempts[2:]] == [
+                            "engine_error",
+                            "engine_error",
+                        ]
+                        assert plan.failed_branches == 2 and plan.discarded == {0}
+                        [visit] = receipt.visited_groups
+                        assert visit.group_id == 1
+                        assert batch.branch_group_id.ravel().tolist() == [1, 1]
+                        assert len(batch.next_done) == 2
+                        assert len(receipt.captures) == 2
+                        assert (
+                            receipt.next_scheduler_state.starts == 7
+                        )  # two fresh + three failed-group attempts + two siblings
+                    targets = compute_batch_targets(
+                        backend, learner, AdmittedRollout(agent, batch), Learning()
+                    )
+                    bank.commit(receipt, targets.signals)
+        assert sum(e.visits for e in bank.state().entries) == 1
+        bank.close()
+
+
+def test_numerical_error_and_unavailable_signal_leave_bank_unchanged() -> None:
+    agent = scalar_backend_agent()
+    recipe, _ = replay_root(agent.observation_space)
+    config = SnapshotConfig(
+        capacity=2,
+        replay_fraction=0.5,
+        fresh_floor=0.5,
+        capture=CapturePolicy(every_n_decisions=4, max_captures_per_batch=2),
+    )
+    bank = SnapshotBank(config)
+    learner = Learner(agent, "cpu", minibatch_rows=16)
+    learning = DampedPolicyLearning(gradient="damped_policy")
+    with (
+        replay_collector(agent.observation_space, recipe) as collector,
+        patch.object(
+            collector._env, "release_handles", wraps=collector._env.release_handles
+        ) as released,
+    ):
+        with bank.begin_batch() as warmup:
+            batch = collect(collector, agent, 1, snapshot_plan=warmup)
+            targets = compute_batch_targets(
+                backend, learner, AdmittedRollout(agent, batch), learning
+            )
+            assert warmup.receipt is not None
+            bank.commit(warmup.receipt, targets.signals)
+        before = bank.state().model_dump_json()
+        released.reset_mock()
+        with pytest.raises(NumericalError), bank.begin_batch() as plan:
+            batch = collect(collector, agent, 1, snapshot_plan=plan)
+            assert plan.receipt is not None and len(plan.receipt.captures) == 2
+            batch.rewards[0, 0] = float("nan")
+            update_damped_iteration(backend, learner, batch, learning, 1)
+        assert sum(len(call.args[0]) for call in released.call_args_list) == 2
+        assert bank.state().model_dump_json() == before
+        bank.close()
+        bank = SnapshotBank(config.model_copy(update={"signal": "wdl_entropy"}))
+        before = bank.state().model_dump_json()
+        with (
+            pytest.raises(ValueError, match="wdl_entropy unavailable"),
+            bank.begin_batch() as plan,
+        ):
+            batch = collect(collector, agent, 1, snapshot_plan=plan)
+            targets = compute_batch_targets(
+                backend, learner, AdmittedRollout(agent, batch), learning
+            )
+            assert plan.receipt is not None
+            bank.commit(plan.receipt, targets.signals)
+        assert bank.state().model_dump_json() == before
+
+
+def test_bank_decays_old_scores_and_spends_only_whole_group_allowance() -> None:
+    agent = scalar_backend_agent()
+    recipe, _ = replay_root(agent.observation_space)
+    config = SnapshotConfig(
+        capacity=2,
+        replay_fraction=0.9,
+        fresh_floor=0.5,
+        group_size=3,
+        score_half_life=1,
+        capture=CapturePolicy(every_n_decisions=1, max_captures_per_batch=1),
+    )
+
+    def score(entry: EntrySignals) -> float:
+        assert entry.root_signals.critic_residual.shape == (1,)
+        assert (
+            len(entry.episode_signals.critic_residual) > 1
+            and not entry.root_signals.critic_residual.flags.writeable
+        )
+        return float(entry.root_signals.critic_residual[0])
+
+    bank = SnapshotBank(config, scorer=score)
+    learner = Learner(agent, "cpu", minibatch_rows=16)
+    ids = []
+    with replay_collector(agent.observation_space, recipe) as collector:
+        # A score of 8 from generation one decays to 2 by generation three.
+        for generation, value in enumerate([8.0, 6.0, 2.5], 1):
+            with bank.begin_batch() as plan:
+                batch = collect(collector, agent, 1, snapshot_plan=plan)
+                receipt = plan.receipt
+                assert receipt is not None
+                [candidate] = receipt.captures
+                ids.append(root_id(candidate.snapshot.recipe))
+                targets = compute_batch_targets(
+                    backend, learner, AdmittedRollout(agent, batch), Learning()
+                )
+                residual = np.zeros(batch.actions.size)
+                residual[candidate.row] = value
+                bank.commit(receipt, replace(targets.signals, critic_residual=residual))
+                state = bank.state()
+                if generation == 1:
+                    assert state.scheduler.allowance == 0
+                if generation == 2:
+                    first = next(e for e in state.entries if e.snapshot_id == ids[0])
+                    assert first.priority(config, 2) == 4
+        assert {e.snapshot_id for e in bank.state().entries} == set(ids[1:])
+        with bank.begin_batch() as plan:
+            # Two fresh post-warmup starts are in the ledger. A third funds K=3.
+            assert plan.next_episode() is None
+            starts = [plan.next_episode() for _ in range(12)]
+            assert [b.branch_index if b else None for b in starts] == [
+                0,
+                1,
+                2,
+                None,
+                None,
+                None,
+                0,
+                1,
+                2,
+                None,
+                None,
+                None,
+            ]
+            assert starts[0].snapshot_id != starts[6].snapshot_id
+        bank.close()
+
+
+def test_coverage_cycle_and_random_draws_resume_with_the_saved_rng() -> None:
+    agent = scalar_backend_agent()
+    recipe, _ = replay_root(agent.observation_space)
+    config = SnapshotConfig(
+        capacity=3,
+        replay_fraction=1,
+        fresh_floor=0,
+        horizon=1,
+        signal="staleness",
+        capture=CapturePolicy(every_n_decisions=2, max_captures_per_batch=3),
+    )
+    bank = SnapshotBank(config)
+    learner = Learner(agent, "cpu", minibatch_rows=8)
+    with replay_collector(agent.observation_space, recipe) as collector:
+        for floor in (1, 8):
+            with bank.begin_batch() as plan:
+                batch = collect(collector, agent, floor, snapshot_plan=plan)
+                targets = compute_batch_targets(
+                    backend, learner, AdmittedRollout(agent, batch), Learning()
+                )
+                assert plan.receipt is not None
+                visits = plan.receipt.visited_groups
+                if floor == 8:
+                    ids = [v.snapshot_id for v in visits]
+                    assert len(set(ids[:3])) == 3 and len(ids) == 8
+                    assert len(plan.receipt.next_scheduler_state.coverage) == 2
+                bank.commit(plan.receipt, targets.signals)
+        saved = bank.state()
+        restored = SnapshotBank.from_state(
+            config, SnapshotBankState.model_validate_json(saved.model_dump_json())
+        )
+        with bank.begin_batch() as hot, restored.begin_batch() as cold:
+            starts = [hot.next_episode() for _ in range(15)]
+            assert starts == [cold.next_episode() for _ in starts]
+            # Draw five used the first coverage entry. Draws ten and fifteen
+            # continue that queue across the saved update boundary.
+            assert [starts[1].snapshot_id, starts[6].snapshot_id] == list(
+                saved.scheduler.coverage
+            )
+            for e in saved.entries:
+                assert e.priority(config, saved.generation + 3) == 3
+        bank.close()
+
+
+def test_mixed_batch_retries_the_same_sibling_after_the_row_floor() -> None:
+    agent = scalar_backend_agent()
+    recipe, _ = replay_root(agent.observation_space)
+    config = SnapshotConfig(
+        capacity=4,
+        replay_fraction=0.875,
+        fresh_floor=0.125,
+        group_size=3,
+        horizon=1,
+        capture=CapturePolicy(probability=1),
+    )
+    bank = SnapshotBank(config)
+    policy = GameErrorPolicy()
+    attempts: list[GameAttempt] = []
+
+    def record(state: GameErrorState, attempt: GameAttempt) -> GameErrorState:
+        attempts.append(attempt)
+        return settle(state, attempt, policy)
+
+    with replay_collector(
+        agent.observation_space,
+        recipe,
+        num_envs=2,
+        game_errors=policy,
+        record_attempt=record,
+    ) as collector:
+        collector.capture_predicate = lambda d: d.decision == 3
+        learner = Learner(agent, "cpu", minibatch_rows=16)
+        with bank.begin_batch() as plan:
+            batch = collect(collector, agent, 1, snapshot_plan=plan)
+            targets = compute_batch_targets(
+                backend, learner, AdmittedRollout(agent, batch), Learning()
+            )
+            assert plan.receipt is not None and len(plan.receipt.captures) == 2
+            assert all(
+                len(c.snapshot.recipe.actions) == 2 for c in plan.receipt.captures
+            )
+            bank.commit(plan.receipt, targets.signals)
+
+        original = collector._env.get_last_info
+        last_sibling = []
+
+        def fail_once() -> list[dict[str, Any]]:
+            info = original()
+            for slot, episode in enumerate(collector._episodes):
+                branch = episode.branch
+                if (
+                    branch
+                    and branch.branch_index == 2
+                    and collector._pending[2 * slot + branch.recipe.root_chooser]
+                    is not None
+                ):
+                    last_sibling.append((branch.snapshot_id, branch.branch_group_id))
+                    if len(last_sibling) == 1:
+                        info[slot] = dict(info[slot], game_error="one failed sibling")
+            return info
+
+        with (
+            bank.begin_batch() as plan,
+            patch.object(collector._env, "get_last_info", side_effect=fail_once),
+        ):
+            batch = collect(collector, agent, 1, snapshot_plan=plan)
+            receipt = plan.receipt
+            assert receipt is not None and len(receipt.captures) == 1
+            [group] = receipt.visited_groups
+            assert len(group.roots) == 3 and len(group.rows) == 3
+            assert last_sibling == [(group.snapshot_id, group.group_id)] * 2
+            assert plan.failed_branches == 1 and not plan.discarded
+            assert np.count_nonzero(batch.episode_source == 0) > 3
+            assert np.count_nonzero(batch.episode_source == 1) == 3
+            assert receipt.next_scheduler_state.starts == 2 + 5
+            targets = compute_batch_targets(
+                backend, learner, AdmittedRollout(agent, batch), Learning()
+            )
+            bank.commit(receipt, targets.signals)
+        bank.close()

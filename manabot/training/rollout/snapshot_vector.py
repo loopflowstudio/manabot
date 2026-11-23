@@ -7,11 +7,19 @@ buffers. Every installation must start a new native game generation.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, Self, runtime_checkable
 
 import numpy as np
 
+from manabot.env.failures import CapturedVector
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
+from manabot.training.rollout.producers import (
+    BufferedStreams,
+    ObservationRead,
+    StreamShard,
+)
 import managym
 from managym.recording import GameInputs
 
@@ -91,19 +99,21 @@ class InstalledSlot:
 
 
 @dataclass(frozen=True)
-class ObservationRead:
-    """A fixed-seat read with the slot in the producer's global coordinates."""
-
+class CapturedSnapshot:
     slot: int
-    player: int
-    game_id: int
-    seed: int
-    revision: int
+    recipe: SnapshotRecipe
+    hot_handle: object | None
+    root_digest: str
+    root_chooser: int
 
 
 @runtime_checkable
 class SnapshotVector(Protocol):
-    """Installation and viewer reads in addition to ordinary buffered stepping."""
+    """Capture returns one owned handle per slot. Release relinquishes those references."""
+
+    def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]: ...
+
+    def release_handles(self, handles: Sequence[object]) -> None: ...
 
     def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]: ...
 
@@ -115,3 +125,166 @@ class SnapshotVector(Protocol):
         *,
         layout: managym.ObservationLayout,
     ) -> Sequence[ObservationRead | managym.ObservationRead]: ...
+
+
+class InMemorySnapshotVector(BufferedStreams):
+    """Serial reference producer with independently resettable one-slot vectors.
+
+    Each slot parks its fresh native source during replay. A hot handle keeps
+    the resolved native setup; both paths replay the committed action prefix.
+    The sum of the two native generations advances on resets of either source.
+    """
+
+    @classmethod
+    def factory(
+        cls, observation_space: ObservationSpace, match: Match, num_envs: int, seed: int
+    ) -> Self:
+        # open_collector supplies the resolved match at its ordinary reset boundary.
+        return cls(observation_space, num_envs, seed)
+
+    def __init__(
+        self,
+        observation_space: ObservationSpace,
+        num_envs: int,
+        seed: int,
+    ) -> None:
+        memory = observation_space.config
+
+        def streams() -> list[StreamShard]:
+            return [
+                StreamShard(
+                    i,
+                    i + 1,
+                    CapturedVector(
+                        num_envs=1,
+                        seed=min(seed + i, 2**64 - 1),
+                        seed_stride=num_envs,
+                        stream_offset=i,
+                        decision_memory=memory.max_decision_records > 0,
+                        decision_memory_include_own=memory.decision_memory_include_own,
+                        player_policies=("agent", "agent"),
+                    ),
+                )
+                for i in range(num_envs)
+            ]
+
+        self._fresh = streams()
+        self._replay = streams()
+        super().__init__(num_envs, self._fresh.copy())
+
+    def set_buffers(
+        self,
+        buffers: dict[str, np.ndarray],
+        action_overflow: str = "error",
+        *,
+        layout: managym.ObservationLayout,
+    ) -> None:
+        super().set_buffers(buffers, action_overflow, layout=layout)
+        for shard in self._replay:
+            shard.native.set_buffers(
+                {k: v[shard.start : shard.stop] for k, v in buffers.items()},
+                action_overflow,
+                layout=layout,
+            )
+
+    def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]:
+        captures = []
+        for slot in slots:
+            if not 0 <= slot < self.num_envs:
+                raise ValueError(f"invalid capture slot {slot}")
+            live = self._shards[slot].native
+            [digest] = live.native.state_digests()
+            [chooser] = live.current_agent_indices()
+            if digest is None or chooser not in (0, 1):
+                raise ValueError(f"slot {slot} has no decision to capture")
+            game = live.games[0]
+            recipe = SnapshotRecipe.from_inputs(game, digest, chooser)
+            captures.append(
+                CapturedSnapshot(slot, recipe, game.setup(), digest, chooser)
+            )
+        return captures
+
+    def release_handles(self, handles: Sequence[object]) -> None:
+        """Native setup references are owned and released by their Python holders."""
+
+    def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]:
+        results = []
+        for request in installs:
+            slot, recipe = request.slot, request.recipe
+            if not 0 <= slot < self.num_envs:
+                raise ValueError(
+                    f"snapshot {request.snapshot_id} has invalid slot {slot}"
+                )
+            shard = (self._fresh if recipe is None else self._replay)[slot]
+            live = shard.native
+            if recipe is None:
+                live.reset_seeds_into_buffers(live.current_game_seeds())
+            else:
+                game = live.games[0]
+                try:
+                    if (game.decision_memory, game.decision_memory_include_own) != (
+                        recipe.decision_memory,
+                        recipe.decision_memory_include_own,
+                    ):
+                        raise ValueError("decision memory settings differ")
+                    setup = (
+                        request.hot_handle
+                        if isinstance(request.hot_handle, managym.GameSetup)
+                        else Match(recipe.match).to_rust()
+                    )
+                    live.reset_all_into_buffers(setup)
+                    live.reset_seeds_into_buffers([recipe.seed])
+                    generation = live.current_game_generations()
+                    for action in recipe.actions:
+                        live.step_into_buffers([action])
+                    if live.current_game_generations() != generation:
+                        raise ValueError("action prefix crossed a game terminal")
+                except Exception as exc:
+                    raise ValueError(
+                        f"snapshot {request.snapshot_id} installation failed: {exc}"
+                    ) from exc
+            [digest] = live.native.state_digests()
+            [chooser] = live.current_agent_indices()
+            if digest is None or (
+                recipe is not None
+                and (digest, chooser) != (recipe.root_digest, recipe.root_chooser)
+            ):
+                raise ValueError(
+                    f"snapshot {request.snapshot_id} root identity mismatch in slot {slot}"
+                )
+            self._shards[slot] = shard
+            results.append(InstalledSlot(slot, digest, chooser))
+        return results
+
+    def current_game_generations(self) -> list[int]:
+        return [
+            a.native.current_game_generations()[0]
+            + b.native.current_game_generations()[0]
+            for a, b in zip(self._fresh, self._replay, strict=True)
+        ]
+
+    def write_observations_for_players(
+        self,
+        players: list[int],
+        buffers: dict[str, np.ndarray],
+        action_overflow: Literal["error", "first-legal"] = "error",
+        *,
+        layout: managym.ObservationLayout,
+    ) -> list[ObservationRead]:
+        reads = super().write_observations_for_players(
+            players, buffers, action_overflow, layout=layout
+        )
+        return [
+            ObservationRead(r.slot, r.player, generation, r.seed, r.revision)
+            for r, generation in zip(
+                reads, self.current_game_generations(), strict=True
+            )
+        ]
+
+    def close(self) -> None:
+        if not self._closed:
+            for fresh, replay, active in zip(
+                self._fresh, self._replay, self._shards, strict=True
+            ):
+                (replay if active is fresh else fresh).native.close()
+            super().close()

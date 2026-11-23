@@ -20,81 +20,42 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.env.failures import CapturedVector
-from manabot.training.rollout.snapshot_vector import ObservationRead
 import managym
 
 Array = NDArray[np.generic]
 
 
 @dataclass(frozen=True)
-class _Shard:
+class StreamShard:
     start: int
     stop: int
     native: CapturedVector
 
 
-class ShardedVectorEnv:
-    """Coarse native producers with a synchronous, globally ordered interface.
+@dataclass(frozen=True)
+class ObservationRead:
+    """A fixed-seat read in the producer's global coordinates."""
 
-    The caller owns the arrays exclusively during every method. Native calls are
-    cooperative: an outer process supervisor supplies a hard execution deadline.
-    On a worker failure, all submitted calls settle before the pool is closed and
-    the earliest shard error is raised. Partial buffers must then be discarded.
-    Call close at the end of the owning training run, including failure paths.
-    """
+    slot: int
+    player: int
+    game_id: int
+    seed: int
+    revision: int
 
-    def __init__(
-        self,
-        num_envs: int,
-        seed: int,
-        workers: int,
-        *,
-        decision_memory_include_own: bool = False,
-        decision_memory: bool = False,
-        games_path: Path | None = None,
-        record_fraction: float = 1.0,
-    ) -> None:
-        if workers not in (2, 4) or workers > num_envs:
-            raise ValueError(
-                "parallel producers require 2 or 4 workers and at least one stream each"
-            )
-        if not 0 <= seed < 2**64:
-            raise ValueError("native seed must fit uint64")
+
+class BufferedStreams:
+    """Present disjoint native shards and their buffer views as one vector."""
+
+    skip_trivial = True
+
+    def __init__(self, num_envs: int, shards: list[StreamShard]) -> None:
         self.num_envs = num_envs
-        self.workers = workers
-        self.skip_trivial = True
+        self._shards = shards
         self._closed = False
-        self._shards = tuple(
-            _Shard(
-                start=index * num_envs // workers,
-                stop=(index + 1) * num_envs // workers,
-                native=CapturedVector(
-                    num_envs=(index + 1) * num_envs // workers
-                    - index * num_envs // workers,
-                    seed=min(seed + index * num_envs // workers, 2**64 - 1),
-                    seed_stride=num_envs,
-                    stream_offset=index * num_envs // workers,
-                    skip_trivial=self.skip_trivial,
-                    decision_memory=decision_memory,
-                    decision_memory_include_own=decision_memory_include_own,
-                    player_policies=("agent", "agent"),
-                    **(
-                        {
-                            "games_path": games_path.with_name(
-                                f"{games_path.stem}-{index}.jsonl"
-                            ),
-                            "record_fraction": record_fraction,
-                        }
-                        if games_path is not None
-                        else {}
-                    ),
-                ),
-            )
-            for index in range(workers)
-        )
-        self._pool = ThreadPoolExecutor(
-            max_workers=workers, thread_name_prefix="manabot-producer"
-        )
+
+    def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
+        self._check()
+        return [call() for call in calls]
 
     def _check(self) -> None:
         if self._closed:
@@ -104,21 +65,6 @@ class ShardedVectorEnv:
         self._check()
         if count != self.num_envs:
             raise ValueError("producer row count differs from global streams")
-
-    def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
-        self._check()
-        try:
-            # Freeze owner coordinates before dispatch; ContextVars do not cross threads.
-            for shard in self._shards:
-                if shard.native.scope is not None and shard.native.scope.detailed:
-                    shard.native.frozen_context = shard.native.scope.context().copy()
-            futures = [self._pool.submit(call) for call in calls]
-            # Settle every writer before propagating failure or exposing buffers.
-            wait(futures)
-            return [future.result() for future in futures]
-        except BaseException:
-            self.close()
-            raise
 
     def set_buffers(
         self,
@@ -288,6 +234,13 @@ class ShardedVectorEnv:
             for selected in shard.native.recording_mask()
         ]
 
+    def current_action_summaries(self) -> list[tuple[int, str]]:
+        return [
+            summary
+            for shard in self._shards
+            for summary in shard.native.current_action_summaries()
+        ]
+
     def current_agent_indices(self) -> list[int]:
         self._check()
         return [
@@ -384,7 +337,87 @@ class ShardedVectorEnv:
     def close(self) -> None:
         if not self._closed:
             self._closed = True
-            self._pool.shutdown(wait=True, cancel_futures=True)
             for shard in self._shards:
                 shard.native.close()
-            self._shards = ()
+            self._shards.clear()
+
+
+class ShardedVectorEnv(BufferedStreams):
+    """Coarse native producers with a synchronous, globally ordered interface.
+
+    The caller owns the arrays exclusively during every method. Native calls are
+    cooperative: an outer process supervisor supplies a hard execution deadline.
+    On a worker failure, all submitted calls settle before the pool is closed and
+    the earliest shard error is raised. Partial buffers must then be discarded.
+    Call close at the end of the owning training run, including failure paths.
+    """
+
+    def __init__(
+        self,
+        num_envs: int,
+        seed: int,
+        workers: int,
+        *,
+        decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
+        games_path: Path | None = None,
+        record_fraction: float = 1.0,
+    ) -> None:
+        if workers not in (2, 4) or workers > num_envs:
+            raise ValueError(
+                "parallel producers require 2 or 4 workers and at least one stream each"
+            )
+        if not 0 <= seed < 2**64:
+            raise ValueError("native seed must fit uint64")
+        self.workers = workers
+        shards = [
+            StreamShard(
+                start=index * num_envs // workers,
+                stop=(index + 1) * num_envs // workers,
+                native=CapturedVector(
+                    num_envs=(index + 1) * num_envs // workers
+                    - index * num_envs // workers,
+                    seed=min(seed + index * num_envs // workers, 2**64 - 1),
+                    seed_stride=num_envs,
+                    stream_offset=index * num_envs // workers,
+                    skip_trivial=self.skip_trivial,
+                    decision_memory=decision_memory,
+                    decision_memory_include_own=decision_memory_include_own,
+                    player_policies=("agent", "agent"),
+                    **(
+                        {
+                            "games_path": games_path.with_name(
+                                f"{games_path.stem}-{index}.jsonl"
+                            ),
+                            "record_fraction": record_fraction,
+                        }
+                        if games_path is not None
+                        else {}
+                    ),
+                ),
+            )
+            for index in range(workers)
+        ]
+        super().__init__(num_envs, shards)
+        self._pool = ThreadPoolExecutor(
+            max_workers=workers, thread_name_prefix="manabot-producer"
+        )
+
+    def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
+        self._check()
+        try:
+            # Freeze owner coordinates before dispatch; ContextVars do not cross threads.
+            for shard in self._shards:
+                if shard.native.scope is not None and shard.native.scope.detailed:
+                    shard.native.frozen_context = shard.native.scope.context().copy()
+            futures = [self._pool.submit(call) for call in calls]
+            # Settle every writer before propagating failure or exposing buffers.
+            wait(futures)
+            return [future.result() for future in futures]
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        self._pool.shutdown(wait=True, cancel_futures=True)
+        super().close()
