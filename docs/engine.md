@@ -1169,6 +1169,11 @@ Twinmaw Stormbrood asks for its target. Once the cast commits, Etali offers
 the remaining spell before anyone receives priority. The last spell cast
 resolves first.
 
+Volcanic Torrent’s cascade stops at the first nonland card with mana value
+below five. If it finds Scavenger Regent, the chooser can cast Regent, cast
+Exude Toxin at X=0, or decline. The resulting spell must also have mana
+value below five.
+
 Targeting Scavenger Regent with an opposing spell or ability triggers ward.
 The spell or ability’s controller can discard a card of their choice to keep the spell or ability
 on the stack. Declining counters it.

@@ -90,6 +90,29 @@ fn volcanic_torrent_cascades_past_costly_cards_and_counts_spells_cast() {
     assert_eq!(s.game().state.permanents[giant].as_ref().unwrap().damage, 2);
 }
 
+#[test]
+fn volcanic_torrent_offers_regent_and_its_free_omen() {
+    use crate::support::inspect::top_spell;
+    use managym::state::card::SpellProfile;
+
+    let mut s = five_color_setup(&["Volcanic Torrent", "Scavenger Regent"]);
+    let hit = cascade_over(&mut s, &["Scavenger Regent"])[0];
+    let offers = &s.action_space().actions;
+    assert_eq!(offers.len(), 3);
+    assert!(offers
+        .iter()
+        .any(|a| matches!(a, Action::SelectCard { object, .. } if *object == hit)));
+    assert!(offers.iter().any(|a| matches!(a, Action::Decline { .. })));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Omen, .. } if *object == hit),
+    );
+    let spell = top_spell(&s);
+    assert_eq!(spell.profile, SpellProfile::Omen);
+    assert_eq!(spell.x, 0);
+    assert!(spell.spent.is_empty());
+}
+
 /// Declining the cast bottoms the hit with every other exiled card.
 #[test]
 fn volcanic_torrent_cascade_may_be_declined() {

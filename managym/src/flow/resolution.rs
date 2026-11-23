@@ -1357,6 +1357,7 @@ impl Game {
                         offer: ResolutionCastOffer::Cascade {
                             object: object_id,
                             exiled: exiled.clone(),
+                            below,
                         },
                         spends: None,
                     })

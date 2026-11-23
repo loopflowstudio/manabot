@@ -383,6 +383,7 @@ pub enum ResolutionCastOffer {
         #[serde(rename = "card")]
         object: ObjectId,
         exiled: Vec<ObjectId>,
+        below: u8,
     },
 }
 
@@ -3376,6 +3377,7 @@ impl Game {
                         offer,
                         ResolutionCastOffer::Graveyard { .. }
                             | ResolutionCastOffer::AmongExiled { .. }
+                            | ResolutionCastOffer::Cascade { .. }
                     )
                 {
                     break;
@@ -3386,6 +3388,15 @@ impl Game {
                 let spell = cast.spell(definition);
                 if !spell.types.is_castable() {
                     continue;
+                }
+                if let ResolutionCastOffer::Cascade { below, .. } = offer {
+                    if spell
+                        .mana_value_cost()
+                        .map_or(0, |cost| cost.mana_value_at(0))
+                        >= *below
+                    {
+                        continue;
+                    }
                 }
                 if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
                     if !predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0)) {

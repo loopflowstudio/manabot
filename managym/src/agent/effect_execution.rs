@@ -51,6 +51,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "caller frame",
     "captured activation",
     "cascade exiled",
+    "cascade mana value limit",
     "cast choices",
     "quota type",
     "cast from exile",
@@ -1403,7 +1404,9 @@ pub(crate) fn project_decision(
                 ResolutionCastOffer::Cascade {
                     object: object_id,
                     exiled,
+                    below,
                 } => {
+                    out.field("cascade mana value limit", below);
                     out.object_id("cast from exile", *object_id);
                     for exiled in exiled {
                         out.object_id("cascade exiled", *exiled);
