@@ -1,10 +1,12 @@
-at: 5a5f87c0e09d9d410eed082e9b97a4a2aaa59f1a
+at: 1d5d5474e8cdb6b16233fbecf0544c16974574e5
 first:
-  - path: managym/src/flow/mana.rs
-    why: Prices X using the activation’s actual payment component
-  - path: managym/src/flow/play.rs
-    why: Enumerates payable announcements
-  - path: managym/src/flow/action.rs
-    why: Checks affordability before offering the activation
-  - path: managym/cards/tests/cards/som.rs
-    why: Resolves every offered value from the saved decision
+  - path: managym/cards/src/fdn.rs
+    why: Defines the draw over controlled nonlands
+  - path: managym/state/src/ability.rs
+    why: Names the quantity that the spell reads
+  - path: managym/src/flow/resolution.rs
+    why: Counts current mana values when the draw begins
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Resolves one announcement against three battlefields
+  - path: managym/cards/tests/cards/observability.rs
+    why: Checks the authored expression reaches catalog tokens
