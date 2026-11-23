@@ -95,10 +95,7 @@ fn fumigate() -> CardDefinition {
                     Scope::Battlefield,
                     CardPredicate::creature(),
                 )),
-                Effect::gain_life(EffectValue::Objects {
-                    of: Box::new(ObjectSelector::Moved),
-                    predicate: None,
-                }),
+                Effect::gain_life(ObjectSelector::Moved.count()),
             ],
             ..Default::default()
         },

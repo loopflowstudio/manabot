@@ -7,6 +7,7 @@ use crate::{
         combat::CombatState,
         event::GameEvent,
         game::Game,
+        proposed_event::EventBinding,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
     state::{
@@ -336,10 +337,9 @@ impl Game {
                             delta: 1,
                             by: Some(active),
                         },
-                    )
-                    .collect();
+                    );
                 let mut frame = crate::flow::decision::EffectFrame::new(active, Vec::new());
-                frame.batch = Some(self.event_batch(events));
+                frame.batch = Some(self.event_batch(EventBinding::None, events));
                 frame.completion = crate::flow::decision::FrameCompletion::Continue;
                 self.run_frame(frame);
                 None

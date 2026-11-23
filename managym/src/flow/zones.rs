@@ -7,7 +7,7 @@ use crate::{
         decision::Decision,
         event::GameEvent,
         game::{CastChoices, Game},
-        proposed_event::{ProposedEvent, ZoneEntry},
+        proposed_event::{EventBinding, ProposedEvent, ZoneEntry},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -349,17 +349,20 @@ impl Game {
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
-        let batch = self.event_batch(vec![ProposedEvent::CreateTokens {
-            definition: Box::new(crate::flow::proposed_event::TokenSource::Registered(
-                key.into(),
-            )),
-            controller,
-            count: 1,
-            entry: ZoneEntry {
-                tapped: tapped_and_attacking,
-                ..Default::default()
-            },
-        }]);
+        let batch = self.event_batch(
+            EventBinding::None,
+            [ProposedEvent::CreateTokens {
+                definition: Box::new(crate::flow::proposed_event::TokenSource::Registered(
+                    key.into(),
+                )),
+                controller,
+                count: 1,
+                entry: ZoneEntry {
+                    tapped: tapped_and_attacking,
+                    ..Default::default()
+                },
+            }],
+        );
         let results = self.complete_immediate_batch(batch);
         for object in results.iter().filter_map(|result| result.moved) {
             self.finish_created_token(object, tapped_and_attacking);
@@ -556,7 +559,7 @@ impl Game {
             return object;
         }
         let event = self.zone_move_proposal(object, to_zone, entry);
-        let batch = self.event_batch(vec![event]);
+        let batch = self.event_batch(EventBinding::None, [event]);
         self.complete_immediate_batch(batch)
             .into_iter()
             .next()
@@ -599,25 +602,22 @@ impl Game {
         printed.is_saga()
     }
 
-    // Keep the evaluated proposal fields together with its pre-move LKI and
-    // consequent-event sink at this single commit boundary.
-    #[allow(clippy::too_many_arguments)]
+    /// Return the appearance minted by this move (CR 400.7), including
+    /// the initial appearance of an object entering its first zone.
     pub(crate) fn commit_zone_move(
         &mut self,
-        object_id: ObjectId,
+        prior_object: ObjectId,
         old_zone: Option<ZoneType>,
         to_zone: ZoneType,
         entry: ZoneEntry,
         departing_lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
-    ) -> bool {
-        let departing_ref = old_zone.map(|_| object_id);
-        let owner = self.state.entry_object(object_id).owner;
-
-        let definition = self.state.entry_object(object_id).definition_id;
+    ) -> ObjectId {
+        let prior = self.state.entry_object(prior_object);
+        let (owner, definition) = (prior.owner, prior.definition_id);
         let public_source = old_zone.is_some_and(|zone| {
             !matches!(zone, ZoneType::Hand | ZoneType::Library)
-                && !(zone == ZoneType::Exile && self.is_foretold(object_id))
+                && !(zone == ZoneType::Exile && self.is_foretold(prior_object))
         });
         let known_top = if old_zone == Some(ZoneType::Library) {
             if entry.library_top_departure {
@@ -637,7 +637,7 @@ impl Game {
         let mut event_controller = owner;
 
         if old_zone == Some(ZoneType::Battlefield) {
-            if let Some(permanent_id) = self.state.object_to_permanent[(object_id).slot()].take() {
+            if let Some(permanent_id) = self.state.object_to_permanent[prior_object.slot()].take() {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_ref() {
                     event_controller = permanent.controller;
                 }
@@ -654,7 +654,7 @@ impl Game {
             self.record_object_lki(lki);
         }
         let cast_spell = (old_zone == Some(ZoneType::Stack))
-            .then(|| self.find_spell_on_stack_index(object_id))
+            .then(|| self.find_spell_on_stack_index(prior_object))
             .flatten()
             .map(|index| self.state.stack_objects_mut().remove(index));
         let carry = CarryOver {
@@ -662,7 +662,7 @@ impl Game {
                 Some(StackObject::Spell(spell)) if to_zone == ZoneType::Battlefield => {
                     Some(CastFacts {
                         x: spell.x,
-                        spent: spell.spent.clone(),
+                        spent: spell.spent,
                     })
                 }
                 _ => None,
@@ -673,10 +673,9 @@ impl Game {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
-        // From here `object_id` is the appearance this move makes.
         let object_id = self
             .state
-            .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
+            .mint_appearance(prior_object, holder, to_zone, entry.entry_copy);
         let entered_definition = self.state[object_id].definition_id;
         if to_zone == ZoneType::Library {
             // A copied or transformed source can restore a different printing.
@@ -721,7 +720,7 @@ impl Game {
             if self.state[object_id].types.is_land() {
                 self.state.turn.history[holder.0].land_entered = true;
             }
-            self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
+            self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
         }
 
         if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {
@@ -732,7 +731,7 @@ impl Game {
         self.capture_object_move(object_id, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             object_id,
-            departed: departing_ref,
+            departed: old_zone.map(|_| prior_object),
             from: old_zone,
             to: to_zone,
             controller: event_controller,
@@ -758,7 +757,7 @@ impl Game {
             }
         }
         if old_zone == Some(ZoneType::Battlefield) {
-            self.handle_leaves_battlefield(departing_ref, to_zone, followups);
+            self.handle_leaves_battlefield(prior_object, to_zone, followups);
         }
         // An attachment that grants or removes abilities changes the mana
         // its creature's controller, possibly the opponent, can produce.
@@ -775,7 +774,7 @@ impl Game {
             self.invalidate_mana_cache(PlayerId(1));
         }
         self.assert_library_knowledge();
-        true
+        object_id
     }
 
     /// `player` bent: record the kind in their turn history and emit the
@@ -847,27 +846,22 @@ impl Game {
     /// (Jailer links — the exiled card returns immediately, no stack).
     fn handle_leaves_battlefield(
         &mut self,
-        departing_ref: Option<ObjectId>,
+        departed_object: ObjectId,
         to_zone: ZoneType,
         followups: &mut Vec<ProposedEvent>,
     ) {
         // Delayed triggers watching this object fire as it dies (or is
         // exiled, for earthbend) and are dropped otherwise: they watched this
         // battlefield stint only.
-        let watches = |trigger: &DelayedTrigger| match trigger.event {
-            DelayedTriggerEvent::Leaves { watched, .. } => {
-                departing_ref.is_some_and(|object_ref| watched == object_ref)
-            }
-            _ => false,
-        };
+        let watches = |trigger: &DelayedTrigger| matches!(trigger.event, DelayedTriggerEvent::Leaves { watched, .. } if watched == departed_object);
         if self.state.delayed_triggers.iter().any(watches) {
             let (watching, kept): (Vec<_>, Vec<_>) =
                 std::mem::take(&mut self.state.delayed_triggers)
                     .into_iter()
                     .partition(watches);
             *self.state.delayed_triggers_mut() = kept;
-            let departed = departing_ref
-                .and_then(|object_ref| self.object_lki(object_ref))
+            let departed = self
+                .object_lki(departed_object)
                 .map(|lki| Target::Permanent(lki.permanent));
             for trigger in watching {
                 let DelayedTriggerEvent::Leaves { or_exiled, .. } = trigger.event else {
@@ -880,25 +874,14 @@ impl Game {
         }
 
         // CR 400.7: continuous effects on the departing object end.
-        if let Some(object) = departing_ref {
-            self.end_effects_on(object);
-        }
+        self.end_effects_on(departed_object);
 
         // "Until this creature leaves the battlefield" durations end now:
         // linked exiled cards return under their owners' control.
-        let ended: Vec<_> = {
-            let mut kept = Vec::new();
-            let mut ended = Vec::new();
-            for link in std::mem::take(&mut self.state.exile_links) {
-                if departing_ref.is_some_and(|object_ref| link.source == object_ref) {
-                    ended.push(link);
-                } else {
-                    kept.push(link);
-                }
-            }
-            self.state.exile_links = kept;
-            ended
-        };
+        let (ended, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.state.exile_links)
+            .into_iter()
+            .partition(|link| link.source == departed_object);
+        self.state.exile_links = kept;
         for link in ended.into_iter().filter(|link| link.returns) {
             let Ok(exiled_object) = self.state.object(link.exiled_object) else {
                 continue;

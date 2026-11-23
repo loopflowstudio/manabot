@@ -11,7 +11,7 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        proposed_event::ProposedEvent,
+        proposed_event::{EventBinding, ProposedEvent},
         turn::OnceEachTurnKey,
     },
     state::{
@@ -1049,14 +1049,15 @@ impl Game {
                 Some((ability, *source))
             }
         };
-        let events: Vec<_> = payment
+        let events = payment
             .receipt
             .sacrificed()
             .filter(|object| self.state.permanent_of(*object).is_some())
             .map(|target| ProposedEvent::Sacrifice { target })
-            .chain(leaves)
-            .collect();
-        let completion = match activated {
+            .chain(leaves);
+        let mut frame = EffectFrame::new(player, Vec::new());
+        frame.batch = Some(self.event_batch(EventBinding::None, events));
+        frame.completion = match activated {
             None => FrameCompletion::Paid { player, payment },
             Some((mut ability, source)) => {
                 ability.paid = payment.receipt;
@@ -1069,9 +1070,6 @@ impl Game {
                 }
             }
         };
-        let mut frame = EffectFrame::new(player, Vec::new());
-        frame.batch = Some(self.event_batch(events));
-        frame.completion = completion;
         self.run_frame(frame);
         Ok(())
     }

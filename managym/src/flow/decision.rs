@@ -1067,13 +1067,13 @@ impl Game {
         }
         frame.batch = Some(
             self.event_batch(
+                EventBinding::None,
                 chosen
                     .iter()
                     .filter_map(|id| self.permanent_object(*id))
                     .map(|object| {
                         self.zone_move_proposal(object, ZoneType::Exile, Default::default())
-                    })
-                    .collect(),
+                    }),
             ),
         );
         None
@@ -1103,9 +1103,8 @@ impl Game {
             .flat_map(|player| self.battlefield_permanents(player))
             .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
             .filter_map(|id| self.permanent_object(id))
-            .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target })
-            .collect();
-        frame.batch = Some(self.event_batch(events));
+            .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target });
+        frame.batch = Some(self.event_batch(EventBinding::None, events));
         None
     }
 
@@ -1269,7 +1268,7 @@ impl Game {
                         // instruction's next simultaneous event; its bound
                         // results are already its own.
                         if !followups.is_empty() {
-                            frame.batch = Some(self.event_batch(followups));
+                            frame.batch = Some(self.event_batch(EventBinding::None, followups));
                             continue;
                         }
                     }
@@ -1398,9 +1397,10 @@ impl Game {
                             } else {
                                 (ZoneType::Graveyard, Default::default())
                             };
-                            frame.batch = Some(
-                                self.event_batch(vec![self.zone_move_proposal(object, to, entry)]),
-                            );
+                            frame.batch = Some(self.event_batch(
+                                EventBinding::None,
+                                [self.zone_move_proposal(object, to, entry)],
+                            ));
                             frame.completion = FrameCompletion::Spell { object, attach_to };
                             continue;
                         }
@@ -1495,7 +1495,7 @@ impl Game {
             }
             EventBinding::Created { attacking } => {
                 frame.created = moved.collect();
-                for object in frame.created.clone() {
+                for &object in &frame.created {
                     self.finish_created_token(object, attacking);
                 }
             }
@@ -1532,8 +1532,7 @@ impl Game {
                 }
                 frame.moved = moved.collect();
                 let mut owners = Vec::new();
-                for object in &frame.moved {
-                    let object_id = *object;
+                for &object_id in &frame.moved {
                     let owner = self.state[object_id].owner;
                     match self.state.zones.zone_of(object_id) {
                         Some(ZoneType::Library) if shuffle => {
@@ -2512,8 +2511,9 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal counter recipient".into()));
                 };
-                let batch = self.event_batch(vec![
-                    crate::flow::proposed_event::ProposedEvent::CounterChange {
+                let batch = self.event_batch(
+                    EventBinding::None,
+                    [crate::flow::proposed_event::ProposedEvent::CounterChange {
                         provenance: crate::flow::proposed_event::CounterProvenance::new(
                             crate::flow::proposed_event::EventCause::Effect,
                         ),
@@ -2521,8 +2521,8 @@ impl Game {
                         kind: *kind,
                         delta: 1,
                         by: Some(*player),
-                    },
-                ]);
+                    }],
+                );
                 let next = self.distribute_counters(*player, *kind, *remaining - 1);
                 suspended.frame.batch = Some(batch);
                 self.continue_resolution(suspended.frame, next);
@@ -2628,11 +2628,14 @@ impl Game {
                 looked.retain(|c| c != object_id);
                 *selected += 1;
                 suspended.frame.batch = if *to_battlefield {
-                    Some(self.event_batch(vec![self.zone_move_proposal(
-                        *object_id,
-                        ZoneType::Battlefield,
-                        Default::default(),
-                    )]))
+                    Some(self.event_batch(
+                        EventBinding::None,
+                        [self.zone_move_proposal(
+                            *object_id,
+                            ZoneType::Battlefield,
+                            Default::default(),
+                        )],
+                    ))
                 } else {
                     if *reveal {
                         self.reveal_object_to_hand(*object_id, player);
@@ -2886,22 +2889,18 @@ impl Game {
                     return Ok(());
                 }
                 let owner = *owner;
-                let events = std::mem::take(revealed)
-                    .into_iter()
-                    .map(|object_id| {
-                        self.zone_move_proposal(
-                            object_id,
-                            ZoneType::Battlefield,
-                            crate::flow::proposed_event::ZoneEntry {
-                                tapped: true,
-                                ..Default::default()
-                            },
-                        )
-                    })
-                    .collect();
-                let mut batch = self.event_batch(events);
-                batch.binding = EventBinding::Shuffle { player: owner };
-                suspended.frame.batch = Some(batch);
+                let events = std::mem::take(revealed).into_iter().map(|object_id| {
+                    self.zone_move_proposal(
+                        object_id,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            tapped: true,
+                            ..Default::default()
+                        },
+                    )
+                });
+                suspended.frame.batch =
+                    Some(self.event_batch(EventBinding::Shuffle { player: owner }, events));
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3409,11 +3408,10 @@ impl Game {
         else {
             unreachable!("surveil selection");
         };
-        let events = graveyard
-            .iter()
-            .map(|object| self.zone_move_proposal(*object, ZoneType::Graveyard, Default::default()))
-            .collect();
-        let batch = self.event_batch(events);
+        let events = graveyard.iter().map(|object| {
+            self.zone_move_proposal(*object, ZoneType::Graveyard, Default::default())
+        });
+        let batch = self.event_batch(EventBinding::None, events);
         looked.retain(|object| !graveyard.contains(object));
         let next =
             self.library_order_decision(*player, std::mem::take(looked), LibraryEnd::Top, false);

@@ -2352,10 +2352,7 @@ fn destruction_count_survives_a_child_returning_one_of_the_destroyed_creatures()
                 effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
                 if_declined: vec![],
             },
-            Effect::gain_life(EffectValue::Objects {
-                of: Box::new(ObjectSelector::Moved),
-                predicate: None,
-            }),
+            Effect::gain_life(ObjectSelector::Moved.count()),
         ],
         vec![],
         vec![],
@@ -3986,27 +3983,31 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                     }
                 }
                 "counter_cause" => {
-                    frame.batch = Some(game.event_batch(vec![ProposedEvent::CounterChange {
-                        provenance: CounterProvenance::new(if choice == 0 {
-                            EventCause::Effect
-                        } else {
-                            EventCause::TurnAction
-                        }),
-                        target: game.permanent_object(first).unwrap(),
-                        kind: CounterKind::PlusOnePlusOne,
-                        delta: 1,
-                        by: Some(player),
-                    }]))
+                    frame.batch = Some(game.event_batch(
+                        EventBinding::None,
+                        [ProposedEvent::CounterChange {
+                            provenance: CounterProvenance::new(if choice == 0 {
+                                EventCause::Effect
+                            } else {
+                                EventCause::TurnAction
+                            }),
+                            target: game.permanent_object(first).unwrap(),
+                            kind: CounterKind::PlusOnePlusOne,
+                            delta: 1,
+                            by: Some(player),
+                        }],
+                    ))
                 }
                 "token_count" => {
-                    let mut batch = game.event_batch(vec![ProposedEvent::CreateTokens {
-                        definition: Box::new(TokenSource::Registered("token.food".into())),
-                        controller: player,
-                        count: choice + 1,
-                        entry: ZoneEntry::default(),
-                    }]);
-                    batch.binding = EventBinding::Created { attacking: false };
-                    frame.batch = Some(batch);
+                    frame.batch = Some(game.event_batch(
+                        EventBinding::Created { attacking: false },
+                        [ProposedEvent::CreateTokens {
+                            definition: Box::new(TokenSource::Registered("token.food".into())),
+                            controller: player,
+                            count: choice + 1,
+                            entry: ZoneEntry::default(),
+                        }],
+                    ));
                 }
                 "departed_source" => {
                     let object = game.state.permanents[first].as_ref().unwrap().object;

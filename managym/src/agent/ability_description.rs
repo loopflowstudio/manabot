@@ -1436,10 +1436,7 @@ mod tests {
             "the number of creature cards moved this way"
         );
         assert_eq!(
-            value_description(&EffectValue::Objects {
-                of: Box::new(ObjectSelector::Moved),
-                predicate: None,
-            }),
+            value_description(&ObjectSelector::Moved.count()),
             "the number of objects moved this way"
         );
     }

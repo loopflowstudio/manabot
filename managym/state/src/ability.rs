@@ -753,6 +753,14 @@ pub enum Except {
 }
 
 impl ObjectSelector {
+    /// Count every object named by this selector.
+    pub fn count(self) -> EffectValue {
+        EffectValue::Objects {
+            of: Box::new(self),
+            predicate: None,
+        }
+    }
+
     /// "Each [predicate] you control".
     pub fn each_you_control(predicate: CardPredicate) -> Self {
         Self::each(Scope::YouControl, predicate)
@@ -1889,10 +1897,7 @@ impl Effect {
             up_to,
             vec![
                 Effect::DrawCards {
-                    count: EffectValue::Objects {
-                        of: Box::new(ObjectSelector::Moved),
-                        predicate: None
-                    },
+                    count: ObjectSelector::Moved.count(),
                 };
                 per_card
             ],

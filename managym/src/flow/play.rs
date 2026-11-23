@@ -18,6 +18,7 @@ use crate::{
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
         payment::{bargain_cost, Help, Operation},
+        proposed_event::EventBinding,
         turn::{PhaseKind, StepKind},
     },
     state::{
@@ -314,11 +315,14 @@ impl Game {
         // CR 305.2 — Track one normal land play per turn.
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
-        frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
-            self.state.object_of(card),
-            ZoneType::Battlefield,
-            Default::default(),
-        )]));
+        frame.batch = Some(self.event_batch(
+            EventBinding::None,
+            [self.zone_move_proposal(
+                self.state.object_of(card),
+                ZoneType::Battlefield,
+                Default::default(),
+            )],
+        ));
         frame.completion = FrameCompletion::Continue;
         self.run_frame(frame);
         Ok(())

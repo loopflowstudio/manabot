@@ -253,9 +253,7 @@ impl Game {
                 });
             }
         }
-        let mut batch = self.event_batch(events);
-        batch.binding = EventBinding::Combat;
-        Some(batch)
+        Some(self.event_batch(EventBinding::Combat, events))
     }
 
     fn creature_deals_damage_in_pass(

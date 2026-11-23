@@ -4909,7 +4909,7 @@ fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
 /// discard branch drains a different amount in a child result scope.
 #[test]
 fn life_lost_this_way_survives_a_private_choice_and_its_child_scope() {
-    use crate::support::play::fork_stepping;
+    use crate::support::play::{fork_choosing, fork_selecting};
 
     let mut s = five_color_setup(&["Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
@@ -4955,24 +4955,32 @@ fn life_lost_this_way_survives_a_private_choice_and_its_child_scope() {
         .expect("the acting viewer can read the pending gain");
     assert_execution_tokens_registered(frame);
     let facts = encoded_default(&actor).facts;
-    assert!(facts.chunks_exact(FACT_DIM).any(|row| {
-        row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32
-            && row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2] == id_columns(retained[0].1)
-    }));
+    let tokens: Vec<_> = facts
+        .chunks_exact(FACT_DIM)
+        .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
+        .map(|row| {
+            (
+                row[fact::VALUE],
+                [row[fact::DETAIL_HIGH], row[fact::DETAIL_HIGH + 1]],
+            )
+        })
+        .collect();
+    let encoded = retained.map(|(kind, value)| (f32::from(kind), id_columns(value)));
+    assert!(tokens.windows(2).any(|pair| pair == encoded));
 
     let root = s.game().state.deterministic_hash();
-    for (index, action) in s.action_space().actions.iter().enumerate() {
-        let lost = match action {
-            Action::SelectCard { object, .. } if *object == fodder => 4,
-            Action::Decline { .. } => 3,
-            action => panic!("unexpected discard choice {action:?}"),
-        };
-        let mut fork = fork_stepping(&s, index);
+    assert_eq!(s.action_space().actions.len(), 2);
+    for (mut fork, lost) in [
+        (
+            fork_choosing(&s, |action| matches!(action, Action::Decline { .. })),
+            3,
+        ),
+        (fork_selecting(&s, fodder), 4),
+    ] {
         settle(&mut fork);
         fork.assert_life(0, 20 + lost);
         fork.assert_life(1, 20 - lost);
     }
-    assert_eq!(s.action_space().actions.len(), 2);
     assert_eq!(s.game().state.deterministic_hash(), root);
     s.assert_life(0, 20);
     s.assert_life(1, 17);
