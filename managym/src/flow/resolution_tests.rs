@@ -4670,7 +4670,7 @@ fn priority_announces_each_granted_spell_copy_by_object() {
     use crate::flow::{cast_permission::PlayGrant, game::PendingChoice};
 
     let player = PlayerId(0);
-    let (mut game, _, _) = fixture(player);
+    let (mut game, first, second) = fixture(PlayerId(1));
     game.state.priority.holder = player;
     let bolt = game
         .state
@@ -4678,17 +4678,35 @@ fn priority_announces_each_granted_spell_copy_by_object() {
         .find(|(_, object)| object.name == "Lightning Bolt")
         .unwrap()
         .0;
-    let copies = [(); 2].map(|_| {
+    let copies = [first, second].map(|source| {
         let id = game.state.id_gen_mut().next_id();
         let copy = game.create_spell_copy(bolt, id, player);
         let copy = game.move_object(copy, ZoneType::Exile);
         assert!(game.state.card_of(copy).is_none());
+        let source = game.permanent_object(source).unwrap();
         game.state.cast_permissions.grant(PlayGrant {
+            source: Some(source),
             cost: Some(Default::default()),
             ..PlayGrant::new(copy, player)
         });
         copy
     });
+    for viewer in [player, PlayerId(1)] {
+        let observation = crate::agent::observation::Observation::for_player(&game, viewer);
+        for (copy, source) in copies.into_iter().zip([first, second]) {
+            let row = observation
+                .agent_cards
+                .iter()
+                .chain(&observation.opponent_cards)
+                .find(|row| row.id == game.state[copy].id.0 as i32)
+                .expect("public exile copy");
+            let [grant] = row.cast_permissions.as_slice() else {
+                panic!("one source per copy")
+            };
+            let source = game.state.permanents[source].as_ref().unwrap();
+            assert_eq!(grant.source_permanent_id, Some(source.id.0 as i32));
+        }
+    }
     let actions = game.compute_player_actions(player);
     for copy in copies {
         let action = actions

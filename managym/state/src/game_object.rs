@@ -721,7 +721,7 @@ impl Object {
             return;
         }
         let inset = self.inset.as_ref().expect("offered inset spell");
-        debug_assert_eq!(inset.profile(), profile);
+        assert_eq!(inset.casting_profile(), Some(profile));
         let spell = Arc::clone(inset.characteristics());
         self.printed = Some((self.definition_id, Arc::clone(&self.definition)));
         self.definition = spell;

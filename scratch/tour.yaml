@@ -1,7 +1,9 @@
-at: 591425d57997b4166c26abf1c2037dd0e9d471d4
+at: 80ec1d98338670fbf6c077772ca1d5f189398a04
 first:
   - path: docs/engine.md
     why: Compare Cascade and Etali at the table
+  - path: managym/state/src/card.rs
+    why: Distinguish printed insets from castable profiles
   - path: managym/src/flow/resolution.rs
     why: Follow Torrent to its physical hit
   - path: managym/src/flow/decision.rs

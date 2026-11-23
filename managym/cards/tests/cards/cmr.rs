@@ -9,11 +9,14 @@ use crate::support::{
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     state::{
-        card::StaticAbility,
+        card::{InsetSpell, PrintedCharacteristics, SpellProfile, StaticAbility},
         game_object::{ObjectId, PlayerId, Target},
+        mana::ManaCost,
         zone::ZoneType,
     },
 };
+
+use std::sync::Arc;
 
 const DECK: [&str; 5] = [
     "Volcanic Torrent",
@@ -31,7 +34,6 @@ fn cascade_over(s: &mut Scenario, top: &[&str]) -> Vec<ObjectId> {
     cast_card(s, torrent);
     spend_colorless(s);
     while s.action_space().kind == ActionSpaceKind::Priority
-        && !s.game().state.stack_objects.is_empty()
         && s.game().state.stack_objects.len() > 1
     {
         s.pass_priority();
@@ -45,17 +47,14 @@ fn current(s: &Scenario, objects: &[ObjectId]) -> Vec<ObjectId> {
 }
 
 fn bottom(s: &Scenario, count: usize) -> Vec<ObjectId> {
-    let mut objects = s
-        .game()
+    s.game()
         .state
         .zones
         .zone_objects(ZoneType::Library, PlayerId(0))
         .iter()
         .take(count)
         .copied()
-        .collect::<Vec<_>>();
-    objects.sort();
-    objects
+        .collect()
 }
 
 fn sorted(mut objects: Vec<ObjectId>) -> Vec<ObjectId> {
@@ -80,7 +79,7 @@ fn volcanic_torrent_cascades_past_costly_cards_and_counts_spells_cast() {
         |a| matches!(a, Action::SelectCard { object, .. } if *object == hit),
     );
     assert_eq!(zone_of(&s, hit), Some(ZoneType::Stack));
-    assert_eq!(bottom(&s, 2), sorted(current(&s, &pinned[..2])));
+    assert_eq!(sorted(bottom(&s, 2)), sorted(current(&s, &pinned[..2])));
     settle(&mut s);
     assert_eq!(zone_of(&s, hit), Some(ZoneType::Battlefield));
     assert!(
@@ -93,7 +92,6 @@ fn volcanic_torrent_cascades_past_costly_cards_and_counts_spells_cast() {
 #[test]
 fn volcanic_torrent_offers_regent_and_its_free_omen() {
     use crate::support::inspect::top_spell;
-    use managym::state::card::SpellProfile;
 
     let mut s = five_color_setup(&["Volcanic Torrent", "Scavenger Regent"]);
     let hit = cascade_over(&mut s, &["Scavenger Regent"])[0];
@@ -113,13 +111,12 @@ fn volcanic_torrent_offers_regent_and_its_free_omen() {
     assert!(spell.spent.is_empty());
 }
 
-/// Raising only the inset's printed cost leaves the physical hit unchanged.
-/// The free payment must not make an equal-value spell eligible.
-#[test]
-fn volcanic_torrent_excludes_an_equal_value_omen_on_a_cheaper_hit() {
-    use managym::state::{card::InsetSpell, mana::ManaCost};
-    use std::sync::Arc;
-
+/// Both controls change only the Regent's inset. The physical card must
+/// still be the hit, with exactly one cast and the option to decline.
+fn assert_only_regent_cascades(
+    hand_profiles: &[SpellProfile],
+    change: impl Fn(Arc<PrintedCharacteristics>) -> InsetSpell,
+) {
     let mut s = five_color_setup(&["Volcanic Torrent", "Scavenger Regent"]);
     let regents: Vec<_> = s
         .game()
@@ -129,11 +126,25 @@ fn volcanic_torrent_excludes_an_equal_value_omen_on_a_cheaper_hit() {
         .map(|(id, _)| id)
         .collect();
     for id in regents {
-        let Some(InsetSpell::Omen(omen)) = &mut s.game_mut().state[id].inset else {
+        let inset = &mut s.game_mut().state[id].inset;
+        let Some(InsetSpell::Omen(program)) = inset.take() else {
             unreachable!()
         };
-        Arc::make_mut(omen).mana_cost = Some(ManaCost::parse("{3}{B}{B}"));
+        *inset = Some(change(program));
     }
+    let hand = move_to_hand(&mut s, "Scavenger Regent");
+    let profiles: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::CastSpell {
+                object, profile, ..
+            } if *object == hand => Some(*profile),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(profiles, hand_profiles);
     let hit = cascade_over(&mut s, &["Scavenger Regent"])[0];
     let offers = &s.action_space().actions;
     assert_eq!(offers.len(), 2);
@@ -143,6 +154,19 @@ fn volcanic_torrent_excludes_an_equal_value_omen_on_a_cheaper_hit() {
     assert!(offers.iter().any(|a| matches!(a, Action::Decline { .. })));
 }
 
+#[test]
+fn volcanic_torrent_excludes_an_equal_value_omen_on_a_cheaper_hit() {
+    assert_only_regent_cascades(&[SpellProfile::Front, SpellProfile::Omen], |mut omen| {
+        Arc::make_mut(&mut omen).mana_cost = Some(ManaCost::parse("{3}{B}{B}"));
+        InsetSpell::Omen(omen)
+    });
+}
+
+#[test]
+fn volcanic_torrent_cannot_cast_a_prepared_inset_from_the_physical_hit() {
+    assert_only_regent_cascades(&[SpellProfile::Front], InsetSpell::Prepared);
+}
+
 /// Declining the cast bottoms the hit with every other exiled card.
 #[test]
 fn volcanic_torrent_cascade_may_be_declined() {
@@ -150,7 +174,7 @@ fn volcanic_torrent_cascade_may_be_declined() {
     let pinned = cascade_over(&mut s, &["Mountain", "Gray Ogre"]);
     assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
-    assert_eq!(bottom(&s, 2), sorted(current(&s, &pinned)));
+    assert_eq!(sorted(bottom(&s, 2)), sorted(current(&s, &pinned)));
     assert_eq!(s.game().state.zones.size(ZoneType::Exile, PlayerId(0)), 0);
 }
 
@@ -184,7 +208,7 @@ fn volcanic_torrent_cascade_without_a_castable_hit_bottoms_everything() {
     spend_colorless(&mut s);
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(bottom(&s, 2), sorted(current(&s, &kept)));
+    assert_eq!(sorted(bottom(&s, 2)), sorted(current(&s, &kept)));
 }
 
 /// Cascade's free cast is a cast from exile, which Drannith Magistrate
@@ -251,17 +275,7 @@ fn countering_the_cascade_hit_keeps_the_bottom_order_and_rng() {
         &mut s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == hit),
     );
-    let bottom_order = |s: &Scenario| {
-        s.game()
-            .state
-            .zones
-            .zone_objects(ZoneType::Library, PlayerId(0))
-            .iter()
-            .take(2)
-            .copied()
-            .collect::<Vec<_>>()
-    };
-    let order = bottom_order(&s);
+    let order = bottom(&s, 2);
     let rng = s.game().state.rng.get_word_pos();
     s.pass_priority();
     choose(
@@ -275,6 +289,6 @@ fn countering_the_cascade_hit_keeps_the_bottom_order_and_rng() {
         s.pass_priority();
     }
     assert_eq!(zone_of(&s, hit), Some(ZoneType::Graveyard));
-    assert_eq!(bottom_order(&s), order);
+    assert_eq!(bottom(&s, 2), order);
     assert_eq!(s.game().state.rng.get_word_pos(), rng);
 }

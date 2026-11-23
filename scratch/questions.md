@@ -32,3 +32,5 @@ Exude Toxin’s cold replay uses Swamps against Mountains and Lightning Bolt. Th
 Use Twinmaw and a second nonland card for the Etali fixture so the same suspended parent exercises profile, target and cast-order choices.
 
 Use two prepared sources in the first priority fixture. A single Seed Suture cannot expose grouping by program name. Preserve physical-card Command bindings while carrying the exact offered object into announcement.
+
+Use Regent’s existing Omen as the prepared-inset control. Changing only the inset kind isolates the hand and Cascade eligibility rule.

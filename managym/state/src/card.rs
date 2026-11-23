@@ -1100,19 +1100,22 @@ impl serde::Serialize for SpellProfile {
 pub enum InsetSpell {
     Adventure(Arc<PrintedCharacteristics>),
     Omen(Arc<PrintedCharacteristics>),
+    Prepared(Arc<PrintedCharacteristics>),
 }
 
 impl InsetSpell {
-    pub fn profile(&self) -> SpellProfile {
+    /// A prepared spell is cast from its linked copy in exile.
+    pub fn casting_profile(&self) -> Option<SpellProfile> {
         match self {
-            Self::Adventure(_) => SpellProfile::Adventure,
-            Self::Omen(_) => SpellProfile::Omen,
+            Self::Adventure(_) => Some(SpellProfile::Adventure),
+            Self::Omen(_) => Some(SpellProfile::Omen),
+            Self::Prepared(_) => None,
         }
     }
 
     pub fn characteristics(&self) -> &Arc<PrintedCharacteristics> {
         match self {
-            Self::Adventure(program) | Self::Omen(program) => program,
+            Self::Adventure(program) | Self::Omen(program) | Self::Prepared(program) => program,
         }
     }
 }
@@ -1246,6 +1249,8 @@ struct DefinitionWire<'a> {
     adventure: Option<&'a PrintedCharacteristics>,
     #[serde(skip_serializing_if = "Option::is_none")]
     omen: Option<&'a PrintedCharacteristics>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prepared: Option<&'a PrintedCharacteristics>,
     name: &'a String,
     mana_cost: &'a Option<ManaCost>,
     types: &'a CardTypes,
@@ -1275,7 +1280,8 @@ struct DefinitionWire<'a> {
 
 impl PrintedCharacteristics {
     pub fn spell_profiles(&self) -> impl Iterator<Item = SpellProfile> {
-        std::iter::once(SpellProfile::Front).chain(self.inset.as_ref().map(InsetSpell::profile))
+        std::iter::once(SpellProfile::Front)
+            .chain(self.inset.as_ref().and_then(InsetSpell::casting_profile))
     }
 
     pub fn spell_characteristics(&self, profile: SpellProfile) -> Option<&Self> {
@@ -1284,7 +1290,7 @@ impl PrintedCharacteristics {
             _ => self
                 .inset
                 .as_ref()
-                .filter(|inset| inset.profile() == profile)
+                .filter(|inset| inset.casting_profile() == Some(profile))
                 .map(|inset| inset.characteristics().as_ref()),
         }
     }
@@ -1293,6 +1299,10 @@ impl PrintedCharacteristics {
         DefinitionWire {
             adventure: self.spell_characteristics(SpellProfile::Adventure),
             omen: self.spell_characteristics(SpellProfile::Omen),
+            prepared: match &self.inset {
+                Some(InsetSpell::Prepared(spell)) => Some(spell),
+                _ => None,
+            },
             name: &self.name,
             mana_cost: &self.mana_cost,
             types: &self.types,
