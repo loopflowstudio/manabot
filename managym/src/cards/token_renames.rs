@@ -5,6 +5,22 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (
+        Variant,
+        "ReplacementEffect::PreventDamageToController",
+        None,
+    ),
+    (
+        Structure,
+        "/ReplacementEffect::PreventDamageToController",
+        None,
+    ),
+    (Variant, "ReplacementEffect::DoubleDamageToController", None),
+    (
+        Structure,
+        "/ReplacementEffect::DoubleDamageToController",
+        None,
+    ),
     (Structure, "/Effect::SearchLandsOpponentSplits", None),
     (Structure, "/ManaUse", None),
     (Structure, "/TriggerCondition::AttacksAlone", None),
@@ -92,6 +108,26 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
 /// The search now describes arbitrary distinct names and a structured ending;
 /// a payment's contributions are `contribution` facts.
 pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
+    (
+        "token",
+        "execution/1//ReplacementEffect::DoubleDamageToController",
+        None,
+    ),
+    (
+        "token",
+        "execution/3/ReplacementEffect::DoubleDamageToController",
+        None,
+    ),
+    (
+        "token",
+        "execution/1//ReplacementEffect::PreventDamageToController",
+        None,
+    ),
+    (
+        "token",
+        "execution/3/ReplacementEffect::PreventDamageToController",
+        None,
+    ),
     ("token", "execution/6/land choices remaining", None),
     ("token", "execution/6/selected lands", None),
     ("token", "execution/6/waterbend contributions", None),

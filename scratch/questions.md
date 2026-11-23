@@ -19,3 +19,5 @@ Replay doubling first without Giant Cindermaw as the positive control for prohib
 Use the public question “does another damage step follow?” as the damage-pass flag. The existing step identifier already names combat damage, and the flag stays false during ordinary single-step damage.
 
 Model Fog Bank’s single prevention ability with one either-endpoint identity check on combat damage.
+
+Twinflame Tyrant uses controller scopes and a damage transform. Add the source predicate and combat endpoint restrictions with the cards that exercise them. Wall of Stone survives a doubled Lightning Bolt, so the same test can inspect marked damage in every creature case.

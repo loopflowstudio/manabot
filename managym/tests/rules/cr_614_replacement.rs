@@ -5,7 +5,8 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        card::ReplacementEffect,
+        ability::Actor,
+        card::{DamageTransform, ReplacementEffect},
         game_object::{PlayerId, Target},
         permanent::CounterKind,
         zone::ZoneType,
@@ -20,7 +21,7 @@ fn resolve_bolt_with_drivers(
     seed: u64,
     driver_effects: Vec<Vec<ReplacementEffect>>,
     target: PlayerId,
-    first_replacement: usize,
+    first_replacement: Option<usize>,
 ) -> (i32, Vec<GameEvent>) {
     let mut s = Scenario::new(
         deck(&[("Gray Ogre", 40)]),
@@ -47,14 +48,16 @@ fn resolve_bolt_with_drivers(
     s.pass_priority();
     s.pass_priority();
 
-    if matches!(
+    let order_pending = matches!(
         s.game()
             .state
             .suspended_decision
             .as_ref()
             .map(|s| &s.decision),
         Some(managym::flow::decision::Decision::OrderReplacement { .. })
-    ) {
+    );
+    assert_eq!(order_pending, first_replacement.is_some());
+    if let Some(first_replacement) = first_replacement {
         assert_eq!(s.action_space().player, Some(target));
         assert_eq!(s.life(target.0), 20, "proposal has not committed");
         crate::support::play::choose_mode(&mut s, first_replacement);
@@ -80,11 +83,13 @@ fn committed_damage(events: &[GameEvent], player: PlayerId) -> Option<u32> {
 fn cr_615_prevented_damage_emits_no_committed_damage_or_life_event() {
     let (life, events) = resolve_bolt_with_drivers(
         614_001,
-        vec![vec![ReplacementEffect::PreventDamageToController {
-            amount: 3,
+        vec![vec![ReplacementEffect::ModifyDamage {
+            source_by: Actor::AnyPlayer,
+            recipient_by: Actor::You,
+            transform: DamageTransform::Prevent(3),
         }]],
         PlayerId(0),
-        0,
+        None,
     );
 
     assert_eq!(life, 20);
@@ -102,12 +107,22 @@ fn cr_615_prevented_damage_emits_no_committed_damage_or_life_event() {
 /// The chosen order is replayable; source insertion does not choose for them.
 #[test]
 fn cr_616_affected_player_chooses_replacement_order() {
-    let prevent_then_double = vec![
-        vec![ReplacementEffect::PreventDamageToController { amount: 1 }],
-        vec![ReplacementEffect::DoubleDamageToController],
-    ];
-    let first = resolve_bolt_with_drivers(614_002, prevent_then_double.clone(), PlayerId(0), 0);
-    let replay = resolve_bolt_with_drivers(614_002, prevent_then_double, PlayerId(0), 0);
+    let drivers = || {
+        vec![
+            vec![ReplacementEffect::ModifyDamage {
+                source_by: Actor::AnyPlayer,
+                recipient_by: Actor::You,
+                transform: DamageTransform::Prevent(1),
+            }],
+            vec![ReplacementEffect::ModifyDamage {
+                source_by: Actor::AnyPlayer,
+                recipient_by: Actor::You,
+                transform: DamageTransform::Double,
+            }],
+        ]
+    };
+    let first = resolve_bolt_with_drivers(614_002, drivers(), PlayerId(0), Some(0));
+    let replay = resolve_bolt_with_drivers(614_002, drivers(), PlayerId(0), Some(0));
 
     assert_eq!(
         first, replay,
@@ -121,29 +136,24 @@ fn cr_616_affected_player_chooses_replacement_order() {
         new: 16,
     }));
 
-    let (reverse_life, reverse_events) = resolve_bolt_with_drivers(
-        614_002,
-        vec![
-            vec![ReplacementEffect::PreventDamageToController { amount: 1 }],
-            vec![ReplacementEffect::DoubleDamageToController],
-        ],
-        PlayerId(0),
-        1,
-    );
+    let (reverse_life, reverse_events) =
+        resolve_bolt_with_drivers(614_002, drivers(), PlayerId(0), Some(1));
     assert_eq!(reverse_life, 15, "(3 * 2) - 1 damage");
     assert_eq!(committed_damage(&reverse_events, PlayerId(0)), Some(5));
 }
 
 #[test]
 fn nonmatching_replacement_preserves_the_legacy_committed_trace() {
-    let baseline = resolve_bolt_with_drivers(614_003, vec![Vec::new()], PlayerId(1), 0);
+    let baseline = resolve_bolt_with_drivers(614_003, vec![Vec::new()], PlayerId(1), None);
     let nonmatching = resolve_bolt_with_drivers(
         614_003,
-        vec![vec![ReplacementEffect::PreventDamageToController {
-            amount: 3,
+        vec![vec![ReplacementEffect::ModifyDamage {
+            source_by: Actor::AnyPlayer,
+            recipient_by: Actor::You,
+            transform: DamageTransform::Prevent(3),
         }]],
         PlayerId(1),
-        0,
+        None,
     );
 
     assert_eq!(baseline, nonmatching);

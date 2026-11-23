@@ -16424,7 +16424,10 @@ fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
 #[test]
 fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink() {
     use managym::flow::event::DamageTarget;
-    use managym::state::card::ReplacementEffect;
+    use managym::state::{
+        ability::Actor,
+        card::{DamageTransform, ReplacementEffect},
+    };
 
     // Preventing first absorbs the hit. Doubling first leaves two damage,
     // so only Cindermaw distinguishes the last two outcomes.
@@ -16446,8 +16449,16 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
         let shield = s.force_permanent_on_battlefield(1, "Island");
         let object = card_of(&s, shield);
         s.game_mut().state[object].replacement_effects = vec![
-            ReplacementEffect::PreventDamageToController { amount: 2 },
-            ReplacementEffect::DoubleDamageToController,
+            ReplacementEffect::ModifyDamage {
+                source_by: Actor::AnyPlayer,
+                recipient_by: Actor::You,
+                transform: DamageTransform::Prevent(2),
+            },
+            ReplacementEffect::ModifyDamage {
+                source_by: Actor::AnyPlayer,
+                recipient_by: Actor::You,
+                transform: DamageTransform::Double,
+            },
         ];
         clear_summoning_sickness(&mut s, attacker);
         s.advance_to_active_step(0, StepKind::DeclareAttackers);

@@ -842,3 +842,45 @@ fn anthem_bonuses_parent_and_its_cat_while_in_play() {
     move_card(&mut s, anthem, ZoneType::Graveyard);
     assert_board(&s, 0);
 }
+
+#[test]
+fn twinflame_tyrant_doubles_only_friendly_damage_to_opposing_recipients() {
+    use crate::support::{
+        inspect::{find_owned_card, permanent},
+        play::cast_card,
+    };
+    use managym::state::game_object::Target;
+
+    for caster in [0, 1] {
+        for recipient in [0, 1] {
+            for creature in [false, true] {
+                let mut s =
+                    five_color_setup(&["Twinflame Tyrant", "Lightning Bolt", "Wall of Stone"]);
+                s.force_permanent_on_battlefield(0, "Twinflame Tyrant");
+                let wall = s.force_permanent_on_battlefield(recipient, "Wall of Stone");
+                s.advance_to_active_step(caster, StepKind::Main);
+                let bolt = find_owned_card(&s, caster, "Lightning Bolt");
+                let bolt = move_card(&mut s, bolt, ZoneType::Hand);
+                s.set_player_mana_pool(caster, "R");
+                cast_card(&mut s, bolt);
+                let target = if creature {
+                    Target::Permanent(wall)
+                } else {
+                    Target::Player(PlayerId(recipient))
+                };
+                assert!(s.choose_target(target));
+                settle(&mut s);
+                let damage = if creature {
+                    permanent(&s, wall).damage
+                } else {
+                    20 - s.life(recipient)
+                };
+                assert_eq!(
+                    damage,
+                    if caster == 0 && recipient == 1 { 6 } else { 3 },
+                    "caster {caster}, target {target:?}"
+                );
+            }
+        }
+    }
+}

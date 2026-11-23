@@ -5,9 +5,9 @@ use managym_state::{
         PlayWindow, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, LayerValue, PrintedCharacteristics, SacrificeCost, StaticAbility,
-        StaticContinuous, StaticScope, TargetCostReduction,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
+        DamageTransform, Keyword, Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect,
+        SacrificeCost, StaticAbility, StaticContinuous, StaticScope, TargetCostReduction,
     },
     effect::Modification,
     mana::ManaCost,
@@ -28,7 +28,32 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         luminous_rebuke(),
         prideful_parent(),
         sire_of_seven_deaths(),
+        twinflame_tyrant(),
     ]
+}
+
+fn twinflame_tyrant() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.twinflame_tyrant",
+        scryfall_id: "1eb34f51-0bd2-43c3-af95-2ce8dabcc7bb",
+        printed: PrintedCharacteristics {
+            name: "Twinflame Tyrant".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(3),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            replacement_effects: vec![ReplacementEffect::ModifyDamage {
+                source_by: Actor::You,
+                recipient_by: Actor::Opponent,
+                transform: DamageTransform::Double,
+            }],
+            text_box: "Flying\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals double that damage instead.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn sire_of_seven_deaths() -> CardDefinition {

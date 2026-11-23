@@ -2866,12 +2866,23 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
 #[test]
 fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
     use crate::flow::combat::CombatState;
-    use crate::state::card::ReplacementEffect;
+    use crate::state::{
+        ability::Actor,
+        card::{DamageTransform, ReplacementEffect},
+    };
     let defender = PlayerId(1);
     let (mut root, first, second) = fixture(defender);
     for effect in [
-        ReplacementEffect::PreventDamageToController { amount: 1 },
-        ReplacementEffect::DoubleDamageToController,
+        ReplacementEffect::ModifyDamage {
+            source_by: Actor::AnyPlayer,
+            recipient_by: Actor::You,
+            transform: DamageTransform::Prevent(1),
+        },
+        ReplacementEffect::ModifyDamage {
+            source_by: Actor::AnyPlayer,
+            recipient_by: Actor::You,
+            transform: DamageTransform::Double,
+        },
     ] {
         let id = root
             .scenario_force_battlefield(defender, "Mountain", true)

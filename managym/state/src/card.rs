@@ -474,6 +474,12 @@ pub enum Restriction {
     CantBeBlockedByMoreThanOne,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DamageTransform {
+    Double,
+    Prevent(u32),
+}
+
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
@@ -481,12 +487,11 @@ pub enum Restriction {
 /// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
-    /// Prevent `amount` damage that would be dealt to this permanent's
-    /// controller or a permanent they control.
-    PreventDamageToController { amount: i32 },
-    /// Double damage that would be dealt to this permanent's controller or a
-    /// permanent they control. This driver makes ordering observable.
-    DoubleDamageToController,
+    ModifyDamage {
+        source_by: super::ability::Actor,
+        recipient_by: super::ability::Actor,
+        transform: DamageTransform,
+    },
     /// This object enters the battlefield tapped (CR 614.1c).
     EntersTapped,
     /// This object enters tapped unless its entering controller already

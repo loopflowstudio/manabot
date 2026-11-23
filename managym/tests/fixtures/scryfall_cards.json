@@ -1,4 +1,19 @@
 {
+  "Twinflame Tyrant": {
+    "name": "Twinflame Tyrant",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Double"
+    ],
+    "oracle_text": "Flying\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals double that damage instead.",
+    "colors": [
+      "R"
+    ]
+  },
   "Marauding Blight-Priest": {
     "name": "Marauding Blight-Priest",
     "mana_cost": "{2}{B}",

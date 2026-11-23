@@ -6,7 +6,10 @@
 //! source snapshot and returns its results with the consequences its caller
 //! runs next.
 
-use crate::state::card::Keyword;
+use crate::state::{
+    ability::Actor,
+    card::{DamageTransform, Keyword},
+};
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::card::StaticAbility,
@@ -284,10 +287,16 @@ impl ReplacementCandidate {
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
-            ReplacementEffect::PreventDamageToController { amount } => {
+            ReplacementEffect::ModifyDamage {
+                transform: DamageTransform::Prevent(amount),
+                ..
+            } => {
                 format!("Prevent {amount} damage")
             }
-            ReplacementEffect::DoubleDamageToController => "Double the damage".into(),
+            ReplacementEffect::ModifyDamage {
+                transform: DamageTransform::Double,
+                ..
+            } => "Double the damage".into(),
             ReplacementEffect::EntersTapped
             | ReplacementEffect::EntersTappedUnlessControls { .. } => "Enter tapped".into(),
             ReplacementEffect::EntersWithPlusOneCounters { count, .. } => {
@@ -1112,7 +1121,7 @@ impl Game {
                         continue;
                     };
                     let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    let affected_side = permanent.controller == affected_controller;
+
                     let source_side = source_controller == Some(permanent.controller)
                         && permanent.controller != affected_controller;
                     for (definition_index, effect) in self.state[permanent.object]
@@ -1121,8 +1130,17 @@ impl Game {
                         .enumerate()
                     {
                         let applies = match effect {
-                            ReplacementEffect::PreventDamageToController { .. }
-                            | ReplacementEffect::DoubleDamageToController => affected_side,
+                            ReplacementEffect::ModifyDamage {
+                                source_by,
+                                recipient_by,
+                                ..
+                            } => {
+                                recipient_by.includes(permanent.controller, affected_controller)
+                                    && (*source_by == Actor::AnyPlayer
+                                        || source_controller.is_some_and(|p| {
+                                            source_by.includes(permanent.controller, p)
+                                        }))
+                            }
                             ReplacementEffect::OpponentDamagePlusCounters { .. } => source_side,
                             _ => false,
                         };
@@ -1383,12 +1401,20 @@ impl Game {
 
             (
                 ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::PreventDamageToController { amount: prevented },
+                ReplacementEffect::ModifyDamage {
+                    transform: DamageTransform::Prevent(prevented),
+                    ..
+                },
             ) => {
-                debug_assert!(*prevented >= 0, "prevention amount must be nonnegative");
-                *amount = amount.saturating_sub((*prevented).max(0)).max(0);
+                *amount = amount.saturating_sub_unsigned(*prevented).max(0);
             }
-            (ProposedEvent::Damage { amount, .. }, ReplacementEffect::DoubleDamageToController) => {
+            (
+                ProposedEvent::Damage { amount, .. },
+                ReplacementEffect::ModifyDamage {
+                    transform: DamageTransform::Double,
+                    ..
+                },
+            ) => {
                 *amount = amount.saturating_mul(2);
             }
             (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersTapped) => {
