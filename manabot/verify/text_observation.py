@@ -36,27 +36,24 @@ def priority_root(
     # played for a model or policy from these roots.
     env = managym.Env(seed=23, skip_trivial=False)
     deck = {card: 20 for card in sorted(set(hand + battlefield + opponent))}
-    env.reset(
+    obs, _ = env.reset(
         managym.GameSetup(
             [managym.PlayerConfig(name, deck) for name in ("a", "b")],
             mana_floats=(mana_floats, mana_floats),
         )
     )
-    # Keep both dealt hands for this turn-position fixture.
-    env.step(0)
-    obs = env.step(0)[0]
-    for _ in range(20):
+    for _ in range(22):
         if obs.turn.turn_number and obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN:
             break
-        action_type = (
-            managym.ActionEnum.DECLINE_CHOICE
-            if obs.turn.turn_number == 0
-            else managym.ActionEnum.PRIORITY_PASS_PRIORITY
-        )
+        # Keep the dealt hand, decline pregame entries, then pass priority.
         index = next(
             i
             for i, action in enumerate(obs.action_space.actions)
-            if action.action_type == action_type
+            if (action.action_type == managym.ActionEnum.CHOOSE_MODE and action.mode_index == 0)
+            or action.action_type in (
+                managym.ActionEnum.DECLINE_CHOICE,
+                managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+            )
         )
         obs = env.step(index)[0]
     else:

@@ -13,6 +13,7 @@ from manabot.managym.experience import ExperienceFrame, InteractionOffer
 import managym
 from managym.academy import server, trace as trace_store
 from tests.academy.socket_messages import settled_message
+from tests.fixtures.recorded_commands import preferred_action
 
 HERO = "56 Island\n4 Secret of Bloodbending"
 VILLAIN = "56 Island\n4 Accumulate Wisdom"
@@ -165,16 +166,7 @@ def test_submitted_tla_decks_play_through_the_training_environment() -> None:
                 managym.ActionEnum.PRIORITY_PASS_PRIORITY,
             )
         )
-        preferred = next(
-            (
-                i
-                for kind in preferences
-                for i, action in enumerate(actions)
-                if action.action_type == kind
-            ),
-            0,
-        )
-        _, _, done, truncated, _ = env.step(preferred)
+        _, _, done, truncated, _ = env.step(preferred_action(actions, *preferences))
         assert not done and not truncated
     else:
         raise AssertionError("training consumer never reached delegated control")

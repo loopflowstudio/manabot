@@ -1,21 +1,21 @@
-at: 1af15ad430fe650c27cf07229a0e59a56b12fbbe
+at: 2ace17228e3de6b6819403df2da890e676af58a4
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
+  - path: managym/src/flow/game.rs
+    why: Lifecycle and committed outcome data
+  - path: managym/src/flow/opening.rs
+    why: Follow mulligans and private bottom choices
   - path: managym/cards/src/dgm.rs
     why: Read the victory condition after the optional search
   - path: managym/cards/src/eld.rs
     why: Compare Passage’s successful-search land count
   - path: managym/src/flow/statics.rs
     why: Count matching permanents or their effective names
-  - path: managym/src/flow/game.rs
-    why: Lifecycle and committed outcome data
-  - path: managym/src/flow/opening.rs
-    why: Follow mulligans and private bottom choices
   - path: managym/src/flow/resolution.rs
     why: Follow turn ending and explicit wins
   - path: managym/src/flow/sba.rs
-    why: Apply simultaneous losses and Herald protection
+    why: Resolve simultaneous losses and group legends by controller
   - path: managym/src/agent/env.rs
     why: Both step APIs project the committed outcome
   - path: tests/env/test_game_snapshot.py
@@ -32,6 +32,8 @@ first:
     why: Match exile labels to the visible Equipment
   - path: manabot/semantic/text_observation.py
     why: Distinguish activation source from exile cost
+  - path: manabot/verify/text_observation.py
+    why: Reach first-main priority through offered opening choices
   - path: tests/academy/test_bracelet_offers.py
     why: Compare both Commands with independently selected native actions
   - path: managym/cards/tests/cards/eoe.rs

@@ -45,21 +45,8 @@ impl Game {
     }
 
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
-        if self.state.opening().is_some() {
-            return match action {
-                Action::ChooseMode { mode: 0, .. } => Some("Keep hand".into()),
-                Action::ChooseMode { mode: 1, .. } => Some("Mulligan".into()),
-                Action::Decline { .. } => Some("Finish opening-hand actions".into()),
-                Action::SelectCard { object, .. } if self.opening_entry() => Some(format!(
-                    "Begin with {} on the battlefield",
-                    self.state[*object].name
-                )),
-                Action::SelectCard { object, .. } => Some(format!(
-                    "Bottom {} (deepest first)",
-                    self.state[*object].name
-                )),
-                _ => None,
-            };
+        if let Some(opening) = self.state.opening() {
+            return opening.action_description(self, action);
         }
         use crate::flow::decision::Decision;
         match action {

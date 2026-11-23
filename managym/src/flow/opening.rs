@@ -39,6 +39,23 @@ impl OpeningHands {
             ),
         }
     }
+    pub(crate) fn action_description(&self, game: &Game, action: &Action) -> Option<String> {
+        match action {
+            Action::ChooseMode { mode: 0, .. } => Some("Keep hand".into()),
+            Action::ChooseMode { mode: 1, .. } => Some("Mulligan".into()),
+            Action::Decline { .. } => Some("Finish opening-hand actions".into()),
+            Action::SelectCard { object, .. } if self.stage == Stage::Enter => Some(format!(
+                "Begin with {} on the battlefield",
+                game.state[*object].name
+            )),
+            Action::SelectCard { object, .. } => Some(format!(
+                "Bottom {} (deepest first)",
+                game.state[*object].name
+            )),
+            _ => None,
+        }
+    }
+
     /// Seat-relative projection is applied by the relation encoder. Neither frame contains a private card.
     pub(crate) fn frames(
         &self,
@@ -90,12 +107,6 @@ impl Game {
                     .statics
                     .contains(&crate::state::card::StaticAbility::BeginOnBattlefield)
             })
-    }
-
-    pub(crate) fn opening_entry(&self) -> bool {
-        self.state
-            .opening()
-            .is_some_and(|o| o.stage == Stage::Enter)
     }
 
     pub(crate) fn opening_actions(&self) -> Option<ActionSpace> {
