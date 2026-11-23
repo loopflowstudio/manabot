@@ -116,11 +116,11 @@ The text-play fixture exposed a missing stage in the renderer for announcing an 
 
 At `73475291`, Ooze and Hellkite share one sorted damage history. Resolution and observation read the combat-player range for the exact source. The v11 permanent and stack rows use the same viewer-relative seat encoding. This answers the pending-source query even after the permanent row disappears.
 
-**Behavior review at 426f0470 — return to implementation.** With the text fixture’s `priority_root((), ("Steel Hellkite",))`, seat 0 has an untapped Hellkite and no mana source. Activate ability 2. The native offer shows X=0 and X=1. Submitting X=1 through `submit_response` raises `PanicException` with “structured search offer admitted an unexecutable action: not enough automatic mana”. Only zero is payable. The combat fixture taps its Hellkite to attack and misses this case.
+Review at `426f0470` found that an untapped Hellkite with no mana source offered X=1 and panicked on submission. The combat fixture missed this because attacking tapped the Hellkite.
 
-The repaired announcement reads the mana component built by activation payment, including waterbend eligibility, and reserves the source’s own costs in the announcement model. The new Scars of Mirrodin fixture offered [0] with Hellkite alone and [0, 1] with a Mountain. Every branch resolved from the saved X decision, leaving Hellkite untapped and tapping the Mountain only for one. The rebuilt CPython 3.13 extension returned the same complete offers through text play and accepted every response after snapshot restore. Katara’s waterbend control offered [1, 2, 3, 4] and paid two by tapping the Ally and Ogre while keeping its floating mana.
+At `5a5f87c0`, `flow/play.rs::legal_activation_x_values` reads the mana component built by activation payment, including waterbend eligibility, and reserves the source’s own costs in the announcement model. `som.rs::steel_hellkite_offers_only_payable_x_values` offered [0] with Hellkite alone and [0, 1] with a Mountain. Every branch resolved from the saved X decision, leaving Hellkite untapped and tapping the Mountain only for one. The rebuilt CPython 3.13 extension returned the same complete offers through text play and accepted every response after snapshot restore. The genuine waterbend control (`tla.rs::katara_waterbends_x_to_set_your_creatures_base_pt`) offered [1, 2, 3, 4] and paid two by tapping the Ally and Ogre while keeping its floating mana.
 
-Lunar Insight is next. Full replay/privacy validation and Engine Budget comparisons remain with their later phases.
+The activation payment repair closes the Hellkite review finding. Full replay/privacy validation and Engine Budget comparisons remain open.
 
 ## Next slice · Lunar Insight
 
