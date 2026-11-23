@@ -22,7 +22,7 @@ from pydantic import ConfigDict, Field, TypeAdapter
 
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.schema import Strict
-from manabot.training.rollout.adaptive import _ranks
+from manabot.training.rollout.adaptive import rank_weights
 from manabot.training.rollout.signals import BatchSignals
 from manabot.training.rollout.snapshot_vector import (
     CapturedSnapshot,
@@ -273,7 +273,7 @@ class BatchPlan:
                 )
                 for k in keys
             ]
-            [key] = self.rng.choices(keys, weights=_ranks(scores))
+            [key] = self.rng.choices(keys, weights=rank_weights(scores))
         self.entries[key] = self.entries[key].model_copy(
             update={"last_visit_generation": self.base_generation + 1}
         )

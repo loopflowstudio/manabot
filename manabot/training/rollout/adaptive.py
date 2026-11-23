@@ -150,7 +150,7 @@ class AdaptiveDiagnostics(TypedDict):
     residual_total: float
 
 
-def _ranks(scores: list[float]) -> list[float]:
+def rank_weights(scores: list[float]) -> list[float]:
     """Descending inverse ranks, with tied ranks averaged before inversion."""
     counts = Counter(scores)
     inverse_ranks: dict[float, float] = {}
@@ -317,7 +317,7 @@ class AdaptiveSampler:
         if self.config.signal in ("M", "ME"):
             known = [i for i, score in enumerate(matchup) if score is not None]
             if known:
-                ranks = _ranks([score for score in matchup if score is not None])
+                ranks = rank_weights([score for score in matchup if score is not None])
                 for cell, weight in zip(known, ranks, strict=True):
                     m[cell] = weight * len(known) / n
         match self.config.signal:
@@ -326,9 +326,9 @@ class AdaptiveSampler:
             case "M":
                 priority = m
             case "E":
-                priority = _ranks(error)
+                priority = rank_weights(error)
             case "ME":
-                priority = [(a + b) / 2 for a, b in zip(m, _ranks(error), strict=True)]
+                priority = [(a + b) / 2 for a, b in zip(m, rank_weights(error), strict=True)]
         s.window, s.matchup_scores, s.error_scores = window, matchup, error
         s.probabilities = _cap(priority)
         s.generation += 1
