@@ -2,10 +2,13 @@
 
 import json
 
+import numpy as np
 import torch
 
+from manabot.env.observation import STACK_SOURCE_INDEX
 from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision, submit_response
+from manabot.verify import choice_inputs
 from manabot.verify.action_cases import encode
 from manabot.verify.choice_corpus import _signatures, action_inputs
 from manabot.verify.text_observation import priority_root
@@ -73,3 +76,23 @@ def test_stack_aliases_share_a_signature_and_reach_collision_inputs() -> None:
         )
     assert signatures[0] == signatures[1]
     assert inputs[0] == inputs[1]
+
+
+def test_permutations_preserve_stack_sources_card_turn_state_and_names() -> None:
+    raw = priority_root(("Waterbending Lesson",), ("Island",)).scenario_refresh()
+    obs = choice_inputs.encode(raw)
+    first_permanent = 2 + 2 * obs["agent_cards"].shape[1]
+    permanent_count = obs["agent_permanents"].shape[1]
+    first_stack = first_permanent + 2 * permanent_count
+    obs["stack"][0, 0, STACK_SOURCE_INDEX] = first_permanent + 1
+    obs["action_focus"][0, 0, 0] = first_stack
+    obs["card_turn_state"][0, 1, 0] = 1
+    obs["name_candidates"][0, 0, 0] = 3
+    moved = choice_inputs.reorder_objects(obs)
+    assert moved["stack"][0, 0, STACK_SOURCE_INDEX] == first_permanent + permanent_count
+    assert moved["action_focus"][0, 0, 0] == first_stack
+    assert moved["card_turn_state"][0, 1, -1] == 1
+    offers = choice_inputs.reorder_offers(moved, [1, 0])
+    assert offers["name_candidates"][0, 1, 0] == 3
+    for key, value in choice_inputs.reorder_objects(moved).items():
+        np.testing.assert_array_equal(value, obs[key], strict=True)

@@ -402,7 +402,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         *_TORCH_LOOPS,
         "manabot/training/mps.py",
         "manabot/verify/action_cases.py",
-        "manabot/verify/choice_corpus.py",
     )
 )
 
@@ -738,3 +737,70 @@ assert 'torch' not in sys.modules
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_mlx_choice_inspection_without_torch(tmp_path: Path) -> None:
+    if importlib.util.find_spec("mlx") is None:
+        pytest.skip("requires MLX")
+    probe = """
+import sys
+from pathlib import Path
+sys.modules['torch'] = None
+from tests.test_package_boundaries import exercise_choice_inspection
+
+exercise_choice_inspection(Path(sys.argv[1]))
+"""
+    subprocess.run(
+        [sys.executable, "-c", probe, str(tmp_path)],
+        cwd=REPO_ROOT,
+        check=True,
+        timeout=90,
+    )
+
+
+def exercise_choice_inspection(out: Path) -> None:
+    from itertools import count
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from manabot.backends import resolve
+    from manabot.env.observation import ObservationSpace
+    from manabot.infra.config import ModelConfig
+    from manabot.verify import choice_corpus
+    from manabot.verify.learning_regression import inspect_policy
+    import managym
+
+    # Freeze the prefix at 32 native decisions, independent of runner speed.
+    with patch.object(choice_corpus, "time") as clock:
+        clock.perf_counter.side_effect = count()
+        cases, _, findings = choice_corpus.collect_choices(out, 0, deadline=32)
+    assert len(cases) >= 2 and not findings
+    with np.load(out / "observations.npz", allow_pickle=False) as stored:
+        for case in cases:
+            for key, value in case.obs.items():
+                assert isinstance(value, np.ndarray)
+                np.testing.assert_array_equal(
+                    stored[f"{case.name}/{key}"], value, strict=True
+                )
+
+    backend = resolve("mlx", precision="float32")
+    space = ObservationSpace()
+    model = ModelConfig(
+        world="world",
+        hidden_dim=16,
+        num_attention_heads=2,
+        value_aggregation="masked_mean",
+    )
+    policy = backend.runtime.create_policy(space, model)
+    checkpoint = out / "policy.safetensors"
+    decks = [
+        managym.authored_deck_setup(choice_corpus.PACK, key)
+        for key in ("ur_lessons", "gw_allies")
+    ]
+    backend.save_policy(policy, space, checkpoint, player_configs=decks)
+    snapshot = inspect_policy(checkpoint, cases[:2], 0, backend=backend)
+    assert [choice.case for choice in snapshot.choices] == [
+        case.name for case in cases[:2]
+    ]
+    assert snapshot.maximum_invariance_error <= 1e-4

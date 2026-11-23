@@ -16,10 +16,9 @@ from typing import Literal
 
 from etude.train.read import read_all
 import numpy as np
-from numpy.typing import ArrayLike
 from pydantic import Field
 
-from manabot.env.observation import ActionEnum
+from manabot.env.observation import ActionEnum, ObservationBuffers
 from manabot.eval.evaluation import EvaluationResult, evaluate_local
 from manabot.eval.local import checkpoint_request
 from manabot.eval.results import EvaluationRow
@@ -32,8 +31,8 @@ from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
 from manabot.training.state.backend import VerificationBackend
-from manabot.verify.action_cases import reorder_objects, reorder_offers
 from manabot.verify.choice_corpus import PACK, Case, collect_choices, input_collisions
+from manabot.verify.choice_inputs import reorder_objects, reorder_offers
 import managym
 
 Verdict = Literal["learning", "regression", "inconclusive", "error"]
@@ -170,10 +169,9 @@ def score_choices(
     """Score a bounded batch and check reload, batching and permutation invariance."""
 
     def evaluate(
-        policy: BackendPolicy, observation: Mapping[str, ArrayLike]
+        policy: BackendPolicy, observation: ObservationBuffers
     ) -> tuple[np.ndarray, np.ndarray]:
-        host = {key: np.asarray(value) for key, value in observation.items()}
-        return policy.evaluate(policy.prepare(host, inference=True))
+        return policy.evaluate(policy.prepare(observation, inference=True))
 
     stacked = {
         key: np.concatenate([case.obs[key] for case in cases], axis=0)

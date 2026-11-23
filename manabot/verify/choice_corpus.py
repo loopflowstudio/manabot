@@ -6,7 +6,7 @@ This corpus contains no strategic labels and never trains a model.
 """
 
 from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, fields
 from itertools import combinations, zip_longest
 import json
 from pathlib import Path
@@ -15,7 +15,6 @@ import time
 from typing import Literal
 
 import numpy as np
-import torch
 
 from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
@@ -23,7 +22,7 @@ from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     STACK_DEFINITION_INDEX,
 )
-from manabot.verify.action_cases import encode, reorder_offers
+from manabot.verify.choice_inputs import encode, reorder_offers
 import managym
 
 PACK = "ur-lessons-vs-gw-allies"
@@ -55,11 +54,15 @@ class Case:
     groups: tuple[list[int], list[int]]
     signatures: list[str]
     raw_json: str
-    obs: dict[str, torch.Tensor]
+    obs: dict[str, np.ndarray]
     successors: tuple[str, str]
 
     def receipt(self) -> dict[str, object]:
-        return {key: value for key, value in asdict(self).items() if key != "obs"}
+        return {
+            field.name: getattr(self, field.name)
+            for field in fields(self)
+            if field.name != "obs"
+        }
 
 
 def _keywords(value: managym.Keywords) -> list[bool]:
@@ -230,11 +233,11 @@ def collect_choices(
                             space.actions = original
                             raw.action_space = space
                         expected = reorder_offers(
-                            obs, torch.arange(len(actions) - 1, -1, -1)
+                            obs, np.arange(len(actions) - 1, -1, -1)
                         )
                         for key in obs:
-                            torch.testing.assert_close(
-                                reversed_obs[key], expected[key], rtol=0, atol=0
+                            np.testing.assert_array_equal(
+                                reversed_obs[key], expected[key], strict=True
                             )
                         counts[f"audited_family_{family}"] += 1
                         selected = _pair(groups, closest)
@@ -311,7 +314,14 @@ def collect_choices(
     out.mkdir(parents=True, exist_ok=True)
     _write_json(out / "cases.json", [case.receipt() for case in cases])
     _write_json(out / "native-findings.json", findings)
-    torch.save({case.name: case.obs for case in cases}, out / "observations.pt")
+    np.savez(
+        out / "observations.npz",
+        **{
+            f"{case.name}/{key}": value
+            for case in cases
+            for key, value in case.obs.items()
+        },
+    )
     return cases, counts, findings
 
 
@@ -332,7 +342,7 @@ class ActionInput:
 
 
 def action_inputs(
-    obs: dict[str, torch.Tensor], count: int, mutation: Mutation
+    obs: dict[str, np.ndarray], count: int, mutation: Mutation
 ) -> list[ActionInput]:
     rows: list[ObjectInput] = []
     for key in (
