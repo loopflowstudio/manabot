@@ -2,7 +2,7 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Battlefield identity · MTG-420</title>
 <style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · engine review at 8fd1eff3</small>
+<main><small>MTG-420 · engine review at 8d7af4b5</small>
 <h1>Does one battlefield target stay one rules event when two cards leave?</h1>
 <p>Yes for Lost Days. A search policy targets Ragnarok once. The owner then chooses how Fang and Vanille enter the library. The next instruction creates a Clue. Search needs a fork at that choice with the spell still resolving.</p>
 <h2>Existing · restore either library order</h2>
@@ -30,9 +30,15 @@
 <tr><td>Restore and choose Vanille first<td>Existing entries → Vanille → Fang<td>The same physical cards in reverse order
 <tr><td>Submit either spent Command again<td>Identical entries and order<td>Rejection leaves the event ledger intact</table>
 <p>The FIN test <code>ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent</code> checks both branches from one native snapshot. Portable replay remains an open check.</p>
-<h2>Proposed · one death, two arrivals, one trigger</h2>
-<p>Lethal damage offers the strongest next control. The state-based action already puts its simultaneous deaths in an <code>EffectFrame</code> with <code>EventBinding::Deaths</code>. Restore both graveyard orders there. Give Ragnarok a legal permanent to destroy and a distinct nonlegendary card to return. Both branches must expose one death ability and resolve its two instructions once. The second physical arrival must never count as another dying creature.</p>
-<p>Use that retained batch as the reference when auditing immediate callers. A single-card result and a call that can finish immediately are separate promises. Even a single card entering as Clone can require input. Search must be able to fork before the choice and resume the instruction that owned it. Measure the cost on ordinary games and Search-64 before adopting a larger common record.</p>
+<h2>Existing · one death, two arrivals, one trigger</h2>
+<p>After Blasphemous Act, the owner restores either graveyard order. The observation returned by each Command reports one death with Ragnarok’s identity and incarnation. Both fronts enter above the previous graveyard. One stacked ability destroys the chosen opposing Island and returns the chosen Gray Ogre. All four native Ragnarok tests passed at this revision.</p>
+<section><h2>Proposed · airbend Ragnarok, then draw</h2>
+<table><thead><tr><th>Search checkpoint<th>Opponent casting Airbending Lesson<th>Owner of Fang and Vanille
+<tbody><tr><td>Fork at the pending order<td>Two Commands. Draw still pending.<td>Controls one Ragnarok in this fixture.
+<tr><td>Restore either Command<td>Chooses the earlier exile timestamp. Records airbending and draws once.<td>Receives a {2} cast permission on each exact exile arrival.
+<tr><td>Submit the spent Command<td>Rejection preserves the draw, order and event history.<td>Both original grants survive.
+<tr><td>Cast one front when timing permits<td>Spell has finished resolving.<td>The other front retains its grant.</table>
+<p>Today <code>Effect::Airbend</code> loops over selected objects, moves each immediately, then records bending if any qualified. The permission helper receives a single successor. Carry the remaining selection and the once-per-instruction bending consequence through the resolution frame. Apply grants to surviving exile arrivals, then resume the Lesson’s draw. A token can be airbent without leaving a castable card. Counting grants to decide whether bending happened would lose that case.</p></section>
 <p>Manifest Dread supplies the independent privacy test. Two exact forks may hold different hidden printings while the opponent sees the same 2/2 and legal choices. A copy inherits the public form. A lasting ability retains its chosen program and source appearance across movement. Neither caller needs a hidden definition to identify a battlefield target.</p>
-<h2>Review questions</h2><ol><li>Which witness should implement first? <b>1a · Lethal damage (selected)</b> checks death cardinality and continuation ownership. 1b · Manifest checks hidden backing first.</li>
-<li>Where should a pending order live? <b>2a · In the existing event batch (selected)</b> restores the remaining instructions with the decision. 2b · A separate order queue would need to synchronize both records on every fork.</li></ol></main></html>
+<h2>Review questions</h2><ol><li>Where should the next fixture start? <b>1a · Airbending Lesson (selected)</b> exercises the chooser, permissions and draw in one resolution. 1b · Manifest Dread exercises hidden backing.</li>
+<li>Who owns the rest of the instruction? <b>2a · The retained resolution frame (selected)</b> keeps the remaining work with the pending batch on a fork. 2b · A separate permission queue would need its own recovery and ordering contract.</li></ol></main></html>

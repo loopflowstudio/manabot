@@ -100,6 +100,8 @@ An opponent can cast Airbending Lesson targeting Ragnarok. Its next instruction 
 
 Start from the genuine pair in `managym/cards/tests/cards/fin.rs`. Cast the Lesson from the other seat. At the timestamp choice Ragnarok should still be present and the draw pending. Restore both Commands, verify the two exact arrivals in each order, check each front’s owner can cast it for {2} under ordinary timing rules, and check the caster draws once. Reuse the retained batch and apply the permission to its surviving exile arrivals before resuming the frame. Keep Epic Downfall as the chooser control and Blasphemous Act as the one-death control. Review the remaining immediate callers for reachable choices, including linked entry follow-ups. Hand discards and library draws already have restricted source zones.
 
+At `8d7af4b5` all four `fin::ragnarok` tests passed together, including the lethal-damage control. In the Lesson slice retain the remaining selected objects and whether any qualified across suspension. The current Airbend loop records bending once per instruction, including for an airbent token with no surviving exile arrival. A count of grants cannot supply that fact. Keep the follow-up on the resolution frame so restoring a Command resumes the same instruction. Reject a spent Command without changing grants, event history or the draw. At a legal casting window spend one front’s permission and verify the other remains usable.
+
 Lost Days checks the event ledger, library order and single Clue after each spent Command is rejected. Owner-only library-order visibility and recorded replay remain open. Continue with Manifest Dread before settling the shared form representation.
 
 ## Native implementation and deletions
