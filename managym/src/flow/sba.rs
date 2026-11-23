@@ -266,6 +266,7 @@ impl Game {
             let from = self.state.zones.zone_of(object_id);
             match from {
                 Some(ZoneType::Library) => {
+                    self.state.library_order_pins_mut(owner).remove(&object_id);
                     // A token's departure is public. Shift known positions at
                     // that position without forgetting unrelated identities.
                     let position = self

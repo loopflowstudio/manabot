@@ -238,6 +238,34 @@ Everything the viewer can see is preserved.
 [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same domain exactly, with compatible-deal counts as weights, for beliefs that
 want more than a uniform redraw ([beside the loop](../README.md#beside-the-loop)).
 
+**Snapshot and continuation.** Save a live decision boundary with
+`Env::snapshot`. The immutable `GameSnapshot` is `Send + Sync`, so several
+workers can restore independent games after the source is dropped.
+
+```rust
+use managym::agent::{BranchMode, GameSnapshot, RestoreOptions};
+
+let snapshot = env.snapshot()?;
+let branch = snapshot.restore(RestoreOptions {
+    mode: BranchMode::ShuffleLibraries { seed: 101 },
+    forced_first_action: Some(0),
+    ..Default::default()
+})?;
+let replay = branch.snapshot()?.to_replay_json()?;
+let reopened = GameSnapshot::from_replay_json(&replay)?;
+```
+
+An exact restore continues the RNG, both decision logs, chooser policies and
+issued object bindings. Each restored game has fresh projection caches and
+a new capture generation. Choose a branch mode, optionally change decision
+memory capture, then optionally commit a first action. Restore checks that
+the action still identifies the same choice after sampling.
+
+The private snapshot replay reproduces the original setup, external actions and
+ordered interventions and verifies the resulting digest. See the
+[Python snapshot guide](engine-python.md#save-and-restore-game-positions)
+for the mode contracts, replay limits and Academy Watch import.
+
 ### Remembered library positions
 
 Native knowledge retains public hand minima and exact card definitions at
@@ -260,6 +288,14 @@ native facts. Samplers reserve distinct definition witnesses for known library
 positions before dealing the remaining hand and library. An unshared sampled
 opponent's private position map resets to their public map. Clones preserve
 both maps. Closed opposing decklists still refuse hidden-world sampling.
+
+`BranchMode::ShuffleLibraries` works on both open and closed decks without
+altering either hand, face-down exile, or future rules RNG. Because the
+positional knowledge maps are bounded at ten entries, the engine separately
+pins every library object that was inspected, revealed as a visible top, or
+placed/repositioned in the library until a genuine rules shuffle clears that
+seat's pins (and pins an entire library while a suspended search inspects it).
+Only the remaining exchangeable slots permute in place.
 
 ## Batched games
 
@@ -407,7 +443,7 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 | One game, explicit reset, readable observations | `managym.Env` |
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
 | Encoded fixed-viewer observations for every slot, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
-| Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
+| Revision-bound Commands, decision captures, live snapshots (`GameSnapshot` / `RestoreOptions`), forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
 | Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
 | Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |
