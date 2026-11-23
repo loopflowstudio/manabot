@@ -289,6 +289,9 @@ impl Game {
                                 LibraryEnd::Bottom => "bottom",
                             }
                         )),
+                        Decision::ManifestDread { .. } => {
+                            Some(format!("Manifest {}", self.state[*object_id].name))
+                        }
                         Decision::Surveil { .. } => Some(format!(
                             "Put {} into your graveyard",
                             self.state[*object_id].name

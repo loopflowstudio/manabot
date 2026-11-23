@@ -850,7 +850,9 @@ impl Game {
                 rebind(looked.iter_mut(), &rebinding.objects);
                 rebind(graveyard.iter_mut(), &rebinding.objects);
             }
-            Decision::LookAndSelect { looked, .. } => rebind(looked.iter_mut(), &rebinding.objects),
+            Decision::ManifestDread { looked, .. } | Decision::LookAndSelect { looked, .. } => {
+                rebind(looked.iter_mut(), &rebinding.objects)
+            }
             Decision::OrderLibrary { object_ids, .. } => {
                 rebind(object_ids.iter_mut(), &rebinding.objects)
             }

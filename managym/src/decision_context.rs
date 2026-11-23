@@ -464,6 +464,7 @@ impl Game {
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
                 Decision::OrderLibrary { end: LibraryEnd::Bottom, .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
                 Decision::OrderLibrary { end: LibraryEnd::Top, .. } => ("order_library_top", "Choose which remaining card to draw next. Earlier choices stay above later choices; the last card is placed automatically."),
+                Decision::ManifestDread { .. } => ("manifest_dread", "Choose a card to manifest. Put the other into your graveyard."),
                 Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard, then keep and order the rest on top."),
                 Decision::OrderMeldedCards { .. } => ("order_melded_cards", "Choose the relative order of the two cards leaving the battlefield."),
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),

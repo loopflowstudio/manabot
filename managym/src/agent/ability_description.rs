@@ -1074,6 +1074,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ShuffleLibrary => "Shuffle your library".into(),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
+        ManifestDread => "Manifest dread".into(),
         Surveil { count } => format!("Surveil {count}"),
         LookAndSelect { random_order, reveal, to_battlefield, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them {} and the rest on the bottom in {} order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards"), if *to_battlefield { "onto the battlefield" } else { "into your hand" }, if *random_order { "a random" } else { "your chosen" }),
         RevealLibraryTop => "Reveal the top card of your library".into(),

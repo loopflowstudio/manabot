@@ -573,6 +573,10 @@ pub enum Decision {
         top: Vec<ObjectId>,
         bottom: Vec<ObjectId>,
     },
+    ManifestDread {
+        player: PlayerId,
+        looked: Vec<ObjectId>,
+    },
     /// Surveil (CR 701.25): select cards for the graveyard, then order
     /// the kept cards on top through the shared library-order decision.
     Surveil {
@@ -745,6 +749,7 @@ impl Decision {
             | Decision::ExileLinked { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::Scry { player, .. }
+            | Decision::ManifestDread { player, .. }
             | Decision::Surveil { player, .. }
             | Decision::OrderLibrary { player, .. }
             | Decision::LookAndSelect { player, .. }
@@ -771,6 +776,7 @@ impl Decision {
     pub(crate) fn library_inspection(&self) -> Option<(PlayerId, &[ObjectId])> {
         match self {
             Self::Scry { player, looked, .. }
+            | Self::ManifestDread { player, looked }
             | Self::Surveil { player, looked, .. }
             | Self::LookAndSelect { player, looked, .. } => Some((*player, looked)),
             Self::OrderLibrary {
@@ -821,7 +827,9 @@ impl Decision {
                 LibraryEnd::Top => objects,
                 LibraryEnd::Bottom => &objects[*next..],
             },
-            Decision::LookAndSelect { looked, .. } | Decision::Surveil { looked, .. } => looked,
+            Decision::LookAndSelect { looked, .. }
+            | Decision::ManifestDread { looked, .. }
+            | Decision::Surveil { looked, .. } => looked,
             Decision::SearchDistinctNames { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::CastDuringResolution {
@@ -1918,6 +1926,12 @@ impl Game {
                     focus: self.object_focus(&object_ids),
                 }
             }
+            Decision::ManifestDread { player, looked } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_objects(*player, looked.iter().copied(), false),
+                focus: self.object_focus(looked),
+            },
             Decision::Surveil {
                 player,
                 looked,
@@ -2607,6 +2621,16 @@ impl Game {
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
                 }
+                Ok(())
+            }
+            (Decision::ManifestDread { player, looked }, Action::SelectCard { object, .. })
+                if looked.contains(object) =>
+            {
+                self.manifest(*object, *player);
+                for other in looked.iter().filter(|other| *other != object) {
+                    self.move_object(*other, ZoneType::Graveyard);
+                }
+                self.run_frame(suspended.frame);
                 Ok(())
             }
             (

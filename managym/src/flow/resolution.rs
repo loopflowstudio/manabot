@@ -1936,6 +1936,19 @@ impl Game {
                     bottom: Vec::new(),
                 })
             }
+            Effect::ManifestDread => {
+                let player = frame.controller;
+                let looked = self.library_top_objects(player, 2);
+                self.remember_library_objects(player, &looked);
+                match looked.as_slice() {
+                    [] => None,
+                    [only] => {
+                        self.manifest(*only, player);
+                        None
+                    }
+                    _ => Some(Decision::ManifestDread { player, looked }),
+                }
+            }
             Effect::Surveil { count } => {
                 if *count > 0 {
                     frame.complete_with_event(GameEvent::Surveilled {

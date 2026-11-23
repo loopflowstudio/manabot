@@ -17,3 +17,4 @@
 - Use Airbending Lesson for the immediate-move probe. The same spell exposes the exile chooser, both cast permissions and whether the following draw waits.
 - Start Manifest Dread with indistinguishable opponent views before implementing turn-up payment. The current permanent projection exposes its backing registry key directly.
 - Exercise the selected Manifest Dread card through native manifest entry. The paired fixture starts after the private choice so it can isolate battlefield projection before the spell and turn-up payment are authored.
+- Use a mandatory private selection for the top two. Resolve a sole library card directly, as there is only one legal outcome.

@@ -727,6 +727,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::GainLife { .. } => "Effect::GainLife",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
+        Effect::ManifestDread => "Effect::ManifestDread",
         Effect::Surveil { .. } => "Effect::Surveil",
         Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
         Effect::RevealLibraryTop => "Effect::RevealLibraryTop",
@@ -780,7 +781,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 86;
+const EFFECT_VARIANTS: usize = 87;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -874,6 +875,7 @@ fn effect_witnesses() -> Vec<Effect> {
             }),
         },
         Effect::Scry { count: 1 },
+        Effect::ManifestDread,
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
             to_battlefield: true,

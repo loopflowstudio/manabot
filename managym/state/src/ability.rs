@@ -1310,6 +1310,7 @@ pub enum Effect {
     Scry {
         count: usize,
     },
+    ManifestDread,
     /// Surveil `count` (CR 701.25): look at the top cards and put any
     /// number of them into the graveyard, then order the kept cards on top.
     Surveil {
@@ -1887,6 +1888,7 @@ impl Effect {
             | Effect::GainLife { .. }
             | Effect::FightLastTarget
             | Effect::Scry { .. }
+            | Effect::ManifestDread
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
             | Effect::RevealLibraryTop

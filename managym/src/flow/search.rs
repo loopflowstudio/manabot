@@ -228,6 +228,7 @@ impl Game {
                             suspended.decision,
                             Decision::SelectCards { .. }
                                 | Decision::Scry { .. }
+                                | Decision::ManifestDread { .. }
                                 | Decision::Surveil { .. }
                                 | Decision::LookAndSelect { .. }
                                 | Decision::OrderLibrary { .. }

@@ -1232,6 +1232,7 @@ pub(crate) fn project_decision(
             out.object_ids("kept on top", top);
             out.object_ids("placed on bottom", bottom);
         }
+        Decision::ManifestDread { looked, .. } => out.object_ids("inspected", looked),
         Decision::Surveil {
             looked, graveyard, ..
         } => {

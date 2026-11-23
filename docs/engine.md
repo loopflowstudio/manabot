@@ -1032,6 +1032,12 @@ card to draw first. Ragnarok stays on the battlefield until that choice
 commits, then both cards move and the spell creates its Clue. A token
 copy of Ragnarok leaves without an ordering choice.
 
+When Manifest Dread resolves, its controller privately inspects the top two library
+cards and chooses one to put onto the battlefield face down. The opponent sees a
+nameless 2/2 creature and can see the other card in the graveyard. With one card
+left, that card enters face down automatically. With an empty library, the spell
+finishes resolving. Turning a manifested creature face up is still pending.
+
 Esper Origins illustrates a zone change with a different face up. Cast it from hand
 to surveil two and gain two life. Cast it from your graveyard for its flashback
 cost and it also exiles itself, then enters as Summon: Esper Maduin with finality

@@ -36,6 +36,7 @@ mod eoe;
 mod fdn;
 mod fin;
 pub use fin::ragnarok;
+mod dsk;
 mod frf;
 mod fut;
 mod gpt;
@@ -137,6 +138,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     dft::cards,
     dmu::cards,
     dom::cards,
+    dsk::cards,
     dtk::cards,
     ecl::cards,
     eld::cards,
