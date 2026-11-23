@@ -101,7 +101,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 The Cat entry tests above cover the previous iteration's requests. The four authored cards now use `Ability::when_enters` in `managym/state/src/ability.rs` for entry triggers without an intervening condition. The subject still distinguishes Arahbo entering itself from another qualifying Cat entering. Regal Caracal uses one continuous ability for both grants and a separate printed token face for intrinsic lifelink.
 
-1. **Parent and Anthem.** The directed FDN position resolves Parent’s entry with Anthem in play. Parent and its single ordinary Cat are 3/3 and 2/2, then 2/2 and 1/1 after Anthem leaves. Parent retains vigilance and the opposing Cat stays 1/1 throughout.
+1. **Parent and Anthem.** The directed FDN position resolves Parent’s entry first. Parent and its single Cat start at 2/2 and 1/1, gain +1/+1 when Anthem enters, and return to their printed sizes when it leaves. Parent retains vigilance and the opposing Cat stays 1/1 throughout.
 2. **Targeting audit complete.** Drakuseth remains pending as documented above. Both authored rows and Drakuseth’s obligation are recorded in the FDN ledger.
 3. **Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
    - Two lifelink creatures dealing combat damage → 2 Pridemate triggers.

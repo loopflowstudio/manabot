@@ -1,4 +1,4 @@
-at: 8bfa6b9aecc383c9c8d2832e634dbb3230b3f3c9
+at: de7a03c4ef2249f4d782dd0a82b72b8636ac05c1
 first:
   - path: scratch/plan.md
     why: Delivered behavior and remaining readiness audit
@@ -13,7 +13,7 @@ first:
   - path: managym/cards/src/fdn.rs
     why: Foundations entry triggers and controller-scoped anthem
   - path: managym/cards/tests/cards/fdn.rs
-    why: Cat interactions before and after Anthem leaves play
+    why: Parent and Cat as Anthem enters and leaves
   - path: managym/cards/tests/cards/observability.rs
     why: Self-entry changes the trigger subject learning tokens
   - path: managym/cards/src/tokens.rs

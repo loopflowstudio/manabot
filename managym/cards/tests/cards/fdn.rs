@@ -822,15 +822,11 @@ fn anthem_bonuses_parent_and_its_cat_while_in_play() {
         .game_mut()
         .create_token("token.cat_1_1_w", PlayerId(1), false)
         .unwrap();
-    let anthem = enter_and_settle(&mut s, "Anthem of Champions");
     enter_and_settle(&mut s, "Prideful Parent");
     let parent = permanent_named(&s, "Prideful Parent");
     let cats = s.battlefield_permanents_named(0, "Cat");
     assert_eq!(cats.len(), 1);
-    for bonus in [1, 0] {
-        if bonus == 0 {
-            move_card(&mut s, anthem, ZoneType::Graveyard);
-        }
+    let assert_board = |s: &crate::support::game::Scenario, bonus: i32| {
         let view = s.game().characteristics(parent);
         assert_eq!(view.pt(), (2 + bonus, 2 + bonus));
         assert!(view.keywords.has(Keyword::Vigilance));
@@ -839,5 +835,10 @@ fn anthem_bonuses_parent_and_its_cat_while_in_play() {
             (1 + bonus, 1 + bonus)
         );
         assert_eq!(s.game().characteristics(opponent).pt(), (1, 1));
-    }
+    };
+    assert_board(&s, 0);
+    let anthem = enter_and_settle(&mut s, "Anthem of Champions");
+    assert_board(&s, 1);
+    move_card(&mut s, anthem, ZoneType::Graveyard);
+    assert_board(&s, 0);
 }
