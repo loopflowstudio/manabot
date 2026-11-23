@@ -1,23 +1,27 @@
-at: 42ee250cd5639a4cd47e91fd3b6337fe3b6d6852
+at: 13c81a90e4c9ab88e7aaf5335a35e9a10bcc8d00
 first:
   - path: managym/README.md
-    why: Where a graveyard spell goes after casting
+    why: Which permission spends Muldrotha’s allowance
+  - path: managym/cards/src/dom.rs
+    why: Muldrotha grants each permanent type
   - path: managym/cards/src/fdn.rs
-    why: Zul Ashur defines the target and duration
+    why: Zul Ashur grants one targeted Zombie
   - path: managym/src/flow/cast_permission.rs
-    why: Exact objects bind permissions and their costs
-  - path: managym/src/flow/resolution.rs
-    why: Airbend and Zul Ashur produce exact grants
+    why: Exact grants and stable permission keys
   - path: managym/src/flow/play.rs
-    why: Announcement binds flashback and computes the cost
+    why: Enumerate permissions and bind announcement terms
   - path: managym/src/flow/action.rs
-    why: Timing and payment determine the offer
+    why: Price each route before offering it
   - path: managym/src/flow/zones.rs
-    why: The spell carries flashback onto the stack
+    why: Commitment spends the selected quota
+  - path: managym/src/agent/structured_offer.rs
+    why: Targeted Commands retain the selected permission
+  - path: managym/src/agent/observation.rs
+    why: Project the cost, type and source
   - path: managym/cards/tests/cards/fdn.rs
-    why: Target choice, countering, expiry and ward payment
+    why: Fork both permissions and counter the Ghoul
   - path: tests/semantic/test_text_observation.py
-    why: Both viewers and the policy see permission terms
+    why: Execute both offers through the text player
 hide:
   - path: protocol/
     why: Schema descriptions mirror Rust field documentation

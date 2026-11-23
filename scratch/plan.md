@@ -1,8 +1,20 @@
 # MTG-419 · Shared casting profiles and play permissions
 
-**Next slice:** add Muldrotha to the same graveyard as Zul Ashur's targeted Zombie. Expose the choice of permission and, for Muldrotha, the permanent type charged to that exact source. Start with the existing Zul Ashur fixture and fork before the cast. Only the Muldrotha branch should consume a quota. Keep the ordinary one-offer Command when one route exists. Bilbo/Adventure, the two prepared links, the other ledger rows and the Engine Budget remain pending.
+## Implemented slice · Overlapping casting permissions
 
-## Decision contract for the next slice
+The same Hungry Ghoul now has separate priority offers for Zul Ashur and Muldrotha. Each offer prices its own route and carries it through announcement, payment preview and commitment. Muldrotha charges the chosen permanent type to its exact battlefield incarnation. The policy can read the base mana value, quota type and granting permanent on overlapping actions. A single-route Command retains its existing shape.
+
+Five directed native cases passed with the following filter. The two-grant fixture reverses storage order after registration and tests both insertion orders with zero and sufficient mana. In the counter forks, the second Hungry Ghoul was legal only after casting the first through Zul. Scarecrow Guide exercised both of its permanent types. A returned Muldrotha could grant another creature cast, and its graveyard land play used the regular land allowance.
+
+```sh
+cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards -- muldrotha overlapping_grants_price_each_cast_in_both_orders flashback_is_exiled_when_countered_after_iroh_leaves zul_ashur_grants_one_exact_zombie_for_the_turn
+```
+
+The rebuilt CPython 3.13 extension passed both text-player variants, including native Command submission for both routes and the Academy action labels. The numeric-reading check and both bundled pinned pilots passed. The optional frontier checkpoint was unavailable. Three observability guards passed for the new static, its learning tokens and action columns. The registered-card Scryfall comparison and runtime token catalog check passed.
+
+**Next slice.** Project all visible grants and spent allowances on the board, including when there is no affordable play. The single-grant card summary still shows only the first grant. Exercise save/reload at a pending payment and rejection with stale object preconditions. Bilbo/Adventure, prepare links, other ledger rows and the Engine Budget remain pending.
+
+## Decision contract for overlapping permissions
 
 Publish one action per legal object, profile and consequential choice of terms in the current native decision. Choose directly between “cast Hungry Ghoul using Zul Ashur” and “cast Hungry Ghoul using Muldrotha, spending creature.” Keep X, modes, targets and actual payment at their existing decision points. A second permission-selection decision would add a search edge before either branch can diverge. Preserve the existing Command encoding and order for an unambiguous ordinary play. Bind ambiguous offers by exact object, stable profile and selected terms including the source incarnation and quota type where applicable. Never persist a position in an enumeration as the meaning of that selection.
 

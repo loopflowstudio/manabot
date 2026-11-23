@@ -5,3 +5,5 @@ The first implementation slice uses Zul Ashur and a pair of Hungry Ghouls. This 
 The compression pass covers the implemented Zul Ashur slice and its existing casting consumers. Multiple permission choices and the remaining card cohorts stay in the implementation plan.
 
 Concept review chooses direct native offers for consequential permission and profile choices. The alternative adds a permission-selection decision to search. Revisit against measured action width and search work.
+
+Exact-object grants receive local keys when granted. Cleanup can reorder the surviving records without changing the meaning of a selected offer. An unambiguous priority action omits the route from its Command.
