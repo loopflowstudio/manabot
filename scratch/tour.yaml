@@ -1,29 +1,17 @@
-at: f7b99adaf2994c99bdff51f2719b479cfbaf63a1
+at: 04fbb56aa6410c165fbe9cbe202110f0e52cd9ae
 first:
-  - path: docs/engine.md
-    why: Follow permissions across zone changes
-  - path: managym/state/src/card.rs
-    why: Distinguish the physical card and chosen spell
   - path: managym/cards/src/tdm.rs
-    why: Read both Twinmaw programs
-  - path: managym/cards/src/akh.rs
-    why: Inspect Vizier's casting and spending permissions
-  - path: managym/src/flow/play.rs
-    why: Check eligibility and price the proposed spell
+    why: Read the Dragon and its X-cost Omen
   - path: managym/src/flow/decision.rs
-    why: Follow successful resolution through the zone change
-  - path: managym/src/flow/proposed_event.rs
-    why: Find which Adventure replacement grants exile access
+    why: Follow ward through discard or decline
+  - path: managym/src/flow/payment.rs
+    why: See which exact card paid the cost
+  - path: managym/state/src/mana.rs
+    why: Count each printed X at its announced value
+  - path: managym/src/agent/observation_layout.rs
+    why: Locate both stack mana values
   - path: managym/cards/tests/cards/tdm.rs
-    why: Compare library offers and three Omen outcomes
-  - path: managym/cards/tests/cards/hob.rs
-    why: Check all four Bilbo branches
-  - path: tests/semantic/test_casting_profiles.py
-    why: Compare both viewers and policy rows
+    why: Compare free casting, paid casting and ward
   - path: tests/env/test_game_snapshot.py
-    why: Restore the pending target Command
-  - path: managym/cards/tests/cards/observability.rs
-    why: Vary inset wording and damage independently
-hide:
-  - path: managym/academy/fixtures/choice-navigation-w17-smart-payment.json
-    why: Derived by replaying the five retained prefixes
+    why: Replay the original announcement through the shuffle
+hide: []
