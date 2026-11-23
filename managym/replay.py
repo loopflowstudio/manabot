@@ -694,6 +694,8 @@ def main() -> None:
         records = read_records(args.path)
         evidence = next(records)
     except StopIteration:
+        if not args.path.is_dir():
+            parser.error(f"cannot read journal {args.path}: no game records")
         parser.error(
             f"no game records in {args.path}: a directory is read for its .jsonl"
             " records; pass a snapshot replay .json file directly"
