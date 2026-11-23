@@ -1,7 +1,7 @@
-at: 9baf11d24e34698633417a8725a8b705e1215d3e
+at: 31022db6444ef469b234af0d90b0bf9cddfd739b
 first:
   - path: scratch/plan.md
-    why: Read the Lost Days acceptance boundary.
+    why: Read the library and exile departure witnesses.
   - path: managym/cards/src/fin.rs
     why: Follow Vanille’s payment into Ragnarok.
   - path: managym/state/src/zone.rs
@@ -11,9 +11,9 @@ first:
   - path: managym/src/flow/zones.rs
     why: Follow one departure into two arrivals.
   - path: managym/src/flow/decision.rs
-    why: Resume the retained batch with the chosen order.
+    why: Carry the resolving controller through the pending move.
   - path: managym/cards/tests/cards/fin.rs
-    why: Restore both orders and compare the token copy.
+    why: Restore both exile orders and reject spent Commands.
   - path: managym/tests/rules/cr_400_identity.rs
     why: Check that separated exile identities stay stale.
   - path: managym/state/src/ability.rs
