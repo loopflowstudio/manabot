@@ -122,3 +122,29 @@ fn fynn_poison_and_herald_loss_protection() {
         assert_eq!(s.game().state.loss(1).unwrap().reason(), Some("poison"));
     }
 }
+
+#[test]
+fn axe_equipped_fynn_poisons_in_both_damage_steps() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with, pass_until},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::permanent::CounterKind};
+
+    let mut s = five_color_setup(&["Leyline Axe", "Fynn, the Fangbearer"]);
+    let axe = s.force_permanent_on_battlefield(0, "Leyline Axe");
+    let fynn = s.force_permanent_on_battlefield(0, "Fynn, the Fangbearer");
+    clear_summoning_sickness(&mut s, fynn);
+    s.set_player_mana_pool(0, "3");
+    activate(&mut s, axe, 0);
+    assert!(s.choose_target(Target::Permanent(fynn)));
+    settle(&mut s);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, fynn);
+    s.advance_to_step(StepKind::EndOfCombat);
+    assert_eq!(
+        s.game().state.players[1].counters.get(CounterKind::Poison),
+        4
+    );
+    s.assert_life(1, 16);
+}
