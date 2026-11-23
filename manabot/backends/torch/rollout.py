@@ -53,13 +53,12 @@ class AdmittedRollout:
         pending = np.unique(indexes[~self._admitted[indexes]])
         for start in range(0, len(pending), chunk_rows):
             chunk = pending[start : start + chunk_rows]
-            rows = self.batch.observations(chunk)
-            obs = rows.observation
-            bucketed = self.agent.check_observation(obs)
+            needs = self.agent.check_observation(
+                self.batch.observations(chunk).observation
+            )
             self._admitted[chunk] = True
-            if bucketed is None:
+            if needs is None:
                 continue
-            needs = bucketed.needs
             # Packing drops illegal offers. Keep their collection-time shape floor
             # while validating the current rollout, whose arrays are writable.
             recorded = self.batch.recorded.gather_needs(chunk)

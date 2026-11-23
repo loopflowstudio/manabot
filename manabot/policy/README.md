@@ -13,11 +13,11 @@ batch = policy.prepare(obs, inference=True)  # admitted and indexed on the host
 logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```
 
-`Prepared` is the one policy input. A policy's `prepare` runs this package's
-host admission and indexing. With bucketed shapes, Torch measures occupied
-prefixes before admission. Preparation translates the extracted object joins
-to the bucket coordinates. Every
-backend's forward reads the resulting batch.
+Every backend's forward reads a `Prepared` batch. With bucketed shapes,
+Torch measures occupied and referenced rows before admission. The resulting
+`BucketedObservation` pairs views of the original rows with their extents.
+Host preparation uses those extents to translate object joins and restore
+the full action width.
 
 - `admission.py` owns the checks an observation batch passes before a policy
   reads it: shapes and binary validity, definition and vocabulary references,

@@ -39,9 +39,8 @@ from manabot.env.observation import ObservationBuffers, ObservationSpace, column
 
 MIN_BUCKET = 8
 
-# Keys trimmed along axis 1, by axis; seat-major keys ([B, 2, rows, ...])
-# are trimmed along axis 2.
-ROW_KEYS: dict[str, tuple[str, ...]] = {
+# In rollout extent-column order. All buffers on an axis share its capacity.
+AXIS_BUFFERS: dict[str, tuple[str, ...]] = {
     "facts": ("facts",),
     "effects": ("effects",),
     "details": ("effect_details",),
@@ -54,7 +53,11 @@ ROW_KEYS: dict[str, tuple[str, ...]] = {
         "opponent_cards",
         "agent_cards_valid",
         "opponent_cards_valid",
+        "semantic_cards",
+        "card_turn_state",
     ),
+    "known": ("known_hand",),
+    "decklists": ("decklists",),
     "permanents": (
         "agent_permanents",
         "opponent_permanents",
@@ -63,12 +66,8 @@ ROW_KEYS: dict[str, tuple[str, ...]] = {
     ),
     "stack": ("stack", "stack_valid"),
 }
-SEAT_KEYS: dict[str, tuple[str, ...]] = {
-    # `card_turn_state` (inputs v10 and v11) aligns with the card rows.
-    "cards": ("semantic_cards", "card_turn_state"),
-    "known": ("known_hand",),
-    "decklists": ("decklists",),
-}
+AXES = tuple(AXIS_BUFFERS)
+SEAT_MAJOR = frozenset({"semantic_cards", "card_turn_state", "known_hand", "decklists"})
 # Column positions come from the native layout by name, so a moved or added
 # column cannot silently shift what is remapped. Policy history v1 is the
 # event layout whose context columns are object references.
@@ -116,24 +115,6 @@ class BucketedObservation:
     needs: np.ndarray
 
 
-def _capacities(space: ObservationSpace) -> dict[str, int]:
-    shapes = space.shapes
-    return {
-        "facts": shapes["facts"][0],
-        "effects": shapes["effects"][0],
-        "details": shapes["effect_details"][0],
-        "members": shapes["effect_members"][0],
-        "relations": shapes["relations"][0],
-        "actions": shapes["actions"][0],
-        "events": shapes["events"][0],
-        "cards": shapes["agent_cards"][0],
-        "known": shapes["known_hand"][1],
-        "decklists": shapes["decklists"][1],
-        "permanents": shapes["agent_permanents"][0],
-        "stack": shapes["stack"][0] if "stack" in shapes else 0,
-    }
-
-
 def has_history_events(obs: Mapping[str, object]) -> bool:
     """Whether `events` holds policy-history rows, whose contexts name objects."""
     events = obs.get("events")
@@ -166,20 +147,6 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
     return segments
 
 
-AXES: tuple[str, ...] = (
-    "facts",
-    "effects",
-    "details",
-    "members",
-    "relations",
-    "actions",
-    "events",
-    "cards",
-    "known",
-    "decklists",
-    "permanents",
-    "stack",
-)
 # Axes whose rows are object-table segments.
 OBJECT_AXES: tuple[str, ...] = ("cards", "permanents", "stack")
 
@@ -213,7 +180,12 @@ def sizes_of(
     needs: np.ndarray, space: ObservationSpace, *, objects: bool
 ) -> BucketSizes:
     """The buckets of a batch whose rows need `needs` [B, len(AXES)]."""
-    capacities = _capacities(space)
+    # The first buffer on each axis gives its unbatched row dimension.
+    capacities = {}
+    for axis, keys in AXIS_BUFFERS.items():
+        first = keys[0]
+        shape = space.shapes.get(first)
+        capacities[axis] = 0 if shape is None else shape[int(first in SEAT_MAJOR)]
     most = needs.max(0, initial=0)
     sizes = {
         axis: bucket(int(most[column]), capacities[axis])
@@ -251,14 +223,14 @@ def bucket_views(
         and not any(key in obs for key in MEMORY_FIELDS)
         else dict(obs)
     )
-    for axis, keys in ROW_KEYS.items():
+    for axis, keys in AXIS_BUFFERS.items():
+        stop = buckets.sizes[axis]
         for key in keys:
             if key in obs:
-                trimmed[key] = obs[key][:, : buckets.sizes[axis]]
-    for axis, keys in SEAT_KEYS.items():
-        for key in keys:
-            if key in obs:
-                trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
+                rows = obs[key]
+                trimmed[key] = (
+                    rows[:, :, :stop] if key in SEAT_MAJOR else rows[:, :stop]
+                )
     return trimmed
 
 

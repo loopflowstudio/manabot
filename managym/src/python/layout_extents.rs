@@ -1,21 +1,12 @@
 //! Pin the layout's batched NumPy buffers, then scan their occupied and referenced rows.
 use super::layout_bindings::ObservationLayout;
 use crate::agent::observation_extents::{joins, row_axis, Join};
-use pyo3::{
-    buffer::{Element, PyBuffer},
-    exceptions::PyValueError,
-    prelude::*,
-    types::PyDict,
-};
+use pyo3::{buffer::PyBuffer, exceptions::PyValueError, prelude::*, types::PyDict};
 use std::collections::BTreeMap;
 
-enum Storage {
-    Float(PyBuffer<f32>),
-    Int(PyBuffer<i32>),
-}
-
-fn direct<T: Element>(array: &Bound<'_, PyAny>) -> Option<PyBuffer<T>> {
+fn direct_f32(array: &Bound<'_, PyAny>) -> Option<PyBuffer<f32>> {
     let buffer = PyBuffer::get_bound(array).ok()?;
+    // PyO3 0.22 accepts a big-endian format on little-endian hosts.
     let foreign = if cfg!(target_endian = "little") {
         b'>'
     } else {
@@ -26,7 +17,7 @@ fn direct<T: Element>(array: &Bound<'_, PyAny>) -> Option<PyBuffer<T>> {
 }
 
 struct Rows {
-    storage: Storage,
+    buffer: PyBuffer<f32>,
     seats: usize,
     rows: usize,
     columns: usize,
@@ -35,14 +26,11 @@ struct Rows {
 }
 
 impl Rows {
-    fn new(storage: Storage, shape: &[usize], axis: usize) -> PyResult<Self> {
-        let (actual, strides, contiguous) = match &storage {
-            Storage::Float(b) => (b.shape(), b.strides(), b.is_c_contiguous()),
-            Storage::Int(b) => (b.shape(), b.strides(), b.is_c_contiguous()),
-        };
-        if actual != shape || !(axis + 1..=axis + 2).contains(&actual.len()) {
+    fn new(buffer: PyBuffer<f32>, shape: &[usize], axis: usize) -> PyResult<Self> {
+        if buffer.shape() != shape || !(axis + 1..=axis + 2).contains(&shape.len()) {
             return Err(PyValueError::new_err("array shape differs from its buffer"));
         }
+        let strides = buffer.strides();
         let strides = [
             strides[0],
             if axis == 2 { strides[1] } else { 0 },
@@ -50,12 +38,12 @@ impl Rows {
             strides.get(axis + 1).copied().unwrap_or(0),
         ];
         Ok(Self {
-            storage,
+            contiguous: buffer.is_c_contiguous(),
+            buffer,
             seats: if axis == 2 { shape[1] } else { 1 },
             rows: shape[axis],
             columns: shape.get(axis + 1).copied().unwrap_or(1),
             strides,
-            contiguous,
         })
     }
 
@@ -68,40 +56,34 @@ impl Rows {
         // SAFETY: each direct export pins its allocation and strides. The scan
         // visits only its checked shape. Callers keep the input stable until return.
         unsafe {
-            match &self.storage {
-                Storage::Float(buf) => buf
-                    .buf_ptr()
-                    .byte_offset(offset)
-                    .cast::<f32>()
-                    .read_unaligned(),
-                Storage::Int(buf) => buf
-                    .buf_ptr()
-                    .byte_offset(offset)
-                    .cast::<i32>()
-                    .read_unaligned() as f32,
-            }
+            self.buffer
+                .buf_ptr()
+                .byte_offset(offset)
+                .cast::<f32>()
+                .read_unaligned()
         }
     }
 
     fn occupied(&self, batch: usize) -> usize {
         let mut extent = 0;
         for seat in 0..self.seats {
-            if let Storage::Float(buf) = &self.storage {
-                if self.columns > 0 && self.contiguous {
-                    let start = (batch * self.seats + seat) * self.rows + extent;
-                    // SAFETY: an aligned contiguous export covers exactly these
-                    // rows. No Python calls or writes occur during this borrow.
-                    let tail = unsafe {
-                        std::slice::from_raw_parts(
-                            buf.buf_ptr().cast::<f32>().add(start * self.columns),
-                            (self.rows - extent) * self.columns,
-                        )
-                    };
-                    if let Some(last) = last_occupied(tail) {
-                        extent += last / self.columns + 1;
-                    }
-                    continue;
+            if self.columns > 0 && self.contiguous {
+                let start = (batch * self.seats + seat) * self.rows + extent;
+                // SAFETY: an aligned contiguous export covers exactly these
+                // rows. No Python calls or writes occur during this borrow.
+                let tail = unsafe {
+                    std::slice::from_raw_parts(
+                        self.buffer
+                            .buf_ptr()
+                            .cast::<f32>()
+                            .add(start * self.columns),
+                        (self.rows - extent) * self.columns,
+                    )
+                };
+                if let Some(last) = last_occupied(tail) {
+                    extent += last / self.columns + 1;
                 }
+                continue;
             }
             if let Some(last) = (extent..self.rows)
                 .rev()
@@ -142,30 +124,31 @@ impl Table {
         joins: &[Join],
         numpy: &Bound<'_, PyModule>,
     ) -> PyResult<Self> {
-        let storage = direct(array).map(Storage::Float).or_else(|| {
-            // Only focus is an encoded integer buffer. Other integer exports
-            // need source-dtype subtraction for their one-based coordinates.
-            matches!(joins, [Join::Objects])
-                .then(|| direct(array).map(Storage::Int))
-                .flatten()
-        });
-        if let Some(storage) = storage {
+        if let Some(buffer) = direct_f32(array) {
             return Ok(Self {
                 axis,
-                rows: Rows::new(storage, shape, dimension)?,
+                rows: Rows::new(buffer, shape, dimension)?,
                 joins: joins.iter().map(|&join| (join, None)).collect(),
             });
         }
-        let occupied = numpy
-            .getattr("not_equal")?
-            .call1((array, 0))?
-            .call_method1("astype", ("float32",))?;
-        let rows = Rows::new(Storage::Float(occupied.extract()?), shape, dimension)?;
+        // Focus is bounded by the action mask and holds only zero-based
+        // coordinates. For other dtypes test occupancy before narrowing:
+        // even a float64 too small for float32 keeps its row alive.
+        let values = if matches!(joins, [Join::Objects]) {
+            array.clone()
+        } else {
+            numpy.getattr("not_equal")?.call1((array, 0))?
+        };
+        let buffer = values.call_method1("astype", ("float32",))?.extract()?;
+        let rows = Rows::new(buffer, shape, dimension)?;
         let column = |i: usize| array.get_item((array.py().Ellipsis(), i));
         let mut coordinates = Vec::new();
         for &join in joins {
             let (values, projected) = match join {
-                Join::Objects => (array.clone(), join),
+                Join::Objects => {
+                    coordinates.push((join, None));
+                    continue;
+                }
                 Join::Object(i, base) => {
                     let v = column(i)?;
                     (if base == 0 { v } else { v.sub(base)? }, Join::Object(0, 0))
@@ -184,18 +167,10 @@ impl Table {
                 }
             };
             let values = values.call_method1("astype", ("float32",))?;
-            let shape = if matches!(join, Join::Objects) {
-                shape
-            } else {
-                &shape[..shape.len() - 1]
-            };
+            let shape = &shape[..shape.len() - 1];
             coordinates.push((
                 projected,
-                Some(Rows::new(
-                    Storage::Float(values.extract()?),
-                    shape,
-                    dimension,
-                )?),
+                Some(Rows::new(values.extract()?, shape, dimension)?),
             ));
         }
         Ok(Self {

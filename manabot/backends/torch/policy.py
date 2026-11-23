@@ -52,7 +52,6 @@ from manabot.policy import admission
 from manabot.policy.buckets import (
     BucketedObservation,
     bucket_views,
-    object_map,
     row_needs,
     sizes_of,
 )
@@ -557,7 +556,7 @@ class ActorCritic(nn.Module):
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
         bucketed, tables = self._admit_observation(obs)
-        return self._prepare_rows(obs, bucketed, tables, inference, memory_roots)
+        return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
 
     def observation_buckets(
         self, obs: ObservationBuffers, needs: np.ndarray | None = None
@@ -571,10 +570,10 @@ class ActorCritic(nn.Module):
         sizes = sizes_of(needs, self.observation_space, objects=self.object_trimming())
         return BucketedObservation(bucket_views(obs, sizes), sizes, needs)
 
-    def check_observation(self, obs: ObservationBuffers) -> BucketedObservation | None:
+    def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None:
         """Validate the current rows and return their measured extents when bucketed."""
         bucketed, _ = self._admit_observation(obs)
-        return bucketed
+        return None if bucketed is None else bucketed.needs
 
     def _admit_observation(
         self, obs: ObservationBuffers
@@ -609,32 +608,27 @@ class ActorCritic(nn.Module):
         """
         bucketed = self.observation_buckets(obs, needs)
         return self._prepare_rows(
-            obs, bucketed, self._admission_spec().tables, inference, memory_roots
+            bucketed or obs, self._admission_spec().tables, inference, memory_roots
         )
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers,
-        bucketed: BucketedObservation | None,
+        obs: ObservationBuffers | BucketedObservation,
         tables: Tables,
         inference: bool,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
-        capacity = obs["actions_valid"].shape[1]
         return prepare(
-            bucketed.rows if bucketed is not None else obs,
+            obs,
             tables,
-            object_remap=object_map(bucketed.buckets) if bucketed is not None else None,
             inference=inference and device_of(self).type == "cpu",
             bucketed=self.bucketed_shapes,
-            bucket_needs=bucketed.needs if bucketed is not None else None,
             live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
             binding=self._binding(),
-            action_capacity=capacity,
             select_programs=not inference and not self.bucketed_shapes,
         )
 

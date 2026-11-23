@@ -65,7 +65,7 @@ from manabot.env.shared_effects import (
     NUMBER_TOKEN_KINDS,
     PROGRAM_TOKEN_KIND,
 )
-from manabot.policy.buckets import has_history_events
+from manabot.policy.buckets import BucketedObservation, has_history_events, object_map
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
 from manabot.policy.readings import (
     DURATION_FLAGS,
@@ -593,13 +593,11 @@ def object_slots(values: Array, remap: Array | None, *, base: int = 1) -> Array:
 
 
 def prepare(
-    obs: ObservationBuffers,
+    obs: ObservationBuffers | BucketedObservation,
     tables: Tables,
     *,
     inference: bool = False,
     bucketed: bool = False,
-    bucket_needs: Array | None = None,
-    object_remap: Array | None = None,
     live_tokens: bool = False,
     value_token: bool = False,
     memory_summaries: int = 0,
@@ -617,6 +615,13 @@ def prepare(
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
+    bucket_needs = object_remap = None
+    if isinstance(obs, BucketedObservation):
+        bucketed = True
+        bucket_needs = obs.needs
+        object_remap = object_map(obs.buckets)
+        action_capacity = obs.buckets.capacities["actions"]
+        obs = obs.rows
     memory = (
         prepare_memory(obs, tables, fold=memory_fold, roots=memory_roots)
         if memory_summaries
@@ -675,10 +680,9 @@ def prepare(
     live = relations[valid]
     pending = np.isin(live[:, _RELATION_FRAME_KIND], (7, 8, 10))
     live[pending, _RELATION_FRAME_IDS] = 0
-    relation_features = np.zeros(
-        (*valid.shape, layout.numeric_width("relations")), dtype=f32
+    relation_features = padded_rows(
+        read_numeric(live, layout.readings["relations"]), valid
     )
-    relation_features[valid] = read_numeric(live, layout.readings["relations"])
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
@@ -693,7 +697,7 @@ def prepare(
     frame_indexes = (frame_base + (frame_ids - 1).clip(min=0)).reshape(-1)
 
     legal = obs["actions_valid"] > 0
-    if action_capacity is not None:
+    if action_capacity is not None and action_capacity != legal.shape[1]:
         legal = np.pad(legal, ((0, 0), (0, action_capacity - legal.shape[1])))
     legal_batches, legal_slots = np.nonzero(legal)
     positions = np.zeros(legal.shape, dtype=np.int64)
@@ -870,6 +874,13 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
+def padded_rows(values: Array, valid: Array) -> Array:
+    """Restore projected live rows to their batch and slot coordinates."""
+    result = np.zeros((*valid.shape, *values.shape[1:]), dtype=values.dtype)
+    result[valid] = values
+    return result
+
+
 def _facts(
     facts: Array, tables: Tables, objects: int, object_remap: Array | None = None
 ) -> FactRoutes[Array]:
@@ -878,12 +889,6 @@ def _facts(
     # Index only live facts on the host. Restore padding before the forward:
     # its matrix shapes and gradient reduction order must remain unchanged.
     live = facts[valid]
-
-    def padded(values: Array) -> Array:
-        shape = (*valid.shape, *values.shape[1:])
-        result = np.zeros(shape, dtype=values.dtype)
-        result[valid] = values
-        return result
 
     kinds = live[..., FACT_KIND_INDEX].astype(np.int64)
     ident, detail = (
@@ -933,8 +938,8 @@ def _facts(
         )
         token_rows[program] = tables.tokens(token_kind[program], detail[program])
         sources = tables.rows(live[..., FACT_SOURCE_INDEX])
-        id_mask = padded(named.astype(np.float32))
-        detail_mask = padded(named_detail.astype(np.float32))
+        id_mask = padded_rows(named.astype(np.float32), valid)
+        detail_mask = padded_rows(named_detail.astype(np.float32), valid)
     else:
         # Torch linear chooses a different accumulation path for strided inputs.
         columns = np.ascontiguousarray(columns[..., :-1])
@@ -944,19 +949,19 @@ def _facts(
         # Hashed records embed every row, padding included.
         id_mask = np.ones(valid.shape, np.float32)
         detail_mask = np.ones(valid.shape, np.float32)
-    links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
+    links = padded_rows(live[..., FACT_OBJECT_INDEX].astype(np.int64), valid)
     base = np.arange(batch)[:, None] * objects
-    all_programs = padded(program)
+    all_programs = padded_rows(program, valid)
     return FactRoutes(
-        kinds=padded(kinds),
-        columns=padded(columns),
-        id_rows=padded(id_rows),
+        kinds=padded_rows(kinds, valid),
+        columns=padded_rows(columns, valid),
+        id_rows=padded_rows(id_rows, valid),
         id_mask=id_mask,
-        detail_rows=padded(detail_rows),
+        detail_rows=padded_rows(detail_rows, valid),
         detail_mask=detail_mask,
-        token_rows=padded(token_rows),
+        token_rows=padded_rows(token_rows, valid),
         token_mask=all_programs.astype(np.float32),
-        source_rows=padded(sources),
+        source_rows=padded_rows(sources, valid),
         targets=(base + object_slots(links, object_remap)).reshape(-1),
         linked=(valid & (links > 0)).astype(np.float32),
         programs=_fact_programs(facts, all_programs, tables.order_lengths),

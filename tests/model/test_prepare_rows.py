@@ -1,6 +1,6 @@
 """Host preparation preserves the admitted observation's joins and coordinates."""
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from functools import lru_cache
 
 import numpy as np
@@ -24,7 +24,12 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, check
-from manabot.policy.buckets import bucket_sizes, object_columns, trim_observation
+from manabot.policy.buckets import (
+    bucket_sizes,
+    object_columns,
+    row_needs,
+    trim_observation,
+)
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Layout, Tables, prepare
 from manabot.policy.readings import fresh_readings, legacy_readings, read_numeric
 from manabot.verify.representation import shared_effect_root
@@ -283,11 +288,11 @@ def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
         compact,
         agent._admission_spec().tables,
         bucketed=True,
-        bucket_needs=actual.bucket_needs,
         binding=actual.binding,
         action_capacity=space.config.max_actions,
         value_token=agent.value_token is not None,
     )
+    expected = replace(expected, bucket_needs=row_needs(obs, space))
     np.testing.assert_equal(asdict(actual), asdict(expected))
     # A pending frame masks its positional columns even for saved scalar readings.
     trimmed = compact["relations"]
