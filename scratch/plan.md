@@ -2,18 +2,18 @@
 
 ## Working progress
 
-**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and still have pending ledger rows. The other 218 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
+**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, two have confirmed deferrals and 216 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
 
 ### Behavior review at `b522de30c4`
 
-**Open defect — surveil loses the chooser's library knowledge.** The physical draw order is correct in the directed card test. The following constructed positions expose a separate failure in the native observation.
+**Reproductions before the surveil knowledge repair.** The physical draw order is correct in the directed card test. The following constructed positions expose a separate failure in the native observation.
 
 | Reproduction | Actual result at the next priority decision | Required result |
 | --- | --- | --- |
 | Use `_lightshell_surveil("Gray Ogre", "Hill Giant")` from `tests/semantic/test_text_observation.py`. Choose Gray Ogre for the graveyard, then **Keep on top**. Repeat with Hill Giant selected. | With either selection, the chooser's `agent.known_library` is empty. V11 has zero populated library-knowledge rows and the text has no known-position line. The opponent sees the committed graveyard card. | Position 0 contains the other definition for the chooser. The closed opponent learns no private top card. |
 | Give seat 0 six ready Islands, Accumulate Wisdom, Lightshell Duo and an Island in hand. From the top, arrange Gray Ogre, Hill Giant, Forest, Plains, Mountain, Swamp. Take Gray Ogre with Wisdom and put Hill Giant before Forest on the bottom. Cast Duo, keep Plains and Mountain on top in the same order. | Before the top-order choice the native map contains Plains at 0, Mountain at 1, Hill Giant at 3 and Forest at 4. Afterward only 0 and 1 survive. V11 confirms the same loss. | All four positions remain known. Reversing the top two should swap just 0 and 1. |
 
-In `flow/decision.rs`, `finish_surveil_selection` calls `library_order_decision` before the graveyard batch commits. The singleton path records the kept card immediately, then `commit_zone_move` in `flow/zones.rs` clears that knowledge on departure. The keep-both path also clears both position maps in `put_on_top_of_library` and `reposition_library_object`. Fix the shared native partition/reorder path so the final map reflects committed movements and each viewer retains known positions outside the affected prefix. Add both regressions, including closed-opponent assertions and a chooser v11 row bound to the kept definition. Recheck text, Academy, replay and fork isolation at the resulting decision. This is the next working-phase fix.
+In `flow/decision.rs`, `finish_surveil_selection` calls `library_order_decision` before the graveyard batch commits. The singleton path records the kept card immediately, then `commit_zone_move` in `flow/zones.rs` clears that knowledge on departure. The keep-both path also clears both position maps in `put_on_top_of_library` and `reposition_library_object`. Fix the shared native partition/reorder path so the final map reflects committed movements and each viewer retains known positions outside the affected prefix. Add both regressions, including closed-opponent assertions and a chooser v11 row bound to the kept definition. Recheck text, Academy, replay and fork isolation at the resulting decision. The repair now shifts facts on each committed inspected departure and confines private top ordering to the inspected prefix. All four Lightshell text cases pass on the rebuilt extension, including both mill choices and both orders above.
 
 **Focused evidence from constructed positions**
 
@@ -22,7 +22,7 @@ In `flow/decision.rs`, `finish_surveil_selection` calls `library_order_decision`
 - A separate `GameSession.current_recovery("reconnect")` probe at the constructed Lightshell root recovered both named mill offers and **Keep on top**. Submitting **Keep on top** recovered the two bound ordering offers. Choosing Hill Giant first put it on top. The Academy session returned the duplicate receipt and rejected a new Command using the old revision at each transition. The committed Python fixture directly exercises `decision_surface_view`; this session probe exercised the envelope.
 - Debug tests passed for the shared surveil completion event, ordered continuation and private fork behavior. The prowess fixtures passed for Swiftspear, the Monk token and Sokka's grant, including the own-noncreature control in the Iguana/Boar fixture. The constructor and predicate produce the existing rules structures. The catalog returned two triggered program spans for Duo, and its prowess span matched Swiftspear token for token. Nine learning-token observability checks and the registered-card Scryfall conformance check passed. The two text fixtures that now share the replay helper also passed. This slice changes no payment or receipt semantics.
 
-After repairing knowledge retention, resume Slice 2's ledger audit and integrated card fixtures. The complete debug suite, pinned-pilot compatibility suite and browser checks remain gate evidence. Decomposition and performance measurement follow working behavior.
+Slice 2 audit resumed. The three pre-existing definitions are reconciled. Joraga Invocation and Confiscate remain pending under combat constraints and characteristics respectively. Continue with the other 216 rows before the integrated card fixtures. The complete debug suite, pinned-pilot compatibility suite and browser checks remain gate evidence. Decomposition and performance measurement follow working behavior.
 
 ## Experience and model to build
 
@@ -143,7 +143,7 @@ Preserve the four headline integrated-validation witnesses (board, chooser, acti
 1. **Arahbo + Helpful Hunter** (lord bonus, non-recursive Cat creation, both trigger orders).
 2. **Doubling Season + Impact Tremors + Dragon Fodder** (4 distinct Goblins + 4 Tremors triggers vs. 2 without Season; plus loyalty-cost vs. effect-counter distinction).
 3. **Lifelink combat + Ajani's Pridemate** (2 lifelinkers → 2 triggers; 1 trampling lifelinker → 1 trigger; prevented damage → 0).
-4. **Lightshell Duo under closed disclosure** (Slice 1 choice and physical-order evidence is in place; post-resolution library knowledge still fails the review positions above).
+4. **Lightshell Duo under closed disclosure** (Slice 1 choice and physical-order evidence is in place; post-resolution library knowledge passes both review positions above).
 
 ## Later phases
 
