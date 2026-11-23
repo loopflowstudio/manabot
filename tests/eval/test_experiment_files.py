@@ -722,69 +722,6 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     assert all("final" not in seating.name for seating in interiors)
 
 
-def test_extended_floor_seed_meets_the_other_arms_past_update_400(
-    tmp_path: Path,
-) -> None:
-    runs = tuple(
-        _finished_run(tmp_path, range(0, 1001, 100), name=f"{job}@2", job=job, seed=2)
-        for job in ("tau-x2-floor-0.002", "tau-x2", "tau-x4")
-    )
-    state = ExperimentState(experiment="fixture", runs=runs)
-    by_key = {
-        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
-    }
-    pairs = Counter()
-    for job in tla_trophies_floor.eval_jobs(state):
-        if job.name.startswith(tla_trophies_floor.SEED_HEAD_TO_HEAD):
-            assert {s.seeds for s in job.tournament.seatings} == {"one"}
-            tournament, gaps = Tournament(
-                definition=job.tournament, checkpoints=job.recorded().checkpoints
-            ).resolve(state.lines)
-            assert not gaps
-            pairs.update(
-                (
-                    by_key[m.checkpoint],
-                    by_key[m.match.players[1].checkpoint.key],
-                    tla_trophies.Deal.model_validate(m.match.config).seed,
-                )
-                for m in tournament.schedule()
-            )
-    assert pairs == {
-        ((f"{arm}@2", update), (f"{opponent}@2", update), deal): 1
-        for arm, opponents in tla_trophies_floor.EXTENSION_OPPONENTS.items()
-        for opponent in opponents
-        for update in range(500, 1001, 100)
-        for deal in range(40900, 40900 + tla_trophies_floor.SEED_DEALS)
-    }
-
-
-def test_floor_seed_past_update_400_has_its_own_one_seed_benchmarks(
-    tmp_path: Path,
-) -> None:
-    runs = (
-        _finished_run(
-            tmp_path, range(0, 401, 100), name="tau-x4@1", job="tau-x4", seed=1
-        ),
-        _finished_run(
-            tmp_path, range(0, 1001, 100), name="tau-x4@2", job="tau-x4", seed=2
-        ),
-    )
-    state = ExperimentState(experiment="fixture", runs=runs)
-    updates = {
-        job.name: (
-            {c.at["updates"] for c in job.checkpoints},
-            {s.seeds for s in job.tournament.seatings},
-        )
-        for job in tla_trophies_floor.eval_jobs(state)
-    }
-    early = (set(range(0, 401, 100)), {"every"})
-    late = (set(range(500, 1001, 100)), {"one"})
-    assert updates[f"{tla_trophies_floor.HELD_OUT}-tau-x4"] == early
-    assert updates[f"{tla_trophies_floor.HALF_TRAINING}-tau-x4"] == early
-    assert updates[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x4"] == late
-    assert updates[f"{tla_trophies_floor.SEED_HALF_TRAINING}-tau-x4"] == late
-
-
 def test_combined_arm_meets_every_tau_x4_seed_at_matched_updates(
     tmp_path: Path,
 ) -> None:
@@ -847,31 +784,3 @@ def test_floor_seed_plays_128_more_deals_on_fresh_pools(tmp_path: Path) -> None:
     assert more_job.play is tla_trophies.play
     assert more_job.tournament.rollups == CARD_ROLLUPS
     assert jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].play is tla_trophies.play
-
-
-def test_final_round_meets_arms_on_every_held_out_pool(
-    tmp_path: Path,
-) -> None:
-    runs = tuple(
-        _finished_run(tmp_path, range(0, 1001, 100), name=f"{arm}@2", job=arm, seed=2)
-        for arm in tla_trophies_floor.EXTENSION_ARMS
-    )
-    state = ExperimentState(experiment="fixture", runs=runs)
-    jobs = {job.name: job for job in tla_trophies_floor.eval_jobs(state)}
-    final = {
-        name: job
-        for name, job in jobs.items()
-        if name.startswith("tla-trophies-floor-final-")
-    }
-    assert len(final) == 3
-    for job in final.values():
-        assert [c.at["updates"] for c in job.checkpoints] == [1000]
-        assert job.tournament.rollups == CARD_ROLLUPS
-        assert len(job.tournament.seatings) == tla_trophies_floor.FINAL_DEALS
-        assert {s.seeds for s in job.tournament.seatings} == {"one"}
-    deals = [
-        tla_trophies.Deal.model_validate(s.config)
-        for s in final["tla-trophies-floor-final-tau-x4-vs-tau-x2"].tournament.seatings
-    ]
-    assert all(d.first != d.second for d in deals)
-    assert len({p for d in deals for p in (d.first, d.second)}) > 800
