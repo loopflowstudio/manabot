@@ -926,6 +926,8 @@ class _Renderer:
             if permission.cost is None
             else f"cast for {_mana(permission.cost)}"
         ]
+        if permission.on_adventure:
+            terms.append("permanent spell only")
         if permission.this_turn:
             terms.append("this turn only")
         if permission.through_next_turn:

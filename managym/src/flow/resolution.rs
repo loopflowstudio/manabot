@@ -1243,6 +1243,21 @@ impl Game {
                 };
                 (!self.linked_exile_candidates(&decision).is_empty()).then_some(decision)
             }
+            Effect::CastFromGraveyard {
+                predicate,
+                exile_instants_and_sorceries,
+            } => {
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    paid: true,
+                    spends: None,
+                    offer: ResolutionCastOffer::Graveyard {
+                        predicate: predicate.clone(),
+                        exile_instants_and_sorceries: *exile_instants_and_sorceries,
+                    },
+                };
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
+            }
             Effect::CastFromHandFree { predicate } => {
                 let decision = Decision::CastDuringResolution {
                     player: frame.controller,

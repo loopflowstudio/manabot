@@ -640,8 +640,22 @@ impl Game {
                 .unwrap_or_else(|| format!("{:?}", action.action_type()));
             let public_commitment = match (action_space.kind, action) {
                 (_, Action::PassPriority { .. }) => Some(PublicCommitment::PassPriority),
-                (_, Action::CastSpell { object, .. }) => Some(PublicCommitment::Cast {
-                    card: self.state[*object].name.clone(),
+                (
+                    _,
+                    Action::CastSpell {
+                        object, adventure, ..
+                    },
+                ) => Some(PublicCommitment::Cast {
+                    card: if *adventure {
+                        self.state[*object]
+                            .adventure
+                            .as_ref()
+                            .expect("offered Adventure")
+                            .name
+                            .clone()
+                    } else {
+                        self.state[*object].name.clone()
+                    },
                 }),
                 (_, Action::PlayLand { object, .. }) => Some(PublicCommitment::PlayLand {
                     card: self.state[*object].name.clone(),
@@ -708,7 +722,13 @@ impl Game {
                 let presentation = self.structured_priority_offers()?;
                 for offer in &mut complete.projection.offers {
                     let Some(InternalOffer::SearchAction {
-                        action: Action::CastSpell { object, route, .. },
+                        action:
+                            Action::CastSpell {
+                                object,
+                                route,
+                                adventure: false,
+                                ..
+                            },
                     }) = complete.internal.get(&offer.id)
                     else {
                         continue;
@@ -1061,6 +1081,7 @@ impl Game {
                     internal.insert(id, InternalOffer::PassPriority { player: *player });
                 }
                 Action::CastSpell {
+                    adventure: false,
                     player,
                     object,
                     route,
@@ -1360,7 +1381,7 @@ impl Game {
                             matches!(
                                 action,
                                 Action::CastSpell {
-                                    player: legal_player,
+                                    adventure: false, player: legal_player,
                                     object: legal_card, route:legal_route,
                                 } if legal_player == player && legal_card == object && legal_route == route
                             )

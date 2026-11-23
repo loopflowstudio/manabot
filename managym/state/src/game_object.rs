@@ -715,6 +715,13 @@ impl Object {
         self.front = Some(front);
     }
 
+    /// Project an adventurer's inset spell while preserving its physical definition.
+    pub fn show_adventure(&mut self) {
+        let spell = self.adventure.clone().expect("card has an Adventure");
+        self.printed = Some((self.definition_id, Arc::clone(&self.definition)));
+        self.definition = spell;
+    }
+
     /// Show the front face, if the back face is up.
     pub fn turn_front_face_up(&mut self) {
         if let Some((id, definition)) = self.front.take() {

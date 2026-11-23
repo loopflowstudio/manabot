@@ -1,9 +1,10 @@
-"""Directed Adventure fixture pending the first playable Adventure definition."""
+"""Play both printed Smaug profiles through the viewer-facing Command surface."""
 
 import managym
+from manabot.env.observation import ObservationSpace, column, encode_observation
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
-from managym.experience_projection import decision_surface_view
+from managym.experience_projection import decision_surface_view, describe_actions
 
 
 def choose(env: managym.Env, wording: str) -> None:
@@ -33,11 +34,28 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
     assert len(casts) == 2
     [inset] = [action for action in casts if adventure in action.description]
     assert any(creature in action.description for action in casts if action != inset)
+    observation = env.observation_for_player(actor)
+    rows = encode_observation(ObservationSpace(), observation)["actions"]
+    projected = [
+        a for a in describe_actions(observation) if a["type"] == "PRIORITY_CAST_SPELL"
+    ]
+    assert {a["description"] for a in projected} == {
+        f"Cast {creature}",
+        f"Cast {adventure}",
+    }
+    for action in projected:
+        assert rows[action["index"], column("actions", "adventure")] == (
+            adventure in action["description"]
+        )
     submit_response(env, hand, inset.reference)
     targets = capture_text_decision(env)
     [ogre] = [action for action in targets.actions if target in action.description]
     submit_response(env, targets, ogre.reference)
+    choose(env, "Pay the offered cost")
     choose(env, "Pass priority")
+    for viewer in (0, 1):
+        [stack] = decision_surface_view(env, viewer)["stack_objects"]
+        assert adventure in stack["label"]
     countered = env.clone_env()
     choose(countered, "Counterspell")
     choose(countered, adventure)
@@ -65,4 +83,11 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
         action for action in exile.actions if action.description.startswith("Cast ")
     ]
     assert creature in recast.description and adventure not in recast.description
+    assert "permanent spell only" in exile.text
     submit_response(env, exile, recast.reference)
+    [spell] = env.observation_for_player(actor).stack_objects
+    assert spell.characteristics is not None and spell.characteristics.name == creature
+    choose(env, "Pass priority")
+    choose(env, "Pass priority")
+    board = decision_surface_view(env, actor)
+    assert any(card["name"] == creature for card in board["agent"]["battlefield"])

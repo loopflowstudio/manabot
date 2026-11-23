@@ -114,3 +114,107 @@ fn beorn_draws_with_three_bears_and_renews_a_keyword_counter_after_loss() {
         .keywords
         .has(Keyword::Trample));
 }
+
+#[test]
+fn bilbo_graveyard_adventure_replacement_owns_the_exile_permission() {
+    use crate::support::{
+        game::{force_lands, move_card, move_from_library},
+        inspect::{can_cast, card_of, now, offer_labels, zone_of},
+        play::{attack_with, choose, fork_choosing, fork_stepping},
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&[
+        "Bilbo, Thief in the Night",
+        "Smaug, the Great Calamity",
+        "Gray Ogre",
+        "Counterspell",
+        "Lightning Bolt",
+    ]);
+    let bilbo = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Bilbo, Thief in the Night", true)
+        .unwrap();
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let target = card_of(&s, ogre);
+    let smaug = move_from_library(&mut s, 0, "Smaug, the Great Calamity", ZoneType::Graveyard);
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    let bolt = move_from_library(&mut s, 1, "Lightning Bolt", ZoneType::Hand);
+    force_lands(&mut s, 1, "Mountain", 1);
+    // Exactly four mana pays for the reduced Spew Flame.
+    force_lands(&mut s, 0, "Mountain", 4);
+    force_lands(&mut s, 1, "Island", 2);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, bilbo);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell {adventure:true, object,..} if *object==smaug),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    s.pass_priority();
+    assert_eq!(crate::support::inspect::top_spell(&s).spent.mana().len(), 4);
+    let mut lost_target = fork_choosing(
+        &s,
+        |a| matches!(a, Action::CastSpell {object,..} if *object == bolt),
+    );
+    assert!(lost_target.choose_target(Target::Permanent(ogre)));
+    settle(&mut lost_target);
+    assert_eq!(zone_of(&lost_target, target), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&lost_target, smaug), Some(ZoneType::Exile));
+    let mut countered = fork_choosing(
+        &s,
+        |a| matches!(a,Action::CastSpell {object,..} if *object == counter),
+    );
+    let spell = now(&countered, smaug);
+    assert!(countered.choose_target(Target::StackSpell(spell)));
+    settle(&mut countered);
+    assert_eq!(zone_of(&countered, smaug), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&countered, target), Some(ZoneType::Battlefield));
+
+    for branch in [&mut lost_target, &mut countered] {
+        branch.advance_to_active_step(0, StepKind::PostcombatMain);
+        branch.set_player_mana_pool(0, "5RR");
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        assert!(!can_cast(branch, smaug));
+    }
+
+    s.pass_priority();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(
+        offer_labels(&s),
+        [
+            "Spew Flame: Exile on Adventure",
+            "Spew Flame: Exile without Adventure permission"
+        ]
+    );
+    for (index, label) in offer_labels(&s).iter().enumerate() {
+        let grants = label.contains("on Adventure");
+        let mut branch = fork_stepping(&s, index);
+        settle(&mut branch);
+        assert_eq!(zone_of(&branch, target), Some(ZoneType::Graveyard));
+        assert_eq!(zone_of(&branch, smaug), Some(ZoneType::Exile));
+        branch.advance_to_active_step(0, StepKind::PostcombatMain);
+        branch.set_player_mana_pool(0, "5RR");
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(can_cast(&branch, smaug), grants);
+        move_card(&mut branch, smaug, ZoneType::Graveyard);
+        move_card(&mut branch, smaug, ZoneType::Exile);
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        assert!(!can_cast(&branch, smaug));
+    }
+}
+
+#[test]
+fn spew_flame_cost_reductions_read_the_sorcery_profile() {
+    use crate::support::{game::move_from_library, inspect::can_cast};
+    use managym::state::zone::ZoneType;
+    let name = "Smaug, the Great Calamity";
+    for (reducer, eligible) in [("Mocking Sprite", true), ("Dragonlord's Servant", false)] {
+        let mut game = five_color_setup(&[name, reducer]);
+        game.force_permanent_on_battlefield(0, reducer);
+        let smaug = move_from_library(&mut game, 0, name, ZoneType::Hand);
+        game.set_player_mana_pool(0, "3R");
+        game.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(can_cast(&game, smaug), eligible, "{reducer}");
+    }
+}

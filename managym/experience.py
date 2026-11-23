@@ -319,6 +319,7 @@ class LegacyCastPermissionView(ProtocolModel):
     any_mana: bool = Field(default=False, exclude_if=lambda value: not value)
     waterbend: bool = Field(default=False, exclude_if=lambda value: not value)
     foretold: bool = Field(default=False, exclude_if=lambda value: not value)
+    on_adventure: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class LegacyRestrictedManaView(ProtocolModel):

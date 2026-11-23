@@ -1148,6 +1148,9 @@
         "foretold": {
           "type": "boolean"
         },
+        "on_adventure": {
+          "type": "boolean"
+        },
         "own_turn_only": {
           "type": "boolean"
         },

@@ -689,7 +689,7 @@ impl Game {
         cast: crate::flow::game::CastChoices,
     ) -> bool {
         let granted_flash = cast.grant(self, object).is_some_and(|grant| grant.flash);
-        let object = &self.state[object];
+        let object = cast.spell(&self.state[object]);
         granted_flash
             || object.is_instant_speed()
             || (object.types.is_creature() && self.has_next_creature_cast_flash(player))

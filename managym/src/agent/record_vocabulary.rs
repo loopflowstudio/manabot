@@ -186,7 +186,12 @@ fn execution_names(out: &mut Vec<RecordName>) {
         ("ZoneType", &["Stack"][..]),
         (
             "ReplacementEffect",
-            &["PreventDamageToController", "DoubleDamageToController"][..],
+            &[
+                "PreventDamageToController",
+                "DoubleDamageToController",
+                "AdventureExile",
+                "ExileInsteadOfGraveyard",
+            ][..],
         ),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
@@ -381,6 +386,8 @@ mod tests {
         tokens.extend(
             rules_tokens(
                 &CastChoices {
+                    adventure: true,
+                    exile_instead_of_graveyard: true,
                     route: None,
                     kicked: true,
                     flashback: true,

@@ -88,6 +88,7 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
         "any_mana",
         "waterbend",
         "foretold",
+        "on_adventure",
     ):
         if getattr(permission, key):
             terms[key] = True
@@ -529,7 +530,11 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             ],
             "controller": int(entry.controller_id),
             "label": entry.description
-            or data["definition_names"][str(entry.source_card_registry_key)],
+            or (
+                entry.characteristics.name
+                if entry.characteristics is not None
+                else data["definition_names"][str(entry.source_card_registry_key)]
+            ),
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,

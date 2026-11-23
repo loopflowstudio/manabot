@@ -2442,6 +2442,9 @@
           "title": "Foretold",
           "type": "boolean"
         },
+        "on_adventure": {
+          "type": "boolean"
+        },
         "own_turn_only": {
           "default": false,
           "title": "Own Turn Only",

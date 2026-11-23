@@ -755,6 +755,7 @@ mod tests {
                 kind: ActionSpaceKind::Priority,
                 actions: vec![
                     Action::CastSpell {
+                        adventure: false,
                         player: PlayerId(0),
                         object: object_id,
                         route: None,

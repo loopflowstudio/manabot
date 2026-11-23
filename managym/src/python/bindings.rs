@@ -2096,6 +2096,8 @@ pub struct PyCastPermission {
     pub waterbend: bool,
     #[pyo3(get)]
     pub foretold: bool,
+    #[pyo3(get)]
+    pub on_adventure: bool,
 }
 
 #[cfg(feature = "python")]
@@ -2113,6 +2115,7 @@ impl From<CastPermissionData> for PyCastPermission {
             any_mana: value.any_mana,
             waterbend: value.waterbend,
             foretold: value.foretold,
+            on_adventure: value.on_adventure,
         }
     }
 }
@@ -2132,6 +2135,7 @@ impl From<PyCastPermission> for CastPermissionData {
             any_mana: value.any_mana,
             waterbend: value.waterbend,
             foretold: value.foretold,
+            on_adventure: value.on_adventure,
         }
     }
 }
@@ -2561,6 +2565,8 @@ pub struct PyAction {
     #[pyo3(get)]
     pub announces_x: bool,
     #[pyo3(get)]
+    pub adventure: bool,
+    #[pyo3(get)]
     pub route_mana_value: Option<u8>,
     #[pyo3(get)]
     pub quota_type: Option<u8>,
@@ -2679,6 +2685,7 @@ impl From<ActionOption> for PyAction {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            adventure: value.adventure,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
         }
@@ -2701,6 +2708,7 @@ impl From<PyAction> for ActionOption {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            adventure: value.adventure,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
         }

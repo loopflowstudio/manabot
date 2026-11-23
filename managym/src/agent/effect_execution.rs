@@ -55,6 +55,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "quota type",
     "cast from exile",
     "cast from hand",
+    "cast from graveyard",
+    "exile instants and sorceries",
     "cast from library",
     "cast predicate",
     "choice",
@@ -1382,6 +1384,13 @@ pub(crate) fn project_decision(
             use crate::flow::decision::ResolutionCastOffer;
             out.field("pay casting costs", paid);
             match offer {
+                ResolutionCastOffer::Graveyard {
+                    predicate,
+                    exile_instants_and_sorceries,
+                } => {
+                    out.field("cast from graveyard", predicate);
+                    out.field("exile instants and sorceries", exile_instants_and_sorceries);
+                }
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
                 ResolutionCastOffer::Exiled { object: object_id } => {
                     out.object_id("cast from exile", *object_id)

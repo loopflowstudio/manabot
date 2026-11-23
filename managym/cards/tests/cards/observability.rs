@@ -740,6 +740,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Cascade => "Effect::Cascade",
         Effect::CumulativeUpkeep { .. } => "Effect::CumulativeUpkeep",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
+        Effect::CastFromGraveyard { .. } => "Effect::CastFromGraveyard",
         Effect::ShuffleLibrary => "Effect::ShuffleLibrary",
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
         Effect::OwnerPutsIntoLibrary { .. } => "Effect::OwnerPutsIntoLibrary",
@@ -772,7 +773,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 84;
+const EFFECT_VARIANTS: usize = 85;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -935,6 +936,10 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Cascade,
         Effect::CumulativeUpkeep {
             each: ManaCost::parse("{1}"),
+        },
+        Effect::CastFromGraveyard {
+            predicate: CardPredicate::default(),
+            exile_instants_and_sorceries: true,
         },
         Effect::CastFromHandFree {
             predicate: CardPredicate {
@@ -1507,6 +1512,10 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "flopsie_counters_your_team_and_limits_big_attackers_to_one_blocker",
         ),
+        StaticAbility::SpellsFromOutsideHandCostLess(_) => witnessed(
+            "StaticAbility::SpellsFromOutsideHandCostLess", Seen::Actions("casts a five-mana Adventure with four mana"),
+            "Bilbo, Thief in the Night", "hob", "bilbo_graveyard_adventure_replacement_owns_the_exile_permission",
+        ),
         StaticAbility::SpellsCostLessMana(_) => witnessed(
             "StaticAbility::SpellsCostLessMana",
             Seen::Actions("casts are offered at the reduced cost"),
@@ -1766,6 +1775,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             predicate: CardPredicate::default(),
             cost: AdditionalCost::Delve,
         },
+        StaticAbility::SpellsFromOutsideHandCostLess(1),
         StaticAbility::SpellsCostLessMana(ManaCost::parse("{W}{U}{B}{R}{G}")),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
@@ -3199,6 +3209,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         flash => [column(Card, card::PERMISSION_FLASH)],
         any_mana => [column(Card, card::PERMISSION_ANY_MANA)],
         waterbend => [column(Card, card::PERMISSION_WATERBEND)],
+        on_adventure => [FactOccurrence(FactKind::EffectProgram)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
     }));
@@ -3438,6 +3449,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
+        adventure => [column(Action, action::ADVENTURE)],
         route_mana_value => [column(Action, action::HAS_ROUTE_COST), column(Action, action::ROUTE_MANA_VALUE)],
         quota_type => [column(Action, action::QUOTA_TYPE)],
         announces_x => [column(Action, action::HAS_X)],

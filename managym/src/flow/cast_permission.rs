@@ -90,6 +90,9 @@ pub struct PlayGrant {
     /// Foretold: the card lies face down and is cast for its foretell cost.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub foretold: bool,
+    /// CR 715.3d: only the permanent spell may be cast with this grant.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub on_adventure: bool,
 }
 
 #[deprecated(note = "use PlayGrant; ExileCastGrant will be removed in 0.4.0")]
@@ -114,6 +117,7 @@ impl PlayGrant {
             any_mana: false,
             after_turn: None,
             foretold: false,
+            on_adventure: false,
         }
     }
 }
@@ -436,7 +440,14 @@ impl Game {
     /// grant's alternative, or its mana cost. `None` when it has no cost to
     /// pay (a land is played, not cast).
     pub(crate) fn grant_cast_cost(&self, grant: &PlayGrant) -> Option<ManaCost> {
-        let definition = &self.state[grant.object];
+        self.grant_cost_for_spell(grant, &self.state[grant.object])
+    }
+
+    pub(super) fn grant_cost_for_spell(
+        &self,
+        grant: &PlayGrant,
+        definition: &crate::state::card::PrintedCharacteristics,
+    ) -> Option<ManaCost> {
         if definition.types.is_land() {
             return None;
         }

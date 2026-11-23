@@ -166,10 +166,27 @@ impl Game {
             _ => None,
         };
         let cost = match action {
-            Action::CastSpell { object, route, .. } => {
-                let cast =
-                    CastChoices::from_route(self.selected_play_route(player, *object, *route)?);
-                let card = &self.state[*object];
+            Action::CastSpell {
+                object,
+                route,
+                adventure,
+                ..
+            } => {
+                let cast = if let Some(cast) =
+                    self.state.suspended_decision.as_ref().and_then(|s| {
+                        s.decision
+                            .resolution_cast_choices(&self.state[*object], *adventure)
+                    }) {
+                    cast
+                } else {
+                    CastChoices {
+                        adventure: *adventure,
+                        ..CastChoices::from_route(
+                            self.selected_play_route(player, *object, *route)?,
+                        )
+                    }
+                };
+                let card = cast.spell(&self.state[*object]);
                 if self.cast_needs_x_announcement(*object, cast) {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
@@ -205,7 +222,7 @@ impl Game {
                     chosen_req_indices,
                     ..
                 }) => {
-                    let card = &self.state[*object];
+                    let card = cast.spell(&self.state[*object]);
                     let owed = self.spell_owed(player, *object, *cast);
                     if will_owe_a_choice(&owed) {
                         return Ok(PaymentPreview::needs_additional_cost());

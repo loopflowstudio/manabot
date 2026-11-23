@@ -21,6 +21,14 @@ use crate::{
 /// How a card enters its new zone.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct ZoneEntry {
+    /// The resolving Adventure proposes a graveyard move. Only its own
+    /// replacement transfers the right to cast to the exile successor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolving_adventure: Option<PlayerId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adventure_player: Option<PlayerId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub cast_adventure: bool,
     /// Battlefield: enters tapped.
     pub tapped: bool,
     /// Battlefield: enters with these counters.
@@ -56,7 +64,16 @@ impl ZoneEntry {
                 face_down: false,
                 ..self.clone()
             },
+            ZoneType::Stack => Self {
+                cast_adventure: self.cast_adventure,
+                ..Default::default()
+            },
+            ZoneType::Graveyard => Self {
+                resolving_adventure: self.resolving_adventure,
+                ..Default::default()
+            },
             ZoneType::Exile => Self {
+                adventure_player: self.adventure_player,
                 face_down: self.face_down,
                 ..Self::default()
             },
@@ -280,6 +297,10 @@ impl ReplacementCandidate {
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
+            ReplacementEffect::ExileInsteadOfGraveyard => {
+                "Exile without Adventure permission".into()
+            }
+            ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
             ReplacementEffect::PreventDamageToController { amount } => {
                 format!("Prevent {amount} damage")
             }
@@ -1041,6 +1062,43 @@ impl Game {
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
         let mut candidates = match event {
+            ProposedEvent::ZoneMove {
+                object_id,
+                from: Some(ZoneType::Stack),
+                to: ZoneType::Graveyard,
+                entry,
+            } => {
+                let mut choices = Vec::new();
+                for (index, replacement) in [
+                    entry
+                        .resolving_adventure
+                        .map(|_| ReplacementEffect::AdventureExile),
+                    self.find_spell_on_stack_index(*object_id)
+                        .and_then(|index| match &self.state.stack_objects[index] {
+                            crate::state::stack_object::StackObject::Spell(spell)
+                                if spell.exile_instead_of_graveyard =>
+                            {
+                                Some(ReplacementEffect::ExileInsteadOfGraveyard)
+                            }
+                            _ => None,
+                        }),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if let Some(effect) = replacement {
+                        choices.push(ReplacementCandidate {
+                            identity: ReplacementId {
+                                source: *object_id,
+                                definition_index: index,
+                                static_ability: false,
+                            },
+                            effect,
+                        });
+                    }
+                }
+                choices
+            }
             ProposedEvent::CreateTokens {
                 controller, count, ..
             } if *count > 0 => {
@@ -1324,6 +1382,17 @@ impl Game {
     fn apply_replacement(&self, pending: &mut PendingEvent, candidate: &ReplacementCandidate) {
         pending.applied.push(candidate.identity);
         match (&mut pending.event, &candidate.effect) {
+            (
+                ProposedEvent::ZoneMove { to, entry, .. },
+                ReplacementEffect::ExileInsteadOfGraveyard,
+            ) => {
+                *to = ZoneType::Exile;
+                *entry = ZoneEntry::default();
+            }
+            (ProposedEvent::ZoneMove { to, entry, .. }, ReplacementEffect::AdventureExile) => {
+                *to = ZoneType::Exile;
+                entry.adventure_player = entry.resolving_adventure.take();
+            }
             (
                 ProposedEvent::CreateTokens { count, .. },
                 ReplacementEffect::MultiplyTokens { multiplier },

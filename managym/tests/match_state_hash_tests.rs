@@ -227,6 +227,8 @@ fn card_names_are_compatibility_data_not_state_identity() {
 #[test]
 fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
     let spell = SpellOnStack {
+        adventure: false,
+        exile_instead_of_graveyard: false,
         cast_from: managym::state::zone::ZoneType::Hand,
         flashback: false,
         id: PublicId(101),

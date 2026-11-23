@@ -254,6 +254,10 @@ pub enum ActivationSource {
 /// when unset so ordinary casts keep their shape.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CastChoices {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_instead_of_graveyard: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub adventure: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub route: Option<crate::flow::cast_permission::PlayRoute>,
     /// Casting via flashback replaces any departure from the stack with exile.

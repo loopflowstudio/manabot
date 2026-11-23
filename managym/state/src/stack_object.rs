@@ -6,8 +6,12 @@ use crate::payment::PaymentReceipt;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_instead_of_graveyard: bool,
     pub cast_from: super::zone::ZoneType,
     pub flashback: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub adventure: bool,
     pub id: PublicId,
     #[serde(rename = "card")]
     pub object: ObjectId,

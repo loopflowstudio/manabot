@@ -67,15 +67,20 @@ impl ContentPack {
     /// Built once with the catalog; decisions and search forks share the allocation.
     pub fn name_candidates(&self) -> Arc<NameVocabulary> {
         Arc::clone(self.names.get_or_init(|| {
+            let mut names = BTreeMap::new();
+            for (id, card) in self.definition_entries() {
+                if card.is_token || (card.key.is_empty() && self.front_face(id).is_none()) {
+                    continue;
+                }
+                names.insert(card.name.clone(), Some(id));
+                if let Some(inset) = &card.adventure {
+                    names.entry(inset.name.clone()).or_insert(None);
+                }
+            }
             NameVocabulary::new(
-                self.definition_entries()
-                    .filter(|(id, card)| {
-                        !card.is_token && (!card.key.is_empty() || self.front_face(*id).is_some())
-                    })
-                    .map(|(definition, card)| NameCandidate {
-                        name: card.name.clone(),
-                        definition: Some(definition),
-                    })
+                names
+                    .into_iter()
+                    .map(|(name, definition)| NameCandidate { name, definition })
                     .collect(),
             )
         }))

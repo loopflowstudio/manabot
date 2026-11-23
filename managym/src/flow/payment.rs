@@ -480,7 +480,7 @@ impl Game {
                 if self.uses_exile_alternative(*object, *cast) {
                     owed.push(CostComponent::ExileFromHand);
                 }
-                let card = &self.state[*object];
+                let card = cast.spell(&self.state[*object]);
                 if let Some(cost) = card.sacrifice_cost() {
                     owed.push(CostComponent::Sacrifice(cost.clone(), Toward::Printed));
                 }
@@ -501,7 +501,7 @@ impl Game {
                     .unwrap_or_default();
                 let help = self.spell_help(player, *object, *cast, &cost);
                 owed.push(CostComponent::Mana { cost, help });
-                if let (false, Some(life)) = (cast.kicked, self.state[*object].life_alternative()) {
+                if let (false, Some(life)) = (cast.kicked, card.life_alternative()) {
                     owed.push(CostComponent::Life(life));
                 }
             }

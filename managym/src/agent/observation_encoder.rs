@@ -1973,7 +1973,7 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
     for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
         for grant in &card.cast_permissions {
             let overlapping = card.cast_permissions.len() > 1;
-            if !overlapping && grant.source_permanent_id.is_none() {
+            if !overlapping && grant.source_permanent_id.is_none() && !grant.on_adventure {
                 continue;
             }
             let terms = (
@@ -1989,8 +1989,12 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
                 grant.waterbend,
                 grant.foretold,
             );
-            let tokens =
-                crate::cards::tokens::rules_tokens(&terms, pack()).expect("public grant terms");
+            let tokens = if grant.on_adventure {
+                crate::cards::tokens::rules_tokens(&(terms, true), pack())
+            } else {
+                crate::cards::tokens::rules_tokens(&terms, pack())
+            }
+            .expect("public grant terms");
             program(card.id, PLAY_GRANT, &tokens);
             // Adjacent source and card programs describe the same occurrence.
             // A singleton still carries its terms in the existing card columns.
@@ -2184,6 +2188,9 @@ fn encode_actions(
             *value = f32::from(action.route_mana_value.unwrap_or_default()) / 10.;
             *quota = f32::from(action.quota_type.unwrap_or_default());
         }
+        if let Some(inset) = row.get_mut(action::ADVENTURE) {
+            *inset = bool_to_f32(action.adventure);
+        }
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;
@@ -2370,6 +2377,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        adventure: false,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2386,6 +2394,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        adventure: false,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2402,6 +2411,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        adventure: false,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2549,6 +2559,7 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                adventure: false,
                 route_mana_value: None,
                 quota_type: None,
             })
@@ -2853,6 +2864,7 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                adventure: false,
                 route_mana_value: None,
                 quota_type: None,
             })

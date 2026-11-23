@@ -171,6 +171,7 @@ impl Game {
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
                 spell.object = self.create_spell_copy(spell.object, id, controller);
+                spell.exile_instead_of_graveyard = false;
                 spell.id = id;
                 spell.controller = controller;
                 StackObject::Spell(spell)

@@ -48,6 +48,8 @@ pub enum Action {
         route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     CastSpell {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        adventure: bool,
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,

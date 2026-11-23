@@ -997,6 +997,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         GainControl { player, what, duration } => format!("{} gains control of {}{}", player_description(player), selector_description(what), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
         CopyTriggeringSpellForEach { each } => format!("Copy that spell for {} it could target. Each copy targets a different one of them", selector_description(each)),
+        CastFromGraveyard { predicate, exile_instants_and_sorceries } => format!("You may cast a {} from your graveyard.{}", predicate_description(predicate, "spell"), if *exile_instants_and_sorceries { " Exile an instant or sorcery cast this way if it would go to your graveyard." } else { "" }),
         CastExiledWithSource { predicate } => format!("You may cast a {} from among cards you own exiled with this", predicate_description(predicate, "spell")),
         ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),

@@ -52,6 +52,7 @@ export interface CastPermission {
   any_mana?: boolean;
   waterbend?: boolean;
   foretold?: boolean;
+  on_adventure?: boolean;
 }
 
 /** Mana spendable only on the named spell or ability-source subtypes. */

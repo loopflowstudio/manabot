@@ -923,6 +923,7 @@ class CastPermission:
     any_mana: bool
     waterbend: bool
     foretold: bool
+    on_adventure: bool
 
 class ObservationCharacteristics:
     """Viewer-safe characteristics. P/T and keywords are effective on the battlefield.
@@ -1108,6 +1109,7 @@ class Action:
     pays_directly: bool
     # mode_index is an announced number (X, a replicate count, a payment's X)
     # rather than an option index.
+    adventure: bool
     route_mana_value: int | None
     quota_type: int | None
     announces_x: bool

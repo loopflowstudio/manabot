@@ -480,6 +480,7 @@ columns! { action {
     25: HAS_ROUTE_COST => ("has_route_cost", ValueLayout::FLAG),
     26: ROUTE_MANA_VALUE => ("route_mana_value", ValueLayout::COUNT_TENTHS),
     27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
+    28: ADVENTURE => ("adventure", ValueLayout::FLAG),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {

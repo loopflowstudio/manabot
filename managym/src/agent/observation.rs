@@ -225,6 +225,8 @@ pub struct CastPermissionData {
     /// Foretold: face down, so only its owner sees the card or this permission.
     #[serde(default)]
     pub foretold: bool,
+    #[serde(default)]
+    pub on_adventure: bool,
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -910,6 +912,9 @@ pub struct ActionOption {
     /// replicate count, a resolving payment's X) rather than an option index.
     #[serde(default)]
     pub announces_x: bool,
+    /// The offer selects the printed Adventure on its physical card.
+    #[serde(default)]
+    pub adventure: bool,
     /// Base mana value of the selected permission, before reductions or additional costs.
     #[serde(default)]
     pub route_mana_value: Option<u8>,
@@ -1060,6 +1065,7 @@ impl Observation {
                                 _ => (None, None),
                             };
                             ActionOption {
+                                adventure: matches!(action, Action::CastSpell { adventure:true, .. }),
                                 route_mana_value,
                                 quota_type,
                                 description: game.action_description(action),
@@ -1681,6 +1687,7 @@ impl Observation {
                     any_mana: grant.any_mana,
                     waterbend: grant.waterbend,
                     foretold: grant.foretold,
+                    on_adventure: grant.on_adventure,
                 })
                 .collect(),
             x: None,
@@ -2575,6 +2582,7 @@ mod characteristics_tests {
             continuation_index: None,
             pays_directly: false,
             announces_x: false,
+            adventure: false,
             route_mana_value: None,
             quota_type: None,
         };

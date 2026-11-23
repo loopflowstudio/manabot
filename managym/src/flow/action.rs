@@ -49,6 +49,15 @@ impl Game {
         match action {
             Action::CastSpell {
                 object,
+                adventure: true,
+                route: None,
+                ..
+            } => Some(format!(
+                "Cast {}",
+                self.state[*object].adventure.as_ref()?.name
+            )),
+            Action::CastSpell {
+                object,
                 route: Some(route),
                 ..
             }
@@ -58,7 +67,17 @@ impl Game {
                 ..
             } => {
                 use crate::flow::cast_permission::PlayRoute;
-                let card = &self.state[*object];
+                let card = CastChoices {
+                    adventure: matches!(
+                        action,
+                        Action::CastSpell {
+                            adventure: true,
+                            ..
+                        }
+                    ),
+                    ..Default::default()
+                }
+                .spell(&self.state[*object]);
                 let terms = match route {
                     PlayRoute::GraveyardType { source, kind, .. } => format!(
                         "using {} (object {}, {kind:?} for this turn)",
@@ -66,7 +85,7 @@ impl Game {
                     ),
                     PlayRoute::Grant(key) => {
                         let grant = self.grant_by_key(*object, *key)?;
-                        let price = self.grant_cast_cost(grant).map(|cost| {
+                        let price = self.grant_cost_for_spell(grant, &card).map(|cost| {
                             if cost.mana_value == 0 && cost.x == 0 {
                                 "{0}".into()
                             } else {
@@ -623,39 +642,50 @@ impl Game {
         mut offer: impl FnMut(Action, u8, CastChoices),
     ) {
         let object = self.state.object_of(card);
-        let types = &self.state[object].types;
+
         // Preserve the original single-route Command. On overlap every offer
         // names its route, even if only one survives the affordability check.
         let routes = self.play_routes(player, object);
         for &permission in routes.iter() {
             let route = (routes.len() > 1).then_some(permission);
-            let cast = CastChoices::from_route(permission);
-            if types.is_land() {
-                if self.can_play_land(player) {
-                    offer(
-                        Action::PlayLand {
-                            player,
-                            object,
-                            route,
-                        },
-                        0,
-                        cast,
-                    );
+            for adventure in [false, true] {
+                if adventure && !self.allows_adventure(object, permission) {
+                    break;
                 }
-            } else if types.is_castable()
-                && (self.can_cast_sorceries(player)
-                    || self.has_instant_timing(player, object, cast))
-            {
-                if let Some(value) = self.castable_mana_value(player, card, cast) {
-                    offer(
-                        Action::CastSpell {
-                            player,
-                            object,
-                            route,
-                        },
-                        value,
-                        cast,
-                    );
+                let cast = CastChoices {
+                    adventure,
+                    ..CastChoices::from_route(permission)
+                };
+                let spell = cast.spell(&self.state[object]);
+                let types = &spell.types;
+                if types.is_land() {
+                    if self.can_play_land(player) {
+                        offer(
+                            Action::PlayLand {
+                                player,
+                                object,
+                                route,
+                            },
+                            0,
+                            cast,
+                        );
+                    }
+                } else if types.is_castable()
+                    && (self.can_cast_sorceries(player)
+                        || self.has_instant_timing(player, object, cast))
+                {
+                    if let Some(value) = self.castable_mana_value(player, card, cast) {
+                        offer(
+                            Action::CastSpell {
+                                adventure,
+                                player,
+                                object,
+                                route,
+                            },
+                            value,
+                            cast,
+                        );
+                    }
                 }
             }
         }
@@ -669,10 +699,10 @@ impl Game {
         card: CardId,
         cast: CastChoices,
     ) -> Option<u8> {
-        let object = &self.state[self.state.object_of(card)];
+        let object = cast.spell(&self.state[self.state.object_of(card)]);
         if object.spell_modes().is_some()
             && self
-                .legal_spell_modes(player, self.state.object_of(card))
+                .legal_spell_modes(player, self.state.object_of(card), cast)
                 .is_empty()
         {
             return None;
@@ -769,11 +799,15 @@ impl Game {
                     focus: Vec::new(),
                 })
             }
-            PendingChoice::SpellMode { player, object, .. } => Some(ActionSpace {
+            PendingChoice::SpellMode {
+                player,
+                object,
+                cast,
+            } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
                 actions: self
-                    .legal_spell_modes(*player, *object)
+                    .legal_spell_modes(*player, *object, *cast)
                     .into_iter()
                     .map(|mode| Action::ChooseMode {
                         player: *player,
@@ -830,7 +864,9 @@ impl Game {
                         target,
                     })
                     .collect();
-                let requirements = self.state[object].target_requirements_for_mode(*mode);
+                let requirements = cast
+                    .spell(&self.state[object])
+                    .target_requirements_for_mode(*mode);
                 let chosen_in_req = chosen_req_indices
                     .iter()
                     .filter(|i| **i == *requirement_index)
@@ -1016,11 +1052,15 @@ impl Game {
                 self.restart_priority_round();
                 Ok(())
             }
+            Action::CastSpell { .. } if self.state.suspended_decision.is_some() => {
+                self.execute_decision_action(action)
+            }
             Action::CastSpell {
                 player,
                 object,
                 route,
-            } => self.cast_spell_action(*player, self.chosen_card(*object)?, *route),
+                adventure,
+            } => self.cast_spell_action(*player, self.chosen_card(*object)?, *route, *adventure),
             Action::ActivateAbility {
                 player,
                 permanent,

@@ -671,3 +671,84 @@ def test_pending_cast_payment_command_survives_save_and_reload() -> None:
     for branch in (env, restored):
         branch.execute_semantic_command_json(command)
     assert restored.search_witness_json() == env.search_witness_json()
+
+
+def test_pending_adventure_target_command_survives_cold_restore() -> None:
+    env = managym.Env(seed=42)
+    deck = {
+        "Mountain": 24,
+        "Gray Ogre": 8,
+        "Lightning Bolt": 4,
+        "Smaug, the Great Calamity": 8,
+    }
+    env.reset(
+        managym.GameSetup([managym.PlayerConfig(name, deck) for name in ("a", "b")])
+    )
+    for _ in range(320):
+        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        adventure = next(
+            (offer for offer in frame.offers if "Spew Flame" in offer["label"]), None
+        )
+        if adventure is not None:
+            obs = env.observation_for_player(frame.actor)
+            ogres = [
+                p
+                for p in [*obs.agent_permanents, *obs.opponent_permanents]
+                if p.characteristics.name == "Gray Ogre"
+            ]
+            if len(ogres) >= 2:
+                env.execute_semantic_command_json(
+                    Command("adventure", frame.revision, adventure["id"]).to_json()
+                )
+                target_frame = DecisionFrame.from_json(
+                    env.semantic_decision_frame_json()
+                )
+                assert all(
+                    offer["verb"] == "choose_target" for offer in target_frame.offers
+                )
+                break
+
+        def priority(index: int) -> int:
+            offer = frame.offers[index]
+            if offer["verb"] == "play_land":
+                return 0
+            if (offer.get("public_commitment") or {}).get("card") == "Gray Ogre":
+                return 1
+            if offer["verb"] == "pass_priority":
+                return 2
+            return 3
+
+        chosen = min(range(len(frame.offers)), key=priority)
+        env.step(chosen)
+    else:
+        pytest.fail("ordinary play never reached Spew Flame's target decision")
+
+    command = Command(
+        "target", target_frame.revision, target_frame.offers[0]["id"]
+    ).to_json()
+    restored = managym.GameSnapshot.from_replay_json(
+        env.snapshot().to_replay_json()
+    ).restore()
+    assert restored.semantic_decision_frame_json() == env.semantic_decision_frame_json()
+    before_payment = {
+        p.id
+        for p in env.observation_for_player(frame.actor).agent_permanents
+        if p.tapped
+    }
+    transition = env.execute_semantic_command_json(command)
+    assert restored.execute_semantic_command_json(command) == transition
+    for branch in (env, restored):
+        observation = branch.observation_for_player(frame.actor)
+        paid = [
+            p
+            for p in observation.agent_permanents
+            if p.tapped and p.id not in before_payment
+        ]
+        assert len(paid) == 5 and all(
+            p.characteristics.name == "Mountain" for p in paid
+        )
+        [spell] = observation.stack_objects
+        assert spell.characteristics is not None
+        assert spell.characteristics.name == "Spew Flame"
+        assert spell.targets[0].permanent_id in {ogre.id for ogre in ogres}
+    assert restored.search_witness_json() == env.search_witness_json()

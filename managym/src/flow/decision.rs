@@ -348,6 +348,10 @@ impl EffectFrame {
 /// Where a `CastDuringResolution` decision's candidates come from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ResolutionCastOffer {
+    Graveyard {
+        predicate: CardPredicate,
+        exile_instants_and_sorceries: bool,
+    },
     /// Spells in the deciding player's hand matching `predicate`, read when
     /// offered (Yue, the Moon Spirit).
     Hand { predicate: CardPredicate },
@@ -713,6 +717,30 @@ pub enum Decision {
 }
 
 impl Decision {
+    pub(super) fn resolution_cast_choices(
+        &self,
+        object: &crate::state::game_object::Object,
+        adventure: bool,
+    ) -> Option<CastChoices> {
+        let Self::CastDuringResolution { offer, paid, .. } = self else {
+            return None;
+        };
+        let exile_instead_of_graveyard = matches!(
+            offer,
+            ResolutionCastOffer::Graveyard {
+                exile_instants_and_sorceries: true,
+                ..
+            }
+        ) && (adventure || object.types.is_spell());
+        Some(CastChoices {
+            adventure,
+            free: !paid,
+            resolving: *paid,
+            exile_instead_of_graveyard,
+            ..Default::default()
+        })
+    }
+
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
@@ -1392,7 +1420,16 @@ impl Game {
                                     },
                                 )
                             } else {
-                                (ZoneType::Graveyard, Default::default())
+                                (
+                                    ZoneType::Graveyard,
+                                    crate::flow::proposed_event::ZoneEntry {
+                                        resolving_adventure: self.find_spell_on_stack_index(object).and_then(|index| match &self.state.stack_objects[index] {
+                                            crate::state::stack_object::StackObject::Spell(spell) if spell.adventure => Some(spell.controller),
+                                            _ => None,
+                                        }),
+                                        ..Default::default()
+                                    },
+                                )
                             };
                             frame.batch = Some(
                                 self.event_batch(vec![self.zone_move_proposal(object, to, entry)]),
@@ -1846,12 +1883,36 @@ impl Game {
                 }
             }
             Decision::CastDuringResolution { player, .. } => {
-                let cards = self.card_objects(self.resolution_cast_candidates(&suspended.decision));
+                let candidates = self.resolution_cast_candidates(&suspended.decision);
+                let cards: Vec<_> = candidates
+                    .iter()
+                    .map(|(card, _)| self.state.object_of(*card))
+                    .collect();
+                let actions = candidates
+                    .into_iter()
+                    .map(|(card, adventure)| {
+                        let object = self.state.object_of(card);
+                        if adventure {
+                            Action::CastSpell {
+                                player: *player,
+                                object,
+                                adventure,
+                                route: None,
+                            }
+                        } else {
+                            Action::SelectCard {
+                                player: *player,
+                                object,
+                            }
+                        }
+                    })
+                    .chain([Action::Decline { player: *player }])
+                    .collect();
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
                     focus: self.object_focus(&cards),
-                    actions: select_objects(*player, cards, true),
+                    actions,
                 }
             }
             Decision::OpponentSplitsRevealed {
@@ -2768,14 +2829,28 @@ impl Game {
             }
             (
                 Decision::CastDuringResolution { .. },
-                Action::SelectCard {
+                Action::CastSpell {
+                    object: object_id,
+                    adventure: true,
+                    ..
+                }
+                | Action::SelectCard {
                     object: object_id, ..
                 },
             ) => {
+                let adventure = matches!(
+                    action,
+                    Action::CastSpell {
+                        adventure: true,
+                        ..
+                    }
+                );
                 if !self
                     .resolution_cast_candidates(&suspended.decision)
                     .iter()
-                    .any(|card| self.state.object_of(*card) == *object_id)
+                    .any(|(card, inset)| {
+                        self.state.object_of(*card) == *object_id && *inset == adventure
+                    })
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
@@ -2789,10 +2864,10 @@ impl Game {
                 // The cast is the effect's last instruction: finish the
                 // resolution, then cast the chosen card onto the stack.
                 let (player, object_id) = (suspended.decision.player(), *object_id);
-                let paid = matches!(
-                    suspended.decision,
-                    Decision::CastDuringResolution { paid: true, .. }
-                );
+                let cast = suspended
+                    .decision
+                    .resolution_cast_choices(&self.state[object_id], adventure)
+                    .expect("cast decision");
                 if let Decision::CastDuringResolution {
                     offer: ResolutionCastOffer::Cascade { exiled, .. },
                     ..
@@ -2806,7 +2881,7 @@ impl Game {
                     self.state.suspended_decision.is_none(),
                     "a cast during resolution ends its resolving effect"
                 );
-                self.begin_resolution_cast(player, object_id, paid)
+                self.begin_resolution_cast(player, object_id, cast)
             }
             (
                 Decision::ExileLinked {
@@ -3160,10 +3235,9 @@ impl Game {
         }
     }
 
-    /// The cards a `CastDuringResolution` decision offers: hand spells matching
-    /// its predicate (one per definition, so resampled copies stay
-    /// consistent) or the exiled card, each castable for free right now.
-    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
+    /// Playable card and profile pairs. Graveyard choices bind each public
+    /// object. Existing free-hand offers group interchangeable copies by definition.
+    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<(CardId, bool)> {
         let Decision::CastDuringResolution {
             player,
             offer,
@@ -3185,6 +3259,10 @@ impl Game {
             ..Default::default()
         };
         let mut cards: Vec<CardId> = match offer {
+            ResolutionCastOffer::Graveyard { .. } => self
+                .state
+                .zone_cards(ZoneType::Graveyard, *player)
+                .collect(),
             ResolutionCastOffer::Hand { predicate } => self
                 .state
                 .zone_cards(ZoneType::Hand, *player)
@@ -3224,12 +3302,43 @@ impl Game {
                 .into_iter()
                 .collect(),
         };
-        cards.retain(|card| self.castable_mana_value(*player, *card, free).is_some());
+
         cards.sort_unstable_by_key(|card| {
             (self.state[self.state.object_of(*card)].definition_id, *card)
         });
-        cards.dedup_by_key(|card| self.state[self.state.object_of(*card)].definition_id);
-        cards
+        let mut candidates = Vec::new();
+        for card in cards {
+            let object = &self.state[self.state.object_of(card)];
+            for adventure in [false, true] {
+                if adventure
+                    && (object.adventure.is_none()
+                        || !matches!(offer, ResolutionCastOffer::Graveyard { .. }))
+                {
+                    break;
+                }
+                let cast = CastChoices { adventure, ..free };
+                if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
+                    let spell = cast.spell(object);
+                    if !spell.types.is_castable()
+                        || !predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0))
+                    {
+                        continue;
+                    }
+                }
+                if self.castable_mana_value(*player, card, cast).is_some() {
+                    candidates.push((card, adventure));
+                }
+            }
+        }
+        if !matches!(offer, ResolutionCastOffer::Graveyard { .. }) {
+            candidates.dedup_by_key(|(card, adventure)| {
+                (
+                    self.state[self.state.object_of(*card)].definition_id,
+                    *adventure,
+                )
+            });
+        }
+        candidates
     }
 
     /// One hand card per matching definition for `DiscardFromRevealedHand`.

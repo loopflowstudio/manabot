@@ -506,7 +506,14 @@ impl Game {
         self.spend_play_route(controller, cast.route);
         let cast_from = self.state.zones.zone_of(object).expect("cast source zone");
         // CR 400.7g, h: the spell is the object the card became on the stack.
-        let object = self.move_object(object, ZoneType::Stack);
+        let object = self.move_object_with_entry(
+            object,
+            ZoneType::Stack,
+            ZoneEntry {
+                cast_adventure: cast.adventure,
+                ..Default::default()
+            },
+        );
         let id = self.state.id_gen_mut().next_id();
         let source_definition_id = self.state[object].definition_id;
         self.state
@@ -517,6 +524,8 @@ impl Game {
                 controller,
                 cast_from,
                 flashback: cast.flashback,
+                adventure: cast.adventure,
+                exile_instead_of_graveyard: cast.exile_instead_of_graveyard,
                 source_definition_id,
                 targets,
                 target_req_indices,
@@ -679,6 +688,19 @@ impl Game {
         let object_id = self
             .state
             .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
+        if entry.cast_adventure {
+            self.state[object_id].show_adventure();
+        }
+        if let Some(player) = entry.adventure_player {
+            if self.state[object_id].is_card() {
+                self.state
+                    .cast_permissions
+                    .grant(crate::flow::cast_permission::PlayGrant {
+                        on_adventure: true,
+                        ..crate::flow::cast_permission::PlayGrant::new(object_id, player)
+                    });
+            }
+        }
         let entered_definition = self.state[object_id].definition_id;
         if to_zone == ZoneType::Library {
             self.state.library_order_pins_mut(owner).insert(object_id);

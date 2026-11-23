@@ -1078,6 +1078,10 @@ pub enum Effect {
     CastLibraryTopFree,
     /// You may cast a matching spell from your hand without paying its mana cost.
     CastFromHandFree { predicate: CardPredicate },
+    CastFromGraveyard {
+        predicate: CardPredicate,
+        exile_instants_and_sorceries: bool,
+    },
     /// Shuffle your graveyard into your library.
     ShuffleGraveyardIntoLibrary,
     /// The target's owner chooses second from the top of their library or
@@ -1742,6 +1746,7 @@ impl Effect {
             | Effect::Cascade
             | Effect::CumulativeUpkeep { .. }
             | Effect::CastFromHandFree { .. }
+            | Effect::CastFromGraveyard { .. }
             | Effect::CastLibraryTopFree
             | Effect::WhenYouDo { .. }
             | Effect::TriggerModes { .. }

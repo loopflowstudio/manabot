@@ -352,6 +352,8 @@ pub struct LegacyCastPermissionView {
     pub waterbend: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub foretold: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_adventure: bool,
 }
 
 /// Mana spendable only on spells with one of `spells`' subtypes or abilities
