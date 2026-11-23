@@ -1471,28 +1471,7 @@ impl Game {
             EventBinding::Shuffle { player } => self.shuffle_library(player),
             EventBinding::PlaceInLibrary { second_from_top } => {
                 for result in results {
-                    let mut arrivals = result.arrivals().filter(|object| {
-                        self.state.zones.zone_of(*object) == Some(ZoneType::Library)
-                    });
-                    let Some(first) = arrivals.next() else {
-                        continue;
-                    };
-                    let second = arrivals.next();
-                    let owner = self.state[first].owner;
-                    // The arrivals entered above the previous top. Insert each
-                    // at the same index so the first chosen is drawn first.
-                    let index = if second_from_top {
-                        self.state
-                            .zones
-                            .size(ZoneType::Library, owner)
-                            .saturating_sub(2 + usize::from(second.is_some()))
-                    } else {
-                        0
-                    };
-                    self.reposition_library_object(owner, first, index);
-                    if let Some(second) = second {
-                        self.reposition_library_object(owner, second, index);
-                    }
+                    self.place_library_arrivals(result, second_from_top);
                 }
             }
             EventBinding::Created { attacking } => {
@@ -4665,8 +4644,8 @@ mod event_result_tests {
     #[test]
     fn paired_arrivals_preserve_bottom_draw_order_and_following_discard_binding() {
         let player = PlayerId(0);
-        let deck = BTreeMap::from([("Mountain".into(), 40)]);
-        let root = Game::new(
+        let deck = BTreeMap::from([("Mountain".into(), 20), ("Forest".into(), 20)]);
+        let mut root = Game::new(
             vec![
                 PlayerConfig::new("a", deck.clone()),
                 PlayerConfig::new("b", deck),
@@ -4674,6 +4653,12 @@ mod event_result_tests {
             420,
             false,
         );
+        let top = root.library_top_objects(player, 40)[0];
+        let different = root
+            .library_from_top(player)
+            .find(|&object| root.state[object].definition_id != root.state[top].definition_id)
+            .unwrap();
+        root.reposition_library_object(player, different, usize::MAX);
         let library = root.library_top_objects(player, 40);
         let [first, second] = [library[0], library[1]];
         let discard = root.state.zones.zone_objects(ZoneType::Hand, player)[0];
@@ -4722,6 +4707,18 @@ mod event_result_tests {
                 second_from_top.library_top_objects(player, 40),
                 [&library[2..3], &pair, &library[3..]].concat()
             );
+            let check_order_knowledge = |branch: &Game, position: usize| {
+                let own = branch.library_facts(player, player);
+                let opponent = branch.library_facts(player, PlayerId(1));
+                for (offset, object) in pair.iter().enumerate() {
+                    assert_eq!(
+                        own.get(&(position + offset)),
+                        Some(&branch.state[*object].definition_id)
+                    );
+                    assert!(!opponent.contains_key(&(position + offset)));
+                }
+            };
+            check_order_knowledge(&second_from_top, 1);
             batch.binding = EventBinding::PlaceInLibrary {
                 second_from_top: false,
             };
@@ -4730,6 +4727,7 @@ mod event_result_tests {
                 game.library_top_objects(player, 40),
                 [&library[2..], &pair].concat()
             );
+            check_order_knowledge(&game, library.len() - 2);
         }
     }
 }

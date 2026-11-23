@@ -719,11 +719,7 @@ impl Game {
                         ..
                     }
                 ) {
-                    for object_id in result.arrivals() {
-                        if self.state.zones.zone_of(object_id) == Some(ZoneType::Library) {
-                            self.put_on_bottom_of_library(object_id);
-                        }
-                    }
+                    self.place_library_arrivals(&result, false);
                 }
                 if let Some((owner, definition, known_before)) = revealed_hand {
                     self.set_known_hand_count(owner, definition, known_before + 1);

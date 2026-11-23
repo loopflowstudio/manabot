@@ -529,6 +529,34 @@ impl Game {
         self.state.stack_objects.is_empty()
     }
 
+    /// Place the surviving arrivals of one event in draw order. The owner
+    /// knows the relative order they chose for two constituent cards.
+    pub(super) fn place_library_arrivals(&mut self, result: &EventResult, second_from_top: bool) {
+        let mut arrivals = result
+            .arrivals()
+            .filter(|object| self.state.zones.zone_of(*object) == Some(ZoneType::Library));
+        let Some(first) = arrivals.next() else {
+            return;
+        };
+        let second = arrivals.next();
+        let owner = self.state[first].owner;
+        // The arrivals entered above the previous top. Insert each
+        // at the same index so the first chosen is drawn first.
+        let index = if second_from_top {
+            self.state
+                .zones
+                .size(ZoneType::Library, owner)
+                .saturating_sub(2 + usize::from(second.is_some()))
+        } else {
+            0
+        };
+        self.reposition_library_object(owner, first, index);
+        if let Some(second) = second {
+            self.reposition_library_object(owner, second, index);
+            self.remember_library_objects(owner, &[first, second]);
+        }
+    }
+
     /// Return the object this move made (CR 400.7j), even if a consequent
     /// event moves it again. A move that does not happen (the object is
     /// already there, or already gone) returns `object` itself.
