@@ -9,3 +9,5 @@ For concept review, pair Cat Collector with Venom Connoisseur in the next slice.
 Resolution keys include the captured printed face: ability index zero can belong to different printed abilities on a permanent whose face changes. The live projection shows the current face and each stack entry retains its own.
 
 Checkpoint assembly uses the saved fact embedding width at construction. Fresh encoders use the native fact vocabulary.
+
+For the exact-source pair, start with Panda and restore its pending trigger before testing source and target reentry separately. Immolator alone cannot exercise target enumeration.
