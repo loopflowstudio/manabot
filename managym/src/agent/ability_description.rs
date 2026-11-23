@@ -378,6 +378,13 @@ fn condition_text(condition: &Condition) -> String {
         Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
             format!("an opponent lost {amount} or more life this turn")
         }
+        Condition::GainedLifeThisTurn => "you gained life this turn".into(),
+        Condition::LostLifeThisTurn => "you lost life this turn".into(),
+        Condition::AllOf(conditions) => conditions
+            .iter()
+            .map(condition_text)
+            .collect::<Vec<_>>()
+            .join(" and "),
         Condition::AnyOf(conditions) => conditions
             .iter()
             .map(condition_text)

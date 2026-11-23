@@ -415,6 +415,7 @@ impl Game {
             condition,
             Condition::ControlsAtLeast { .. }
                 | Condition::BattlefieldAtLeast { .. }
+                | Condition::AllOf(_)
                 | Condition::AnyOf(_)
         ));
         self.condition_holds(
@@ -818,6 +819,11 @@ impl Game {
             Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
                 self.state.turn.history[1 - controller.0].life_lost >= *amount
             }
+            Condition::GainedLifeThisTurn => self.state.turn.history[controller.0].life_gains > 0,
+            Condition::LostLifeThisTurn => self.state.turn.history[controller.0].life_lost > 0,
+            Condition::AllOf(conditions) => conditions.iter().all(|condition| {
+                self.condition_holds(condition, controller, frame, source, triggering)
+            }),
             Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
                 self.condition_holds(condition, controller, frame, source, triggering)
             }),

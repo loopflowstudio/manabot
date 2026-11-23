@@ -164,7 +164,7 @@ impl ReadSet {
             | Condition::SourceMatches(predicate) => {
                 self.predicate(predicate);
             }
-            Condition::AnyOf(conditions) => {
+            Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 for condition in conditions {
                     self.condition(condition);
                 }
@@ -860,6 +860,7 @@ impl<'a> Context<'a> {
                     >= *count
             }
             Condition::SourceMatches(predicate) => self.matches(source, predicate, Some(source)),
+            Condition::AllOf(conditions) => conditions.iter().all(|c| self.condition(c, source)),
             Condition::AnyOf(conditions) => conditions.iter().any(|c| self.condition(c, source)),
             // All other static conditions read state, not characteristics.
             _ => self

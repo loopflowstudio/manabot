@@ -1,14 +1,53 @@
 //! Bloomburrow.
 use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
-    card::{AdditionalCost, CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    ability::{
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
+        TriggerCondition, TurnStep,
+    },
+    card::{
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
+        PrintedCharacteristics,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![diresight(), feed_the_cycle(), savor()]
+    vec![diresight(), feed_the_cycle(), lunar_convocation(), savor()]
+}
+
+fn lunar_convocation() -> CardDefinition {
+    let end_step = |condition, effect| Ability::Triggered {
+        condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+        intervening_if: Some(condition),
+        effects: vec![effect],
+    };
+    CardDefinition {
+        key: "blb.lunar_convocation",
+        scryfall_id: "a9ee50d4-c878-457b-964d-29c039ce9852",
+        printed: PrintedCharacteristics {
+            name: "Lunar Convocation".into(),
+            mana_cost: Some(ManaCost::parse("{W}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                end_step(Condition::GainedLifeThisTurn, Effect::LoseLife {
+                    player: PlayerSelector::EachOpponent,
+                    amount: EffectValue::Fixed(1),
+                }),
+                end_step(Condition::AllOf(vec![Condition::GainedLifeThisTurn, Condition::LostLifeThisTurn]), Effect::create_tokens("token.bat", 1)),
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}{B}"),
+                life_cost: 2,
+                effects: vec![Effect::DrawCards { count: EffectValue::Fixed(1) }],
+                ..Default::default()
+            }],
+            text_box: "At the beginning of your end step, if you gained life this turn, each opponent loses 1 life.\nAt the beginning of your end step, if you gained and lost life this turn, create a 1/1 black Bat creature token with flying.\n{1}{B}, Pay 2 life: Draw a card.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn savor() -> CardDefinition {

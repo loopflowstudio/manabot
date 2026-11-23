@@ -273,6 +273,9 @@ pub enum Condition {
     /// creature or a land entered the battlefield under your control this
     /// turn").
     AnyOf(Vec<Condition>),
+    AllOf(Vec<Condition>),
+    GainedLifeThisTurn,
+    LostLifeThisTurn,
     /// Resolution only: the resolving spell was kicked (CR 702.33).
     Kicked,
     /// Resolution only: the frame's primary target is still a permanent and
@@ -357,7 +360,9 @@ impl Condition {
             | Condition::TriggeringHadCounters => true,
             Condition::ControlsAtLeast { predicate, .. }
             | Condition::BattlefieldAtLeast { predicate, .. } => predicate.reads_source(),
-            Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
+            Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
+                conditions.iter().any(Condition::reads_source)
+            }
             _ => false,
         }
     }
@@ -367,7 +372,9 @@ impl Condition {
     pub fn reads_mana_pools(&self) -> bool {
         match self {
             Condition::UnspentManaAtLeast { .. } => true,
-            Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_mana_pools),
+            Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
+                conditions.iter().any(Condition::reads_mana_pools)
+            }
             _ => false,
         }
     }
@@ -384,7 +391,9 @@ impl Condition {
             | Condition::TriggeringSpellMatches(_)
             | Condition::Moved
             | Condition::TargetControlledByYou => true,
-            Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
+            Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
+                conditions.iter().any(Condition::is_resolution_only)
+            }
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
             | Condition::SourceSaddled
@@ -400,6 +409,8 @@ impl Condition {
             | Condition::ControlsUnownedAtLeast { .. }
             | Condition::CardsInHandAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
+            | Condition::GainedLifeThisTurn
+            | Condition::LostLifeThisTurn
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
             | Condition::BentAllFourThisTurn

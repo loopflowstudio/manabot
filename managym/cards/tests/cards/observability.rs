@@ -1195,6 +1195,9 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::OpponentLostLifeThisTurnAtLeast { .. } => {
             "Condition::OpponentLostLifeThisTurnAtLeast"
         }
+        Condition::AllOf(_) => "Condition::AllOf",
+        Condition::LostLifeThisTurn => "Condition::LostLifeThisTurn",
+        Condition::GainedLifeThisTurn => "Condition::GainedLifeThisTurn",
         Condition::AnyOf(_) => "Condition::AnyOf",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
@@ -1239,6 +1242,9 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::BentAllFourThisTurn,
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },
+        Condition::AllOf(vec![Condition::YourTurn]),
+        Condition::LostLifeThisTurn,
+        Condition::GainedLifeThisTurn,
         Condition::AnyOf(vec![Condition::YourTurn]),
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),

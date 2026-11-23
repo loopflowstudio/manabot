@@ -196,3 +196,96 @@ fn feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black() {
         }
     }
 }
+
+fn convocation_draw(s: &mut crate::support::game::Scenario) {
+    use crate::support::play::activate_named;
+    use managym::state::zone::ZoneType;
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let life = s.life(0);
+    activate_named(s, "Lunar Convocation", 0);
+    spend_colorless(s);
+    s.assert_life(0, life - 2);
+    settle(s);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 1);
+}
+
+fn collector_food(s: &mut crate::support::game::Scenario) {
+    use crate::support::play::{activate_first, enter_and_settle};
+    enter_and_settle(s, "Cat Collector");
+    let food = permanent_named(s, "Food");
+    activate_first(s, food);
+    spend_colorless(s);
+    settle(s);
+}
+
+#[test]
+fn lunar_convocation_checks_life_history_when_the_end_step_begins() {
+    use crate::support::play::{fork_stepping, play_and_settle};
+    use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind, search_state::witness};
+
+    let mut s = five_color_setup(&["Lunar Convocation", "Cat Collector"]);
+    collector_food(&mut s);
+    play_and_settle(&mut s, "Lunar Convocation");
+    let root = s.game().clone();
+    let root_witness = witness(&root);
+    let frame = |s: &crate::support::game::Scenario| {
+        serde_json::to_value(s.game().semantic_decision_frame().unwrap()).unwrap()
+    };
+    let root_frame = frame(&s);
+    for early in [true, false] {
+        *s.game_mut() = root.clone();
+        assert_eq!(frame(&s), root_frame);
+        assert_eq!(witness(s.game()), root_witness);
+        if early {
+            convocation_draw(&mut s);
+        }
+        s.advance_to_step(StepKind::End);
+        if early {
+            assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+            assert_eq!(s.action_space().actions.len(), 2);
+            for order in 0..2 {
+                let mut branch = fork_stepping(&s, order);
+                settle(&mut branch);
+                branch.assert_life(1, 19);
+                assert_eq!(branch.battlefield_permanents_named(0, "Bat").len(), 1);
+            }
+        } else {
+            assert_eq!(s.game().state.stack_objects.len(), 1);
+            s.set_player_mana_pool(0, "1B");
+            convocation_draw(&mut s);
+            s.assert_life(1, 19);
+            assert!(s.battlefield_permanents_named(0, "Bat").is_empty());
+        }
+    }
+    assert_eq!(witness(&root), root_witness);
+}
+
+#[test]
+fn lunar_convocation_counts_equal_gain_and_loss_then_resets() {
+    use crate::support::play::play_and_settle;
+    use managym::flow::turn::StepKind;
+    for gained in [false, true] {
+        let mut s = five_color_setup(&["Lunar Convocation", "Cat Collector"]);
+        if gained {
+            collector_food(&mut s);
+            collector_food(&mut s);
+        }
+        play_and_settle(&mut s, "Lunar Convocation");
+        for _ in 0..3 {
+            convocation_draw(&mut s);
+        }
+        s.assert_life(0, if gained { 20 } else { 14 });
+        s.advance_to_step(StepKind::End);
+        settle(&mut s);
+        let bats = usize::from(gained);
+        let opponent_life = if gained { 19 } else { 20 };
+        for active in [1, 0] {
+            s.assert_life(1, opponent_life);
+            assert_eq!(s.battlefield_permanents_named(0, "Bat").len(), bats);
+            s.advance_to_active_step(active, StepKind::End);
+            assert!(s.game().state.stack_objects.is_empty());
+            assert_eq!(s.game().state.turn.history[0].life_gains, 0);
+            assert_eq!(s.game().state.turn.history[0].life_lost, 0);
+        }
+    }
+}

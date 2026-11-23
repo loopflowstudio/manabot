@@ -20,6 +20,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
     vec![
         ally(),
         ballistic_boulder(),
+        bat(),
         bear(),
         cat(),
         clue(),
@@ -105,6 +106,18 @@ fn ballistic_boulder() -> TokenDefinition {
         PrintedCharacteristics {
             keywords: Keywords::of(&[Keyword::Flying]),
             ..creature(base, 2, 1, [])
+        },
+    )
+}
+
+fn bat() -> TokenDefinition {
+    let base = face("Bat", [CardType::Creature], &["Bat"], "Flying");
+    token(
+        "token.bat",
+        "89d7ed94-564b-415c-b590-d89c972384a1",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(base, 1, 1, [Color::Black])
         },
     )
 }

@@ -82,13 +82,15 @@ The review at `11f107c0` found “Its pending activation still omits that public
 
 The observation matches the damage expression to decide when to expose power. If another pending instruction needs that value, move recognition of the expression into the shared query vocabulary before extending the stack projection. The exact-source lookup already owns the value.
 
-Behavior review at `64eaa87c` reproduced both M21 damage outcomes after reentry and both history-free Python projection cases. The Panda engine snapshot test also passed with both target outcomes. The pending-power defect is closed. Payment rules and authored tokens did not change in this correction. Continue the working phase with Lunar Convocation. Its definition and end-step interaction are still missing. Integrated stale-Command and hidden-card permutation checks and gate suites remain open.
+Behavior review at `64eaa87c` reproduced both M21 damage outcomes after reentry and both history-free Python projection cases. The Panda engine snapshot test also passed with both target outcomes. The pending-power defect is closed. Payment rules and authored tokens did not change in this correction. Integrated stale-Command and hidden-card permutation checks remain open.
 
-## Next slice · Lunar Convocation
+## Implemented slice · Lunar Convocation
 
-Use Cat Collector’s Food and Lunar Convocation’s life payment to exercise the two end-step conditions in the [BLB ledger](../.lf/wave/coverage/research/standard-2026-11/sets/blb.jsonl). Compare gain alone, loss alone, and equal gain and loss on the controller’s turn. Check opponent life loss and Bat creation separately, then cross the turn boundary. The existing `PlayerTurnHistory.life_gains` and `life_lost` in `managym/src/flow/turn.rs` already answer both occurrence questions. Reuse those fields in the conditions and viewer projections. Derive each intervening-if condition from the controller’s turn record when matching the end-step event and when resolving the ability. A card-local history flag would duplicate that record.
+`blb.lunar_convocation` reads its controller’s existing gain count and life lost through two intervening-if triggers. The Bat uses `token.bat`, a black 1/1 with flying. Both triggers use the native end-step matcher and resolution check.
 
-First gain life from Food before Convocation enters, then resolve Convocation during the same main phase. Its end-step abilities ask what the controller did over the whole turn, including while the enchantment was absent. Restore the same post-Convocation decision twice. Pay life before the end step in one branch and after the gain-only trigger is pending in the other. Only the first branch offers both trigger orders. A later payment cannot create a missed trigger. Compare viewer-safe decision frames and witnesses on repeated restore, resolve each offered order and verify the original root. Keep equal gain and loss as a separate control against deriving occurrence from the net life change.
+The two directed BLB fixtures gained life from Cat Collector’s Food before casting Convocation. From the same saved decision, paying before the end step offered two trigger orders. Both left one Bat and the opponent at 19. Paying after the gain-only trigger was on the stack drew a card and left the opponent at 19 with no Bat. Both restored decision frames and search witnesses matched the root. Three payments after two Foods returned the controller to 20 and still created a Bat. Three payments without a gain triggered neither ability. Neither subsequent end step carried over the history.
+
+Next, take Predator Ooze’s damage-then-death interaction and use the blinked successor as the negative control. Lunar Convocation is a BLB witness, so the FDN count stays at 77 remaining.
 
 ## Evidence to carry forward
 
