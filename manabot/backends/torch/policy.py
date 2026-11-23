@@ -50,8 +50,16 @@ from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
-from manabot.policy.buckets import row_needs, sizes_of, trim_observation
-from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
+from manabot.policy.buckets import trim_to_needs
+from manabot.policy.catalog import fresh_policy_tables
+from manabot.policy.checkpoint import Dimensions
+from manabot.policy.prepare import (
+    BeliefRows,
+    Layout,
+    Prepared,
+    Tables,
+    prepare,
+)
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
 import managym
@@ -166,34 +174,29 @@ class ActorCritic(nn.Module):
         self.readings: Readings = (
             fresh_readings(observation_space) if readings is None else readings
         )
-        columns = Layout(self.readings)
-        player_dim = columns.numeric_width("agent_player")
-        card_dim = columns.numeric_width("agent_cards")
-        # Inputs v10/v11 append each seat's turn-state row to its player row and
-        # each card row's turn-state value to that card row.
+        tables = fresh_policy_tables(observation_space, config)
+        dims = Dimensions.from_layout(
+            config,
+            observation_space,
+            Layout(self.readings),
+            token_rows=tables.token_rows,
+            name_rows=len(tables.definitions),
+            fact_kinds=fact_kinds,
+        )
         self.turn_state = observation_space.turn_state
         self.stack_tokens = observation_space.one_token
-        if self.turn_state:
-            player_dim += columns.numeric_width("player_turn_state")
-            card_dim += 1
-        # Joins (definitions, links, action continuations) and validity
-        # columns the mask carries are never numeric features.
-        perm_dim = columns.numeric_width("agent_permanents")
-        action_dim = columns.numeric_width("actions")
-        self.max_focus_objects = observation_space.config.max_focus_objects
-        embed_dim = config.hidden_dim
+        self.max_focus_objects = dims.focus
+        embed_dim = dims.hidden
 
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
-        if config.world is not None:
+        if tables.catalog is not None:
             # Log-enabled controls reserve the branches' exact catalog rows,
             # so trunk copying never remaps a shared embedding or lookup.
             self.semantic_cards = SemanticCardEncoder(
-                config.world,
+                tables.catalog,
                 embed_dim,
                 decklists=True,
-                records=config.catalog_records(),
-                decision_memory=bool(observation_space.config.max_decision_records),
                 library=observation_space.one_token,
                 stream_norm=config.stream_norm,
             )
@@ -205,24 +208,24 @@ class ActorCritic(nn.Module):
             )
 
         # Set up typed object embeddings.
-        self.player_embedding = ProjectionLayer(player_dim, embed_dim)
-        self.card_embedding = ProjectionLayer(card_dim, embed_dim)
-        self.perm_embedding = ProjectionLayer(perm_dim, embed_dim)
+        self.player_embedding = ProjectionLayer(dims.player, embed_dim)
+        self.card_embedding = ProjectionLayer(dims.card, embed_dim)
+        self.perm_embedding = ProjectionLayer(dims.permanent, embed_dim)
         # Embed policy features; validity only masks legal rows.
-        self.action_embedding = ProjectionLayer(action_dim, embed_dim)
+        self.action_embedding = ProjectionLayer(dims.action, embed_dim)
 
-        self.logger.info(f"Player embedding: ({player_dim} -> {embed_dim})")
-        self.logger.info(f"Card embedding: ({card_dim} -> {embed_dim})")
-        self.logger.info(f"Permanent embedding: ({perm_dim} -> {embed_dim})")
-        self.logger.info(f"Action embedding: ({action_dim} -> {embed_dim})")
+        self.logger.info(f"Player embedding: ({dims.player} -> {embed_dim})")
+        self.logger.info(f"Card embedding: ({dims.card} -> {embed_dim})")
+        self.logger.info(f"Permanent embedding: ({dims.permanent} -> {embed_dim})")
+        self.logger.info(f"Action embedding: ({dims.action} -> {embed_dim})")
 
         # Global game state processor via attention.
         if self.config.attention_on:
-            num_heads = self.config.num_attention_heads
+            num_heads = dims.heads
             self.attention = GameObjectAttention(
                 embed_dim,
                 num_heads=num_heads,
-                feedforward_dim=config.attention_feedforward_dim,
+                feedforward_dim=dims.feedforward,
                 memory_gate_scale=config.decision_memory_gate_scale,
                 pre_norm=config.stream_norm,
             )
@@ -287,35 +290,20 @@ class ActorCritic(nn.Module):
             self.belief_global_embedding = None
 
         # Static ownership mask over the concatenated visible object sequence.
-        is_agent_parts = [
-            torch.ones(1, dtype=torch.bool),
-            torch.zeros(1, dtype=torch.bool),
-            torch.ones(observation_space.config.max_cards_per_player, dtype=torch.bool),
-            torch.zeros(
-                observation_space.config.max_cards_per_player, dtype=torch.bool
-            ),
-            torch.ones(
-                observation_space.config.max_permanents_per_player, dtype=torch.bool
-            ),
-            torch.zeros(
-                observation_space.config.max_permanents_per_player, dtype=torch.bool
-            ),
-        ]
-        is_agent_template = torch.cat(is_agent_parts).unsqueeze(0)
-        self.register_buffer("_is_agent_template", is_agent_template)
+        self.register_buffer("_is_agent_template", torch.from_numpy(tables.ownership))
 
         # Construct optional parameters after the historical model to preserve
         # its initialization order and state-dict names.
         self.extra_attention = nn.ModuleList(
             GameObjectAttention(
                 embed_dim,
-                config.num_attention_heads,
+                dims.heads,
                 ownership=False,
-                feedforward_dim=config.attention_feedforward_dim,
+                feedforward_dim=dims.feedforward,
                 memory_gate_scale=config.decision_memory_gate_scale,
                 pre_norm=config.stream_norm,
             )
-            for _ in range(config.attention_layers - 1)
+            for _ in range(dims.layers - 1)
         )
         self.value_token = (
             nn.Parameter(torch.randn(1, 1, embed_dim) / embed_dim**0.5)
@@ -354,9 +342,7 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.weight)
             nn.init.zeros_(self.policy_film.bias)
 
-        self.continuation = ContinuationEncoder(
-            embed_dim, columns.numeric_width("relations")
-        )
+        self.continuation = ContinuationEncoder(embed_dim, dims.relation)
 
         # The policy input links permanents to other objects: an Aura or
         # Equipment to its host, a blocker to the attacker it blocks. Each
@@ -367,7 +353,7 @@ class ActorCritic(nn.Module):
         # weights start additive; skip_init draws no RNG.
         self.link_from_target = nn.ModuleList()
         self.link_to_target = nn.ModuleList()
-        for _ in columns.link_columns:
+        for _ in range(dims.links):
             for layers in (self.link_from_target, self.link_to_target):
                 layer = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
                 nn.init.zeros_(layer.weight)
@@ -382,21 +368,19 @@ class ActorCritic(nn.Module):
         )
         self.facts = FactEncoder(
             embed_dim,
-            fact_kinds=fact_kinds,
-            numeric=columns.fact_width(catalog_ids=record_vocabulary == "catalog"),
+            fact_kinds=dims.fact_kinds,
+            numeric=dims.fact,
             vocabulary=record_vocabulary,
         )
         self.shared_effects = SharedEffectEncoder(
             embed_dim,
-            numeric=columns.numeric_width("effects"),
+            numeric=dims.effect,
             vocabulary=record_vocabulary,
         )
         self.name_candidates = NameCandidateEncoder(
-            managym.naming_catalog(),
+            tables.definitions,
             embed_dim,
-            self.semantic_cards.definition_rows
-            if self.semantic_cards is not None
-            else None,
+            tables.program_rows,
             onto_definitions=config.definition_names,
         )
 
@@ -417,14 +401,13 @@ class ActorCritic(nn.Module):
         self.stack_embedding: ProjectionLayer | None = None
         self.stack_source: nn.Linear | None = None
         if self.stack_tokens:
-            stack_dim = columns.numeric_width("stack")
-            self.stack_embedding = ProjectionLayer(stack_dim, embed_dim)
+            self.stack_embedding = ProjectionLayer(dims.stack, embed_dim)
             self.stack_source = torch.nn.utils.skip_init(
                 nn.Linear, embed_dim, embed_dim
             )
             nn.init.zeros_(self.stack_source.weight)
             nn.init.zeros_(self.stack_source.bias)
-            self.logger.info(f"Stack embedding: ({stack_dim} -> {embed_dim})")
+            self.logger.info(f"Stack embedding: ({dims.stack} -> {embed_dim})")
 
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.
@@ -577,18 +560,10 @@ class ActorCritic(nn.Module):
         spec = self._admission_spec()
         capacity = obs["actions_valid"].shape[1]
         if self.bucketed_shapes:
-            if needs is None:
-                needs = row_needs(obs, self.observation_space)
-            if needs is not None:
-                obs = trim_observation(
-                    obs,
-                    sizes_of(
-                        needs,
-                        self.observation_space,
-                        objects=self.object_trimming(),
-                    ),
-                )
-        batch = prepare(
+            obs, needs = trim_to_needs(
+                obs, self.observation_space, needs, objects=self.object_trimming()
+            )
+        return prepare(
             obs,
             spec.tables,
             inference=inference and device_of(self).type == "cpu",
@@ -600,14 +575,8 @@ class ActorCritic(nn.Module):
             memory_roots=memory_roots,
             binding=spec.binding,
             action_capacity=capacity,
+            bucket_needs=needs,
             select_programs=not inference and not self.bucketed_shapes,
-        )
-
-        return replace(
-            batch,
-            bucket_needs=None
-            if needs is None
-            else tuple(tuple(map(int, row)) for row in needs),
         )
 
     def _evaluate_outputs(
@@ -670,10 +639,6 @@ class ActorCritic(nn.Module):
         if double:
             tensor = tensor.double()
         return to_numpy(torch.softmax(tensor, dim=-1))
-
-    @staticmethod
-    def probability_from_logit(value: float) -> float:
-        return float(torch.sigmoid(torch.tensor(value, dtype=torch.float64)))
 
     @torch.no_grad()
     def sample(

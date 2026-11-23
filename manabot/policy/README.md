@@ -73,8 +73,8 @@ forward reads the result; no forward reads an observation dictionary.
   `terminal_distances`). The update diagnostics read them and every backend's
   `transition_gae` wraps them; torch's device-side selection matches them bit
   for bit.
-- `protocol.py` states what a backend provides (`BackendPolicy`,
-  `BackendLearner`, `Backend`) and one captured minibatch's constants and
+- `protocol.py` defines host policy inference, checkpoint readers and loaders,
+  and one captured minibatch's constants and
   coefficients (`Targets`, `Settings`). Values are `[B]`.
 
 Two type aliases name the NumPy mappings that cross this boundary:

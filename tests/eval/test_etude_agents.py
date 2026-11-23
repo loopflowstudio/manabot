@@ -67,7 +67,7 @@ def test_loader_batches_prepared_rows_without_sampling(
     model = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     match = Match()
     monkeypatch.setattr(
-        "manabot.backends.torch.checkpoint.checkpoint_source",
+        "manabot.policy.checkpoint.checkpoint_source",
         lambda: {"commit": "a" * 40},
     )
     path = tmp_path / "policy.safetensors"

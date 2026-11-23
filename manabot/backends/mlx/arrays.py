@@ -6,7 +6,8 @@ live in unified memory, so conversion copies but never transfers between
 devices, and the `device` argument the updates pass is ignored.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
 
 import mlx.core as mx
 from mlx.utils import tree_flatten
@@ -15,7 +16,27 @@ import numpy as np
 from manabot.infra.config import BF16_MIN_HIDDEN_DIM
 from manabot.policy.protocol import Precision
 
+if TYPE_CHECKING:
+    from manabot.training.learning import Precision as TrainingPrecision
+
 FLOAT = mx.float32
+
+
+def mlx_device(name: str) -> mx.DeviceType:
+    if name == "cpu":
+        return mx.cpu
+    if name in {"mps", "gpu"}:
+        return mx.gpu
+    if name == "cuda":
+        raise ValueError("MLX does not support CUDA")
+    raise ValueError(f"MLX does not support device {name!r}")
+
+
+def training_precision(precision: "TrainingPrecision") -> Precision:
+    """Translate the recipe's precision to the MLX forward dtype name."""
+    if precision == "tf32":
+        raise ValueError("precision tf32 requires CUDA")
+    return "bfloat16" if precision == "bf16" else precision
 
 
 def precision_dtype(precision: Precision) -> mx.Dtype:
@@ -49,12 +70,19 @@ def from_numpy(array: np.ndarray, device: object = None) -> mx.array:
 
 
 def to_numpy(array: mx.array) -> np.ndarray:
+    if array.dtype == mx.bfloat16:
+        array = array.astype(mx.float32)
     return np.array(array)
 
 
 def float32(array: mx.array) -> mx.array:
     """A forward output in float32, whatever precision the forward ran in."""
     return array.astype(FLOAT)
+
+
+def all_finite(arrays: Iterable[mx.array]) -> mx.array:
+    """Reduce each tensor before stacking, so the check never packs a second model."""
+    return mx.stack([mx.isfinite(value).all() for value in arrays]).all()
 
 
 def flat_numpy(tree: Mapping[str, object] | list[object]) -> dict[str, np.ndarray]:

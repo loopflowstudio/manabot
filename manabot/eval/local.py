@@ -13,7 +13,6 @@ from pathlib import Path
 import time
 
 from pydantic import TypeAdapter
-import torch
 
 from manabot.backends import resolve
 from manabot.eval.admission import (
@@ -133,6 +132,8 @@ def _prepare(
     try:
         if isinstance(checkpoint, StoredArtifact):
             checkpoint = materialize_artifact(checkpoint)
+        import torch
+
         torch.set_num_threads(1)
         request = checkpoint_request(
             checkpoint,
