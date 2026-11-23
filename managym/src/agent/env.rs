@@ -1860,6 +1860,37 @@ mod terminal_tests {
     use super::*;
 
     #[test]
+    fn instructed_outcomes_pay_both_seats() {
+        use crate::flow::game::WinCause;
+        let root = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1").unwrap();
+        for winner in [0, 1] {
+            for explicit_win in [false, true] {
+                let mut game = root.clone();
+                let loser = 1 - winner;
+                if explicit_win {
+                    game.win_game(PlayerId(winner), WinCause::MazesEnd);
+                } else {
+                    game.lose_game(PlayerId(loser));
+                }
+                for seat in 0..2 {
+                    let done = game.is_game_over();
+                    let (_, reward, done, _, info) =
+                        finish_game_step(&mut game, PlayerId(seat), done);
+                    assert!(done);
+                    assert_eq!(reward, if seat == winner { 1.0 } else { -1.0 });
+                    assert_eq!(info["winner_index"], InfoValue::Int(winner as i64));
+                    if !explicit_win {
+                        assert_eq!(
+                            info[&format!("p{loser}_loss_reason")],
+                            InfoValue::String("instructed_loss".into())
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn terminal_rewards_and_reasons_read_the_committed_batch() {
         let root = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1").unwrap();
         for simultaneous in [false, true] {

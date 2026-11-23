@@ -1059,6 +1059,7 @@ pub enum Effect {
     /// cleanup step, which proceeds as usual.
     EndTheTurn,
     LoseGame,
+    WinWithDistinctGates,
     /// Control the selected player during their next actual turn or combat.
     /// This changes decision authority, never ownership of their resources.
     ControlPlayer {
@@ -1836,6 +1837,7 @@ impl Effect {
             | Effect::CreateToken { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::WinWithDistinctGates
             | Effect::LoseGame
             | Effect::EndTheTurn
             | Effect::ControlPlayer { .. }

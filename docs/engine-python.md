@@ -62,6 +62,10 @@ protected. Terminal step info reports the losing seat’s reason under
 `p0_loss_reason` or `p1_loss_reason`. When several causes apply to a seat,
 the reported reason is the first applicable one in the order `deck_empty`,
 `life_total`, `poison`. A simultaneous loss by both seats is a draw.
+A resolving Demonic Pact loss reports `instructed_loss`. Maze's End sets
+`winner_index` directly when its controller has ten differently named Gates
+after searching. Herald of Eternal Dawn prevents its controller’s loss and
+an opponent’s explicit win. Play continues when either instruction is prevented.
 
 Run `uv run --no-project --python .venv/bin/python play.py`. It starts a game
 from two bundled decks and executes the first legal action, then prints the

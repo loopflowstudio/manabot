@@ -539,6 +539,7 @@ impl Game {
                     (ability.tap_source, How::Tapped),
                     (ability.sacrifice_source, How::Sacrificed),
                     (ability.exile_source, How::Exiled),
+                    (ability.return_source, How::Returned),
                     (ability.discard_source, How::Discarded),
                 ] {
                     if owes {
@@ -1043,6 +1044,7 @@ impl Game {
                         How::Tapped | How::Sacrificed => continue,
                         How::Discarded => ZoneType::Graveyard,
                         How::Exiled => ZoneType::Exile,
+                        How::Returned => ZoneType::Hand,
                     };
                     leaves.push(self.zone_move_proposal(source_object, to, Default::default()));
                 }

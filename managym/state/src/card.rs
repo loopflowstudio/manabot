@@ -615,7 +615,7 @@ impl ActivatedAbilityDefinition {
     /// Whether paying the cost removes the source permanent from the
     /// battlefield (sacrificed or exiled).
     pub fn source_leaves(&self) -> bool {
-        self.sacrifice_source || self.exile_source
+        self.sacrifice_source || self.exile_source || self.return_source
     }
 
     /// For a known mana ability, does activation change anything besides
@@ -792,6 +792,9 @@ pub struct ActivatedAbilityDefinition {
     /// artifact: ...").
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exile_source: bool,
+    /// Return the source to its owner’s hand as an activation cost.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub return_source: bool,
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as

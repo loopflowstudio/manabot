@@ -916,6 +916,7 @@ pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribu
         How::Sacrificed => "sacrificed",
         How::Exiled => "exiled",
         How::Discarded => "discarded",
+        How::Returned => "returned",
     };
     let toward = match paid.toward {
         Toward::Printed => "",

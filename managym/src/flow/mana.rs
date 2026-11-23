@@ -1614,7 +1614,7 @@ fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
     Some(SourceReservation {
         permanent,
         tap,
-        sacrifice: tap || owes(How::Sacrificed) || owes(How::Exiled),
+        sacrifice: tap || owes(How::Sacrificed) || owes(How::Exiled) || owes(How::Returned),
     })
 }
 

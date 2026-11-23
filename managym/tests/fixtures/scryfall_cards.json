@@ -2376,6 +2376,16 @@
       "R"
     ]
   },
+  "Maze's End": {
+    "name": "Maze's End",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {C}.\n{3}, {T}, Return this land to its owner's hand: Search your library for a Gate card, put it onto the battlefield, then shuffle. If you control ten or more Gates with different names, you win the game.",
+    "colors": []
+  },
   "Meditation Pools": {
     "name": "Meditation Pools",
     "mana_cost": "",

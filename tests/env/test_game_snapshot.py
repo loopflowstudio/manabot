@@ -627,3 +627,61 @@ def test_standalone_snapshot_replay_and_unterminated_journal_row(
     journal.write_text(json.dumps(saved))
     with pytest.warns(RuntimeWarning, match="Incomplete final game record"):
         assert records_from_source(journal) == []
+
+
+def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
+    env = managym.Env(seed=23)
+    decks = [
+        managym.PlayerConfig("Pact", {"Swamp": 20, "Demonic Pact": 8}),
+        managym.PlayerConfig("Opponent", {"Plains": 28}),
+    ]
+    obs, _ = env.reset(managym.GameSetup(decks, mana_payment=("auto", "auto")))
+    for _ in range(100):
+        actions = obs.action_space.actions
+        if len(actions) == 4 and all(
+            action.action_type == managym.ActionEnum.CHOOSE_MODE for action in actions
+        ):
+            break
+        choice = next(
+            (
+                i
+                for kind in (
+                    managym.ActionEnum.PRIORITY_PLAY_LAND,
+                    managym.ActionEnum.PRIORITY_CAST_SPELL,
+                    managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+                )
+                for i, action in enumerate(actions)
+                if action.action_type == kind
+            ),
+            0,
+        )
+        obs = env.step(choice)[0]
+    else:
+        pytest.fail("Pact never offered its four upkeep modes")
+
+    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    command = Command("pact-loss", frame.revision, frame.offers[3]["id"]).to_json()
+    before = env.search_witness_json()
+    position = env.snapshot()
+    reopened = managym.GameSnapshot.from_replay_json(position.to_replay_json())
+    successors = []
+    for snapshot in (position, reopened):
+        branch = snapshot.restore()
+        assert branch.search_witness_json() == before
+        branch.execute_semantic_command_json(command)
+        for _ in range(3):
+            if branch.is_game_over():
+                break
+            chooser = branch.current_agent_index()
+            actions = branch.observation_for_player(chooser).action_space.actions
+            branch.step(
+                next(
+                    i
+                    for i, action in enumerate(actions)
+                    if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+                )
+            )
+        assert branch.is_game_over()
+        successors.append(branch.search_witness_json())
+    assert successors[0] == successors[1]
+    assert env.search_witness_json() == before

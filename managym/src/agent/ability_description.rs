@@ -980,6 +980,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             crate::state::ability::PlayerControlDuration::NextTurn => "turn",
         }),
         TakeExtraTurn => "Take an extra turn after this one".into(),
+        WinWithDistinctGates => "If you control ten or more Gates with different names, you win the game".into(),
         LoseGame => "You lose the game".into(),
         EndTheTurn => "End the turn".into(),
         AdditionalCombatPhase { attackers } => match attackers {
