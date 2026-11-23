@@ -1489,7 +1489,7 @@ impl Game {
             }
             EventBinding::Created { attacking } => {
                 frame.created = moved.collect();
-                for object in frame.created.clone() {
+                for &object in &frame.created {
                     self.finish_created_token(object, attacking);
                 }
             }

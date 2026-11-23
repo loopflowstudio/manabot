@@ -682,16 +682,15 @@ impl Game {
             } else {
                 None
             };
-            let known_before = reveal.map(|(owner, definition)| {
-                self.state.players[owner.0]
+            let revealed_hand = reveal.map(|(owner, definition)| {
+                let known_before = self.state.players[owner.0]
                     .known_hand
                     .get(&definition)
                     .copied()
-                    .unwrap_or(0)
-            });
-            if let Some((owner, definition)) = reveal {
+                    .unwrap_or(0);
                 self.emit(GameEvent::CardRevealed { owner, definition });
-            }
+                (owner, definition, known_before)
+            });
             let committed = self.commit_proposed_event(event, departing_lki, &mut followups);
             // CR 400.7: the object this move made, or the same object when
             // it entered its first zone (CR 400.11).
@@ -715,12 +714,8 @@ impl Game {
                         self.put_on_bottom_of_library(object_id);
                     }
                 }
-                if let Some((owner, definition)) = reveal {
-                    self.set_known_hand_count(
-                        owner,
-                        definition,
-                        known_before.expect("revealed entrant") + 1,
-                    );
+                if let Some((owner, definition, known_before)) = revealed_hand {
+                    self.set_known_hand_count(owner, definition, known_before + 1);
                 }
                 died.extend(death);
                 hits.extend(hit);

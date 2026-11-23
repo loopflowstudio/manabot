@@ -29,7 +29,7 @@ use crate::{
     state::{
         ability::Effect,
         card::CardDefId,
-        game_object::{ObjectId, ObjectLki, PlayerId, Target},
+        game_object::{CopiableValues, ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
         payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
     },
@@ -803,16 +803,13 @@ impl<'a> Projection<'a> {
                             let name = content.token_name(key);
                             self.summary(|| format!("Pending: create {count} {name} tokens."));
                         }
-                        TokenSource::Copy {
-                            values:
-                                crate::state::game_object::CopiableValues {
-                                    definition_id,
-                                    definition,
-                                    front,
-                                    copy,
-                                },
-                            exceptions,
-                        } => {
+                        TokenSource::Copy { values, exceptions } => {
+                            let CopiableValues {
+                                definition_id,
+                                definition,
+                                front,
+                                copy,
+                            } = values;
                             self.reference(
                                 "copy definition",
                                 VisibleReference {
