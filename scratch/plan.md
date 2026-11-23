@@ -74,7 +74,25 @@ All 20 turn-ending, cleanup and Bloodbending debug tests passed again with nexte
 
 ## Subsequent phases
 
-**Decomposition** compares Axe/Quicksilver opening actions, Time Stop/Sundial cleanup, Fynn/Silencer poison, Pact/Maze/Herald outcomes, and the three control sources. Each pair should use the same native authority with differences expressed in the card definition. Rerun the witnesses after deleting obsolete paths.
+### Decomposition at `6ed6a04d`
+
+The next implementation cut is the post-search condition on Maze’s End. Fabled Passage already composes a library selection with a controlled-land threshold and a conditional effect. Its threshold counts permanents. Maze counts different effective names among controlled permanents matching the Gate subtype. Its conditional belongs *after* the entire optional search, because declining to find with ten names still wins. Preserve Passage’s existing placement of the untap instruction and its moved-object selector.
+
+| Consumers | Rules owner and projection |
+|---|---|
+| Maze’s End, Fabled Passage | The definitions in `dgm.rs` and `eld.rs` own predicate, threshold, timing and consequence. Extend the controlled-permanent count used by `Condition::ControlsAtLeast` to count distinct effective names when requested. Keep ordinary object counting as the default for existing cards and their tokens. Use the layer view appropriate to each evaluation context in `flow/layers.rs` and `flow/statics.rs`. Maze composes `Effect::If` with an instructed win. Pact’s instructed loss and Maze’s instructed win go through the existing protection and outcome authority in `flow/sba.rs`. |
+| Leyline Axe, Quicksilver | `StaticAbility::BeginOnBattlefield` selects exact hand objects in `flow/opening.rs`. The opening workspace owns progress. Viewer action focus and private library knowledge project each commitment. Seed 103 exercises both definitions in one hand. |
+| Time Stop, Sundial | Both definitions emit `Effect::EndTheTurn`. The resolution frame owns the return to cleanup after state-based choices. Frame descriptions expose suspended work. Retain the seed-725 legend fork and the controlled repeated-cleanup case. |
+| Fynn, Virulent Silencer, Herald | `DealsCombatDamage` filters the damaging source and recipient. The printed effects put poison counters on the damaged player. Player counter facts project the same count that SBA checks against Herald’s current restriction. The token and nontoken branches at seed 161 distinguish the selectors. |
+| Bracelet, Construct a Cosmic Cube, Secret of Bloodbending | Each definition supplies its target, duration and route to `Effect::ControlPlayer`. The turn control records govern chooser publication and information sharing. The Bracelet’s ability source and Equipment cost remain distinct focus joins in native offers, tensors and viewer text. Retain the independent indexed-action comparison at seed 23. |
+
+#### Delete — do not maintain
+
+1. Remove the singleton `WinCause::MazesEnd` from rules arbitration and the Env fixture that constructs it. Represent an instructed victory in the committed result. Trace serialized outcome and hash consumers before changing that representation and retain old evidence with its original revision.
+2. Remove `Effect::WinWithDistinctGates` and its dedicated subtype scan, threshold, English description and observability-enumeration arms in the same cut that migrates Maze. Put the Gate predicate and ten-name threshold in its card definition. Derive descriptions and catalog tokens from the conditional and win instruction. Check old catalog token identities and saved bindings explicitly.
+3. Keep the public count, poison total, turn controller and terminal result under their existing native owners. Retain the shared openers, cleanup and control routes above. Their directed tests already exercise a second card with a different entry point or selector.
+
+**Review criterion.** Reading Maze and Passage side by side must explain which permanents count, whether names are distinct, when the condition runs and what succeeds. Neither resolution nor outcome arbitration may name Maze, Gate or ten. Run the existing Passage and Maze witnesses, including nine names plus a duplicate, finding a tenth, declining with ten and Herald flashing in response. Check the learning tokens distinguish both count semantics and the viewer description states the threshold. Rerun Pact’s indexed/Command reward and restore parity alongside the changed victory projection. Earlier passing receipts above describe the pre-cut implementation. A different result on a named branch reopens its behavior contract before further decomposition.
 
 **Performance** keeps the paired same-runner 10% Engine Budget and its semantic digests. Real mulligan decisions change decision sequences even on ordinary decks. Record rule-driven digest changes under the repository baseline procedure and retain the old recording. Measure ordinary play, training stepping and search alongside bounded constructed positions in `managym/examples/bench_states.rs`. Compare size, action count and work at the decision as well as time. Add a named state where existing fixtures miss the shape. [Validation and stress-state harness](../docs/development.md#stress-states)
 
@@ -136,4 +154,4 @@ At `5d6e00bb` the native probe admitted Silencer alone among the three cards. At
 
 ### Next slice
 
-At gate, run the full suite and the paired same-runner 10% Engine Budget described above. Check the semantic digests alongside the timings, including the effect of opening decisions on ordinary games. Focused card and Command results do not establish that budget.
+Implement and review the Maze’s End decomposition above first. At gate, run the full suite and the paired same-runner 10% Engine Budget described above. Check the semantic digests alongside the timings, including the effect of opening decisions on ordinary games. Focused card and Command results do not establish that budget.
