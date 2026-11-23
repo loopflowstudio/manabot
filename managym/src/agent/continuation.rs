@@ -275,14 +275,15 @@ impl Game {
         {
             return VisibleReference::default();
         }
+        let permanent = self
+            .state
+            .permanent_of(object)
+            .and_then(|id| self.state.permanents[id].as_ref());
         VisibleReference {
-            object: Some(
-                self.lookup_current_permanent(object)
-                    .ok()
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(record.id.0, |p| p.id.0) as i32,
-            ),
-            definition: Some(record.definition_id.0),
+            object: Some(permanent.map_or(record.id, |p| p.id).0 as i32),
+            definition: permanent
+                .is_none_or(|p| self.can_inspect_permanent(viewer, p))
+                .then_some(record.definition_id.0),
             player: None,
         }
     }

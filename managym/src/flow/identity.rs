@@ -7,7 +7,7 @@ use crate::{
     flow::{event::ObjectEventRef, game::Game},
     state::{
         card::ObjectDefinition,
-        game_object::{ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId, PublicId},
         zone::ZoneType,
     },
 };
@@ -38,6 +38,32 @@ impl Game {
                         .is_some_and(|permanent| permanent.object == object)
             })
             .ok_or(ObjectLookupError::WrongZone)
+    }
+
+    pub(crate) fn can_inspect_permanent(
+        &self,
+        viewer: PlayerId,
+        permanent: &crate::state::permanent::Permanent,
+    ) -> bool {
+        !permanent.manifested || self.shares_information(viewer, permanent.controller)
+    }
+
+    /// Face-down battlefield references must not identify the physical card,
+    /// whose public id can depend on its position in the submitted deck.
+    pub(crate) fn observed_object_id(&self, object: ObjectId) -> PublicId {
+        if let Some(permanent) = self
+            .state
+            .permanent_of(object)
+            .and_then(|id| self.state.permanents[id].as_ref())
+            .filter(|permanent| permanent.manifested)
+        {
+            return permanent.id;
+        }
+        self.state
+            .objects
+            .provenance(object)
+            .expect("object provenance")
+            .0
     }
 
     /// Snapshot the current battlefield object for triggers and LKI.

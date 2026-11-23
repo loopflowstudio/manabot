@@ -135,8 +135,10 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
     let Permanent {
+        manifested: _,
+
         transforms: _,
         id: _,
         object: _,
@@ -160,6 +162,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
     [
         ("id", Seen::Identity),
         ("card", Seen::Permanent(permanent::DEFINITION)),
+        (
+            "manifested",
+            Seen::Via("viewer-specific definition and object reference"),
+        ),
         ("controller", Seen::Permanent(permanent::IS_MINE)),
         ("transforms", Seen::Via("Transforms fact rows")),
         ("tapped", Seen::Permanent(permanent::TAPPED)),

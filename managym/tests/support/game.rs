@@ -93,6 +93,20 @@ impl Scenario {
         }
     }
 
+    /// Capture this constructed decision for exact native forks.
+    pub fn snapshot(&self) -> managym::agent::env::GameSnapshot {
+        use managym::{state::player::PlayerConfig, Env};
+        let mut env = Env::new(1, false, false, false);
+        env.reset(
+            ["a", "b"]
+                .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
+                .to_vec(),
+        )
+        .unwrap();
+        *env.benchmark_game_mut() = self.game.clone();
+        env.snapshot().unwrap()
+    }
+
     pub fn game(&self) -> &Game {
         &self.game
     }

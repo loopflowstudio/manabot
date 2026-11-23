@@ -1195,7 +1195,7 @@ impl Game {
     }
 
     fn object_focus(&self, ids: &[ObjectId]) -> Vec<PublicId> {
-        ids.iter().map(|id| self.state[id].id).collect()
+        ids.iter().map(|id| self.observed_object_id(*id)).collect()
     }
 
     /// The current appearances of cards found in a zone, in their order.

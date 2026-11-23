@@ -38,6 +38,9 @@ pub(crate) struct ZoneEntry {
     /// Exile: enters face down (foretell, CR 702.143a), so the move is
     /// secret from everyone but its owner (CR 406.3).
     pub face_down: bool,
+    /// Battlefield: manifest as a nameless 2/2 creature (CR 701).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub manifested: bool,
     /// Battlefield: enters with its back face up (CR 712.14).
     pub transformed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

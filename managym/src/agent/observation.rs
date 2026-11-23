@@ -1500,7 +1500,7 @@ impl Observation {
             front_mana_value: (object.is_transformed()
                 || game.state.zones.melded_card(permanent.object).is_some())
             .then(|| game.object_mana_value(permanent.object)),
-            colors: (characteristics.colors != game.state[permanent.object].colors()).then(|| {
+            colors: (characteristics.colors != object.colors()).then(|| {
                 characteristics
                     .colors
                     .iter()
@@ -1514,7 +1514,13 @@ impl Observation {
                 .collect(),
             transforms: permanent.transforms,
             id: permanent.id.0 as i32,
-            registry_key: game.state[permanent.object].registry_key.0 as i32,
+            registry_key: if game
+                .can_inspect_permanent(PlayerId(self.agent.player_index as usize), permanent)
+            {
+                object.registry_key.0 as i32
+            } else {
+                -1 // Encodes as the absent definition join.
+            },
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,
@@ -1565,8 +1571,7 @@ impl Observation {
                     .map(|creature_type| creature_type.to_string())
                     .collect()
             }),
-            is_granted_land: characteristics.is_land()
-                && !game.state[permanent.object].types.is_land(),
+            is_granted_land: characteristics.is_land() && !object.types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
                     .attacker_to_blockers
@@ -1587,15 +1592,13 @@ impl Observation {
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
-            copy: game.state[permanent.object]
+            copy: object
                 .copy
                 .as_ref()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
-            object_id: Some(game.state[permanent.object].id.0 as i32),
-            owner_id: game.state.players[game.state[permanent.object].owner.0]
-                .id
-                .0 as i32,
-            is_token: !game.state[permanent.object].is_card(),
+            object_id: Some(game.observed_object_id(permanent.object).0 as i32),
+            owner_id: game.state.players[object.owner.0].id.0 as i32,
+            is_token: !object.is_card(),
             characteristics: CharacteristicsData {
                 name: characteristics.name.clone(),
                 power: characteristics.power,
@@ -2090,7 +2093,7 @@ impl Observation {
             | Action::Foretell { object, .. }
             | Action::ScryCard { object, .. }
             | Action::SelectCard { object, .. }
-            | Action::LearnDiscard { object, .. } => vec![game.state[object].id],
+            | Action::LearnDiscard { object, .. } => vec![game.observed_object_id(*object)],
             Action::LearnTakeLesson { object, .. } => game
                 .state
                 .card_id(*object)
@@ -2145,7 +2148,7 @@ impl Observation {
                 ) {
                     return candidates
                         .get(*mode)
-                        .map(|candidate| game.state[candidate.source()].id)
+                        .map(|candidate| game.observed_object_id(candidate.source()))
                         .into_iter()
                         .collect();
                 }
@@ -2204,15 +2207,7 @@ impl Observation {
                         None => None,
                     });
                 object_id
-                    .map(|object_id| {
-                        vec![
-                            game.state
-                                .objects
-                                .provenance(object_id)
-                                .expect("source provenance")
-                                .0,
-                        ]
-                    })
+                    .map(|object_id| vec![game.observed_object_id(object_id)])
                     .unwrap_or_default()
             }
         }

@@ -42,6 +42,8 @@ mod dft;
 mod dmu;
 #[path = "cards/dom.rs"]
 mod dom;
+#[path = "cards/dsk.rs"]
+mod dsk;
 #[path = "cards/dtk.rs"]
 mod dtk;
 #[path = "cards/ecl.rs"]

@@ -149,6 +149,8 @@ pub struct Permanent {
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub manifested: bool,
     pub id: PublicId,
     #[serde(rename = "card")]
     pub object: ObjectId,
@@ -220,6 +222,7 @@ impl Permanent {
     pub fn new(id: PublicId, object_id: ObjectId, object: &Object) -> Self {
         Self {
             transforms: 0,
+            manifested: false,
             id,
             object: object_id,
             controller: object.owner,

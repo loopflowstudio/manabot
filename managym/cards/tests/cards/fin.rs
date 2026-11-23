@@ -519,17 +519,7 @@ fn ragnarok_parts(s: &Scenario) -> (PermanentId, ObjectId, [CardId; 2]) {
 fn restored_meld_orders(
     s: &Scenario,
 ) -> impl Iterator<Item = (usize, managym::Env, managym::decision::Command)> {
-    use crate::support::game::deck;
-    use managym::{state::player::PlayerConfig, Env};
-    let mut env = Env::new(1, false, false, false);
-    env.reset(
-        ["a", "b"]
-            .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
-            .to_vec(),
-    )
-    .unwrap();
-    *env.benchmark_game_mut() = s.game().clone();
-    let snapshot = env.snapshot().unwrap();
+    let snapshot = s.snapshot();
     let frame = s.game().semantic_decision_frame().unwrap();
     assert_eq!(frame.offers.len(), 2);
     (0..2).map(move |first| {

@@ -747,8 +747,12 @@ impl Object {
         self.front = Some(front);
     }
 
-    /// A meld result has a single copiable face; its physical card resumes its printing on departure.
-    pub fn show_meld_result(&mut self, id: CardDefId, definition: Arc<PrintedCharacteristics>) {
+    /// Install battlefield characteristics and restore the physical printing on departure.
+    pub fn show_battlefield_form(
+        &mut self,
+        id: CardDefId,
+        definition: Arc<PrintedCharacteristics>,
+    ) {
         self.printed = Some((self.definition_id, Arc::clone(&self.definition)));
         self.show(id, definition);
     }

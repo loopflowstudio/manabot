@@ -24,6 +24,17 @@ use crate::{
     },
 };
 
+/// The prospective entry and the permanent share these copiable values.
+static MANIFESTED: std::sync::LazyLock<std::sync::Arc<PrintedCharacteristics>> =
+    std::sync::LazyLock::new(|| {
+        std::sync::Arc::new(PrintedCharacteristics {
+            types: crate::state::card::CardTypes::new([crate::state::card::CardType::Creature]),
+            power: Some(2),
+            toughness: Some(2),
+            ..Default::default()
+        })
+    });
+
 impl Game {
     pub(crate) fn set_known_hand_count(
         &mut self,
@@ -666,6 +677,19 @@ impl Game {
         self.move_object_with_entry(object, to_zone, ZoneEntry::default())
     }
 
+    /// Put the selected card onto the battlefield face down under the chooser's control.
+    pub fn manifest(&mut self, object: ObjectId, controller: PlayerId) -> ObjectId {
+        self.move_object_with_entry(
+            object,
+            ZoneType::Battlefield,
+            ZoneEntry {
+                manifested: true,
+                controller: Some(controller),
+                ..Default::default()
+            },
+        )
+    }
+
     pub(crate) fn move_object_with_entry(
         &mut self,
         object: ObjectId,
@@ -719,7 +743,9 @@ impl Game {
         entry: &ZoneEntry,
     ) -> Option<&PrintedCharacteristics> {
         let object = self.state.entry_object(object);
-        let face = if let Some((_, result)) = entry.meld {
+        let face = if entry.manifested {
+            &*MANIFESTED
+        } else if let Some((_, result)) = entry.meld {
             default_content_pack().definition(result)?.printed.as_ref()
         } else if entry.transformed {
             let (_, back) = default_content_pack().back_face_row(object.definition_id)?;
@@ -763,7 +789,8 @@ impl Game {
             None
         };
         if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let seen = (to_zone != ZoneType::Library && !entry.face_down).then_some(definition);
+            let seen = (to_zone != ZoneType::Library && !entry.face_down && !entry.manifested)
+                .then_some(definition);
             self.forget_hand_card(owner, seen);
         }
 
@@ -838,7 +865,10 @@ impl Game {
                 let row = default_content_pack()
                     .definition(result)
                     .expect("meld result");
-                self.state[object_id].show_meld_result(result, row.printed.clone());
+                self.state[object_id].show_battlefield_form(result, row.printed.clone());
+            }
+            if entry.manifested {
+                self.state[object_id].show_battlefield_form(entered_definition, MANIFESTED.clone());
             }
             if entry.transformed {
                 self.show_back_face(object_id);
@@ -849,6 +879,7 @@ impl Game {
                 object_id,
                 &self.state[object_id],
             );
+            permanent.manifested = entry.manifested;
             permanent.controller = holder;
             // CR 400.7d: the permanent remembers how its spell was cast.
             if let Some(StackObject::Spell(cast)) = cast_spell {
@@ -878,7 +909,7 @@ impl Game {
             from: old_zone,
             to: to_zone,
             controller: event_controller,
-            face_down: entry.face_down,
+            face_down: entry.face_down || entry.manifested,
         };
         self.emit(event);
         if to_zone == ZoneType::Battlefield {

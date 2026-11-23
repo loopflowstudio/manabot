@@ -1,7 +1,11 @@
-at: fa23fe703733d6ee6f22c616d7c459e6a3ffe256
+at: 0e35f039d9473531b5482178b8bc91c9ba973877
 first:
   - path: scratch/plan.md
     why: Locate the movement evidence and remaining probes.
+  - path: managym/cards/tests/cards/dsk.rs
+    why: Compare both hidden printings at opponent priority.
+  - path: managym/src/agent/observation.rs
+    why: Read the viewer-specific permanent projection.
   - path: managym/cards/tests/cards/fin.rs
     why: Trace both physical fronts through restored order choices.
   - path: managym/src/flow/resolution.rs
