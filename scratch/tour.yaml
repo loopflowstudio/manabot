@@ -1,21 +1,21 @@
-at: d0617e74929b46d138843bbe5211dbe944c688ad
+at: 591425d57997b4166c26abf1c2037dd0e9d471d4
 first:
   - path: docs/engine.md
-    why: Follow an Etali attack through both casts
-  - path: managym/cards/src/rix.rs
-    why: Read the printed attack trigger
+    why: Compare Cascade and Etali at the table
   - path: managym/src/flow/resolution.rs
-    why: Identify the exact exiled cards
+    why: Follow Torrent to its physical hit
   - path: managym/src/flow/decision.rs
-    why: Compare offered cast terms with announcement and resumption
-  - path: managym/src/agent/continuation.rs
-    why: Inspect the parent during the target choice
-  - path: managym/cards/tests/cards/rix.rs
-    why: Compare both orders, stopping and countering
-  - path: tests/env/test_game_snapshot.py
-    why: Replay Bite and count Etali’s completed resolutions
+    why: Check each resulting spell against Torrent’s threshold
+  - path: managym/src/agent/effect_execution.rs
+    why: Inspect the pending threshold
   - path: managym/cards/tests/cards/cmr.rs
-    why: Check Cascade’s bottom order and RNG
+    why: Check both profiles, decline, bottoming and countering
+  - path: managym/src/flow/action.rs
+    why: Follow exact exiled objects through priority
+  - path: managym/src/flow/play.rs
+    why: Validate the selected appearance before announcement
+  - path: managym/src/flow/resolution_tests.rs
+    why: Fork between two copies of one spell
 hide:
   - path: managym/academy/fixtures/choice-navigation-w17-smart-payment.json
     why: Regenerated catalog references and verified position hashes
