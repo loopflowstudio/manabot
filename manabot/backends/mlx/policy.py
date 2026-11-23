@@ -289,7 +289,13 @@ class _Static:
     cache: dict[str, mx.array] = field(default_factory=dict)
 
 
+def parameter_ids(parameters: dict[str, object]) -> tuple[int, ...]:
+    return tuple(id(value) for _, value in tree_flatten(parameters))
+
+
 class MLXActorCritic(nn.Module):
+    _cast_state: tuple[tuple[int, ...], tuple[int, ...]] | None
+
     def __init__(
         self,
         dims: Dimensions,
@@ -305,6 +311,7 @@ class MLXActorCritic(nn.Module):
             precision = default_precision(dims.hidden)
         precision_dtype(precision)
         object.__setattr__(self, "_precision", precision)
+        object.__setattr__(self, "_cast_state", None)
         self.dims = dims
         # The model configuration the weights were trained under, as the
         # torch policy carries it; the updates read its `value_kind`.
@@ -563,11 +570,17 @@ class MLXActorCritic(nn.Module):
             yield
             return
         masters = self.parameters()
-        self.update(tree_map(lambda p: p.astype(dtype), masters))
+        casts = tree_map(lambda p: p.astype(dtype), masters)
+        self.update(casts)
         try:
+            # A frozen inference scope can recognize these casts of its own masters.
+            object.__setattr__(
+                self, "_cast_state", (parameter_ids(masters), parameter_ids(casts))
+            )
             yield
         finally:
             self.update(masters)
+            object.__setattr__(self, "_cast_state", None)
 
     def memory_gates(self) -> dict[str, float]:
         """MLX does not implement decision memory."""
@@ -1122,22 +1135,30 @@ class PolicyInference:
     """An unchanged inference policy and its optional weight-only program cache."""
 
     def __init__(self, agent: MLXActorCritic, *, cache_catalog: bool = True) -> None:
+        if agent.compute_dtype != mx.float32:
+            raise RuntimeError("open inference scopes on float32 master weights")
         self.agent = agent
         self.cache_catalog = cache_catalog
         self._closed = False
-        self._weights = tuple(
-            id(value) for _, value in tree_flatten(agent.parameters())
-        )
+        self._weights = parameter_ids(agent.parameters())
+        self._precision = agent.precision
         self._binding = agent.config.model_dump_json()
         agent.clear_cache()
 
     def _check(self) -> None:
         if self._closed:
             raise RuntimeError("inference scope is closed")
+        current = parameter_ids(self.agent.parameters())
+        cast_state = self.agent._cast_state
+        same_weights = (
+            current == self._weights
+            if cast_state is None
+            else cast_state == (self._weights, current)
+        )
         if (
             self._binding != self.agent.config.model_dump_json()
-            or self._weights
-            != tuple(id(value) for _, value in tree_flatten(self.agent.parameters()))
+            or self._precision != self.agent.precision
+            or not same_weights
         ):
             raise RuntimeError("inference policy changed within its scope")
 

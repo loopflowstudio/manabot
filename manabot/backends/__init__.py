@@ -32,7 +32,8 @@ def resolve(
 ) -> "TorchBackend | MLXBackend":
     """Select a configured backend, loading its optional framework on first use.
 
-    MLX's omitted precision follows each policy's width. Torch's resolver
+    With precision omitted, MLX uses the self-play settings for training
+    and the policy's width for standalone inference. Torch's resolver
     supports float32; reduced-precision training is configured on its learner.
     """
     if name not in {"torch", "mlx"}:

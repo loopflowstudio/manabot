@@ -10,7 +10,7 @@ from typing import cast
 import mlx.core as mx
 import numpy as np
 
-from manabot.backends.mlx.arrays import mlx_device, to_numpy
+from manabot.backends.mlx.arrays import mlx_device, to_numpy, training_precision
 from manabot.backends.mlx.policy import MLXActorCritic, PolicyInference
 from manabot.backends.mlx.rl import (
     NumericalError,
@@ -51,7 +51,7 @@ class CollectionSession:
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:
         mlx_agent = cast(MLXActorCritic, agent)
-        expected = "bfloat16" if self.precision == "bf16" else self.precision
+        expected = training_precision(self.precision)
         if mlx_agent.precision != expected or mlx_agent.inference_device != self.device:
             raise ValueError(
                 f"MLX collection requires {self.device_name}/{expected}, "

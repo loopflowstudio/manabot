@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import mlx.core as mx
 from mlx.utils import tree_flatten
 
-from manabot.backends.mlx.arrays import all_finite, mlx_device
+from manabot.backends.mlx.arrays import all_finite, mlx_device, training_precision
 from manabot.backends.mlx.checkpoint import require_supported
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
@@ -25,8 +25,7 @@ from manabot.training.learning import Precision
 
 def configure(threads: int, precision: Precision, device: str) -> None:
     """Set the MLX device. MLX manages its own CPU thread pool."""
-    if precision == "tf32":
-        raise ValueError("precision tf32 requires CUDA")
+    training_precision(precision)
     mx.set_default_device(mlx_device(device))
 
 
@@ -69,8 +68,7 @@ def create_learner(
     execution_rows: int | None,
     bootstrap_rows: int | None,
 ) -> Learner:
-    expected = "bfloat16" if precision == "bf16" else precision
-    if expected != agent.precision:
+    if training_precision(precision) != agent.precision:
         raise ValueError(
             f"self-play precision {precision} differs from MLX policy precision {agent.precision}"
         )
@@ -101,11 +99,22 @@ class Runtime:
         config: ModelConfig,
         *,
         pretrained: MLXActorCritic | None = None,
+        precision: Precision | None = None,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> MLXActorCritic:
         if live_tokens:
             raise ValueError("MLX does not support live-token inference")
+        requested = training_precision(precision) if precision is not None else None
+        if (
+            self.precision is not None
+            and requested is not None
+            and requested != self.precision
+        ):
+            raise ValueError(
+                f"self-play precision {precision} differs from MLX policy precision {self.precision}"
+            )
+        effective = requested or self.precision
         require_supported(config, space.config)
         if pretrained is not None:
             if pretrained.config != config:
@@ -114,6 +123,8 @@ class Runtime:
                 value for _, value in tree_flatten(pretrained.parameters())
             ):
                 raise ValueError("pretrained policy contains nonfinite tensors")
+            if effective is not None:
+                pretrained.set_precision(effective)
             return pretrained
         layout = Layout(fresh_readings(space))
         tables = fresh_policy_tables(space, config)
@@ -129,7 +140,7 @@ class Runtime:
             tables.preparation_tables(layout),
             config,
             space,
-            precision=self.precision,
+            precision=effective,
             bucketed_shapes=bucketed_shapes,
         )
         mx.eval(policy.parameters())

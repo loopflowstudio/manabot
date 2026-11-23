@@ -71,7 +71,7 @@ recipe = settings(BaselineConfig(device="mps")).model_copy(
     update={"streams": 2, "games_per_stream": 1, "bucketed_shapes": True}
 )
 result = fresh_iteration(
-    recipe, backend=resolve("mlx", precision="float32"), seed=19,
+    recipe, backend=resolve("mlx"), seed=19,
     out=Path(".runs/mlx-baseline"),
 )
 print(result.checkpoint, result.counts.learner_transitions)
@@ -183,7 +183,10 @@ A policy built without a precision follows the
 [one width rule](../../docs/training.md#reduced-precision) every GPU backend
 shares: bfloat16 at `hidden_dim` 256 or more (`BF16_MIN_HIDDEN_DIM`), float32
 below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
-precision always wins. Tracked recipes use the precision declared by their settings.
+precision always wins. Fresh and tracked self-play use `SelfPlay.precision`,
+including when starting from a portable checkpoint. An explicit precision on
+`resolve("mlx", precision=...)` must agree with the recipe. Resuming a tracked
+MLX run requires the precision in its training save.
 
 ```python
 from manabot.backends import resolve

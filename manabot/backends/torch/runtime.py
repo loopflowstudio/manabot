@@ -46,7 +46,9 @@ def create_policy(
     bucketed_shapes: bool = False,
     live_tokens: bool = False,
     pretrained: ActorCritic | None = None,
+    precision: Precision | None = None,
 ) -> ActorCritic:
+    """Construct float32 master weights. Collection and learning scope autocast."""
     model = ActorCritic(
         space,
         config,

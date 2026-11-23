@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 if TYPE_CHECKING:
+    from manabot.training.learning import Precision
     from manabot.training.loops.self_play import SelfPlay
 
 
@@ -31,6 +32,42 @@ def bounded_self_play() -> "SelfPlay":
             "checkpoint_every": 1,
         }
     )
+
+
+@pytest.mark.parametrize(
+    "width,precision,device",
+    [
+        (64, "float32", "mps"),
+        (64, "bf16", "mps"),
+        (256, "float32", "mps"),
+        (256, "bf16", "mps"),
+        (256, "float32", "cpu"),
+    ],
+)
+def test_mlx_iteration_uses_recipe_precision(
+    tmp_path: Path, width: int, precision: "Precision", device: str
+) -> None:
+    pytest.importorskip("mlx.core")
+    from manabot.backends import resolve
+    from manabot.training.loops.self_play import fresh_iteration
+
+    recipe = bounded_self_play()
+    settings = recipe.model_copy(
+        update={
+            "model": recipe.model.model_copy(update={"hidden_dim": width}),
+            "precision": precision,
+            "device": device,
+        }
+    )
+    result = fresh_iteration(
+        settings, backend=resolve("mlx"), seed=19, out=tmp_path / "run"
+    )
+    assert result.counts.learner_transitions >= settings.transitions
+    assert result.counts.optimizer_updates > 0
+    assert result.ema is not None
+    expected = "bfloat16" if precision == "bf16" else "float32"
+    assert result.raw.precision == result.ema.precision == expected
+    assert result.checkpoint.is_file()
 
 
 @pytest.mark.parametrize(
@@ -86,6 +123,7 @@ def test_tracked_mlx_continuation_without_torch(tmp_path: Path) -> None:
 def exercise_continuation(root: Path) -> None:
     from etude.train.state import read_state
     import mlx.core as mx
+    from mlx.utils import tree_flatten
 
     from manabot.backends import resolve
     from manabot.backends.mlx import state
@@ -94,11 +132,13 @@ def exercise_continuation(root: Path) -> None:
     from tests.fixtures.training_records import recording
 
     backend = resolve("mlx")
-    settings = bounded_self_play()
+    settings = bounded_self_play().model_copy(update={"precision": "bf16"})
     out = root / "out"
     os.environ["ETUDE_OUT"] = str(out)
 
-    def attempt(updates: int, *, resume: bool = True) -> Path:
+    def attempt(
+        updates: int, *, resume: bool = True, recipe: "SelfPlay" = settings
+    ) -> Path:
         with recording(
             experiment="test",
             run="mlx",
@@ -107,10 +147,21 @@ def exercise_continuation(root: Path) -> None:
             directory=root / "track",
             resume=resume,
         ) as run:
-            return loop.self_play(settings, run, updates=updates, backend=backend)
+            return loop.self_play(recipe, run, updates=updates, backend=backend)
 
     milestone = attempt(1, resume=False)
     original = milestone.read_bytes()
+    with pytest.raises(ValueError, match="incompatible MLX snapshot"):
+        attempt(2, recipe=settings.model_copy(update={"precision": "float32"}))
+    # A portable policy can start a fresh learner in the recipe's precision.
+    portable, _ = backend.load_policy(milestone)
+    warm, _ = loop.create(
+        settings.model_copy(update={"pretrained": milestone}), seed=37, backend=backend
+    )
+    assert portable.precision == "float32" and warm.precision == "bfloat16"
+    restored_weights = warm.parameters()
+    for name, value in tree_flatten(portable.parameters()):
+        np.testing.assert_array_equal(restored_weights[name], value, err_msg=name)
     saved = read_state(out / "state")
     assert saved is not None and not saved.record.files
     counts = loop.Counts.model_validate(saved.record.extra)

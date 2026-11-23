@@ -7,6 +7,7 @@ devices, and the `device` argument the updates pass is ignored.
 """
 
 from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
 
 import mlx.core as mx
 from mlx.utils import tree_flatten
@@ -14,6 +15,9 @@ import numpy as np
 
 from manabot.infra.config import BF16_MIN_HIDDEN_DIM
 from manabot.policy.protocol import Precision
+
+if TYPE_CHECKING:
+    from manabot.training.learning import Precision as TrainingPrecision
 
 FLOAT = mx.float32
 
@@ -26,6 +30,13 @@ def mlx_device(name: str) -> mx.DeviceType:
     if name == "cuda":
         raise ValueError("MLX does not support CUDA")
     raise ValueError(f"MLX does not support device {name!r}")
+
+
+def training_precision(precision: "TrainingPrecision") -> Precision:
+    """Translate the recipe's precision to the MLX forward dtype name."""
+    if precision == "tf32":
+        raise ValueError("precision tf32 requires CUDA")
+    return "bfloat16" if precision == "bf16" else precision
 
 
 def precision_dtype(precision: Precision) -> mx.Dtype:

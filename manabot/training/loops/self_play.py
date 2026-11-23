@@ -454,6 +454,7 @@ def create(
         space,
         settings.model,
         pretrained=published,
+        precision=settings.precision,
         bucketed_shapes=settings.bucketed_shapes,
         live_tokens=settings.live_tokens,
     ).to(settings.device)

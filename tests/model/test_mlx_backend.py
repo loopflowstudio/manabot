@@ -655,6 +655,31 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
             changed.infer(inputs)
 
 
+def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
+    _, target, _ = _converted(tmp_path)
+    policy, _ = resolve("mlx", precision="bfloat16").load_policy(target)
+    with policy.inference_scope() as scope:
+        with policy.forward_precision():
+            with pytest.raises(RuntimeError, match="master weights"):
+                policy.inference_scope()
+            with policy.forward_precision():
+                scope.cache_programs()
+            layer = policy.player_embedding.projection.layers[0]
+            layer.weight = layer.weight + 1
+            with pytest.raises(RuntimeError, match="changed"):
+                scope.cache_programs()
+        scope.cache_programs()
+        policy.set_precision("float32")
+        with pytest.raises(RuntimeError, match="changed"):
+            scope.cache_programs()
+
+    policy.set_precision("bfloat16")
+    with policy.inference_scope() as scope:
+        layer.weight = layer.weight + 1
+        with policy.forward_precision(), pytest.raises(RuntimeError, match="changed"):
+            scope.cache_programs()
+
+
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
     """Remapped opponent joins and ownership survive changes in object capacity."""
 

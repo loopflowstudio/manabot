@@ -140,6 +140,7 @@ class SelfPlayRuntime(ExecutionScope, Protocol):
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
         pretrained: BackendPolicy | None = None,
+        precision: Precision | None = None,
     ) -> SelfPlayPolicy: ...
     def create_learner(
         self,

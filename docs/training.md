@@ -173,9 +173,9 @@ loss and diagnostic arithmetic runs on the host with gradients preserved; no
 automatic operator fallback is enabled. Precision follows the
 [one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
 inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
-on CPU. A separate [MLX backend](../manabot/backends/mlx.md) of the policy and
-the damped update reads the same policy files for measurement on Apple
-Silicon; no recipe runs on it. This support makes no speed or strength claim.
+on CPU. On Apple Silicon, the baseline, local and Elemental recipes accept
+`backend="mlx"` for tracked scalar damped self-play. They read and write the
+same portable policies and can resume an [MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery).
 
 ### Saved regimes
 
@@ -330,9 +330,18 @@ def self_play(
         raise ValueError("updates must be positive")
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=run.seed, backend=backend)
-        objects = state.resume_objects(learner, ema)
-        # The loop validates saved model settings and readings before restoration.
-        counts = run.resume(**objects, extra=Counts())
+        counts = run.resume(extra=Counts())
+        saved_model = counts.model
+        if saved_model is None and counts.updates > 0:
+            initial = run.out / "policies/00000000-raw.safetensors"
+            saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
+        model = resume_model(saved_model, settings.model)
+        readings = resume_readings(counts, learner.agent.readings, learner.agent.observation_space)
+        export = state.restore(run, learner, ema, counts)
+        counts.model = model
+        counts.readings = readings
+        if export is not None:
+            run.save(export=export)
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
@@ -1050,7 +1059,7 @@ precision they ran with, and a checkpoint keeps what its run recorded.
 | --- | --- |
 | `float32` (default) | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the loop, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
-| `bf16` | `torch.autocast(device, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
+| `bf16` | Torch uses autocast and MLX temporarily casts the policy weights for collection, bootstrap and learner forwards. Forward outputs, behavior log-probabilities, targets, losses, master weights and Adam state stay float32. |
 
 Managed checkpoint evaluation uses CUDA when available, otherwise CPU, in
 float32; standalone evaluation and search use CPU. TF32 requires CUDA;
