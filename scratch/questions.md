@@ -17,3 +17,5 @@ Combat assignments use the existing modal Command. For multiple blockers the att
 Replay doubling first without Giant Cindermaw as the positive control for prohibited lifelink.
 
 Use the public question “does another damage step follow?” as the damage-pass flag. The existing step identifier already names combat damage, and the flag stays false during ordinary single-step damage.
+
+Model Fog Bank’s single prevention ability with one either-endpoint identity check on combat damage.
