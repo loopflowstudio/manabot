@@ -119,7 +119,8 @@ def test_snapshot_metadata_and_terminal_boundary() -> None:
     env = managym.Env(seed=42)
     with pytest.raises(managym.AgentError, match="before reset"):
         env.snapshot()
-    obs, _ = env.reset(setup())
+    seat = reset_to_first_main(env, setup())
+    obs = env.observation_for_player(seat)
     meta = env.snapshot().metadata()
     assert meta.turn == 1
     assert meta.phase == managym.PhaseEnum.PRECOMBAT_MAIN
@@ -347,7 +348,8 @@ def test_restore_rejects_illegal_or_rebound_actions_without_changing_the_source(
             )
         )
     assert position.restore().search_witness_json() == source.search_witness_json()
-    obs, _ = source.reset(setup("open"))
+    seat = reset_to_first_main(source, setup("open"))
+    obs = source.observation_for_player(seat)
     land = next(
         i
         for i, a in enumerate(obs.action_space.actions)
@@ -405,7 +407,7 @@ def test_banked_branch_round_trips_through_replay_and_academy(
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "academy")
     shuffle_seed = 77665544332211
     source = managym.Env(seed=42, decision_memory_include_own=True)
-    source.reset(setup())
+    reset_to_first_main(source, setup())
     source.step(0)
     bank = source.snapshot()
     assert bank.metadata().action_count >= 2
@@ -438,7 +440,10 @@ def test_banked_branch_round_trips_through_replay_and_academy(
     raw = branch.snapshot().to_replay_json()
     path = tmp_path / "branch.json"
     path.write_text(raw)
-    assert json.loads(raw)["interventions"][-1]["at_action"] == 3
+    # Both seats kept their opening hands before the three play decisions.
+    expected_actions = [0, 0, 0, 0, 0]
+    committed = len(expected_actions)
+    assert json.loads(raw)["interventions"][-1]["at_action"] == committed
     before = position_evidence(branch)
     assert before["frame"] == frame
     with pytest.raises(managym.AgentError) as rejected:
@@ -475,13 +480,13 @@ print(json.dumps([before, position_evidence(env)]))
     (record,) = records
     assert record.context == {}
     replay = walk(record)
-    assert [decision.chosen for decision in replay] == [0, 0, 0]
+    assert [decision.chosen for decision in replay] == expected_actions
     assert replay.stop is not None and replay.stop.status == "interrupted"
     assert position_evidence(replay.env) == before
 
     imported = import_game(json.loads(raw))
-    assert (imported["stop"], imported["count"]) == ("interrupted", 3)
-    for ordinal in range(3):
+    assert (imported["stop"], imported["count"]) == ("interrupted", committed)
+    for ordinal in range(committed):
         shown = inspect_watch(imported["id"], ordinal, imported["token"])
         assert shown["observation"]["opponent"]["hand"] == []
         revealed = inspect_watch(
@@ -494,14 +499,14 @@ print(json.dumps([before, position_evidence(env)]))
             assert str(shuffle_seed) not in json.dumps(view)
             assert "987654321123" not in json.dumps(view)
 
-    record.games[0].committed = 3
+    record.games[0].committed = committed
     record.games[0].actions.append(999)
     record.games[0].frame = frame
     record.execution_outcome = "failed"
     record.error_class = type(rejected.value).__name__
     record.error = str(rejected.value)
     (result,) = replay_failure_inputs(record)
-    assert result["action_index"] == 3
+    assert result["action_index"] == committed
     assert result["status"] == "failed"
     assert (
         result["at_retained_failure"]
@@ -602,13 +607,14 @@ def test_watch_publishes_the_determinized_offers(
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
     env = managym.Env(seed=42)
-    original = env.reset(setup("open"))[0]
+    seat = reset_to_first_main(env, setup("open"))
+    original = env.observation_for_player(seat)
     branch = env.snapshot().restore(managym.RestoreOptions.determinize(1, 35))
     offers = branch.observation_for_player(0).action_space.actions
     assert len(offers) != len(original.action_space.actions)
     branch.step(len(offers) - 1)
     imported = import_game(json.loads(branch.snapshot().to_replay_json()))
-    shown = inspect_watch(imported["id"], 0, imported["token"])
+    shown = inspect_watch(imported["id"], imported["count"] - 1, imported["token"])
     assert len(shown["decision"]["frame"]["offers"]) == len(offers)
     assert shown["decision"]["offer"]["label"] == "Pass priority"
 
@@ -702,11 +708,11 @@ def test_simulation_counts_native_outcomes_on_last_allowed_step() -> None:
         env.last_raw_obs = obs
         env.reset.return_value = (obs, {})
         env.step.side_effect = native.step
-        outcome, steps, duration, _ = sim._simulate_game(env, player, player, 1)
-        assert steps == 1
-        assert outcome == expected
+        record = sim._simulate_game(env, player, player, 1)
+        assert record.steps == 1
+        assert record.outcome == expected
         assert native.is_game_over() == (not protected)
-        records.append(sim.GameRecord(outcome, steps, duration))
+        records.append(record)
 
     summary = sim.simulation_summary(records)
     assert summary["total_games"] == 4

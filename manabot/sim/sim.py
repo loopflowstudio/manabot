@@ -293,11 +293,11 @@ def simulate_models(
                     completed_games += 1
 
                 # Simulate a single game
-                outcome, steps, duration, profiler_data = _simulate_game(
-                    env, hero_player, villain_player, sim_config.max_steps
+                record = _simulate_game(
+                    env, hero_player, villain_player, sim_config.max_steps,
+                    thread_id=thread_id,
                 )
 
-                record = GameRecord(outcome, steps, duration, thread_id, profiler_data)
                 with games_lock:
                     games.append(record)
 
@@ -386,20 +386,14 @@ def simulate_models(
 
 
 def _simulate_game(
-    env: Env, hero_player: Player, villain_player: Player, max_steps: int
-) -> tuple[GameOutcome, int, float, dict[str, dict[str, float | int]]]:
-    """
-    Simulate a single game between two players.
-
-    Args:
-        env: Game environment
-        hero_player: Player for hero position
-        villain_player: Player for villain position
-        max_steps: Maximum steps before timeout
-
-    Returns:
-        Tuple of (outcome, steps, duration, profiler_data)
-    """
+    env: Env,
+    hero_player: Player,
+    villain_player: Player,
+    max_steps: int,
+    *,
+    thread_id: int | None = None,
+) -> GameRecord:
+    """Play until the environment stops or the step budget runs out."""
     logger = getLogger("manabot.sim.sim").getChild("simulate_game")
     # Reset environment
     start_time = time.time()
@@ -416,7 +410,9 @@ def _simulate_game(
     if outcome == GameOutcome.TIMEOUT:
         logger.warning("Game did not complete")
 
-    return outcome, steps, time.time() - start_time, info.get("profiler", {})
+    return GameRecord(
+        outcome, steps, time.time() - start_time, thread_id, info.get("profiler", {})
+    )
 
 
 def load_player(model_str: str, *, backend: PolicyLoader | None = None) -> Player:

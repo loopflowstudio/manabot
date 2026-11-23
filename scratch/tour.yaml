@@ -1,4 +1,4 @@
-at: 5390217b482744ce0149dbc6dafb10ec58a6045f
+at: 02ef340d11bb32c4c866c81f1f92be5e3e7b0519
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
@@ -23,7 +23,7 @@ first:
   - path: manabot/sim/sim.py
     why: Follow terminal receipts into simulation counts and rates
   - path: tests/env/test_game_snapshot.py
-    why: Compare Pact results across restored branches
+    why: Verify restored Pact outcomes and final-step simulation records
   - path: managym/cards/tests/cards/dgm.rs
     why: Exercise Maze from land entry through victory
   - path: managym/cards/src/eoe.rs
