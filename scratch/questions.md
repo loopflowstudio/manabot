@@ -15,3 +15,4 @@
 - Use the existing owner exile list for the pair’s relative timestamps. Exile appends new arrivals and preserves survivor order on departure.
 - Use Blasphemous Act for lethal damage, an opposing Island for destruction and Gray Ogre for return. Read the death event from the ordering Command’s returned observation.
 - Use Airbending Lesson for the immediate-move probe. The same spell exposes the exile chooser, both cast permissions and whether the following draw waits.
+- Start Manifest Dread with indistinguishable opponent views before implementing turn-up payment. The current permanent projection exposes its backing registry key directly.

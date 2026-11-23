@@ -106,6 +106,8 @@ The directed debug test `fin::ragnarok_airbend_orders_both_cast_grants_before_th
 
 Exercise the private selection through the turn-face-up decision and a copy of the face-down permanent, using the constructed positions above. Cecil and Ragnarok already distinguish physical backing from the current face. Manifest tests the remaining design assumption: a copy can acquire the public form while only the controller of the original can inspect its hidden printing. Compare the two viewers before settling the shared representation.
 
+Start with paired exact roots at the opponent’s first decision after manifest. Swap a hidden creature and noncreature between the manifested slot and an unknown library slot so the public graveyard and deck counts stay fixed. Compare the entire permanent projection, especially the backing registry key that add_permanent currently always emits, before implementing payment. Preserve the exact key in private snapshots. Derive permitted inspection separately from copiable characteristics so a copy of the public 2/2 cannot inherit the original’s inspection or turn-up action. Then exercise turn-up payment and stale rejection from a restored controller decision. At 5a06fb19 all five native Ragnarok tests passed together.
+
 Keep the remaining immediate movement callers under review, including linked entry follow-ups. Trace each caller’s legal source zones before migrating it. Airbend needed a retained batch because one selected permanent produced two arrivals. A top-of-library move in `flow/cast_permission.rs` takes one card. Lost Days still needs owner-only library-order visibility and recorded replay checks.
 
 ## Native implementation and deletions
