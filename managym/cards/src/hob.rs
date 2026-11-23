@@ -94,7 +94,7 @@ fn smaug_the_great_calamity() -> CardDefinition {
             toughness: Some(5),
             keywords: Keywords::of(&[Keyword::Flying]),
             text_box: "Flying".into(),
-            adventure: Some(
+            inset: Some(managym_state::card::InsetSpell::Adventure(
                 PrintedCharacteristics {
                     name: "Spew Flame".into(),
                     mana_cost: Some(ManaCost::parse("{4}{R}")),
@@ -108,7 +108,7 @@ fn smaug_the_great_calamity() -> CardDefinition {
                     ..Default::default()
                 }
                 .into(),
-            ),
+            )),
             ..Default::default()
         },
         ..Default::default()

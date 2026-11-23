@@ -1,3 +1,4 @@
+use crate::state::card::SpellProfile;
 use crate::state::{
     game_object::{ObjectId, PermanentId, PlayerId, PublicId},
     target::Target,
@@ -48,8 +49,8 @@ pub enum Action {
         route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     CastSpell {
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        adventure: bool,
+        #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+        profile: SpellProfile,
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
@@ -146,6 +147,13 @@ pub enum Action {
 }
 
 impl Action {
+    pub(crate) fn spell_profile(&self) -> SpellProfile {
+        match self {
+            Self::CastSpell { profile, .. } => *profile,
+            _ => SpellProfile::Front,
+        }
+    }
+
     /// The player performing this rules action, whose resources and objects
     /// it uses. The published ActionSpace.player separately authorizes its chooser.
     pub fn player(&self) -> PlayerId {

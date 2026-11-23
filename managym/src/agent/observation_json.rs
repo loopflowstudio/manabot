@@ -143,6 +143,9 @@ impl Serialize for ActionJson<'_> {
         if let Some(name_index) = &value.name_index {
             map.serialize_entry("name_index", name_index)?;
         }
+        if value.omen {
+            map.serialize_entry("omen", &true)?;
+        }
         if value.adventure {
             map.serialize_entry("adventure", &true)?;
         }

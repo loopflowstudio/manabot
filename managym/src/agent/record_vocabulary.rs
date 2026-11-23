@@ -16,6 +16,8 @@
 //!
 //! Entry point: [`record_names`].
 
+#[cfg(test)]
+use crate::state::card::SpellProfile;
 use crate::{
     agent::{
         ability_description::predicate_description,
@@ -178,6 +180,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
             "GameEvent",
             &["Scried", "Surveilled", "LibrarySearched"][..],
         ),
+        ("SpellProfile", &["Omen"][..]),
         ("LibraryEnd", &["Top", "Bottom"][..]),
         // Supported stack-ability targeting has no printed card program yet.
         ("TargetSpec", &["Ability"][..]),
@@ -261,6 +264,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "attacking",
         "kicked",
         "flashback",
+        "exile_instead_of_graveyard",
         "x",
         "free",
         "resolving",
@@ -386,7 +390,7 @@ mod tests {
         tokens.extend(
             rules_tokens(
                 &CastChoices {
-                    adventure: true,
+                    profile: SpellProfile::Adventure,
                     exile_instead_of_graveyard: true,
                     route: None,
                     kicked: true,
@@ -394,6 +398,16 @@ mod tests {
                     x: 1,
                     free: true,
                     resolving: true,
+                },
+                pack,
+            )
+            .unwrap(),
+        );
+        tokens.extend(
+            rules_tokens(
+                &CastChoices {
+                    profile: SpellProfile::Omen,
+                    ..Default::default()
                 },
                 pack,
             )

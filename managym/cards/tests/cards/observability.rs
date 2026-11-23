@@ -1468,6 +1468,7 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
         StaticAbility::PlayGraveyardByPermanentType => witnessed(
             "StaticAbility::PlayGraveyardByPermanentType", Seen::Actions("each remaining permanent type offers a graveyard play"), "Muldrotha, the Gravetide","fdn","muldrotha_and_zul_offer_independent_casts",
         ),
+        StaticAbility::SpendAnyManaToCast(_) => witnessed("StaticAbility::SpendAnyManaToCast", Seen::Actions("creature spells can spend any mana"), "Vizier of the Menagerie", "tdm", "vizier_filters_twinmaw_profiles_and_mana"),
         StaticAbility::CastFromLibraryTop(_) => witnessed(
             "StaticAbility::CastFromLibraryTop",
             Seen::Actions("the library's top card is offered as a cast"),
@@ -1749,6 +1750,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::LookAtLibraryTop,
         StaticAbility::PlayGraveyardByPermanentType,
         StaticAbility::CastFromLibraryTop(creature()),
+        StaticAbility::SpendAnyManaToCast(creature()),
         StaticAbility::AttachedHas(ActivatedAbilityDefinition::default()),
         StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
             named: "Witness".into(),
@@ -2641,12 +2643,18 @@ fn adventure_learning_tokens_encode_damage_without_printed_identity() {
     let mut card = card_definition("Smaug, the Great Calamity");
     let original = definition_tokens(&card, pack).unwrap();
     let printed = std::sync::Arc::make_mut(&mut card.printed);
-    let spell = std::sync::Arc::make_mut(printed.adventure.as_mut().unwrap());
+    let Some(managym::state::card::InsetSpell::Adventure(spell)) = printed.inset.as_mut() else {
+        panic!("Smaug has an Adventure")
+    };
+    let spell = std::sync::Arc::make_mut(spell);
     spell.name = "Different name".into();
     spell.text_box = "Different wording".into();
     assert_eq!(original, definition_tokens(&card, pack).unwrap());
     let printed = std::sync::Arc::make_mut(&mut card.printed);
-    let spell = std::sync::Arc::make_mut(printed.adventure.as_mut().unwrap());
+    let Some(managym::state::card::InsetSpell::Adventure(spell)) = printed.inset.as_mut() else {
+        panic!("Smaug has an Adventure")
+    };
+    let spell = std::sync::Arc::make_mut(spell);
     spell.spell_effects[0] = Effect::deal_damage(4, ObjectSelector::Target(TargetSpec::Creature));
     assert_ne!(original, definition_tokens(&card, pack).unwrap());
 }
@@ -3466,6 +3474,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
         adventure => [column(Action, action::ADVENTURE)],
+        omen => [column(Action, action::OMEN)],
         route_mana_value => [column(Action, action::HAS_ROUTE_COST), column(Action, action::ROUTE_MANA_VALUE)],
         quota_type => [column(Action, action::QUOTA_TYPE)],
         announces_x => [column(Action, action::HAS_X)],

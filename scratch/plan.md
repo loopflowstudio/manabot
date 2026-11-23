@@ -46,13 +46,17 @@ At reset, before the first CHOOSE_TARGET prefix Command, the human opening hand 
 
 Nested printed characteristics serialize as CardDefinition too. The token writer now skips identity fields at either depth while keeping nested program fields. The Smaug regression passed after changing both inset strings and comparing tokens, then changing only damage from five to four.
 
-## Next slice
+## Implemented slice · Twinmaw and Vizier
 
-The printed choice currently travels as an Adventure boolean through `CastChoices::from_route`, pending decisions and `SpellOnStack`. Replace that boolean with one selected profile when adding Omen. Keep the exact exile grant separate from the choice of spell. Preserve existing Adventure Commands and the four observed prices.
+The engine binds one printed spell profile at announcement, retains it through payment and stack resolution, and tests Vizier's predicate on the proposed spell. At the same six red mana, the top-library position offered Twinmaw alone and the hand offered both profiles. Six blue mana paid for the Dragon alone. Its entry gained five life.
 
-Start with one top-library position and move the same Twinmaw to hand. Make permission eligibility a query on the exact object and candidate printed profile together. The library lookup supplies the object once. Evaluate each route predicate on the proposed spell, using the existing effective-object evaluation for the ordinary face. Require one creature offer at the top and two offers in hand before implementing Omen resolution. This isolates permission filtering from shuffle behavior. Keep enumeration borrowed or allocation-free for the common single hand cast and measure it under the existing Engine Budget.
+In the native Charring Bite fixture, a flyer could not be targeted. A successful cast killed the Ogre, moved the Dragon into its owner's library and advanced the shuffle RNG. Two forks reached the same seeded library order and RNG position. Counterspell and Lightning Bolt removing the target both sent the Dragon to the graveyard with the shuffle RNG unchanged. An exact exile grant paid zero mana for the Omen. A Goggles copy killed the target and shuffled, leaving the original to go to the graveyard and the library at its original size.
 
-Use Twinmaw Stormbrood // Charring Bite to extend printed spell selection to Omen. Test the creature-only library permission and both hand offers, then compare successful resolution, a counter and an illegal target. The first Adventure and Bilbo cover the exercised routes. Other resolution-time permissions, modal playable faces, linked preparation, the remaining cohorts and the Engine Budget still need their planned work.
+After registering Twinmaw and Vizier, CHOOSE_TARGET already differed at revision zero. Wind Drake in hand slot 1 moved from catalog row 523 to 525. The fixture writer accepted all 212 original prefix Commands across the five positions. All five final revisions and complete offer lists matched their pre-expansion fixtures. The refreshed navigation cases also exercised stale rejection.
+
+The runtime vocabulary test exposed a missing field token for `exile_instead_of_graveyard` (1543504283). The token and the new Omen profile variant now pass the same catalog admission check. Both bundled pinned pilots passed; the optional frontier checkpoint was unavailable.
+
+The second Omen, the remaining ledger cohorts, resolution-time permissions and preparation links still need their planned work. Measure ordinary casting and the new positions under the Engine Budget in the performance phase.
 
 ## Scope
 

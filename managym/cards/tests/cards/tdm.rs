@@ -180,3 +180,182 @@ fn teval_delve_never_exiles_the_spell_being_cast_from_the_graveyard() {
     assert!(!offered.contains(&now(&s, dance)));
     assert!(offered.contains(&now(&s, third)));
 }
+
+#[test]
+fn vizier_filters_twinmaw_profiles_and_mana() {
+    use crate::support::{
+        game::Scenario,
+        game::{move_card, move_from_library},
+        play::choose,
+    };
+    use managym::{agent::action::Action, state::card::SpellProfile};
+    fn profiles(s: &Scenario, card: managym::state::game_object::ObjectId) -> Vec<SpellProfile> {
+        s.action_space()
+            .actions
+            .iter()
+            .filter_map(|action| match action {
+                Action::CastSpell {
+                    object, profile, ..
+                } if *object == card => Some(*profile),
+                _ => None,
+            })
+            .collect()
+    }
+
+    let creature = "Twinmaw Stormbrood";
+    let mut s = five_color_unfunded_setup(&[creature, "Vizier of the Menagerie", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Vizier of the Menagerie");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let id = move_from_library(&mut s, 0, creature, ZoneType::Exile);
+    let id = move_card(&mut s, id, ZoneType::Library);
+    s.set_player_mana_pool(0, "RRRRRR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert_eq!(profiles(&s, id), [SpellProfile::Front]);
+    let id = move_card(&mut s, id, ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert_eq!(profiles(&s, id), [SpellProfile::Front, SpellProfile::Omen]);
+    s.set_player_mana_pool(0, "UUUUUU");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert_eq!(profiles(&s, id), [SpellProfile::Front]);
+    let life = s.game().state.players[0].life;
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell {object, profile: SpellProfile::Front,..} if *object == id),
+    );
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, life + 5);
+}
+
+#[test]
+fn charring_bite_shuffles_only_on_resolution() {
+    use crate::support::{
+        game::{force_lands, move_from_library},
+        inspect::zone_of,
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut s = five_color_unfunded_setup(&[
+        "Twinmaw Stormbrood",
+        "Gray Ogre",
+        "Lightning Bolt",
+        "Counterspell",
+    ]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let flyer = s.force_permanent_on_battlefield(1, "Twinmaw Stormbrood");
+    let target = card_of(&s, ogre);
+    let spell = move_from_library(&mut s, 0, "Twinmaw Stormbrood", ZoneType::Hand);
+    let bolt = move_from_library(&mut s, 1, "Lightning Bolt", ZoneType::Hand);
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    force_lands(&mut s, 0, "Mountain", 2);
+    force_lands(&mut s, 1, "Island", 2);
+    force_lands(&mut s, 1, "Mountain", 1);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a,Action::CastSpell {object,profile:SpellProfile::Omen,..} if *object==spell),
+    );
+    assert!(!s.choose_target(Target::Permanent(flyer)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    s.pass_priority();
+    let rng = s.game().state.rng.get_word_pos();
+    let mut lost = fork_choosing(
+        &s,
+        |a| matches!(a,Action::CastSpell{object,..} if *object==bolt),
+    );
+    assert!(lost.choose_target(Target::Permanent(ogre)));
+    settle(&mut lost);
+    assert_eq!(zone_of(&lost, spell), Some(ZoneType::Graveyard));
+    assert_eq!(lost.game().state.rng.get_word_pos(), rng);
+    let mut countered = fork_choosing(
+        &s,
+        |a| matches!(a,Action::CastSpell{object,..} if *object==counter),
+    );
+    let stack_id = now(&countered, spell);
+    assert!(countered.choose_target(Target::StackSpell(stack_id)));
+    settle(&mut countered);
+    assert_eq!(zone_of(&countered, spell), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&countered, target), Some(ZoneType::Battlefield));
+    assert_eq!(countered.game().state.rng.get_word_pos(), rng);
+    let mut replay = fork_choosing(&s, |a| matches!(a, Action::PassPriority { .. }));
+    settle(&mut replay);
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.rng.get_word_pos(),
+        replay.game().state.rng.get_word_pos()
+    );
+    assert_eq!(
+        s.game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0)),
+        replay
+            .game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0))
+    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Library));
+    assert_eq!(zone_of(&s, target), Some(ZoneType::Graveyard));
+    assert_ne!(s.game().state.rng.get_word_pos(), rng);
+}
+
+#[test]
+fn copied_charring_bite_shuffles_before_the_original_loses_its_target() {
+    use crate::support::{
+        game::{force_lands, move_from_library},
+        inspect::zone_of,
+        play::choose,
+    };
+    use managym::{
+        agent::action::Action,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut s =
+        five_color_unfunded_setup(&["Pyromancer's Goggles", "Twinmaw Stormbrood", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Pyromancer's Goggles");
+    force_lands(&mut s, 0, "Mountain", 1);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let spell = move_from_library(&mut s, 0, "Twinmaw Stormbrood", ZoneType::Hand);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let size = s.zone_size(0, ZoneType::Library);
+    let rng = s.game().state.rng.get_word_pos();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell {object, profile: SpellProfile::Omen, ..} if *object == spell),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
+    s.assert_zone_size(0, ZoneType::Library, size);
+    assert_ne!(s.game().state.rng.get_word_pos(), rng);
+}
+
+#[test]
+fn free_exile_grant_casts_charring_bite_with_no_mana() {
+    use crate::support::{game::move_from_library, inspect::zone_of, play::choose};
+    use managym::{
+        agent::action::Action,
+        flow::cast_permission::PlayGrant,
+        state::{card::SpellProfile, game_object::Target, mana::ManaCost},
+    };
+    let mut s = five_color_unfunded_setup(&["Twinmaw Stormbrood", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let spell = move_from_library(&mut s, 0, "Twinmaw Stormbrood", ZoneType::Exile);
+    s.game_mut().state.cast_permissions.grant(PlayGrant {
+        cost: Some(ManaCost::default()),
+        ..PlayGrant::new(spell, PlayerId(0))
+    });
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell {object, profile: SpellProfile::Omen, ..} if *object == spell),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert_eq!(top_spell(&s).spent.total(), 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Library));
+}

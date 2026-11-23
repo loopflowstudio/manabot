@@ -73,8 +73,10 @@ impl ContentPack {
                     continue;
                 }
                 names.insert(card.name.clone(), Some(id));
-                if let Some(inset) = &card.adventure {
-                    names.entry(inset.name.clone()).or_insert(None);
+                if let Some(inset) = &card.inset {
+                    names
+                        .entry(inset.characteristics().name.clone())
+                        .or_insert(None);
                 }
             }
             NameVocabulary::new(

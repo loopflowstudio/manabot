@@ -169,19 +169,19 @@ impl Game {
             Action::CastSpell {
                 object,
                 route,
-                adventure,
+                profile,
                 ..
             } => {
                 let cast = if let Some(cast) =
                     self.state.suspended_decision.as_ref().and_then(|s| {
                         s.decision
-                            .resolution_cast_choices(&self.state[*object], *adventure)
+                            .resolution_cast_choices(&self.state[*object], *profile)
                     }) {
                     cast
                 } else {
                     CastChoices::from_route(
                         self.selected_play_route(player, *object, *route)?,
-                        *adventure,
+                        *profile,
                     )
                 };
                 let card = cast.spell(&self.state[*object]);

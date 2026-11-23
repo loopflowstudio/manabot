@@ -1,6 +1,7 @@
 // game.rs
 // Core game structs: GameState and Game.
 
+use crate::state::card::SpellProfile;
 use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
     cell::RefCell,
@@ -256,8 +257,8 @@ pub enum ActivationSource {
 pub struct CastChoices {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exile_instead_of_graveyard: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub adventure: bool,
+    #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub route: Option<crate::flow::cast_permission::PlayRoute>,
     /// Casting via flashback replaces any departure from the stack with exile.

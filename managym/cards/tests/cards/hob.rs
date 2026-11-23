@@ -4,6 +4,7 @@ use crate::support::{
     inspect::permanent_named,
     play::{activate, enter_and_settle, pass_until, settle},
 };
+use managym::state::card::SpellProfile;
 use managym::{
     agent::{
         action::ActionSpaceKind,
@@ -148,7 +149,7 @@ fn bilbo_graveyard_adventure_replacement_owns_the_exile_permission() {
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     choose(
         &mut s,
-        |a| matches!(a, Action::CastSpell {adventure:true, object,..} if *object==smaug),
+        |a| matches!(a, Action::CastSpell {profile: SpellProfile::Adventure, object,..} if *object==smaug),
     );
     assert!(s.choose_target(Target::Permanent(ogre)));
     s.pass_priority();

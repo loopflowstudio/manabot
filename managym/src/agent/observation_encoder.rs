@@ -2188,6 +2188,9 @@ fn encode_actions(
             *value = f32::from(action.route_mana_value.unwrap_or_default()) / 10.;
             *quota = f32::from(action.quota_type.unwrap_or_default());
         }
+        if let Some(omen) = row.get_mut(action::OMEN) {
+            *omen = bool_to_f32(action.omen);
+        }
         if let Some(inset) = row.get_mut(action::ADVENTURE) {
             *inset = bool_to_f32(action.adventure);
         }
@@ -2378,6 +2381,7 @@ mod tests {
                         pays_directly: false,
                         announces_x: false,
                         adventure: false,
+                        omen: false,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2395,6 +2399,7 @@ mod tests {
                         pays_directly: false,
                         announces_x: false,
                         adventure: false,
+                        omen: false,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2412,6 +2417,7 @@ mod tests {
                         pays_directly: false,
                         announces_x: false,
                         adventure: false,
+                        omen: false,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2560,6 +2566,7 @@ mod tests {
                 pays_directly: false,
                 announces_x: false,
                 adventure: false,
+                omen: false,
                 route_mana_value: None,
                 quota_type: None,
             })
@@ -2865,6 +2872,7 @@ mod tests {
                 pays_directly: false,
                 announces_x: false,
                 adventure: false,
+                omen: false,
                 route_mana_value: None,
                 quota_type: None,
             })

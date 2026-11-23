@@ -10,7 +10,56 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![teval_arbiter_of_virtue()]
+    vec![teval_arbiter_of_virtue(), twinmaw_stormbrood()]
+}
+
+fn twinmaw_stormbrood() -> CardDefinition {
+    use managym_state::ability::TriggerSubject;
+    CardDefinition {
+        key: "tdm.twinmaw_stormbrood",
+        scryfall_id: "2999e3b1-6510-42b2-9429-28c07a64a44f",
+        printed: PrintedCharacteristics {
+            name: "Twinmaw Stormbrood".into(),
+            mana_cost: Some(ManaCost::parse("{5}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(5),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::gain_life(5)],
+            }],
+            text_box: "Flying\nWhen this creature enters, you gain 5 life.".into(),
+            inset: Some(managym_state::card::InsetSpell::Omen(
+                charring_bite().into(),
+            )),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn charring_bite() -> PrintedCharacteristics {
+    use managym_state::ability::{ObjectSelector, TargetSpec};
+    let target = TargetSpec::Permanent {
+        predicate: CardPredicate {
+            flying: Some(false),
+            ..CardPredicate::creature()
+        },
+    };
+    PrintedCharacteristics {
+        name: "Charring Bite".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Omen".into()],
+        spell_effects: vec![Effect::deal_damage(5, ObjectSelector::Target(target))],
+        text_box: "Charring Bite deals 5 damage to target creature without flying. (Then shuffle this card into its owner's library.)".into(),
+        ..Default::default()
+    }
 }
 
 fn teval_arbiter_of_virtue() -> CardDefinition {

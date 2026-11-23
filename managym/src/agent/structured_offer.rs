@@ -10,6 +10,7 @@
 //! `compound_commands` lowers its atomic selections to canonical Commands.
 
 use crate::state::card::Keyword;
+use crate::state::card::SpellProfile;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -643,19 +644,14 @@ impl Game {
                 (
                     _,
                     Action::CastSpell {
-                        object, adventure, ..
+                        object, profile, ..
                     },
                 ) => Some(PublicCommitment::Cast {
-                    card: if *adventure {
-                        self.state[*object]
-                            .adventure
-                            .as_ref()
-                            .expect("offered Adventure")
-                            .name
-                            .clone()
-                    } else {
-                        self.state[*object].name.clone()
-                    },
+                    card: self.state[*object]
+                        .spell_characteristics(*profile)
+                        .expect("offered spell")
+                        .name
+                        .clone(),
                 }),
                 (_, Action::PlayLand { object, .. }) => Some(PublicCommitment::PlayLand {
                     card: self.state[*object].name.clone(),
@@ -726,7 +722,7 @@ impl Game {
                             Action::CastSpell {
                                 object,
                                 route,
-                                adventure: false,
+                                profile: SpellProfile::Front,
                                 ..
                             },
                     }) = complete.internal.get(&offer.id)
@@ -1081,7 +1077,7 @@ impl Game {
                     internal.insert(id, InternalOffer::PassPriority { player: *player });
                 }
                 Action::CastSpell {
-                    adventure: false,
+                    profile: SpellProfile::Front,
                     player,
                     object,
                     route,
@@ -1381,7 +1377,7 @@ impl Game {
                             matches!(
                                 action,
                                 Action::CastSpell {
-                                    adventure: false, player: legal_player,
+                                    profile: SpellProfile::Front, player: legal_player,
                                     object: legal_card, route:legal_route,
                                 } if legal_player == player && legal_card == object && legal_route == route
                             )

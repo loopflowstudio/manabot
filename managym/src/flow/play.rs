@@ -11,6 +11,7 @@
 // ability functions from its owner's hand or graveyard (cycling, "return
 // this card from your graveyard").
 
+use crate::state::card::SpellProfile;
 use std::borrow::Cow;
 
 use crate::{
@@ -62,9 +63,9 @@ impl CastChoices {
         self,
         object: &'a crate::state::game_object::Object,
     ) -> Cow<'a, crate::state::game_object::Object> {
-        if self.adventure {
+        if !self.profile.is_front() {
             let mut spell = object.clone();
-            spell.show_adventure();
+            spell.show_spell(self.profile);
             Cow::Owned(spell)
         } else {
             Cow::Borrowed(object)
@@ -77,7 +78,7 @@ impl CastChoices {
         object: ObjectId,
         predicate: &crate::state::predicate::CardPredicate,
     ) -> bool {
-        if self.adventure {
+        if !self.profile.is_front() {
             let spell = self.spell(&game.state[object]);
             predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0))
         } else {
@@ -85,9 +86,9 @@ impl CastChoices {
         }
     }
 
-    pub(crate) fn from_route(route: PlayRoute, adventure: bool) -> Self {
+    pub(crate) fn from_route(route: PlayRoute, profile: SpellProfile) -> Self {
         Self {
-            adventure,
+            profile,
             route: (route != PlayRoute::Hand).then_some(route),
             flashback: matches!(
                 route,
@@ -175,19 +176,6 @@ impl Game {
             })
     }
 
-    /// The top card of `player`'s library, when a permanent they control
-    /// lets them cast it as a spell (Hakoda's Ally spells). Lands are never
-    /// cast, so they are never offered.
-    pub(crate) fn library_top_castable(&self, player: PlayerId) -> Option<CardId> {
-        let card = self.library_top_card(player)?;
-        let definition = &self.state[self.state.object_of(card)];
-        (!definition.types.is_land()
-            && self.active_permanent_has(player, |source| {
-                matches!(source, StaticAbility::CastFromLibraryTop(predicate) if self.object_matches_predicate(self.state.object_of(card), predicate))
-            }))
-        .then_some(card)
-    }
-
     /// Collect the permissions before timing or payment eliminates individual routes.
     pub(super) fn play_routes(
         &self,
@@ -260,9 +248,7 @@ impl Game {
                 routes.into()
             }
             Some(ZoneType::Library)
-                if self
-                    .library_top_castable(player)
-                    .is_some_and(|c| self.state.object_of(c) == object) =>
+                if !land && self.state.zones.top(ZoneType::Library, player) == Some(object) =>
             {
                 Cow::Borrowed(&[PlayRoute::LibraryTop])
             }
@@ -270,16 +256,32 @@ impl Game {
         }
     }
 
-    /// Whether this permission lets the card be cast using its inset characteristics.
-    pub(super) fn allows_adventure(&self, object: ObjectId, route: PlayRoute) -> bool {
-        self.state[object].adventure.is_some()
-            && match route {
-                PlayRoute::Hand => true,
-                PlayRoute::Grant(key) => self
-                    .grant_by_key(object, key)
-                    .is_some_and(|grant| !grant.on_adventure && !grant.foretold),
+    /// A library permission tests the characteristics of the proposed spell.
+    pub(super) fn permits_spell(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> bool {
+        if self.state[object]
+            .spell_characteristics(cast.profile)
+            .is_none()
+        {
+            return false;
+        }
+        match cast.route.unwrap_or(PlayRoute::Hand) {
+            PlayRoute::LibraryTop => self.active_permanent_has(player, |ability| match ability {
+                StaticAbility::CastFromLibraryTop(predicate) => {
+                    cast.matches_spell(self, object, predicate)
+                }
                 _ => false,
-            }
+            }),
+            PlayRoute::Hand => true,
+            PlayRoute::Grant(key) if !cast.profile.is_front() => self
+                .grant_by_key(object, key)
+                .is_some_and(|grant| !grant.on_adventure && !grant.foretold),
+            _ => cast.profile.is_front(),
+        }
     }
 
     pub(super) fn selected_play_route(
@@ -402,8 +404,13 @@ impl Game {
                 cost = cost.reduced_generic(reduction.generic);
             }
         }
+        let mut any_mana = false;
         for (_, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
             for ability in &view.static_abilities {
+                if let StaticAbility::SpendAnyManaToCast(predicate) = ability {
+                    any_mana |= cast.matches_spell(self, object, predicate);
+                    continue;
+                }
                 if let StaticAbility::SpellsFromOutsideHandCostLess(amount) = ability {
                     if self.state.zones.zone_of(object) != Some(ZoneType::Hand) {
                         cost = cost.reduced_generic(*amount);
@@ -432,7 +439,11 @@ impl Game {
                 }
             }
         }
-        Some(cost)
+        Some(if any_mana {
+            cost.pay_with_any_mana()
+        } else {
+            cost
+        })
     }
 
     pub(crate) fn play_land(
@@ -472,7 +483,7 @@ impl Game {
         player: PlayerId,
         card: CardId,
         selected: Option<PlayRoute>,
-        adventure: bool,
+        profile: SpellProfile,
     ) -> Result<(), AgentError> {
         if self.pending_choice.is_some() {
             return Err(AgentError("a choice is already pending".to_string()));
@@ -483,10 +494,10 @@ impl Game {
             return Err(AgentError("land cards cannot be cast".into()));
         }
         let route = self.selected_play_route(player, object, selected)?;
-        if adventure && !self.allows_adventure(object, route) {
-            return Err(AgentError("no Adventure available".into()));
+        let cast = CastChoices::from_route(route, profile);
+        if !self.permits_spell(player, object, cast) {
+            return Err(AgentError("permission does not allow this spell".into()));
         }
-        let cast = CastChoices::from_route(route, adventure);
         if self.state.priority.holder != player {
             return Err(AgentError("player does not have priority".to_string()));
         }

@@ -613,6 +613,15 @@ impl ManaCost {
         out
     }
 
+    /// Preserve the spending restriction and X while allowing any mana type for every pip.
+    pub fn pay_with_any_mana(self) -> Self {
+        Self {
+            purpose: self.purpose,
+            x: self.x,
+            ..Self::default().with_generic(self.mana_value)
+        }
+    }
+
     /// The generic component of the cost.
     pub fn generic(&self) -> u8 {
         self.cost[Color::Generic as usize]

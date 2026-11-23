@@ -4,6 +4,7 @@
 // action arrives. The suspended state (remaining effects + the pending
 // decision) lives on GameState so clones/forks carry it.
 
+use crate::state::card::SpellProfile;
 #[cfg(test)]
 use crate::state::player::ManaFloats;
 use std::collections::VecDeque;
@@ -720,7 +721,7 @@ impl Decision {
     pub(super) fn resolution_cast_choices(
         &self,
         object: &crate::state::game_object::Object,
-        adventure: bool,
+        profile: SpellProfile,
     ) -> Option<CastChoices> {
         let Self::CastDuringResolution { offer, paid, .. } = self else {
             return None;
@@ -731,9 +732,9 @@ impl Decision {
                 exile_instants_and_sorceries: true,
                 ..
             }
-        ) && (adventure || object.types.is_spell());
+        ) && (!profile.is_front() || object.types.is_spell());
         Some(CastChoices {
-            adventure,
+            profile,
             free: !paid,
             resolving: *paid,
             exile_instead_of_graveyard,
@@ -1399,6 +1400,19 @@ impl Game {
                         // has already left the stack (CR 608.2n); the entry
                         // batch always moves a card still on it.
                         if self.state.zones.zone_of(object) == Some(ZoneType::Stack) {
+                            let profile = self
+                                .state
+                                .stack_objects
+                                .iter()
+                                .find_map(|entry| match entry {
+                                    crate::state::stack_object::StackObject::Spell(spell)
+                                        if spell.object == object =>
+                                    {
+                                        Some(spell.profile)
+                                    }
+                                    _ => None,
+                                })
+                                .expect("resolving spell on stack");
                             let (to, entry) = if self.state[object].types.is_permanent() {
                                 (
                                     ZoneType::Battlefield,
@@ -1421,19 +1435,26 @@ impl Game {
                                 )
                             } else {
                                 (
-                                    ZoneType::Graveyard,
+                                    if profile == SpellProfile::Omen {
+                                        ZoneType::Library
+                                    } else {
+                                        ZoneType::Graveyard
+                                    },
                                     crate::flow::proposed_event::ZoneEntry {
-                                        resolving_adventure: self.find_spell_on_stack_index(object).and_then(|index| match &self.state.stack_objects[index] {
-                                            crate::state::stack_object::StackObject::Spell(spell) if spell.adventure => Some(spell.controller),
-                                            _ => None,
-                                        }),
+                                        resolving_adventure: (profile == SpellProfile::Adventure)
+                                            .then_some(frame.controller),
                                         ..Default::default()
                                     },
                                 )
                             };
-                            frame.batch = Some(
-                                self.event_batch(vec![self.zone_move_proposal(object, to, entry)]),
-                            );
+                            let mut batch =
+                                self.event_batch(vec![self.zone_move_proposal(object, to, entry)]);
+                            if profile == SpellProfile::Omen {
+                                batch.binding = EventBinding::Shuffle {
+                                    player: self.state[object].owner,
+                                };
+                            }
+                            frame.batch = Some(batch);
                             frame.completion = FrameCompletion::Spell { object, attach_to };
                             continue;
                         }
@@ -1890,13 +1911,13 @@ impl Game {
                     .collect();
                 let actions = candidates
                     .into_iter()
-                    .map(|(card, adventure)| {
+                    .map(|(card, profile)| {
                         let object = self.state.object_of(card);
-                        if adventure {
+                        if !profile.is_front() {
                             Action::CastSpell {
                                 player: *player,
                                 object,
-                                adventure,
+                                profile,
                                 route: None,
                             }
                         } else {
@@ -2831,25 +2852,19 @@ impl Game {
                 Decision::CastDuringResolution { .. },
                 Action::CastSpell {
                     object: object_id,
-                    adventure: true,
+                    profile: SpellProfile::Adventure | SpellProfile::Omen,
                     ..
                 }
                 | Action::SelectCard {
                     object: object_id, ..
                 },
             ) => {
-                let adventure = matches!(
-                    action,
-                    Action::CastSpell {
-                        adventure: true,
-                        ..
-                    }
-                );
+                let profile = action.spell_profile();
                 if !self
                     .resolution_cast_candidates(&suspended.decision)
                     .iter()
                     .any(|(card, inset)| {
-                        self.state.object_of(*card) == *object_id && *inset == adventure
+                        self.state.object_of(*card) == *object_id && *inset == profile
                     })
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2866,7 +2881,7 @@ impl Game {
                 let (player, object_id) = (suspended.decision.player(), *object_id);
                 let cast = suspended
                     .decision
-                    .resolution_cast_choices(&self.state[object_id], adventure)
+                    .resolution_cast_choices(&self.state[object_id], profile)
                     .expect("cast decision");
                 if let Decision::CastDuringResolution {
                     offer: ResolutionCastOffer::Cascade { exiled, .. },
@@ -3237,7 +3252,10 @@ impl Game {
 
     /// Playable card and profile pairs. Graveyard choices bind each public
     /// object. Existing free-hand offers group interchangeable copies by definition.
-    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<(CardId, bool)> {
+    pub(crate) fn resolution_cast_candidates(
+        &self,
+        decision: &Decision,
+    ) -> Vec<(CardId, SpellProfile)> {
         let Decision::CastDuringResolution {
             player,
             offer,
@@ -3310,14 +3328,11 @@ impl Game {
         for card in cards {
             let object = self.state.object_of(card);
             let definition = &self.state[object];
-            for adventure in [false, true] {
-                if adventure
-                    && (definition.adventure.is_none()
-                        || !matches!(offer, ResolutionCastOffer::Graveyard { .. }))
-                {
+            for profile in definition.spell_profiles() {
+                if !profile.is_front() && !matches!(offer, ResolutionCastOffer::Graveyard { .. }) {
                     break;
                 }
-                let cast = CastChoices { adventure, ..free };
+                let cast = CastChoices { profile, ..free };
                 if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
                     let spell = cast.spell(definition);
                     if !spell.types.is_castable()
@@ -3327,15 +3342,15 @@ impl Game {
                     }
                 }
                 if self.castable_mana_value(*player, object, cast).is_some() {
-                    candidates.push((card, adventure));
+                    candidates.push((card, profile));
                 }
             }
         }
         if !matches!(offer, ResolutionCastOffer::Graveyard { .. }) {
-            candidates.dedup_by_key(|(card, adventure)| {
+            candidates.dedup_by_key(|(card, profile)| {
                 (
                     self.state[self.state.object_of(*card)].definition_id,
-                    *adventure,
+                    *profile,
                 )
             });
         }

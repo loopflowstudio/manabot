@@ -21,3 +21,5 @@ Use separate constructed and ordinary-play Smaug roots. The ordinary-play root s
 The ordinary-play replay witness uses two Ogre targets and Lightning Bolt in each deck so the target choice and paid spell are both observable with native trivial skipping enabled.
 
 Use Twinmaw's top-library versus hand offers as the first Omen witness. That comparison can expose a profile-filtering error before the shuffle implementation exists.
+
+Use Pyromancer’s Goggles for the copied Omen witness. The copy can kill the sole target, so the physical card’s graveyard destination isolates the copy’s shuffle.

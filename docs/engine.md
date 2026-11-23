@@ -1159,6 +1159,7 @@ crosses a zone change only as a field of it, with the rule that allows it:
 | CR 400.7i | an effect that lets a land be played finds the land on the battlefield | the entry batch's `EventResult.moved`, bound when the batch completes (an entry replacement may suspend it first) |
 | CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |
 | CR 715.3d | resolving an Adventure can give its caster permission to cast the permanent spell from exile | the selected Adventure replacement grants access to the exact exile successor. Bilbo’s competing exile replacement creates no grant. |
+| [Tarkir: Dragonstorm release notes](https://magic.wizards.com/en/news/feature/tarkir-dragonstorm-release-notes) | an Omen uses its own characteristics while casting and on the stack | Vizier permits Twinmaw Stormbrood from the library. Charring Bite resolves into its owner’s library and shuffles it. A counter or loss of its only target sends it to the graveyard. |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
 
 Entry replacements supply instructions for the new object, rather than facts

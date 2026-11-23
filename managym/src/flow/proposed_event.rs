@@ -27,8 +27,11 @@ pub(crate) struct ZoneEntry {
     pub resolving_adventure: Option<PlayerId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub adventure_player: Option<PlayerId>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub cast_adventure: bool,
+    #[serde(
+        rename = "cast_adventure",
+        skip_serializing_if = "crate::state::card::SpellProfile::is_front"
+    )]
+    pub profile: crate::state::card::SpellProfile,
     /// Battlefield: enters tapped.
     pub tapped: bool,
     /// Battlefield: enters with these counters.
@@ -65,7 +68,7 @@ impl ZoneEntry {
                 ..self.clone()
             },
             ZoneType::Stack => Self {
-                cast_adventure: self.cast_adventure,
+                profile: self.profile,
                 ..Default::default()
             },
             ZoneType::Graveyard => Self {

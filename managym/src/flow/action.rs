@@ -49,12 +49,12 @@ impl Game {
         match action {
             Action::CastSpell {
                 object,
-                adventure: true,
+                profile,
                 route: None,
                 ..
-            } => Some(format!(
+            } if !profile.is_front() => Some(format!(
                 "Cast {}",
-                self.state[*object].adventure.as_ref()?.name
+                self.state[*object].spell_characteristics(*profile)?.name
             )),
             Action::CastSpell {
                 object,
@@ -67,17 +67,7 @@ impl Game {
                 ..
             } => {
                 use crate::flow::cast_permission::PlayRoute;
-                let card = CastChoices {
-                    adventure: matches!(
-                        action,
-                        Action::CastSpell {
-                            adventure: true,
-                            ..
-                        }
-                    ),
-                    ..Default::default()
-                }
-                .spell(&self.state[*object]);
+                let card = self.state[*object].spell_characteristics(action.spell_profile())?;
                 let terms = match route {
                     PlayRoute::GraveyardType { source, kind, .. } => format!(
                         "using {} (object {}, {kind:?} for this turn)",
@@ -85,7 +75,7 @@ impl Game {
                     ),
                     PlayRoute::Grant(key) => {
                         let grant = self.grant_by_key(*object, *key)?;
-                        let price = self.grant_cost_for_spell(grant, &card).map(|cost| {
+                        let price = self.grant_cost_for_spell(grant, card).map(|cost| {
                             if cost.mana_value == 0 && cost.x == 0 {
                                 "{0}".into()
                             } else {
@@ -394,7 +384,7 @@ impl Game {
             .zone_cards(ZoneType::Hand, player)
             .chain(self.state.zone_cards(ZoneType::Graveyard, player))
             .chain(self.exile_granted_cards(player))
-            .chain(self.library_top_castable(player))
+            .chain(self.library_top_card(player))
     }
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
@@ -648,11 +638,11 @@ impl Game {
         let routes = self.play_routes(player, object);
         for &permission in routes.iter() {
             let route = (routes.len() > 1).then_some(permission);
-            for adventure in [false, true] {
-                if adventure && !self.allows_adventure(object, permission) {
-                    break;
+            for profile in self.state[object].spell_profiles() {
+                let cast = CastChoices::from_route(permission, profile);
+                if !self.permits_spell(player, object, cast) {
+                    continue;
                 }
-                let cast = CastChoices::from_route(permission, adventure);
                 let spell = cast.spell(&self.state[object]);
                 let types = &spell.types;
                 if types.is_land() {
@@ -674,7 +664,7 @@ impl Game {
                     if let Some(value) = self.castable_mana_value(player, object, cast) {
                         offer(
                             Action::CastSpell {
-                                adventure,
+                                profile,
                                 player,
                                 object,
                                 route,
@@ -1053,8 +1043,8 @@ impl Game {
                 player,
                 object,
                 route,
-                adventure,
-            } => self.cast_spell_action(*player, self.chosen_card(*object)?, *route, *adventure),
+                profile,
+            } => self.cast_spell_action(*player, self.chosen_card(*object)?, *route, *profile),
             Action::ActivateAbility {
                 player,
                 permanent,

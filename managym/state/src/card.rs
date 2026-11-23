@@ -944,6 +944,7 @@ pub enum StaticAbility {
     LookAtLibraryTop,
     /// "You may cast [predicate] spells from the top of your library."
     CastFromLibraryTop(CardPredicate),
+    SpendAnyManaToCast(CardPredicate),
     PlayGraveyardByPermanentType,
     /// "Equipped creature has \"...\"": an activated ability the creature
     /// this is attached to has, listed after its own in printed order.
@@ -1070,6 +1071,53 @@ pub enum AdditionalCost {
     Discard,
 }
 
+/// The printed spell chosen at announcement and retained through resolution.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SpellProfile {
+    #[default]
+    Front,
+    Adventure,
+    Omen,
+}
+
+impl SpellProfile {
+    pub fn is_front(&self) -> bool {
+        *self == Self::Front
+    }
+}
+
+impl serde::Serialize for SpellProfile {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Existing pending casts and stack witnesses record the Adventure flag.
+        match self {
+            Self::Front | Self::Adventure => serializer.serialize_bool(*self == Self::Adventure),
+            Self::Omen => serializer.serialize_unit_variant("SpellProfile", 2, "Omen"),
+        }
+    }
+}
+
+/// The second spell printed on a physical card.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InsetSpell {
+    Adventure(Arc<PrintedCharacteristics>),
+    Omen(Arc<PrintedCharacteristics>),
+}
+
+impl InsetSpell {
+    pub fn profile(&self) -> SpellProfile {
+        match self {
+            Self::Adventure(_) => SpellProfile::Adventure,
+            Self::Omen(_) => SpellProfile::Omen,
+        }
+    }
+
+    pub fn characteristics(&self) -> &Arc<PrintedCharacteristics> {
+        match self {
+            Self::Adventure(program) | Self::Omen(program) => program,
+        }
+    }
+}
+
 /// An object as printed (CR 108.4, 111.3): what cards and tokens share,
 /// before any continuous effect. It is the input to the layer system;
 /// `Game::characteristics(id)` is the layered view computed from it. Identity
@@ -1078,8 +1126,7 @@ pub enum AdditionalCost {
 /// objects, so a copy effect copies these values and nothing else.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrintedCharacteristics {
-    /// Alternative characteristics while casting this card as its Adventure (CR 715).
-    pub adventure: Option<Arc<PrintedCharacteristics>>,
+    pub inset: Option<InsetSpell>,
     pub name: String,
     pub mana_cost: Option<ManaCost>,
     pub types: CardTypes,
@@ -1198,6 +1245,8 @@ impl ObjectDefinition {
 struct DefinitionWire<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     adventure: Option<&'a PrintedCharacteristics>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    omen: Option<&'a PrintedCharacteristics>,
     name: &'a String,
     mana_cost: &'a Option<ManaCost>,
     types: &'a CardTypes,
@@ -1226,9 +1275,25 @@ struct DefinitionWire<'a> {
 }
 
 impl PrintedCharacteristics {
+    pub fn spell_profiles(&self) -> impl Iterator<Item = SpellProfile> {
+        std::iter::once(SpellProfile::Front).chain(self.inset.as_ref().map(InsetSpell::profile))
+    }
+
+    pub fn spell_characteristics(&self, profile: SpellProfile) -> Option<&Self> {
+        match profile {
+            SpellProfile::Front => Some(self),
+            _ => self
+                .inset
+                .as_ref()
+                .filter(|inset| inset.profile() == profile)
+                .map(|inset| inset.characteristics().as_ref()),
+        }
+    }
+
     fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
         DefinitionWire {
-            adventure: self.adventure.as_deref(),
+            adventure: self.spell_characteristics(SpellProfile::Adventure),
+            omen: self.spell_characteristics(SpellProfile::Omen),
             name: &self.name,
             mana_cost: &self.mana_cost,
             types: &self.types,

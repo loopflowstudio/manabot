@@ -771,7 +771,7 @@ fn air_nomad_legacy() -> CardDefinition {
             }],
             statics: vec![StaticAbility::PtBuff(StaticPtBuff {
                 scope: StaticScope::YouControl(CardPredicate {
-                    flying: true,
+                    flying: Some(true),
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
@@ -6694,7 +6694,7 @@ fn momo_friendly_flier() -> CardDefinition {
             statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
                 first_on_own_turn: true,
                 predicate: CardPredicate {
-                    flying: true,
+                    flying: Some(true),
                     not_subtypes: vec!["Lemur".into()],
                     card_type: Some(CardType::Creature),
                     ..Default::default()
@@ -6706,7 +6706,7 @@ fn momo_friendly_flier() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::another_you_control(CardPredicate {
-                        flying: true,
+                        flying: Some(true),
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     }),
@@ -9037,7 +9037,7 @@ fn swampsnare_trap() -> CardDefinition {
             statics: vec![
                 StaticAbility::CostsLessIfTargets(TargetCostReduction {
                     predicate: CardPredicate {
-                        flying: true,
+                        flying: Some(true),
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
@@ -9139,7 +9139,7 @@ fn teo_spirited_glider() -> CardDefinition {
                 condition: TriggerCondition::attacks(
                     TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
-                        flying: true,
+                        flying: Some(true),
                         ..Default::default()
                     }),
                     Per::Batch,

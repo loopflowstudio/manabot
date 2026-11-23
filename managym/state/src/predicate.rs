@@ -28,8 +28,8 @@ pub struct CardPredicate {
     /// (currently ControlsAtLeast); card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub namesake: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub flying: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flying: Option<bool>,
     /// "with no counters on it". Only battlefield permanents carry counters,
     /// so card-only matching ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -167,7 +167,9 @@ impl CardPredicate {
             || self.attacking
             || self.tapped
             || self.from_battlefield_this_turn
-            || (self.flying && !object.keywords.has(Keyword::Flying))
+            || self
+                .flying
+                .is_some_and(|flying| flying != object.keywords.has(Keyword::Flying))
         {
             return false;
         }

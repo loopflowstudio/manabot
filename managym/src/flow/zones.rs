@@ -510,7 +510,7 @@ impl Game {
             object,
             ZoneType::Stack,
             ZoneEntry {
-                cast_adventure: cast.adventure,
+                profile: cast.profile,
                 ..Default::default()
             },
         );
@@ -524,7 +524,7 @@ impl Game {
                 controller,
                 cast_from,
                 flashback: cast.flashback,
-                adventure: cast.adventure,
+                profile: cast.profile,
                 exile_instead_of_graveyard: cast.exile_instead_of_graveyard,
                 source_definition_id,
                 targets,
@@ -688,9 +688,7 @@ impl Game {
         let object_id = self
             .state
             .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
-        if entry.cast_adventure {
-            self.state[object_id].show_adventure();
-        }
+        self.state[object_id].show_spell(entry.profile);
         if let Some(player) = entry.adventure_player {
             if self.state[object_id].is_card() {
                 self.state

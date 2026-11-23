@@ -2,6 +2,7 @@ use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
+use crate::card::SpellProfile;
 use crate::payment::PaymentReceipt;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -10,8 +11,8 @@ pub struct SpellOnStack {
     pub exile_instead_of_graveyard: bool,
     pub cast_from: super::zone::ZoneType,
     pub flashback: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub adventure: bool,
+    #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
     pub id: PublicId,
     #[serde(rename = "card")]
     pub object: ObjectId,

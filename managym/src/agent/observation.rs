@@ -1,4 +1,5 @@
 use crate::cards::names::NameOption;
+use crate::state::card::SpellProfile;
 use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
@@ -915,6 +916,8 @@ pub struct ActionOption {
     /// The offer selects the printed Adventure on its physical card.
     #[serde(default)]
     pub adventure: bool,
+    #[serde(default)]
+    pub omen: bool,
     /// Base mana value of the selected permission, before reductions or additional costs.
     #[serde(default)]
     pub route_mana_value: Option<u8>,
@@ -1051,11 +1054,11 @@ impl Observation {
                                 },
                                 _ => (None, None, None),
                             };
-                            let adventure = matches!(action, Action::CastSpell { adventure: true, .. });
+                            let profile = action.spell_profile();
                             let (route_mana_value, quota_type) = match action {
                                 Action::CastSpell { object, route: Some(route), .. }
                                 | Action::PlayLand { object, route: Some(route), .. } => {
-                                    let cast = crate::flow::game::CastChoices::from_route(*route, adventure);
+                                    let cast = crate::flow::game::CastChoices::from_route(*route, profile);
                                     let cost = game.casting_mana_cost(*object, cast);
                                     let quota = match route {
                                         crate::flow::cast_permission::PlayRoute::GraveyardType { kind, .. } => Some(*kind as u8 + 1),
@@ -1066,7 +1069,8 @@ impl Observation {
                                 _ => (None, None),
                             };
                             ActionOption {
-                                adventure,
+                                adventure: profile == SpellProfile::Adventure,
+                                omen: profile == SpellProfile::Omen,
                                 route_mana_value,
                                 quota_type,
                                 description: game.action_description(action),
@@ -2584,6 +2588,7 @@ mod characteristics_tests {
             pays_directly: false,
             announces_x: false,
             adventure: false,
+            omen: false,
             route_mana_value: None,
             quota_type: None,
         };

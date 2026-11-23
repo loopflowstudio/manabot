@@ -2567,6 +2567,8 @@ pub struct PyAction {
     #[pyo3(get)]
     pub adventure: bool,
     #[pyo3(get)]
+    pub omen: bool,
+    #[pyo3(get)]
     pub route_mana_value: Option<u8>,
     #[pyo3(get)]
     pub quota_type: Option<u8>,
@@ -2686,6 +2688,7 @@ impl From<ActionOption> for PyAction {
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
             adventure: value.adventure,
+            omen: value.omen,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
         }
@@ -2709,6 +2712,7 @@ impl From<PyAction> for ActionOption {
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
             adventure: value.adventure,
+            omen: value.omen,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
         }

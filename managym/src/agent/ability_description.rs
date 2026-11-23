@@ -480,8 +480,8 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
                 .join(" or "),
         );
     }
-    if *flying {
-        terms.push("flying".into());
+    if let Some(flying) = flying {
+        terms.push(if *flying { "flying" } else { "without flying" }.into());
     }
     terms.extend(supertype.iter().cloned());
     if *nonbasic {

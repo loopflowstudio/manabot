@@ -715,9 +715,14 @@ impl Object {
         self.front = Some(front);
     }
 
-    /// Project an adventurer's inset spell while preserving its physical definition.
-    pub fn show_adventure(&mut self) {
-        let spell = self.adventure.clone().expect("card has an Adventure");
+    /// Show the selected spell while retaining the physical card's definition.
+    pub fn show_spell(&mut self, profile: super::card::SpellProfile) {
+        if profile.is_front() {
+            return;
+        }
+        let inset = self.inset.as_ref().expect("offered inset spell");
+        debug_assert_eq!(inset.profile(), profile);
+        let spell = Arc::clone(inset.characteristics());
         self.printed = Some((self.definition_id, Arc::clone(&self.definition)));
         self.definition = spell;
     }
