@@ -1,8 +1,6 @@
 pub mod agent;
 pub mod allocator;
 #[cfg(feature = "benchmark")]
-pub use allocator as benchmark_allocations;
-#[cfg(feature = "benchmark")]
 pub mod benchmark_footprint;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_layers;

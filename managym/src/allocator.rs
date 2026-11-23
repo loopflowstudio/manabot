@@ -24,33 +24,74 @@ pub const NAME: &str = if cfg!(feature = "mimalloc") {
 /// Whether the library installed the counting wrapper, even outside a measurement.
 pub const COUNTING: bool = cfg!(feature = "benchmark");
 
-/// Records process-wide allocation requests on the selected backing allocator.
-pub struct CountingAllocator;
-static RECORDING: AtomicBool = AtomicBool::new(false);
-static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
-static BYTES: AtomicU64 = AtomicU64::new(0);
+/// Counts allocation requests passed to the selected backing allocator.
+///
+/// Each instance owns its counters, so a binary that installs its own counting
+/// wrapper reads the instance it installed; nothing else can report a zero
+/// count on its behalf.
+pub struct CountingAllocator {
+    recording: AtomicBool,
+    allocations: AtomicU64,
+    bytes: AtomicU64,
+}
 
-fn record(size: usize) {
-    if RECORDING.load(Ordering::Relaxed) {
-        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        BYTES.fetch_add(size as u64, Ordering::Relaxed);
+impl CountingAllocator {
+    pub const fn new() -> Self {
+        Self {
+            recording: AtomicBool::new(false),
+            allocations: AtomicU64::new(0),
+            bytes: AtomicU64::new(0),
+        }
+    }
+
+    /// Clears the counters and starts recording requests from every thread.
+    pub fn start(&self) {
+        self.allocations.store(0, Ordering::Relaxed);
+        self.bytes.store(0, Ordering::Relaxed);
+        self.recording.store(true, Ordering::Relaxed);
+    }
+
+    /// Stops recording and returns `(allocations, requested bytes)`.
+    pub fn stop(&self) -> (u64, u64) {
+        self.recording.store(false, Ordering::Relaxed);
+        self.snapshot()
+    }
+
+    pub fn snapshot(&self) -> (u64, u64) {
+        (
+            self.allocations.load(Ordering::Relaxed),
+            self.bytes.load(Ordering::Relaxed),
+        )
+    }
+
+    fn record(&self, size: usize) {
+        if self.recording.load(Ordering::Relaxed) {
+            self.allocations.fetch_add(1, Ordering::Relaxed);
+            self.bytes.fetch_add(size as u64, Ordering::Relaxed);
+        }
+    }
+}
+
+impl Default for CountingAllocator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        record(layout.size());
+        self.record(layout.size());
         unsafe { Backing.alloc(layout) }
     }
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        record(layout.size());
+        self.record(layout.size());
         unsafe { Backing.alloc_zeroed(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         unsafe { Backing.dealloc(ptr, layout) }
     }
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        record(size);
+        self.record(size);
         unsafe { Backing.realloc(ptr, layout, size) }
     }
 }
@@ -61,22 +102,21 @@ static ALLOCATOR: Backing = Backing;
 
 #[cfg(feature = "benchmark")]
 #[global_allocator]
-static ALLOCATOR: CountingAllocator = CountingAllocator;
+static ALLOCATOR: CountingAllocator = CountingAllocator::new();
 
+// The process-wide counters exist only where the library installed them.
+
+#[cfg(feature = "benchmark")]
 pub fn start() {
-    ALLOCATIONS.store(0, Ordering::Relaxed);
-    BYTES.store(0, Ordering::Relaxed);
-    RECORDING.store(true, Ordering::Relaxed);
+    ALLOCATOR.start();
 }
 
+#[cfg(feature = "benchmark")]
 pub fn stop() -> (u64, u64) {
-    RECORDING.store(false, Ordering::Relaxed);
-    snapshot()
+    ALLOCATOR.stop()
 }
 
+#[cfg(feature = "benchmark")]
 pub fn snapshot() -> (u64, u64) {
-    (
-        ALLOCATIONS.load(Ordering::Relaxed),
-        BYTES.load(Ordering::Relaxed),
-    )
+    ALLOCATOR.snapshot()
 }

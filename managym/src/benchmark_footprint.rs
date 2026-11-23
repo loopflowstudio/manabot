@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, hint::black_box, mem::size_of};
 use serde::Serialize;
 
 use crate::{
-    benchmark_allocations,
+    allocator,
     flow::{
         game::{GameState, TrackedState},
         statics::DerivedCache,
@@ -59,9 +59,9 @@ fn measure_clone<'a, T: Clone>(
     field: &'static str,
     value: &T,
 ) -> CloneTraffic<'a> {
-    benchmark_allocations::start();
+    allocator::start();
     let copy = black_box(value.clone());
-    let (calls, bytes) = benchmark_allocations::stop();
+    let (calls, bytes) = allocator::stop();
     drop(copy);
     CloneTraffic {
         fixture,

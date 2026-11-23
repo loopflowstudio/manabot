@@ -6,7 +6,7 @@ mod curated;
 #[path = "curated/search.rs"]
 mod search;
 
-use managym::{agent::env::Env, benchmark_allocations};
+use managym::{agent::env::Env, allocator};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::{hint::black_box, time::Instant};
@@ -45,15 +45,15 @@ fn main() {
             // One representative ordinary decision boundary per game. This
             // isolates actual clone/projection allocation traffic from stepping.
             if count == 40 && !env.is_game_over() {
-                benchmark_allocations::start();
+                allocator::start();
                 let start = Instant::now();
                 let fork = black_box(env.fork().unwrap());
                 fork_ns += start.elapsed().as_nanos();
-                let (allocations, bytes) = benchmark_allocations::stop();
+                let (allocations, bytes) = allocator::stop();
                 fork_allocations.0 += allocations;
                 fork_allocations.1 += bytes;
                 drop(fork);
-                benchmark_allocations::start();
+                allocator::start();
                 let start = Instant::now();
                 let observation = black_box(
                     env.observation_for_player(env.current_agent_index().unwrap())
@@ -66,7 +66,7 @@ fn main() {
                         .any(|frame| matches!(frame.kind, 5 | 6)),
                 );
                 projection_ns += start.elapsed().as_nanos();
-                let (allocations, bytes) = benchmark_allocations::stop();
+                let (allocations, bytes) = allocator::stop();
                 projection_allocations.0 += allocations;
                 projection_allocations.1 += bytes;
                 forks += 1;

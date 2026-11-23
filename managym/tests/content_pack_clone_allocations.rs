@@ -1,12 +1,45 @@
 use std::hint::black_box;
 
-use managym::{allocator, match_fixtures::build_fixture, Game};
+use managym::{match_fixtures::build_fixture, Game};
 use serde::Serialize;
 
-// In the default build the library leaves allocator selection to the binary.
+// In the default build the library leaves allocator selection to the binary,
+// so this test installs and reads its own counting wrapper.
 #[cfg(not(any(feature = "benchmark", feature = "mimalloc")))]
 #[global_allocator]
-static ALLOCATOR: allocator::CountingAllocator = allocator::CountingAllocator;
+static ALLOCATOR: managym::allocator::CountingAllocator =
+    managym::allocator::CountingAllocator::new();
+
+#[cfg(not(any(feature = "benchmark", feature = "mimalloc")))]
+fn start_counting() {
+    ALLOCATOR.start();
+}
+
+#[cfg(not(any(feature = "benchmark", feature = "mimalloc")))]
+fn stop_counting() -> (u64, u64) {
+    ALLOCATOR.stop()
+}
+
+#[cfg(feature = "benchmark")]
+fn start_counting() {
+    managym::allocator::start();
+}
+
+#[cfg(feature = "benchmark")]
+fn stop_counting() -> (u64, u64) {
+    managym::allocator::stop()
+}
+
+// The library installed mimalloc without a counter; refuse rather than report zero.
+#[cfg(all(feature = "mimalloc", not(feature = "benchmark")))]
+fn start_counting() {
+    panic!("run with --features benchmark,mimalloc to count allocations under mimalloc");
+}
+
+#[cfg(all(feature = "mimalloc", not(feature = "benchmark")))]
+fn stop_counting() -> (u64, u64) {
+    unreachable!("start_counting refuses this build")
+}
 
 const FIXTURE_ID: &str = "interactive-heavy-80-w4-v1";
 const WARMUP_CLONE_COUNT: usize = 64;
@@ -54,9 +87,9 @@ fn clone_repeatedly<T: Clone>(source: &T, count: usize) {
 }
 
 fn measure_clones<T: Clone>(source: &T) -> AllocationCounts {
-    allocator::start();
+    start_counting();
     clone_repeatedly(source, MEASURED_CLONE_COUNT);
-    let (allocations, allocated_bytes) = allocator::stop();
+    let (allocations, allocated_bytes) = stop_counting();
     AllocationCounts {
         allocations,
         allocated_bytes,
