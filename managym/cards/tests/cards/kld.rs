@@ -281,3 +281,60 @@ fn cultivators_caravan_mana_floated_first_still_names_the_caravan() {
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     }
 }
+
+#[test]
+fn authority_checks_entering_control() {
+    use crate::support::{inspect::permanent_of, play::resolve_top};
+    use managym::flow::event::GameEvent;
+    use managym::state::{game_object::PlayerId, stack_object::StackObject};
+
+    for (authority, entrant, should_trigger) in [
+        (0, "Gray Ogre", true),
+        (1, "Gray Ogre", false),
+        (0, "Sol Ring", false),
+    ] {
+        let mut s = five_color_setup(&["Authority of the Consuls", entrant]);
+        s.force_permanent_on_battlefield(authority, "Authority of the Consuls");
+        let spell = cast_owned(&mut s, entrant);
+        spend_colorless(&mut s);
+        let Some(StackObject::Spell(top)) = s.game_mut().state.stack_objects.last_mut() else {
+            panic!("expected a permanent spell");
+        };
+        // The other player takes control before the owner's spell resolves.
+        top.controller = PlayerId(1);
+        resolve_top(&mut s);
+        let id = permanent_of(&s, spell).expect("spell entered the battlefield");
+        assert_eq!(
+            s.game().state.permanents[id].as_ref().unwrap().controller,
+            PlayerId(1)
+        );
+        assert_eq!(tapped(&s, id), should_trigger);
+        assert_eq!([s.life(0), s.life(1)], [20, 20]);
+        if should_trigger {
+            assert!(matches!(
+                s.game().state.stack_objects.as_slice(),
+                [StackObject::TriggeredAbility(_)]
+            ));
+            s.drain_events();
+            let mut fork = s.clone();
+            resolve_top(&mut s);
+            resolve_top(&mut fork);
+            for branch in [&s, &fork] {
+                assert_eq!([branch.life(0), branch.life(1)], [21, 20]);
+                assert!(branch.game().state.stack_objects.is_empty());
+            }
+            let events = s.drain_events();
+            assert_eq!(events, fork.drain_events());
+            let gains: Vec<_> = events
+                .iter()
+                .filter_map(|event| match event {
+                    GameEvent::LifeChanged { player, old, new } => Some((*player, *old, *new)),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(gains, [(PlayerId(0), 20, 21)]);
+        } else {
+            assert!(s.game().state.stack_objects.is_empty());
+        }
+    }
+}

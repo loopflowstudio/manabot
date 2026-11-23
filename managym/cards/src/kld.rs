@@ -1,12 +1,12 @@
 //! Kaladesh.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement,
-        TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        PrintedCharacteristics, StaticAbility,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -15,10 +15,31 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        authority_of_the_consuls(),
         cultivators_caravan(),
         dramatic_reversal(),
         noxious_gearhulk(),
     ]
+}
+
+fn authority_of_the_consuls() -> CardDefinition {
+    CardDefinition {
+        key: "kld.authority_of_the_consuls",
+        scryfall_id: "324b2f55-1e09-490e-8f7e-bfde85a91ac4",
+        printed: PrintedCharacteristics {
+            name: "Authority of the Consuls".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            statics: vec![StaticAbility::OpponentsEnterTapped(CardPredicate::creature())],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::matching(Actor::Opponent, CardPredicate::creature(), false),
+                vec![Effect::gain_life(1)],
+            )],
+            text_box: "Creatures your opponents control enter tapped.\nWhenever a creature an opponent controls enters, you gain 1 life.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn cultivators_caravan() -> CardDefinition {

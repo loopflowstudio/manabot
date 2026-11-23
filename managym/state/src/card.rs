@@ -971,6 +971,8 @@ pub enum StaticAbility {
     /// "[predicate] permanents enter tapped" (Zhao, the Moon Slayer's
     /// nonbasic lands), for every player (CR 614.1c).
     EntersTapped(CardPredicate),
+    /// Matching permanents entering under an opponent’s control enter tapped.
+    OpponentsEnterTapped(CardPredicate),
     /// "As long as this has [threshold], [predicate] lands are [subtype]"
     /// (CR 305.7): they lose all other land types and abilities and have
     /// that basic land type's mana ability.

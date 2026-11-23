@@ -1231,9 +1231,17 @@ impl Game {
                         continue;
                     };
                     for (definition_index, ability) in view.static_abilities.iter().enumerate() {
-                        if matches!(ability, StaticAbility::EntersTapped(predicate)
-                            if self.entry_matches_predicate(*object_id, predicate))
-                        {
+                        let predicate = match ability {
+                            StaticAbility::EntersTapped(predicate) => predicate,
+                            StaticAbility::OpponentsEnterTapped(predicate)
+                                if self.state.permanents[id].as_ref().unwrap().controller
+                                    != entering_controller =>
+                            {
+                                predicate
+                            }
+                            _ => continue,
+                        };
+                        if self.entry_matches_predicate(*object_id, predicate) {
                             entries.push(ReplacementCandidate {
                                 identity: ReplacementId {
                                     source,

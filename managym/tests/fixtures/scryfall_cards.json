@@ -1,4 +1,16 @@
 {
+  "Authority of the Consuls": {
+    "name": "Authority of the Consuls",
+    "mana_cost": "{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures your opponents control enter tapped.\nWhenever a creature an opponent controls enters, you gain 1 life.",
+    "colors": [
+      "W"
+    ]
+  },
   "Gratuitous Violence": {
     "name": "Gratuitous Violence",
     "mana_cost": "{2}{R}{R}{R}",

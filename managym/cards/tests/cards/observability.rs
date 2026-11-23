@@ -1542,6 +1542,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "katara_the_fearless_makes_ally_triggers_trigger_an_additional_time",
         ),
+        StaticAbility::OpponentsEnterTapped(_) => witnessed(
+            "StaticAbility::OpponentsEnterTapped",
+            Seen::Via("the entering permanent's tapped column"),
+            "Authority of the Consuls",
+            "kld",
+            "authority_checks_entering_control",
+        ),
         StaticAbility::EntersTapped(_) => witnessed(
             "StaticAbility::EntersTapped",
             Seen::Via("the entering permanent's tapped column"),
@@ -1770,6 +1777,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         }),
         StaticAbility::AttacksDespiteDefender(Condition::YourTurn),
         StaticAbility::TriggersAdditionalTime(CardPredicate::subtype("Ally")),
+        StaticAbility::OpponentsEnterTapped(CardPredicate::creature()),
         StaticAbility::EntersTapped(CardPredicate::creature()),
         StaticAbility::SetsLandType(StaticLandType {
             predicate: CardPredicate::creature(),

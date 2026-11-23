@@ -23,3 +23,5 @@ Model Fog Bank’s single prevention ability with one either-endpoint identity c
 Twinflame Tyrant uses controller scopes and a damage transform. Add the source predicate and combat endpoint restrictions with the cards that exercise them. Wall of Stone survives a doubled Lightning Bolt, so the same test can inspect marked damage in every creature case.
 
 The controller fixture changes the Bolt’s controller after targets are chosen. A single point of prevention makes both replacement orders distinguishable on the fork.
+
+Authority uses an opponent-scoped entry ability so Zhao keeps its existing serialized predicate. The fixture changes the resolving spell's controller and places Authority on either seat to cross ownership and control in both creature cases.
