@@ -307,9 +307,9 @@ fn catalog_naming_cost_attribution() {
         let micros = started.elapsed().as_secs_f64() * 1e6;
         std::hint::black_box(&result);
         drop(result);
-        crate::benchmark_allocations::start();
+        crate::allocator::start();
         let result = operation();
-        let (allocations, bytes) = crate::benchmark_allocations::stop();
+        let (allocations, bytes) = crate::allocator::stop();
         std::hint::black_box(result);
         println!(
             "{}",

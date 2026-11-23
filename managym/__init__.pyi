@@ -23,6 +23,9 @@ from managym.disclosure import DecklistDisclosure, DecklistSampling
 from . import format as format
 from .statistics import GameStatistics
 
+NATIVE_ALLOCATOR: Literal["system", "mimalloc"]
+ALLOCATION_COUNTING: bool
+
 ManaPayment = Literal["auto", "manual"]
 ManaFloats = Literal["off", "usable", "all"]
 

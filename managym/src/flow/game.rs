@@ -703,6 +703,24 @@ pub struct Game {
     pub(crate) skipped_priority_passes: usize,
 }
 
+// Inline footprint on 64-bit hosts. Remeasure heap traffic and live banks
+// with bench_footprint before raising a ceiling. Object and Permanent repeat
+// for each occupied row. TrackedState allows 32 bytes for its revisions
+// in addition to the GameState ceiling.
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    use crate::state::game_object::Object;
+    use std::mem::size_of;
+
+    assert!(size_of::<Object>() <= 96);
+    assert!(size_of::<Permanent>() <= 168);
+    assert!(size_of::<GameState>() <= 4096);
+    assert!(size_of::<TrackedState>() <= 4128);
+    assert!(size_of::<Game>() <= 5248);
+    let cache_limit = if cfg!(debug_assertions) { 104 } else { 96 };
+    assert!(size_of::<DerivedCache>() <= cache_limit);
+};
+
 impl Clone for Game {
     fn clone(&self) -> Self {
         Self {

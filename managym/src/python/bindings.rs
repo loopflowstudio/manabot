@@ -5372,6 +5372,8 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("NATIVE_ALLOCATOR", crate::allocator::NAME)?;
+    m.add("ALLOCATION_COUNTING", crate::allocator::COUNTING)?;
     m.add(
         "MAX_DECISION_CODE",
         crate::agent::continuation::MAX_DECISION_CODE,
