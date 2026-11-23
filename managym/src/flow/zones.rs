@@ -631,7 +631,9 @@ impl Game {
                 && !(zone == ZoneType::Exile && self.is_foretold(prior_object))
         });
         let known_top = if old_zone == Some(ZoneType::Library) {
-            self.state.library_order_pins_mut(owner).remove(&object_id);
+            self.state
+                .library_order_pins_mut(owner)
+                .remove(&prior_object);
             if entry.library_top_departure {
                 self.state.known_library_mut(owner).remove_top()
             } else {

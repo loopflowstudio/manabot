@@ -55,7 +55,7 @@ pub struct GameState {
     pub zones: ZoneManager,
     /// Physical appearances whose library rank was observed or chosen since the
     /// last rules shuffle. Private branch sampling reads these, rules play does not.
-    pub(crate) library_order_pins: [BTreeSet<ObjectId>; 2],
+    pub(crate) library_order_pins: Box<[BTreeSet<ObjectId>; 2]>,
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
