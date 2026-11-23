@@ -287,6 +287,9 @@ impl ReplacementCandidate {
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
+            ReplacementEffect::PreventCombatDamageToOrFromSelf => {
+                "Prevent all combat damage".into()
+            }
             ReplacementEffect::ModifyDamage {
                 transform: DamageTransform::Prevent(amount),
                 ..
@@ -1092,16 +1095,16 @@ impl Game {
             }
 
             ProposedEvent::Damage {
-                source,
+                source: damage_source,
                 target,
                 amount,
-                ..
+                combat,
             } if *amount > 0 => {
                 let Some(affected_controller) = self.damage_target_controller(*target) else {
                     return Vec::new();
                 };
                 let source_controller =
-                    source.and_then(|source| self.damage_source_controller(source));
+                    damage_source.and_then(|source| self.damage_source_controller(source));
                 let mut out = Vec::new();
                 // Preserve permanent-slot order while sharing one immutable
                 // board read across the replacement scan.
@@ -1130,6 +1133,11 @@ impl Game {
                         .enumerate()
                     {
                         let applies = match effect {
+                            ReplacementEffect::PreventCombatDamageToOrFromSelf => {
+                                *combat
+                                    && (*damage_source == Some(source)
+                                        || *target == ProposedDamageTarget::Object(source))
+                            }
                             ReplacementEffect::ModifyDamage {
                                 source_by,
                                 recipient_by,
@@ -1354,6 +1362,10 @@ impl Game {
     fn apply_replacement(&self, pending: &mut PendingEvent, candidate: &ReplacementCandidate) {
         pending.applied.push(candidate.identity);
         match (&mut pending.event, &candidate.effect) {
+            (
+                ProposedEvent::Damage { amount, .. },
+                ReplacementEffect::PreventCombatDamageToOrFromSelf,
+            ) => *amount = 0,
             (
                 ProposedEvent::CreateTokens { count, .. },
                 ReplacementEffect::MultiplyTokens { multiplier },
@@ -1746,6 +1758,113 @@ mod tests {
             Some(ZoneType::Graveyard)
         );
         assert!(game.object_lki(current).is_some());
+    }
+
+    #[test]
+    fn fog_bank_prevents_only_combat_damage_at_its_own_endpoints() {
+        use super::{BatchProgress, ProposedDamageTarget};
+        let deck = BTreeMap::from([("Fog Bank".into(), 20), ("Twinflame Tyrant".into(), 20)]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            614901,
+            false,
+        );
+        let fog = game
+            .scenario_force_battlefield(PlayerId(1), "Fog Bank", true)
+            .unwrap();
+        game.state.permanents[fog]
+            .as_mut()
+            .unwrap()
+            .change_counters(CounterKind::PlusOnePlusOne, 1);
+        let power = game.characteristics(fog).pt().0;
+        assert_eq!(power, 1);
+        let cat = game
+            .create_token("token.cat_1_1_w_lifelink", PlayerId(0), false)
+            .unwrap();
+        let other = game
+            .create_token("token.cat_1_1_w_lifelink", PlayerId(1), false)
+            .unwrap();
+        let damage = |source, target, combat, amount| ProposedEvent::Damage {
+            source: Some(source),
+            target: ProposedDamageTarget::Object(target),
+            combat,
+            amount,
+        };
+        for (source, target, combat, amount, expected) in [
+            (fog, cat, true, power, 0),
+            (cat, fog, true, 1, 0),
+            (fog, cat, false, power, 1),
+            (cat, fog, false, 1, 1),
+            (cat, other, true, 1, 1),
+        ] {
+            let mut branch = game.clone();
+            branch.apply_immediate_event(damage(
+                game.permanent_object(source).unwrap(),
+                game.permanent_object(target).unwrap(),
+                combat,
+                amount,
+            ));
+            assert_eq!(
+                branch.state.permanents[target].as_ref().unwrap().damage,
+                expected
+            );
+            assert_eq!(
+                branch.state.players[0].life,
+                20 + if source == cat { expected } else { 0 }
+            );
+        }
+
+        let tyrant = game
+            .scenario_force_battlefield(PlayerId(0), "Twinflame Tyrant", true)
+            .unwrap();
+        let fog_object = game.permanent_object(fog).unwrap();
+        let tyrant_object = game.permanent_object(tyrant).unwrap();
+        let proposal = damage(game.permanent_object(cat).unwrap(), fog_object, true, 1);
+        let mut batch = game.event_batch(vec![proposal.clone()]);
+        let BatchProgress::Choice { player, candidates } = game.advance_event_batch(&mut batch)
+        else {
+            panic!("competing prevention and doubling")
+        };
+        assert_eq!(player, PlayerId(1));
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(batch.events[0].event, proposal);
+        assert!(batch.events[0].applied.is_empty());
+        let fog_effect = candidates
+            .iter()
+            .find(|c| c.source() == fog_object)
+            .unwrap();
+        let double = candidates
+            .iter()
+            .find(|c| c.source() == tyrant_object)
+            .unwrap();
+        for (choice, intermediate, identities) in [
+            (fog_effect, 0, vec![fog_effect.identity]),
+            (double, 2, vec![double.identity, fog_effect.identity]),
+        ] {
+            let mut branch = game.clone();
+            let mut pending = batch.clone();
+            branch.choose_replacement(&mut pending, choice);
+            assert!(
+                matches!(pending.events[0].event, ProposedEvent::Damage { amount, .. } if amount == intermediate)
+            );
+            assert_eq!(pending.events[0].applied, [choice.identity]);
+            let BatchProgress::Complete { followups, .. } =
+                branch.advance_event_batch(&mut pending)
+            else {
+                panic!("replacement order must complete")
+            };
+            assert!(followups.is_empty());
+            assert_eq!(pending.events[0].applied, identities);
+            assert!(matches!(
+                pending.events[0].event,
+                ProposedEvent::Damage { amount: 0, .. }
+            ));
+            assert_eq!(branch.state.permanents[fog].as_ref().unwrap().damage, 0);
+            assert_eq!(branch.state.players[0].life, 20);
+        }
     }
 
     #[test]

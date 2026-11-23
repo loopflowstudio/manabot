@@ -487,6 +487,7 @@ pub enum DamageTransform {
 /// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
+    PreventCombatDamageToOrFromSelf,
     ModifyDamage {
         source_by: super::ability::Actor,
         recipient_by: super::ability::Actor,
@@ -496,7 +497,9 @@ pub enum ReplacementEffect {
     EntersTapped,
     /// This object enters tapped unless its entering controller already
     /// controls a permanent matching `predicate` (CR 614.1c, 614.12).
-    EntersTappedUnlessControls { predicate: CardPredicate },
+    EntersTappedUnlessControls {
+        predicate: CardPredicate,
+    },
     /// This object enters with +1/+1 counters already present (CR 614.1c),
     /// if `condition` holds for its entering controller as it enters
     /// ("enters with a +1/+1 counter on it if you attacked this turn").
@@ -507,13 +510,20 @@ pub enum ReplacementEffect {
     },
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
-    EntersWithXCounters { kind: CounterKind },
+    EntersWithXCounters {
+        kind: CounterKind,
+    },
     /// This object enters with `count` counters of `kind` (CR 614.1c).
-    EntersWithCounters { kind: CounterKind, count: i32 },
+    EntersWithCounters {
+        kind: CounterKind,
+        count: i32,
+    },
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the
     /// number of `kind` counters on this permanent (CR 614.1a).
-    OpponentDamagePlusCounters { kind: CounterKind },
+    OpponentDamagePlusCounters {
+        kind: CounterKind,
+    },
     /// While this permanent is on the battlefield, unspent mana its
     /// controller would lose as a step or phase ends becomes red instead
     /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
@@ -532,7 +542,9 @@ pub enum ReplacementEffect {
     },
     /// Replace a logical creation under your control, before any token enters
     /// (CR 616.1g). Entry and copy terms belong to every resulting token.
-    MultiplyTokens { multiplier: i32 },
+    MultiplyTokens {
+        multiplier: i32,
+    },
     /// "You may have this creature enter as a copy of [a creature in
     /// `scope` matching `predicate`]" (CR 707.5, 614.1c): its entering
     /// controller chooses before the move commits, and the copy's own entry

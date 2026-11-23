@@ -156,6 +156,8 @@ mod tla;
 mod tle;
 #[path = "cards/ulg.rs"]
 mod ulg;
+#[path = "cards/usg.rs"]
+mod usg;
 #[path = "cards/vis.rs"]
 mod vis;
 #[path = "cards/war.rs"]

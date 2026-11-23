@@ -1,4 +1,19 @@
 {
+  "Fog Bank": {
+    "name": "Fog Bank",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Wall",
+    "power": "0",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Defender"
+    ],
+    "oracle_text": "Defender (This creature can't attack.)\nFlying\nPrevent all combat damage that would be dealt to and dealt by this creature.",
+    "colors": [
+      "U"
+    ]
+  },
   "Twinflame Tyrant": {
     "name": "Twinflame Tyrant",
     "mana_cost": "{3}{R}{R}",
