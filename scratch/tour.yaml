@@ -1,7 +1,9 @@
-at: 13b900412b0a280bbc1e2b5a1296a02f5ee3f0d2
+at: fa23fe703733d6ee6f22c616d7c459e6a3ffe256
 first:
   - path: scratch/plan.md
     why: Locate the movement evidence and remaining probes.
+  - path: managym/cards/tests/cards/fin.rs
+    why: Trace both physical fronts through restored order choices.
   - path: managym/src/flow/resolution.rs
     why: Follow Airbend from selection into the retained batch.
   - path: managym/src/flow/cast_permission.rs
@@ -16,8 +18,6 @@ first:
     why: Follow one departure into two arrivals.
   - path: managym/src/flow/decision.rs
     why: Carry the resolving controller through the pending move.
-  - path: managym/cards/tests/cards/fin.rs
-    why: Restore both orders and cast each airbent front.
   - path: managym/tests/rules/cr_400_identity.rs
     why: Check that separated exile identities stay stale.
   - path: managym/state/src/ability.rs

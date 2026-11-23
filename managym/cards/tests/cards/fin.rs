@@ -23,7 +23,7 @@ use managym::{
     flow::{event::GameEvent, turn::StepKind},
     state::{
         card::Keyword,
-        game_object::{ObjectId, PlayerId},
+        game_object::{CardId, ObjectId, PermanentId, PlayerId},
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -495,11 +495,7 @@ fn vanille_can_decline_meld() {
     }
 }
 
-fn bottom_with_lost_days(
-    s: &mut Scenario,
-    spell: ObjectId,
-    target: managym::state::game_object::PermanentId,
-) {
+fn bottom_with_lost_days(s: &mut Scenario, spell: ObjectId, target: PermanentId) {
     use crate::support::play::pass_until;
     use managym::{agent::action::ActionSpaceKind, state::target::Target};
     cast_card(s, spell);
@@ -507,6 +503,17 @@ fn bottom_with_lost_days(
     spend_colorless(s);
     pass_until(s, ActionSpaceKind::Modal);
     command(s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+}
+
+fn ragnarok_parts(s: &Scenario) -> (PermanentId, ObjectId, [CardId; 2]) {
+    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
+    let object = s.game().permanent_object(permanent).unwrap();
+    let state = &s.game().state;
+    let cards = [
+        state.card_of(object).unwrap(),
+        state.zones.melded_card(object).unwrap(),
+    ];
+    (permanent, object, cards)
 }
 
 fn restored_meld_orders(
@@ -549,8 +556,7 @@ fn restored_meld_orders(
 fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
     let mut s = form_ragnarok(&["Lost Days"]);
     let owner = PlayerId(0);
-    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
-    let object = s.game().permanent_object(permanent).unwrap();
+    let (permanent, object, cards) = ragnarok_parts(&s);
     let observed = Observation::for_player(s.game(), PlayerId(1));
     let ragnarok = observed
         .opponent_permanents
@@ -559,10 +565,6 @@ fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
         .unwrap();
     assert_eq!(ragnarok.mana_value(), 7);
     let state = &s.game().state;
-    let cards = [
-        state.card_of(object).unwrap(),
-        state.zones.melded_card(object).unwrap(),
-    ];
     assert!(cards.iter().all(|card| state.object_of(*card) == object));
     // Leave a single unrelated library card after positioning Lost Days in hand.
     let spell = move_to_hand(&mut s, "Lost Days");
@@ -606,13 +608,7 @@ fn ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent() {
     use managym::state::target::Target;
 
     let mut s = form_ragnarok(&["Epic Downfall"]);
-    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
-    let object = s.game().permanent_object(permanent).unwrap();
-    let state = &s.game().state;
-    let cards = [
-        state.card_of(object).unwrap(),
-        state.zones.melded_card(object).unwrap(),
-    ];
+    let (permanent, object, cards) = ragnarok_parts(&s);
     s.advance_to_active_step(1, StepKind::Main);
     s.set_player_mana_pool(1, "1B");
     let spell = force_new_card_in_hand(&mut s, 1, "Epic Downfall");
@@ -655,13 +651,7 @@ fn ragnarok_airbend_orders_both_cast_grants_before_the_lesson_draw() {
     use managym::state::{mana::ManaCost, target::Target};
 
     let mut s = form_ragnarok(&["Airbending Lesson"]);
-    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
-    let object = s.game().permanent_object(permanent).unwrap();
-    let state = &s.game().state;
-    let cards = [
-        state.card_of(object).unwrap(),
-        state.zones.melded_card(object).unwrap(),
-    ];
+    let (permanent, object, cards) = ragnarok_parts(&s);
     let owner = PlayerId(0);
     let caster = PlayerId(1);
     let hand = |s: &Scenario| {
@@ -764,14 +754,9 @@ fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
     use managym::{agent::observation::EventType, state::target::Target};
 
     let mut s = form_ragnarok(&["Blasphemous Act", "Gray Ogre"]);
-    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
-    let object = s.game().permanent_object(permanent).unwrap();
+    let (permanent, object, cards) = ragnarok_parts(&s);
     let state = &s.game().state;
     let entity = state.permanents[permanent].as_ref().unwrap().id;
-    let cards = [
-        state.card_of(object).unwrap(),
-        state.zones.melded_card(object).unwrap(),
-    ];
     let land = s.force_permanent_on_battlefield(1, "Island");
     let island = s.game().permanent_object(land).unwrap();
     let ogre = plant_in_graveyard(&mut s, 0, "Gray Ogre");
