@@ -1,11 +1,9 @@
-at: d977dfffe1ed4633d67f544de58ad5babad880a6
+at: fd4384cd97b7cff22728c9468e71cf2340aabc65
 first:
-  - path: managym/cards/src/ons.rs
-    why: Printed enchantment and its damage replacement
-  - path: managym/src/flow/identity.rs
-    why: Capture effective creature status before departure
+  - path: managym/src/flow/damage.rs
+    why: Resolve the source controller used for lifelink
   - path: managym/src/flow/proposed_event.rs
-    why: Read controller and creature status once per damage proposal
-  - path: managym/cards/tests/cards/ons.rs
-    why: Compare live sources and fork after sacrifice
+    why: Match replacements against the same source facts
+  - path: managym/tests/rules/cr_614_replacement.rs
+    why: Resolve a borrowed spell and replay both replacement orders
 hide: []
