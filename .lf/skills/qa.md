@@ -129,6 +129,7 @@ publish, land or choose the next Graph step from here.
   chosen policy before reading the opponent's plays. When this checkout has no
   `academy/ui/node_modules`, keep the script under `.runs/` and load Playwright
   from a sibling checkout with `createRequire('<sibling>/academy/ui/')('playwright')`.
+- Snapshot recipes (`GameSnapshot.to_recipe_json()`): run the `docs/engine-python.md#save-and-restore-game-positions` example from an empty directory, then build a longer recipe on authored decks with `player_policies=("agent", "agent")`, a `shuffle_libraries` and a `determinize` restore mid-game; Academy refuses heuristic/random seats with `replay.rejected`. Open it with `managym academy replay <recipe> --no-open --port <unused> --traces-dir <dir>` (needs `ACADEMY_FRONTEND_BUILD`), press End and compare "Decisions · N" with the recipe's action count; collect WebSocket and JSON bodies and check no `"seed"` or intervention names reach the browser. Tamper `state_digest`, `seed`, `actions`, `card_digest` and `schema` in copies: each must refuse.
 - Game records in Academy (`managym.recording`, `managym academy replay
   <file|dir> --game N`): write records with the `docs/engine-python.md` Record
   games example (a complete game, and one closed after a few steps for
