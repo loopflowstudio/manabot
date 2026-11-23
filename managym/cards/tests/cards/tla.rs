@@ -16377,3 +16377,52 @@ fn combat_assignment_deals_all_five_damage_as_one_lifelink_gain() {
         assert_eq!(counters_of(&s, pridemate, CounterKind::PlusOnePlusOne), 1);
     }
 }
+
+#[test]
+fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
+    let mut s = five_color_setup(&["Foggy Swamp Spirit Keeper", "Ajani's Pridemate"]);
+    let small = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+    let large = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+    let pridemate = s.force_permanent_on_battlefield(0, "Ajani's Pridemate");
+    set_counters(&mut s, large, CounterKind::PlusOnePlusOne, 1);
+    for attacker in [small, large] {
+        clear_summoning_sickness(&mut s, attacker);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let combat_start = s.game().state.events.len();
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { permanent, attack, .. }
+                if *attack == [small, large].contains(permanent))
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::OrderTriggers);
+    assert_eq!(s.action_space().actions.len(), 2);
+    assert_eq!(counters_of(&s, pridemate, CounterKind::PlusOnePlusOne), 0);
+    let second = s.action_space().actions[1].clone();
+    let mut replay = crate::support::play::command(&mut s, |a| *a == second);
+    for branch in [&mut s, &mut replay] {
+        branch.advance_to_active_step(0, StepKind::EndOfCombat);
+        let gains: Vec<_> = branch
+            .game()
+            .state
+            .events
+            .iter()
+            .skip(combat_start)
+            .filter_map(|event| match event {
+                GameEvent::LifeChanged {
+                    player: PlayerId(0),
+                    old,
+                    new,
+                } if new > old => Some(new - old),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(gains, [2, 3]);
+        assert_eq!(branch.life(1), 15);
+        assert_eq!(
+            counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),
+            2
+        );
+    }
+}

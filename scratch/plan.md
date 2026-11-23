@@ -111,7 +111,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-**Next fixture.** Attack with two lifelink sources dealing 2 and 3 in the same damage step. Check the two separate gains and submit the Pridemate trigger order through a bound Command. Replay that order on an independent fork, reject stale resubmission, and resolve both counters. Reuse the existing combat assignment and Command helper. Its witness comparison ends at Command execution. Carry an independent fork through trigger resolution in this fixture and compare the final counters and ordered life changes on both branches. The batch fixture already distinguishes source counts, while the combat fixture above exercises a single source.
+**Two-attacker combat fixture delivered.** Two Foggy Swamp Spirit Keepers attack together, one with a +1/+1 counter. The fixture selects the second Pridemate trigger through a bound Command, checks stale resubmission and resolves the original and independent fork through end of combat. Both record gains of 2 then 3 and finish with two Pridemate counters. The focused native card test passed.
 
 Then cover the remaining boundaries and callers.
 

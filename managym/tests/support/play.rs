@@ -845,8 +845,8 @@ pub fn resolve_until_priority(s: &mut Scenario) {
 
 /// Commit the chosen legal action through the public semantic Command API,
 /// checking that a fork commits identically, the source is untouched until
-/// it commits, and the spent Command is then stale.
-pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
+/// it commits, and the spent Command is then stale. Return the committed fork.
+pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) -> Scenario {
     use managym::{decision::Command, search_state::witness};
     let index = s
         .action_space()
@@ -872,4 +872,5 @@ pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
         s.game_mut().execute_semantic_command(&command).is_err(),
         "stale Command rejected"
     );
+    Scenario { game: fork }
 }
