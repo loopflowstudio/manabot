@@ -354,9 +354,22 @@ class TorchBackend:
         if deterministic is not None:
             torch.backends.cudnn.deterministic = deterministic
 
-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[ActorCritic, Learner]:
+    def load(
+        self,
+        checkpoint: PolicyCheckpoint,
+        *,
+        minibatch_rows: int = 1,
+        execution_rows: int | None = None,
+        bootstrap_rows: int | None = None,
+    ) -> tuple[ActorCritic, Learner]:
         agent = assemble(checkpoint)
-        return agent, Learner(agent, "cpu", minibatch_rows=1)
+        return agent, Learner(
+            agent,
+            "cpu",
+            minibatch_rows=minibatch_rows,
+            execution_rows=execution_rows,
+            bootstrap_rows=bootstrap_rows,
+        )
 
     def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         """Torch tensors have the canonical shapes under torch's own names."""

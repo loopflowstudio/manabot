@@ -44,12 +44,12 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.policy.protocol import PolicyLoader
 from manabot.sim.search.flat_mc import (
     make_player,
     spec_name,
     wilson_interval,
 )
-from manabot.training.state.backend import TrainingBackend
 from manabot.verify.scenarios import (
     PHASE_POSTCOMBAT,
     PHASE_PRECOMBAT,
@@ -418,7 +418,7 @@ def play_probed_games(
     hero_spec: dict[str, Any],
     villain_spec: dict[str, Any],
     *,
-    backend: TrainingBackend,
+    backend: PolicyLoader,
     hero_deck: dict[str, int],
     villain_deck: dict[str, int],
     num_games: int,

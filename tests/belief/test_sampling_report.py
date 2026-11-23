@@ -26,7 +26,7 @@ from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.reports.belief import _pool_games, main, report_saved_sampler
 
 torch_report = partial(
-    report_saved_sampler, backend=resolve("torch"), trainer=belief_fit
+    report_saved_sampler, codec=resolve("torch").belief, trainer=belief_fit
 )
 
 

@@ -5,7 +5,7 @@ backend module passed as an argument. `UpdateBackend` is that module's
 surface: its `rl`, `arrays`, `learner` and `rollout` files, each a Protocol a
 module satisfies with plain functions. `Learner` and `Policy` are the objects
 an update steps and runs forward. `manabot.policy.protocol.Backend` also
-provides loading and NumPy parity; `Learner` extends its `BackendLearner`.
+provides checkpoint admission. Parity supplies its own learner and layout contract.
 
 Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
 standardization, top-count selection and a policy `__call__`/`get_value`; only
@@ -34,7 +34,6 @@ from numpy.typing import NDArray
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
-from manabot.policy.protocol import BackendLearner
 from manabot.training.rollout.actions import ActionRows, ActionValidator
 
 if TYPE_CHECKING:
@@ -284,11 +283,14 @@ class PPOPolicy(Policy, Protocol):
     def get_value(self, obs: Observations, /) -> Array: ...
 
 
-class Learner(BackendLearner, Protocol):
+class Learner(Protocol):
     """The policy, its optimizer and profiler, as an update steps them."""
 
     execution_rows: int | None
     bootstrap_rows: int | None
+
+    def set_learning_rate(self, rate: float) -> None: ...
+    def loss(self, objective: Callable[[], tuple[Array, ...]]) -> tuple[Array, ...]: ...
 
     def accumulate(self, loss: Array, *, first: bool) -> None: ...
 

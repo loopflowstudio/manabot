@@ -23,8 +23,7 @@ MLX lines differ only in the name passed to `resolve`
 A backend runs the manabot policy forward and the learner step of its
 updates in one array framework. Backends share the framework-free contract in
 [`manabot.policy`](../policy/README.md): observation admission, host
-preparation, the checkpoint container and the `BackendPolicy`,
-`BackendLearner` and `Backend` protocols. Tracked training defaults to PyTorch. The baseline, local and Elemental recipes
+preparation, the checkpoint container and the host inference contract. Tracked training defaults to PyTorch. The baseline, local and Elemental recipes
 also accept MLX. PyTorch supplies evaluation and the parity reference.
 
 | Backend | Status | Guide |
@@ -57,8 +56,9 @@ encoders and `live_tokens.py`):
 | `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
 | `checkpoint.py` | the map from canonical names to the backend's layout, portable loading and export, and `BACKEND` |
 
-`resolve` returns a `manabot.policy.protocol.Backend`: a configured loader
-with `rl`, `arrays`, `learner` and `rollout` modules for updates. These modules
+`resolve` returns the configured framework. Simulation loads a policy through
+`PolicyLoader`, checkpoint inspection reads its metadata and tensors through
+`CheckpointReader`, and updates take the `rl`, `arrays`, `learner` and `rollout` modules. These modules
 load on access, so playing a policy does not import training. A backend
 imports its own framework,
 `manabot.policy` and the configuration and observation modules; it never
@@ -70,7 +70,7 @@ Library code receives a backend; it does not import one. An update takes the
 configured backend object (or an imported update module) as its first
 argument, and simulation and evaluation take a
 policy that satisfies `BackendPolicy`. Checkpoint discovery and registration
-receive `Backend` for loading and metadata reads; they never resolve it themselves.
+receive a reader for metadata and a loader when they need a live policy; they never resolve it themselves.
 Only the code that starts a program
 chooses:
 
@@ -132,8 +132,8 @@ stream; the generator's state is saved only in a numerical incident.
 Belief inference uses host observations and the policy's admission and
 evaluation methods. Search receives a hand sampler; the selected backend
 owns its physical or learned sampling arithmetic, random stream and learned
-state. Verification uses the policy for inference and injected learner
-capabilities for gradient diagnostics. Each forward reads a `Prepared` batch
+state. Verification uses a policy loader for frozen choices. Numerical parity takes a
+fresh learner and the conversions between canonical and framework arrays. Each forward reads a `Prepared` batch
 from host preparation; inference probes use `inference=True`.
 
 Health reporting keeps step and rejection counters on the host, with tensor
@@ -330,7 +330,7 @@ change a default learner batch into an inference batch. Torch rollout `rows`
 and `minibatches` always prepare learner rows; `next_observation` always
 prepares inference rows for bootstrapping.
 
-`BACKEND` is torch's `manabot.policy.protocol.Backend`: `load` returns an
+For parity, Torch’s `BACKEND.load` returns an
 `ActorCritic` and a `Learner`, whose parameters and gradients keep torch's
 names (`torch_name` in `manabot.policy.checkpoint` maps canonical names
 back).

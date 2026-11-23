@@ -1,5 +1,7 @@
 """Small self-play captures shared by backend conformance and numerical parity tests."""
 
+from typing import TYPE_CHECKING
+
 import pytest
 import torch
 
@@ -13,7 +15,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.policy.checkpoint import PolicyCheckpoint, from_torch_state
-from manabot.policy.protocol import Backend, BackendPolicy, Precision
+from manabot.policy.protocol import BackendPolicy, Precision
 from manabot.training.rollout.collection import (
     RolloutBatch,
     close_collector,
@@ -23,8 +25,14 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.numerics import CollectionSession
 import managym
 
+if TYPE_CHECKING:
+    from manabot.backends.mlx.checkpoint import MLXBackend
+    from manabot.backends.torch.checkpoint import TorchBackend
 
-def installed_backend(name: str, *, precision: Precision | None = None) -> Backend:
+
+def installed_backend(
+    name: str, *, precision: Precision | None = None
+) -> "TorchBackend | MLXBackend":
     if name not in installed_backends():
         pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     return resolve(name, precision=precision)

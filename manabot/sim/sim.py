@@ -36,7 +36,7 @@ from manabot.infra.artifacts import fetch_etude_checkpoint
 from manabot.infra.config import ObservationConfig, RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.model.world import validate_agent_setup
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import PolicyLoader, SimulationBackend
 from manabot.sim.player import (
     DefaultPlayer,
     ModelPlayer,
@@ -457,7 +457,7 @@ def _simulate_game(
     return outcome, turn_count, duration, profiler_data
 
 
-def load_player(model_str: str, *, backend: Backend | None = None) -> Player:
+def load_player(model_str: str, *, backend: PolicyLoader | None = None) -> Player:
     model_name = model_str.lower()
     if model_name == "random":
         return RandomPlayer("RandomPlayer")
@@ -488,7 +488,7 @@ def run_simulation(
     sim_config: SimulationConfig,
     runtime_config: RuntimeConfig,
     *,
-    backend: Backend | None = None,
+    backend: SimulationBackend | None = None,
 ) -> None:
     """Run a simulation sweep for hero/villain model specs."""
     setGlobalLogLevel(getattr(logging, runtime_config.log_level.upper(), logging.INFO))

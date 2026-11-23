@@ -27,11 +27,11 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
-from manabot.policy.protocol import Backend, BackendPolicy
+from manabot.policy.protocol import BackendPolicy, PolicyLoader
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
-from manabot.training.state.backend import TrainingBackend
+from manabot.training.state.backend import VerificationBackend
 from manabot.verify.action_cases import reorder_objects, reorder_offers
 from manabot.verify.choice_corpus import PACK, Case, collect_choices, input_collisions
 import managym
@@ -139,7 +139,7 @@ def _logsumexp(values: np.ndarray) -> float:
 
 
 def inspect_policy(
-    path: Path, cases: list[Case], updates: int, *, backend: Backend
+    path: Path, cases: list[Case], updates: int, *, backend: PolicyLoader
 ) -> PolicySnapshot:
     """Use the checkpoint loader and exact setup; never refit weights."""
     if not cases:
@@ -331,7 +331,7 @@ def inspect_baseline(
     exported: Sequence[PolicyPoint],
     metric_rows: Sequence[Mapping[str, object]],
     *,
-    backend: TrainingBackend,
+    backend: PolicyLoader,
 ) -> None:
     """Fill policy and exposure diagnostics in place, using the frozen native corpus."""
     report.learning = learning_evidence([report.paired])
@@ -353,18 +353,17 @@ def inspect_baseline(
         cases.extend(rows)
         corpus_hashes.append(file_sha256(target / "cases.json"))
     report.corpus_sha256 = canonical_sha256(corpus_hashes)
-    with backend.runtime.preserve_rng("cpu"):
-        for checkpoint in exported:
-            if file_sha256(checkpoint.path) != checkpoint.sha256:
-                raise ValueError("checkpoint bytes changed")
-            report.policies.append(
-                inspect_policy(
-                    Path(checkpoint.path),
-                    cases,
-                    checkpoint.updates,
-                    backend=backend,
-                )
+    for checkpoint in exported:
+        if file_sha256(checkpoint.path) != checkpoint.sha256:
+            raise ValueError("checkpoint bytes changed")
+        report.policies.append(
+            inspect_policy(
+                Path(checkpoint.path),
+                cases,
+                checkpoint.updates,
+                backend=backend,
             )
+        )
     report.families = family_changes(report.policies[0], report.policies[-1])
     exposure: dict[int, ActionExposure] = {}
     for row in metric_rows:
@@ -443,7 +442,7 @@ def report_recipe(
     updates: int,
     deals: tuple[int, ...],
     seconds: float,
-    backend: TrainingBackend,
+    backend: VerificationBackend,
 ) -> BaselineReport:
     """Evaluate the loop's initial/final raw policies and retain the nightly evidence.
 
@@ -457,72 +456,76 @@ def report_recipe(
         steps=updates,
         learning=learning_evidence([]),
     )
-    previous_threads = backend.runtime.threads()
-    backend.runtime.configure(1, "float32", "cpu")
     try:
-        exported = [
-            PolicyPoint(path, int(path.stem.split("-")[0]), file_sha256(path))
-            for path in sorted((directory / "policies").glob("*-raw.safetensors"))
-        ]
-        if not exported or exported[0].updates != 0 or exported[-1].updates != updates:
-            raise ValueError("missing initial or endpoint checkpoint")
-        payload = backend.metadata(str(exported[-1].path))
-        counts = Counts.model_validate(payload.get("bc", {}).get("counts"))
-        if counts.updates != updates or counts.optimizer_updates == 0:
-            raise ValueError(
-                "training did not complete the requested optimizer updates"
-            )
-        source = payload.get("source", {}).get("commit")
-        if not isinstance(source, str):
-            raise ValueError("checkpoint has no source revision")
-        report.source = source
-        results: list[EvaluationResult] = []
-        deadline = time.time() + seconds
-        for point in (exported[0], exported[-1]):
-            if time.time() >= deadline:
-                raise TimeoutError("verification evaluation budget exhausted")
-            request = checkpoint_request(
-                point.path, opponent="random", deal_seeds=deals, backend=backend
-            )
-            target = directory / "evaluation" / f"{point.updates:08d}"
-            if (target / "evaluation.json").exists():
-                result = EvaluationResult.model_validate_json(
-                    (target / "evaluation.json").read_bytes()
-                )
-                if result.execution is not None or result.request != request:
-                    raise ValueError("evaluation belongs to another checkpoint")
-            else:
-                result = evaluate_local(
-                    request,
-                    deadline=deadline,
-                    out_dir=target,
-                )
-            result.validate_cohort()
-            if result.status != "completed" or result.request.deal_seeds != deals:
+        with backend.runtime.scoped(1, "float32", "cpu"):
+            exported = [
+                PolicyPoint(path, int(path.stem.split("-")[0]), file_sha256(path))
+                for path in sorted((directory / "policies").glob("*-raw.safetensors"))
+            ]
+            if (
+                not exported
+                or exported[0].updates != 0
+                or exported[-1].updates != updates
+            ):
+                raise ValueError("missing initial or endpoint checkpoint")
+            payload = backend.metadata(str(exported[-1].path))
+            counts = Counts.model_validate(payload.get("bc", {}).get("counts"))
+            if counts.updates != updates or counts.optimizer_updates == 0:
                 raise ValueError(
-                    "paired arena evaluation incomplete or from other deals"
+                    "training did not complete the requested optimizer updates"
                 )
-            results.append(result)
-        report.paired = paired_rows(results[0].rows, results[1].rows, deals)
-        run_directory = directory.parent
-        (tracked,) = [
-            run
-            for run in read_all(run_directory.parent)
-            if run.name == run_directory.name
-        ]
-        exposure = {
-            name: int(np.nansum(tracked.points(name, "updates").y))
-            for name in tracked.metrics()
-            if name.startswith("selection_groups/")
-        }
-        inspect_baseline(report, directory, exported, [exposure], backend=backend)
+            source = payload.get("source", {}).get("commit")
+            if not isinstance(source, str):
+                raise ValueError("checkpoint has no source revision")
+            report.source = source
+            results: list[EvaluationResult] = []
+            deadline = time.time() + seconds
+            for point in (exported[0], exported[-1]):
+                if time.time() >= deadline:
+                    raise TimeoutError("verification evaluation budget exhausted")
+                request = checkpoint_request(
+                    point.path, opponent="random", deal_seeds=deals, backend=backend
+                )
+                target = directory / "evaluation" / f"{point.updates:08d}"
+                if (target / "evaluation.json").exists():
+                    result = EvaluationResult.model_validate_json(
+                        (target / "evaluation.json").read_bytes()
+                    )
+                    if result.execution is not None or result.request != request:
+                        raise ValueError("evaluation belongs to another checkpoint")
+                else:
+                    result = evaluate_local(
+                        request,
+                        deadline=deadline,
+                        out_dir=target,
+                    )
+                result.validate_cohort()
+                if result.status != "completed" or result.request.deal_seeds != deals:
+                    raise ValueError(
+                        "paired arena evaluation incomplete or from other deals"
+                    )
+                results.append(result)
+            report.paired = paired_rows(results[0].rows, results[1].rows, deals)
+            run_directory = directory.parent
+            (tracked,) = [
+                run
+                for run in read_all(run_directory.parent)
+                if run.name == run_directory.name
+            ]
+            exposure = {
+                name: int(np.nansum(tracked.points(name, "updates").y))
+                for name in tracked.metrics()
+                if name.startswith("selection_groups/")
+            }
+            with backend.runtime.preserve_rng("cpu"):
+                inspect_baseline(
+                    report, directory, exported, [exposure], backend=backend
+                )
     except Exception as error:
         report.error = f"{type(error).__name__}: {error}"
         report.learning = LearningEvidence(
             verdict="error", seeds=1, deals=0, reason=report.error
         )
-    finally:
-        backend.runtime.configure(previous_threads, "float32", "cpu")
     return write_baseline_report(report, directory)
 
 

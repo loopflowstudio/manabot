@@ -26,6 +26,7 @@ from manabot.backends.parity import (
     LOSS_TOLERANCE,
     STEP_PARAMETER_TOLERANCE,
     TOLERANCES,
+    ParityBackend,
     Report,
 )
 from manabot.env.observation import (
@@ -37,7 +38,7 @@ from manabot.policy.checkpoint import (
     PolicyCheckpoint,
     canonical_parameters,
 )
-from manabot.policy.protocol import Backend, Precision
+from manabot.policy.protocol import Precision
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import (
@@ -78,7 +79,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
 
 
 def _update(
-    module: Backend,
+    module: ParityBackend,
     weights: PolicyCheckpoint,
     batch: RolloutBatch,
     minibatch_rows: int,
@@ -86,11 +87,8 @@ def _update(
     execution_rows: int | None = None,
 ) -> tuple[UpdateDiagnostics, Mapping[str, np.ndarray], Mapping[str, np.ndarray]]:
     """Diagnostics of one update from `weights`, with parameters before and after."""
-    learner = module.learner.Learner(
-        module.load(weights)[0],
-        "cpu",
-        minibatch_rows=minibatch_rows,
-        execution_rows=execution_rows,
+    _, learner = module.load(
+        weights, minibatch_rows=minibatch_rows, execution_rows=execution_rows
     )
     before = learner.parameters()
     diagnostics = update_damped_iteration(module, learner, batch, LEARNING, 1)
@@ -229,8 +227,9 @@ def test_half_damped_update_after_cached_inference(
     precision: Precision = "bfloat16"
     module = installed_backend("mlx", precision=precision)
     weights, batch = captured
-    agents = [module.load(weights)[0] for _ in range(2)]
-    learners = [module.learner.Learner(agent, minibatch_rows=2) for agent in agents]
+    agents, learners = zip(
+        *(module.load(weights, minibatch_rows=2) for _ in range(2)), strict=True
+    )
     before = learners[0].parameters()
     # A fixed-weight collection cache must not sever catalog gradients in training.
     agents[0].cache_programs()
@@ -353,9 +352,8 @@ def test_actor_filtered_floor_is_the_reported_penalty(
         learning = LEARNING.model_copy(
             update={"filter_scope": "actor", "reference_forward_kl": coefficient}
         )
-        learner = backend.learner.Learner(
-            backend.load(weights)[0],
-            "cpu",
+        _, learner = backend.load(
+            weights,
             minibatch_rows=batch.actions.size,
             execution_rows=2,
             bootstrap_rows=1,

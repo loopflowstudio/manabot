@@ -450,9 +450,6 @@ class MLXActorCritic(nn.Module):
     def has_programs(self) -> bool:
         return True
 
-    def admit_belief(self, belief_schema: object) -> None:
-        raise NotImplementedError("MLX does not support belief inputs")
-
     def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
         return PolicyInference(self, cache_catalog=cache_catalog)
 

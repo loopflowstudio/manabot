@@ -46,7 +46,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import numpy as np
 import torch
@@ -56,20 +56,55 @@ import manabot.backends.torch as torch_backend
 from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.policy.checkpoint import (
+    ParameterArrays,
+    PolicyCheckpoint,
     canonical_parameters,
     from_torch_state,
 )
 from manabot.policy.prepare import Prepared, reference_distribution
 from manabot.policy.protocol import (
-    Backend,
     BackendLearner,
     BackendPolicy,
     Precision,
     Settings,
     Targets,
 )
-from manabot.training.updates.backend import UpdateBackend
+from manabot.training.updates.backend import Learner, Policy, UpdateBackend
 from manabot.training.updates.damped_policy import minibatch_objective
+
+
+class ParityPolicy(BackendPolicy, Policy, Protocol):
+    """One policy for both host inference and differentiable parity checks."""
+
+
+class ParityLearner(Learner, BackendLearner, Protocol):
+    """An update learner whose parameters and gradients can be compared on the host."""
+
+
+class ParityBackend(UpdateBackend, Protocol):
+    """Fresh learner and layout conversions used by numerical comparisons."""
+
+    def load(
+        self,
+        checkpoint: PolicyCheckpoint,
+        *,
+        minibatch_rows: int = 1,
+        execution_rows: int | None = None,
+        bootstrap_rows: int | None = None,
+    ) -> tuple[ParityPolicy, ParityLearner]:
+        """A policy holding the checkpoint's weights, and a fresh learner on it."""
+        ...
+
+    def parameter_layout(self, canonical: ParameterArrays) -> ParameterArrays:
+        """Canonical parameters (or deltas: the map is linear) in the
+        backend's names and layout, as `BackendLearner.parameters` returns them."""
+        ...
+
+    def gradient_layout(self, canonical: ParameterArrays) -> ParameterArrays:
+        """Gradients of canonical parameters as gradients of the backend's,
+        as `BackendLearner.gradients` returns them."""
+        ...
+
 
 LOGIT_TOLERANCE = 1e-4
 LOSS_TOLERANCE = 1e-3
@@ -119,7 +154,7 @@ def installed_backends() -> list[str]:
 
 def minibatch_loss(
     module: UpdateBackend,
-    policy: BackendPolicy,
+    policy: ParityPolicy,
     learner: BackendLearner,
     batch: Prepared,
     targets: Targets,
@@ -473,7 +508,7 @@ def check(
 def _compare_step(
     reference: BackendLearner,
     reference_loss: Any,
-    port: Backend,
+    port: ParityBackend,
     learner: BackendLearner,
     loss: Any,
     settings: Settings,

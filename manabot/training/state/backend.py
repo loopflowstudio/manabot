@@ -13,16 +13,15 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Protocol, runtime_checkable
 
 import numpy as np
 
-from manabot.belief.protocol import SamplerBackend
 from manabot.env.observation import ObservationSpace
-from manabot.policy.protocol import BackendPolicy
-from manabot.training.updates.backend import Learner, LearnerFile, UpdateBackend
+from manabot.policy.protocol import Backend, BackendPolicy, PolicyLoader
+from manabot.training.updates.backend import Learner, LearnerFile, Policy, UpdateBackend
 
 if TYPE_CHECKING:
     from etude.train.tracking import TrainingRun
 
-    from manabot.belief.encoding import BeliefEncodingSchema
     from manabot.infra.config import ModelConfig
+    from manabot.policy.readings import Readings
     from manabot.training.learning import Precision
     from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
@@ -63,10 +62,7 @@ class TrainingState(Protocol):
     ) -> IncidentCapture: ...
 
 
-class TrainingRuntime(Protocol):
-    def configure(self, threads: int, precision: Precision, device: str) -> None: ...
-    def threads(self) -> int: ...
-    def preserve_rng(self, device: str) -> AbstractContextManager[object]: ...
+class PolicyFactory(Protocol):
     def create_policy(
         self,
         space: ObservationSpace,
@@ -75,6 +71,12 @@ class TrainingRuntime(Protocol):
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> BackendPolicy: ...
+
+
+class FreshPolicies(Protocol):
+    @property
+    def runtime(self) -> PolicyFactory: ...
+    def seed(self, seed: int, *, deterministic: bool | None = None) -> None: ...
 
 
 class SessionFactory(Protocol):
@@ -88,23 +90,46 @@ class CollectionSessions(Protocol):
     def CollectionSession(self) -> SessionFactory: ...
 
 
-class CollectionFactory(CollectionSessions, Protocol):
+class SelectionPredictors(Protocol):
     @property
     def SelectionPredictor(
         self,
     ) -> Callable[[BackendPolicy, int], SelectionPredictor]: ...
 
 
+class SelectionBackend(PolicyLoader, Protocol):
+    @property
+    def collection(self) -> SelectionPredictors: ...
+    def metadata(self, path: str) -> dict[str, Any]: ...
+
+
+class SelfPlayPolicy(BackendPolicy, Policy, Protocol):
+    def memory_gates(self) -> dict[str, float]:
+        """Effective decision-memory gates at an update boundary."""
+        ...
+
+    @property
+    def readings(self) -> Readings: ...
+
+
 class SelfPlayLearner(Learner, Protocol):
     @property
-    def agent(self) -> BackendPolicy: ...
+    def agent(self) -> SelfPlayPolicy: ...
 
 
-class SelfPlayRuntime(Protocol):
+class ExecutionScope(Protocol):
     def scoped(
         self, threads: int, precision: Precision, device: str
     ) -> AbstractContextManager[object]: ...
     def preserve_rng(self, device: str) -> AbstractContextManager[object]: ...
+
+
+class VerificationBackend(Backend, Protocol):
+    @property
+    def runtime(self) -> ExecutionScope: ...
+
+
+class SelfPlayRuntime(ExecutionScope, Protocol):
     def synchronize(self, device: str) -> None: ...
     def memory_metrics(self, device: str) -> dict[str, int]: ...
     def create_policy(
@@ -115,7 +140,7 @@ class SelfPlayRuntime(Protocol):
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
         pretrained: BackendPolicy | None = None,
-    ) -> BackendPolicy: ...
+    ) -> SelfPlayPolicy: ...
     def create_learner(
         self,
         agent: BackendPolicy,
@@ -187,30 +212,3 @@ def require_continuation(backend: SelfPlayBackend) -> Continuation:
     if not isinstance(state, Continuation):
         raise ValueError(f"{backend.name} does not support resumable self-play")
     return state
-
-
-class TrainingBackend(SamplerBackend, Protocol):
-    """Execution roles beyond ordinary inference and portable updates.
-
-    An unsupported runtime refuses before collection or recovery starts.
-    """
-
-    @property
-    def runtime(self) -> TrainingRuntime: ...
-
-    def save_policy(
-        self,
-        agent: BackendPolicy,
-        obs_space: ObservationSpace,
-        path: str | Path,
-        *,
-        player_configs: Sequence[PlayerConfig] | None,
-        extra: dict[str, Any] | None = None,
-        belief_schema: "BeliefEncodingSchema | None" = None,
-    ) -> None: ...
-
-    @property
-    def state(self) -> "TrainingState": ...
-
-    @property
-    def collection(self) -> CollectionFactory: ...

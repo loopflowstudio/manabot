@@ -20,7 +20,7 @@ from typing import Literal, Sequence
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
-from manabot.belief.protocol import SamplerBackend
+from manabot.belief.protocol import SamplerCodec
 from manabot.belief.sampling_data import Split, read_dataset
 from manabot.belief.sampling_fit import (
     BeliefTrainer,
@@ -124,7 +124,7 @@ def _pool_games(
 def report_saved_sampler(
     dataset_path: Path,
     *,
-    backend: SamplerBackend,
+    codec: SamplerCodec,
     trainer: BeliefTrainer,
     checkpoint: Path | None = None,
     checkpoint_identity: str | None = None,
@@ -178,7 +178,7 @@ def report_saved_sampler(
                 expected_schema_identity=training.schema.identity,
                 expected_world_identity=training.world_identity,
                 expected_checkpoint_identity=checkpoint_identity,
-                codec=backend.belief,
+                codec=codec,
             )
         # The admitted bytes own the fit seed when historical exports retained it.
         # Missing metadata stays unavailable; a sampling seed cannot replace it.
@@ -325,7 +325,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     report = report_saved_sampler(
         args.dataset,
-        backend=resolve("torch"),
+        codec=resolve("torch").belief,
         trainer=belief_fit,
         checkpoint=args.checkpoint,
         checkpoint_identity=args.checkpoint_sha256,

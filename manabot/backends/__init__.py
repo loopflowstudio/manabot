@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Literal, overload
 if TYPE_CHECKING:
     from manabot.backends.mlx.checkpoint import MLXBackend
     from manabot.backends.torch.checkpoint import TorchBackend
-    from manabot.policy.protocol import Backend, Precision
+    from manabot.policy.protocol import Precision
 
 
 @overload
@@ -22,10 +22,14 @@ def resolve(
 
 
 @overload
-def resolve(name: str, *, precision: "Precision | None" = None) -> "Backend": ...
+def resolve(
+    name: str, *, precision: "Precision | None" = None
+) -> "TorchBackend | MLXBackend": ...
 
 
-def resolve(name: str, *, precision: "Precision | None" = None) -> "Backend":
+def resolve(
+    name: str, *, precision: "Precision | None" = None
+) -> "TorchBackend | MLXBackend":
     """Select a configured backend, loading its optional framework on first use.
 
     MLX's omitted precision follows each policy's width. Torch's resolver

@@ -309,9 +309,21 @@ class MLXBackend:
     def seed(seed: int, *, deterministic: bool | None = None) -> None:
         mx.random.seed(seed)
 
-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
+    def load(
+        self,
+        checkpoint: PolicyCheckpoint,
+        *,
+        minibatch_rows: int = 1,
+        execution_rows: int | None = None,
+        bootstrap_rows: int | None = None,
+    ) -> tuple[MLXActorCritic, Learner]:
         policy = assemble(checkpoint, precision=self.precision)
-        return policy, Learner(policy, minibatch_rows=1)
+        return policy, Learner(
+            policy,
+            minibatch_rows=minibatch_rows,
+            execution_rows=execution_rows,
+            bootstrap_rows=bootstrap_rows,
+        )
 
     parameter_layout = staticmethod(mlx_parameters)
     gradient_layout = staticmethod(mlx_parameters)

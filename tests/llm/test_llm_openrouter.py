@@ -6,6 +6,9 @@ import hashlib
 import json
 from pathlib import Path
 
+from etude.checkpoints import CheckpointRef
+from etude.eval.records import CheckpointPlayer
+from etude.records import ArtifactRef
 import httpx
 import pytest
 import torch
@@ -20,7 +23,8 @@ from manabot.llm.budget import BudgetConfig, BudgetLedger
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterResult, OpenRouterSession
 from manabot.llm.schema import DecisionInput
 from manabot.llm.selection import REPAIR, decision_messages
-from manabot.verify.llm_game import CheckpointOpponent, GameConfig, play
+from manabot.verify.llm_game import GameConfig, play
+from manabot.verify.llm_match import checkpoint_opponent
 import managym
 
 
@@ -351,9 +355,14 @@ def test_preloaded_campaign_opponent_keeps_timing_and_model_seat_control(
             managym.PlayerConfig(str(seat), config.deck) for seat in (0, 1)
         ],
     )
-    opponent = CheckpointOpponent(
-        path, file_sha256(path), path.stat().st_size, backend=resolve("torch")
+    artifact = ArtifactRef(
+        uri=path.as_uri(), sha256=file_sha256(path), size_bytes=path.stat().st_size
     )
+    player = CheckpointPlayer(
+        name="control",
+        checkpoint=CheckpointRef(address=artifact.uri, artifact=artifact),
+    )
+    opponent = checkpoint_opponent(player, tmp_path / "cache", backend=resolve("torch"))
     summary = play(
         config, tmp_path / "game", None, opponent=opponent, backend=resolve("torch")
     )

@@ -33,7 +33,7 @@ import managym
 from managym.decision import Command, DecisionFrame, Observation
 
 if TYPE_CHECKING:
-    from manabot.training.state.backend import TrainingBackend
+    from manabot.training.state.backend import SelectionBackend
 
 
 class SelectionGameSpec(Strict):
@@ -293,7 +293,7 @@ def collect_selection(
     match: MatchConfig,
     reference: Literal["uniform", "action_type_uniform"] = "action_type_uniform",
     max_steps: int = 2000,
-    backend: "TrainingBackend",
+    backend: "SelectionBackend",
 ) -> Path:
     """Freeze a policy's complete-game diagnostics, retaining partial replay journals.
 

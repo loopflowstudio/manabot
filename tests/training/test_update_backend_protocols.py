@@ -18,7 +18,7 @@ import pytest
 import torch
 
 from manabot.backends import resolve
-from manabot.backends.parity import BACKENDS
+from manabot.backends.parity import BACKENDS, ParityBackend
 from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.rollout import AdmittedRollout as TorchRollout
 from manabot.policy.checkpoint import PolicyCheckpoint
@@ -29,9 +29,10 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.rollout.selection_data import SelectionPredictor
 from manabot.training.state.backend import (
-    CollectionFactory,
+    Continuation,
+    SelectionPredictors,
     SelfPlayBackend,
-    TrainingState,
+    VerificationBackend,
 )
 from manabot.training.updates.backend import (
     AdmittedRollout,
@@ -151,7 +152,7 @@ def test_backend_provides_what_the_damped_update_calls(
 ) -> None:
     module = installed_backend(name)
     weights, batch = captured
-    learner = module.learner.Learner(module.load(weights)[0], "cpu", minibatch_rows=4)
+    _, learner = module.load(weights, minibatch_rows=4)
     admitted = module.rollout.AdmittedRollout(learner.agent, batch)
     assert _violations(module, Backend, name) == []
     assert _violations(module, UpdateBackend, name) == []
@@ -169,9 +170,7 @@ def test_torch_provides_what_ppo_calls(
     captured: tuple[PolicyCheckpoint, RolloutBatch],
 ) -> None:
     module = resolve("torch")
-    learner = module.learner.Learner(
-        module.load(captured[0])[0], "cpu", minibatch_rows=4
-    )
+    _, learner = module.load(captured[0], minibatch_rows=4)
     assert _violations(module, PPOBackend, "torch") == []
     assert _violations(learner, PPOLearner, "torch.Learner") == []
     assert (
@@ -305,15 +304,13 @@ def test_the_conformance_check_sees_a_wrong_signature() -> None:
     ]
 
 
-def test_torch_execution_state_capabilities_match_their_contracts() -> None:
-    backend = resolve("torch")
-    assert _violations(backend.state, TrainingState, "state") == []
-
-
 @pytest.mark.parametrize("name", sorted(BACKENDS))
 def test_backends_provide_runtime_and_collection_contracts(name: str) -> None:
     backend = installed_backend(name)
     assert _violations(backend, SelfPlayBackend, name) == []
+    assert _violations(backend.state, Continuation, name) == []
+    assert _violations(backend, VerificationBackend, name) == []
+    assert _violations(backend, ParityBackend, name) == []
     assert (
-        _violations(backend.collection, CollectionFactory, f"{name}.collection") == []
+        _violations(backend.collection, SelectionPredictors, f"{name}.collection") == []
     )

@@ -28,7 +28,7 @@ from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.session import InferenceSession
 from manabot.model.world import validate_agent_setup
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import SeededPolicyLoader, SimulationBackend
 from manabot.semantic.text_observation import (
     TextDecision,
     capture_text_decision,
@@ -131,7 +131,9 @@ class CheckpointOpponent:
     offer space must fit the checkpoint encoder; truncation fails closed.
     """
 
-    def __init__(self, path: Path, sha256: str, size: int, *, backend: Backend) -> None:
+    def __init__(
+        self, path: Path, sha256: str, size: int, *, backend: SimulationBackend
+    ) -> None:
         started = time.monotonic()
         verify_file(path, sha256, size)
         self.backend = backend
@@ -272,7 +274,7 @@ def play(
     *,
     progress_path: Path | None = None,
     opponent: CheckpointOpponent | None = None,
-    backend: Backend,
+    backend: SeededPolicyLoader,
 ) -> GameSummary:
     """Run once; failures never reset the game or retry uncertain execution.
 
@@ -494,7 +496,7 @@ def play(
     return summary
 
 
-def run(config: GameConfig, *, backend: Backend) -> None:
+def run(config: GameConfig, *, backend: SeededPolicyLoader) -> None:
     """Etude entry point; setup has acquired bytes, so inference is offline."""
     os.environ["HF_HUB_OFFLINE"] = "1"
     inference = InferenceConfig.model_validate_json(config.inference.read_text())
