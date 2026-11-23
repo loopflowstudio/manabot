@@ -520,7 +520,7 @@ def selected_magnitudes(
     """Retained flat indexes and empirical cutoff before the absolute floor."""
     magnitude = advantages.detach().abs().flatten()
     if kind == "quantile":
-        cutoff = magnitude_quantile(advantages, 1 - fraction)
+        cutoff = float(torch.quantile(magnitude, 1 - fraction))
         return (magnitude >= max(cutoff, minimum)).nonzero().flatten(), cutoff
     count = max(1, math.ceil(len(magnitude) * fraction))
     indices = torch.argsort(magnitude, descending=True, stable=True)[:count]

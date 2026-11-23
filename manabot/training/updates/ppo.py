@@ -158,7 +158,9 @@ def update_iteration(
                 execution_rows = learner.execution_rows or size
                 split = len(logical_rows) > execution_rows
                 actor_count = int(actor_rows[logical_rows].sum())
-                weights = logical_weights(normalized, logical_rows, actor_count)
+                weights = logical_weights(
+                    normalized, logical_rows, actor_count, backend.arrays, dev
+                )
                 totals = dict(
                     loss=0.0,
                     policy_loss=0.0,
@@ -200,9 +202,7 @@ def update_iteration(
                             coefficients = (
                                 None
                                 if weights is None
-                                else to_device(
-                                    weights[offset : offset + len(rows_host)], dev
-                                )
+                                else weights[offset : offset + execution_rows]
                             )
                             policy = actor_term(
                                 rl,

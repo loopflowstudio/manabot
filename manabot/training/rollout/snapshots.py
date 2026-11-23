@@ -1,9 +1,9 @@
-"""Schedule sibling continuations and score retained roots after a successful update.
+"""Schedule sibling continuations and commit their scores with a successful update.
 
 A BatchPlan spends replay allowance in actual episode-start order. Its receipt
 joins capture-time observation rows to packed learner rows. Preparation scores
-the batch before learning; publication installs that generation after learning. Hot handles belong to the collecting vector and never
-enter the cold state.
+the batch before learning and publication installs that generation afterwards.
+Hot handles belong to the collecting vector and never enter the cold state.
 """
 
 from collections import defaultdict, deque
@@ -341,7 +341,19 @@ class BatchPlan:
         self, decisions: Iterable[CaptureDecision], predicate: CapturePredicate | None
     ) -> None:
         """Stage requested pre-step roots on their live episodes."""
-        selected = {d.slot: d for d in decisions if self.wants_capture(d, predicate)}
+        policy = self.config.capture
+        if policy.every_n_decisions is None and not policy.probability:
+            return
+        # Stop before requesting another native decision or consuming another RNG draw.
+        limit = policy.max_captures_per_batch
+        eligible = (d for d in decisions if self.wants_capture(d, predicate))
+        selected = {}
+        while limit is None or self.capture_count < limit:
+            decision = next(eligible, None)
+            if decision is None:
+                break
+            selected[decision.slot] = decision
+            self.capture_count += 1
         if not selected:
             return
         assert self.vector is not None
@@ -373,10 +385,6 @@ class BatchPlan:
         if (
             (policy.fresh_only and decision.branch is not None)
             or decision.legal_actions < policy.min_legal_actions
-            or (
-                policy.max_captures_per_batch is not None
-                and self.capture_count >= policy.max_captures_per_batch
-            )
             or (predicate is not None and not predicate(decision))
         ):
             return False
@@ -384,25 +392,21 @@ class BatchPlan:
             policy.every_n_decisions is not None
             and decision.decision % policy.every_n_decisions == 0
         )
-        if periodic or (
-            policy.probability and self.capture_rng.random() < policy.probability
-        ):
-            self.capture_count += 1
-            return True
-        return False
+        return periodic or (
+            policy.probability > 0 and self.capture_rng.random() < policy.probability
+        )
 
     def finish(self, decisions: Iterable[PackedDecision]) -> BatchReceipt:
         """Resolve surviving observation references after both seats are packed."""
-        by_episode: dict[int, list[int]] = defaultdict(list)
+        # Each episode maps its capture-time observation rows to final packed rows.
+        by_episode: dict[int, dict[int, int]] = defaultdict(dict)
         by_group: dict[tuple[int, int], list[int]] = defaultdict(list)
         roots: dict[tuple[int, int], list[int]] = defaultdict(list)
-        flat: dict[int, int] = {}
         row_count = 0
         for i, decision in enumerate(decisions):
             row_count += 1
             if decision.episode_ordinal in self.candidates:
-                by_episode[decision.episode_ordinal].append(i)
-                flat[decision.obs_row] = i
+                by_episode[decision.episode_ordinal][decision.obs_row] = i
             if (branch := decision.branch) is not None:
                 group = (branch.branch_group_id, branch.snapshot_id)
                 by_group[group].append(i)
@@ -419,9 +423,10 @@ class BatchPlan:
             if episode not in by_episode:
                 self.discard_captures(episode)
                 continue
-            episode_rows = tuple(by_episode[episode])
+            packed = by_episode[episode]
+            episode_rows = tuple(packed.values())
             captures.extend(
-                CapturedCandidate(s, flat[row], episode_rows, tags)
+                CapturedCandidate(s, packed[row], episode_rows, tags)
                 for row, s, tags in self.candidates[episode]
             )
         scheduler = self.scheduler.model_copy(

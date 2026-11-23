@@ -66,6 +66,10 @@ class BufferedStreams:
         if count != self.num_envs:
             raise ValueError("producer row count differs from global streams")
 
+    def _owned_shards(self) -> Sequence[StreamShard]:
+        """Buffer binding and cleanup include parked sources as well as active streams."""
+        return self._shards
+
     def set_buffers(
         self,
         buffers: dict[str, Array],
@@ -89,7 +93,7 @@ class BufferedStreams:
                     action_overflow,
                     layout=layout,
                 )
-                for shard in self._shards
+                for shard in self._owned_shards()
             ]
         )
 
@@ -337,7 +341,7 @@ class BufferedStreams:
     def close(self) -> None:
         if not self._closed:
             self._closed = True
-            for shard in self._shards:
+            for shard in self._owned_shards():
                 shard.native.close()
             self._shards.clear()
 

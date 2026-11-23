@@ -87,7 +87,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
-from manabot.training.updates.targets import compute_batch_targets
+from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 import managym
 from managym.recording import GameInputs, PlayerSetup, read_records
 from managym.statistics import read_statistics
@@ -116,6 +116,14 @@ def small_agent(
     return ActorCritic(
         space if space is not None else ObservationSpace(),
         ModelConfig(attention_on=False, hidden_dim=8, value_kind=kind),
+    )
+
+
+def torch_targets(
+    learner: Learner, batch: RolloutBatch, learning: Learning | DampedPolicyLearning
+) -> BatchTargets:
+    return compute_batch_targets(
+        backend, learner, AdmittedRollout(learner.agent, batch), learning
     )
 
 
@@ -266,9 +274,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         advantage_quantile=0,
         min_advantage=0,
     )
-    targets = compute_batch_targets(
-        backend, learner, AdmittedRollout(agent, batch), learning
-    )
+    targets = torch_targets(learner, batch, learning)
     predictions = raw.softmax(-1) if kind == "categorical_wdl" else raw
     expected = predictions[[0, 0, 1]]
     # The two native views must make distinguishable predictions for this control.
@@ -300,9 +306,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         next_obs={k: v[[1, 0]] for k, v in batch.next_obs.items()},
         trajectories=(TrajectorySpan(0, 2, 0, 1), TrajectorySpan(2, 3, 1, 0)),
     )
-    reordered_targets = compute_batch_targets(
-        backend, learner, AdmittedRollout(agent, reordered), learning
-    )
+    reordered_targets = torch_targets(learner, reordered, learning)
     torch.testing.assert_close(reordered_targets.value_targets, targets.value_targets)
     torch.testing.assert_close(reordered_targets.advantages, targets.advantages)
 
@@ -313,9 +317,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         perturbed = replace(
             batch, next_obs={k: v[[other, other]] for k, v in batch.next_obs.items()}
         )
-        changed = compute_batch_targets(
-            backend, learner, AdmittedRollout(agent, perturbed), learning
-        )
+        changed = torch_targets(learner, perturbed, learning)
         torch.testing.assert_close(
             changed.advantages[~changed_rows], targets.advantages[~changed_rows]
         )
@@ -671,12 +673,7 @@ def test_sibling_roots_use_empirical_returns_and_leave_descendants_unchanged(
         learning,
         action_values=action_values,
     )
-    ordinary = compute_batch_targets(
-        backend,
-        learner,
-        AdmittedRollout(agent, replace(batch, branch_group_id=None)),
-        learning,
-    )
+    ordinary = torch_targets(learner, replace(batch, branch_group_id=None), learning)
     roots = [0, 2, 4]
     others = np.setdiff1d(np.arange(12), roots)
     assert torch.equal(targets.advantages[roots, 0], torch.tensor([1.5, 0, -1.5]))
@@ -742,9 +739,7 @@ def test_grouped_ppo_discounts_root_viewer_cuts_and_validates_identity() -> None
     batch = replace(batch, rewards=np.array([[0.1], [0.2], [0.3], [-0.1]], np.float32))
     learning = Learning(gamma=0.5, epochs=1, minibatches=1, retained_fraction=1)
     learner = Learner(agent, "cpu", minibatch_rows=3)
-    targets = compute_batch_targets(
-        backend, learner, AdmittedRollout(agent, batch), learning
-    )
+    targets = torch_targets(learner, batch, learning)
     g0 = 0.1 + 0.5 * (0.2 + 0.5 * long_tail[0].item())
     g1 = 0.3 + 0.5 * short_tail[0].item()
     np.testing.assert_allclose(
@@ -768,16 +763,11 @@ def test_grouped_ppo_discounts_root_viewer_cuts_and_validates_identity() -> None
         replace(batch, snapshot_id=np.array([[7], [7], [8], [7]], np.int64)),
     ):
         with pytest.raises(ValueError, match="snapshot ID and seat"):
-            compute_batch_targets(
-                backend, learner, AdmittedRollout(agent, mixed), learning
-            )
+            torch_targets(learner, mixed, learning)
 
 
 def test_wdl_group_at_a_cut_averages_frozen_root_viewer_distributions() -> None:
-    agent = ActorCritic(
-        ObservationSpace(),
-        ModelConfig(attention_on=False, hidden_dim=8, value_kind="categorical_wdl"),
-    )
+    agent = small_agent(kind="categorical_wdl")
     _, long_tail = three_choices(agent)
     _, short_tail = three_choices(agent, horizon=1)
     batch = cut_siblings(agent)
@@ -828,9 +818,7 @@ def test_mixed_sources_filter_eligible_rows_independently(
         epochs=1, minibatches=1, filter_kind=kind, retained_fraction=0.4
     )
     learner = Learner(agent, "cpu", minibatch_rows=12)
-    targets = compute_batch_targets(
-        backend, learner, AdmittedRollout(agent, batch), learning
-    )
+    targets = torch_targets(learner, batch, learning)
     expected = [10, 8, 4, 2] if kind == "top_count" else [2, 3, 4, 8, 9, 10]
     assert targets.retained.tolist() == expected
     result = update_iteration(
@@ -866,9 +854,7 @@ def test_weighted_steps_match_hand_weighted_actor_and_critic(rule: str) -> None:
             reference_forward_kl=0.1,
         )
     )
-    targets = compute_batch_targets(
-        backend, reference, AdmittedRollout(reference.agent, batch), learning
-    )
+    targets = torch_targets(reference, batch, learning)
     indices = np.array([0, 1])
     rows = batch.observations(indices)
     logits, values = reference.agent(device_input(reference.agent, rows.observation))
@@ -975,9 +961,7 @@ def test_damped_minibatches_preserve_source_and_root_weights(framework: str) -> 
         root_actor_weight=4,
         max_grad_norm=100,
     )
-    targets = compute_batch_targets(
-        backend, reference, AdmittedRollout(reference.agent, batch), learning
-    )
+    targets = torch_targets(reference, batch, learning)
     rate, tau = learning.rates(1)
     reference.set_learning_rate(rate)
     actor_weights = torch.tensor([0.1, 0.1, 4, 1])
@@ -1088,9 +1072,7 @@ def test_zero_weight_discovery_preserves_live_adam_and_ema(rule: str) -> None:
     adam_before = deepcopy(learner.optimizer.state_dict())
     assert adam_before["state"]
     discovery = replace(batch, sample_weight=np.zeros_like(batch.rewards))
-    targets = compute_batch_targets(
-        backend, learner, AdmittedRollout(agent, discovery), learning
-    )
+    targets = torch_targets(learner, discovery, learning)
     assert (
         targets.signals.policy_entropy.shape == (3,)
         and np.isfinite(targets.signals.critic_residual).all()
@@ -1208,9 +1190,7 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
                     batch = collect(collector, agent, 1, snapshot_plan=plan)
                     receipt = plan.receipt
                     assert receipt is not None
-                    targets = compute_batch_targets(
-                        backend, learner, AdmittedRollout(agent, batch), learning
-                    )
+                    targets = torch_targets(learner, batch, learning)
                     prepared = bank.prepare_commit(receipt, targets.signals)
                     assert bank.generation == generation - 1
                     if generation == 1:
@@ -1372,9 +1352,7 @@ def test_failed_episodes_discard_captures_siblings_and_frozen_views() -> None:
                         assert (
                             receipt.next_scheduler_state.starts == 7
                         )  # two fresh + three failed-group attempts + two siblings
-                    targets = compute_batch_targets(
-                        backend, learner, AdmittedRollout(agent, batch), Learning()
-                    )
+                    targets = torch_targets(learner, batch, Learning())
                     bank.commit(receipt, targets.signals)
         assert sum(e.visits for e in bank.state().entries) == 1
         bank.close()
@@ -1400,9 +1378,7 @@ def test_numerical_error_and_unavailable_signal_leave_bank_unchanged() -> None:
     ):
         with bank.begin_batch() as warmup:
             batch = collect(collector, agent, 1, snapshot_plan=warmup)
-            targets = compute_batch_targets(
-                backend, learner, AdmittedRollout(agent, batch), learning
-            )
+            targets = torch_targets(learner, batch, learning)
             assert warmup.receipt is not None
             bank.commit(warmup.receipt, targets.signals)
         before = bank.state().model_dump_json()
@@ -1422,9 +1398,7 @@ def test_numerical_error_and_unavailable_signal_leave_bank_unchanged() -> None:
             bank.begin_batch() as plan,
         ):
             batch = collect(collector, agent, 1, snapshot_plan=plan)
-            targets = compute_batch_targets(
-                backend, learner, AdmittedRollout(agent, batch), learning
-            )
+            targets = torch_targets(learner, batch, learning)
             assert plan.receipt is not None
             bank.commit(plan.receipt, targets.signals)
         assert bank.state().model_dump_json() == before
@@ -1462,9 +1436,7 @@ def test_bank_decays_old_scores_and_spends_only_whole_group_allowance() -> None:
                 assert receipt is not None
                 [candidate] = receipt.captures
                 ids.append(root_id(candidate.snapshot.recipe))
-                targets = compute_batch_targets(
-                    backend, learner, AdmittedRollout(agent, batch), Learning()
-                )
+                targets = torch_targets(learner, batch, Learning())
                 residual = np.zeros(batch.actions.size)
                 residual[candidate.row] = value
                 bank.commit(receipt, replace(targets.signals, critic_residual=residual))
@@ -1518,9 +1490,7 @@ def test_full_staleness_bank_keeps_new_capture_and_evicts_oldest() -> None:
                 assert plan.receipt is not None
                 [candidate] = plan.receipt.captures
                 captured.append(root_id(candidate.snapshot.recipe))
-                targets = compute_batch_targets(
-                    backend, learner, AdmittedRollout(agent, batch), Learning()
-                )
+                targets = torch_targets(learner, batch, Learning())
                 bank.commit(plan.receipt, targets.signals)
                 assert {e.snapshot_id for e in bank.state().entries} == set(
                     captured[-2:]
@@ -1552,9 +1522,7 @@ def test_eight_streams_launch_funded_pairs_and_resume_retry_debt() -> None:
     ) as collector:
         with bank.begin_batch() as warmup:
             batch = collect(collector, agent, 1, snapshot_plan=warmup)
-            targets = compute_batch_targets(
-                backend, learner, AdmittedRollout(agent, batch), Learning()
-            )
+            targets = torch_targets(learner, batch, Learning())
             assert warmup.receipt is not None
             bank.commit(warmup.receipt, targets.signals)
         get_info = collector._env.get_last_info
@@ -1579,9 +1547,7 @@ def test_eight_streams_launch_funded_pairs_and_resume_retry_debt() -> None:
             batch = collect(collector, agent, 1, snapshot_plan=plan)
             assert failed and plan.receipt is not None
             assert len(plan.receipt.visited_groups) == 2
-            targets = compute_batch_targets(
-                backend, learner, AdmittedRollout(agent, batch), Learning()
-            )
+            targets = torch_targets(learner, batch, Learning())
             bank.commit(plan.receipt, targets.signals)
         saved = SnapshotBankState.model_validate_json(bank.state().model_dump_json())
         assert saved.scheduler.allowance == -1
@@ -1609,9 +1575,7 @@ def test_coverage_cycle_and_random_draws_resume_with_the_saved_rng() -> None:
         for floor in (1, 8):
             with bank.begin_batch() as plan:
                 batch = collect(collector, agent, floor, snapshot_plan=plan)
-                targets = compute_batch_targets(
-                    backend, learner, AdmittedRollout(agent, batch), Learning()
-                )
+                targets = torch_targets(learner, batch, Learning())
                 assert plan.receipt is not None
                 visits = plan.receipt.visited_groups
                 if floor == 8:
@@ -1666,9 +1630,7 @@ def test_mixed_batch_retries_the_same_sibling_after_the_row_floor() -> None:
         learner = Learner(agent, "cpu", minibatch_rows=16)
         with bank.begin_batch() as plan:
             batch = collect(collector, agent, 1, snapshot_plan=plan)
-            targets = compute_batch_targets(
-                backend, learner, AdmittedRollout(agent, batch), Learning()
-            )
+            targets = torch_targets(learner, batch, Learning())
             assert plan.receipt is not None and len(plan.receipt.captures) == 2
             assert all(
                 len(c.snapshot.recipe.actions) == 2 for c in plan.receipt.captures
@@ -1707,9 +1669,7 @@ def test_mixed_batch_retries_the_same_sibling_after_the_row_floor() -> None:
             assert np.count_nonzero(batch.episode_source == 0) > 3
             assert np.count_nonzero(batch.episode_source == 1) == 3
             assert receipt.next_scheduler_state.starts == 2 + 5
-            targets = compute_batch_targets(
-                backend, learner, AdmittedRollout(agent, batch), Learning()
-            )
+            targets = torch_targets(learner, batch, Learning())
             bank.commit(receipt, targets.signals)
         bank.close()
 

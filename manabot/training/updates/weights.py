@@ -3,7 +3,7 @@
 import numpy as np
 
 from manabot.training.rollout.collection import RolloutBatch
-from manabot.training.updates.backend import RL, Array
+from manabot.training.updates.backend import RL, Array, Arrays, Device
 
 
 def batch_weights(
@@ -39,12 +39,17 @@ def batch_weights(
 
 
 def logical_weights(
-    normalized: np.ndarray | None, rows: np.ndarray, actor_count: int
-) -> np.ndarray | None:
-    """Each row's contribution to its logical minibatch, before execution splits."""
+    normalized: np.ndarray | None,
+    rows: np.ndarray,
+    actor_count: int,
+    arrays: Arrays,
+    device: Device,
+) -> Array | None:
+    """Transfer the two coefficients per trained row once, before execution splits."""
     if normalized is None:
         return None
-    return (normalized[rows] / (max(actor_count, 1), len(rows))).astype(np.float32)
+    coefficients = normalized[rows] / (max(actor_count, 1), len(rows))
+    return arrays.from_numpy(coefficients.astype(np.float32), device)
 
 
 def actor_term(

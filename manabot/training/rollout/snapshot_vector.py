@@ -130,6 +130,30 @@ class SnapshotVector(Protocol):
 SnapshotVectorFactory = Callable[[ObservationSpace, Match, int, int], SnapshotVector]
 
 
+def replay_prefix(
+    live: CapturedVector, recipe: SnapshotRecipe, hot_handle: object | None
+) -> None:
+    """Reset a replay stream and apply the committed decisions of a single game."""
+    game = live.games[0]
+    if (game.decision_memory, game.decision_memory_include_own) != (
+        recipe.decision_memory,
+        recipe.decision_memory_include_own,
+    ):
+        raise ValueError("decision memory settings differ")
+    setup = (
+        hot_handle
+        if isinstance(hot_handle, managym.GameSetup)
+        else Match(recipe.match).to_rust()
+    )
+    live.reset_all_into_buffers(setup)
+    live.reset_seeds_into_buffers([recipe.seed])
+    generation = live.current_game_generations()
+    for action in recipe.actions:
+        live.step_into_buffers([action])
+    if live.current_game_generations() != generation:
+        raise ValueError("action prefix crossed a game terminal")
+
+
 class InMemorySnapshotVector(BufferedStreams):
     """Serial reference producer with independently resettable one-slot vectors.
 
@@ -179,6 +203,9 @@ class InMemorySnapshotVector(BufferedStreams):
         self._replay = streams({"record_fraction": 0.0, "statistics_path": None})
         super().__init__(num_envs, self._fresh.copy())
 
+    def _owned_shards(self) -> Sequence[StreamShard]:
+        return (*self._fresh, *self._replay)
+
     def set_buffers(
         self,
         buffers: dict[str, np.ndarray],
@@ -190,17 +217,6 @@ class InMemorySnapshotVector(BufferedStreams):
         self._buffers = buffers
         self._layout = layout
         self._action_overflow = action_overflow
-        for slot, active in enumerate(self._shards):
-            shard = (
-                self._fresh[slot]
-                if active is self._replay[slot]
-                else self._replay[slot]
-            )
-            shard.native.set_buffers(
-                {k: v[shard.start : shard.stop] for k, v in buffers.items()},
-                action_overflow,
-                layout=layout,
-            )
 
     def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]:
         captures = []
@@ -252,25 +268,8 @@ class InMemorySnapshotVector(BufferedStreams):
             elif recipe is None:
                 live.reset_seeds_into_buffers(live.current_game_seeds())
             else:
-                game = live.games[0]
                 try:
-                    if (game.decision_memory, game.decision_memory_include_own) != (
-                        recipe.decision_memory,
-                        recipe.decision_memory_include_own,
-                    ):
-                        raise ValueError("decision memory settings differ")
-                    setup = (
-                        request.hot_handle
-                        if isinstance(request.hot_handle, managym.GameSetup)
-                        else Match(recipe.match).to_rust()
-                    )
-                    live.reset_all_into_buffers(setup)
-                    live.reset_seeds_into_buffers([recipe.seed])
-                    generation = live.current_game_generations()
-                    for action in recipe.actions:
-                        live.step_into_buffers([action])
-                    if live.current_game_generations() != generation:
-                        raise ValueError("action prefix crossed a game terminal")
+                    replay_prefix(live, recipe, request.hot_handle)
                 except Exception as exc:
                     raise ValueError(
                         f"snapshot {request.snapshot_id} installation failed: {exc}"
@@ -315,11 +314,3 @@ class InMemorySnapshotVector(BufferedStreams):
                 reads, self.current_game_generations(), strict=True
             )
         ]
-
-    def close(self) -> None:
-        if not self._closed:
-            for fresh, replay, active in zip(
-                self._fresh, self._replay, self._shards, strict=True
-            ):
-                (replay if active is fresh else fresh).native.close()
-            super().close()

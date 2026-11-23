@@ -1393,7 +1393,10 @@ def _collect(
             )
 
         if snapshot_plan is not None:
-            _capture_decisions(collector, snapshot_plan, learner_rows, acting)
+            snapshot_plan.capture(
+                _capture_decisions(collector, learner_rows, acting),
+                collector.capture_predicate,
+            )
 
         for row in np.flatnonzero(active):
             _expose(collector, int(row), "environment_decisions")
@@ -1661,40 +1664,30 @@ def _install_roots(
 
 
 def _capture_decisions(
-    collector: Collector, plan: BatchPlan, rows: np.ndarray, acting: np.ndarray
-) -> None:
-    policy = plan.config.capture
-    if (policy.every_n_decisions is None and not policy.probability) or (
-        policy.max_captures_per_batch is not None
-        and plan.capture_count >= policy.max_captures_per_batch
-    ):
-        return
+    collector: Collector, rows: np.ndarray, acting: np.ndarray
+) -> Iterator[CaptureDecision]:
     # Native legality can exceed the learned action slots under first-legal.
     native_counts = (
         collector._env.current_action_summaries()
         if collector.observation_space.config.action_overflow == "first-legal"
         else None
     )
-    decisions = []
     for row in rows:
         slot, seat = int(row), int(acting[row])
         episode = collector._episodes[slot]
         pending = collector._pending[2 * slot + seat]
         assert pending is not None
-        decisions.append(
-            CaptureDecision(
-                slot,
-                episode.choices + 1,
-                native_counts[slot][0]
-                if native_counts is not None
-                else len(pending.action_data.slots),
-                seat,
-                episode.branch,
-                episode.ordinal,
-                pending.obs_row,
-            )
+        yield CaptureDecision(
+            slot,
+            episode.choices + 1,
+            native_counts[slot][0]
+            if native_counts is not None
+            else len(pending.action_data.slots),
+            seat,
+            episode.branch,
+            episode.ordinal,
+            pending.obs_row,
         )
-    plan.capture(decisions, collector.capture_predicate)
 
 
 def _discard_group_rows(collector: Collector, groups: set[int]) -> None:

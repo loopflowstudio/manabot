@@ -286,7 +286,9 @@ def update_damped_iteration(
             execution_rows = learner.execution_rows or len(logical_rows)
             split = len(logical_rows) > execution_rows
             actor_count = int(actor_rows[logical_rows].sum())
-            weights = logical_weights(normalized, logical_rows, actor_count)
+            weights = logical_weights(
+                normalized, logical_rows, actor_count, backend.arrays, device
+            )
             totals = dict(
                 loss=0.0,
                 policy_loss=0.0,
@@ -303,9 +305,7 @@ def update_damped_iteration(
                     coefficients = (
                         None
                         if weights is None
-                        else to_device(
-                            weights[offset : offset + len(rows_host)], device
-                        )
+                        else weights[offset : offset + execution_rows]
                     )
                     indexes = to_device(rows_host, device)
                     minibatch_actions = actions[indexes]
@@ -317,7 +317,7 @@ def update_damped_iteration(
                         device,
                     )
                     actor_selected = actor_rows[rows_host]
-                    actor_mask = to_device(actor_selected, device)
+                    actor_mask = targets.selected.reshape(-1)[indexes]
                     # Actor and critic have different denominators under actor-only filtering.
                     policy_weight = int(actor_selected.sum()) / max(1, actor_count)
                     value_weight = len(rows_host) / len(logical_rows)
