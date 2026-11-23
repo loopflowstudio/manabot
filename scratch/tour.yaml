@@ -1,5 +1,7 @@
-at: 80425a2cbf66b400fdf2eaf30dcdad2740d89673
+at: 0ed6707c1048d7345fb98629388ab9a21ceeb8b7
 first:
+  - path: scratch/plan.md
+    why: Delivered behavior and remaining readiness audit
   - path: managym/cards/src/fdn.rs
     why: Lightshell Duo combines prowess and surveil on entry
   - path: managym/state/src/ability.rs

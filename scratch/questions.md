@@ -6,4 +6,4 @@ Selected Lightshell Duo first to check the existing private ordering contract th
 
 The compression pass covers the delivered Lightshell Duo slice. The Python fixture keeps a fifth Island in hand so the player still has a decision after surveil resolves.
 
-The resumed ledger audit covers two Bucket C rows so far. Joraga Invocation requires whole-declaration block requirement maximization. The current combat chooser enforces MustBeBlockedByAllAble per blocker. Confiscate requires an attached continuous control effect in layer 2. The existing control effect records the previous controller at resolution. The other 216 unclassified names remain open.
+Five Bucket C rows are confirmed. Joraga Invocation requires whole-declaration block requirement maximization. Confiscate requires an attached continuous control effect in layer 2. Knight of Grace, Knight of Malice and Elenda, Saint of Dusk require hexproof qualified by source color or type. The permanent target check in `flow/resolution.rs` reads a single unconditional hexproof flag for opposing controllers. The other 213 unclassified names remain open.
