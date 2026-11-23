@@ -1,0 +1,31 @@
+at: ea10a4aac351971d0cdd95e66491b206ea656e98
+first:
+  - path: docs/engine.md
+    why: How later instructions use a committed result
+  - path: managym/cards/src/kld.rs
+    why: Fumigate counts the creatures it destroyed
+  - path: managym/cards/src/som.rs
+    why: Exsanguinate gains the life opponents actually lost
+  - path: managym/state/src/ability.rs
+    why: Object counts and scoped life loss
+  - path: managym/src/flow/resolution.rs
+    why: Which results each instruction requests and reads
+  - path: managym/src/flow/proposed_event.rs
+    why: Each proposal commits and returns its outcome
+  - path: managym/src/flow/zones.rs
+    why: A move returns the exact appearance it minted
+  - path: managym/src/flow/damage.rs
+    why: A life change returns its applied difference
+  - path: managym/src/flow/decision.rs
+    why: Bind one completed batch to its instruction
+  - path: managym/src/agent/effect_execution.rs
+    why: Project retained results into viewer observations
+  - path: managym/cards/tests/cards/kld.rs
+    why: Destruction with exile and an indestructible survivor
+  - path: managym/cards/tests/cards/som.rs
+    why: Protected losses and zero X
+  - path: managym/cards/tests/cards/observability.rs
+    why: Text, policy tokens and divergent discard choices
+  - path: managym/src/flow/resolution_tests.rs
+    why: Retaining destruction counts through a second move
+hide: []
