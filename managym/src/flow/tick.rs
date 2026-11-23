@@ -144,30 +144,8 @@ impl Game {
             }
         }
 
-        if step == StepKind::Cleanup {
-            if !self.state.turn.cleanup_priority {
-                let choice = self.stabilize_before_priority();
-                if choice.is_some() {
-                    self.state.set_cleanup_priority(true);
-                }
-                if let Some(space) = choice {
-                    return Some(space);
-                }
-            }
-            if self.state.turn.cleanup_priority {
-                if let Some(space) = self.tick_priority() {
-                    return Some(space);
-                }
-                // CR 514.3a: repeat cleanup after this priority round finishes.
-                if self.state.turn.step_initialized && !self.is_game_over() {
-                    self.end_step_for_cleanup();
-                }
-                return None;
-            }
-        }
-
-        if TurnState::step_has_priority(step) {
-            if let Some(space) = self.tick_priority() {
+        if step != StepKind::Untap {
+            if let Some(space) = self.tick_priority(step) {
                 return Some(space);
             }
             if !self.state.turn.step_initialized || self.is_game_over() {
@@ -175,26 +153,26 @@ impl Game {
             }
         }
 
-        // CR 106.4 — Unspent mana empties at the end of each step and phase.
-        self.clear_mana_pools();
         self.on_step_end(step);
-        self.remember_controlled_hands();
-        self.state.advance_step();
-        self.skip_combat_phases_if_required();
+        if self.state.turn.cleanup_priority {
+            // CR 514.3a: repeat cleanup after its priority round finishes.
+            self.state.turn.start_cleanup();
+        } else {
+            self.state.advance_step();
+            self.skip_combat_phases_if_required();
+        }
 
         None
     }
 
-    /// Leave the interrupted step (CR 725.1d) or repeat cleanup (CR 514.3a).
+    /// CR 725.1d: leaving a combat step early also ends its combat phase.
     pub(crate) fn end_step_for_cleanup(&mut self) {
         let step = if self.state.turn.current_phase_kind() == PhaseKind::Combat {
             StepKind::EndOfCombat
         } else {
             self.state.turn.current_step_kind()
         };
-        self.clear_mana_pools();
         self.on_step_end(step);
-        self.remember_controlled_hands();
         self.state.turn.start_cleanup();
     }
 
@@ -258,26 +236,20 @@ impl Game {
     }
 
     fn on_step_end(&mut self, step: StepKind) {
-        if matches!(step, StepKind::EndOfCombat) {
+        // CR 106.4 — Unspent mana empties at the end of each step and phase.
+        self.clear_mana_pools();
+        if step == StepKind::EndOfCombat {
             // CR 511.3 — Creatures stop being attacking as combat ends.
-            for index in 0..self.state.permanents.len() {
-                let permanent_id = crate::state::game_object::PermanentId(index);
-                if self.state.permanents[permanent_id].is_some() {
-                    self.state.permanents[permanent_id]
-                        .as_mut()
-                        .expect("checked permanent")
-                        .attacking = false;
-                }
+            for permanent in self.state.permanents.iter_mut().flatten() {
+                permanent.attacking = false;
             }
             self.finish_combat_capture();
             self.state.combat = None;
-            // Until-end-of-combat mana (firebending) empties now.
+        }
+        if matches!(step, StepKind::EndOfCombat | StepKind::Cleanup) {
             self.clear_combat_mana_pools();
         }
-        if matches!(step, StepKind::Cleanup) {
-            // Safety net: no combat mana survives the turn.
-            self.clear_combat_mana_pools();
-        }
+        self.remember_controlled_hands();
     }
 
     fn perform_turn_based_actions(&mut self, step: StepKind) -> Option<ActionSpace> {
@@ -467,14 +439,13 @@ impl Game {
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
                 self.end_turn_modifiers();
-                self.expire_turn_cast_grants();
                 None
             }
             _ => None,
         }
     }
 
-    fn tick_priority(&mut self) -> Option<ActionSpace> {
+    fn tick_priority(&mut self, step: StepKind) -> Option<ActionSpace> {
         // An automatic pass changes only the priority holder. Reuse this
         // invocation's fixed-point proof until a stack object resolves.
         let mut stabilized = false;
@@ -492,6 +463,10 @@ impl Game {
             if !stabilized {
                 if let Some(space) = self.stabilize_before_priority() {
                     return Some(space);
+                }
+                // CR 514.3a: only an SBA or a waiting trigger opens cleanup priority.
+                if !TurnState::step_has_priority(step) && !self.state.turn.cleanup_priority {
+                    return None;
                 }
                 stabilized = true;
             }

@@ -13,7 +13,7 @@ use crate::{
         game::Game,
         payment::{CostComponent, PaymentProgress},
         proposed_event::{
-            EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
+            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
         trigger::{DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
@@ -249,6 +249,18 @@ impl Game {
             ..EffectFrame::new(spell.controller, effects)
         };
         self.run_frame(frame);
+    }
+
+    /// CR 725.1b: abilities cease to exist. All spells, including copies
+    /// and the resolving spell, leave the stack in one zone-change batch.
+    fn exile_stack(&mut self) -> EventBatch {
+        self.state
+            .stack_objects_mut()
+            .retain(|item| matches!(item, StackObject::Spell(_)));
+        let moves = self.state.stack_objects.iter().rev().map(|spell| {
+            self.zone_move_proposal(spell.source_object(), ZoneType::Exile, Default::default())
+        });
+        self.event_batch(moves.collect())
     }
 
     /// Counter an activated or triggered ability: it is removed from the
@@ -1132,31 +1144,11 @@ impl Game {
             Effect::EndTheTurn => {
                 // CR 725.1a: collect occurrences from earlier instructions
                 // before discarding them. Later triggers wait for cleanup.
-                self.process_game_events();
-                self.check_state_triggers();
+                self.collect_waiting_triggers();
                 self.state.pending_triggers_mut().clear();
                 self.capture_resolution(frame);
-
-                // CR 725.1b: abilities cease to exist and all spells move
-                // together, including this spell and any spell copies.
-                self.state
-                    .stack_objects_mut()
-                    .retain(|item| matches!(item, StackObject::Spell(_)));
-                let moves = self
-                    .state
-                    .stack_objects
-                    .iter()
-                    .rev()
-                    .map(|spell| {
-                        self.zone_move_proposal(
-                            spell.source_object(),
-                            ZoneType::Exile,
-                            Default::default(),
-                        )
-                    })
-                    .collect();
                 *frame = EffectFrame {
-                    batch: Some(self.event_batch(moves)),
+                    batch: Some(self.exile_stack()),
                     completion: FrameCompletion::EndTurn,
                     ..EffectFrame::new(frame.controller, Vec::new())
                 };

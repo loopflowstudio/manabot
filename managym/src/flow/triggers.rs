@@ -873,6 +873,12 @@ impl Game {
         candidates
     }
 
+    /// Collect occurrences in order without placing them on the stack.
+    pub(crate) fn collect_waiting_triggers(&mut self) {
+        self.process_game_events();
+        self.check_state_triggers();
+    }
+
     /// Match pending committed events against the applicable exact sources.
     pub(crate) fn process_game_events(&mut self) {
         while !self.state.pending_events.is_empty() {
@@ -1413,7 +1419,7 @@ impl Game {
 
     /// State triggers (CR 603.8) of battlefield sources whose state holds,
     /// unless that exact source's occurrence is still waiting or on the stack.
-    pub(crate) fn check_state_triggers(&mut self) {
+    fn check_state_triggers(&mut self) {
         let mut fired = Vec::new();
         for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
             let Some(permanent) = self

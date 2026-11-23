@@ -22,6 +22,7 @@ use crate::{
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
+        sba::SbaProgress,
         turn::OnceEachTurnKey,
     },
     state::{
@@ -1232,6 +1233,31 @@ impl Game {
         self.run_frame(child);
     }
 
+    /// Reach a stable board without granting priority. If an SBA needs a
+    /// decision, its frame inherits the interrupted rule's return point.
+    fn finish_sbas_before(&mut self, resume: FrameCompletion) -> bool {
+        while !self.is_game_over() {
+            if matches!(resume, FrameCompletion::EndTurn) {
+                self.collect_waiting_triggers();
+            }
+            match self.perform_state_based_actions() {
+                SbaProgress::Stable => return true,
+                SbaProgress::Changed => continue,
+                SbaProgress::Pending => {
+                    self.state
+                        .suspended_decision_mut()
+                        .as_mut()
+                        .expect("pending SBA")
+                        .frame
+                        .completion
+                        .then(resume);
+                    return false;
+                }
+            }
+        }
+        false
+    }
+
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
@@ -1305,35 +1331,19 @@ impl Game {
                         frame.completion = *next;
                         continue;
                     }
-                    FrameCompletion::CombatNormal | FrameCompletion::EndTurn => {
-                        if frame.completion == FrameCompletion::EndTurn {
-                            self.process_game_events();
-                            self.check_state_triggers();
-                        }
-                        match self.perform_state_based_actions() {
-                            crate::flow::sba::SbaProgress::Changed if self.is_game_over() => return,
-                            crate::flow::sba::SbaProgress::Changed => continue,
-                            crate::flow::sba::SbaProgress::Pending => {
-                                self.state
-                                    .suspended_decision_mut()
-                                    .as_mut()
-                                    .expect("pending SBA")
-                                    .frame
-                                    .completion
-                                    .then(frame.completion);
-                                return;
-                            }
-                            crate::flow::sba::SbaProgress::Stable => {}
-                        }
-                        if frame.completion == FrameCompletion::EndTurn {
+                    FrameCompletion::EndTurn => {
+                        if self.finish_sbas_before(FrameCompletion::EndTurn) {
                             self.end_step_for_cleanup();
+                        }
+                        return;
+                    }
+                    FrameCompletion::CombatNormal => {
+                        if !self.finish_sbas_before(FrameCompletion::CombatNormal) {
                             return;
                         }
-                        if !self.is_game_over() {
-                            frame.batch = self.combat_damage_batch(
-                                crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
-                            );
-                        }
+                        frame.batch = self.combat_damage_batch(
+                            crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
+                        );
                         frame.completion = FrameCompletion::Continue;
                         continue;
                     }

@@ -1,13 +1,19 @@
 //! Tests for cards filed in `src/chk.rs`, in card order.
 
-use crate::support::inspect::zone_of;
 use crate::support::{
-    game::{clear_summoning_sickness, five_color_unfunded_setup, move_to_hand, Scenario},
-    inspect::{card_of, permanent_named, tapped},
-    play::{activate, cast_card, castable, choose, choose_mode},
+    game::{
+        clear_summoning_sickness, five_color_setup, five_color_unfunded_setup,
+        force_new_card_in_hand, move_to_hand, plant_in_graveyard, Scenario,
+    },
+    inspect::{assert_choice_contract, card_of, permanent, permanent_named, tapped, zone_of},
+    play::{
+        activate, activate_card, attack_with, cast, cast_card, castable, choose, choose_mode,
+        resolve_top, settle, spend_colorless, target_opponent,
+    },
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
+    flow::turn::{AdditionalCombat, StepKind},
     state::{
         ability::Effect,
         card::{ActivatedAbilityDefinition, CardType},
@@ -222,13 +228,7 @@ fn heartbeat_of_spring_ignores_nonlands_and_badgermole_stays_with_its_controller
 /// ability. Cleanup still demands the active player's discard.
 #[test]
 fn time_stop_exiles_the_stack_during_opposing_combat() {
-    use crate::support::{
-        game::{clear_summoning_sickness, five_color_setup, force_new_card_in_hand},
-        inspect::{assert_choice_contract, permanent},
-        play::{attack_with, cast, resolve_top, target_opponent},
-    };
-    use managym::flow::turn::StepKind;
-    let mut s = five_color_setup(&[
+    let mut s = five_color_unfunded_setup(&[
         "Time Stop",
         "Sundial of the Infinite",
         "Lightning Bolt",
@@ -244,7 +244,7 @@ fn time_stop_exiles_the_stack_during_opposing_combat() {
         .state
         .turn
         .additional_combats
-        .push(managym::flow::turn::AdditionalCombat { attackers: None });
+        .push(AdditionalCombat { attackers: None });
     s.game_mut().state.turn.extra_turns.push(PlayerId(0));
     s.set_player_mana_pool(0, "1R");
     s.set_player_mana_pool(1, "4UU");
@@ -255,9 +255,7 @@ fn time_stop_exiles_the_stack_during_opposing_combat() {
     let stop = force_new_card_in_hand(&mut s, 1, "Time Stop");
     cast_card(&mut s, stop);
     assert_eq!(s.game().state.stack_objects.len(), 3);
-    for land in ["Forest", "Island"].into_iter().cycle().take(8) {
-        force_new_card_in_hand(&mut s, 0, land);
-    }
+    s.game_mut().draw_cards(PlayerId(0), 8);
     let turn = s.game().state.turn.turn_number;
     resolve_top(&mut s);
     assert_eq!(zone_of(&s, stop), Some(ZoneType::Exile));
@@ -279,11 +277,6 @@ fn time_stop_exiles_the_stack_during_opposing_combat() {
 /// Unearth's delayed trigger waits for an end step that actually begins.
 #[test]
 fn time_stop_skips_the_end_step_but_preserves_its_delayed_trigger() {
-    use crate::support::{
-        game::{five_color_setup, plant_in_graveyard},
-        play::{activate_card, cast, resolve_top, settle, spend_colorless},
-    };
-    use managym::flow::turn::StepKind;
     let mut s = five_color_setup(&["Time Stop", "Cityscape Leveler"]);
     let leveler = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
     activate_card(&mut s, leveler, 0);

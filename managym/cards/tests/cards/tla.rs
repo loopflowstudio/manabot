@@ -15742,6 +15742,12 @@ fn secret_of_bloodbending_controls_only_the_next_combat_in_either_seat() {
 /// Both discard decisions still belong to the player whose turn it is.
 #[test]
 fn secret_of_bloodbending_control_during_time_stop_and_repeated_cleanup() {
+    let cast_time_stop = |s: &mut Scenario| {
+        s.pass_priority();
+        s.set_player_mana_pool(0, "4UU");
+        cast(s, "Time Stop");
+        resolve_top(s);
+    };
     for paid in [false, true] {
         let mut s = five_color_setup(&[
             "Secret of Bloodbending",
@@ -15765,18 +15771,17 @@ fn secret_of_bloodbending_control_during_time_stop_and_repeated_cleanup() {
         let defector = s.force_permanent_on_battlefield(1, "Humble Defector");
         clear_summoning_sickness(&mut s, defector);
         clear_hand(&mut s, 1);
-        for _ in 0..8 {
-            force_new_card_in_hand(&mut s, 1, "Forest");
-        }
-        s.pass_priority();
-        s.set_player_mana_pool(0, "4UU");
-        cast(&mut s, "Time Stop");
-        resolve_top(&mut s);
+        s.game_mut().draw_cards(PlayerId(1), 8);
+        s.drain_events();
+        cast_time_stop(&mut s);
 
-        let chooser = if paid { PlayerId(0) } else { PlayerId(1) };
-        assert_eq!(s.current_step(), StepKind::Cleanup);
-        assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
-        assert_eq!(s.action_space().player, Some(chooser));
+        let assert_cleanup_discard = |s: &Scenario| {
+            let chooser = if paid { PlayerId(0) } else { PlayerId(1) };
+            assert_eq!(s.current_step(), StepKind::Cleanup);
+            assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
+            assert_eq!(s.action_space().player, Some(chooser));
+        };
+        assert_cleanup_discard(&s);
         s.step_action(0);
         assert!(s.game().state.permanents[animals].is_none());
         assert_eq!(s.game().state.stack_objects.len(), 1);
@@ -15785,32 +15790,21 @@ fn secret_of_bloodbending_control_during_time_stop_and_repeated_cleanup() {
         resolve_top(&mut s);
         if paid {
             // Ending the turn again during cleanup exiles the death trigger.
-            s.pass_priority();
-            s.set_player_mana_pool(0, "4UU");
-            cast(&mut s, "Time Stop");
-            resolve_top(&mut s);
+            cast_time_stop(&mut s);
         } else {
             resolve_top(&mut s);
             resolve_top(&mut s); // both players pass on an empty stack
         }
-        assert_eq!(s.current_step(), StepKind::Cleanup);
-        assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
-        assert_eq!(s.action_space().player, Some(chooser));
-        assert_eq!(
-            s.game()
-                .state
-                .events
-                .iter()
-                .filter(|e| matches!(
-                    e,
-                    GameEvent::StepStarted {
-                        step: StepKind::Cleanup
-                    }
-                ))
-                .count(),
-            3,
-            "one cleanup on the caster's turn and two on the victim's"
-        );
+        assert_cleanup_discard(&s);
+        let steps: Vec<_> = s
+            .drain_events()
+            .into_iter()
+            .filter_map(|event| match event {
+                GameEvent::StepStarted { step } => Some(step),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(steps, [StepKind::Cleanup, StepKind::Cleanup]);
         assert_eq!(s.life(1), if paid { 20 } else { 23 });
         s.step_action(0);
         s.step_action(0);
