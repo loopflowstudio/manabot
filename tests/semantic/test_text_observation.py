@@ -557,7 +557,8 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         _card_line(decision.text, alias)
     )
     observation = _viewer_observation(decision)
-    encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
+    space = ObservationSpace(ObservationConfig())
+    encoded = encode_observation(space, observation)
     if with_muldrotha:
         projected = [
             a
@@ -604,7 +605,6 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         }
         # A public source sustains one specific cost. Swapping those sources
         # must exchange their terms even when every legal action stays fixed.
-        space = ObservationSpace(ObservationConfig())
         sources = state["agent_permanents"][:2]
         first_permanent = 3 + 2 * space.config.max_cards_per_player
         source_terms = []
@@ -613,25 +613,18 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
                 grant["source_permanent_id"] = permanent["id"]
             bound = managym.Observation.from_json(json.dumps(state))
             buffers = encode_observation(space, bound)
-            # The original card columns still describe the first grant.
-            singleton = card.pop("cast_permissions")
-            card["cast_permission"] = singleton[0]
-            single = encode_observation(
-                space, managym.Observation.from_json(json.dumps(state))
-            )
-            np.testing.assert_array_equal(single["agent_cards"], buffers["agent_cards"])
-            card.pop("cast_permission")
-            card["cast_permissions"] = singleton
-
             facts = buffers["facts"]
+            owners = facts[:, column("facts", "object")]
             source_terms.append(
-                [
-                    facts[
-                        facts[:, column("facts", "object")] == first_permanent + i, 1:
-                    ]
-                    for i in range(2)
-                ]
+                [facts[owners == first_permanent + i, 1:] for i in range(2)]
             )
+
+        # A reader using the original card columns still sees the first grant.
+        card["cast_permission"] = card.pop("cast_permissions")[0]
+        single = managym.Observation.from_json(json.dumps(state))
+        np.testing.assert_array_equal(
+            encode_observation(space, single)["agent_cards"], buffers["agent_cards"]
+        )
         original, swapped = source_terms
         assert len(original[0]) and not np.array_equal(original[0], original[1])
         np.testing.assert_array_equal(original[0], swapped[1])

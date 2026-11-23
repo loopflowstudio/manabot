@@ -92,3 +92,5 @@ After the prescribed extension rebuild and atomic install, run `uv run pytest te
 - Many copies of Emergency Phytomedic with individual Seed Sutures, then different prepared permanents sharing and differing in spell names. Include a control transfer and several target creatures. Measure link lookup, legal offers, observation/encoding and fork cost, then casting one copy. Include an ordinary board with zero links.
 
 Use the same harness and hardware for comparisons. For new board states that the base cannot construct, report candidate work/counts by size and compare equivalent workloads on revisions supporting those states. Separate changed rules digests from timing claims. Select optimizations from measured costs, retain replay and legal-choice witnesses, and leave deck selection and training to integrated validation.
+
+The executable hand probe is `uv run pytest -q scratch/test_smaug_profile.py`. It stops at native deck admission with `unknown card in decklist: Smaug, the Great Calamity`. Its later assertions remain unverified. Both Zul source-order cases and the saved-policy column-prefix test passed at f62b935e with the simplified comparison.

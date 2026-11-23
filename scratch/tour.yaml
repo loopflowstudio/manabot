@@ -1,9 +1,9 @@
-at: 02c3bf94a8974b2c54ec832651dd1eae77834a25
+at: f62b935e4214f3263c6910efa4ccc2937bcb1e7f
 first:
   - path: managym/src/agent/observation_encoder.rs
-    why: Join grant terms to card and source
-  - path: managym/src/agent/record_vocabulary.rs
-    why: Register the source program for policy readers
+    why: Join each grant to its public source
   - path: tests/semantic/test_text_observation.py
     why: Swap sources and compare singleton card columns
+  - path: scratch/test_smaug_profile.py
+    why: Exercise Adventure resolution and counter from one cast
 hide: []
