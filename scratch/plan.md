@@ -147,19 +147,21 @@ The unequal-hit fixture in `managym/cards/tests/cards/fdn.rs` checks both native
 
 The catalog fixture update at `ef9a8011` supplied reference data. Count delivery from executable definitions and directed fixtures. The merge at `58896721` includes upstream MLX self-play work. Integrated consumer and budget checks remain open on the merged revision.
 
-Behavior review at `a36dcdb2`: both `drake_hatcher` debug card tests and the native snapshot test passed. Three focused text tests passed: Hatcher pending damage, manual mana-source Commands (including stale rejection with unchanged digest), and hidden-hand permutations. Hatcher spends only counters, so the earlier pooled-mana and receipt controls still apply. The Hatcher slice meets its working obligations. Continue the working phase with Hunter; the 73 primary rows, integrated replay/privacy parity and Engine Budget checks remain open.
+Behavior review at `a36dcdb2`: both `drake_hatcher` debug card tests and the native snapshot test passed. Three focused text tests passed: Hatcher pending damage, manual mana-source Commands (including stale rejection with unchanged digest), and hidden-hand permutations. Hatcher spends only counters, so the earlier pooled-mana and receipt controls still apply. The Hatcher slice meets its working obligations.
 
 ## Implemented slice · High-Society Hunter
 
-The two `high_society_hunter` native card fixtures passed. From one attack trigger, sacrificing a Cat added a counter without drawing and declining kept the Cat. Fumigate destroyed Hunter, a friendly Gray Ogre and an opposing Island copying Gray Ogre. Both viewers saw two Hunter death triggers. Restoring the pending game yielded two draws or one after countering a trigger. Only Hunter’s controller saw the drawn cards in hand. The existing Predator Ooze damage/death fixture also passed. The shared departure predicate reads creature status and power from the exact departed permanent. Token status is stable across appearances. Vampire is now a classified creature subtype.
+The two `high_society_hunter` native card fixtures passed. From one attack trigger, sacrificing a Cat added a counter without drawing and declining kept the Cat. Fumigate destroyed Hunter, a friendly Gray Ogre and an opposing Island copying Gray Ogre. Both viewers saw two Hunter death triggers. Restoring the pending game clone yielded two draws or one after countering a trigger. Only Hunter’s controller saw the drawn cards in hand. The existing Predator Ooze damage/death fixture also passed. The shared departure predicate reads creature status and power from the exact departed permanent. Token status is stable across appearances. Vampire is now a classified creature subtype.
 
 ## Next slice · Cackling Prowler
 
-Use the sacrificed Cat to exercise Prowler’s end-step death check alongside Hunter. Cover ward payment, a turn without a qualifying death, and the turn boundary.
+Branch from Hunter’s attack trigger with Prowler in play. Sacrifice the Cat in one branch and decline in the other. With no other deaths, only the sacrifice branch should give Prowler a counter at its controller’s end step. Carry that game into the next turn and verify the fact resets. Target Prowler from the opposing seat and exercise paying and declining ward.
+
+Hunter’s death matcher already reads effective creature status at departure (`managym/src/flow/triggers.rs`). Have the turn-history writer use the same departure fact. The matcher still reads other card types from the moved card. If a remaining predicate needs another effective type at departure, consolidate that lookup before extending it.
 
 ## Evidence to carry forward
 
-The 72 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
+Eight of 81 primary rows have definitions and directed fixtures. Hunter and Hatcher are cost-primary witnesses. The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 
