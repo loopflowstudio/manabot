@@ -4,3 +4,4 @@
 - This compression pass covers Esper Origins and the callers sharing its rules. Preserve the serialized type order in existing card predicates so the refactor keeps their learning tokens.
 - Review choice for MTG-420: probe the departed Clone before adding Cecil. It exercises the existing copy fallback with two supported cards and leaves physical backing open for the meld and manifest probes.
 - Use Scout's Warning for the Horde fixture. Its draw triggers Horde and its flash permission lets the same physical Clone return as Gray Ogre above the pending trigger. Exercise a native in-memory GameSnapshot on this constructed position.
+- Keep Cecil first as the one-card control for the paired Ragnarok and token-copy movement probes. Use the pending library-order choice as the recovery boundary.
