@@ -8,8 +8,7 @@ and uses PyTorch as its numerical reference
 ([parity check](README.md#parity-check)). The ordinary pilot gates timing on
 those checks. The [MPS retest](../../experiments/reports/mps_retest.md) explicitly
 measures approximate half-precision arms too; it reports failing tolerances
-alongside timing and does not treat execution as numerical equivalence. Training, evaluation and the CLI
-still run the PyTorch model; nothing in the PyTorch path imports MLX.
+alongside timing and does not treat execution as numerical equivalence. The tracked recipes, evaluation and the CLI use PyTorch.
 
 ```python
 from manabot.backends import resolve
@@ -58,6 +57,34 @@ column readings as Torch. The model supports stream normalization, focus and
 policy FiLM, and v11 stack and known-library rows. Collection and learning
 support bucketed shapes and bounded execution chunks. The tracked baseline
 and Elemental recipes use Torch for training and recovery.
+
+Run one fresh baseline iteration on Apple Silicon with the recipe’s model,
+learning rule and both-seat routing. Give each run a new output directory.
+
+```python
+from pathlib import Path
+
+from manabot.backends import resolve
+from manabot.recipes.baseline import BaselineConfig, settings
+from manabot.training.loops.self_play import fresh_iteration
+
+recipe = settings(BaselineConfig(device="mps")).model_copy(
+    update={"streams": 2, "games_per_stream": 1, "bucketed_shapes": True}
+)
+result = fresh_iteration(
+    recipe, backend=resolve("mlx", precision="float32"), seed=19,
+    out=Path(".runs/mlx-baseline"),
+)
+print(result.checkpoint, result.counts.learner_transitions)
+```
+
+The ordinary self-play loop and `fresh_iteration` share policy creation,
+collection, learning, EMA and milestone export. The output directory holds
+`policies/00000001-raw.safetensors` and, when averaging is enabled,
+`policies/00000001-ema.safetensors`. Both readers can load either file.
+The returned policies are the live sources of those exports.
+To carry an Etude run forward, the tracked loop requires a backend that can
+restore the registered policy, Adam, EMA and counts. Torch supplies that capability.
 
 Fresh construction and checkpoint loading both call `require_supported`.
 It reports unsupported settings together, including belief inputs, decision
@@ -123,8 +150,8 @@ gradient detail of `OptimizerHealth` is absent
 
 The step runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell
-is compiled. The backend does not write checkpoints or collect; training
-continuity stays with the PyTorch learner.
+is compiled. Collection samples once per group across execution chunks.
+Portable exports contain the policy’s float32 parameters and lookup buffers.
 
 Results, machine and cost are in
 [the MLX pilot report](../../experiments/reports/mlx_pilot.md).

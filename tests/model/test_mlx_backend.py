@@ -88,7 +88,15 @@ from manabot.policy.checkpoint import (
 from manabot.policy.prepare import Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.recipes import baseline, elemental
-from manabot.training.loops.self_play import create, fresh_iteration, self_play
+from manabot.training.loops.self_play import (
+    Counts,
+    create,
+    device_settings,
+    fresh_iteration,
+    learn,
+    self_play,
+)
+from manabot.training.rollout.matchups import elemental_roster
 from manabot.verify.choice_corpus import collect_choices
 from manabot.verify.learning_regression import inspect_policy
 import managym
@@ -451,7 +459,14 @@ def test_mlx_fresh_recipe_exports_both_live_policies(
 
     if recipe == "elemental":
         (ledger,) = (tmp_path / recipe / "game-attempts").glob("*.jsonl")
-        assert len(ledger.read_text().splitlines()) == 2
+        matchups = [
+            json.loads(line)["attempt"]["matchup"]
+            for line in ledger.read_text().splitlines()
+        ]
+        assert len(matchups) == 2
+        roster = {player.name for player in elemental_roster(Match(settings.match))}
+        pairs = {(m["hero"], m["villain"]) for m in matchups}
+        assert len(pairs) == 2 and all(set(pair) <= roster for pair in pairs)
         return
     saved = result.checkpoint
     cases, _, findings = collect_choices(
@@ -468,6 +483,72 @@ def test_mlx_fresh_recipe_exports_both_live_policies(
         assert mlx_choice.case == torch_choice.case
         assert mlx_choice.log_odds == pytest.approx(torch_choice.log_odds, abs=1e-4)
         assert mlx_choice.value == pytest.approx(torch_choice.value, abs=1e-4)
+
+
+def test_mlx_filtered_iteration_advances_ema_and_invalidates_cached_programs(
+    baseline_model: ModelConfig,
+) -> None:
+    backend = resolve("mlx")
+    settings = baseline.settings(baseline.BaselineConfig(device="mps")).model_copy(
+        update={"model": baseline_model}
+    )
+    settings = settings.model_copy(
+        update={
+            "learning": settings.learning.model_copy(
+                update={"ema": 0.75, "min_advantage": 100.0}
+            )
+        }
+    )
+    learner, ema = create(settings, seed=21, backend=backend)
+    assert ema is not None
+    batch = self_play_batch(
+        learner.agent,
+        lesson_match(),
+        backend.collection.CollectionSession(device="mps", seed=21),
+        2,
+    )
+    # Make the two catalogs differ, as they would after an earlier optimizer step.
+    ema.cache_programs()
+    initial = ema.semantic_cards.token_embedding.weight
+    learner.agent.semantic_cards.token_embedding.weight = initial + 0.25
+    diagnostics = learn(
+        settings,
+        learner,
+        ema,
+        Counts(),
+        batch,
+        np.random.default_rng(3),
+        backend=backend,
+    )
+    assert diagnostics["numerical"]["optimizer_steps"] == 0
+    np.testing.assert_allclose(
+        np.asarray(ema.semantic_cards.token_embedding.weight),
+        np.asarray(initial + 0.0625),
+        atol=1e-6,
+    )
+    obs = batch.observations(np.array([0, 1])).observation
+    prepared = ema.prepare(obs)
+    actual = ema.evaluate(prepared)
+    ema.clear_cache()
+    for observed, expected in zip(actual, ema.evaluate(prepared), strict=True):
+        np.testing.assert_array_equal(observed, expected)
+
+
+def test_configured_mlx_precision_and_device_scope(baseline_model: ModelConfig) -> None:
+    backend = resolve("mlx", precision="bfloat16")
+    settings = baseline.settings(baseline.BaselineConfig(device="cpu")).model_copy(
+        update={"model": baseline_model}
+    )
+    before = mx.default_device()
+    with pytest.raises(ValueError, match="differs from MLX policy precision"):
+        with device_settings(settings, backend=backend):
+            assert mx.default_device() == mx.cpu
+            create(settings, seed=7, backend=backend)
+    assert mx.default_device() == before
+    agent = backend.runtime.create_policy(
+        ObservationSpace(settings.observation), settings.model
+    )
+    assert agent.precision == "bfloat16"
 
 
 def test_mlx_refuses_tracked_self_play_before_accessing_run_state() -> None:

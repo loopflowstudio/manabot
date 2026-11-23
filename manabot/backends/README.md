@@ -24,7 +24,7 @@ A backend runs the manabot policy forward and the learner step of its
 updates in one array framework. Backends share the framework-free contract in
 [`manabot.policy`](../policy/README.md): observation admission, host
 preparation, the checkpoint container and the `BackendPolicy`,
-`BackendLearner` and `Backend` protocols. Training, evaluation and the CLI
+`BackendLearner` and `Backend` protocols. Tracked training, evaluation and the CLI
 run the PyTorch backend, which is also the reference every other backend is
 checked against.
 
@@ -56,7 +56,7 @@ encoders and `live_tokens.py`):
 | `rl.py` | the policy terms, losses, returns and selection the updates call, over the framework's arrays |
 | `learner.py` | `Learner`: the optimizer, the differentiated loss, the guarded step and precision |
 | `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
-| `checkpoint.py` | the map from canonical names to the backend's layout, loading (torch also saves), and `BACKEND` |
+| `checkpoint.py` | the map from canonical names to the backend's layout, portable loading and export, and `BACKEND` |
 
 `resolve` returns a `manabot.policy.protocol.Backend`: a configured loader
 with `rl`, `arrays`, `learner` and `rollout` modules for updates. These modules
@@ -118,11 +118,11 @@ functions composition roots.
 Pass the selected backend through training execution, monitoring and
 verification. A caller that only runs inference takes a `BackendPolicy`; a
 caller that collects, learns or captures a numerical incident also needs the
-capabilities for that work. These arguments are required: helpers do not
-default to Torch or resolve a backend themselves. The role contracts are
-`TrainingBackend` and `TrainingState` in `training/state/backend.py`, the
-collector session in `training/rollout/numerics.py`, and the inference-only
-`SamplerBackend` in `belief/protocol.py`.
+capabilities for that work. The fresh loop accepts a `SelfPlayBackend` for construction,
+collection, the update, EMA and portable export. The maintained tracked
+recipes select Torch explicitly. Older calls to the self-play functions
+default to Torch. Tracked self-play admits the backend’s `Continuation`
+before accessing run state. See the [fresh MLX example](mlx.md#what-the-backend-covers).
 
 The collector receives a numerical session that owns policy inference,
 precision and sampling. Native game streams, seat routing and complete-game
@@ -150,8 +150,10 @@ explicit `BeliefTrainer` from the caller. MLX supports fresh collection,
 bucketed inference, scalar damped updates and portable policy export.
 Tracked training and recovery use Torch.
 
-A policy checkpoint supplies weights for play. Exact training continuation
-also needs the admitted optimizer, EMA, collector and RNG snapshot. State
+The tracked self-play loop restores Adam, EMA, model readings and counts,
+then starts new game and sampling streams at the saved update. Its policy
+exports can also seed a fresh learner. Separately, exact update replay uses
+collector and RNG snapshots. State
 serialization and optimizer validation belong to the selected backend;
 world, source, artifact digest and stage-lineage admission still apply before
 execution. Torch recovery retains its format-4 update snapshots, including

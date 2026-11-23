@@ -6,8 +6,7 @@ directory and its metadata (`training/state/incidents.py`).
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Mapping
 import random
 from typing import TYPE_CHECKING, Any, BinaryIO
 
@@ -23,12 +22,6 @@ from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import Collector, RolloutBatch
-
-
-@contextmanager
-def preserve_rng() -> Iterator[None]:
-    with torch.random.fork_rng(devices=[]):
-        yield
 
 
 def save(value: object, stream: BinaryIO) -> None:

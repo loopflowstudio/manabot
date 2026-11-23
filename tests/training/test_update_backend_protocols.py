@@ -30,7 +30,7 @@ from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.rollout.selection_data import SelectionPredictor
 from manabot.training.state.backend import (
     CollectionFactory,
-    TrainingRuntime,
+    SelfPlayBackend,
     TrainingState,
 )
 from manabot.training.updates.backend import (
@@ -313,7 +313,7 @@ def test_torch_execution_state_capabilities_match_their_contracts() -> None:
 @pytest.mark.parametrize("name", sorted(BACKENDS))
 def test_backends_provide_runtime_and_collection_contracts(name: str) -> None:
     backend = installed_backend(name)
-    assert _violations(backend.runtime, TrainingRuntime, f"{name}.runtime") == []
+    assert _violations(backend, SelfPlayBackend, name) == []
     assert (
         _violations(backend.collection, CollectionFactory, f"{name}.collection") == []
     )

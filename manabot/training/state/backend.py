@@ -44,7 +44,6 @@ class IncidentCapture:
 
 
 class TrainingState(Protocol):
-    def preserve_rng(self) -> AbstractContextManager[object]: ...
     def save(self, value: object, stream: BinaryIO) -> None: ...
     def capture_incident(
         self,
@@ -63,6 +62,7 @@ class TrainingState(Protocol):
 class TrainingRuntime(Protocol):
     def configure(self, threads: int, precision: Precision, device: str) -> None: ...
     def threads(self) -> int: ...
+    def preserve_rng(self, device: str) -> AbstractContextManager[object]: ...
     def create_policy(
         self,
         space: ObservationSpace,
@@ -79,9 +79,12 @@ class SessionFactory(Protocol):
     ) -> CollectionSession: ...
 
 
-class CollectionFactory(Protocol):
+class CollectionSessions(Protocol):
     @property
     def CollectionSession(self) -> SessionFactory: ...
+
+
+class CollectionFactory(CollectionSessions, Protocol):
     @property
     def SelectionPredictor(
         self,
@@ -93,7 +96,7 @@ class SelfPlayLearner(Learner, Protocol):
     def agent(self) -> BackendPolicy: ...
 
 
-class SelfPlayRuntime(TrainingRuntime, Protocol):
+class SelfPlayRuntime(Protocol):
     def scoped(
         self, threads: int, precision: Precision, device: str
     ) -> AbstractContextManager[object]: ...
@@ -137,7 +140,7 @@ class SelfPlayBackend(UpdateBackend, Protocol):
     @property
     def learner(self) -> SelfPlayLearning: ...
     @property
-    def collection(self) -> CollectionFactory: ...
+    def collection(self) -> CollectionSessions: ...
     def metadata(self, path: str | Path) -> dict[str, Any]: ...
     def seed(self, seed: int, *, deterministic: bool | None = None) -> None: ...
     def load_policy(

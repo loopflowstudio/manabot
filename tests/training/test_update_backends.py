@@ -32,6 +32,7 @@ from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     PERMANENT_ATTACHED_INDEX,
 )
+from manabot.infra.profiler import Profiler
 from manabot.policy.checkpoint import (
     PolicyCheckpoint,
     canonical_parameters,
@@ -81,10 +82,15 @@ def _update(
     weights: PolicyCheckpoint,
     batch: RolloutBatch,
     minibatch_rows: int,
+    *,
+    execution_rows: int | None = None,
 ) -> tuple[UpdateDiagnostics, Mapping[str, np.ndarray], Mapping[str, np.ndarray]]:
     """Diagnostics of one update from `weights`, with parameters before and after."""
     learner = module.learner.Learner(
-        module.load(weights)[0], "cpu", minibatch_rows=minibatch_rows
+        module.load(weights)[0],
+        "cpu",
+        minibatch_rows=minibatch_rows,
+        execution_rows=execution_rows,
     )
     before = learner.parameters()
     diagnostics = update_damped_iteration(module, learner, batch, LEARNING, 1)
@@ -157,6 +163,43 @@ def test_damped_update_agrees_with_the_torch_backend(
     ):
         assert actual["numerical"][key] == expected["numerical"][key], key
     assert actual["loss"] == pytest.approx(expected["loss"], rel=1e-2)
+
+
+def test_mlx_chunking_preserves_the_collection_draw_and_logical_adam_step(
+    captured: tuple[PolicyCheckpoint, RolloutBatch],
+) -> None:
+    weights, batch = captured
+    backend = installed_backend("mlx")
+    agent = backend.load(weights)[0].to("mps")
+    rows = batch.observations(np.arange(5)).observation
+    whole = backend.collection.CollectionSession(device="mps", seed=111)
+    split = backend.collection.CollectionSession(device="mps", seed=111)
+    with whole.scope(agent) as scope:
+        expected = scope.sample(rows, Profiler())
+    with split.scope(agent) as scope:
+        actual = scope.sample(rows, Profiler(), execution_rows=2)
+    np.testing.assert_array_equal(split.snapshot_rng(), whole.snapshot_rng())
+    np.testing.assert_array_equal(actual.actions, expected.actions)
+    np.testing.assert_allclose(
+        actual.log_probabilities, expected.log_probabilities, atol=1e-6
+    )
+    np.testing.assert_allclose(actual.values, expected.values, atol=1e-6)
+
+    size = batch.actions.size
+    reference, _, unchunked = _update(backend, weights, batch, size)
+    chunked, _, after = _update(backend, weights, batch, size, execution_rows=2)
+    assert (
+        reference["numerical"]["optimizer_steps"]
+        == chunked["numerical"]["optimizer_steps"]
+        == 1
+    )
+    for key in _COUNTS:
+        assert reference[key] == chunked[key]
+    assert chunked["loss"] == pytest.approx(reference["loss"], rel=LOSS_TOLERANCE)
+    for name, value in unchunked.items():
+        np.testing.assert_allclose(
+            after[name], value, atol=STEP_PARAMETER_TOLERANCE, rtol=0, err_msg=name
+        )
 
 
 def test_parity_requires_a_matching_optimizer_step() -> None:

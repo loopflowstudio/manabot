@@ -320,40 +320,38 @@ def self_play(
     updates: int,
     kind: str | None = None,
     recipe: str | None = None,
+    backend: SelfPlayBackend | None = None,
 ) -> Path:
     """Train to the target; log report labels only when the recipe supplies them."""
+    backend = backend or default_backend()
+    state = require_continuation(backend)
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
-    with device_settings(settings):
-        learner, ema = create(settings, seed=run.seed)
-        # No EMA object exists for recipes that do not average their policy.
-        objects: dict[str, object] = {
-            "learner": learner.agent,
-            "optimizer": learner.optimizer,
-        }
-        if ema is not None:
-            objects["ema"] = ema
+    with device_settings(settings, backend=backend):
+        learner, ema = create(settings, seed=run.seed, backend=backend)
+        objects = state.resume_objects(learner, ema)
+        # The loop validates saved model settings and readings before restoration.
         counts = run.resume(**objects, extra=Counts())
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
-            publish(settings, run, learner, ema, counts)
-        with self_play_games(settings, run, counts) as collector:
+            publish(settings, run, learner, ema, counts, backend=backend)
+        with self_play_games(settings, run, counts, backend=backend) as collector:
             if counts.updates == 0:
                 log_corpus_setup(
                     run,
                     collector,
                     behavior=settings.behavior,
                     curriculum=settings.matchup_curriculum,
-                    parent=parent_checkpoint(settings.pretrained)
+                    parent=parent_checkpoint(settings.pretrained, backend)
                     if settings.pretrained is not None
                     else None,
                     updates=0,
                     **clocks(counts),
                 )
             for update in run.steps("updates", to=updates):
-                row = step(settings, learner, ema, collector, counts, rng, out=run.out)
+                row = step(settings, learner, ema, collector, counts, rng, out=run.out, backend=backend)
                 if kind is not None:
                     row["run/kind"] = kind
                 if recipe is not None:
@@ -362,8 +360,8 @@ def self_play(
                 log_corpus_outcomes(run, collector, **clocks(counts))
                 run.save()
                 if is_checkpoint(settings, update):
-                    publish(settings, run, learner, ema, counts)
-        return publish(settings, run, learner, ema, counts)
+                    publish(settings, run, learner, ema, counts, backend=backend)
+        return publish(settings, run, learner, ema, counts, backend=backend)
 ```
 
 Report labels are optional: without them or Etude declaration labels, the
@@ -402,9 +400,12 @@ The pieces that are manabot's:
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
 | `publish(settings, run, learner, ema, counts)` | Writes raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
-The loop takes Etude's `TrainingRun` (`etude.train.tracking`); there is no
-untracked path through it. The updates and pieces it calls need no run
-([training loops](training-loop.md)), and
+For a single fresh collect/update iteration, pass the same settings, a configured
+backend, a seed and a new output directory to `fresh_iteration`. It returns the
+live policies, the metric row, counts and the selected portable checkpoint.
+The tracked loop also registers its state with Etude for continuation.
+See the [MLX example](../manabot/backends/mlx.md#what-the-backend-covers).
+For a smaller tracked example,
 [`loops/minimal.py`](training-loop.md#a-complete-self-play-loop) is a whole
 resumable loop in about ninety lines to copy from.
 

@@ -353,7 +353,7 @@ def inspect_baseline(
         cases.extend(rows)
         corpus_hashes.append(file_sha256(target / "cases.json"))
     report.corpus_sha256 = canonical_sha256(corpus_hashes)
-    with backend.state.preserve_rng():
+    with backend.runtime.preserve_rng("cpu"):
         for checkpoint in exported:
             if file_sha256(checkpoint.path) != checkpoint.sha256:
                 raise ValueError("checkpoint bytes changed")

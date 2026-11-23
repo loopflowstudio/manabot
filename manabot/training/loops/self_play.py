@@ -100,6 +100,7 @@ from manabot.training.update_metrics import (
     phase_seconds,
     time_since,
 )
+from manabot.training.updates.backend import ppo_rl
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
@@ -440,6 +441,8 @@ def create(
 ) -> tuple[SelfPlayLearner, BackendPolicy | None]:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     backend = backend or default_backend()
+    if isinstance(settings.learning, Learning):
+        ppo_rl(backend.rl)
     space = ObservationSpace(settings.observation)
     published = (
         pretrained_policy(settings, space, backend)
