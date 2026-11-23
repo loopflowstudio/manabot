@@ -1123,6 +1123,7 @@ class StackTarget:
     card_id: int | None
 
 class StackObject:
+    source_power: int | None
     ability_resolutions: int
     # Spells own characteristics; abilities own only their source reference.
     characteristics: ObservationCharacteristics | None

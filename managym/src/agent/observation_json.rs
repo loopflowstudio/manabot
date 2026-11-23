@@ -311,6 +311,9 @@ impl Serialize for StackObjectJson<'_> {
         map.serialize_entry("kind", &(value.kind as i32))?;
         map.serialize_entry("source_card_registry_key", &value.source_card_registry_key)?;
         map.serialize_entry("source_permanent_id", &value.source_permanent_id)?;
+        if let Some(power) = value.source_power {
+            map.serialize_entry("source_power", &power)?;
+        }
         map.serialize_entry("stack_object_id", &value.stack_object_id)?;
         map.serialize_entry("targets", &StackTargetsJson(&value.targets))?;
         if value.x != 0 {
@@ -811,6 +814,7 @@ pub(super) struct WirePermanentData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WireStackObjectData {
+    pub source_power: Option<i32>,
     #[serde(default)]
     pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
@@ -989,6 +993,7 @@ impl Serialize for PermanentData {
 impl From<WireStackObjectData> for StackObjectData {
     fn from(w: WireStackObjectData) -> Self {
         Self {
+            source_power: w.source_power,
             description: w.description,
             ability_resolutions: w.ability_resolutions,
             stack_object_id: w.stack_object_id,

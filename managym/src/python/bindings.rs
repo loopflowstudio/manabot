@@ -2776,6 +2776,10 @@ impl PyStackObject {
         self.data.description = value;
     }
     #[getter]
+    fn source_power(&self) -> Option<i32> {
+        self.data.source_power
+    }
+    #[getter]
     fn ability_resolutions(&self) -> u32 {
         self.data.ability_resolutions
     }

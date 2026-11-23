@@ -78,9 +78,9 @@ At `73f608af`, retargeting reads the announced clause for each slot directly. Si
 
 Four directed debug fixtures passed again: Panda snapshot and Command replay, live source-power rechecks during retargeting and resolution, Immolator damage after source reentry, and Sandbender reanimation. Panda’s two viewer frames agreed across restores. This checks deterministic projection; the hidden-hand permutation and stale Command checks remain integrated obligations. The pair uses existing cost and token expressions.
 
-**Open consumer defect.** Stop the Immolator fixture after sacrifice, before resolving its activation. The Wurm will take three. The public stack record in `agent/observation.rs::StackObjectData` carries the source identity, printed definition and effect description, but omits the departed source’s effective power. Neither the stack tensor row nor the stack text can report the three from that record. Compare the same activation at base power two and after prowess, with history disabled. Project the public value for this source-relative read through the native observation and check both values in v11, text and Academy against the actual damage. Reuse the exact-source rules lookup.
+**Immolator's pending damage.** The stack observation reads the same exact source as resolution. With history disabled, the base and prowess activations showed source power two and three to both viewers, including the v11 stack tensor and Academy decision surface. The acting viewer’s LLM prompt showed the same power. Craw Wurm took the corresponding damage. The M21 native fixture also checked both values after the source returned.
 
-The working phase remains open for this projection and 77 primary rows. Lunar Convocation is the next authored interaction. Gate owns the broad suites and the later performance and integrated checks below.
+The working phase remains open for 77 primary rows. Lunar Convocation is the next authored interaction. Gate owns the broad suites and the later performance and integrated checks below.
 
 ## Next slice · Lunar Convocation
 

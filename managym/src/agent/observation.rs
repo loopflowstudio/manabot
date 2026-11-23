@@ -11,7 +11,7 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
-        ability::PaymentCost,
+        ability::{Effect, EffectValue, PaymentCost},
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{ObjectId, PlayerId, PublicId, Target},
@@ -460,6 +460,8 @@ pub struct StackTargetData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(from = "super::observation_json::WireStackObjectData")]
 pub struct StackObjectData {
+    /// Effective power read by a pending source-power damage instruction.
+    pub source_power: Option<i32>,
     pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
     pub description: Option<String>,
@@ -1688,7 +1690,24 @@ impl Observation {
     }
 
     fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
+        let source_power = match stack_object {
+            StackObject::ActivatedAbility(a)
+                if a.effects.iter().any(|effect| {
+                    matches!(
+                        effect,
+                        Effect::DealDamage {
+                            amount: EffectValue::SourcePower,
+                            ..
+                        }
+                    )
+                }) =>
+            {
+                game.permanent_power_or_lki(a.source_object())
+            }
+            _ => None,
+        };
         StackObjectData {
+            source_power,
             ability_resolutions: match stack_object {
                 StackObject::TriggeredAbility(a) => game
                     .state
@@ -1701,7 +1720,11 @@ impl Observation {
             },
             description: match stack_object {
                 StackObject::ActivatedAbility(a) => {
-                    Some(super::ability_description::effects_description(&a.effects))
+                    let description = super::ability_description::effects_description(&a.effects);
+                    Some(match source_power {
+                        Some(power) => format!("{description} (source power {power})"),
+                        None => description,
+                    })
                 }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(

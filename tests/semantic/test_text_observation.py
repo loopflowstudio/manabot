@@ -661,6 +661,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
+        "source_power": "source power in the ability description",
         "ability_resolutions": "prior resolutions this turn",
         "characteristics": "spell characteristics; absent for abilities",
         "object_id": "the spell's exact object alias",

@@ -54,7 +54,7 @@ impl Game {
     }
 
     /// Power of this exact battlefield appearance, including after departure.
-    fn permanent_power_or_lki(&self, object: ObjectId) -> Option<i32> {
+    pub(crate) fn permanent_power_or_lki(&self, object: ObjectId) -> Option<i32> {
         self.state
             .permanent_of(object)
             .map(|id| self.characteristics(id).power)

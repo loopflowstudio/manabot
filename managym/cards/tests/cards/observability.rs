@@ -3340,6 +3340,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         timestamp => [column(Facts, fact::TIMESTAMP)],
     }));
     fields.extend(encoding!(StackObjectData {
+        source_power => [column(Stack, stack::SOURCE_POWER)],
         ability_resolutions => [column(Stack, stack::ABILITY_RESOLUTIONS)],
         description => [Definition],
         stack_object_id => [Identity, Rows("relations")],

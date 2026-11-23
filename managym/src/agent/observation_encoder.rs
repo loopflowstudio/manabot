@@ -1149,6 +1149,7 @@ fn encode_into_memory(
         .iter_mut()
         .zip(&obs.stack_objects)
     {
+        row[stack::SOURCE_POWER] = object.source_power.unwrap_or_default() as f32 / 10.0;
         row[stack::ABILITY_RESOLUTIONS] = object.ability_resolutions as f32;
         row[stack::SOURCE] = link(object.source_permanent_id);
     }
@@ -2660,6 +2661,7 @@ mod tests {
         let spell = make_card(555, ZoneType::Stack, false, 0, 0, 3);
         obs.stack_objects = vec![
             StackObjectData {
+                source_power: None,
                 ability_resolutions: 0,
                 description: None,
                 stack_object_id: 600,
@@ -2678,6 +2680,7 @@ mod tests {
                 )),
             },
             StackObjectData {
+                source_power: None,
                 ability_resolutions: 0,
                 description: None,
                 stack_object_id: 601,

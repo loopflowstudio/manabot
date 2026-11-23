@@ -447,6 +447,7 @@ columns! { stack {
     35: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     36: VALID => ("valid", ValueLayout::FLAG),
     37: ABILITY_RESOLUTIONS => ("ability_resolutions", ValueLayout::COUNT),
+    38: SOURCE_POWER => ("source_power", ValueLayout::NUMBER_TENTHS),
 } }
 
 columns! { action {
@@ -1145,7 +1146,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 38);
+                assert_eq!(stack::WIDTH, 39);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }

@@ -546,7 +546,11 @@ object_id = permanent.object_id  # selection, payment and history identity
 A spell's `stack_object.characteristics` is present even for a copy;
 `object_id`, `owner_id`, `is_copy` and `announced_x` belong to the stack object.
 An ability has no spell characteristics and retains its captured source
-definition/reference after the source leaves. `Permanent.name` keeps its old
+definition/reference after the source leaves. For an activation such as
+Heartfire Immolator’s, the stack object reports the source power used for
+damage. After sacrifice this is the power of the departed permanent, even if
+the card returns. The v11 stack column `source_power` stores it in tenths.
+The LLM prompt and Academy stack label show the unscaled value. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
 The old Python `.card` accessors and flat characteristic getters are derived
