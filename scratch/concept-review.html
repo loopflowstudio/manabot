@@ -2,7 +2,7 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Battlefield identity · MTG-420</title>
 <style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · engine review at 5a06fb19</small>
+<main><small>MTG-420 · engine review at 4959c14e</small>
 <h1>Does knowing the target mean knowing the card behind it?</h1>
 <p>A policy can target a permanent by its public identity. Resolution may need its physical cards, a waiting trigger may need its last copiable form, and the acting viewer may know only a face-down 2/2. The branch separates these questions for meld and departed copies. Manifest Dread puts all three in the same position.</p>
 <h2>Existing · restore either library order</h2>
@@ -19,7 +19,7 @@
 <tr><td>A triggered copy effect can finish after its source leaves<td>CopiableValues for the departed appearance. The Horde trigger survives Clone returning as Gray Ogre.<td>Yes
 <tr><td>Resolve a departure and keep its consequences together<td>EventResult carries both arrivals. The general move_object_with_entry API completes immediately and returns its first arrival.<td>No · the same zone change has two caller contracts.
 <tr><td>Give the decision to the responsible seat<td>meld_order_choice reads the owner for library and graveyard. Epic Downfall supplies its controller for exile.<td>Yes · the native Commands distinguish owner and exiling opponent.
-<tr><td>Search a hidden battlefield from the acting viewer’s knowledge<td>Manifest Dread still needs a viewer projection and possible-world witness with distinct hidden printings.<td>No · the public meld witness cannot establish private search behavior.</table>
+<tr><td>Search a hidden battlefield from the acting viewer’s knowledge<td>The paired native permanent projection agrees. Sampling hidden battlefield slots from viewer evidence remains unverified.<td>No · the public meld witness cannot establish private search behavior.</table>
 <section><h2>Movement contract · asking for the successor of a permanent</h2>
 <p><b>Existing.</b> An object handle alone admits a token, an ordinary card or a genuine pair. An immediate move returning one handle cannot express a pending order or tell a linked effect which two arrivals it owns.</p>
 <p><b>Proposed.</b> A battlefield departure submits one zone-change proposal. After replacements fix the destination, the batch retains any ordering decision and resumes the original instruction with all its arrivals. Carry the player performing the exile into this decision. Preserve the cheap single-card path where the source zone guarantees it, including a draw from the library.</p></section>
@@ -31,7 +31,7 @@
 <tr><td>Submit either spent Command again<td>Identical entries and order<td>Rejection leaves the event ledger intact</table>
 <p>The FIN test <code>ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent</code> checks both branches from one native snapshot. Portable replay remains an open check.</p>
 <h2>Existing · one death, two arrivals, one trigger</h2>
-<p>After Blasphemous Act, the owner restores either graveyard order. The observation returned by each Command reports one death with Ragnarok’s identity and incarnation. Both fronts enter above the previous graveyard. One stacked ability destroys the chosen opposing Island and returns the chosen Gray Ogre. Five native Ragnarok tests passed in this review, including Airbending Lesson.</p>
+<p>After Blasphemous Act, the owner restores either graveyard order. The observation returned by each Command reports one death with Ragnarok’s identity and incarnation. Both fronts enter above the previous graveyard. One stacked ability destroys the chosen opposing Island and returns the chosen Gray Ogre. The previous behavior review recorded five passing native Ragnarok tests, including Airbending Lesson.</p>
 <section><h2>Existing · airbend Ragnarok, then draw</h2>
 <table><thead><tr><th>Search checkpoint<th>Opponent casting Airbending Lesson<th>Owner of Fang and Vanille
 <tbody><tr><td>Fork at the pending order<td>Two Commands. Draw still pending.<td>Controls one Ragnarok in this fixture.
@@ -39,12 +39,19 @@
 <tr><td>Submit the spent Command<td>Rejection preserves the draw, order and event history.<td>Both original grants survive.
 <tr><td>Cast one front when timing permits<td>Spell has finished resolving.<td>The other front retains its grant.</table>
 <p>The retained movement batch delivers both arrivals before the Lesson continues. In each restored branch the owner casts both fronts with four colorless mana. A token copy has no surviving card to receive a grant.</p></section>
-<h2>Biggest mismatch · a public target carries a backing definition</h2>
-<p><b>Existing.</b> <code>add_permanent</code> writes the object's registry key directly into <code>PermanentData</code>. Even if the displayed characteristics say “2/2”, that join would identify a manifested card to an opponent. This is a design constraint for the proposed card. The live fixtures above involve public forms.</p>
-<table><thead><tr><th>Proposed fork<th>What the opponent can use<th>What the controller can do
-<tbody><tr><td>Manifest a creature<td>Target the public 2/2<td>Inspect the card and pay its mana cost to turn it up when legal
-<tr><td>Restore with a noncreature hidden there<td>Same public row, joins and choices given identical prior knowledge<td>Inspect it. No turn-up action from manifest
-<tr><td>Copy either 2/2<td>Target a second permanent with the same copiable characteristics<td>The copy acquires no inspection right or turn-up action from the original
-<tr><td>Restore before turning up the original<td>Observe a reveal only on the committed branch<td>Keep the exact card, counters and target through the turn. Reject the spent Command without another payment</table>
-<p><b>Proposed.</b> Keep physical identity in exact state. Resolve inspection rights once in the native viewer projection, before a backing definition reaches a join, event or offer. Search samples hidden slots consistent with that viewer’s evidence. Ordinary visible permanents retain their current joins and saved input column meanings.</p>
-<h2>Review questions</h2><ol><li>Which witness should constrain the form API first? <b>1a · Two indistinguishable opponent views (selected).</b> 1b · Implement the turn-up payment first.</li><li>Where should backing identity become visible? <b>2a · At native viewer projection (selected).</b> 2b · Let each policy, text and replay reader filter the definition independently.</li></ol></main></html>
+<h2>Existing · same target, two private roots</h2>
+<table><thead><tr><th>After manifest entry<th>Root A<th>Root B</thead>
+<tbody><tr><th>Controller inspects<td>Gray Ogre<td>Forest
+<tr><th>Public graveyard arrival<td>Plains<td>Plains
+<tr><th>Other hidden library card<td>Forest<td>Gray Ogre
+<tr><th>Opponent at priority<td colspan="2">One nameless 2/2. Both roots have identical permanent records and encoded permanent buffers. The registry key is −1 and the object join names the battlefield permanent.
+<tr><th>Exact snapshot restored<td>Gray Ogre under the permanent<td>Forest under the permanent</table>
+<p><b>Fit: Yes.</b> The fixture in <code>cards/tests/cards/dsk.rs</code> supplies the private selection and calls <code>Game::manifest</code>. A real choice between Ogre and Forest would expose the unselected card in the graveyard. Those two outcomes should be distinguishable.</p>
+<section><h2>Biggest mismatch · which printing does a copy own?</h2>
+<p><b>Existing · No.</b> Manifest entry installs the nameless characteristics alongside the entered definition ID. <code>CopiableValues</code> requires a <code>CardDefId</code>. The original has a printing that its controller may inspect. A token copying that 2/2 has no claim on that printing, even for its controller. Masking the original’s opponent row cannot express this distinction.</p>
+<p><b>Proposed.</b> Allow the copiable face to have characteristics without a catalog identity. Keep physical backing and turn-up eligibility on the original appearance. Share the anonymous face across copies and departed-source snapshots. Preserve exact catalog joins and the compact catalog fallback for ordinary sources.</p></section>
+<h2>Proposed · resolve, copy and restore</h2>
+<ol><li>Cast Manifest Dread. At its private choice, save the pending resolution. Restore each legal Command and manifest its selected card. Move the other to the graveyard once.</li>
+<li>Copy the public 2/2 in both controlled roots. Inspect the token from either seat and copy it again. Each generation has the nameless face and no private join or inherited turn-up action.</li>
+<li>At priority, pay to turn the original Ogre face up. Keep its counters and target identity. A manifested Forest offers no such payment. Replay a spent Command and check mana, counters, zones and history. Restore the pre-payment snapshot to recover the hidden Ogre and the original offer.</li></ol>
+<h2>Review questions</h2><ol><li>Which test should accompany the playable spell? <b>1a · Copy the resulting 2/2 in both roots (selected).</b> 1b · Exercise only selection and graveyard movement.</li><li>How should a copy identify an anonymous face? <b>2a · Carry the face with an absent catalog identity (selected).</b> 2b · Assign it a synthetic catalog printing.</li></ol></main></html>
