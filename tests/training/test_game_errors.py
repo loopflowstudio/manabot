@@ -19,7 +19,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -50,7 +50,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.updates.ppo import update_iteration
 import managym
-from managym.recording import read_record
+from managym.recording import CapturedVector, read_record
 from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
@@ -923,3 +923,68 @@ def test_arena_completed_game_journal_is_kept_only_on_request(
     )
     assert result["failure"] is None and result["terminated"]
     assert journal.exists() == keep
+
+
+def test_replay_resource_limit_on_a_restored_memory_boundary() -> None:
+    config = ObservationConfig(
+        max_decision_records=1,
+        max_decision_references=128,
+        max_decision_reference_details=2048,
+        max_decision_members=256,
+    )
+    space = ObservationSpace(config)
+    match = Match(
+        MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Mountain": 12})
+    )
+    source = managym.Env(seed=42)
+    source.reset(match.to_rust())
+    for _ in range(4):
+        source.step(0)
+    vector = CapturedVector(num_envs=1, decision_memory=True, auto_reset=False)
+    vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+    vector.reset_all_into_buffers(match.to_rust())
+    vector.load_slots_into_buffers(
+        [
+            managym.SlotLoad.snapshot(
+                0,
+                source.snapshot(),
+                managym.RestoreOptions.shuffle_libraries(
+                    17, enable_decision_memory=True
+                ),
+            )
+        ]
+    )
+    for _ in range(8):
+        vector.step_isolated_into_buffers([0], recover_capacity=True)
+        [info] = vector.get_last_info()
+        if "game_error" in info:
+            break
+    else:
+        pytest.fail("fixture did not overflow its viewer memory")
+    assert info["game_error_kind"] == "resource_limit"
+    game = vector.game_inputs(0)
+    assert (
+        not game.decision_memory and game.interventions[-1].op == "set_decision_memory"
+    )
+    receipt = GameAttempt(
+        stream=0,
+        seed=game.seed,
+        seat=0,
+        matchup=match.config,
+        outcome="resource_limit",
+        actions=game.actions,
+        interventions=game.interventions,
+        observation=config,
+        decision_memory=game.decision_memory,
+        frame_json=info["game_error_frame"],
+        error_class=info["game_error_class"],
+        error=info["game_error"],
+    )
+    vector.close()
+    result = replay_attempt(GameAttempt.model_validate_json(receipt.model_dump_json()))
+    assert (
+        result["matches_binding"]
+        and result["at_retained_failure"]
+        and result["matches_error"]
+    )
+    assert result["action_index"] == len(receipt.actions) - 1

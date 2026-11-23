@@ -1,6 +1,6 @@
 """Packed seat trajectories bootstrap at their viewer's frozen game revision."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import replace
@@ -21,7 +21,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
-from manabot.env.failures import CaptureScope, capture_scope
+from manabot.env.failures import CapturedVector, CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation
 from manabot.env.observation import (
@@ -65,6 +65,8 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.snapshot_vector import (
     InMemorySnapshotVector,
+    InstalledSlot,
+    SlotInstall,
     SnapshotBranch,
     SnapshotRecipe,
 )
@@ -83,13 +85,14 @@ from manabot.training.state.game_errors import (
     GameErrorPolicy,
     GameErrorState,
     RecordAttempt,
+    replay_attempt,
     settle,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 import managym
-from managym.recording import GameInputs, PlayerSetup, read_records
+from managym.recording import GameInputs, PlayerSetup, read_records, record_from_row
 from managym.statistics import read_statistics
 from scripts.inspect_batch import _report
 from tests.fixtures.training_records import recording
@@ -2015,3 +2018,181 @@ def test_inspector_labels_a_cut_seat_trajectory_as_censored(
     assert float(report.splitlines()[-1].split()[4]) == pytest.approx(
         expected[0].item(), abs=0.0005
     )
+
+
+def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> None:
+    space = ObservationSpace()
+    agent = small_agent(space)
+    recipe, source = replay_root(space)
+    early = source.snapshot()
+    for _ in range(64):
+        last = source.snapshot()
+        if source.step(0)[2]:
+            break
+    else:
+        pytest.fail("fixture did not reach a terminal decision")
+    chooser = last.metadata().acting_player
+    assert chooser in (0, 1)
+    final_recipe = SnapshotRecipe.from_inputs(
+        record_from_row(json.loads(last.to_replay_json())).games[0],
+        last.state_digest,
+        chooser,
+    )
+    early_branch = SnapshotBranch(1, recipe, horizon=2, hot_handle=early)
+    end_branch = SnapshotBranch(2, final_recipe, hot_handle=last)
+    vector = CapturedVector(num_envs=4, seed=70, auto_reset=False)
+    attempts: list[GameAttempt] = []
+    policy = GameErrorPolicy()
+
+    def record(state: GameErrorState, attempt: GameAttempt) -> GameErrorState:
+        attempts.append(attempt)
+        return settle(state, attempt, policy)
+
+    # Direct prescribed starts supply all handles. The bank's multi-shard
+    # dispatcher is independent of this collector allocation fixture.
+    def install(requests: Sequence[SlotInstall]) -> list[InstalledSlot]:
+        loads = []
+        for request in requests:
+            if request.recipe is None:
+                loads.append(managym.SlotLoad.fresh(request.slot))
+            else:
+                assert isinstance(request.hot_handle, managym.GameSnapshot)
+                loads.append(
+                    managym.SlotLoad.snapshot(
+                        request.slot, request.hot_handle, request.restore_options
+                    )
+                )
+        return [
+            InstalledSlot(
+                r.slot,
+                r.source_digest or "",
+                r.acting_player if r.acting_player is not None else -1,
+            )
+            for r in vector.load_slots_into_buffers(loads)
+        ]
+
+    step = vector.step_isolated_into_buffers
+    calls = 0
+
+    def fail_once(
+        actions: list[int], active: list[bool], recover_capacity: bool
+    ) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            actions[2] = 999
+        step(actions, active, recover_capacity)
+
+    with (
+        patch.object(
+            vector, "install_slots", side_effect=install, create=True
+        ) as installs,
+        patch.object(vector, "capture_slots", create=True, side_effect=AssertionError),
+        patch.object(
+            vector, "release_handles", create=True, side_effect=AssertionError
+        ),
+        patch.object(vector, "replace_failed_into_buffers", side_effect=AssertionError),
+        patch.object(vector, "step_isolated_into_buffers", side_effect=fail_once),
+        patch.object(
+            vector,
+            "write_observations_for_players",
+            wraps=vector.write_observations_for_players,
+        ) as reads,
+        patch.object(
+            torch,
+            "multinomial",
+            side_effect=lambda probs, *args, **kwargs: torch.zeros(
+                len(probs), 1, dtype=torch.long
+            ),
+        ),
+    ):
+        collector = open_collector(
+            space,
+            Match(recipe.match),
+            Reward(RewardConfig()),
+            num_envs=4,
+            opponent_mode="self",
+            games_per_stream=1,
+            game_errors=policy,
+            record_attempt=record,
+            snapshot_vector=vector,
+            numerics=CollectionSession(device="cpu", seed=0),
+        )
+        try:
+            batch = collect(
+                collector,
+                agent,
+                1,
+                snapshot_starts=[
+                    early_branch,
+                    end_branch,
+                    replace(
+                        early_branch,
+                        restore_options=managym.RestoreOptions.shuffle_libraries(101),
+                    ),
+                    replace(
+                        end_branch,
+                        restore_options=managym.RestoreOptions.exact(
+                            forced_first_action=0
+                        ),
+                    ),
+                    None,
+                ],
+            )
+            assert collector.stats.snapshot.terminals == 2
+            assert collector.stats.snapshot.failed_branches == 1
+            assert collector.stats.snapshot.horizon_cuts == 1
+            assert collector.stats.games == 1
+            assert batch.is_root_decision.sum() == 2  # cut and sampled terminal
+            assert all(
+                call.args[0][1:] == [None, None, None] for call in reads.call_args_list
+            )
+            assert reads.called
+            assert [a.valid_samples for a in attempts if a.stream == 3] == [0]
+            [failure] = [a for a in attempts if a.outcome == "engine_error"]
+            assert (
+                failure.actions[-1] == 999
+                and failure.interventions[-1].op == "shuffle_libraries"
+            )
+            assert vector.next_seeds == [70, 71, 76, 73]
+            assert [
+                (r.slot, r.recipe) for r in installs.call_args_list[-1].args[0]
+            ] == [(2, None)]
+            # The next update starts with one mixed allocation. Ended fresh
+            # slot 2 spends its next seed; the opening deals parked by branches resume.
+            collect(collector, agent, 1, snapshot_starts=[early_branch])
+            mixed = installs.call_args_list[-1].args[0]
+            assert [(r.slot, r.recipe is None) for r in mixed] == [
+                (0, False),
+                (1, True),
+                (2, True),
+                (3, True),
+            ]
+            assert vector.current_game_seeds() == [42, 71, 76, 73]
+        finally:
+            close_collector(collector)
+    result = replay_attempt(GameAttempt.model_validate_json(failure.model_dump_json()))
+    assert (
+        result["at_retained_failure"]
+        and result["matches_binding"]
+        and result["matches_error"]
+    )
+
+
+def test_grouped_plan_rejects_forced_opening_before_install() -> None:
+    space = ObservationSpace()
+    recipe, _ = replay_root(space)
+    bank = SnapshotBank(SnapshotConfig(capacity=1, replay_fraction=1, fresh_floor=0))
+    with replay_collector(space, recipe) as collector, bank.begin_batch() as plan:
+        generations = collector._env.current_game_generations()
+        plan.pending.append(
+            SnapshotBranch(
+                0,
+                recipe,
+                restore_options=managym.RestoreOptions.exact(forced_first_action=0),
+            )
+        )
+        with pytest.raises(ValueError, match="cannot force an opening"):
+            collect(collector, small_agent(space), 1, snapshot_plan=plan)
+        assert collector._env.current_game_generations() == generations
+        assert collector.stats.micro_steps == 0

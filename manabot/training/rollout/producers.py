@@ -21,6 +21,7 @@ from numpy.typing import NDArray
 
 from manabot.env.failures import CapturedVector
 import managym
+from managym.recording import GameInputs
 
 Array = NDArray[np.generic]
 
@@ -376,6 +377,17 @@ class BufferedStreams:
             sum(stepping for stepping, _ in shards) / len(shards),
             sum(encoding for _, encoding in shards) / len(shards),
         )
+
+    @property
+    def auto_reset(self) -> bool:
+        return self._shards[0].native.auto_reset
+
+    def game_inputs(self, slot: int) -> GameInputs:
+        """Materialize one failed game's replay on the producer that owns it."""
+        for shard in self._shards:
+            if shard.start <= slot < shard.stop:
+                return shard.native.game_inputs(slot - shard.start)
+        raise IndexError(slot)
 
     def capture_failure(self, error: BaseException) -> None:
         # Capture from the owning thread so live run coordinates remain available.

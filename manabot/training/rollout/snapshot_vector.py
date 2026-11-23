@@ -71,6 +71,7 @@ class SnapshotBranch:
     branch_index: int = 0
     sample_weight: float = 1.0
     hot_handle: object | None = None
+    restore_options: managym.RestoreOptions | None = None
 
     def __post_init__(self) -> None:
         if self.snapshot_id < 0 or self.branch_group_id < -1 or self.branch_index < 0:
@@ -89,6 +90,7 @@ class SlotInstall:
     snapshot_id: int
     recipe: SnapshotRecipe | None
     hot_handle: object | None = None
+    restore_options: managym.RestoreOptions | None = None
 
 
 @dataclass(frozen=True)
@@ -119,7 +121,7 @@ class SnapshotVector(Protocol):
 
     def write_observations_for_players(
         self,
-        players: list[int],
+        players: Sequence[int | None],
         buffers: dict[str, np.ndarray],
         action_overflow: Literal["error", "first-legal"] = "error",
         *,
@@ -239,6 +241,8 @@ class InMemorySnapshotVector(BufferedStreams):
         """Native setup references are owned and released by their Python holders."""
 
     def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]:
+        if any(request.restore_options is not None for request in installs):
+            raise ValueError("restore options require a native snapshot producer")
         results = []
         for request in installs:
             slot, recipe = request.slot, request.recipe
@@ -299,7 +303,7 @@ class InMemorySnapshotVector(BufferedStreams):
 
     def write_observations_for_players(
         self,
-        players: list[int],
+        players: Sequence[int | None],
         buffers: dict[str, np.ndarray],
         action_overflow: Literal["error", "first-legal"] = "error",
         *,
@@ -308,9 +312,8 @@ class InMemorySnapshotVector(BufferedStreams):
         reads = super().write_observations_for_players(
             players, buffers, action_overflow, layout=layout
         )
+        generations = self.current_game_generations()
         return [
-            ObservationRead(r.slot, r.player, generation, r.seed, r.revision)
-            for r, generation in zip(
-                reads, self.current_game_generations(), strict=True
-            )
+            ObservationRead(r.slot, r.player, generations[r.slot], r.seed, r.revision)
+            for r in reads
         ]
