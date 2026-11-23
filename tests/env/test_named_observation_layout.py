@@ -51,18 +51,26 @@ def test_column_constants_are_read_from_the_native_layout() -> None:
     assert MEMORY_WIDTHS.keys() == {k for k in memory if k.startswith("decision_")}
 
 
-def test_observation_extents_on_empty_and_broadcast_views() -> None:
+def test_observation_row_extents_on_strided_and_empty_views() -> None:
     rows = np.broadcast_to(np.array([[0, 1, 3.5]], np.float32), (2, 3))
     assert managym.observation_row_extents(rows[:, ::-1], 1) == [2, 2]
     assert managym.observation_row_extents(rows[:, :0], 1) == [0, 0]
     assert managym.observation_row_extents(rows[:0], 1) == []
-    # Contiguous items scan in chunks of 16 values with a shorter tail.
-    dense = np.zeros((3, 10, 4), np.float32)
-    dense[0, 7, 2] = np.nan
-    dense[1, 1, 0] = 2
-    dense[1, 9, 3] = -0.0
-    assert managym.observation_row_extents(dense, 1) == [8, 2, 0]
+    with pytest.raises(ValueError, match="strided"):
+        managym.observation_row_extents(rows, 2)
 
+
+def test_observation_row_extents_take_the_last_occupied_row_across_seats() -> None:
+    dense = np.zeros((3, 2, 10, 4), np.float32)
+    dense[0, 0, 1, 0] = 1
+    dense[0, 1, 9, 2] = np.nan
+    dense[1, 0, 7, 0] = 2
+    dense[1, 1, 9, 3] = -0.0
+    assert managym.observation_row_extents(dense, 2) == [10, 8, 0]
+
+
+def test_observation_reference_extents_on_broadcast_columns() -> None:
+    rows = np.broadcast_to(np.array([[0, 1, 3.5]], np.float32), (2, 3))
     segments = [(0, 2), (2, 3), (5, 0)]
     assert managym.observation_reference_extents([(rows, 1)], segments) == [
         [1, 1],
@@ -71,8 +79,6 @@ def test_observation_extents_on_empty_and_broadcast_views() -> None:
     ]
     with pytest.raises(ValueError, match="batch sizes"):
         managym.observation_reference_extents([(rows, 0), (rows[:1], 1)], segments)
-    with pytest.raises(ValueError, match="strided"):
-        managym.observation_row_extents(rows, 2)
 
 
 def test_fact_kinds_are_named_native_row_kinds() -> None:

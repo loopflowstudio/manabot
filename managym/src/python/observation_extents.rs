@@ -1,7 +1,11 @@
 //! Read occupied rows and referenced segments from strided observation buffers.
 //! The caller supplies the row axis, reference columns and coordinate system.
 #![allow(clippy::useless_conversion)] // PyO3 function wrappers
-use pyo3::{buffer::PyBuffer, exceptions::PyValueError, prelude::*};
+use pyo3::{
+    buffer::{PyBuffer, ReadOnlyCell},
+    exceptions::PyValueError,
+    prelude::*,
+};
 
 /// A float32 buffer viewed as [batch, seat, row, column]. Missing seat and
 /// column axes are singletons. The PyBuffer pins the storage for the scan.
@@ -64,60 +68,53 @@ impl<'a> Rows<'a> {
                 .read_unaligned()
         }
     }
-
-    /// The bits of one (batch, seat) item's rows from `first` onward when
-    /// they are contiguous and aligned in memory, so a scan can vectorize.
-    fn contiguous_tail(&self, batch: usize, seat: usize, first: usize) -> Option<&[u32]> {
-        let [b, s, r, c] = self.strides;
-        let element = std::mem::size_of::<f32>() as isize;
-        let contiguous = (self.columns == 1 || c == element)
-            && (self.rows == 1 || r == self.columns as isize * element);
-        if !contiguous || first >= self.rows {
-            return None;
-        }
-        let offset = batch as isize * b + seat as isize * s + first as isize * r;
-        // SAFETY: as in `value`; the tail lies within this item's block.
-        let start = unsafe { self.buffer.buf_ptr().byte_offset(offset).cast::<u32>() };
-        if !start.is_aligned() {
-            return None;
-        }
-        let len = (self.rows - first) * self.columns;
-        // SAFETY: `len` contiguous aligned elements starting at `start` belong
-        // to the buffer, which is not written while we hold the GIL.
-        Some(unsafe { std::slice::from_raw_parts(start, len) })
-    }
 }
 
 /// Index of the last element whose float32 bits are not a signed zero. NaN
 /// counts as occupied, matching `value != 0.0`.
-fn last_occupied(bits: &[u32]) -> Option<usize> {
+fn last_occupied(values: &[ReadOnlyCell<f32>]) -> Option<usize> {
     const CHUNK: usize = 16;
     const MAGNITUDE: u32 = 0x7fff_ffff;
-    let occupied = |word: &u32| word & MAGNITUDE != 0;
-    let (chunks, tail) = bits.as_chunks::<CHUNK>();
-    let whole = chunks.len() * CHUNK;
+    let occupied = |value: &ReadOnlyCell<f32>| value.get() != 0.0;
+    let (chunks, tail) = values.as_chunks::<CHUNK>();
     if let Some(index) = tail.iter().rposition(occupied) {
-        return Some(whole + index);
+        return Some(chunks.len() * CHUNK + index);
     }
     // OR each chunk's magnitude bits to skip padding without branching per element.
-    let chunk = chunks
-        .iter()
-        .rposition(|chunk| chunk.iter().fold(0, |acc, word| acc | word) & MAGNITUDE != 0)?;
+    let chunk = chunks.iter().rposition(|chunk| {
+        chunk
+            .iter()
+            .fold(0, |bits, value| bits | value.get().to_bits())
+            & MAGNITUDE
+            != 0
+    })?;
     Some(chunk * CHUNK + chunks[chunk].iter().rposition(occupied)?)
 }
 
 /// One past the last nonzero row for each batch item, including NaN padding.
 #[pyfunction]
-fn observation_row_extents(buffer: PyBuffer<f32>, axis: usize) -> PyResult<Vec<usize>> {
+fn observation_row_extents(
+    py: Python<'_>,
+    buffer: PyBuffer<f32>,
+    axis: usize,
+) -> PyResult<Vec<usize>> {
     let view = Rows::new(&buffer, axis)?;
     let mut extents = vec![0; view.batch];
+    if buffer.item_count() == 0 {
+        return Ok(extents);
+    }
+    let contiguous = buffer.as_slice(py);
     for (batch, extent) in extents.iter_mut().enumerate() {
         for seat in 0..view.seats {
-            let row = match view.contiguous_tail(batch, seat, *extent) {
-                Some(bits) => last_occupied(bits).map(|index| *extent + index / view.columns),
-                None => (*extent..view.rows).rev().find(|&row| {
+            let row = if let Some(values) = contiguous {
+                let start = (batch * view.seats + seat) * view.rows;
+                let tail =
+                    &values[(start + *extent) * view.columns..(start + view.rows) * view.columns];
+                last_occupied(tail).map(|index| *extent + index / view.columns)
+            } else {
+                (*extent..view.rows).rev().find(|&row| {
                     (0..view.columns).any(|column| view.value(batch, seat, row, column) != 0.0)
-                }),
+                })
             };
             if let Some(row) = row {
                 *extent = row + 1;
@@ -152,7 +149,7 @@ fn observation_reference_extents(
             for row in 0..view.rows {
                 for column in 0..view.columns {
                     let index = view.value(batch, 0, row, column) - *base as f32;
-                    if index < 0.0 || !index.is_finite() || index >= usize::MAX as f32 {
+                    if !(0.0..usize::MAX as f32).contains(&index) {
                         continue;
                     }
                     let index = index as usize; // floor of a nonnegative coordinate

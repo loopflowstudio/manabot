@@ -28,8 +28,10 @@ which follow the objects. The deprecated v9/v10 layouts have no stack: its
 capacity is zero and its keys are absent.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from itertools import groupby
+from operator import itemgetter
 
 import numpy as np
 
@@ -39,6 +41,9 @@ from manabot.env.observation import ObservationBuffers, ObservationSpace, column
 import managym
 
 MIN_BUCKET = 8
+
+# Keys only input v11 carries.
+STACK_KEYS = ("stack", "stack_valid")
 
 # Keys trimmed along axis 1, by axis; seat-major keys ([B, 2, rows, ...])
 # are trimmed along axis 2.
@@ -62,18 +67,14 @@ ROW_KEYS: dict[str, tuple[str, ...]] = {
         "agent_permanents_valid",
         "opponent_permanents_valid",
     ),
-    "stack": ("stack", "stack_valid"),
+    "stack": STACK_KEYS,
 }
-# Keys only input v11 carries; absent from v9/v10 batches.
-STACK_KEYS = ("stack", "stack_valid")
 SEAT_KEYS: dict[str, tuple[str, ...]] = {
     # `card_turn_state` (inputs v10 and v11) aligns with the card rows.
     "cards": ("semantic_cards", "card_turn_state"),
     "known": ("known_hand",),
     "decklists": ("decklists",),
 }
-# Read only at legal rows, which `actions_valid` bounds; its padding is -1.
-_UNMEASURED_KEYS = ("action_focus",)
 # Column positions come from the native layout by name, so a moved or added
 # column cannot silently shift what is remapped. Policy history v1 is the
 # event layout whose context columns are object references.
@@ -152,18 +153,11 @@ def _extent(value: np.ndarray, axis: int) -> np.ndarray:
     return np.asarray(managym.observation_row_extents(value, axis), dtype=np.int64)
 
 
-def _float32(values: np.ndarray, invalid: float) -> np.ndarray:
-    """`values` as float32 with NaN and infinities replaced by `invalid`."""
-    return np.nan_to_num(
-        values.astype(np.float32), nan=invalid, posinf=invalid, neginf=invalid
-    )
-
-
 def _reference_extent(values: np.ndarray, capacity: int) -> np.ndarray:
-    """[B] largest integer part of each row's finite one-based references,
-    clamped to capacity."""
-    clipped = np.clip(np.floor(_float32(values, 0.0)), 0, capacity)
-    return clipped.reshape(len(values), -1).max(1, initial=0).astype(np.int64)
+    """Largest finite one-based reference per item, floored and clamped to capacity."""
+    values = np.asarray(values, dtype=np.float32)
+    largest = values.max(axis=1, where=np.isfinite(values), initial=0)
+    return np.minimum(largest, capacity).astype(np.int64)
 
 
 def has_history_events(obs: Mapping[str, object]) -> bool:
@@ -171,6 +165,16 @@ def has_history_events(obs: Mapping[str, object]) -> bool:
     events = obs.get("events")
     shape = getattr(events, "shape", None)
     return shape is not None and len(shape) == 3 and shape[-1] == _EVENT_WIDTH
+
+
+def object_reference_columns(
+    obs: ObservationBuffers,
+) -> Iterator[tuple[str, tuple[int, ...], int]]:
+    """Group live reference columns so trimming copies each buffer once."""
+    for fields, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
+        for key, group in groupby(fields, key=itemgetter(0)):
+            if key in obs and (key != "events" or has_history_events(obs)):
+                yield key, tuple(index for _, index in group), base
 
 
 def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]:
@@ -183,15 +187,18 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
     segments: list[tuple[str, int, int]] = []
     start = 2
     for axis in ("cards", "cards", "permanents", "permanents", "stack"):
-        segments.append((axis, start, capacities.get(axis, 0)))
-        start += capacities.get(axis, 0)
+        rows = capacities.get(axis, 0)
+        segments.append((axis, start, rows))
+        start += rows
     return segments
 
 
 def _reference_buffer(value: np.ndarray, base: int) -> tuple[np.ndarray, int]:
     if value.dtype != np.float32:
         # NumPy subtracts in the source dtype before rounding to float32.
-        return (value - base if base else value).astype(np.float32), 0
+        if base:
+            value = value - base
+        return value.astype(np.float32), 0
     return (value if value.flags.aligned else value.copy()), base
 
 
@@ -245,7 +252,8 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
 
     for axis, keys in ROW_KEYS.items():
         for key in keys:
-            if key not in _UNMEASURED_KEYS and key in obs:
+            # actions_valid bounds action_focus, whose padding is -1.
+            if key != "action_focus" and key in obs:
                 need(axis, _extent(obs[key], 1))
     for axis, keys in SEAT_KEYS.items():
         for key in keys:
@@ -273,12 +281,8 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
             _reference_extent(obs[key][..., index], capacities["relations"]),
         )
     references = [_reference_buffer(obs["action_focus"], 0)]
-    for key, index in ONE_BASED_REFERENCES:
-        if key in obs:
-            references.append(_reference_buffer(obs[key][..., index], 1))
-    if has_history_events(obs):
-        for key, index in ZERO_BASED_REFERENCES:
-            references.append(_reference_buffer(obs[key][..., index], 0))
+    for key, indices, base in object_reference_columns(obs):
+        references.extend(_reference_buffer(obs[key][..., i], base) for i in indices)
 
     segments = object_segments(capacities)
     extents = managym.observation_reference_extents(
@@ -342,21 +346,17 @@ def trim_observation(
     if not buckets.trims_objects:
         return trimmed
 
+    segments = object_segments(buckets.capacities)
+
     def remap(values: np.ndarray) -> np.ndarray:
         shift = np.zeros_like(values)
-        for axis, start, rows in object_segments(buckets.capacities):
+        for axis, start, rows in segments:
             shift += (values >= start + rows) * (rows - buckets.sizes[axis])
         return values - shift
 
     trimmed["action_focus"] = remap(trimmed["action_focus"])
-    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
-        for key in dict.fromkeys(key for key, _ in references):
-            if key not in trimmed:
-                continue
-            if key == "events" and not has_history_events(trimmed):
-                continue
-            columns = [column for name, column in references if name == key]
-            value = trimmed[key].copy()
-            value[..., columns] = remap(value[..., columns] - base) + base
-            trimmed[key] = value
+    for key, indices, base in object_reference_columns(trimmed):
+        value = trimmed[key].copy()
+        value[..., indices] = remap(value[..., indices] - base) + base
+        trimmed[key] = value
     return trimmed

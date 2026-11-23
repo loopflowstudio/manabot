@@ -11,10 +11,9 @@ from manabot.env.observation import FACT_OBJECT_INDEX, ObservationSpace, column
 from manabot.infra.config import ObservationConfig
 from manabot.policy.buckets import (
     AXES,
-    ONE_BASED_REFERENCES,
-    ZERO_BASED_REFERENCES,
     bucket,
     bucket_sizes,
+    object_reference_columns,
     row_needs,
     sizes_of,
 )
@@ -100,11 +99,14 @@ def test_row_needs_keep_strided_padding_and_referenced_objects() -> None:
     # in the second seat. The float32 spacing changes at 16.
     obs["effects"] = obs["effects"].astype(np.float64)
     obs["effects"][2, 0, column("effects", "source")] = 17 - 7e-7
+    obs["effects"][2, 0, column("effects", "detail_count")] = 3.75
+    obs["effects"][2, 1, column("effects", "detail_count")] = np.inf
 
     expected = np.zeros((5, len(AXES)), dtype=np.int64)
     for axis, rows in {
         "facts": [0, 0, 4, 3, 0],
-        "effects": [0, 0, 1, 0, 0],
+        "effects": [0, 0, 2, 0, 0],
+        "details": [0, 0, 3, 0, 0],
         "cards": [9, 9, 5, 0, 0],
         "permanents": [0, 0, 5, 5, 0],
         "stack": [0, 0, 0, 0, 3],
@@ -119,20 +121,23 @@ def test_row_needs_keep_strided_padding_and_referenced_objects() -> None:
 def test_remapped_references_are_every_object_table_column() -> None:
     """A new object-table reference must be remapped, not trimmed silently."""
     layout = managym.observation_layout(policy_history=True)
-    one_based: set[tuple[str, int]] = set()
-    zero_based: set[tuple[str, int]] = set()
+    expected: set[tuple[str, int, int]] = set()
     for key, array in layout.items():
         for field in array["columns"].values():
             encoding = field["encoding"].lower()
             if field["kind"] != "reference" or "object" not in encoding:
                 continue
-            target = zero_based if encoding.startswith("zero-based") else one_based
-            target.add((key, field["index"]))
+            base = 0 if encoding.startswith("zero-based") else 1
+            expected.add((key, field["index"], base))
         element = array.get("element")
         if element is not None and element["kind"] == "reference":
             assert key == "action_focus", key
-    assert one_based == set(ONE_BASED_REFERENCES)
-    assert zero_based == set(ZERO_BASED_REFERENCES)
+    obs = ObservationSpace(ObservationConfig(policy_history_version=1)).allocate(1)
+    assert {
+        (key, index, base)
+        for key, indices, base in object_reference_columns(obs)
+        for index in indices
+    } == expected
 
 
 @pytest.mark.parametrize(
