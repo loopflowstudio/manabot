@@ -143,7 +143,13 @@ Each committed combat hit carries its exact source, recipient and damage amount 
 
 The FDN fixture restores simultaneous one- and three-damage triggers after removing the power boost. Each source receives its own incubation counters. The activation is absent at two and offered at three. From the paid fork, resolving creates a 2/2 flying Drake and countering creates none. Both leave zero incubation counters. The native Env snapshot fixture restores the same precombat source for one and three damage and restores each pending trigger after its power changes. The replacement-order control and Invasion Tactics’ one-draw-per-batch control passed. Python text and Academy decision context also exposed the bound amount. The FDN ledger links the card fixture. Hatcher belongs to the additional cost-payment cohort.
 
-The next planned card is High-Society Hunter. Check its optional sacrifice and its draws for other nontoken creatures dying simultaneously on either side, including when the Hunter itself dies.
+The unequal-hit fixture in `managym/cards/tests/cards/fdn.rs` checks both native viewers and their v11 fact rows. The Python fixture in `tests/semantic/test_text_observation.py` checks a one-damage hit in acting-viewer text and both Academy decision contexts. Together these cover the requested public amount. The attempted inline trigger-placement state exceeded the 4096-byte GameState limit. Boxing the placement round kept the limit. Keep the committed hit on the event and its bound amount on the pending trigger. Neither counter placement nor activation needs a turn-wide damage total.
+
+The catalog fixture update at `ef9a8011` supplied reference data. Count delivery from executable definitions and directed fixtures. The merge at `58896721` includes upstream MLX self-play work. Integrated consumer and budget checks remain open on the merged revision.
+
+## Next slice · High-Society Hunter
+
+From the same attack trigger, take the optional sacrifice and decline it in a sibling. Use a creature token to distinguish paying the sacrifice from qualifying for a death draw. Then destroy Hunter, another friendly nontoken creature and an opposing nontoken creature together. Expect two draws. Inspect the existing departure and trigger matching paths before adding a query. The deciding facts are which creatures died, their token status at departure and which one was Hunter. Link the passing fixture in the FDN cost-payment row.
 
 ## Evidence to carry forward
 
