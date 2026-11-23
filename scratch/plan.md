@@ -189,3 +189,11 @@ uv run --no-project --python 3.13 python scripts/engine_budget.py compare
 ```
 
 No baseline update or relative speed claim follows from the local instrumented sample.
+
+### Performance review at d972bed7
+
+Return to `implement` for simulation outcome parity. The seed-23 Pact receipt establishes an absolute winner at positive life. The simulation reader still tests the step limit first and looks for a different winner field. Withhold simulation outcome and win-rate comparisons until the reader passes the cases in Next slice. The native benchmark receipts remain observations of their recorded workloads.
+
+The reviewed reference is `932a1bb9`. Its 512-game workload took 123,517 steps with digest 6877553498864102521. The candidate took 118,255 steps and all three search seed digests changed. Opening choices change the paths through those games. The local instrumented release and the hosted reference also have different build and machine profiles. These receipts establish neither a speedup nor a regression. Gate must reconcile the changed paths and run the paired release Engine Budget on its ubuntu-24.04 runner. Reference adoption remains a separate reviewed operation.
+
+The local engine measurement was based on `7e5f71bd`; the matched Herald workload is recorded in `5a43ee03`. The timing and allocation receipts agree on each constructed cohort digest. Doubling the variable creatures on the healthy Herald board multiplied damage-pass allocations by 4.33 and median time by 3.17. At size eight, adding a pending loss left board builds at nine and added 22 allocated bytes. Crowded damage merits investigation if it constrains the paired workload. Retain the current representation pending evidence identifying a redundant rebuild. Debug checks in `flow/statics.rs` compare the cached board with a fresh evaluation, and `flow/layers.rs` checks dependency pruning against pairwise evaluation. The release samples do not exercise those assertions. Gate retains the debug suite alongside the directed Herald-removal, simultaneous-loss and exact-fork evidence.
