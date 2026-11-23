@@ -1,11 +1,11 @@
-at: 8771c9fdaba572f67611b89ada91f85f6f069c24
+at: fc24614f88dfb9eece3fd78c0868a5f8b7e6e9c9
 first:
-  - path: managym/cards/src/usg.rs
-    why: Fog Bank’s printed characteristics and prevention ability
-  - path: managym/state/src/card.rs
-    why: A single replacement covers both endpoints
+  - path: managym/cards/src/ons.rs
+    why: Printed enchantment and its damage replacement
+  - path: managym/src/flow/identity.rs
+    why: Capture effective creature status before departure
   - path: managym/src/flow/proposed_event.rs
-    why: Match combat endpoints and verify both replacement orders
-  - path: managym/cards/tests/cards/usg.rs
-    why: Replay a powered Fog Bank blocking Healer’s Hawk
+    why: Match each damage proposal against its exact source
+  - path: managym/cards/tests/cards/ons.rs
+    why: Compare live sources and fork after sacrifice
 hide: []
