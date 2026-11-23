@@ -18,3 +18,5 @@
 - Return the same terminal info from indexed and semantic Env steps. Derive it from the committed native outcome so restoring a snapshot needs no second stored receipt.
 
 - Use Sakashima of a Thousand Faces to keep two legendary Bracelets on the same creature. Use Doubling Season to cross seven plan counters with one placement.
+
+- Use match-state hash v19 for the smaller serialized victory record. Keep the previous hash in git and leave the recorded games at their original revisions.

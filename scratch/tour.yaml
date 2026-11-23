@@ -1,7 +1,13 @@
-at: b37b8aa6014acd3f2b21274faa8e1f9e143a4ac2
+at: 1af15ad430fe650c27cf07229a0e59a56b12fbbe
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
+  - path: managym/cards/src/dgm.rs
+    why: Read the victory condition after the optional search
+  - path: managym/cards/src/eld.rs
+    why: Compare Passage’s successful-search land count
+  - path: managym/src/flow/statics.rs
+    why: Count matching permanents or their effective names
   - path: managym/src/flow/game.rs
     why: Lifecycle and committed outcome data
   - path: managym/src/flow/opening.rs

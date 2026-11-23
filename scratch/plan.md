@@ -152,6 +152,14 @@ At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact
 
 At `5d6e00bb` the native probe admitted Silencer alone among the three cards. At `0ea0c204` the rebuilt CPython 3.13 extension admitted Bracelet, Cube and Silencer together. The earlier review passed nine focused native cases and the seed-23 Pact parity fixture. Three focused Python cases subsequently passed across the paid and unpaid Bloodbending decision surfaces and Academy reconnect at a pending delegated discard.
 
-### Next slice
+### Maze’s End decomposition at `1af15ad4`
 
-Implement and review the Maze’s End decomposition above first. At gate, run the full suite and the paired same-runner 10% Engine Budget described above. Check the semantic digests alongside the timings, including the effect of opening decisions on ordinary games. Focused card and Command results do not establish that budget.
+Maze now places the ten-name Gate condition after the entire search. Fabled Passage checks the ordinary land count only after a successful find. The condition reads effective names in both evaluation contexts. Ordinary counts keep their previous catalog token representation. The retired Maze-specific instruction has no successor token because its meaning is now distributed across the condition and the win instruction.
+
+At seed 161, nine names plus a duplicate failed on decline, finding the tenth won, declining with ten won, and flashing Herald prevented that victory. Passage fetched a Forest tapped with two other Forests and untapped with three. The native description and catalog tests verified the threshold wording and distinct-name field. Both seat assignments received the expected rewards for an instructed win or loss. The suspended Clone replacement fork passed with its observed v19 state hash.
+
+On the rebuilt CPython 3.13 extension, the seed-23 Pact Command matched indexed play across live and replay-restored snapshots. Both checkpoint formats passed catalog-growth binding, and the saved-column-prefix case passed. The native rename table exposed the retired Maze variant.
+
+### Next step
+
+Review the shared condition and instructed victory. Gate still owns the full suite and paired same-runner 10% Engine Budget, including semantic digests for ordinary games with opening decisions.
