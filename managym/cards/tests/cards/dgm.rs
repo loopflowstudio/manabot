@@ -1,8 +1,8 @@
 //! Dragon's Maze card interactions.
 use crate::support::{
-    game::five_color_setup,
+    game::{five_color_setup, force_new_card_in_hand},
     inspect::{card_of, zone_of},
-    play::{activate, command, pay_rest},
+    play::{activate, cast_card, command, pay_rest, resolve_top},
 };
 use managym::{
     agent::action::Action,
@@ -35,9 +35,7 @@ fn mazes_end_counts_distinct_gate_names_after_the_search() {
         for name in gates[..distinct].iter().chain([&gates[0]]) {
             s.force_permanent_on_battlefield(0, name);
         }
-        if protected {
-            s.force_permanent_on_battlefield(1, "Herald of Eternal Dawn");
-        }
+        let herald = protected.then(|| force_new_card_in_hand(&mut s, 1, "Herald of Eternal Dawn"));
         let maze = s.force_permanent_on_battlefield(0, "Maze's End");
         let source = card_of(&s, maze);
         s.game_mut().mana_payment[0] = ManaPayment::Auto;
@@ -47,8 +45,17 @@ fn mazes_end_counts_distinct_gate_names_after_the_search() {
             pay_rest(&mut s);
         }
         assert_eq!(zone_of(&s, source), Some(ZoneType::Hand));
-        s.pass_priority();
-        s.pass_priority();
+        if let Some(herald) = herald {
+            s.pass_priority();
+            cast_card(&mut s, herald);
+            if s.game().state.stack_objects.len() == 1 {
+                pay_rest(&mut s);
+            }
+            assert_eq!(s.game().state.stack_objects.len(), 2);
+            resolve_top(&mut s);
+            assert_eq!(zone_of(&s, herald), Some(ZoneType::Battlefield));
+        }
+        resolve_top(&mut s);
         if find {
             let selected = s
                 .action_space()

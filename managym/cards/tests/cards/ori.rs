@@ -237,3 +237,34 @@ fn demonic_pact_loss_can_be_answered_with_herald() {
         }
     }
 }
+
+#[test]
+fn demonic_pact_resolves_each_resource_mode() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{command, settle, target_opponent},
+    };
+    use managym::{agent::action::Action, flow::turn::StepKind};
+
+    for mode in 0..3 {
+        let mut s = five_color_setup(&["Demonic Pact"]);
+        s.force_permanent_on_battlefield(0, "Demonic Pact");
+        s.advance_to_active_step(0, StepKind::Upkeep);
+        for name in ["Forest", "Swamp", "Island"] {
+            force_new_card_in_hand(&mut s, 1, name);
+        }
+        let hands = [0, 1].map(|seat| s.zone_size(seat, ZoneType::Hand));
+        command(
+            &mut s,
+            |a| matches!(a, Action::ChooseMode {mode: choice, ..} if *choice == mode),
+        );
+        if mode != 2 {
+            target_opponent(&mut s);
+        }
+        settle(&mut s);
+        s.assert_life(0, if mode == 0 { 24 } else { 20 });
+        s.assert_life(1, if mode == 0 { 16 } else { 20 });
+        s.assert_zone_size(0, ZoneType::Hand, hands[0] + if mode == 2 { 2 } else { 0 });
+        s.assert_zone_size(1, ZoneType::Hand, hands[1] - if mode == 1 { 2 } else { 0 });
+    }
+}
