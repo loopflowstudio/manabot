@@ -681,6 +681,8 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
 fn effect_token(effect: &Effect) -> &'static str {
     match effect {
         Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
+        Effect::ExileMeldPair { .. } => "Effect::ExileMeldPair",
+        Effect::MeldExiled { .. } => "Effect::MeldExiled",
         Effect::TransformSource => "Effect::TransformSource",
         Effect::ControlPlayer { .. } => "Effect::ControlPlayer",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
@@ -772,7 +774,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 84;
+const EFFECT_VARIANTS: usize = 86;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -992,6 +994,16 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
         Effect::EachPlayerSacrificesCreatures { count: 13 },
+        Effect::ExileMeldPair {
+            partner: "Fang, Fearless l'Cie".into(),
+        },
+        Effect::MeldExiled {
+            fronts: [
+                "Vanille, Cheerful l'Cie".into(),
+                "Fang, Fearless l'Cie".into(),
+            ],
+            result: "Ragnarok, Divine Deliverance".into(),
+        },
         Effect::TransformSource,
         Effect::ControlPlayer {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -1195,6 +1207,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::CastFromGraveyard => "Condition::CastFromGraveyard",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
+        Condition::OwnsMeldPair { .. } => "Condition::OwnsMeldPair",
         Condition::AtMostHalfStartingLife => "Condition::AtMostHalfStartingLife",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
@@ -1241,6 +1254,9 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::CastFromGraveyard,
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
+        Condition::OwnsMeldPair {
+            partner: String::new(),
+        },
         Condition::AtMostHalfStartingLife,
         Condition::TargetDealtDamageThisTurn,
         Condition::SourceCountersAtLeast {

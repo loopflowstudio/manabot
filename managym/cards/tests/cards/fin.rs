@@ -439,3 +439,182 @@ fn fang_token_copy_leaves_the_library_order_intact() {
     assert!(s.game().permanent_object(original).is_some());
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
 }
+
+const VANILLE: &str = "Vanille, Cheerful l'Cie";
+const FANG: &str = "Fang, Fearless l'Cie";
+const RAGNAROK: &str = "Ragnarok, Divine Deliverance";
+
+fn reach_meld_payment(s: &mut Scenario) {
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    resolve_top(s);
+}
+
+fn vanille_first_main() -> Scenario {
+    let mut s = five_color_setup(&[VANILLE, FANG, "Lost Days", "Ember Island Production"]);
+    s.force_permanent_on_battlefield(0, VANILLE);
+    s.force_permanent_on_battlefield(0, FANG);
+    reach_meld_payment(&mut s);
+    s
+}
+
+fn pay_for_meld(s: &mut Scenario) {
+    command(s, |a| matches!(a, Action::PayCost { .. }));
+    spend_colorless(s);
+    if !offered_cards(s).is_empty() {
+        command(s, |a| matches!(a, Action::SelectCard { .. }));
+    }
+}
+
+fn form_ragnarok() -> Scenario {
+    let mut s = vanille_first_main();
+    pay_for_meld(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, RAGNAROK).len(), 1);
+    s
+}
+
+#[test]
+fn vanille_exiles_a_namesake_but_only_melds_the_original_cards() {
+    use managym::state::target::Target;
+    let mut s = five_color_setup(&[VANILLE, FANG, "Clone"]);
+    let vanille = s.force_permanent_on_battlefield(0, VANILLE);
+    let vanille = s
+        .game()
+        .state
+        .card_of(s.game().permanent_object(vanille).unwrap())
+        .unwrap();
+    let fang = s.force_permanent_on_battlefield(1, FANG);
+    let clone = cast(&mut s, "Clone");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(fang)));
+    settle(&mut s);
+    reach_meld_payment(&mut s);
+    pay_for_meld(&mut s);
+    assert!(s.battlefield_permanents_named(0, RAGNAROK).is_empty());
+    let state = &s.game().state;
+    for card in [vanille, state.card_id(clone).unwrap()] {
+        assert_eq!(
+            state.zones.zone_of(state.object_of(card)),
+            Some(ZoneType::Exile)
+        );
+    }
+}
+
+#[test]
+fn vanille_can_decline_meld() {
+    let mut s = vanille_first_main();
+    command(&mut s, |a| matches!(a, Action::Decline { .. }));
+    for name in [VANILLE, FANG] {
+        assert_eq!(s.battlefield_permanents_named(0, name).len(), 1);
+    }
+}
+
+fn bottom_with_lost_days(
+    s: &mut Scenario,
+    spell: ObjectId,
+    target: managym::state::game_object::PermanentId,
+) {
+    use crate::support::play::pass_until;
+    use managym::{agent::action::ActionSpaceKind, state::target::Target};
+    cast_card(s, spell);
+    assert!(s.choose_target(Target::Permanent(target)));
+    spend_colorless(s);
+    pass_until(s, ActionSpaceKind::Modal);
+    command(s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+}
+
+#[test]
+fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
+    use crate::support::{game::deck, inspect::library};
+    use managym::{state::player::PlayerConfig, Env};
+    let mut s = form_ragnarok();
+    let owner = PlayerId(0);
+    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
+    let object = s.game().permanent_object(permanent).unwrap();
+    let observed = Observation::for_player(s.game(), PlayerId(1));
+    let ragnarok = observed
+        .opponent_permanents
+        .iter()
+        .find(|p| p.characteristics.name == RAGNAROK)
+        .unwrap();
+    assert_eq!(ragnarok.mana_value(), 7);
+    let state = &s.game().state;
+    let cards = [
+        state.card_of(object).unwrap(),
+        state.zones.melded_card(object).unwrap(),
+    ];
+    assert!(cards.iter().all(|card| state.object_of(*card) == object));
+    // Leave a single unrelated library card after positioning Lost Days in hand.
+    let spell = crate::support::game::move_to_hand(&mut s, "Lost Days");
+    let library_cards = library(&s, 0);
+    let unrelated = s.game().state.card_of(library_cards[0]).unwrap();
+    for &card in &library_cards[1..] {
+        s.game_mut().move_object(card, ZoneType::Exile);
+    }
+    bottom_with_lost_days(&mut s, spell, permanent);
+    assert_eq!(s.game().permanent_object(permanent), Some(object));
+    assert_eq!(library(&s, 0), vec![library_cards[0]]);
+    assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
+    let mut env = Env::new(1, false, false, false);
+    env.reset(
+        ["a", "b"]
+            .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
+            .to_vec(),
+    )
+    .unwrap();
+    *env.benchmark_game_mut() = s.game().clone();
+    let snapshot = env.snapshot().unwrap();
+    let offers = s.game().semantic_decision_frame().unwrap().offers;
+    assert_eq!(offers.len(), 2);
+    for first in 0..2 {
+        *s.game_mut() = snapshot
+            .restore(Default::default())
+            .unwrap()
+            .benchmark_game_mut()
+            .clone();
+        assert_eq!(s.game().semantic_decision_frame().unwrap().offers, offers);
+        command(
+            &mut s,
+            |a| matches!(a, Action::ChooseMode {mode,..} if *mode == first),
+        );
+        assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+        for expected in [unrelated, cards[first], cards[1 - first]] {
+            assert_eq!(s.game().state.card_of(library_top(&s, 0)), Some(expected));
+            s.game_mut().draw_cards(owner, 1);
+        }
+        assert!(library(&s, 0).is_empty());
+    }
+}
+
+#[test]
+fn ragnarok_token_copy_departs_without_ordering_or_moving_either_card() {
+    use crate::support::{game::move_to_hand, inspect::library};
+    use managym::{agent::action::ActionSpaceKind, state::target::Target};
+    let mut s = form_ragnarok();
+    let original = s.battlefield_permanents_named(0, RAGNAROK)[0];
+    cast(&mut s, "Ember Island Production");
+    command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    assert!(s.choose_target(Target::Permanent(original)));
+    settle(&mut s);
+    let token = s
+        .battlefield_permanents_named(0, RAGNAROK)
+        .into_iter()
+        .find(|id| *id != original)
+        .unwrap();
+    let spell = move_to_hand(&mut s, "Lost Days");
+    let before = library(&s, 0);
+    let observed = Observation::for_player(s.game(), PlayerId(1));
+    let copied = observed
+        .opponent_permanents
+        .iter()
+        .find(|p| p.is_token && p.characteristics.name == RAGNAROK)
+        .unwrap();
+    assert_eq!(copied.mana_value(), 0);
+    bottom_with_lost_days(&mut s, spell, token);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(library(&s, 0), before);
+    assert_eq!(s.battlefield_permanents_named(0, RAGNAROK), vec![original]);
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+}

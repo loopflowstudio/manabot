@@ -35,6 +35,7 @@ mod emn;
 mod eoe;
 mod fdn;
 mod fin;
+pub use fin::ragnarok;
 mod frf;
 mod fut;
 mod gpt;

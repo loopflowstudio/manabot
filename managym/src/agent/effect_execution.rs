@@ -123,6 +123,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "linked exile",
     "linked return",
     "linked source",
+    "meld component",
     "mana spent",
     "spending option",
     "cost sacrifice",
@@ -1188,6 +1189,28 @@ pub(crate) fn project_decision(
             });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
+        }
+        Decision::OrderMeldedCards { cards, .. } => {
+            for (mode, card) in cards.iter().enumerate() {
+                let definition = game.state.cards[*card].definition;
+                out.reference(
+                    "meld component",
+                    VisibleReference {
+                        definition: Some(definition.0),
+                        ..Default::default()
+                    },
+                );
+                out.note(|| {
+                    format!(
+                        "Order option {} places {} first.",
+                        mode + 1,
+                        default_content_pack()
+                            .definition(definition)
+                            .expect("physical card definition")
+                            .name
+                    )
+                });
+            }
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {

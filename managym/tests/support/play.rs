@@ -880,4 +880,9 @@ pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
         s.game_mut().execute_semantic_command(&command).is_err(),
         "stale Command rejected"
     );
+    assert_eq!(
+        witness(s.game()),
+        witness(&fork),
+        "stale Command changed state"
+    );
 }

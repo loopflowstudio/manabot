@@ -136,6 +136,13 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
+                    Decision::OrderMeldedCards { cards, .. } => {
+                        let card = self.state.cards[*cards.get(*mode)?];
+                        Some(format!(
+                            "Place {} first",
+                            default_content_pack().definition(card.definition)?.name
+                        ))
+                    }
                     Decision::OrderReplacement { candidates, .. } => {
                         let candidate = candidates.get(*mode)?;
                         let object_id = candidate.source();

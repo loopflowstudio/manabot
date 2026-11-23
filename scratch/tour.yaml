@@ -1,31 +1,29 @@
-at: 85bc1ad5c8447af4d226a018f2b9b4fc62e7b887
+at: 9baf11d24e34698633417a8725a8b705e1215d3e
 first:
   - path: scratch/plan.md
-    why: Read the physical identity probe and formation correction.
-  - path: managym/state/src/zone.rs
-    why: Follow an exile appearance through retirement and reentry.
-  - path: managym/tests/rules/cr_400_identity.rs
-    why: Check stale exile identities and direct successor links.
-  - path: docs/engine.md
-    why: Compare transforming, changing zones and copying departed sources.
+    why: Read the Lost Days acceptance boundary.
   - path: managym/cards/src/fin.rs
-    why: Read Fang, Cecil and Esper’s printed abilities.
+    why: Follow Vanille’s payment into Ragnarok.
+  - path: managym/state/src/zone.rs
+    why: Find both physical cards behind one permanent.
+  - path: managym/src/flow/proposed_event.rs
+    why: Suspend a replaced move before committing the batch.
+  - path: managym/src/flow/zones.rs
+    why: Follow one departure into two arrivals.
+  - path: managym/src/flow/decision.rs
+    why: Resume the retained batch with the chosen order.
+  - path: managym/cards/tests/cards/fin.rs
+    why: Restore both orders and compare the token copy.
+  - path: managym/tests/rules/cr_400_identity.rs
+    why: Check that separated exile identities stay stale.
   - path: managym/state/src/ability.rs
     why: See the source, event quantity and life condition.
-  - path: managym/src/flow/zones.rs
-    why: Follow the departing appearance through watches and linked returns.
-  - path: managym/src/flow/proposed_event.rs
-    why: Collect departures and bind one result per event.
-  - path: managym/src/flow/decision.rs
-    why: Check both viewers, draw order and the following discard.
   - path: managym/src/flow/triggers.rs
     why: Match graveyard departures and collect simultaneous damage.
   - path: managym/src/flow/resolution.rs
     why: Read captured quantities and resolve against the exact source.
   - path: managym/src/agent/continuation.rs
     why: Follow the quantity into the viewer’s stack frame.
-  - path: managym/cards/tests/cards/fin.rs
-    why: Check Fang’s token departure, draw trigger and Cecil’s transformations.
   - path: managym/tests/support/play.rs
     why: Declare the chosen attackers through native actions.
   - path: managym/state/src/game_object.rs

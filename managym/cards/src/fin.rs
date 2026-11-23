@@ -1,8 +1,9 @@
 //! Final Fantasy.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, Except, ObjectSelector, Per, PlayerSelector,
-        Scope, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, Except, ObjectSelector, PaymentCost, Per,
+        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TurnStep,
     },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
@@ -12,10 +13,17 @@ use managym_state::{
     mana::{Color, Colors, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![cecil(), esper_origins(), fang(), sazh_s_chocobo()]
+    vec![
+        cecil(),
+        esper_origins(),
+        fang(),
+        vanille(),
+        sazh_s_chocobo(),
+    ]
 }
 
 fn cecil() -> CardDefinition {
@@ -92,7 +100,7 @@ fn fang() -> CardDefinition {
         key: "fin.fang_fearless_lcie",
         scryfall_id: "f73a5cbb-905f-4b99-8d23-9d1b6bd47ee8",
         printed: PrintedCharacteristics {
-            name: "Fang, Fearless l'Cie".into(),
+            name: FANG.into(),
             mana_cost: Some(ManaCost::parse("{2}{B}")),
             supertypes: vec!["Legendary".into()],
             types: CardTypes::new([CardType::Creature]),
@@ -108,6 +116,128 @@ fn fang() -> CardDefinition {
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+const VANILLE: &str = "Vanille, Cheerful l'Cie";
+const FANG: &str = "Fang, Fearless l'Cie";
+const RAGNAROK: &str = "Ragnarok, Divine Deliverance";
+
+fn vanille() -> CardDefinition {
+    let text_box = "When Vanille enters, mill two cards, then return a permanent card from your graveyard to your hand.\nAt the beginning of your first main phase, if you both own and control Vanille and a creature named Fang, Fearless l'Cie, you may pay {3}{B}{G}. If you do, exile them, then meld them into Ragnarok, Divine Deliverance.";
+    CardDefinition {
+        key: "fin.vanille_cheerful_lcie",
+        scryfall_id: "91226c1a-63a0-494e-bcf0-77c2d6f49213",
+        printed: PrintedCharacteristics {
+            name: VANILLE.into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            supertypes: vec!["Legendary".into()],
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Cleric".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::MillCards {
+                            count: 2.into(),
+                            target: None,
+                        },
+                        Effect::SelectCards {
+                            from: ObjectSelector::Zone(ZoneType::Graveyard),
+                            predicate: CardPredicate::permanent(),
+                            min: 1,
+                            max: 1.into(),
+                            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                            if_declined: vec![],
+                        },
+                    ],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::beginning_of(TurnStep::FirstMain, Actor::You),
+                    intervening_if: Some(Condition::OwnsMeldPair {
+                        partner: FANG.into(),
+                    }),
+                    effects: vec![Effect::OptionalPayment {
+                        cost: PaymentCost::Mana(ManaCost::parse("{3}{B}{G}")),
+                        if_paid: vec![
+                            Effect::ExileMeldPair {
+                                partner: FANG.into(),
+                            },
+                            Effect::MeldExiled {
+                                fronts: [VANILLE.into(), FANG.into()],
+                                result: RAGNAROK.into(),
+                            },
+                        ],
+                        if_declined: vec![],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+/// The single face shown by the two melded cards (CR 713).
+pub fn ragnarok() -> managym_state::card::ObjectDefinition {
+    let text_box = "Reach, vigilance, menace, trample, haste\nWhen Ragnarok dies, destroy target permanent and return target nonlegendary permanent card from your graveyard to the battlefield.";
+    let destroy = TargetSpec::Permanent {
+        predicate: CardPredicate::default(),
+    };
+    let reanimate = TargetSpec::GraveyardCardYouOwn {
+        predicate: CardPredicate {
+            nonlegendary: true,
+            ..CardPredicate::permanent()
+        },
+    };
+    let face = PrintedCharacteristics {
+        name: RAGNAROK.into(),
+        supertypes: vec!["Legendary".into()],
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Beast".into(), "Avatar".into()],
+        power: Some(7),
+        toughness: Some(6),
+        color_override: Some(Colors::from_iter([Color::Black, Color::Green])),
+        keywords: Keywords::of(&[
+            Keyword::Vigilance,
+            Keyword::Menace,
+            Keyword::Trample,
+            Keyword::Reach,
+            Keyword::Haste,
+        ]),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(destroy.clone()),
+                    effects: vec![Effect::Destroy {
+                        what: ObjectSelector::Target(destroy),
+                    }],
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(reanimate.clone()),
+                    effects: vec![Effect::move_to(
+                        ObjectSelector::Target(reanimate),
+                        ZoneType::Battlefield,
+                    )],
+                },
+            ],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    };
+    managym_state::card::ObjectDefinition {
+        scryfall_id: Some("a951cc35-bd29-467f-b28c-5d57340e7450"),
+        ..managym_state::card::ObjectDefinition::face(face)
     }
 }
 

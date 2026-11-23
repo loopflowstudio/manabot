@@ -70,7 +70,10 @@ impl ContentPack {
             NameVocabulary::new(
                 self.definition_entries()
                     .filter(|(id, card)| {
-                        !card.is_token && (!card.key.is_empty() || self.front_face(*id).is_some())
+                        !card.is_token
+                            && (card.scryfall_id.is_some()
+                                || !card.key.is_empty()
+                                || self.front_face(*id).is_some())
                     })
                     .map(|(definition, card)| NameCandidate {
                         name: card.name.clone(),
@@ -148,6 +151,7 @@ impl Default for ContentPack {
                 Row::Token(token) => out.register_token(token),
             }
         }
+        out.register(managym_cards::ragnarok());
         out
     }
 }

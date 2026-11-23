@@ -1150,6 +1150,57 @@ impl Game {
                 }
                 None
             }
+            Effect::ExileMeldPair { .. } => {
+                let source = frame.source_ref()?;
+                let Some(chosen) = frame.chosen else {
+                    return Some(Decision::ChooseObject {
+                        player: frame.controller,
+                        predicate: CardPredicate::creature(),
+                        excluded: self.source_permanent_id(frame),
+                        optional: false,
+                        effect: Box::new(effect.clone()),
+                    });
+                };
+                let events = [source, chosen]
+                    .into_iter()
+                    .map(|object| {
+                        self.zone_move_proposal(object, ZoneType::Exile, Default::default())
+                    })
+                    .collect();
+                let mut batch = self.event_batch(events);
+                batch.binding = EventBinding::Moved {
+                    linked: None,
+                    shuffle: false,
+                    library_end: None,
+                    reveal: false,
+                };
+                frame.batch = Some(batch);
+                None
+            }
+            Effect::MeldExiled { fronts, result } => {
+                let [first, second] = *frame.moved.as_slice() else {
+                    return None;
+                };
+                let cards = [self.state.card_of(first)?, self.state.card_of(second)?];
+                let content = crate::cards::content_pack::default_content_pack();
+                for ((object, card), name) in [first, second].into_iter().zip(cards).zip(fronts) {
+                    if self.state.zones.zone_of(object) != Some(ZoneType::Exile)
+                        || content.definition(self.state.cards[card].definition)?.name != *name
+                    {
+                        return None;
+                    }
+                }
+                let entry = ZoneEntry {
+                    meld: Some((cards[1], content.definition_id(result)?)),
+                    ..Default::default()
+                };
+                frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
+                    first,
+                    ZoneType::Battlefield,
+                    entry,
+                )]));
+                None
+            }
             Effect::TransformSource => {
                 let id = self.source_permanent_id(frame)?;
                 // CR 701.27f: only if it hasn't turned over since this ability
@@ -2549,9 +2600,16 @@ impl Game {
     /// The object's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn object_mana_value(&self, object: ObjectId) -> u8 {
+        if let Some(second) = self.state.zones.melded_card(object) {
+            let first = self.state.card_of(object).expect("melded primary card");
+            return self.meld_mana_value(first, second);
+        }
         let Some(cost) = self.state[object].mana_value_cost() else {
             return 0;
         };
+        if cost.x == 0 {
+            return cost.mana_value;
+        }
         let x = match self
             .find_spell_on_stack_index(object)
             .map(|index| &self.state.stack_objects[index])

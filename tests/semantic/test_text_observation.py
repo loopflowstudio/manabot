@@ -615,6 +615,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "kicker_cost": "kicker mana value or the definition's kicker rule",
     },
     managym.Permanent: {
+        "mana_value": "the battlefield form’s mana value",
         "characteristics": "effective name, P/T, types, keywords, cost, ward and Rules",
         "object_id": "the permanent's exact object alias",
         "owner_id": "owner",
@@ -681,6 +682,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
+        "cast_from_graveyard": "cast from graveyard",
         "characteristics": "spell characteristics; absent for abilities",
         "object_id": "the spell's exact object alias",
         "owner_id": "Spell: owner",

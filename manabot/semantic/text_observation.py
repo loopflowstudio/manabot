@@ -112,6 +112,7 @@ _STAGES = frozenset(
         "select_milled",
         "select_cards",
         "order_replacement",
+        "order_melded_cards",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -216,6 +217,7 @@ _OBLIGATIONS = (
     "order replacements",
     "enter as a copy",
     "spend mana",
+    "order melded cards",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (

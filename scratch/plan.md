@@ -2,7 +2,7 @@
 
 The Task brief gives the design constraint: “Explore one-card transform, two-card meld, and hidden face-down characteristics against contrasting real cards before fixing the representation, preserving exact physical-card identity and viewer-safe observations.”
 
-Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. The departed Clone copy witnesses now cover Joo Dee and Homunculus Horde. Cecil exercises transformation in place. Fang’s graveyard trigger is playable. Paired arrivals have a binding fixture, but no battlefield move produces them yet. Meld, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
+Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. The departed Clone copy witnesses now cover Joo Dee and Homunculus Horde. Cecil exercises transformation in place. Fang’s graveyard trigger is playable. Vanille and Fang now form Ragnarok. A genuine departure produces both physical arrivals, and Lost Days retains the order choice before the Clue. Exile timestamp ordering, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
 
 ## Cohort and interaction fixtures
 
@@ -70,7 +70,13 @@ At `1169bdcb`, the native test `paired_arrivals_preserve_bottom_draw_order_and_f
 
 At `71838e7e`, Fang is registered in `managym/cards/src/fin.rs`. Its trigger uses the sources present before the graveyard move, so returning Fang misses its own departure and sees a later one. The focused target ran 11 tests including both Fang cases, Cecil, Esper, Clone and the trigger-token guard. Registered-card conformance and both pinned pilot games passed. The zone commit returns the exact appearance it minted. Keep that direct return when extending the producer to two arrivals.
 
-## Next slice — form Ragnarok and resolve its departure
+## Form Ragnarok and resolve its departure
+
+The FIN registry now authors Vanille’s mill and return, first-main payment, paired exile, and Ragnarok’s death ability. The owner chooses the draw order in the retained movement batch while the genuine pair is still on the battlefield. The native Lost Days test restores each order, draws the unrelated card and both originals, and checks the Clue. A nonlegendary token copy uses the same spell and leaves the physical pair intact. Exile timestamp ordering and integrated consumer evidence remain open.
+
+Focused debug checks passed for all 12 FIN fixtures, including namesake failure, both restored draw orders and token departure. The paired-arrivals discard binding, separated exile identity, real-card conformance, nine learning-token checks, decision-code bound and catalog naming checks passed. The CPython 3.13 release extension built. The text and pinned-pilot tests passed 77 cases and skipped the optional frontier checkpoint.
+
+### Earlier behavior reviews
 
 Behavior review at `f848ff30`: the three `fin::fang` debug fixtures passed. Lost Days targeting a Clone Legion copy of Fang returns directly to priority with one Clue and the original library order. The FIN Vanille, Ragnarok and meld filters selected zero of 819 tests. The paired-arrivals debug unit test passed for both supplied orders, including owner-only library facts and the following discard binding. One member was already in the library when the test supplied its result. No pending meld choice was produced or restored.
 

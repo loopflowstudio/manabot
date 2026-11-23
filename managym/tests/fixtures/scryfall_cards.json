@@ -1,4 +1,38 @@
 {
+  "Ragnarok, Divine Deliverance": {
+    "name": "Ragnarok, Divine Deliverance",
+    "mana_cost": "",
+    "type_line": "Legendary Creature — Beast Avatar",
+    "power": "7",
+    "toughness": "6",
+    "keywords": [
+      "Reach",
+      "Vigilance",
+      "Haste",
+      "Trample",
+      "Menace"
+    ],
+    "oracle_text": "Reach, vigilance, menace, trample, haste\nWhen Ragnarok dies, destroy target permanent and return target nonlegendary permanent card from your graveyard to the battlefield.",
+    "colors": [
+      "B",
+      "G"
+    ]
+  },
+  "Vanille, Cheerful l'Cie": {
+    "name": "Vanille, Cheerful l'Cie",
+    "mana_cost": "{3}{G}",
+    "type_line": "Legendary Creature — Human Cleric",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Meld",
+      "Mill"
+    ],
+    "oracle_text": "When Vanille enters, mill two cards, then return a permanent card from your graveyard to your hand.\nAt the beginning of your first main phase, if you both own and control Vanille and a creature named Fang, Fearless l'Cie, you may pay {3}{B}{G}. If you do, exile them, then meld them into Ragnarok, Divine Deliverance.",
+    "colors": [
+      "G"
+    ]
+  },
   "Aang's Iceberg": {
     "name": "Aang's Iceberg",
     "mana_cost": "{2}{W}",

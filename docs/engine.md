@@ -1023,6 +1023,15 @@ recipients. You still lose that life if Cecil dies in combat.
 When the Paladin attacks, its trigger gives the other attacking creatures
 indestructible until end of turn.
 
+Vanille’s first-main trigger offers a payment of {3}{B}{G} when you own
+and control her and a creature named Fang, Fearless l'Cie. Paying exiles
+both. The original cards form Ragnarok, Divine Deliverance. Both physical
+card IDs then refer to the same battlefield object. If Lost Days puts
+Ragnarok on the bottom of its owner’s library, the owner chooses which
+card to draw first. Ragnarok stays on the battlefield until that choice
+commits, then both cards move and the spell creates its Clue. A token
+copy of Ragnarok leaves without an ordering choice.
+
 Esper Origins illustrates a zone change with a different face up. Cast it from hand
 to surveil two and gain two life. Cast it from your graveyard for its flashback
 cost and it also exiles itself, then enters as Summon: Esper Maduin with finality

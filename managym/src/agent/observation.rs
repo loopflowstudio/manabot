@@ -1497,9 +1497,9 @@ impl Observation {
     ) {
         let object = &game.state[permanent.object];
         let pdat = PermanentData {
-            front_mana_value: object
-                .is_transformed()
-                .then(|| object.mana_value_cost().map_or(0, |cost| cost.mana_value)),
+            front_mana_value: (object.is_transformed()
+                || game.state.zones.melded_card(permanent.object).is_some())
+            .then(|| game.object_mana_value(permanent.object)),
             colors: (characteristics.colors != game.state[permanent.object].colors()).then(|| {
                 characteristics
                     .colors

@@ -390,6 +390,9 @@ fn condition_text(condition: &Condition) -> String {
             "that target is a {}",
             predicate_description(predicate, "permanent")
         ),
+        Condition::OwnsMeldPair { partner } => {
+            format!("you own and control this and a creature named {partner}")
+        }
         Condition::AtMostHalfStartingLife => {
             "your life total is half your starting life total or less".into()
         }
@@ -463,6 +466,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         not_subtypes,
         supertype,
         nonbasic,
+        nonlegendary,
         any_of,
         min_power,
         card_type: kind,
@@ -490,6 +494,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         terms.push("flying".into());
     }
     terms.extend(supertype.iter().cloned());
+    if *nonlegendary {
+        terms.push("nonlegendary".into());
+    }
     if *nonbasic {
         terms.push("nonbasic".into());
     }
@@ -976,6 +983,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
             },
             modes.iter().map(|mode| effects_description(mode)).collect::<Vec<_>>().join("; or ")
         ),
+        ExileMeldPair { partner } => format!("Exile this and {partner}"),
+        MeldExiled { result, .. } => format!("Meld them into {result}"),
         TransformSource => "Transform this".into(),
         ControlPlayer { what, duration } => format!("You control {} during their next {}", selector_description(what), match duration {
             crate::state::ability::PlayerControlDuration::NextCombat => "combat phase",

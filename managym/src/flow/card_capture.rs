@@ -193,7 +193,11 @@ fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
         name: original.map_or_else(|| data.name.clone(), |object| object.name.clone()),
         incarnation: object.generation(),
         owner: owner.0,
-        zone: game.state.zones.zone_of(object),
+        zone: game.state.zones.zone_of(
+            game.state
+                .card_id(object)
+                .map_or(object, |card| game.state.object_of(card)),
+        ),
         origin: match game.state.card_id(object) {
             Some(card) if player.deck.contains(&card) => "deck",
             Some(card) if player.sideboard.contains(&card) => "outside",

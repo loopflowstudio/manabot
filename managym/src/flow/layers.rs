@@ -798,9 +798,10 @@ impl<'a> Context<'a> {
     fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => self.game.state[self.game.live_permanent(id).object]
-                .mana_value_cost()
-                .map_or(0, |m| i32::from(m.mana_value)),
+            LayerValue::ManaValue => i32::from(
+                self.game
+                    .object_mana_value(self.game.live_permanent(id).object),
+            ),
             LayerValue::GraveyardCardTypes { offset } => {
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
@@ -1210,7 +1211,7 @@ pub(super) fn matches_view(
         return false;
     };
     let object = &game.state[permanent.object];
-    let mana_value = object.mana_value_cost().map_or(0, |m| m.mana_value);
+    let mana_value = game.object_mana_value(permanent.object);
     // A permanent is on the battlefield, never a graveyard card.
     !p.from_battlefield_this_turn
         && (!p.namesake || source_name == Some(view.name.as_str()))
@@ -1233,6 +1234,7 @@ pub(super) fn matches_view(
                 object.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
             }
         })
+        && (!p.nonlegendary || !view.is_legendary)
         && (!p.nonbasic
             || !object
                 .supertypes

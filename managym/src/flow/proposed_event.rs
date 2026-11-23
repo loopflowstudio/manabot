@@ -6,7 +6,11 @@
 //! source snapshot and returns its results with the consequences its caller
 //! runs next.
 
-use crate::state::card::Keyword;
+use super::decision::Decision;
+use crate::state::{
+    card::{CardDefId, Keyword},
+    game_object::CardId,
+};
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::card::StaticAbility,
@@ -36,6 +40,8 @@ pub(crate) struct ZoneEntry {
     pub face_down: bool,
     /// Battlefield: enters with its back face up (CR 712.14).
     pub transformed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meld: Option<(CardId, CardDefId)>,
     /// CR 614.1c, 614.12: this entry owns the prospective copy already on
     /// the row. It is an instruction for the new object, not old copy state
     /// carried across a zone change. The row already records its values in
@@ -316,6 +322,8 @@ pub(crate) struct PendingEvent {
     /// Its "enter as a copy" choice has been made (or had no candidate).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) copy_chosen: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) second_card_first: Option<bool>,
 }
 
 /// A logical simultaneous event: its current proposals in replacement order,
@@ -399,18 +407,7 @@ impl EventResult {
 }
 
 pub(crate) enum BatchProgress {
-    Choice {
-        player: PlayerId,
-        candidates: Vec<ReplacementCandidate>,
-    },
-    /// The member at the cursor may enter as a copy of one of `candidates`
-    /// (CR 707.5); its entering controller chooses before any other entry
-    /// replacement applies (CR 616.1c).
-    EntryCopy {
-        player: PlayerId,
-        object: ObjectId,
-        candidates: Vec<PermanentId>,
-    },
+    Decision(Box<Decision>),
     /// Every member committed. Cards returning as a linked exile ends are
     /// consequences of the committed event: a new simultaneous event the
     /// caller runs next, which never replaces these results.
@@ -469,6 +466,7 @@ impl Game {
             sacrifice,
             applied: Vec::new(),
             copy_chosen: false,
+            second_card_first: None,
         })
     }
 
@@ -554,13 +552,18 @@ impl Game {
                             .filter_map(|event| self.pending_event(ordinal, event)),
                     );
                 }
-                [] => batch.cursor += 1,
+                [] => {
+                    if let Some(decision) = self.meld_order_choice(pending) {
+                        return BatchProgress::Decision(Box::new(decision));
+                    }
+                    batch.cursor += 1;
+                }
                 [candidate] => self.apply_replacement(&mut batch.events[batch.cursor], candidate),
                 _ => {
-                    return BatchProgress::Choice {
+                    return BatchProgress::Decision(Box::new(Decision::OrderReplacement {
                         player: self.affected_player(&pending.event),
                         candidates,
-                    }
+                    }))
                 }
             }
         }
@@ -710,6 +713,9 @@ impl Game {
                 (owner, definition, known_before)
             });
             let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
+            if let Some(second_first) = pending.second_card_first {
+                self.order_meld_arrivals(&mut result, second_first, &batch.binding);
+            }
             result.excess_damage = excess_damage;
             if result.committed {
                 if matches!(
@@ -824,11 +830,11 @@ impl Game {
             pending.copy_chosen = true;
             return None;
         }
-        Some(BatchProgress::EntryCopy {
+        Some(BatchProgress::Decision(Box::new(Decision::EnterAsCopy {
             player,
-            object,
+            object_id: object,
             candidates,
-        })
+        })))
     }
 
     /// Answer the cursor member's entry-copy question: it becomes a copy of
@@ -949,8 +955,12 @@ impl Game {
         loop {
             match self.advance_event_batch(batch) {
                 BatchProgress::Complete { results, followups } => return (results, followups),
-                BatchProgress::EntryCopy { .. } => self.choose_entry_copy(batch, None),
-                BatchProgress::Choice { .. } => {
+                BatchProgress::Decision(decision)
+                    if matches!(*decision, Decision::EnterAsCopy { .. }) =>
+                {
+                    self.choose_entry_copy(batch, None)
+                }
+                BatchProgress::Decision(_) => {
                     panic!("event requiring a choice needs a retained caller")
                 }
             }
@@ -1591,9 +1601,12 @@ mod tests {
                     by: Some(PlayerId(0)),
                     provenance: CounterProvenance::new(cause),
                 }]);
-                while let super::BatchProgress::Choice { candidates, .. } =
+                while let super::BatchProgress::Decision(decision) =
                     game.advance_event_batch(&mut batch)
                 {
+                    let super::Decision::OrderReplacement { candidates, .. } = *decision else {
+                        panic!("expected a replacement choice")
+                    };
                     // Apply the unconditional +1 first when both are initially
                     // eligible. For costs/turn actions it is initially the only
                     // replacement; its result then admits the effect-only one.

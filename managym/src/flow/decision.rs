@@ -458,6 +458,10 @@ pub enum SelectionOrigin {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    OrderMeldedCards {
+        player: PlayerId,
+        cards: [CardId; 2],
+    },
     OrderReplacement {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
@@ -720,7 +724,8 @@ impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
-            Decision::OrderReplacement { player, .. }
+            Decision::OrderMeldedCards { player, .. }
+            | Decision::OrderReplacement { player, .. }
             | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
@@ -823,7 +828,8 @@ impl Decision {
                 offer: ResolutionCastOffer::LibraryTop { object },
                 ..
             } => std::slice::from_ref(object),
-            Decision::OrderReplacement { .. }
+            Decision::OrderMeldedCards { .. }
+            | Decision::OrderReplacement { .. }
             | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -1116,11 +1122,20 @@ impl Game {
             player,
             predicate,
             excluded,
+            effect,
             ..
         } = decision
         else {
             return Vec::new();
         };
+        if let Effect::ExileMeldPair { partner } = effect.as_ref() {
+            return excluded
+                .and_then(|id| self.permanent_object(id))
+                .into_iter()
+                .flat_map(|source| self.meld_partners(*player, source, partner))
+                .filter_map(|object| self.state.permanent_of(object))
+                .collect();
+        }
         self.battlefield_permanents(*player)
             .into_iter()
             .filter(|id| self.permanent_matches_predicate(*id, predicate))
@@ -1239,27 +1254,11 @@ impl Game {
         loop {
             if let Some(mut batch) = frame.batch.take() {
                 match self.advance_event_batch(&mut batch) {
-                    BatchProgress::Choice { player, candidates } => {
+                    BatchProgress::Decision(decision) => {
                         frame.batch = Some(batch);
                         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
                             frame,
-                            decision: Decision::OrderReplacement { player, candidates },
-                        });
-                        return;
-                    }
-                    BatchProgress::EntryCopy {
-                        player,
-                        object,
-                        candidates,
-                    } => {
-                        frame.batch = Some(batch);
-                        *self.state.suspended_decision_mut() = Some(SuspendedResolution {
-                            frame,
-                            decision: Decision::EnterAsCopy {
-                                player,
-                                object_id: object,
-                                candidates,
-                            },
+                            decision: *decision,
                         });
                         return;
                     }
@@ -1552,6 +1551,17 @@ impl Game {
             })
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::OrderMeldedCards { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: (0..2)
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
             Decision::OrderReplacement { player, candidates } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -2091,6 +2101,16 @@ impl Game {
                 let mut batch = suspended.frame.batch.take().expect("retained event batch");
                 self.choose_entry_copy(&mut batch, of);
                 suspended.frame.batch = Some(batch);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::OrderMeldedCards { .. }, Action::ChooseMode { mode, .. }) if *mode < 2 => {
+                let batch = suspended
+                    .frame
+                    .batch
+                    .as_mut()
+                    .expect("retained meld departure");
+                batch.events[batch.cursor].second_card_first = Some(*mode == 1);
                 self.run_frame(suspended.frame);
                 Ok(())
             }

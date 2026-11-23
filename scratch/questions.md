@@ -10,3 +10,4 @@
 - Treat the compress step as a behavior-preserving pass over the movement and copy paths that the planned meld departure will use. The Fang and Vanille implementation and its forked ordering fixtures remain open.
 - Implement Fang’s graveyard-departure trigger independently of the pair. The movement authority can return the exact minted appearance directly, which removes the caller’s successor lookup.
 - Exercise retirement of the second exile appearance separately from formation. Preserve the existing generation of a ceased token in ordinary recorded games.
+- Use Ember Island Production for the Ragnarok token witness so the original and its nonlegendary copy survive together. The forked ordering test restores the same native GameSnapshot for each Command.

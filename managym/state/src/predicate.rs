@@ -68,6 +68,8 @@ pub struct CardPredicate {
     /// "nonbasic": the card must not have the basic supertype.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub nonbasic: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub nonlegendary: bool,
     /// At least one alternative must match ("artifact or Lesson").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub any_of: Vec<CardPredicate>,
@@ -223,6 +225,14 @@ impl CardPredicate {
             .supertype
             .as_ref()
             .is_some_and(|s| !object.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
+        {
+            return false;
+        }
+        if self.nonlegendary
+            && object
+                .supertypes
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case("legendary"))
         {
             return false;
         }

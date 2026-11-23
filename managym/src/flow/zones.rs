@@ -7,7 +7,7 @@ use crate::{
         decision::Decision,
         event::GameEvent,
         game::{CastChoices, Game},
-        proposed_event::{EventResult, ProposedEvent, ZoneEntry},
+        proposed_event::{EventBinding, EventResult, PendingEvent, ProposedEvent, ZoneEntry},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -85,6 +85,40 @@ impl Game {
                 remaining,
             },
         )
+    }
+
+    /// A melded permanent sums the two front faces (CR 202.3c). A token
+    /// copying the result has no constituent cards and keeps mana value zero.
+    pub(super) fn meld_mana_value(&self, first: CardId, second: CardId) -> u8 {
+        [first, second]
+            .into_iter()
+            .filter_map(|card| default_content_pack().definition(self.state.cards[card].definition))
+            .filter_map(|definition| definition.mana_cost.as_ref())
+            .map(|cost| cost.mana_value)
+            .sum()
+    }
+
+    pub(super) fn meld_partners<'a>(
+        &'a self,
+        player: PlayerId,
+        source: ObjectId,
+        name: &'a str,
+    ) -> impl Iterator<Item = ObjectId> + 'a {
+        let owns_source = self
+            .lookup_current_permanent(source)
+            .ok()
+            .is_some_and(|id| {
+                self.state[source].owner == player
+                    && self.state.permanents[id].as_ref().unwrap().controller == player
+            });
+        self.iter_battlefield_permanents(player)
+            .filter(move |id| {
+                owns_source
+                    && self.permanent_is_battlefield_creature(*id)
+                    && self.characteristics(*id).name == name
+            })
+            .filter_map(|id| self.permanent_object(id))
+            .filter(move |object| *object != source && self.state[*object].owner == player)
     }
 
     pub(crate) fn sacrifice_candidates(
@@ -529,6 +563,65 @@ impl Game {
         self.state.stack_objects.is_empty()
     }
 
+    /// Ask after replacements have fixed the destination and before any
+    /// member of the simultaneous batch has moved (CR 713.8).
+    pub(super) fn meld_order_choice(&self, pending: &PendingEvent) -> Option<Decision> {
+        let ProposedEvent::ZoneMove {
+            object_id,
+            to: ZoneType::Library | ZoneType::Graveyard,
+            ..
+        } = pending.event
+        else {
+            return None;
+        };
+        if pending.second_card_first.is_some() {
+            return None;
+        }
+        let second = self.state.zones.melded_card(object_id)?;
+        let first = self.state.card_of(object_id).expect("melded primary card");
+        Some(Decision::OrderMeldedCards {
+            player: self.state.cards[first].owner,
+            cards: [first, second],
+        })
+    }
+
+    pub(super) fn order_meld_arrivals(
+        &mut self,
+        result: &mut EventResult,
+        second_first: bool,
+        binding: &EventBinding,
+    ) {
+        if second_first {
+            result.moved.swap(0, 1);
+        }
+        let [Some(first), Some(second)] = result.moved else {
+            return;
+        };
+        let owner = self.state[first].owner;
+        match self.state.zones.zone_of(first) {
+            // The instruction places both arrivals together at its stated depth.
+            Some(ZoneType::Library)
+                if matches!(
+                    binding,
+                    EventBinding::PlaceInLibrary { .. }
+                        | EventBinding::Moved {
+                            library_end: Some(crate::state::ability::LibraryEnd::Bottom),
+                            ..
+                        }
+                ) => {}
+            Some(ZoneType::Library) => {
+                self.reposition_library_object(owner, first, usize::MAX);
+                self.remember_library_objects(owner, &[first, second]);
+            }
+            Some(ZoneType::Graveyard) => {
+                self.state
+                    .zones
+                    .reposition(ZoneType::Graveyard, owner, first, usize::MAX)
+            }
+            _ => {}
+        }
+    }
+
     /// Place the surviving arrivals of one event in draw order. The owner
     /// knows the relative order they chose for two constituent cards.
     pub(super) fn place_library_arrivals(&mut self, result: &EventResult, second_from_top: bool) {
@@ -617,7 +710,9 @@ impl Game {
         entry: &ZoneEntry,
     ) -> Option<&PrintedCharacteristics> {
         let object = self.state.entry_object(object);
-        let face = if entry.transformed {
+        let face = if let Some((_, result)) = entry.meld {
+            default_content_pack().definition(result)?.printed.as_ref()
+        } else if entry.transformed {
             let (_, back) = default_content_pack().back_face_row(object.definition_id)?;
             back.printed.as_ref()
         } else {
@@ -639,6 +734,7 @@ impl Game {
         followups: &mut Vec<ProposedEvent>,
     ) -> EventResult {
         let departing_object = object_id;
+        let second = self.state.zones.separate_melded_card(object_id);
         let owner = self.state.entry_object(object_id).owner;
 
         let definition = self.state.entry_object(object_id).definition_id;
@@ -727,6 +823,14 @@ impl Game {
         }
 
         if to_zone == ZoneType::Battlefield {
+            if let Some((second, result)) = entry.meld {
+                let second_slot = self.state.zones.join_melded_card(object_id, second);
+                self.capture_object_move(second_slot, old_zone, Some(to_zone), holder);
+                let row = default_content_pack()
+                    .definition(result)
+                    .expect("meld result");
+                self.state[object_id].show_meld_result(result, row.printed.clone());
+            }
             if entry.transformed {
                 self.show_back_face(object_id);
             }
@@ -803,10 +907,25 @@ impl Game {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));
         }
+        let second = second.map(|second| {
+            let arrival = self.state.mint_appearance(second, owner, to_zone, false);
+            if to_zone == ZoneType::Library {
+                self.state.library_order_pins_mut(owner).insert(arrival);
+                let definition = self.state[arrival].definition_id;
+                self.state
+                    .known_library_mut(owner)
+                    .insert_top(None, Some(definition));
+            }
+            if to_zone == ZoneType::Graveyard {
+                self.state.turn.graveyard_from_battlefield.push(arrival);
+            }
+            self.capture_object_move(arrival, old_zone, Some(to_zone), event_controller);
+            arrival
+        });
         self.assert_library_knowledge();
         EventResult {
             committed: true,
-            moved: [Some(object_id), None],
+            moved: [Some(object_id), second],
             excess_damage: None,
         }
     }

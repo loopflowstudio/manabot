@@ -555,7 +555,15 @@ impl Game {
         predicate.matches_printing(
             face,
             row.kind(),
-            row.mana_value_cost().map_or(0, |c| c.mana_value),
+            entry.meld.map_or_else(
+                || row.mana_value_cost().map_or(0, |c| c.mana_value),
+                |(second, _)| {
+                    self.meld_mana_value(
+                        self.state.card_of(object).expect("melded primary card"),
+                        second,
+                    )
+                },
+            ),
             power,
             &[],
         )
@@ -779,6 +787,7 @@ impl Game {
                 .and_then(|id| self.state.permanents[id].as_ref())
         };
         match condition {
+            Condition::OwnsMeldPair { partner } => source.is_some_and(|object| self.meld_partners(controller, object, partner).next().is_some()),
             Condition::AtMostHalfStartingLife => self.state.players[controller.0].life <= crate::state::player::Player::STARTING_LIFE / 2,
             Condition::Always => true,
             Condition::YourTurn => self.active_player() == controller,

@@ -424,12 +424,25 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
 /// boundaries. Neither its old id nor a link to its successor may find it.
 #[test]
 fn cr_400_7_separated_card_cannot_revive_its_exile_appearance() {
-    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 420);
-    let card = s.game().state.players[0].deck[0];
-    let initial = s.game().state.object_of(card);
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 39), ("Gray Ogre", 1)]),
+        deck(&[("Island", 40)]),
+        420,
+    );
+    let initial = owned_card(&s, 0, "Mountain");
+    let card = s.game().state.card_of(initial).unwrap();
     let exile = s.game_mut().move_object(initial, ZoneType::Exile);
-    let parked = s.game_mut().state.zones.depart(exile).unwrap();
-    assert_eq!(s.game().state.object_of(card), parked);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let battlefield = s.game().state.permanents[first].as_ref().unwrap().object;
+    s.game_mut().state.zones.join_melded_card(battlefield, card);
+    assert_eq!(s.game().state.object_of(card), battlefield);
+    assert_eq!(s.game().state.zones.melded_card(battlefield), Some(card));
+    let parked = s
+        .game_mut()
+        .state
+        .zones
+        .separate_melded_card(battlefield)
+        .unwrap();
     assert_ne!(parked, exile);
     let arrival = s.game_mut().move_object(parked, ZoneType::Library);
     assert_eq!(s.game().state.object_of(card), arrival);

@@ -45,6 +45,7 @@ RESOLVING_STAGES = frozenset(
         "order_library_bottom",
         "order_library_top",
         "order_replacement",
+        "order_melded_cards",
         "resolution_payment",
         "private_search",
         "name_card",
