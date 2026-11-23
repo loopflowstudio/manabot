@@ -30,6 +30,16 @@ Bilbo's attack trigger offers the graveyard Adventure. Four Mountains pay its re
 
 At `897faeaf`, the overlap fixture in `managym/cards/tests/cards/hob.rs` checks four public exile offers. The paid route shows seven mana for Smaug and five for Spew Flame. The free route shows zero for each. Previously, observation could price the front spell while execution priced the Adventure. Route construction now requires the printed choice for observation, preview and execution.
 
+### Behavior review at `306fd916`
+
+Stay in the working phase. After rebuilding and atomically installing the CPython 3.13 wheel, the Smaug hand fixture and both pending-Command cold restores passed. The five HOB debug tests passed, including both successful Bilbo replacements, counter and lost-target branches, and all four overlapping exile prices. Six additional debug cases passed for automatic restricted spending, manual converge, the nested filter receipt, stale object rejection and foretell privacy.
+
+- **Printed identity enters the learning tokens.** In `managym.catalog_tokens()`, slice the Smaug row at its two `definition_offsets`. It contains the text-token hashes for both `Spew Flame` and `Spew Flame deals 5 damage to target creature.`, alongside the expected `Effect::DealDamage` variant. The definition serializer excludes identity fields only at depth one. Apply the identity exclusion to nested printed characteristics and retain their rules program. Test that changing only an inset name or reminder text preserves its token sequence while changing damage changes it.
+- **Five retained Academy positions disagree with the engine digest.** Run `uv run pytest -q 'tests/academy/test_choice_navigation.py::test_retained_choice_position[CHOOSE_TARGET]'`. The recorded prefix Commands were accepted, but the expected digest starts with `83da2ba9` and the actual digest with `df30418c`. Learn, discard, declare-blocker and pay-or-not stop at the same assertion. Trace the first divergent serialized state against the fixture revision before deciding the compatibility fix. The subsequent full-offer comparisons were never reached.
+- **Omen remains blocked at admission.** Calling `priority_root(("Twinmaw Stormbrood",), ("Mountain",) * 6)` raises `unknown card in decklist: Twinmaw Stormbrood`. Register the physical card and evaluate the library permission against each proposed spell. The top-library versus hand test below precedes any shuffle claim.
+
+The combined hand, snapshot, text, Academy navigation and pinned-pilot run reported 84 passed, five failed and one optional checkpoint skipped. Full workspace validation and Engine Budget measurements remain later phases.
+
 ## Next slice
 
 The printed choice currently travels as an Adventure boolean through `CastChoices::from_route`, pending decisions and `SpellOnStack`. Replace that boolean with one selected profile when adding Omen. Keep the exact exile grant separate from the choice of spell. Preserve existing Adventure Commands and the four observed prices.
