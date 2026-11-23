@@ -116,6 +116,12 @@ The text-play fixture exposed a missing stage in the renderer for announcing an 
 
 At `73475291`, Ooze and Hellkite share one sorted damage history. Resolution and observation read the combat-player range for the exact source. The v11 permanent and stack rows use the same viewer-relative seat encoding. This answers the pending-source query even after the permanent row disappears.
 
+**Behavior review at 426f0470 — return to implementation.** With the text fixture’s `priority_root((), ("Steel Hellkite",))`, seat 0 has an untapped Hellkite and no mana source. Activate ability 2. The native offer shows X=0 and X=1. Submitting X=1 through `submit_response` raises `PanicException` with “structured search offer admitted an unexecutable action: not enough automatic mana”. Only zero is payable. The combat fixture taps its Hellkite to attack and misses this case.
+
+`flow/play.rs::legal_activation_x_values` always invokes `can_pay_with_waterbend`, which counts untapped creatures and artifacts toward generic costs. The actual activation payment grants this help only when the ability has waterbend. Derive announcement payability from the same activation cost, restrictions and tap commitments as payment. Add a regression asserting the complete X offer with an untapped Hellkite, first alone (only zero), then with a Mountain (zero and one). Execute every offered value from a restored decision and retain a genuine waterbend control. Filtering a text or Academy offer would leave the native defect in place.
+
+The two Hellkite debug fixtures, the text/Academy fixture, the native stale-Command rejection control and the catalog-token integrity control passed in this review. They support the damage history and viewer projections. The sixth ledger row still needs the announcement repair before advancing to Lunar Insight. Full replay/privacy validation and Engine Budget comparisons remain with their later phases.
+
 ## Next slice · Lunar Insight
 
 The ledger obligation is “Count distinct mana values among current nonland permanents.” Author Lunar Insight with a draw amount evaluated at resolution. Use a distinct-mana-value EffectValue over the existing battlefield selection (ObjectSelector::Each, YouControl, nonland). Read the same permanent mana value as Hellkite. DrawCards evaluates the amount once before the first draw. Keep the spell’s ordinary saved frame, native draw events and viewer-specific hand projection. A running per-seat count would duplicate the current board across control and type changes. This query needs no retained turn fact.
