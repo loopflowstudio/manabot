@@ -1,17 +1,19 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>When does the board determine the draw?</title>
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Which creature deals the damage?</title>
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:54rem;margin:3rem auto;padding:0 1rem 3rem}h1,h2{line-height:1.15}h2{margin-top:2rem}table{width:100%;border-collapse:collapse}th,td{padding:.6rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:4px solid #888;padding-inline:1rem}li{margin:.45rem 0}small{font-weight:bold}
 </style><main><small>Managym · MTG-418 · Foundations and Standard</small>
 <h1>Do the player’s questions and the engine’s records line up?</h1>
 <p>Foundations asks players to remember a hit, recognize what an instruction actually did, and inspect the board as a spell resolves. The time named by the instruction determines which facts the engine needs.</p>
-<aside><h2>Biggest remaining mismatch · three permanents can mean two draws</h2>
-<p><b>Existing.</b> Steel Hellkite can select current nonlands and compare their mana values. <code>EffectValue::Objects</code> can count selected objects. A player resolving Lunar Insight counts the different mana values those objects represent. Two Foods both represent zero.</p>
-<p><b>Proposed.</b> Give <code>DrawCards</code> a distinct-mana-value amount over the existing battlefield selection. Keep selection, reading a permanent’s mana value, and drawing in their current owners. Compute the amount once when the draw instruction begins.</p></aside>
-<h2>One pending Lunar Insight · proposed restore fixture</h2>
-<table><tr><th>Action from the saved decision</th><th>Draws at resolution</th></tr>
-<tr><td>Pass with controlled nonlands worth 0, 0 and 2. The opponent controls a one-mana nonland.</td><td>Two. Lands are excluded before collecting values.</td></tr>
-<tr><td>Restore. In response, trade control of a zero-mana nonland for the opponent’s one-mana nonland. Pass again.</td><td>Three. The same number of permanents now represents three values. A count saved on announcement would incorrectly draw two.</td></tr>
-<tr><td>Restore with the spell pending and remove every qualifying permanent before passing. Replay the original pass from the parent.</td><td>Zero in the branch, two in the parent. Verify actual cards drawn with sufficient library cards.</td></tr></table>
+<aside><h2>Biggest mismatch · Felling Blow’s “it”</h2>
+<p><b>Existing.</b> A player chooses one creature they control and one an opponent controls. The engine’s damage instruction reads a list of attackers and takes the last slot as the victim. That convention alone cannot tell a card author where the counter belongs, and “attackers” can include a creature that never attacked.</p>
+<p><b>Proposed.</b> Bind the two printed target roles in order. Give the first its counter, then let that same creature deal noncombat damage using its current power. Reuse the existing damage instruction, which already reads layered power and attributes the event to the creature. A separate saved power value would go stale as soon as the counter lands.</p></aside>
+<h2>One pending Felling Blow · proposed fixture</h2>
+<p>Announce with a 2-power creature and a fresh opposing creature with 5 toughness. Save the pending spell with both target identities. Each row begins from that position.</p>
+<table><tr><th>Before resolution</th><th>Expected counter</th><th>Expected damage</th></tr>
+<tr><td>Both creatures stay</td><td>One on your creature</td><td>Three to the opposing creature, dealt by yours</td></tr>
+<tr><td>The opposing creature leaves and returns</td><td>One on your creature</td><td>Zero to the returned creature</td></tr>
+<tr><td>Your creature leaves and returns</td><td>Zero on the returned creature</td><td>Zero to the opponent’s creature</td></tr>
+<tr><td>Restore the original position and pass</td><td>One on your creature</td><td>Three again</td></tr></table>
 <h2>Do the product and code concepts line up?</h2>
 <table><thead><tr><th>Player’s question</th><th>Existing native owner</th><th>Match</th></tr></thead><tbody>
 <tr><td>How many creatures did this Fumigate destroy?</td><td>The resolution frame binds the committed destruction batch across child choices.</td><td>Yes</td></tr>
@@ -21,7 +23,8 @@
 <tr><td>Did this Ooze damage that departing creature?</td><td>DamageHistory retains the two incarnations. The death matcher and v11 relation read the pair. Repeated hits produced one trigger in the snapshot fixture.</td><td>Yes</td></tr>
 <tr><td>Which X values can I pay?</td><td><code>legal_activation_x_values</code> checks each amount with <code>activation_x_payable</code>. The announced ability determines whether tapping creatures can help pay.</td><td>Yes</td></tr>
 <tr><td>Whose permanents will this Hellkite destroy?</td><td>The use belongs to each permanent. The stack retains X and the exact source. DamageHistory supplies eligible seats after source departure, including on restore. The Scars fixture exercised X=0 and X=4.</td><td>Yes</td></tr>
-<tr><td>How many different values do my current nonlands represent?</td><td>ObjectSelector::Each selects the group. EffectValue lacks the distinct-value count for DrawCards.</td><td>No</td></tr>
+<tr><td>How many different values do my current nonlands represent?</td><td>DrawCards evaluates EffectValue::DistinctManaValues once at resolution. The FDN fixture drew two, three and zero from branches of the same pending spell, retaining a land and opposing nonland.</td><td>Yes</td></tr>
+<tr><td>Which creature gets the counter and deals damage?</td><td>TargetCreaturesDealPowerDamageToLastTarget uses ordered legal slots. Felling Blow still needs its two roles bound across both instructions.</td><td>No</td></tr>
 <tr><td>What did I spend casting that spell?</td><td>PaymentReceipt owns the committed units. The planned Expend threshold and Unravel comparison still need their consumers.</td><td>No · partial</td></tr></tbody></table>
 <h2>One saved Hellkite decision · existing behavior</h2>
 <p>The earlier menu offered one with only an untapped Hellkite. Selecting it panicked because the payment required mana. The repaired menu and the payment step use the same ability cost.</p>
@@ -30,5 +33,5 @@
 <tr><td>Hellkite and one untapped Mountain</td><td>0, 1</td><td>Restore the X decision for each choice. Only one taps the Mountain.</td></tr>
 <tr><td>Katara’s waterbend fixture</td><td>1, 2, 3, 4</td><td>Pay two by tapping the Ally and Ogre. Floating mana remains available.</td></tr></table>
 <h2>Existing recovery evidence</h2><p>The native Hellkite snapshot fixture used two copies. Both could spend their use for zero. Noncombat damage by the second copy left its ability ineffective. Restoring after the hitting source left preserved the eligible seat for both viewers. A transferred Food was destroyed under its current controller. Countering an activation left its use spent. The turn boundary cleared the hit and restored the use.</p>
-<p><b>Proposed consumer contract.</b> Keep the Lunar Insight expression in the authored catalog and learning tokens. A saved spell carries its normal resolving frame. Native execution reads the restored battlefield. Ordinary draw visibility governs the resulting hands in policy, text and Academy views.</p>
-<h2>Review questions</h2><ol><li>Which position supplies Lunar Insight’s count? <b>1a</b> Announcement. <b>1b</b> Resolution (selected).</li><li>Where should the count live? <b>2a</b> Evaluate the selected values once inside the draw amount (selected). <b>2b</b> Maintain a per-seat count through battlefield changes.</li></ol></main></html>
+<p><b>Proposed consumer contract.</b> Native target offers and the pending spell identify both creatures. The authored catalog tokens describe the counter followed by damage. Existing counter and damage projections carry the results to players and policies. The power read needs no additional turn record or decision.</p>
+<h2>Review questions</h2><ol><li>When does Felling Blow read power? <b>1a</b> At announcement. <b>1b</b> When the creature deals damage (selected).</li><li>What survives a blink of the opposing target? <b>2a</b> The counter instruction for the still-legal first target (selected). <b>2b</b> Neither instruction.</li></ol></main></html>
