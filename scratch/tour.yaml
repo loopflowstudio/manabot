@@ -1,29 +1,13 @@
-at: 38425bf5cf237af705709cf133be2a4665391450
+at: f747f145d0077b2657659b1f246a25f7f95f6296
 first:
-  - path: docs/engine.md
-    why: Explains event ordinals and ability resolution counts
-  - path: managym/src/flow/turn.rs
-    why: Turn history owns both counts
-  - path: managym/src/flow/zones.rs
-    why: Committed gains retain their ordinal
-  - path: managym/src/flow/resolution.rs
-    why: Only resolving abilities advance their captured source
-  - path: managym/src/state/hash.rs
-    why: The witness preserves source generations
   - path: managym/cards/src/fdn.rs
-    why: Cat Collector reads the first gain
-  - path: managym/cards/src/snc.rs
-    why: Venom Connoisseur reads its second resolution
-  - path: managym/src/agent/observation.rs
-    why: Live permanents and stack entries retain distinct counts
-  - path: managym/src/flow/resolution_tests.rs
-    why: Queued gains, counters, and overlapping source incarnations
-  - path: managym/cards/tests/cards/snc.rs
-    why: Priority Commands replay both incarnations
-  - path: managym/cards/tests/cards/tla.rs
-    why: Returning Voyager draws on its second resolution
-  - path: manabot/backends/torch/checkpoint.py
-    why: Stored embedding width governs historical policy inputs
-hide:
-  - path: protocol/
-    why: Schema projections of the native viewer records
+    why: Panda combines a graveyard predicate with source power
+  - path: managym/src/flow/resolution.rs
+    why: Each target is checked against its captured source
+  - path: managym/src/flow/triggers.rs
+    why: Announcement uses the same requirement as resolution
+  - path: managym/src/agent/env/snapshot.rs
+    why: Replays Panda after either object changes zones
+  - path: managym/cards/tests/cards/m21.rs
+    why: Prowess survives sacrifice for Immolator’s damage
+hide: []
