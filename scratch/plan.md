@@ -169,7 +169,9 @@ Behavior review at `9a119c98`: five focused Rust tests passed (both Hunter fixtu
 
 Blast uses the existing damage and optional discard/draw effects in printed order. Gray Ogre had six damage marked when the caster could decline or discard either Forest or Mountain. Each paid fork put the selected card in the graveyard, kept the other in hand and drew once. Decline kept both cards and drew nothing. Exiling the Ogre from the pre-resolution fork returned directly to priority with the hand and library intact.
 
-Next, use the private discard decision for end-to-end Command replay and Academy viewer-privacy parity.
+The fixture at `314de3ce` forks the native action space with lethal damage marked and the Ogre still on the battlefield. Each completed branch finds the Ogre in the graveyard. The existing `Effect::discard_draw(1, 1)` owns the conditional draw, so Blast needs no new history field or continuation type. The FDN ledger links the fixture in `managym/cards/tests/cards/fdn.rs`.
+
+**Next slice.** Carry this position through the semantic Command and Academy paths using the replay and privacy fixture below. Compare the caster’s three offers with the opposing viewer’s frame while the choice is pending, before a selected card becomes public in the graveyard.
 
 ## Evidence to carry forward
 
