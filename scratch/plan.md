@@ -107,7 +107,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 Then cover the remaining boundaries and callers.
 
-- Fully prevented damage and `PlayersCantGainLife` each yield zero gain triggers. Fork at a pending replacement choice and resolve each branch to check the gains due for its committed damage and that the root stays intact.
+- Fully prevented damage and `PlayersCantGainLife` each yield zero gain triggers. Fork at a pending replacement choice and resolve each branch to check the gains due for its committed damage and that the root stays intact. Replay the same replacement choice on an independent fork and compare the committed gains, pending stack order after the same ordering decisions, and resulting Pridemate counters.
 - Author Marauding Blight-Priest and Drogskol Reaver using the shared trigger. Exercise the Priest’s opponent life loss and Reaver’s draw. For an unblocked Reaver, verify a gain and draw in each of the first-strike and normal combat damage steps.
 - Check the life-gain condition in the catalog learning tokens and its viewer text. Keep the consumer and conformance suites at gate.
 
