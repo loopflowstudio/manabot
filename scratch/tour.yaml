@@ -1,19 +1,21 @@
-at: 80f6dce526b31a880347f44fbf6647f8c20e3bf3
+at: 73c46dd9a1d41799c8a3fe780bcfc62b1fcfa973
 first:
   - path: docs/engine.md
-    why: Start with casting profiles and stack mana values
-  - path: managym/cards/src/tdm.rs
-    why: Read the Dragon and its X-cost Omen
+    why: Follow an Etali attack through both casts
+  - path: managym/cards/src/rix.rs
+    why: Read the printed attack trigger
+  - path: managym/src/flow/resolution.rs
+    why: Identify the exact exiled cards
   - path: managym/src/flow/decision.rs
-    why: Follow ward through discard or decline
-  - path: managym/src/flow/payment.rs
-    why: See which exact card paid the cost
-  - path: managym/state/src/mana.rs
-    why: Count each printed X at its announced value
-  - path: managym/src/agent/observation_layout.rs
-    why: Locate both stack mana values
-  - path: managym/cards/tests/cards/tdm.rs
-    why: Compare free casting, paid casting and ward
+    why: Follow announcement and resumption after payment
+  - path: managym/src/agent/continuation.rs
+    why: Inspect the parent during the target choice
+  - path: managym/cards/tests/cards/rix.rs
+    why: Compare both orders, stopping and countering
   - path: tests/env/test_game_snapshot.py
-    why: Replay the original announcement through the shuffle
-hide: []
+    why: Replay Bite and count Etali’s completed resolutions
+  - path: managym/cards/tests/cards/cmr.rs
+    why: Check Cascade’s bottom order and RNG
+hide:
+  - path: managym/academy/fixtures/choice-navigation-w17-smart-payment.json
+    why: Regenerated catalog references and verified position hashes
