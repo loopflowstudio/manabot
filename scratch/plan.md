@@ -165,7 +165,7 @@ The v11 fact joins the active player row for either viewer. The turn owns one bo
 
 ## Next slice · Incinerating Blast
 
-Fork the pending discard after Blast deals damage. Offer decline and every legal card in hand. Resolve decline and two different discards from that fork, checking the discarded identity and one draw only in each paid branch. From a fork before damage, remove the sole target and verify that resolution offers no discard and draws nothing. Use this decision for the replay and privacy fixture below.
+Author Blast as ordered damage followed by the existing Effect::discard_draw(1, 1), as used in the TLA catalog. The cost-primary ledger classification does not imply a casting cost. Start with lethal damage to a legal creature and retain the private discard choice during that same resolution. This distinguishes a target lost before resolution from one dealt lethal damage during it. Fork the pending discard after Blast deals damage. Offer decline and every legal card in hand. Resolve decline and two different discards from that fork, checking the discarded identity and one draw only in each paid branch. From a fork before damage, remove the sole target and verify that resolution offers no discard and draws nothing. Use this decision for the replay and privacy fixture below.
 
 ## Evidence to carry forward
 
