@@ -232,31 +232,31 @@ fn lunar_convocation_checks_life_history_when_the_end_step_begins() {
         serde_json::to_value(s.game().semantic_decision_frame().unwrap()).unwrap()
     };
     let root_frame = frame(&s);
-    for early in [true, false] {
+    let restore = |s: &mut crate::support::game::Scenario| {
         *s.game_mut() = root.clone();
-        assert_eq!(frame(&s), root_frame);
+        assert_eq!(frame(s), root_frame);
         assert_eq!(witness(s.game()), root_witness);
-        if early {
-            convocation_draw(&mut s);
-        }
-        s.advance_to_step(StepKind::End);
-        if early {
-            assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
-            assert_eq!(s.action_space().actions.len(), 2);
-            for order in 0..2 {
-                let mut branch = fork_stepping(&s, order);
-                settle(&mut branch);
-                branch.assert_life(1, 19);
-                assert_eq!(branch.battlefield_permanents_named(0, "Bat").len(), 1);
-            }
-        } else {
-            assert_eq!(s.game().state.stack_objects.len(), 1);
-            s.set_player_mana_pool(0, "1B");
-            convocation_draw(&mut s);
-            s.assert_life(1, 19);
-            assert!(s.battlefield_permanents_named(0, "Bat").is_empty());
-        }
+    };
+
+    restore(&mut s);
+    convocation_draw(&mut s);
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    assert_eq!(s.action_space().actions.len(), 2);
+    for order in 0..2 {
+        let mut branch = fork_stepping(&s, order);
+        settle(&mut branch);
+        branch.assert_life(1, 19);
+        assert_eq!(branch.battlefield_permanents_named(0, "Bat").len(), 1);
     }
+
+    restore(&mut s);
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    s.set_player_mana_pool(0, "1B");
+    convocation_draw(&mut s);
+    s.assert_life(1, 19);
+    assert!(s.battlefield_permanents_named(0, "Bat").is_empty());
     assert_eq!(witness(&root), root_witness);
 }
 

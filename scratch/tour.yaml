@@ -1,4 +1,4 @@
-at: c96616704aa606c803c2ab033f4515e8b2254218
+at: 3c8daa64ea6bbedfc1db15ae0d14bf2bf522a7c0
 first:
   - path: scratch/plan.md
     why: Records the timing branches and remaining coverage
@@ -9,5 +9,5 @@ first:
   - path: managym/src/flow/statics.rs
     why: Evaluates predicates against the controller’s history
   - path: managym/cards/tests/cards/blb.rs
-    why: Plays early payment, late payment, and reset
+    why: Follows each payment timing from the same decision
 hide: []
