@@ -572,7 +572,7 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
             assert "using Muldrotha" in label or "using Zul Ashur" in label
     rows = encoded["agent_cards"]
     row = next(
-        i for i, card in enumerate(observation.agent_cards) if card.cast_permission
+        i for i, card in enumerate(observation.agent_cards) if card.cast_permissions
     )
     assert rows[row, CARD_PERMISSION_INDEX] == 1
     assert rows[row, column("agent_cards", "permission_this_turn")] == 1

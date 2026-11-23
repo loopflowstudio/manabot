@@ -1,7 +1,5 @@
-at: 08702060a7bd67c1e3213aaa6e2303bf335e48f8
+at: 17ce6bfe3717f287e2672e0434582ed9528ea595
 first:
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Inspect both grants and fork the quota choice
   - path: managym/src/flow/cast_permission.rs
     why: Enumerate grants independently of timing and payment
   - path: managym/src/agent/observation.rs
@@ -10,6 +8,10 @@ first:
     why: Join grant and allowance programs to objects
   - path: managym/src/agent/observation_json.rs
     why: Preserve singleton grant bytes in saved captures
+  - path: managym/experience_projection.py
+    why: Read every grant into Academy's board
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Inspect both grants and fork the quota choice
   - path: tests/semantic/test_text_observation.py
     why: Inspect costs and allowances across consumers
   - path: tests/env/test_game_snapshot.py

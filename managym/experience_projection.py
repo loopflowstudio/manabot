@@ -130,12 +130,14 @@ def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any
         announced_x = card.x
         if card.face_down:
             details["face_down"] = True
-        if len(permissions := card.cast_permissions) > 1:
-            details["cast_permissions"] = [
-                _serialize_cast_permission(p) for p in permissions
-            ]
+        permissions = [
+            _serialize_cast_permission(grant) for grant in card.cast_permissions
+        ]
+        # Retained boards use the singular field for a single grant.
+        if len(permissions) == 1:
+            details["cast_permission"] = permissions[0]
         elif permissions:
-            details["cast_permission"] = _serialize_cast_permission(permissions[0])
+            details["cast_permissions"] = permissions
     if announced_x is not None:
         details["x"] = int(announced_x)
     return {
@@ -419,8 +421,8 @@ def _serialize_player(
             else {}
         ),
         **(
-            {"spent_graveyard_types": player.spent_graveyard_types}
-            if player.spent_graveyard_types
+            {"spent_graveyard_types": spent}
+            if (spent := player.spent_graveyard_types)
             else {}
         ),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),

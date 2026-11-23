@@ -49,7 +49,7 @@ At `0fdc98ca` review identified the grant-order defect by inspection. The later 
 
 ## Scope
 
-The Task brief requires “one shared casting-profile and play-permission model” and says “Preserve complete legal choices, observations, learning tokens, LLM text, replay/forks, and the 10% Engine Budget.” The single-route fixture establishes exact-object access. The overlap fixture distinguishes the selected permission on legal actions. Board inspection remains incomplete.
+The Task brief requires “one shared casting-profile and play-permission model” and says “Preserve complete legal choices, observations, learning tokens, LLM text, replay/forks, and the 10% Engine Budget.” The single-route fixture establishes exact-object access. The overlap fixture distinguishes the selected permission on legal actions. Board inspection exposes all visible exact-object grants and spent type allowances.
 
 ## Batch to deliver
 
