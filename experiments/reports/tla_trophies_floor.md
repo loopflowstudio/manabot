@@ -25,8 +25,12 @@ matters most as tau keeps decaying. Forward KL 0.01 also unlocks an already
 locked policy within 25 updates, but on fresh runs it over-regularizes: it
 learned more slowly and trails the control head to head.
 
-**Recommended default for new trophy runs:** tau_scale 0.1 with a 0.002
-forward-KL floor, pending the 1,000-update extensions.
+**Recommended default for new trophy runs:** tau_scale 0.1 (tau ×2) with no
+forward-KL floor. At update 1,000 of seed 40902, tau ×2 + forward KL 0.002
+scores 0.464 against tau ×2 alone (1,064 games, ±0.015) and 0.753 against
+the heuristic to tau ×2's 0.785. The floor keeps combat choices open but no
+longer buys strength by then, and tau ×2 plays tau ×4 evenly (0.507 over
+2,916 games).
 
 | Arm | Seeds | Score vs heuristic, 400 | vs control, 400 | Attackers declared, 400 | Blockers declared, 400 | Saturated attacks, probe 400 | Rare offers, 8+ offers, 200 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
