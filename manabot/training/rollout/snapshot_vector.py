@@ -145,8 +145,7 @@ def replay_prefix(
         if isinstance(hot_handle, managym.GameSetup)
         else Match(recipe.match).to_rust()
     )
-    live.reset_all_into_buffers(setup)
-    live.reset_seeds_into_buffers([recipe.seed])
+    live.reset_each_into_buffers([setup], seeds=[recipe.seed])
     generation = live.current_game_generations()
     for action in recipe.actions:
         live.step_into_buffers([action])
@@ -224,7 +223,7 @@ class InMemorySnapshotVector(BufferedStreams):
             if not 0 <= slot < self.num_envs:
                 raise ValueError(f"invalid capture slot {slot}")
             live = self._shards[slot].native
-            [digest] = live.native.state_digests()
+            [digest] = live.state_digests()
             [chooser] = live.current_agent_indices()
             if digest is None or chooser not in (0, 1):
                 raise ValueError(f"slot {slot} has no decision to capture")
@@ -274,7 +273,7 @@ class InMemorySnapshotVector(BufferedStreams):
                     raise ValueError(
                         f"snapshot {request.snapshot_id} installation failed: {exc}"
                     ) from exc
-            [digest] = live.native.state_digests()
+            [digest] = live.state_digests()
             [chooser] = live.current_agent_indices()
             if digest is None or (
                 recipe is not None

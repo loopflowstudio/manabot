@@ -454,6 +454,9 @@ Optional statistics and private recording share native setup, movement and
 committed-choice facts. Search clones omit those sinks and their copy provenance;
 transactional rollback snapshots must restore them. Training supplies recorder
 paths and phase markers; engine recording never discovers training scope.
+Install retained vector roots with `reset_each_into_buffers(setups, seeds=seeds)`.
+An ordinary reset followed by a seed reset creates a separate interrupted game
+in recording and statistics. Enable native statistics before the first reset.
 
 `protocol/*.schema.json` has no generator. Patch the files when a protocol
 type changes; the Rust schema tests compare them byte for byte with what

@@ -21,7 +21,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
-from manabot.env.failures import CaptureScope, capture_scope
+from manabot.env.failures import CapturedVector, CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation
 from manabot.env.observation import (
@@ -67,6 +67,7 @@ from manabot.training.rollout.snapshot_vector import (
     InMemorySnapshotVector,
     SnapshotBranch,
     SnapshotRecipe,
+    replay_prefix,
 )
 from manabot.training.rollout.snapshots import (
     CaptureDecision,
@@ -474,21 +475,24 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
     vector = ShardedVectorEnv(3, 42, 2)
     try:
         vector.set_buffers(allocate_vector_buffers(space, 3), layout=space.layout)
-        vector.reset_all_into_buffers(setup)
+        seeds = [701, 49, 33]
+        vector.reset_each_into_buffers([setup] * 3, seeds=seeds)
         frozen = space.allocate(3)
         players = [1, 0, 1]
         reads = vector.write_observations_for_players(
             players, frozen, layout=space.layout
         )
+        digests = vector.state_digests([True, False, True])
         for slot, read in enumerate(reads):
             assert (read.slot, read.player, read.seed, read.game_id) == (
                 slot,
                 players[slot],
-                42 + slot,
+                seeds[slot],
                 vector.current_game_generations()[slot],
             )
-            scalar = managym.Env(seed=42 + slot)
+            scalar = managym.Env(seed=seeds[slot])
             scalar.reset(setup)
+            assert digests[slot] == (None if slot == 1 else scalar.state_digest())
             encoded = encode_observation(
                 space, scalar.observation_for_player(players[slot])
             )
@@ -496,6 +500,28 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
                 np.testing.assert_array_equal(frozen[key][slot], encoded[key])
     finally:
         vector.close()
+
+
+def test_replay_prefix_records_only_the_supplied_root(tmp_path: Path) -> None:
+    space = ObservationSpace()
+    recipe, scalar = replay_root(space)
+    games = tmp_path / "games.jsonl"
+    statistics = tmp_path / "statistics.jsonl"
+    vector = CapturedVector(
+        num_envs=1, seed=900, games_path=games, statistics_path=statistics
+    )
+    try:
+        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+        replay_prefix(vector, recipe, None)
+        assert vector.state_digests() == [scalar.state_digest()]
+        assert vector.current_agent_indices() == [scalar.current_agent_index()]
+    finally:
+        vector.close()
+    [record] = read_records(games)
+    [game] = record.games
+    assert (game.seed, game.actions) == (recipe.seed, list(recipe.actions))
+    [summary] = read_statistics(statistics)
+    assert summary.seed == recipe.seed
 
 
 def test_slot_reuse_packs_snapshot_and_fresh_rows_and_counts_one_fresh_game() -> None:

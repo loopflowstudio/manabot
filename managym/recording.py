@@ -1192,6 +1192,7 @@ _VECTOR_READS = frozenset(
         "get_last_info",
         "semantic_decision_frames_json",
         "skip_trivial_counts",
+        "state_digests",
     }
 )
 
@@ -1471,32 +1472,46 @@ class CapturedVector(_Capture):
     def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
-    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
-        self._reset_each(players, lambda: self.native.reset_each_into_buffers(players))
+    def reset_each_into_buffers(
+        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None
+    ) -> None:
+        self._reset_each(
+            players,
+            self.next_seeds if seeds is None else seeds,
+            lambda: self.native.reset_each_into_buffers(players, seeds=seeds),
+        )
 
     def reset_all(self, players: managym.GameSetup) -> Any:
         return self._reset_each(
-            [players for _ in self.games], lambda: self.native.reset_all(players)
+            [players for _ in self.games],
+            self.next_seeds,
+            lambda: self.native.reset_all(players),
         )
 
     def _reset_each(
-        self, players: list[managym.GameSetup], call: Callable[[], Any]
+        self,
+        players: list[managym.GameSetup],
+        seeds: list[int],
+        call: Callable[[], Any],
     ) -> Any:
+        if len(players) != len(self.games) or len(seeds) != len(self.games):
+            raise ValueError("expected one setup and seed per stream")
+        retained = [
+            _retain_players(setup, seed)
+            for setup, seed in zip(players, seeds, strict=True)
+        ]
         self._activate_journal(self.native)
         if self._game_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
                 "reset_each",
                 setup_known=not self._sampled_roots,
-                seeds=self.next_seeds,
-                players=[
-                    _retain_players(setup, seed)
-                    for setup, seed in zip(players, self.next_seeds, strict=True)
-                ],
+                seeds=seeds,
+                players=retained,
             )
-        for game, setup, seed in zip(self.games, players, self.next_seeds, strict=True):
+        for game, seats, seed in zip(self.games, retained, seeds, strict=True):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
-            game.players = _retain_players(setup, seed)
+            game.players = seats
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self._executing()

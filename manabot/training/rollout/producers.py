@@ -183,13 +183,18 @@ class BufferedStreams:
             ]
         )
 
-    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
+    def reset_each_into_buffers(
+        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None
+    ) -> None:
         self._rows(len(players))
+        if seeds is not None:
+            self._rows(len(seeds))
         self._run(
             [
                 partial(
                     shard.native.reset_each_into_buffers,
                     players[shard.start : shard.stop],
+                    seeds=None if seeds is None else seeds[shard.start : shard.stop],
                 )
                 for shard in self._shards
             ]
@@ -295,6 +300,19 @@ class BufferedStreams:
         self._check()
         return [
             seed for shard in self._shards for seed in shard.native.current_game_seeds()
+        ]
+
+    def state_digests(self, active: list[bool] | None = None) -> list[str | None]:
+        """Hash selected games in global slot order, leaving masked slots empty."""
+        self._check()
+        if active is not None:
+            self._rows(len(active))
+        return [
+            digest
+            for shard in self._shards
+            for digest in shard.native.state_digests(
+                None if active is None else active[shard.start : shard.stop]
+            )
         ]
 
     def current_game_generations(self) -> list[int]:
