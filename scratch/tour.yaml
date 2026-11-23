@@ -1,4 +1,4 @@
-at: 9de9c111cd290aaa21fc3074f4d2ceb43364a503
+at: b37b8aa6014acd3f2b21274faa8e1f9e143a4ac2
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
@@ -27,7 +27,7 @@ first:
   - path: manabot/semantic/text_observation.py
     why: Distinguish activation source from exile cost
   - path: tests/academy/test_bracelet_offers.py
-    why: Follow both Commands through targeting and payment
+    why: Compare both Commands with independently selected native actions
   - path: managym/cards/tests/cards/eoe.rs
     why: Compare manual and automatic payment branches
   - path: managym/cards/tests/cards/msh.rs

@@ -13,6 +13,21 @@ from managym.experience import ExperienceFrame
 BRACELET = "The Dominion Bracelet"
 
 
+def step_action(
+    env: managym.Env, kind: managym.ActionEnum, focus: list[int] | None = None
+) -> None:
+    actor = env.current_agent_index()
+    assert actor is not None
+    actions = env.observation_for_player(actor).action_space.actions
+    env.step(
+        next(
+            i
+            for i, action in enumerate(actions)
+            if action.action_type == kind and (focus is None or action.focus == focus)
+        )
+    )
+
+
 def equip_both() -> managym.Env:
     env = priority_root(
         (),
@@ -22,24 +37,15 @@ def equip_both() -> managym.Env:
     permanents = env.observation_for_player(0).agent_permanents
     ogre = next(p.id for p in permanents if p.characteristics.name == "Gray Ogre")
 
-    def choose(kind: managym.ActionEnum, focus: int | None = None) -> None:
-        obs = env.observation_for_player(env.current_agent_index())
-        env.step(
-            next(
-                i
-                for i, action in enumerate(obs.action_space.actions)
-                if action.action_type == kind
-                and (focus is None or action.focus == [focus])
-            )
-        )
-
     for permanent in permanents:
         if permanent.characteristics.name == BRACELET:
-            choose(managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY, permanent.id)
-            choose(managym.ActionEnum.CHOOSE_TARGET, ogre)
-            choose(managym.ActionEnum.PAY_COST)
-            choose(managym.ActionEnum.PRIORITY_PASS_PRIORITY)
-            choose(managym.ActionEnum.PRIORITY_PASS_PRIORITY)
+            step_action(
+                env, managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY, [permanent.id]
+            )
+            step_action(env, managym.ActionEnum.CHOOSE_TARGET, [ogre])
+            step_action(env, managym.ActionEnum.PAY_COST)
+            step_action(env, managym.ActionEnum.PRIORITY_PASS_PRIORITY)
+            step_action(env, managym.ActionEnum.PRIORITY_PASS_PRIORITY)
     return env
 
 
@@ -78,7 +84,9 @@ def test_bracelet_cost_labels_bind_the_selected_permanent(
     label = f"Activate ability of P{rows[ogre.id]} (Gray Ogre); exile P{rows[grantor.id]} ({BRACELET})"
     action = next(a for a in decision.actions if a.description.startswith(label))
     indexed = env.clone_env()
-    indexed.step(prompt.action_by_offer[offer.id])
+    step_action(
+        indexed, managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY, [ogre.id, grantor.id]
+    )
     submit_response(env, decision, action.reference)
     result = session.hero_command(
         {
@@ -93,15 +101,8 @@ def test_bracelet_cost_labels_bind_the_selected_permanent(
     assert result["status"] == "accepted"
     assert session.env.state_digest() == env.state_digest() == indexed.state_digest()
     for branch in (indexed, env, session.env):
-        for kind in (managym.ActionEnum.CHOOSE_TARGET, managym.ActionEnum.PAY_COST):
-            obs = branch.observation_for_player(0)
-            branch.step(
-                next(
-                    i
-                    for i, a in enumerate(obs.action_space.actions)
-                    if a.action_type == kind
-                )
-            )
+        step_action(branch, managym.ActionEnum.CHOOSE_TARGET)
+        step_action(branch, managym.ActionEnum.PAY_COST)
         paid = branch.observation_for_player(0)
         assert paid.stack_objects[-1].source_permanent_id == ogre.id
         assert {
