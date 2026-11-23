@@ -674,3 +674,80 @@ fn ragnarok_token_copy_departs_without_ordering_or_moving_either_card() {
     assert_eq!(s.battlefield_permanents_named(0, RAGNAROK), vec![original]);
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
 }
+
+#[test]
+fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
+    use managym::{agent::observation::EventType, decision::Command, state::target::Target};
+
+    let mut s = five_color_setup(&[VANILLE, FANG, "Blasphemous Act", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, VANILLE);
+    s.force_permanent_on_battlefield(0, FANG);
+    reach_meld_payment(&mut s);
+    pay_for_meld(&mut s);
+    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
+    let object = s.game().permanent_object(permanent).unwrap();
+    let state = &s.game().state;
+    let entity = state.permanents[permanent].as_ref().unwrap().id;
+    let cards = [
+        state.card_of(object).unwrap(),
+        state.zones.melded_card(object).unwrap(),
+    ];
+    let land = s.force_permanent_on_battlefield(1, "Island");
+    let island = s.game().permanent_object(land).unwrap();
+    let ogre = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    cast(&mut s, "Blasphemous Act");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let snapshot = meld_snapshot(&s);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    assert_eq!(frame.offers.len(), 2);
+    for (first, offer) in frame.offers.iter().enumerate() {
+        let mut env = snapshot.restore(Default::default()).unwrap();
+        let game = env.benchmark_game_mut();
+        assert_eq!(game.permanent_object(permanent), Some(object));
+        let mut expected = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Graveyard, PlayerId(0))
+            .to_vec();
+        let cmd = Command {
+            command_id: format!("graveyard-{first}"),
+            expected_revision: frame.revision,
+            offer_id: offer.id.0,
+            answers: vec![],
+            object_preconditions: vec![],
+        };
+        let (_, obs, ..) = env.step_semantic_command(&cmd).unwrap();
+        *s.game_mut() = env.benchmark_game_mut().clone();
+        let state = &s.game().state;
+        // The graveyard stores its top card last.
+        for index in [1 - first, first] {
+            let arrival = state.object_of(cards[index]);
+            assert_ne!(arrival, object);
+            assert_eq!(state.card_of(arrival), Some(cards[index]));
+            expected.push(arrival);
+        }
+        assert_eq!(
+            state
+                .zones
+                .zone_objects(ZoneType::Graveyard, PlayerId(0))
+                .to_vec(),
+            expected
+        );
+        let deaths: Vec<_> = obs
+            .recent_events
+            .iter()
+            .filter(|event| event.event_type == EventType::PermanentsDied as i32)
+            .map(|event| (event.source_id, event.source_incarnation, event.amount))
+            .collect();
+        assert_eq!(deaths, [(entity.0 as i32, object.generation() as i32, 1)]);
+        assert!(s.choose_target(Target::Permanent(land)));
+        assert!(s.choose_target(Target::GraveyardCard(ogre)));
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+        resolve_top(&mut s);
+        assert_eq!(zone_of(&s, island), Some(ZoneType::Graveyard));
+        assert!(permanent_of(&s, ogre).is_some());
+        assert!(s.game().state.stack_objects.is_empty());
+    }
+}
