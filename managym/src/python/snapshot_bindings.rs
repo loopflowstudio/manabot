@@ -17,6 +17,11 @@ impl PyGameSnapshot {
     }
 
     #[getter]
+    fn acting_player(&self) -> Option<usize> {
+        self.0.acting_player()
+    }
+
+    #[getter]
     fn seed(&self) -> u64 {
         self.0.seed()
     }

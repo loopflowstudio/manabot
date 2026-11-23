@@ -117,14 +117,15 @@ def test_snapshot_metadata_and_terminal_boundary() -> None:
     with pytest.raises(managym.AgentError, match="before reset"):
         env.snapshot()
     obs, _ = env.reset(setup())
-    meta = env.snapshot().metadata()
+    opening = env.snapshot()
+    meta = opening.metadata()
     assert meta.turn == 1
     assert meta.phase == managym.PhaseEnum.PRECOMBAT_MAIN
     assert meta.life == [20, 20]
     assert meta.board_counts == [0, 0]
     assert not meta.active_card_defs and meta.stack_len == 0
     assert meta.action_count == len(obs.action_space.actions)
-    assert meta.acting_player == obs.agent.player_index
+    assert opening.acting_player == meta.acting_player == obs.agent.player_index
     assert meta.action_kind == managym.ActionSpaceEnum.PRIORITY
     land = next(
         i
@@ -145,6 +146,7 @@ def test_snapshot_metadata_and_terminal_boundary() -> None:
     meta = terminal.metadata()
     assert meta.terminal and meta.action_count == 0
     assert meta.action_kind is None and meta.acting_player is None
+    assert terminal.acting_player is None
     ended = last.restore(managym.RestoreOptions.exact(forced_first_action=0))
     assert ended.is_game_over() and ended.state_digest() == env.state_digest()
     with pytest.raises(managym.AgentError, match="non-terminal"):

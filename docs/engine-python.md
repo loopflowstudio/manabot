@@ -440,6 +440,8 @@ stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
 and `action_kind` and `acting_player` are `None`. Reading metadata never builds
 observation JSON or opens hidden zones. `snapshot.state_digest` returns the
 cached state digest and `snapshot.seed` returns the originating reset seed.
+Use `snapshot.acting_player` to read the chooser alone. It returns `None`
+at a terminal and skips the board summary.
 
 `snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
 settings, committed external actions, and ordered branch interventions. It
