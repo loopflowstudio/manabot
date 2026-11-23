@@ -37,10 +37,7 @@ fn force_of_negation() -> CardDefinition {
             }],
             spell_effects: vec![Effect::CounterSpell {
                 what: ObjectSelector::Target(TargetSpec::SpellMatching {
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
+                    predicate: CardPredicate::noncreature(),
                 }),
                 exile: true,
             }],

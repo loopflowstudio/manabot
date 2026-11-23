@@ -28,10 +28,7 @@ fn ironheart_clever_champion() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             additional_costs: vec![AdditionalCost::Improvise],
             statics: vec![StaticAbility::SpellsHave {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
+                predicate: CardPredicate::noncreature(),
                 cost: AdditionalCost::Improvise,
             }],
             text_box: text_box.into(),

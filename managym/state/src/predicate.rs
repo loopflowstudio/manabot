@@ -101,6 +101,13 @@ impl CardPredicate {
         }
     }
 
+    pub fn noncreature() -> Self {
+        Self {
+            not_card_types: vec![CardType::Creature],
+            ..Self::default()
+        }
+    }
+
     pub fn basic_land() -> Self {
         Self {
             card_type: Some(CardType::Land),

@@ -707,7 +707,7 @@ fn lightshell_duo_orders_or_mills_and_gains_prowess() {
     use crate::support::{
         game::pin_top,
         inspect::{library_top, offered_cards, zone_of},
-        play::{cast, choose, fork_selecting, pass_until, resolve_top, select_card},
+        play::{cast, choose, fork_choosing, fork_selecting, pass_until, resolve_top, select_card},
     };
     use managym::agent::action::{Action, ActionSpaceKind};
 
@@ -721,19 +721,16 @@ fn lightshell_duo_orders_or_mills_and_gains_prowess() {
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     assert_eq!(offered_cards(&s), cards);
 
-    // Choosing one card for the graveyard leaves the other on top.
-    for (i, &card) in cards.iter().enumerate() {
-        let mut mill = fork_selecting(&s, card);
+    let order = fork_choosing(&s, |a| matches!(a, Action::Decline { .. }));
+    assert_eq!(offered_cards(&order), cards);
+    let (island, forest) = (cards[0], cards[1]);
+    for (first, second) in [(island, forest), (forest, island)] {
+        let mut mill = fork_selecting(&s, first);
         choose(&mut mill, |a| matches!(a, Action::Decline { .. }));
-        assert_eq!(zone_of(&mill, card), Some(ZoneType::Graveyard));
-        assert_eq!(library_top(&mill, 0), cards[1 - i]);
-    }
-    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
-    assert_eq!(offered_cards(&s), cards);
+        assert_eq!(zone_of(&mill, first), Some(ZoneType::Graveyard));
+        assert_eq!(library_top(&mill, 0), second);
 
-    for (i, &first) in cards.iter().enumerate() {
-        let second = cards[1 - i];
-        let mut keep = fork_selecting(&s, first);
+        let mut keep = fork_selecting(&order, first);
         select_card(&mut keep, second);
         cast(&mut keep, "Scout's Warning");
         resolve_top(&mut keep);

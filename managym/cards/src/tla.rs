@@ -1833,13 +1833,7 @@ fn boar_q_pine() -> CardDefinition {
             toughness: Some(2),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                ),
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::noncreature()),
                 effects: vec![Effect::put_counters(
                     ObjectSelector::This,
                     CounterKind::PlusOnePlusOne,
@@ -4628,10 +4622,7 @@ fn gran_gran() -> CardDefinition {
             toughness: Some(2),
             statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
                 first_on_own_turn: false,
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
+                predicate: CardPredicate::noncreature(),
                 condition: Condition::GraveyardAtLeast {
                     count: 3,
                     predicate: CardPredicate {
@@ -6352,13 +6343,7 @@ fn mai_scornful_striker() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::FirstStrike]),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::AnyPlayer,
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                ),
+                condition: TriggerCondition::casts(Actor::AnyPlayer, CardPredicate::noncreature()),
                 effects: vec![Effect::LoseLife {
                     player: PlayerSelector::TriggeringPlayer,
                     amount: EffectValue::Fixed(2),
@@ -8390,10 +8375,6 @@ fn shared_roots() -> CardDefinition {
 
 fn sokka_tenacious_tactician() -> CardDefinition {
     let text_box = "Menace, prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nOther Allies you control have menace and prowess.\nWhenever you cast a noncreature spell, create a 1/1 white Ally creature token.";
-    let noncreature = || CardPredicate {
-        not_card_types: vec![CardType::Creature],
-        ..Default::default()
-    };
     let other_allies = || StaticScope::OtherYouControl(CardPredicate::subtype("Ally"));
 
     CardDefinition {
@@ -8412,7 +8393,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
                 Ability::prowess(),
                 Ability::Triggered {
                     intervening_if: None,
-                    condition: TriggerCondition::casts(Actor::You, noncreature()),
+                    condition: TriggerCondition::casts(Actor::You, CardPredicate::noncreature()),
                     effects: vec![Effect::create_tokens("token.ally", 1)],
                 },
             ],
@@ -9669,13 +9650,7 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
             toughness: Some(3),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                ),
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::noncreature()),
                 effects: vec![Effect::create_tokens("token.clue", 1)],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {

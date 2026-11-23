@@ -34,13 +34,7 @@ impl Ability {
     pub fn prowess() -> Self {
         Self::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::casts(
-                Actor::You,
-                CardPredicate {
-                    not_card_types: vec![super::card::CardType::Creature],
-                    ..Default::default()
-                },
-            ),
+            condition: TriggerCondition::casts(Actor::You, CardPredicate::noncreature()),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::This,
                 Modification::pump(1, 1),

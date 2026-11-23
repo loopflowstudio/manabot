@@ -410,10 +410,25 @@ def test_continuation_text_states_announcing_only_when_present() -> None:
 def _choose(env: managym.Env, wording: str) -> None:
     """Submit the one offered action whose line contains `wording`."""
     decision = capture_text_decision(env)
-    [line] = [
-        line for line in decision.text.splitlines() if " — " in line and wording in line
-    ]
-    submit_response(env, decision, line.split(" — ", 1)[0])
+    [action] = [action for action in decision.actions if wording in action.description]
+    assert f"{action.reference} — {action.description}" in decision.text
+    submit_response(env, decision, action.reference)
+
+
+def _replay_text_choice(root: managym.Env, reference: str) -> managym.Env:
+    """Play one offer on two forks and verify replay, stale rejection and isolation."""
+    before = root.state_digest()
+    branch, replay = root.clone_env(), root.clone_env()
+    decision = capture_text_decision(branch)
+    result = submit_response(branch, decision, reference)
+    assert submit_response(replay, capture_text_decision(replay), reference) == result
+    after = branch.state_digest()
+    assert after == replay.state_digest()
+    with pytest.raises(SemanticContractError, match="stale_capture"):
+        submit_response(branch, decision, reference)
+    assert branch.state_digest() == after
+    assert root.state_digest() == before
+    return branch
 
 
 def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
@@ -1385,7 +1400,7 @@ def test_accumulate_wisdom_ordering_reaches_text_commands_and_policy_input() -> 
 
 def _lightshell_surveil(first: str, second: str) -> managym.Env:
     env = managym.Env(seed=23)
-    deck = {"Lightshell Duo": 1, "Island": 4, "Plains": 5, first: 1, second: 1}
+    deck = {"Lightshell Duo": 1, "Island": 5, first: 1, second: 1}
     env.reset(
         managym.GameSetup(
             [
@@ -1396,38 +1411,26 @@ def _lightshell_surveil(first: str, second: str) -> managym.Env:
             mana_payment=("auto", "auto"),
         )
     )
-    # Clear the two-card hand to set their relative library order. Move the
-    # other cards into position so these two are the entire remaining library.
+    # Clearing a hand puts its cards on the library bottom in draw order.
+    # Once the Duo and Islands are placed, only this ordered pair remains.
     env.scenario_clear_hand(0)
     for name in (first, second):
         env.scenario_force_card_in_hand(0, name)
     env.scenario_clear_hand(0)
     for _ in range(4):
         env.scenario_force_battlefield(0, "Island", ready=True)
-    for name in ("Lightshell Duo",) + ("Plains",) * 5:
-        env.scenario_force_card_in_hand(0, name)
+    env.scenario_force_card_in_hand(0, "Lightshell Duo")
+    # A land play keeps priority from skipping past the result of surveil.
+    env.scenario_force_card_in_hand(0, "Island")
     env.scenario_refresh()
     _choose(env, "Cast ")
     return env
 
 
-def _replay_text_choice(root: managym.Env, reference: str) -> managym.Env:
-    before = root.state_digest()
-    branch, replay = root.clone_env(), root.clone_env()
-    decision = capture_text_decision(branch)
-    result = submit_response(branch, decision, reference)
-    assert submit_response(replay, capture_text_decision(replay), reference) == result
-    after = branch.state_digest()
-    assert after == replay.state_digest()
-    with pytest.raises(SemanticContractError):
-        submit_response(branch, decision, reference)
-    assert branch.state_digest() == after
-    assert root.state_digest() == before
-    return branch
-
-
-@pytest.mark.parametrize("stage", ["surveil", "order library top"])
-def test_lightshell_duo_private_choices_reach_each_viewer(stage: str) -> None:
+@pytest.mark.parametrize(("stage", "count"), [("surveil", 3), ("order library top", 2)])
+def test_lightshell_duo_private_choices_reach_each_viewer(
+    stage: str, count: int
+) -> None:
     names = ("Gray Ogre", "Hill Giant")
     orders = (names, names[::-1])
     roots = [_lightshell_surveil(*order) for order in orders]
@@ -1444,7 +1447,6 @@ def test_lightshell_duo_private_choices_reach_each_viewer(stage: str) -> None:
         inspected = decision_surface_view(env, 0)["agent"]["inspected"]
         assert [c["id"] for c in inspected] == [c.id for c in cards]
         rows = encode_observation(space, own)
-        count = 3 if stage == "surveil" else 2
         assert len(decision.actions) == np.count_nonzero(rows["actions_valid"]) == count
         focus = rows["action_focus"][:2, 0]
         assert min(focus) >= 0 and focus[0] != focus[1]
@@ -1525,20 +1527,11 @@ def test_shared_mill_selection_reaches_text_commands_and_policy_input() -> None:
         for frame in observation.continuation
     )
     assert render_decision(decision.capture_json).text == decision.text
-    before = env.state_digest()
-    outcomes: set[str] = set()
-    for action in decision.actions:
-        branch = env.clone_env()
-        replay = env.clone_env()
-        captured = capture_text_decision(branch)
-        submit_response(branch, captured, action.reference)
-        submit_response(replay, capture_text_decision(replay), action.reference)
-        assert branch.state_digest() == replay.state_digest()
-        outcomes.add(branch.state_digest())
-        with pytest.raises(SemanticContractError):
-            submit_response(branch, captured, action.reference)
+    outcomes = {
+        _replay_text_choice(env, action.reference).state_digest()
+        for action in decision.actions
+    }
     assert len(outcomes) >= 2
-    assert env.state_digest() == before
 
 
 def test_decision_memory_text_lists_every_record_and_snapshot_once() -> None:
