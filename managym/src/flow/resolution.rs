@@ -58,6 +58,10 @@ impl Game {
     /// announced X and recorded excess damage.
     fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         match value {
+            EffectValue::Objects {
+                of,
+                predicate: None,
+            } if **of == ObjectSelector::Moved => frame.moved.len() as i32,
             EffectValue::Objects { of, predicate } => self
                 .select(of, frame)
                 .into_iter()
@@ -80,6 +84,7 @@ impl Game {
             },
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::ExcessDamage => frame.excess_damage,
+            EffectValue::LifeLostThisWay => frame.life_lost,
             EffectValue::PowerTappedToPay => frame
                 .spent
                 .contributions()
@@ -129,6 +134,7 @@ impl Game {
             EffectValue::Objects { .. }
             | EffectValue::X
             | EffectValue::ExcessDamage
+            | EffectValue::LifeLostThisWay
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
             | EffectValue::SourcePower
@@ -925,15 +931,8 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id))
                     .map(|target| ProposedEvent::Destroy { target })
                     .collect();
-                // What was destroyed answers "destroyed this way"
-                // (`Condition::Moved`).
                 let mut batch = self.event_batch(events);
-                batch.binding = EventBinding::Moved {
-                    linked: None,
-                    shuffle: false,
-                    library_end: None,
-                    reveal: false,
-                };
+                batch.binding = EventBinding::Destroyed;
                 frame.batch = Some(batch);
                 None
             }
@@ -1449,10 +1448,18 @@ impl Game {
                 None
             }
             Effect::LoseLife { player, amount } => {
-                let amount = self.effect_value(amount, frame);
-                for player in self.selected_players(player, frame) {
-                    self.change_life(player, -amount);
-                }
+                let amount = self.effect_value(amount, frame).max(0);
+                let events = self
+                    .selected_players(player, frame)
+                    .into_iter()
+                    .map(|player| ProposedEvent::LifeChange {
+                        player,
+                        delta: -amount,
+                    })
+                    .collect();
+                let mut batch = self.event_batch(events);
+                batch.binding = EventBinding::LifeLost;
+                frame.batch = Some(batch);
                 None
             }
             Effect::FightLastTarget => {

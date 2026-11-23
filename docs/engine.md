@@ -205,10 +205,11 @@ select an outcome.
 
 The digest is `GameState::deterministic_hash()`, a versioned BLAKE3 digest of
 canonical JSON over every `GameState` field plus the content pack's schema and
-digest (`MATCH_STATE_HASH_VERSION`, now 1). The struct is destructured without
-`..`, so a new field fails to compile until its canonical treatment is chosen;
-pointers, capacities, timings and observation projections are excluded, and
-the RNG is represented by eight draws from a clone, never advanced.
+digest. Version 18 of `MATCH_STATE_HASH_VERSION` includes the life loss retained
+across a choice and distinguishes a pending destruction from other zone moves.
+Destructuring the state without `..` makes every new field an explicit decision
+in the hash contract. The digest excludes pointers, capacities, timings and
+observation projections. It reads eight draws from a clone of the RNG.
 `cargo test --test match_state_hash_tests` in `managym/` proves clone and
 allocation independence, mutation sensitivity and RNG non-mutation. Consumers
 compare version and digest together; a content change changes the hash on
@@ -882,6 +883,12 @@ card, its back face's `PrintedCharacteristics` (`back_face`; the outer
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
   variant with a directed test, never a special case for one card.
+- Later instructions can read what an earlier instruction accomplished.
+  Fumigate counts the creatures its destruction moved, including a creature
+  exiled by a finality counter. Exsanguinate reads `LifeLostThisWay` after
+  each opponent loses X life. A player whose life total cannot change
+  contributes zero. A selection's child effects have their own results, and
+  completing the selection restores the caller's results.
 - A trigger is "whenever X does Y": an event over its actor, with the event's
   own parameters as fields. Monastery Swiftspear's prowess
   ([`managym/cards/src/ktk.rs`](../managym/cards/src/ktk.rs)) is the cast event

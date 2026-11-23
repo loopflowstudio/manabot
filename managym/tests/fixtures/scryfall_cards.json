@@ -6715,5 +6715,29 @@
     ],
     "oracle_text": "Reach, first strike\nVigilance, menace\nTrample, lifelink\nWard—Pay 7 life.",
     "colors": []
+  },
+  "Fumigate": {
+    "name": "Fumigate",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy all creatures. You gain 1 life for each creature destroyed this way.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Exsanguinate": {
+    "name": "Exsanguinate",
+    "mana_cost": "{X}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Each opponent loses X life. You gain life equal to the life lost this way.",
+    "colors": [
+      "B"
+    ]
   }
 }

@@ -369,6 +369,9 @@ pub(crate) enum EventBinding {
         reveal: bool,
     },
     ThisWay,
+    /// A Destroy instruction, including when its zone moves end in exile.
+    Destroyed,
+    LifeLost,
     Damage {
         result: Option<usize>,
     },
@@ -393,6 +396,8 @@ pub(crate) enum EventBinding {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EventResult {
     pub committed: bool,
+    /// Signed difference of the committed life totals for a LifeChange member.
+    pub life_delta: i32,
     pub moved: Option<ObjectId>,
     pub excess_damage: Option<i32>,
 }
@@ -698,7 +703,8 @@ impl Game {
             if let Some((owner, definition)) = reveal {
                 self.emit(GameEvent::CardRevealed { owner, definition });
             }
-            let committed = self.commit_proposed_event(event, departing_lki, &mut followups);
+            let result = self.commit_proposed_event(event, departing_lki, &mut followups);
+            let committed = result.committed;
             // CR 400.7: the object this move made, or the same object when
             // it entered its first zone (CR 400.11).
             let moved_object = moved_object.filter(|_| committed).and_then(|object_id| {
@@ -732,9 +738,9 @@ impl Game {
                 hits.extend(hit);
             }
             results.push(EventResult {
-                committed,
                 excess_damage,
                 moved: moved_object,
+                ..result
             });
         }
         if let EventBinding::Moved {
@@ -1424,15 +1430,22 @@ impl Game {
         event: ProposedEvent,
         lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
-    ) -> bool {
-        match event {
+    ) -> EventResult {
+        let committed = match event {
             ProposedEvent::Damage {
                 source,
                 target,
                 amount,
                 combat,
             } => self.commit_damage(source, target, amount, combat),
-            ProposedEvent::LifeChange { player, delta } => self.commit_life_change(player, delta),
+            ProposedEvent::LifeChange { player, delta } => {
+                let life_delta = self.commit_life_change(player, delta);
+                return EventResult {
+                    committed: life_delta != 0,
+                    life_delta,
+                    ..Default::default()
+                };
+            }
             ProposedEvent::CreateTokens { .. } => unreachable!("creation owns an entry batch"),
             ProposedEvent::Destroy { .. } | ProposedEvent::Sacrifice { .. } => {
                 unreachable!("normalized before replacement")
@@ -1450,6 +1463,10 @@ impl Game {
                 to,
                 entry,
             } => self.commit_zone_move(object_id, from, to, entry, lki, followups),
+        };
+        EventResult {
+            committed,
+            ..Default::default()
         }
     }
 
@@ -1707,6 +1724,17 @@ mod tests {
             Some(ZoneType::Graveyard)
         );
         assert!(game.object_lki(current).is_some());
+    }
+
+    #[test]
+    fn life_change_result_uses_the_applied_difference_at_the_storage_limit() {
+        let (mut game, _) = game_with_ogre();
+        let player = PlayerId(0);
+        *game.state.life_mut(player).unwrap() = i32::MAX - 1;
+        let batch = game.event_batch(vec![ProposedEvent::LifeChange { player, delta: 3 }]);
+        let results = game.complete_immediate_batch(batch);
+        assert_eq!(game.state.players[0].life, i32::MAX);
+        assert_eq!(results[0].life_delta, 1);
     }
 
     #[test]

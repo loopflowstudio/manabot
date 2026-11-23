@@ -150,6 +150,9 @@ pub struct EffectFrame {
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub excess_damage: i32,
+    /// Committed loss across all players in the scope's latest LoseLife.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub life_lost: i32,
     /// The cards the resolution's latest discard or mill moved ("this way").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -248,6 +251,7 @@ impl EffectFrame {
             x: 0,
             spent: Default::default(),
             excess_damage: 0,
+            life_lost: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
             selected_from: None,
@@ -1463,6 +1467,12 @@ impl Game {
         let moved = results.iter().filter_map(|result| result.moved);
         match batch.binding {
             EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
+            EventBinding::Destroyed => frame.moved = moved.collect(),
+            EventBinding::LifeLost => {
+                frame.life_lost = results.iter().fold(0_i32, |lost, result| {
+                    lost.saturating_sub(result.life_delta.min(0))
+                });
+            }
             EventBinding::Bending { player, kind } => self.record_bending(player, kind),
             EventBinding::Shuffle { player } => self.shuffle_library(player),
             EventBinding::PlaceInLibrary { second_from_top } => {

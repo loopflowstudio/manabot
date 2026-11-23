@@ -1,8 +1,8 @@
 //! Kaladesh.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement,
-        TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Scope,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -17,6 +17,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         cultivators_caravan(),
         dramatic_reversal(),
+        fumigate(),
         noxious_gearhulk(),
     ]
 }
@@ -73,6 +74,32 @@ fn dramatic_reversal() -> CardDefinition {
                 },
             ))],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fumigate() -> CardDefinition {
+    let text_box = "Destroy all creatures. You gain 1 life for each creature destroyed this way.";
+    CardDefinition {
+        key: "kld.fumigate",
+        scryfall_id: "f00f27a7-9e92-4fbf-baa8-f47a5eee48a6",
+        printed: PrintedCharacteristics {
+            name: "Fumigate".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::each(
+                    Scope::Battlefield,
+                    CardPredicate::creature(),
+                )),
+                Effect::gain_life(EffectValue::Objects {
+                    of: Box::new(ObjectSelector::Moved),
+                    predicate: None,
+                }),
+            ],
             ..Default::default()
         },
         ..Default::default()

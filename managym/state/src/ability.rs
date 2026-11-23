@@ -553,6 +553,8 @@ pub enum EffectValue {
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
+    /// Total life actually lost to this scope's latest LoseLife instruction.
+    LifeLostThisWay,
     /// The source permanent's current power ("where X is this creature's
     /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,
@@ -593,11 +595,12 @@ pub enum EffectValue {
     },
     /// Cards in `controller`'s hand.
     CardsInHand,
-    /// Number of objects still named by a resolution result or selector.
+    /// Number of objects named by a resolution result or selector.
     Objects {
         of: Box<ObjectSelector>,
         /// Count only matching card objects when present, using their current
-        /// characteristics. `Moved` therefore counts what actually moved.
+        /// characteristics. Unfiltered `Moved` counts the committed moves
+        /// even if a successor has since changed zones again.
         #[serde(skip_serializing_if = "Option::is_none")]
         predicate: Option<CardPredicate>,
     },

@@ -2329,6 +2329,52 @@ fn library_keyword_completion_handles_empty_libraries_and_zero_counts() {
 }
 
 #[test]
+fn destruction_count_survives_a_child_returning_one_of_the_destroyed_creatures() {
+    use crate::state::ability::Scope;
+
+    let player = PlayerId(0);
+    let (mut game, first, _) = fixture(player);
+    let victim = game.permanent_object(first).unwrap();
+    stack(
+        &mut game,
+        Entry::Spell,
+        player,
+        vec![
+            Effect::destroy(ObjectSelector::each(
+                Scope::Battlefield,
+                CardPredicate::creature(),
+            )),
+            Effect::SelectCards {
+                from: ObjectSelector::Moved,
+                predicate: CardPredicate::creature(),
+                min: 1,
+                max: EffectValue::Fixed(1),
+                effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                if_declined: vec![],
+            },
+            Effect::gain_life(EffectValue::Objects {
+                of: Box::new(ObjectSelector::Moved),
+                predicate: None,
+            }),
+        ],
+        vec![],
+        vec![],
+    );
+    game.resolve_top_of_stack();
+    let choice = Action::SelectCard {
+        player,
+        object: game.state.now(victim),
+    };
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    checked_command(&mut game, choice);
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(victim)),
+        Some(ZoneType::Hand)
+    );
+    assert_eq!(game.state.players[player.0].life, 22);
+}
+
+#[test]
 fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
     for player in [PlayerId(0), PlayerId(1)] {
         let (mut game, _, _) = fixture(player);

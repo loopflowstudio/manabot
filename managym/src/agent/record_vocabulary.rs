@@ -191,6 +191,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &[
                 "None",
                 "ThisWay",
+                "Destroyed",
+                "LifeLost",
                 "Damage",
                 "Deaths",
                 "Combat",
@@ -355,6 +357,8 @@ mod tests {
                 &[
                     EventBinding::None,
                     EventBinding::ThisWay,
+                    EventBinding::Destroyed,
+                    EventBinding::LifeLost,
                     EventBinding::Deaths,
                     EventBinding::Combat,
                     EventBinding::Damage { result: Some(1) },

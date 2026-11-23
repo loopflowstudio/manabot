@@ -4905,6 +4905,79 @@ fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
     }
 }
 
+/// A choice interrupts the parent after it has drained three life. Its
+/// discard branch drains a different amount in a child result scope.
+#[test]
+fn life_lost_this_way_survives_a_private_choice_and_its_child_scope() {
+    use crate::support::play::fork_stepping;
+
+    let mut s = five_color_setup(&["Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let object = card_of(&s, ogre);
+    let lose = |amount| Effect::LoseLife {
+        player: PlayerSelector::EachOpponent,
+        amount: EffectValue::Fixed(amount),
+    };
+    let gain = Effect::gain_life(EffectValue::LifeLostThisWay);
+    s.game_mut().state[object]
+        .activated_abilities
+        .push(ActivatedAbilityDefinition {
+            effects: vec![
+                lose(3),
+                Effect::may_discard(1, vec![lose(1), gain.clone()]),
+                gain,
+            ],
+            ..Default::default()
+        });
+    let fodder = move_to_hand(&mut s, "Plains");
+    activate(&mut s, ogre, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+
+    let actor = Observation::for_player(s.game(), PlayerId(0));
+    let capture = s.game().capture_decision(PlayerId(0), 0).unwrap();
+    assert!(capture.frames.iter().any(|frame| frame
+        .effect_execution_description
+        .as_deref()
+        .is_some_and(|description| description.contains("life lost this way: 3"))));
+    let retained = [
+        (TokenKind::Text as u16, name_value("life lost this way")),
+        (TokenKind::Integer as u16, 3),
+    ];
+    let frame = actor
+        .continuation
+        .iter()
+        .find(|frame| {
+            frame
+                .effect_execution
+                .windows(2)
+                .any(|tokens| tokens == retained)
+        })
+        .expect("the acting viewer can read the pending gain");
+    assert_execution_tokens_registered(frame);
+    let facts = encoded_default(&actor).facts;
+    assert!(facts.chunks_exact(FACT_DIM).any(|row| {
+        row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32
+            && row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2] == id_columns(retained[0].1)
+    }));
+
+    let root = s.game().state.deterministic_hash();
+    for (index, action) in s.action_space().actions.iter().enumerate() {
+        let lost = match action {
+            Action::SelectCard { object, .. } if *object == fodder => 4,
+            Action::Decline { .. } => 3,
+            action => panic!("unexpected discard choice {action:?}"),
+        };
+        let mut fork = fork_stepping(&s, index);
+        settle(&mut fork);
+        fork.assert_life(0, 20 + lost);
+        fork.assert_life(1, 20 - lost);
+    }
+    assert_eq!(s.action_space().actions.len(), 2);
+    assert_eq!(s.game().state.deterministic_hash(), root);
+    s.assert_life(0, 20);
+    s.assert_life(1, 17);
+}
+
 /// An object that paid a cost other than with mana is a public fact of the
 /// receipt: the stack frame references it for both players, with what was
 /// done to it, and keeps naming what it was after it has left (Hungry Ghoul,

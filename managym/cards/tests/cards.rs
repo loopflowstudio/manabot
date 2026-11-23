@@ -136,6 +136,8 @@ mod scryfall;
 mod shm;
 #[path = "cards/soi.rs"]
 mod soi;
+#[path = "cards/som.rs"]
+mod som;
 #[path = "cards/spm.rs"]
 mod spm;
 #[path = "cards/sth.rs"]

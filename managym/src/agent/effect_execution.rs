@@ -118,6 +118,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "library end",
     "library order",
     "life change",
+    "life lost this way",
     "life paid",
     "linked exile",
     "linked return",
@@ -1058,6 +1059,9 @@ pub(crate) fn project_frame(
     }
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);
+    }
+    if effect.life_lost != 0 {
+        out.field("life lost this way", &effect.life_lost);
     }
     let source_definition = effect
         .source()

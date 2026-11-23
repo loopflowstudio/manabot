@@ -155,9 +155,10 @@ impl Game {
         self.apply_immediate_event(ProposedEvent::LifeChange { player, delta })
     }
 
-    pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> bool {
+    /// Apply the change and return the signed amount that actually occurred.
+    pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> i32 {
         if self.life_total_cant_change(player) {
-            return false;
+            return 0;
         }
         if delta > 0
             && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
@@ -168,23 +169,23 @@ impl Game {
                 })
             })
         {
-            return false;
+            return 0;
         }
         let Some(life) = self.state.life_mut(player) else {
-            return false;
+            return 0;
         };
         let old_life = *life;
         *life = life.saturating_add(delta);
         let new_life = *life;
         if old_life == new_life {
-            return false;
+            return 0;
         }
         self.emit(GameEvent::LifeChanged {
             player,
             old: old_life,
             new: new_life,
         });
-        true
+        new_life - old_life
     }
     pub(crate) fn clear_damage(&mut self) {
         for index in 0..self.state.permanents.len() {

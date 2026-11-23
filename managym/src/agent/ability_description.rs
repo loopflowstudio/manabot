@@ -760,11 +760,11 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
         EffectValue::Objects { of, predicate } if matches!(of.as_ref(), ObjectSelector::Moved) => {
-            let cards = match predicate {
-                None => "cards".into(),
+            let objects = match predicate {
+                None => "objects".into(),
                 Some(predicate) => predicate_description(predicate, "cards"),
             };
-            format!("the number of {cards} moved this way")
+            format!("the number of {objects} moved this way")
         }
         EffectValue::Objects { of, predicate } => {
             let objects = selector_description(of);
@@ -803,6 +803,7 @@ fn value_description(value: &EffectValue) -> String {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
+        EffectValue::LifeLostThisWay => "the life lost this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
         EffectValue::ColorsSpentToCast => "the number of colors of mana spent to cast it".into(),
@@ -1439,7 +1440,7 @@ mod tests {
                 of: Box::new(ObjectSelector::Moved),
                 predicate: None,
             }),
-            "the number of cards moved this way"
+            "the number of objects moved this way"
         );
     }
 
