@@ -1,19 +1,18 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Which creature deals the damage?</title>
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>How much damage did this creature deal?</title>
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:54rem;margin:3rem auto;padding:0 1rem 3rem}h1,h2{line-height:1.15}h2{margin-top:2rem}table{width:100%;border-collapse:collapse}th,td{padding:.6rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:4px solid #888;padding-inline:1rem}li{margin:.45rem 0}small{font-weight:bold}
 </style><main><small>Managym · MTG-418 · Foundations and Standard</small>
 <h1>Do the player’s questions and the engine’s records line up?</h1>
 <p>Foundations asks players to remember a hit, recognize what an instruction actually did, and inspect the board as a spell resolves. The time named by the instruction determines which facts the engine needs.</p>
-<aside><h2>Biggest mismatch · Felling Blow’s “it”</h2>
-<p><b>Existing.</b> A player chooses one creature they control and one an opponent controls. The engine’s damage instruction reads a list of attackers and takes the last slot as the victim. That convention alone cannot tell a card author where the counter belongs, and “attackers” can include a creature that never attacked.</p>
-<p><b>Proposed.</b> Bind the two printed target roles in order. Give the first its counter, then let that same creature deal noncombat damage using its current power. Reuse the existing damage instruction, which already reads layered power and attributes the event to the creature. A separate saved power value would go stale as soon as the counter lands.</p></aside>
-<h2>One pending Felling Blow · proposed fixture</h2>
-<p>Announce with a 2-power creature and a fresh opposing creature with 5 toughness. Save the pending spell with both target identities. Each row begins from that position.</p>
-<table><tr><th>Before resolution</th><th>Expected counter</th><th>Expected damage</th></tr>
-<tr><td>Both creatures stay</td><td>One on your creature</td><td>Three to the opposing creature, dealt by yours</td></tr>
-<tr><td>The opposing creature leaves and returns</td><td>One on your creature</td><td>Zero to the returned creature</td></tr>
-<tr><td>Your creature leaves and returns</td><td>Zero on the returned creature</td><td>Zero to the opponent’s creature</td></tr>
-<tr><td>Restore the original position and pass</td><td>One on your creature</td><td>Three again</td></tr></table>
+<aside><h2>Biggest mismatch · Drake Hatcher remembers a quantity</h2>
+<p><b>Existing.</b> The player sees a creature hit for three. In <code>damage.rs</code> the committed damage carries an amount. In <code>proposed_event.rs</code> the combat batch passed to trigger matching carries a list of creatures. One hit for three and one hit for one look identical to that matcher.</p>
+<p><b>Proposed.</b> Carry the source, recipient and committed amount together through the combat batch. Bind the matching hit’s amount on Hatcher’s pending trigger. Existing “one or more” listeners still fire once per qualifying group. Hellkite still needs only membership for the turn.</p></aside>
+<h2>One Hatcher, two moments · proposed fixture</h2>
+<table><tr><th>From the same combat position</th><th>What the player should see</th></tr>
+<tr><td>One damage gets through</td><td>Resolve the trigger for one incubation counter. Starting from zero, the three-counter activation is unavailable.</td></tr>
+<tr><td>Three damage gets through</td><td>Save with the trigger pending. Change Hatcher’s power, then resolve. Three counters still land.</td></tr>
+<tr><td>Activate and counter the ability</td><td>The counters were spent at activation. No Drake appears.</td></tr>
+<tr><td>Restore the paid activation and resolve</td><td>The payment stays spent and one Drake appears. The original saved position still has its pending ability.</td></tr></table>
 <h2>Do the product and code concepts line up?</h2>
 <table><thead><tr><th>Player’s question</th><th>Existing native owner</th><th>Match</th></tr></thead><tbody>
 <tr><td>How many creatures did this Fumigate destroy?</td><td>The resolution frame binds the committed destruction batch across child choices.</td><td>Yes</td></tr>
@@ -24,7 +23,8 @@
 <tr><td>Which X values can I pay?</td><td><code>legal_activation_x_values</code> checks each amount with <code>activation_x_payable</code>. The announced ability determines whether tapping creatures can help pay.</td><td>Yes</td></tr>
 <tr><td>Whose permanents will this Hellkite destroy?</td><td>The use belongs to each permanent. The stack retains X and the exact source. DamageHistory supplies eligible seats after source departure, including on restore. The Scars fixture exercised X=0 and X=4.</td><td>Yes</td></tr>
 <tr><td>How many different values do my current nonlands represent?</td><td>DrawCards evaluates EffectValue::DistinctManaValues once at resolution. The FDN fixture drew two, three and zero from branches of the same pending spell, retaining a land and opposing nonland.</td><td>Yes</td></tr>
-<tr><td>Which creature gets the counter and deals damage?</td><td>TargetCreaturesDealPowerDamageToLastTarget uses ordered legal slots. Felling Blow still needs its two roles bound across both instructions.</td><td>No</td></tr>
+<tr><td>Which creature gets the counter and deals damage?</td><td>TargetCreaturesDealPowerDamageToLastTarget uses ordered legal slots. The FDN fixture gives the Ogre its counter before it deals three. Blinking the victim preserves the counter. Blinking the Ogre prevents both effects.</td><td>Yes</td></tr>
+<tr><td>How many counters did this hit earn?</td><td>GameEvent::CombatDamageToPlayers supplies creature identities to trigger_multiplicity. Its per-hit amount is missing.</td><td>No</td></tr>
 <tr><td>What did I spend casting that spell?</td><td>PaymentReceipt owns the committed units. The planned Expend threshold and Unravel comparison still need their consumers.</td><td>No · partial</td></tr></tbody></table>
 <h2>One saved Hellkite decision · existing behavior</h2>
 <p>The earlier menu offered one with only an untapped Hellkite. Selecting it panicked because the payment required mana. The repaired menu and the payment step use the same ability cost.</p>
@@ -33,5 +33,5 @@
 <tr><td>Hellkite and one untapped Mountain</td><td>0, 1</td><td>Restore the X decision for each choice. Only one taps the Mountain.</td></tr>
 <tr><td>Katara’s waterbend fixture</td><td>1, 2, 3, 4</td><td>Pay two by tapping the Ally and Ogre. Floating mana remains available.</td></tr></table>
 <h2>Existing recovery evidence</h2><p>The native Hellkite snapshot fixture used two copies. Both could spend their use for zero. Noncombat damage by the second copy left its ability ineffective. Restoring after the hitting source left preserved the eligible seat for both viewers. A transferred Food was destroyed under its current controller. Countering an activation left its use spent. The turn boundary cleared the hit and restored the use.</p>
-<p><b>Proposed consumer contract.</b> Native target offers and the pending spell identify both creatures. The authored catalog tokens describe the counter followed by damage. Existing counter and damage projections carry the results to players and policies. The power read needs no additional turn record or decision.</p>
-<h2>Review questions</h2><ol><li>When does Felling Blow read power? <b>1a</b> At announcement. <b>1b</b> When the creature deals damage (selected).</li><li>What survives a blink of the opposing target? <b>2a</b> The counter instruction for the still-legal first target (selected). <b>2b</b> Neither instruction.</li></ol></main></html>
+<p><b>Proposed consumer contract.</b> A pending Hatcher trigger exposes its bound amount to both viewers, including after restore. Native observation, v11 and text read that same value. An authored amount expression identifies its meaning in the catalog. After resolution, ordinary permanent counters and the native activation offer take over.</p>
+<h2>Review questions</h2><ol><li>Where should the amount survive? <b>1a</b> On the trigger created by this hit (selected). <b>1b</b> In a running damage total for the turn.</li><li>Which recovery would expose a payment error? <b>2a</b> Restore before combat only. <b>2b</b> Restore after paying, then compare countering and resolving the activation (selected).</li></ol></main></html>
