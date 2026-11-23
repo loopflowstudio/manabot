@@ -737,8 +737,12 @@ publish, land or choose the next Graph step from here.
   `--seconds 8` then `--resume`, and a pty Ctrl-C. With `{"record_games": 1,
   "statistics": true}`, `read_records(Path(out / "games"))` (a `Path`, not a
   string) must hold only fresh games: a continuation's 15-action prefix
-  replay is a defect. An empty `reset` record of the seed a fresh game replays
-  after a continuation is a known gap of the reference vector.
+  replay is a defect, as is an empty `reset` record repeating a fresh seed
+  (16 complete plus one zero-action in-flight game per stream after 4
+  updates). `points(...)` returns `Points` with `.x`/`.y` arrays. `workers`
+  is not a recipe config key: check the startup refusals (`workers=2`,
+  `wdl_entropy` on a scalar critic, `action_value_spread`) with a `.runs/`
+  copy of the recipe that `model_copy`s `SelfPlay`/`SnapshotConfig` fields.
 - Decision memory is opt-in on raw engines: `managym.Env(...)` and
   `VectorEnv(...)` record no viewer decision log unless built with
   `decision_memory=True` (the training wrappers derive it from
