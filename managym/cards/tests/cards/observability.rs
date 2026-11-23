@@ -5937,11 +5937,7 @@ fn library_knowledge_positions_reach_their_named_rows() {
 
 #[test]
 fn lunar_insight_catalog_tokens_describe_its_draw_amount() {
-    let pack = default_content_pack();
-    let definition = pack
-        .definition(pack.definition_id("Lunar Insight").unwrap())
-        .unwrap();
-    let tokens = tokens_of(definition);
+    let tokens = tokens_of(&card_definition("Lunar Insight"));
     for variant in [
         "Effect::DrawCards",
         "EffectValue::DistinctManaValues",
@@ -5959,11 +5955,7 @@ fn lunar_insight_catalog_tokens_describe_its_draw_amount() {
 
 #[test]
 fn felling_blow_catalog_tokens_describe_both_instructions() {
-    let pack = default_content_pack();
-    let definition = pack
-        .definition(pack.definition_id("Felling Blow").unwrap())
-        .unwrap();
-    let tokens = tokens_of(definition);
+    let tokens = tokens_of(&card_definition("Felling Blow"));
     for variant in [
         "Effect::PutCounters",
         "Effect::TargetCreaturesDealPowerDamageToLastTarget",

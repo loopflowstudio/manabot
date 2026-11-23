@@ -816,30 +816,26 @@ fn felling_blow_reads_power_after_the_counter_and_keeps_both_targets_bound() {
             .observation_events
             .iter()
             .any(|event| matches!(event, GameEvent::CombatDamageDealt { .. })));
-        let mut hits = Vec::new();
-        for event in s
+        let mut hits = s
             .game()
             .state
             .events
             .iter()
             .skip(pending.state.events.len())
-        {
-            if let GameEvent::DamageDealt {
-                source,
-                target,
-                amount,
-            } = event
-            {
-                hits.push((*source, target, *amount));
-            }
-        }
+            .filter_map(|event| match event {
+                GameEvent::DamageDealt {
+                    source,
+                    target,
+                    amount,
+                } => Some((*source, target, *amount)),
+                _ => None,
+            });
         if damage > 0 {
             assert_eq!(
-                hits,
-                vec![(Some(object), &DamageTarget::Permanent(victim), 3)]
+                hits.next(),
+                Some((Some(object), &DamageTarget::Permanent(victim), 3))
             );
-        } else {
-            assert!(hits.is_empty());
         }
+        assert_eq!(hits.next(), None);
     }
 }

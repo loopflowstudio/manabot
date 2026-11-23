@@ -1,10 +1,10 @@
-at: 8d35046a0bcb07cc69101588b6c433e97ab59baf
+at: 97374c70f5084cc3aa1b5f998944fc71cfea21d9
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Records the Felling Blow obligation and its fixture
   - path: managym/cards/src/fdn.rs
     why: Binds the two targets and orders the instructions
   - path: managym/cards/tests/cards/fdn.rs
-    why: Resolves the same spell across both target reentries
+    why: Checks damage attribution across target reentries and replay
   - path: managym/cards/tests/cards/observability.rs
     why: Checks both instructions reach the catalog tokens
