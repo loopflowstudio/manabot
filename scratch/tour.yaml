@@ -1,7 +1,11 @@
-at: 2ac414b773edf0d05e3e55da39cd8415b5af7d90
+at: 13b900412b0a280bbc1e2b5a1296a02f5ee3f0d2
 first:
   - path: scratch/plan.md
-    why: Find the remaining movement and privacy probes.
+    why: Locate the movement evidence and remaining probes.
+  - path: managym/src/flow/resolution.rs
+    why: Follow Airbend from selection into the retained batch.
+  - path: managym/src/flow/cast_permission.rs
+    why: Bind each permission to its exact exile arrival.
   - path: managym/cards/src/fin.rs
     why: Follow Vanille’s payment into Ragnarok.
   - path: managym/state/src/zone.rs
@@ -13,15 +17,13 @@ first:
   - path: managym/src/flow/decision.rs
     why: Carry the resolving controller through the pending move.
   - path: managym/cards/tests/cards/fin.rs
-    why: Restore each library, exile and graveyard order.
+    why: Restore both orders and cast each airbent front.
   - path: managym/tests/rules/cr_400_identity.rs
     why: Check that separated exile identities stay stale.
   - path: managym/state/src/ability.rs
     why: See the source, event quantity and life condition.
   - path: managym/src/flow/triggers.rs
     why: Match graveyard departures and collect simultaneous damage.
-  - path: managym/src/flow/resolution.rs
-    why: Read captured quantities and resolve against the exact source.
   - path: managym/src/agent/continuation.rs
     why: Follow the quantity into the viewer’s stack frame.
   - path: managym/tests/support/play.rs
