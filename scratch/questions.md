@@ -13,3 +13,5 @@ Checkpoint assembly uses the saved fact embedding width at construction. Fresh e
 For the exact-source pair, start with Panda and restore its pending trigger before testing source and target reentry separately. Immolator alone cannot exercise target enumeration.
 
 The checkout's library-order pin addition failed to compile with an unbound pre-move object and exceeded the GameState size guard. The prerequisite repair uses the departing object and boxes the two existing pin sets together.
+
+For Lunar Convocation, place the Food gain before the enchantment enters. This distinguishes controller history from events witnessed by the permanent in the same two-branch fixture.
