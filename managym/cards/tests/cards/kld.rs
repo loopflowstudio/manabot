@@ -310,31 +310,31 @@ fn authority_checks_entering_control() {
         );
         assert_eq!(tapped(&s, id), should_trigger);
         assert_eq!([s.life(0), s.life(1)], [20, 20]);
-        if should_trigger {
-            assert!(matches!(
-                s.game().state.stack_objects.as_slice(),
-                [StackObject::TriggeredAbility(_)]
-            ));
-            s.drain_events();
-            let mut fork = s.clone();
-            resolve_top(&mut s);
-            resolve_top(&mut fork);
-            for branch in [&s, &fork] {
-                assert_eq!([branch.life(0), branch.life(1)], [21, 20]);
-                assert!(branch.game().state.stack_objects.is_empty());
-            }
-            let events = s.drain_events();
-            assert_eq!(events, fork.drain_events());
-            let gains: Vec<_> = events
-                .iter()
-                .filter_map(|event| match event {
-                    GameEvent::LifeChanged { player, old, new } => Some((*player, *old, *new)),
-                    _ => None,
-                })
-                .collect();
-            assert_eq!(gains, [(PlayerId(0), 20, 21)]);
-        } else {
+        if !should_trigger {
             assert!(s.game().state.stack_objects.is_empty());
+            continue;
         }
+
+        assert!(matches!(
+            s.game().state.stack_objects.as_slice(),
+            [StackObject::TriggeredAbility(_)]
+        ));
+        s.drain_events();
+        let mut fork = s.clone();
+        for branch in [&mut s, &mut fork] {
+            resolve_top(branch);
+            assert_eq!([branch.life(0), branch.life(1)], [21, 20]);
+            assert!(branch.game().state.stack_objects.is_empty());
+        }
+        let events = s.drain_events();
+        assert_eq!(events, fork.drain_events());
+        let gains: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::LifeChanged { player, old, new } => Some((*player, *old, *new)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(gains, [(PlayerId(0), 20, 21)]);
     }
 }

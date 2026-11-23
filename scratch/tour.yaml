@@ -1,4 +1,4 @@
-at: 4d581dda963d8bd24e3ba49d6e33f0eda2ffeb6a
+at: d9a7ce3257ed69b878383d90b8ea27811eea615e
 first:
   - path: managym/cards/src/kld.rs
     why: Authority’s entry replacement and separate triggered gain
