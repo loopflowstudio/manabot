@@ -1,30 +1,26 @@
-at: ee55656520f9adf549cc2bad3d7e5a18f8906809
+at: c977065ddb3056a4e190fc4c4fd491f8b414d1ef
 first:
   - path: docs/engine.md
-    why: Read the movement and source-copy rules.
+    why: Compare transforming, changing zones and copying departed sources.
+  - path: managym/cards/src/fin.rs
+    why: Read Cecil’s two triggers and Esper’s transformed return.
+  - path: managym/state/src/ability.rs
+    why: See the source, event quantity and life condition.
+  - path: managym/src/flow/triggers.rs
+    why: Collect simultaneous damage and retain each trigger’s amount.
+  - path: managym/src/flow/resolution.rs
+    why: Read captured quantities and resolve against the exact source.
+  - path: managym/src/agent/continuation.rs
+    why: Follow the quantity into the viewer’s stack frame.
+  - path: managym/cards/tests/cards/fin.rs
+    why: Play the threshold, pending target and lethal combat cases.
+  - path: managym/state/src/game_object.rs
+    why: Inspect copiable values retained on departure.
+  - path: managym/src/flow/zones.rs
+    why: Follow movement, face identity and prospective entry.
+  - path: managym/src/flow/stabilization.rs
+    why: Release unused forms after the stack clears.
   - path: managym/cards/tests/cards/lea.rs
     why: Play the departed, returned and token Clone cases.
-  - path: managym/state/src/game_object.rs
-    why: Copiable values, inherited exceptions and retained departures.
-  - path: managym/src/flow/resolution.rs
-    why: Read the exact source when the instruction resolves.
-  - path: managym/src/flow/stabilization.rs
-    why: Release forms after the stack clears.
-  - path: managym/cards/src/fin.rs
-    why: Read the spell and its three Saga chapters.
-  - path: managym/state/src/ability.rs
-    why: Follow both moves in a transformed return.
-  - path: managym/state/src/predicate.rs
-    why: Identify permanent cards across reveal and graveyard choices.
-  - path: managym/src/flow/zones.rs
-    why: Follow entry, cast receipts and known library cards.
-  - path: managym/src/flow/proposed_event.rs
-    why: Evaluate replacements against the face entering play.
-  - path: managym/src/flow/knowledge.rs
-    why: Record the revealed library top for both players.
-  - path: managym/src/agent/observation.rs
-    why: Project casting origin and battlefield mana value.
-  - path: managym/cards/tests/cards/fin.rs
-    why: Check both casts, exact appearances and chapter outcomes.
   - path: tests/semantic/test_text_observation.py
-    why: Follow the same casts through text decisions.
+    why: Inspect public stack and spell information in text.
