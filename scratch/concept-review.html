@@ -2,8 +2,8 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Battlefield identity · MTG-420</title>
 <style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · engine review at 4959c14e</small>
-<h1>Does knowing the target mean knowing the card behind it?</h1>
+<main><small>MTG-420 · engine review at 17aee613</small>
+<h1>Do the engine’s battlefield records match what a policy can act on?</h1>
 <p>A policy can target a permanent by its public identity. Resolution may need its physical cards, a waiting trigger may need its last copiable form, and the acting viewer may know only a face-down 2/2. The branch separates these questions for meld and departed copies. Manifest Dread puts all three in the same position.</p>
 <h2>Existing · restore either library order</h2>
 <table><thead><tr><th>Decision or continuation<th>Battlefield<th>Library, next draw first<th>Clues
@@ -50,8 +50,13 @@
 <section><h2>Biggest mismatch · which printing does a copy own?</h2>
 <p><b>Existing · No.</b> Manifest entry installs the nameless characteristics alongside the entered definition ID. <code>CopiableValues</code> requires a <code>CardDefId</code>. The original has a printing that its controller may inspect. A token copying that 2/2 has no claim on that printing, even for its controller. Masking the original’s opponent row cannot express this distinction.</p>
 <p><b>Proposed.</b> Allow the copiable face to have characteristics without a catalog identity. Keep physical backing and turn-up eligibility on the original appearance. Share the anonymous face across copies and departed-source snapshots. Preserve exact catalog joins and the compact catalog fallback for ordinary sources.</p></section>
-<h2>Proposed · resolve, copy and restore</h2>
-<ol><li>Cast Manifest Dread. At its private choice, save the pending resolution. Restore each legal Command and manifest its selected card. Move the other to the graveyard once.</li>
-<li>Copy the public 2/2 in both controlled roots. Inspect the token from either seat and copy it again. Each generation has the nameless face and no private join or inherited turn-up action.</li>
-<li>At priority, pay to turn the original Ogre face up. Keep its counters and target identity. A manifested Forest offers no such payment. Replay a spent Command and check mana, counters, zones and history. Restore the pre-payment snapshot to recover the hidden Ogre and the original offer.</li></ol>
-<h2>Review questions</h2><ol><li>Which test should accompany the playable spell? <b>1a · Copy the resulting 2/2 in both roots (selected).</b> 1b · Exercise only selection and graveyard movement.</li><li>How should a copy identify an anonymous face? <b>2a · Carry the face with an absent catalog identity (selected).</b> 2b · Assign it a synthetic catalog printing.</li></ol></main></html>
+<h2>Existing · one private choice, two public outcomes</h2>
+<table><thead><tr><th>Restored Command<th>Controller inspects<th>Public graveyard arrival<th>Opponent can target</thead><tbody>
+<tr><td>Select Gray Ogre<td>Gray Ogre<td>Forest, once<td>Nameless 2/2
+<tr><td>Select Forest<td>Forest<td>Gray Ogre, once<td>Nameless 2/2</table>
+<p><b>Fit · Yes.</b> The cast fixture restores the pending native choice for each Command and rejects reuse after resolution. One remaining library card enters directly. An empty library produces no permanent. These forks deliberately have different public graveyards. The paired roots above isolate disclosure by keeping Plains in both graveyards.</p>
+<h2>Proposed · follow the face into a second copy</h2>
+<p>Fork immediately before copying a manifested transforming creature. Restore and resolve the same copy in each branch. Both viewers should see a face-up, nameless 2/2 token. Neither should find a printing, reverse face or turn-up action on it. Copy that token again. Its characteristics and lack of a catalog join must survive even after the original leaves play. A token copying an eligible face-up transforming source is the control that catches an overbroad deletion of reverse faces.</p>
+<p><b>Text projection · No.</b> The permanent formatter asks for a definition even when the native opponent row carries −1. Exercise the anonymous row through the text reader alongside the native copy fixture. The reader should describe its effective characteristics and use its public target alias. Controller inspection of the original remains a separate permitted lookup.</p>
+<p><b>Recovery boundary.</b> Exact search forks retain the private backing of the original and the copiable values captured for a waiting ability. Share immutable characteristics between branches. Preserve the catalog-backed departure path for ordinary cards. Check recorded replay and viewer-safe search separately from in-memory restoration.</p>
+<h2>Review questions</h2><ol><li>Which copy fixture comes first? <b>1a · A manifested transforming front and a second-generation copy (selected).</b> 1b · An ordinary single-faced front only.</li><li>What identifies the anonymous face? <b>2a · Its characteristics, with an absent catalog identity (selected).</b> 2b · A synthetic catalog printing.</li></ol></main></html>
