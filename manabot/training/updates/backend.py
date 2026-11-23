@@ -8,7 +8,7 @@ an update steps and runs forward. `manabot.policy.protocol.Backend` also
 provides loading and NumPy parity; `Learner` extends its `BackendLearner`.
 
 Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
-standardization, top-count selection and a policy `__call__`/`get_value`; only
+standardization and a policy `__call__`/`get_value`; only
 torch provides it. A categorical critic needs `CategoricalRL` (torch only);
 `categorical_rl` narrows to it and refuses a backend without one. `ppo_rl`
 likewise refuses an unsupported PPO update before reading rollout or learner state.
@@ -85,6 +85,7 @@ class RL(Protocol):
         next_value: Array,
         gamma: float,
         lam: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> tuple[Array, Array]: ...
 
     def clipped_surrogate(
@@ -116,9 +117,11 @@ class RL(Protocol):
 
     def clip_fraction(self, log_ratio: Array, clip: float) -> float: ...
 
-    def selection_mask(
+    def selected_magnitudes(
         self, advantages: Array, kind: FilterKind, fraction: float, minimum: float
-    ) -> Array: ...
+    ) -> tuple[Array, float | None]: ...
+
+    def weighted_sum(self, values: Array, weights: Array) -> Array: ...
 
     def selected_mean(self, values: Array, selected: Array) -> Array: ...
 
@@ -138,6 +141,7 @@ class CategoricalRL(RL, Protocol):
         ends: Array,
         bootstrap: Array,
         trace_lambda: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> Array: ...
 
     def categorical_value_loss(self, value_logits: Array, targets: Array) -> Array: ...
@@ -157,15 +161,6 @@ class PPORL(CategoricalRL, Protocol):
 
     def standardized_advantages(
         self, advantages: Array, over: Array | None = None
-    ) -> Array: ...
-
-    def selected_rows(
-        self,
-        advantages: Array,
-        fraction: float,
-        minimum: float,
-        *,
-        kind: FilterKind = "top_count",
     ) -> Array: ...
 
 
@@ -218,7 +213,7 @@ class AdmittedRollout(Protocol):
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None: ...
 
-    def next_observation(self, device: Device) -> Observations: ...
+    def next_observation(self, device: Device) -> Observations | None: ...
     def next_observations(
         self, device: Device, size: int
     ) -> Iterator[Observations]: ...
