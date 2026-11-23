@@ -1,23 +1,19 @@
-at: 27a8e0ff0e88f534216adae112ac4c6e4385d277
+at: 6591d3861d6eedac5268badb3ff6f27aaaec1dd6
 first:
-  - path: docs/engine-python.md
-    why: What both players see after reset
-  - path: managym/src/flow/setup.rs
-    why: Seeded deal initializes the opening procedure
-  - path: managym/src/flow/opening.rs
-    why: Declarations, private bottom order and pregame entry
-  - path: managym/src/flow/tick.rs
-    why: Opening choices precede ordinary turn initialization
-  - path: managym/cards/src/fdn.rs
-    why: Leyline Axe enters and equips
-  - path: managym/cards/src/msh.rs
-    why: Quicksilver shares the opening ability
-  - path: managym/src/flow/statics.rs
-    why: Power-up pricing distinguishes normal and pregame entry
-  - path: managym/tests/rules/cr_103_game_start.rs
-    why: Both seats redraw and fork their choices
+  - path: managym/src/flow/game.rs
+    why: Opening, ordinary play and committed terminal causes
+  - path: managym/src/flow/sba.rs
+    why: Check both protected seats before committing losses
+  - path: managym/src/agent/env.rs
+    why: Project the result into rewards and reasons
+  - path: managym/cards/tests/cards/khm.rs
+    why: Fynn reaches ten poison with and without Herald
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Herald protects through its final state-based batch
+  - path: managym/src/agent/observation_encoder.rs
+    why: Counter facts identify the affected player
   - path: tests/env/test_native_player_policies.py
-    why: Scalar and vector parity and viewer privacy
-  - path: tests/academy/test_player_control_session.py
-    why: Academy reconnects during private bottom selection
+    why: Restore private choices and replay divergent branches
+  - path: scratch/plan.md
+    why: Witnesses and remaining card interactions
 hide: []
