@@ -8,9 +8,10 @@ prefix loop remains separate because it measures failure agreement, not history.
 """
 
 import argparse
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 import hashlib
+from itertools import chain, repeat
 import json
 from pathlib import Path
 import subprocess
@@ -27,6 +28,7 @@ from managym.recording import (
     DecisionAnnotation,
     GameInputs,
     GameRecord,
+    Intervention,
     read_record,
     read_records,
     runtime_identities,
@@ -79,6 +81,44 @@ def _build_name(identities: Mapping[str, object]) -> str:
     )
 
 
+type BoundaryOperation = Intervention | Literal["issue_frame"]
+
+
+def replay_boundaries(game: GameInputs) -> Iterator[Sequence[BoundaryOperation]]:
+    """Yield ordered frame reads and native interventions, including the final boundary."""
+    count = len(game.actions) + 1
+    if not game.interventions and not game.issued_frame_boundaries:
+        yield from repeat((), count)
+        return
+    frames = set(game.issued_frame_boundaries)
+    applied = 0
+    for index in range(count):
+        operations: list[BoundaryOperation] = []
+        if index + applied in frames:
+            operations.append("issue_frame")
+        while (
+            applied < len(game.interventions)
+            and game.interventions[applied].at_action == index
+        ):
+            operations.append(game.interventions[applied])
+            applied += 1
+            if index + applied in frames:
+                operations.append("issue_frame")
+        yield operations
+
+
+def apply_boundary(env: managym.Env, operations: Sequence[BoundaryOperation]) -> bool:
+    """Reissue bindings and apply interventions. Only an intervention changes the view."""
+    changed = False
+    for op in operations:
+        if op == "issue_frame":
+            env.semantic_decision_frame_json()
+        else:
+            env.apply_intervention_json(op.model_dump_json(exclude={"at_action"}))
+            changed = True
+    return changed
+
+
 class RecordWalker:
     """One verified traversal, optionally applying through a consumer authority.
 
@@ -108,7 +148,12 @@ class RecordWalker:
             )
         self.build_differs = any(
             record.identities.get(key) != current[key]
-            for key in ("engine_recording_source_sha256", "engine_extension_sha256")
+            for key in (
+                "managym_version",
+                "engine_recording_source_sha256",
+                "engine_extension_sha256",
+            )
+            if key in record.identities
         )
         self.record = record
         self.game = record.games[0]
@@ -140,7 +185,10 @@ class RecordWalker:
         return self.run()
 
     def run(
-        self, apply: Callable[[RecordedDecision], None] | None = None
+        self,
+        apply: Callable[[RecordedDecision], None] | None = None,
+        *,
+        on_intervention: Callable[[managym.Observation], None] | None = None,
     ) -> Iterator[RecordedDecision]:
         if self._used:
             raise ValueError("a record walker can only be consumed once")
@@ -159,9 +207,21 @@ class RecordWalker:
             and self.record.execution_outcome != "last_command_succeeded"
         ):
             count = max(0, count - 1)
+        boundaries = replay_boundaries(game)
+
+        def enter(operations: Sequence[BoundaryOperation]) -> None:
+            if apply_boundary(self.env, operations):
+                self.observation = self.env.observation_for_player(
+                    self.env.current_agent_index() or 0
+                )
+                if on_intervention is not None:
+                    on_intervention(self.observation)
+
         index = 0
         try:
+            following = next(boundaries)
             for index, action in enumerate(game.actions[:count]):
+                enter(following)
                 if (
                     index < len(game.digests)
                     and self.env.state_digest() != game.digests[index]
@@ -211,13 +271,19 @@ class RecordWalker:
                     if index + 1 == count and game.end is not None
                     else None
                 )
-                if after is not None and target.state_digest() != after:
-                    raise ValueError("transition digest differs")
+                following = next(boundaries)
+                # Compare the consumer immediately after its action. The retained
+                # next digest includes any interventions before the next decision.
+                expected = target.state_digest() if apply is not None else None
+                if after is not None:
+                    apply_boundary(target, following)
+                    if target.state_digest() != after:
+                        raise ValueError("transition digest differs")
                 if apply is None:
                     self.observation = decision.apply(self.env)
                 else:
                     apply(decision)
-                    if self.env.state_digest() != target.state_digest():
+                    if self.env.state_digest() != expected:
                         raise RuntimeError(
                             "consumer transition differs from verified native commitment"
                         )
@@ -226,14 +292,19 @@ class RecordWalker:
                     )
                 yield decision
             index = count
+            enter(following)
             end = game.end
+            if (
+                end is not None
+                and end.digest is not None
+                and self.env.state_digest() != end.digest
+            ):
+                raise ValueError("final digest differs")
             if end is not None and end.status == "complete":
                 if not self.env.is_game_over() or (
                     end.winner_retained and self.env.winner_index() != end.winner
                 ):
                     raise ValueError("recorded result differs")
-                if end.digest is not None and self.env.state_digest() != end.digest:
-                    raise ValueError("final digest differs")
                 self.stop = ReplayStop(
                     "complete", count, winner=self.env.winner_index()
                 )
@@ -335,7 +406,7 @@ def require_replay_runtime(
     """
     native = hashlib.sha256(Path(managym._managym.__file__).read_bytes()).hexdigest()
     if not allow_changed_runtime:
-        if native != identities["engine_extension_sha256"]:
+        if native != identities.get("engine_extension_sha256"):
             raise ValueError(
                 "native bytes differ; explicit --allow-changed-runtime required"
             )
@@ -505,7 +576,18 @@ def _replay_game_inputs(
         else:
             reached = env.reset(setup)[0]
         phase = "prefix"
-        for index, action in enumerate(game.actions):
+        for offset, operations in enumerate(replay_boundaries(game)):
+            if operations:
+                index, phase = offset, "intervention"
+                agreement.at_retained_failure = False
+                if not isinstance(env, managym.Env):
+                    raise ValueError("branch interventions require a scalar replay")
+                if apply_boundary(env, operations):
+                    reached = env.observation_for_player(env.current_agent_index() or 0)
+            if offset == len(game.actions):
+                break
+            index, phase = offset, "prefix"
+            action = game.actions[index]
             if (
                 index == len(game.actions) - 1
                 and game.frame is not None
@@ -622,12 +704,13 @@ def main() -> None:
     if not args.worker:
         run_bounded_replay("managym.replay", args.seconds)
     try:
-        evidence = next(read_records(args.path))
+        records = read_records(args.path)
+        evidence = next(records)
     except (OSError, ValueError, StopIteration) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
     if not evidence.needs_reproduction:
         results = []
-        for record in read_records(args.path):
+        for record in chain((evidence,), records):
             try:
                 replay = walk(record, capture_cards=args.statistics)
             except ValueError as error:

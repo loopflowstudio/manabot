@@ -4238,6 +4238,16 @@ impl PyEnv {
         Ok(env.compare_profile(&baseline))
     }
 
+    /// Apply one recorded operation at the current live boundary.
+    fn apply_intervention_json(&self, raw: &str) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.apply_intervention_json")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .apply_intervention_json(raw)
+            .map_err(map_agent_err)
+    }
+
     /// Save this live boundary for independent continuations.
     fn snapshot(&self, py: Python<'_>) -> PyResult<super::snapshot_bindings::PyGameSnapshot> {
         py.allow_threads(|| {

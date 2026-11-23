@@ -28,6 +28,16 @@ impl PyGameSnapshot {
     }
 
     #[staticmethod]
+    fn _validate_recipe(py: Python<'_>, raw: &str) -> PyResult<Vec<usize>> {
+        py.allow_threads(|| {
+            let mut boundaries = Vec::new();
+            GameSnapshot::replay_recipe(raw, |index| boundaries.push(index))
+                .map(|_| boundaries)
+                .map_err(map_agent_err)
+        })
+    }
+
+    #[staticmethod]
     fn from_recipe_json(py: Python<'_>, raw: &str) -> PyResult<Self> {
         py.allow_threads(|| GameSnapshot::from_recipe_json(raw))
             .map(Self)

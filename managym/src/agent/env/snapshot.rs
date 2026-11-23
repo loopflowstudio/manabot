@@ -91,6 +91,14 @@ pub struct SnapshotMetadata {
 }
 
 impl Env {
+    /// Replay the operation payload of a retained boundary intervention.
+    #[cfg(feature = "python")]
+    pub(crate) fn apply_intervention_json(&mut self, raw: &str) -> Result<(), AgentError> {
+        let op = serde_json::from_str(raw)
+            .map_err(|e| AgentError(format!("invalid snapshot intervention: {e}")))?;
+        self.apply_intervention(op)
+    }
+
     pub fn snapshot(&self) -> Result<GameSnapshot, AgentError> {
         let game = self
             .game
@@ -283,6 +291,15 @@ impl GameSnapshot {
 
     /// Rebuild the position from private inputs and verify its rules digest.
     pub fn from_recipe_json(raw: &str) -> Result<Self, AgentError> {
+        Self::replay_recipe(raw, |_| {})?.snapshot()
+    }
+
+    /// A boundary ordinal counts actions and interventions already applied.
+    /// Recording readers use these locations to reissue historical object addresses.
+    pub(crate) fn replay_recipe(
+        raw: &str,
+        mut issued_frame: impl FnMut(usize),
+    ) -> Result<Env, AgentError> {
         let mut recipe: Recipe = serde_json::from_str(raw)
             .map_err(|e| AgentError(format!("invalid snapshot recipe: {e}")))?;
         if recipe.card_digest != default_content_pack().content_digest() {
@@ -317,8 +334,10 @@ impl GameSnapshot {
             .with_decision_memory_include_own(provenance.decision_memory_include_own);
         env.reset((*provenance.setup).clone())?;
         let mut interventions = provenance.interventions.iter().peekable();
+        let mut applied_interventions = 0;
         for k in 0..=provenance.actions.len() {
             loop {
+                let before = remaining_frames.len();
                 env.game
                     .as_ref()
                     .expect("reset game")
@@ -326,12 +345,16 @@ impl GameSnapshot {
                     .map_err(|error| {
                         AgentError(format!("snapshot frame at action {k}: {error}"))
                     })?;
+                if remaining_frames.len() != before {
+                    issued_frame(k + applied_interventions);
+                }
                 let Some(item) = interventions.next_if(|item| item.at_action == k) else {
                     break;
                 };
                 env.apply_intervention(item.op).map_err(|error| {
                     AgentError(format!("snapshot intervention at action {k}: {error}"))
                 })?;
+                applied_interventions += 1;
             }
             if let Some(action) = provenance.actions.get(k) {
                 let result = match action {
@@ -352,7 +375,7 @@ impl GameSnapshot {
         if env.state_digest()? != recipe.state_digest {
             return Err(AgentError("snapshot state_digest mismatch".into()));
         }
-        env.snapshot()
+        Ok(env)
     }
 }
 

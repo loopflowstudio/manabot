@@ -9,9 +9,9 @@ from typing import Literal
 import pytest
 
 import managym
-from managym.decision import Command
-from managym.recording import ScalarCapture, record_from_row
-from managym.replay import walk
+from managym.decision import Command, DecisionFrame
+from managym.recording import ScalarCapture, record_from_row, records_from_source
+from managym.replay import replay_failure_inputs, walk
 from tests.fixtures.recorded_commands import record_until_object_candidate
 
 
@@ -315,6 +315,15 @@ def test_forced_builtin_override_replays_at_the_trailing_boundary() -> None:
     ]
     cold = managym.GameSnapshot.from_recipe_json(raw).restore()
     assert cold.search_witness_json() == branch.search_witness_json()
+    replay = walk(record_from_row(recipe))
+    assert list(replay) == []
+    assert replay.stop is not None and replay.stop.status == "interrupted"
+    assert replay.env.search_witness_json() == branch.search_witness_json()
+    assert logs(replay.env) == logs(branch)
+    assert (
+        replay.observation.toJSON()
+        == branch.observation_for_player(branch.current_agent_index() or 0).toJSON()
+    )
     with pytest.raises(managym.AgentError, match="built-in chooser"):
         cold.step(1)
     for env in (branch, cold):
@@ -352,3 +361,188 @@ def test_restore_rejects_illegal_or_rebound_actions_without_changing_the_source(
             managym.RestoreOptions.determinize(1, 35, forced_first_action=land)
         )
     assert position.restore().search_witness_json() == source.search_witness_json()
+
+
+def test_recipe_walk_reissues_historical_command_precondition() -> None:
+    env = managym.Env(seed=23)
+    capture = ScalarCapture(seed=23)
+    previous, _ = record_until_object_candidate(env, capture)
+    capture.close()
+    env.step(0)
+    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    env.execute_semantic_command_json(
+        Command(
+            "later",
+            frame.revision,
+            frame.offers[0]["id"],
+            object_preconditions=(previous.object_candidates[0],),
+        ).to_json()
+    )
+    record = record_from_row(json.loads(env.snapshot().to_recipe_json()))
+    replay = walk(record)
+    assert len(list(replay)) == len(record.games[0].actions)
+    assert replay.stop is not None and replay.stop.status == "interrupted"
+    assert replay.env.search_witness_json() == env.search_witness_json()
+
+
+def position_evidence(env: managym.Env) -> dict[str, str | list[str]]:
+    return {
+        "digest": env.state_digest(),
+        "memory": logs(env),
+        "frame": env.semantic_decision_frame_json(),
+    }
+
+
+def test_banked_branch_round_trips_through_replay_and_academy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from managym.academy import trace
+    from managym.academy.watch import import_game, inspect_watch
+
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "academy")
+    shuffle_seed = 77665544332211
+    source = managym.Env(seed=42, decision_memory_include_own=True)
+    source.reset(setup())
+    source.step(0)
+    bank = source.snapshot()
+    assert bank.metadata().action_count >= 2
+    assert all(json.loads(log) for log in logs(source))
+    shared = bank.restore(managym.RestoreOptions.shuffle_libraries(shuffle_seed))
+    for index in (0, 1):
+        control = shared.snapshot().restore()
+        control.step(index)
+        branch = bank.restore(
+            managym.RestoreOptions.shuffle_libraries(
+                shuffle_seed, forced_first_action=index
+            )
+        )
+        assert branch.search_witness_json() == control.search_witness_json()
+        assert logs(branch) == logs(control)
+
+    # After the next draw, the unshuffled game offers a different legal frame.
+    branch = shared.snapshot().restore(
+        managym.RestoreOptions.exact(forced_first_action=0)
+    )
+    branch.step(0)
+    source.step(0)
+    source.step(0)
+    frame = branch.semantic_decision_frame_json()
+    assert source.semantic_decision_frame_json() != frame
+    branch = branch.snapshot().restore(
+        managym.RestoreOptions.shuffle_libraries(987654321123)
+    )
+    raw = branch.snapshot().to_recipe_json()
+    path = tmp_path / "branch.json"
+    path.write_text(raw)
+    assert json.loads(raw)["interventions"][-1]["at_action"] == 3
+    before = position_evidence(branch)
+    assert before["frame"] == frame
+    with pytest.raises(managym.AgentError) as rejected:
+        branch.step(999)
+    branch.step(0)
+    after = position_evidence(branch)
+    del bank, source, shared, control, branch
+
+    child = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import json, sys
+from pathlib import Path
+import managym
+from tests.env.test_game_snapshot import position_evidence
+env = managym.GameSnapshot.from_recipe_json(Path(sys.argv[1]).read_text()).restore()
+before = position_evidence(env)
+env.step(0)
+print(json.dumps([before, position_evidence(env)]))
+""",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    assert json.loads(child.stdout) == [before, after]
+
+    records = records_from_source(path)
+    assert records is not None
+    (record,) = records
+    replay = walk(record)
+    assert [decision.chosen for decision in replay] == [0, 0, 0]
+    assert replay.stop is not None and replay.stop.status == "interrupted"
+    assert position_evidence(replay.env) == before
+
+    imported = import_game(json.loads(raw))
+    assert (imported["stop"], imported["count"]) == ("interrupted", 3)
+    for ordinal in range(3):
+        shown = inspect_watch(imported["id"], ordinal, imported["token"])
+        assert shown["observation"]["opponent"]["hand"] == []
+        assert str(shuffle_seed) not in json.dumps(shown)
+        assert "987654321123" not in json.dumps(shown)
+    with pytest.raises(ValueError, match="spectator_view_unavailable"):
+        inspect_watch(imported["id"], 0, imported["token"], reveal=True)
+
+    record.games[0].committed = 3
+    record.games[0].actions.append(999)
+    record.games[0].frame = frame
+    record.execution_outcome = "failed"
+    record.error_class = type(rejected.value).__name__
+    record.error = str(rejected.value)
+    (result,) = replay_failure_inputs(record)
+    assert result["action_index"] == 3
+    assert result["status"] == "failed"
+    assert (
+        result["at_retained_failure"]
+        and result["matches_binding"]
+        and result["matches_error"]
+    )
+    record.games[0].interventions.clear()
+    assert replay_failure_inputs(record)[0]["status"] == "binding_mismatch"
+
+
+@pytest.mark.parametrize("field", ["card_digest", "state_digest"])
+def test_record_reader_checks_private_recipe_before_projection(field: str) -> None:
+    env = managym.Env(seed=42)
+    env.reset(setup())
+    recipe = json.loads(env.snapshot().to_recipe_json())
+    recipe[field] = "edited"
+    with pytest.raises(ValueError, match="digest mismatch"):
+        records_from_source(recipe)
+
+
+def test_watch_publishes_the_determinized_offers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from managym.academy import trace
+    from managym.academy.watch import import_game, inspect_watch
+
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
+    env = managym.Env(seed=42)
+    original = env.reset(setup("open"))[0]
+    branch = env.snapshot().restore(managym.RestoreOptions.determinize(1, 35))
+    offers = branch.observation_for_player(0).action_space.actions
+    assert len(offers) != len(original.action_space.actions)
+    branch.step(len(offers) - 1)
+    imported = import_game(json.loads(branch.snapshot().to_recipe_json()))
+    shown = inspect_watch(imported["id"], 0, imported["token"])
+    assert len(shown["decision"]["frame"]["offers"]) == len(offers)
+    assert shown["decision"]["offer"]["label"] == "Pass priority"
+
+
+def test_standalone_recipe_and_unterminated_journal_row(tmp_path: Path) -> None:
+    env = managym.Env(seed=42)
+    env.reset(setup())
+    recipe = json.loads(env.snapshot().to_recipe_json())
+    for seat in recipe["player_configs"]:
+        del seat["sideboard"]
+    path = tmp_path / "position.json"
+    path.write_text(json.dumps(recipe, indent=2))
+    records = records_from_source(path)
+    assert records is not None and len(records) == 1
+    assert records[0].games[0].setup()[0].sideboard == {}
+    journal = path.with_suffix(".jsonl")
+    journal.write_text(json.dumps(recipe))
+    with pytest.warns(RuntimeWarning, match="Incomplete final game record"):
+        assert records_from_source(journal) == []

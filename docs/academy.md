@@ -235,8 +235,10 @@ an evaluation's, or a private snapshot recipe exported by
 A record holds the seed, both setups, the actions, and any recorded boundary
 interventions (such as library reshuffles or determinizations), so
 Academy plays the game again through the engine, checks the recorded state
-digest before every decision, and saves what it verified to this traces
-directory as a finished recording. It runs no policy and loads no checkpoint,
+digests wherever the source retained them, and saves what it verified to this traces
+directory as a finished recording. A snapshot recipe carries its final digest.
+Its Watch recording shows each chooser’s hand at their decision and keeps the
+branch seeds private. It runs no policy and loads no checkpoint,
 and it never changes the file. Opening the same game again returns to the
 recording made the first time. At each choice the panel shows what the chooser
 recorded about it (the probability of each legal action, the value and the

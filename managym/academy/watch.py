@@ -11,6 +11,7 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
+    from managym import Observation
     from managym.recording import GameRecord
 
 from fastapi import HTTPException
@@ -537,7 +538,8 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
                 "name": "Recorded game",
                 **(
                     {"source_kind": record.context["source_kind"]}
-                    if record.context.get("source_kind") in ("training", "evaluation")
+                    if record.context.get("source_kind")
+                    in ("training", "evaluation", "snapshot")
                     else {}
                 ),
             },
@@ -583,7 +585,11 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
                 else None,
             )
 
-        for _ in replay.run(apply):
+        def refresh(observation: "Observation") -> None:
+            session.obs = observation
+            session.published_prompt = None
+
+        for _ in replay.run(apply, on_intervention=refresh):
             pass
         assert replay.stop is not None
         stop = replay.stop

@@ -18,7 +18,7 @@ from pathlib import Path
 import platform
 import time
 import traceback
-from typing import Any, BinaryIO, Literal, TypedDict, Unpack
+from typing import Annotated, Any, BinaryIO, Literal, TypedDict, Unpack
 from uuid import uuid4
 import warnings
 
@@ -134,6 +134,40 @@ class GameEnd(BaseModel):
     digest: str | None = None
 
 
+class BoundaryIntervention(BaseModel):
+    """One native operation after exactly at_action external commitments."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    at_action: int = Field(ge=0)
+
+
+class SeedIntervention(BoundaryIntervention):
+    op: Literal["reseed", "shuffle_libraries"]
+    seed: int = Field(ge=0, lt=2**64)
+
+
+class Determinize(BoundaryIntervention):
+    op: Literal["determinize"]
+    seed: int = Field(ge=0, lt=2**64)
+    viewer: Literal[0, 1]
+
+
+class SetDecisionMemory(BoundaryIntervention):
+    op: Literal["set_decision_memory"]
+    enabled: bool
+
+
+class ForceAction(BoundaryIntervention):
+    op: Literal["force_action"]
+    action: int = Field(ge=0)
+
+
+Intervention = Annotated[
+    SeedIntervention | Determinize | SetDecisionMemory | ForceAction,
+    Field(discriminator="op"),
+]
+
+
 class GameInputs(BaseModel):
     stream: int = 0
     # Older evidence always captured; new disabled captures serialize False.
@@ -144,6 +178,14 @@ class GameInputs(BaseModel):
     seed: int
     players: list[PlayerSetup]
     actions: list[int | str] = []
+    interventions: list[Intervention] = Field(
+        default_factory=list, exclude_if=lambda v: not v
+    )
+    # Ordinals count actions plus interventions. A retained Command may refer
+    # to a frame issued before either kind of transition.
+    issued_frame_boundaries: list[int] = Field(
+        default_factory=list, exclude_if=lambda v: not v
+    )
     committed: int | None = Field(default=None, ge=0)
     digests: list[str] = []
     annotations: list[DecisionAnnotation | None] = []
@@ -155,8 +197,18 @@ class GameInputs(BaseModel):
     frame: str | None = None
 
     @model_validator(mode="after")
-    def uniform_disclosure(self) -> "GameInputs":
+    def validate_boundaries(self) -> "GameInputs":
         _game_disclosure(self.players)
+        previous = 0
+        for item in self.interventions:
+            if not previous <= item.at_action <= len(self.actions):
+                raise ValueError("invalid intervention offset")
+            previous = item.at_action
+        if any(
+            not 0 <= k <= len(self.actions) + len(self.interventions)
+            for k in self.issued_frame_boundaries
+        ):
+            raise ValueError("invalid issued frame boundary")
         return self
 
     def setup(self) -> managym.GameSetup:
@@ -185,6 +237,8 @@ class GameInputs(BaseModel):
         """Keep the stream's setup, discard all inputs from its previous game."""
         self.seed = seed
         self.actions = []
+        self.interventions = []
+        self.issued_frame_boundaries = []
         self.committed = 0
         self.digests = []
         self.annotations = []
@@ -1900,34 +1954,59 @@ def _read_journal(path: Path) -> GameRecord:
 
 
 def record_from_row(row: dict[str, Any]) -> GameRecord:
-    """Project retained exposure receipts by field without loading a bot package."""
+    """Project native replay inputs, validating private recipes with their writer."""
     if not isinstance(row, dict):
         raise ValueError("expected a game record object")
-    if row.get("schema") != "training-exposure-v1":
+    schema = row.get("schema")
+    if schema == "managym-snapshot-v1":
+        try:
+            issued = managym.GameSnapshot._validate_recipe(json.dumps(row))
+        except managym.AgentError as error:
+            raise ValueError(str(error)) from error
+        trace = row
+        # The native recipe's omitted sideboard is an empty sideboard.
+        players = [{"sideboard": {}, **seat} for seat in trace["player_configs"]]
+        skip_trivial = row.get("skip_trivial", True)
+        seed = row["seed"]
+        terminal = row.get("terminal", False)
+        digest = row["state_digest"]
+        identities = {key: row[key] for key in ("managym_version", "card_digest")}
+        stream, context, seconds = 0, {"source_kind": "snapshot"}, 0.0
+    elif schema == "training-exposure-v1":
+        game = row["game"]
+        trace = game["trace"]
+        players = trace["player_configs"]
+        skip_trivial = row["skip_trivial"]
+        seed, terminal = game["seed"], game["terminal"]
+        digest, issued = None, []
+        identities = row["identities"]
+        stream, context, seconds = row["stream"], row["context"], row["seconds"]
+    else:
         return GameRecord.model_validate(row)
-    game = row["game"]
-    trace = game["trace"]
     return GameRecord(
         mode="scalar",
         operation="step",
-        skip_trivial=row["skip_trivial"],
+        skip_trivial=skip_trivial,
         player_policies=trace.get("player_policies"),
-        identities=row["identities"],
-        context=row["context"],
-        seconds=row["seconds"],
+        identities=identities,
+        context=context,
+        seconds=seconds,
         games=[
             GameInputs(
-                stream=row["stream"],
-                seed=game["seed"],
-                players=trace["player_configs"],
+                stream=stream,
+                seed=seed,
+                players=players,
                 actions=trace["actions"],
+                interventions=trace.get("interventions", []),
+                issued_frame_boundaries=issued,
                 decision_memory=trace.get("decision_memory", True),
                 decision_memory_include_own=trace.get(
                     "decision_memory_include_own", False
                 ),
                 end=GameEnd(
-                    status="complete" if game["terminal"] else "interrupted",
+                    status="complete" if terminal else "interrupted",
                     winner_retained=False,
+                    digest=digest,
                 ),
             )
         ],
@@ -1951,7 +2030,12 @@ def records_from_source(
         if journal_path is None:
             raise ValueError("a journal requires its complete file")
         return list(read_records(journal_path))
-    if schema in {"managym-game-v1", "native-failure-v1", "training-exposure-v1"}:
+    if schema in {
+        "managym-game-v1",
+        "native-failure-v1",
+        "training-exposure-v1",
+        "managym-snapshot-v1",
+    }:
         return list(_games_from_snapshot(record_from_row(source)))
     return None
 
@@ -2001,6 +2085,13 @@ def _read_snapshots(path: Path) -> Iterator[GameRecord]:
                 incomplete = None
             if (
                 isinstance(incomplete, dict)
+                and incomplete.get("schema") == "managym-snapshot-v1"
+                and path.suffix != ".jsonl"
+            ):
+                yield record_from_row(incomplete)
+                return
+            if (
+                isinstance(incomplete, dict)
                 and incomplete.get("schema") == "training-game-checkpoint-v1"
             ):
                 raise ValueError("incomplete initial training checkpoint")
@@ -2008,7 +2099,14 @@ def _read_snapshots(path: Path) -> Iterator[GameRecord]:
                 "Incomplete final game record; ignored", RuntimeWarning, stacklevel=2
             )
             return
-        row = json.loads(first)
+        try:
+            row = json.loads(first)
+        except json.JSONDecodeError:
+            if path.suffix != ".json":
+                raise
+            row = json.loads(first + source.read())
+            if not isinstance(row, dict) or row.get("schema") != "managym-snapshot-v1":
+                raise
         if not isinstance(row, dict):
             raise ValueError("expected a game record object")
         second = source.readline()

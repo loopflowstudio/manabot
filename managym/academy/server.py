@@ -1581,7 +1581,10 @@ class GameSession:
 
         observation = decision_surface_view(self.env, int(self.obs.agent.player_index))
         analysis_observation = None
-        if self.watch_mode:
+        if (
+            self.watch_mode
+            and (self.trace.config.opponent or {}).get("source_kind") != "snapshot"
+        ):
             analysis_observation = deepcopy(observation)
             other = serialize_observation(
                 self.env.observation_for_player(1 - int(self.obs.agent.player_index))

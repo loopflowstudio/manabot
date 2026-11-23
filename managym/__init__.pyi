@@ -199,6 +199,8 @@ class GameSnapshot:
     def to_recipe_json(self) -> str: ...
     @staticmethod
     def from_recipe_json(raw: str) -> GameSnapshot: ...
+    @staticmethod
+    def _validate_recipe(raw: str) -> list[int]: ...
 
 class RestoreOptions:
     @staticmethod
@@ -248,6 +250,7 @@ class SnapshotMetadata:
 
 class Env:
     def snapshot(self) -> GameSnapshot: ...
+    def apply_intervention_json(self, raw: str) -> None: ...
     def __init__(
         self,
         seed: int = 0,

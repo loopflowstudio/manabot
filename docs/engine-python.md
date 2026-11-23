@@ -375,7 +375,7 @@ game.reset(managym.GameSetup(players, decklists="closed"))
 snapshot = game.snapshot()
 meta = snapshot.metadata()
 print(meta.turn, meta.phase, meta.action_count, meta.terminal)
-# 1 PhaseEnum.PRECOMBAT_MAIN 2 False
+# 1 PhaseEnum.PrecombatMain 6 False
 
 # Drop the source Env and compare two opening choices under the same unseen
 # library order (Common Random Numbers), on open or closed decks.
@@ -397,6 +397,8 @@ assert continuation.state_digest() == branch_a.state_digest()
 
 # The same recipe feeds managym.replay and Academy Watch directly.
 replay = walk(read_record(recipe_path))
+for _ in replay:
+    pass
 print(replay.stop.status, replay.stop.index)
 # interrupted 1
 ```
