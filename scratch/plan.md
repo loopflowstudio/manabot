@@ -2,7 +2,7 @@
 
 ## Working progress
 
-**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, seven have confirmed deferrals and 211 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
+**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, eight have confirmed deferrals and 210 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
 
 ### Behavior after the shared repair at `12096ae8`
 
@@ -15,7 +15,7 @@
 - A separate `GameSession.current_recovery("reconnect")` probe at the constructed Lightshell root recovered both named mill offers and **Keep on top**. Submitting **Keep on top** recovered the two bound ordering offers. Choosing Hill Giant first put it on top. The Academy session returned the duplicate receipt and rejected a new Command using the old revision at each transition. The committed Python fixture directly exercises `decision_surface_view`; this session probe exercised the envelope.
 - Debug tests passed for the shared surveil completion event, ordered continuation and private fork behavior. The prowess fixtures passed for Swiftspear, the Monk token and Sokka's grant, including the own-noncreature control in the Iguana/Boar fixture. The constructor and predicate produce the existing rules structures. The catalog returned two triggered program spans for Duo, and its prowess span matched Swiftspear token for token. Nine learning-token observability checks and the registered-card Scryfall conformance check passed. The two text fixtures that now share the replay helper also passed. This slice changes no payment or receipt semantics.
 
-The merge at `24ddbe76` adds snapshot library-order pins on shuffle and movement alongside the shared knowledge updates. The four-case result above predates that merge.
+The merge at `24ddbe76` adds snapshot library-order pins on shuffle and movement alongside the shared knowledge updates. The four Lightshell cases passed again using the installed extension. Its build predates the merged source, so rebuild before claiming merged snapshot coverage. In the merged source, remember_library_objects pins inspected objects separately from the positions a viewer can observe. Preserve both through exact forks and replay.
 
 Slice 2 audit resumed. Taurean Mauler needs Changeling across zones. Soulstone Sanctuary needs every creature type only while animated. Both are Bucket C: definition matching checks explicit subtype membership in `managym/state/src/effect.rs`, and battlefield layers add and match individual subtypes in `managym/src/flow/layers.rs`. The complete debug suite, pinned-pilot compatibility suite and browser checks remain gate evidence. Decomposition and performance measurement follow working behavior.
 
@@ -71,9 +71,9 @@ Leave pending in `fdn.jsonl` with exact missing authority and owning track:
 - **Quality-scoped hexproof:** `Knight of Grace`, `Knight of Malice`, `Elenda, Saint of Dusk`.
 - **Every creature type (all zones for Mauler, animated battlefield characteristics for Sanctuary):** `Taurean Mauler`, `Soulstone Sanctuary`.
 
-Candidates still to verify:
+- **Pile formation and handoff:** `Curator of Destinies`. LookAndSelect has one chooser and moves selected cards to hand. Curator needs two piles that survive a change of chooser, separate disclosure for each pile, and movement determined by the second choice. Defer to the choice-continuations track.
 
-- **Private pile partition with opponent choice:** `Curator of Destinies`.
+Candidates still to verify:
 - **All-zone graveyard replacement (stack/hand/library):** `Dryad Militant`, `Darksteel Colossus`.
 - **Cross-target relational constraints:** `Run Away Together` (different controllers), `Drakuseth, Maw of Flames` (primary + up to 2 distinct other targets).
 - **Reveal-until-matching with random bottom:** `Spinner of Souls`.
@@ -85,7 +85,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Triage + Token/Static/Lifegain Model Proof (run next)
 This slice tests the entire redesigned model immediately:
-1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and seven deferrals documented. Audit the remaining 211 rows against native rules, starting with Curator of Destinies: trace private pile formation, opponent selection and the resulting zone moves. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
+1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and eight deferrals documented. Audit the remaining 210 rows against native rules, starting with Dryad Militant across resolution, discard and mill. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
 2. **Tokens + `StaticAbility::Continuous` proof:** Add `token.cat_1_1_w` and `token.cat_1_1_w_lifelink` in `tokens.rs`. Author **Arahbo, the First Fang**, **Helpful Hunter**, **Prideful Parent**, **Regal Caracal**, and **Anthem of Champions** using `StaticAbility::Continuous`. Verify:
    - Arahbo + Helpful Hunter: Hunter draws 1, Arahbo creates 1 ordinary Cat (`token.cat_1_1_w`) that gets Arahbo's lord bonus and does *not* recursively trigger Arahbo; test both trigger orders.
    - Regal Caracal: creates 2 `token.cat_1_1_w_lifelink` tokens; remove Caracal and confirm those tokens retain lifelink while Arahbo's Cat does not.
