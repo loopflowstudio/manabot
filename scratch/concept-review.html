@@ -1,12 +1,12 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Which creature just died?</title>
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Who sees the pending discard?</title>
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:54rem;margin:3rem auto;padding:0 1rem 3rem}h1,h2{line-height:1.15}h2{margin-top:2rem}table{width:100%;border-collapse:collapse}th,td{padding:.6rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:4px solid #888;padding-inline:1rem}li{margin:.45rem 0}small{font-weight:bold}
 </style><main><small>Managym · MTG-418 · Foundations and Standard</small>
 <h1>Do the player’s questions and the engine’s records line up?</h1>
 <p>Foundations asks players to remember a hit, recognize what an instruction actually did, and inspect the board as a spell resolves. The time named by the instruction determines which facts the engine needs.</p>
-<aside><h2>Biggest remaining mismatch · When does Blast ask for a card?</h2>
-<p><b>Existing.</b> The FDN ledger groups Incinerating Blast under cost payment. That label alone leaves the timing ambiguous. The catalog has no Blast definition. The engine already has <code>Effect::discard_draw(1, 1)</code> for this private choice during resolution.</p>
-<p><b>Proposed.</b> Cast Blast with its creature target. When it resolves, deal the damage, then show the caster each legal discard and the option to decline. A creature leaving before resolution makes the sole target illegal and ends the spell. Lethal damage during resolution still leads to the discard choice. The point at which the target leaves changes the answer.</p></aside>
+<aside><h2>Biggest gap · Who sees the pending discard?</h2>
+<p><b>Existing.</b> Gray Ogre has six damage marked and is still on the battlefield. The caster has three legal actions. The native fixture branches by selecting an action directly. It establishes when Blast asks, but leaves open what the opponent sees during that pause and whether a restored Command completes the spell exactly once.</p>
+<p><b>Proposed.</b> Carry the same pending decision through restore, semantic Command execution and Academy projection. Give the caster the complete choice and the opponent the public damage and hand count. Generate both views from the native decision. Reconstructing a discard menu from the visible history would require a second owner for legality and hidden information.</p></aside>
 <h2>Existing · Two Hatchers hit the same player</h2>
 <table><tr><th>Moment</th><th>What the player can recover</th></tr>
 <tr><td>Combat damage commits</td><td>One Hatcher deals one, the other three. Each CombatPlayerHit pairs source and recipient with its own amount.</td></tr>
@@ -27,7 +27,7 @@
 <tr><td>How many counters did this hit earn?</td><td>CombatPlayerHit supplies the committed amount. The pending trigger owns the value exposed by the triggering_damage fact.</td><td>Yes</td></tr>
 <tr><td>Did another nontoken creature die?</td><td>Hunter’s matching subject excludes its own departure and tokens. Each qualifying departure yields one stack entry.</td><td>Yes</td></tr>
 <tr><td>Did a creature die this turn?</td><td>The committed move and delayed watcher read was_creature from the exact departure. TurnState holds one public bit, cleared at the next turn.</td><td>Yes</td></tr>
-<tr><td>Can I see the damage before choosing a discard?</td><td>The shared discard effect supports that ordering. Blast still needs a definition and a restored private choice fixture.</td><td>No · proposed</td></tr>
+<tr><td>Can I see the damage before choosing a discard?</td><td>Blast resolves damage then Effect::discard_draw(1, 1). Its LookAndSelect action space belongs to the caster.</td><td>Yes</td></tr>
 <tr><td>What did I spend casting that spell?</td><td>PaymentReceipt owns the committed units. The planned Expend threshold and Unravel comparison still need their consumers.</td><td>No · partial</td></tr></tbody></table>
 <h2>One saved Hellkite decision · existing behavior</h2>
 <p>The earlier menu offered one with only an untapped Hellkite. Selecting it panicked because the payment required mana. The repaired menu and the payment step use the same ability cost.</p>
@@ -44,9 +44,11 @@
 <tr><td>Sacrifice the Cat token</td><td>0</td><td>One trigger, one counter on resolution</td></tr>
 <tr><td>Restore after sacrifice, before end step</td><td>0</td><td>Same trigger. A later turn with no deaths adds no counter.</td></tr></table>
 <p>The sole copying Island’s death set the turn fact and fired the delayed watcher. Exile did neither. Changing just the bit changed the canonical hash. Both viewers can read the fact on the active player’s v11 row. Paying ward allowed Lightning Strike to kill Prowler. Declining kept Prowler alive.</p>
+<h2>Existing · Three outcomes from one pause</h2><p>Decline keeps Forest and Mountain and draws zero. Discarding either land leaves the other in hand and draws one. The Ogre dies after the spell finishes in all three branches. Exiling the sole target before resolution instead returns to priority with both lands and the library intact.</p>
 <h2>Proposed · Restore Blast after damage</h2>
 <table><tr><th>Command from the saved choice</th><th>What survives</th></tr>
 <tr><td>Decline</td><td>Keep both hand cards. The damage stands. Draw zero.</td></tr>
 <tr><td>Discard A or discard B</td><td>Move just the chosen card and draw one. Both viewers can see the discard. Only its owner sees the newly drawn card.</td></tr>
 <tr><td>Submit the same Command again</td><td>Reject the spent Command. The damage, discard and draw each happened once. Restoring the untouched parent makes the original decision available again.</td></tr></table>
-<h2>Review questions</h2><ol><li>Which record survives the Cat sacrifice? <b>1a</b> One public turn fact (selected). <b>1b</b> A list of victims for Prowler.</li><li>When does Blast offer the discard? <b>2a</b> During casting. <b>2b</b> After damage in the same resolution (selected).</li></ol></main></html>
+<p>For the privacy comparison, hold the opponent’s viewing seat fixed and vary an unrevealed land in the caster’s hand. Before submission the caster’s label should change and the opponent’s view should remain equal. After submission a discarded land becomes public. Compare private state witnesses only across identical restores.</p>
+<h2>Review questions</h2><ol><li>Where should reconnect obtain the discard choices? <b>1a</b> Restore the pending native decision (selected). <b>1b</b> Rebuild choices from the event display.</li><li>When may the opponent identify the selected land? <b>2a</b> While the choice is pending. <b>2b</b> Once the discard commits (selected).</li></ol></main></html>
