@@ -18,4 +18,4 @@ pub mod shared_effects;
 pub mod structured_offer;
 pub mod vector_env;
 
-pub use env::{GameSnapshot, RestoreOptions, SnapshotMetadata};
+pub use env::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};

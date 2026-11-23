@@ -48,17 +48,21 @@ pub(super) struct BoundaryIntervention {
     pub op: Intervention,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum Intervention {
     Reseed { seed: u64 },
+    ShuffleLibraries { seed: u64 },
+    Determinize { viewer: usize, seed: u64 },
+    SetDecisionMemory { enabled: bool },
+    ForceAction { action: usize },
 }
 
 impl GameProvenance {
-    pub fn record_reseed(&mut self, seed: u64) {
+    pub fn record_intervention(&mut self, op: Intervention) {
         Arc::make_mut(&mut self.interventions).push(BoundaryIntervention {
             at_action: self.actions.len(),
-            op: Intervention::Reseed { seed },
+            op,
         });
     }
 

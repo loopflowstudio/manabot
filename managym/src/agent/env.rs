@@ -124,8 +124,8 @@ pub struct FlatMcResult {
 
 mod provenance;
 mod snapshot;
-use provenance::{GameProvenance, RecordedAction};
-pub use snapshot::{GameSnapshot, RestoreOptions, SnapshotMetadata};
+use provenance::{GameProvenance, Intervention, RecordedAction};
+pub use snapshot::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};
 
 #[derive(Debug)]
 pub struct Env {
@@ -592,17 +592,24 @@ impl Env {
             obs.recent_events.clone_from(&self.heuristic_events);
             policy.select_for_step(self, &obs)?
         };
-        let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
-        // A mixed game's rewards belong to its external seat, also when a
-        // built-in continues after a Command left it the decision.
-        if self.external_seat().is_some_and(|seat| seat != chooser) {
-            reward = -reward;
-        }
-        let result = self.settle_players(obs, reward, terminated, truncated, info)?;
+        let result = self.step_and_settle(chooser, action)?;
         if let Some(trace) = &mut self.provenance {
             trace.push(RecordedAction::Index(external_action));
         }
         Ok(result)
+    }
+
+    fn step_and_settle(
+        &mut self,
+        chooser: usize,
+        action: i64,
+    ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
+        let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
+        // A mixed game's rewards belong to its external seat.
+        if self.external_seat().is_some_and(|seat| seat != chooser) {
+            reward = -reward;
+        }
+        self.settle_players(obs, reward, terminated, truncated, info)
     }
 
     /// The agent seat of a mixed game; None when both or neither seat is external.
@@ -1308,8 +1315,9 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("env.fork called before reset".to_string()))?;
         let mut branch = self.branch_from_game(game.clone());
-        if !game.decision_memory_enabled {
-            branch.provenance = self.provenance.clone();
+        branch.provenance = self.provenance.clone();
+        if game.decision_memory_enabled {
+            branch.apply_intervention(Intervention::SetDecisionMemory { enabled: false })?;
         }
         Ok(branch)
     }
@@ -1324,27 +1332,43 @@ impl Env {
         perspective: usize,
         seed: u64,
     ) -> Result<(), AgentError> {
-        if perspective > 1 {
-            return Err(AgentError(format!(
-                "determinize: perspective {perspective} out of range"
-            )));
-        }
-        let game = self.game.as_mut().ok_or_else(|| {
-            AgentError("env.selected_determinize called before reset".to_string())
-        })?;
-        game.require_open_decklist(PlayerId(perspective))?;
-        self.provenance = None;
-        game.determinize(PlayerId(perspective), seed)?;
-        Ok(())
+        self.determinize(perspective, seed)
     }
 
     pub fn selected_reseed_rollout(&mut self, seed: u64) -> Result<(), AgentError> {
-        let game = self.game.as_mut().ok_or_else(|| {
-            AgentError("env.selected_reseed_rollout called before reset".to_string())
-        })?;
-        game.reseed(seed);
+        self.apply_intervention(Intervention::Reseed { seed })
+    }
+
+    fn apply_intervention(&mut self, op: Intervention) -> Result<(), AgentError> {
+        let game = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("intervention before reset".into()))?;
+        match op {
+            Intervention::Reseed { seed } => game.reseed(seed),
+            Intervention::ShuffleLibraries { seed } => game.shuffle_unseen_libraries(seed),
+            Intervention::Determinize { viewer, seed } => {
+                let viewer = game.state.sampling_viewer(viewer)?;
+                game.determinize(viewer, seed)?;
+            }
+            Intervention::SetDecisionMemory { enabled } => {
+                game.decision_memory_enabled = enabled;
+                self.decision_memory_enabled = enabled;
+            }
+            Intervention::ForceAction { action } => {
+                let chooser = self
+                    .current_agent_index()
+                    .ok_or_else(|| AgentError("no active chooser".into()))?;
+                if self.player_policies[chooser] == PlayerPolicy::Agent {
+                    return Err(AgentError(
+                        "force_action requires a built-in chooser".into(),
+                    ));
+                }
+                self.step_and_settle(chooser, action as i64)?;
+            }
+        }
         if let Some(trace) = &mut self.provenance {
-            trace.record_reseed(seed);
+            trace.record_intervention(op);
         }
         Ok(())
     }
@@ -1572,19 +1596,10 @@ impl Env {
     /// Resample hidden information from `perspective`'s point of view.
     /// See [`Game::determinize`].
     pub fn determinize(&mut self, perspective: usize, seed: u64) -> Result<(), AgentError> {
-        if perspective > 1 {
-            return Err(AgentError(format!(
-                "determinize: perspective {perspective} out of range"
-            )));
-        }
-        let game = self
-            .game
-            .as_mut()
-            .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
-        game.require_open_decklist(PlayerId(perspective))?;
-        self.provenance = None;
-        game.determinize(PlayerId(perspective), seed)?;
-        Ok(())
+        self.apply_intervention(Intervention::Determinize {
+            viewer: perspective,
+            seed,
+        })
     }
 
     /// Reseed the game RNG and play both sides uniformly-random-legal to

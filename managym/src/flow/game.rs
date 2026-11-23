@@ -4,7 +4,7 @@
 use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ops::{Deref, DerefMut},
 };
 
@@ -53,6 +53,9 @@ pub struct GameState {
     pub object_lki: ObjectLkiLog,
     pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
+    /// Physical appearances whose library rank was observed or chosen since the
+    /// last rules shuffle. Private branch sampling reads these, rules play does not.
+    pub(crate) library_order_pins: [BTreeSet<ObjectId>; 2],
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
@@ -85,7 +88,13 @@ impl GameState {
     /// Put the same appearance in a zone without a zone change. Callers own
     /// rules events; ordinary play uses `Game::move_object`.
     pub fn place_object(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
+        if self.zones.zone_of(object) == Some(ZoneType::Library) {
+            self.library_order_pins[self.objects[object.slot()].owner.0].remove(&object);
+        }
         self.zones.place(&self.objects, object, holder, zone);
+        if zone == ZoneType::Library {
+            self.library_order_pins[holder.0].insert(object);
+        }
     }
 
     /// Materialize hidden-zone contents, retaining transient occupants and order.
@@ -392,6 +401,10 @@ impl TrackedState {
 
     pub(crate) fn known_library_mut(&mut self, player: PlayerId) -> &mut LibraryKnowledge {
         &mut self.state.players[player.0].known_library
+    }
+
+    pub(crate) fn library_order_pins_mut(&mut self, owner: PlayerId) -> &mut BTreeSet<ObjectId> {
+        &mut self.state.library_order_pins[owner.0]
     }
 
     pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {

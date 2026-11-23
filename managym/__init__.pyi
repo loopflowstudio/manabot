@@ -202,7 +202,27 @@ class GameSnapshot:
 
 class RestoreOptions:
     @staticmethod
-    def exact(*, reseed: int | None = None) -> RestoreOptions: ...
+    def exact(
+        *,
+        reseed: int | None = None,
+        enable_decision_memory: bool | None = None,
+        forced_first_action: int | None = None,
+    ) -> RestoreOptions: ...
+    @staticmethod
+    def shuffle_libraries(
+        seed: int,
+        *,
+        enable_decision_memory: bool | None = None,
+        forced_first_action: int | None = None,
+    ) -> RestoreOptions: ...
+    @staticmethod
+    def determinize(
+        viewer: int,
+        seed: int,
+        *,
+        enable_decision_memory: bool | None = None,
+        forced_first_action: int | None = None,
+    ) -> RestoreOptions: ...
 
 class SnapshotMetadata:
     @property

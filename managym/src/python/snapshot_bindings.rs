@@ -2,7 +2,7 @@
 #![allow(clippy::useless_conversion)]
 
 use super::bindings::{map_agent_err, ActionSpaceEnum, PhaseEnum, PyEnv};
-use crate::agent::{GameSnapshot, RestoreOptions, SnapshotMetadata};
+use crate::agent::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};
 use pyo3::prelude::*;
 
 #[pyclass(name = "GameSnapshot", frozen)]
@@ -44,9 +44,44 @@ impl PyRestoreOptions {
         Self(RestoreOptions::default())
     }
     #[staticmethod]
-    #[pyo3(signature = (*, reseed=None))]
-    fn exact(reseed: Option<u64>) -> Self {
-        Self(RestoreOptions::exact(reseed))
+    #[pyo3(signature = (*, reseed=None, enable_decision_memory=None, forced_first_action=None))]
+    fn exact(
+        reseed: Option<u64>,
+        enable_decision_memory: Option<bool>,
+        forced_first_action: Option<usize>,
+    ) -> Self {
+        Self(RestoreOptions {
+            mode: BranchMode::Exact { reseed },
+            enable_decision_memory,
+            forced_first_action,
+        })
+    }
+    #[staticmethod]
+    #[pyo3(signature = (seed, *, enable_decision_memory=None, forced_first_action=None))]
+    fn shuffle_libraries(
+        seed: u64,
+        enable_decision_memory: Option<bool>,
+        forced_first_action: Option<usize>,
+    ) -> Self {
+        Self(RestoreOptions {
+            mode: BranchMode::ShuffleLibraries { seed },
+            enable_decision_memory,
+            forced_first_action,
+        })
+    }
+    #[staticmethod]
+    #[pyo3(signature = (viewer, seed, *, enable_decision_memory=None, forced_first_action=None))]
+    fn determinize(
+        viewer: usize,
+        seed: u64,
+        enable_decision_memory: Option<bool>,
+        forced_first_action: Option<usize>,
+    ) -> Self {
+        Self(RestoreOptions {
+            mode: BranchMode::Determinize { viewer, seed },
+            enable_decision_memory,
+            forced_first_action,
+        })
     }
 }
 

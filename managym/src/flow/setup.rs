@@ -145,6 +145,7 @@ impl Game {
                 players,
                 disclosure,
                 zones,
+                library_order_pins: Default::default(),
                 turn: TurnState::new(PlayerId(0)),
                 priority: PriorityState::default(),
                 stack_objects: Vec::new(),

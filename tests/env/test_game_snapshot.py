@@ -15,13 +15,13 @@ from managym.replay import walk
 from tests.fixtures.recorded_commands import record_until_object_candidate
 
 
-def setup() -> managym.GameSetup:
+def setup(decklists: Literal["open", "closed"] = "closed") -> managym.GameSetup:
     return managym.GameSetup(
         [
             managym.PlayerConfig(name, {"Mountain": 8, "Gray Ogre": 4})
             for name in ("a", "b")
         ],
-        decklists="closed",
+        decklists=decklists,
     )
 
 
@@ -150,13 +150,20 @@ def test_snapshot_metadata_and_terminal_boundary() -> None:
     board = env.snapshot().metadata()
     assert board.board_counts == [1, 0] and len(board.active_card_defs) == 1
     for _ in range(64):
+        last = env.snapshot()
+        env.step(0)
         if env.is_game_over():
             break
-        env.step(0)
+    else:
+        pytest.fail("fixture did not reach its terminal action")
     terminal = env.snapshot()
     meta = terminal.metadata()
     assert meta.terminal and meta.action_count == 0
     assert meta.action_kind is None and meta.acting_player is None
+    ended = last.restore(managym.RestoreOptions.exact(forced_first_action=0))
+    assert ended.is_game_over() and ended.state_digest() == env.state_digest()
+    with pytest.raises(managym.AgentError, match="non-terminal"):
+        terminal.restore(managym.RestoreOptions.exact(forced_first_action=0))
     assert terminal.restore().is_game_over()
     assert (
         managym.GameSnapshot.from_recipe_json(terminal.to_recipe_json())
@@ -220,3 +227,128 @@ def test_native_exposure_replays_external_calls_with_recorded_choosers() -> None
     assert replay.stop is not None and replay.stop.status == "interrupted"
     assert replay.env.state_digest() == vector.state_digests()[0]
     assert replay.env.decision_memory_counts() == vector.decision_memory_counts()[0]
+
+
+def logs(env: managym.Env) -> list[str]:
+    return [env.observation_for_player(i).decision_memory_json() for i in (0, 1)]
+
+
+@pytest.mark.parametrize("decklists", ["open", "closed"])
+def test_shuffled_siblings_share_a_deal_across_opening_choices(
+    decklists: Literal["open", "closed"],
+) -> None:
+    source = managym.Env(seed=42, decision_memory_include_own=True)
+    source.reset(setup(decklists))
+    position = source.snapshot()
+    options = managym.RestoreOptions.shuffle_libraries
+    shuffled = position.restore(options(101))
+    assert shuffled.state_digest() != source.state_digest()
+    assert shuffled.state_digest() != position.restore(options(102)).state_digest()
+    for seat in (0, 1):
+        assert shuffled.hand_snapshot(seat).cards == source.hand_snapshot(seat).cards
+        assert (
+            shuffled.observation_for_player(seat).toJSON()
+            == source.observation_for_player(seat).toJSON()
+        )
+    for choice in (0, 1):
+        branch = position.restore(options(101, forced_first_action=choice))
+        control = shuffled.snapshot().restore()
+        control.step(choice)
+        assert control.search_witness_json() == branch.search_witness_json()
+        assert logs(control) == logs(branch)
+        recipe = branch.snapshot().to_recipe_json()
+        assert json.loads(recipe)["actions"] == [choice]
+        cold = managym.GameSnapshot.from_recipe_json(recipe).restore()
+        for env in (cold, branch):
+            env.step(0)
+        assert cold.search_witness_json() == branch.search_witness_json()
+        assert logs(cold) == logs(branch)
+
+
+def test_promoted_fork_replays_frozen_then_live_logs_with_determinization() -> None:
+    source = managym.Env(seed=42, decision_memory_include_own=True)
+    source.reset(setup("open"))
+    source.step(0)
+    prefix = logs(source)
+    fork = source.clone_env()
+    fork.step(0)
+    assert logs(fork) == prefix
+    viewer = fork.snapshot().metadata().acting_player
+    assert viewer is not None
+    fork.determinize(seed=5, perspective=viewer)
+    branch = fork.snapshot().restore(
+        managym.RestoreOptions.shuffle_libraries(
+            13, enable_decision_memory=True, forced_first_action=0
+        )
+    )
+    assert logs(source) == prefix and logs(branch) != prefix
+    recipe = branch.snapshot().to_recipe_json()
+    assert json.loads(recipe)["interventions"] == [
+        {"at_action": 1, "op": "set_decision_memory", "enabled": False},
+        {"at_action": 2, "op": "determinize", "viewer": viewer, "seed": 5},
+        {"at_action": 2, "op": "shuffle_libraries", "seed": 13},
+        {"at_action": 2, "op": "set_decision_memory", "enabled": True},
+    ]
+    cold = managym.GameSnapshot.from_recipe_json(recipe).restore()
+    assert cold.search_witness_json() == branch.search_witness_json()
+    assert logs(cold) == logs(branch)
+
+
+def test_forced_builtin_override_replays_at_the_trailing_boundary() -> None:
+    source = managym.Env(seed=42, player_policies=("random", "heuristic"))
+    source.reset(setup())
+    options = managym.RestoreOptions.exact(
+        enable_decision_memory=True, forced_first_action=1
+    )
+    branch = source.snapshot().restore(options)
+    control = managym.Env(seed=42, decision_memory=True)
+    control.reset(setup())
+    control.step(1)
+    assert branch.state_digest() == control.state_digest()
+    assert logs(branch) == logs(control)
+    raw = branch.snapshot().to_recipe_json()
+    recipe = json.loads(raw)
+    assert recipe["actions"] == []
+    assert recipe["interventions"] == [
+        {"op": "set_decision_memory", "at_action": 0, "enabled": True},
+        {"op": "force_action", "at_action": 0, "action": 1},
+    ]
+    cold = managym.GameSnapshot.from_recipe_json(raw).restore()
+    assert cold.search_witness_json() == branch.search_witness_json()
+    with pytest.raises(managym.AgentError, match="built-in chooser"):
+        cold.step(1)
+    for env in (branch, cold):
+        env.step(None)
+    assert cold.search_witness_json() == branch.search_witness_json()
+    assert logs(cold) == logs(branch)
+
+
+def test_restore_rejects_illegal_or_rebound_actions_without_changing_the_source() -> (
+    None
+):
+    source = managym.Env(seed=42)
+    source.reset(setup())
+    position = source.snapshot()
+    with pytest.raises(managym.AgentError, match="decklist closed"):
+        position.restore(managym.RestoreOptions.determinize(0, 42))
+    with pytest.raises(managym.AgentError, match="out of range"):
+        position.restore(managym.RestoreOptions.determinize(2, 42))
+    with pytest.raises(managym.AgentError, match="out of bounds"):
+        position.restore(
+            managym.RestoreOptions.exact(
+                forced_first_action=position.metadata().action_count
+            )
+        )
+    assert position.restore().search_witness_json() == source.search_witness_json()
+    obs, _ = source.reset(setup("open"))
+    land = next(
+        i
+        for i, a in enumerate(obs.action_space.actions)
+        if a.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
+    )
+    position = source.snapshot()
+    with pytest.raises(managym.AgentError, match="changed after resampling"):
+        position.restore(
+            managym.RestoreOptions.determinize(1, 35, forced_first_action=land)
+        )
+    assert position.restore().search_witness_json() == source.search_witness_json()

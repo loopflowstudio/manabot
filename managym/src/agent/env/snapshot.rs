@@ -1,6 +1,5 @@
 //! An immutable decision boundary. Only live branches have projection caches,
 //! producer sinks or a generation used to admit append-only memory transport.
-use super::provenance::Intervention;
 use super::*;
 use crate::{
     agent::{
@@ -47,14 +46,33 @@ const _: fn() = || {
     assert_send_sync::<GameSnapshot>();
 };
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
+pub enum BranchMode {
+    Exact { reseed: Option<u64> },
+    ShuffleLibraries { seed: u64 },
+    Determinize { viewer: usize, seed: u64 },
+}
+
+#[derive(Clone, Copy)]
 pub struct RestoreOptions {
-    pub reseed: Option<u64>,
+    pub mode: BranchMode,
+    pub enable_decision_memory: Option<bool>,
+    pub forced_first_action: Option<usize>,
 }
 
 impl RestoreOptions {
     pub fn exact(reseed: Option<u64>) -> Self {
-        Self { reseed }
+        Self {
+            mode: BranchMode::Exact { reseed },
+            enable_decision_memory: None,
+            forced_first_action: None,
+        }
+    }
+}
+
+impl Default for RestoreOptions {
+    fn default() -> Self {
+        Self::exact(None)
     }
 }
 
@@ -106,6 +124,25 @@ impl Env {
 impl GameSnapshot {
     /// Materialize a new live game generation, continuing both viewer logs.
     pub fn restore(&self, options: RestoreOptions) -> Result<Env, AgentError> {
+        if let BranchMode::Determinize { viewer, .. } = options.mode {
+            self.state.sampling_viewer(viewer)?;
+        }
+        let forced = options
+            .forced_first_action
+            .map(|index| {
+                let space = self
+                    .action_space
+                    .as_ref()
+                    .filter(|_| self.state.players.iter().all(|p| p.alive))
+                    .ok_or_else(|| {
+                        AgentError("forced_first_action requires a non-terminal decision".into())
+                    })?;
+                let action = space.actions.get(index).ok_or_else(|| {
+                    AgentError(format!("forced_first_action {index} out of bounds"))
+                })?;
+                Ok::<_, AgentError>((index, space.player, action))
+            })
+            .transpose()?;
         let game = Game {
             state: self.state.clone(),
             decision_memory: self.decision_memory.clone(),
@@ -141,8 +178,39 @@ impl GameSnapshot {
             capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
             ..Env::new(self.reset_seed, self.skip_trivial, false, false)
         };
-        if let Some(seed) = options.reseed {
-            env.selected_reseed_rollout(seed)?;
+        let intervention = match options.mode {
+            BranchMode::Exact { reseed } => reseed.map(|seed| Intervention::Reseed { seed }),
+            BranchMode::ShuffleLibraries { seed } => Some(Intervention::ShuffleLibraries { seed }),
+            BranchMode::Determinize { viewer, seed } => {
+                Some(Intervention::Determinize { viewer, seed })
+            }
+        };
+        if let Some(op) = intervention {
+            env.apply_intervention(op)?;
+        }
+        if let Some(enabled) = options
+            .enable_decision_memory
+            .filter(|&enabled| enabled != self.memory_enabled)
+        {
+            env.apply_intervention(Intervention::SetDecisionMemory { enabled })?;
+        }
+        if let Some((index, chooser, action)) = forced {
+            let current = env.game.as_ref().and_then(|g| g.action_space());
+            let seat = env
+                .current_agent_index()
+                .ok_or_else(|| AgentError("no active chooser".into()))?;
+            if Some(PlayerId(seat)) != chooser
+                || current.and_then(|s| s.actions.get(index)) != Some(action)
+            {
+                return Err(AgentError(format!(
+                    "forced_first_action {index} changed after resampling"
+                )));
+            }
+            if env.player_policies[seat] == PlayerPolicy::Agent {
+                env.step(index as i64)?;
+            } else {
+                env.apply_intervention(Intervention::ForceAction { action: index })?;
+            }
         }
         Ok(env)
     }
@@ -250,16 +318,21 @@ impl GameSnapshot {
         env.reset((*provenance.setup).clone())?;
         let mut interventions = provenance.interventions.iter().peekable();
         for k in 0..=provenance.actions.len() {
-            while let Some(item) = interventions.next_if(|item| item.at_action == k) {
-                match item.op {
-                    Intervention::Reseed { seed } => env.selected_reseed_rollout(seed)?,
-                }
+            loop {
+                env.game
+                    .as_ref()
+                    .expect("reset game")
+                    .restore_frame_candidates(&mut remaining_frames)
+                    .map_err(|error| {
+                        AgentError(format!("snapshot frame at action {k}: {error}"))
+                    })?;
+                let Some(item) = interventions.next_if(|item| item.at_action == k) else {
+                    break;
+                };
+                env.apply_intervention(item.op).map_err(|error| {
+                    AgentError(format!("snapshot intervention at action {k}: {error}"))
+                })?;
             }
-            env.game
-                .as_ref()
-                .expect("reset game")
-                .restore_frame_candidates(&mut remaining_frames)
-                .map_err(|error| AgentError(format!("snapshot frame at action {k}: {error}")))?;
             if let Some(action) = provenance.actions.get(k) {
                 let result = match action {
                     RecordedAction::Index(i) => env.step(*i).map(|_| ()),
