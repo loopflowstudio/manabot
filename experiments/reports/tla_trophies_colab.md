@@ -53,7 +53,14 @@ updates 2–4 post-warmup, `$0.194/hr` = `1.94 CU/hr`):
 
 ## Etude 0.4.5 Colab findings & patches
 
-Testing live on Colab exposed three issues patched locally in `/Users/jack/src/etude.colab-keepalive` (`jack-heart/colab-keepalive` off `v0.4.5`):
-1. **Missing keep-alive:** `ColabMachines.alive()` never sent `GET /tun/m/<endpoint>/keep-alive/` (`X-Colab-Tunnel: Google`), causing Google Colab to idle-prune session 1 (`5c95dd06d627`) at 21m 49s. Added 60s-throttled keep-alive inside `alive()`.
-2. **HTTP 503 reconciliation wedge:** `ColabAPI.assign()` raised `ProviderUnavailable` on `503`, leaving unconfirmed sessions reconciling until `rental.deadline`. On `503`, `assign()` now verifies absence via deterministic `nbh` `lookup()` and raises `Refused`, and `loop.py` bounds unconfirmed-create reconciliation by `min(deadline, startup_deadline)`.
-3. **Teardown flush race:** When Google dropped session 1 from `/tun/m/assignments`, the dying VM flushed one last append to `out/game-attempts/0000.jsonl` after session 2's `bootstrap.json` was snapshotted, causing restore to fail on changed file length.
+Testing live on Colab exposed three issues patched in `/Users/jack/src/etude.colab-keepalive` (`jack-heart/colab-keepalive` off `v0.4.5`):
+1. **21-minute disconnected-runtime timeout:** Google Colab drops runtimes with no open client WebSocket after ~21 minutes even when a kernel cell is `busy` (session 1 unpatched dropped at `21m 33s`; session 2 with `GET /tun/m/<endpoint>/keep-alive/` dropped at `21m 17s` — `colab-vscode` PR #718 confirms that TFE endpoint is now a no-op; session 3 adding `GET <proxy>/api/colab/resources` still dropped at `21m 34s`). Keeping a lightweight `KernelChannel` WebSocket open to `/api/kernels/<id>/channels` (30s pings, 45m proxy-token rotation, lazy re-attachment across restarts) plus a 30s kernel `last_activity` heartbeat cleared both the 21-minute wall and the 1-hour proxy token expiry cleanly (session 4 `a066620b9e72` running continuously at 66+ min with verified socket rotation).
+2. **HTTP 503 reconciliation wedge:** `ColabAPI.assign()` raised `ProviderUnavailable` on `503`, leaving unconfirmed sessions reconciling until `rental.deadline`. On `503`, `assign()` now verifies absence via deterministic `nbh` `lookup()` and raises `Refused` (verified live on attempt 2 `b7ed51523a0d`).
+3. **Dead-startup idle VMs & teardown flush race:** When Google dropped a session from `/tun/m/assignments`, the dying VM flushed one last append to `out/game-attempts/*.jsonl` after the replacement session's `bootstrap.json` was snapshotted, causing restore to exit with status 1 while the Colab runtime sat idle until `startup_seconds` (15m). `ColabMachines.alive()` now checks `GET /api/kernels` and reports a booted runtime dead as soon as no active (non-`idle`) kernel remains.
+
+## Steady-state training throughput (`tla_trophies_colab_2m`, 2026-11-23)
+
+Over 40.7 minutes on session 4 (`colab-l4-s2-a066620b9e72`, `workers=4, threads=2`, `$0.194/hr`):
+- **`w64@40902`** (`u41` → `u71`): **`81.4 s/update`** (~11,900 games/hr)
+- **`w160l8@40902`** (`u25` → `u49`): **`101.8 s/update`** (~9,500 games/hr; 1.6× faster than init as games shorten)
+- At current speed, reaching 7,500 updates (~2M games each) takes ~212 hours (~412 CU / **~$41 total**, ~1.91 CU / ~$0.19 per run spent so far).
