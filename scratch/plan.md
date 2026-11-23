@@ -25,7 +25,7 @@ Authoring Foundations cards should be direct, predictable, and collision-free: o
 
 ### Canonical authoring model (and choices made for review)
 
-1. **Upfront 3-bucket readiness partition of the 222 rows.** `fdn.jsonl`'s `dependencies == []` tag came from a text-only planning scan (*"No games, tests or benchmarks were run"*). The three existing definitions are reconciled. Classify the remaining 207 unaudited rows against native selection, execution and observation. The task brief allows “minimal local primitives”. Treat the designs below as proposals until the audit establishes their callers and scope:
+1. **Capability-by-capability readiness partition of the 222 rows.** `fdn.jsonl`'s `dependencies == []` tag came from a text-only planning scan (*"No games, tests or benchmarks were run"*). The three existing definitions are reconciled. Classify the remaining 207 unaudited rows against native selection, execution and observation. The task brief allows “minimal local primitives”. Treat the designs below as proposals until the audit establishes their callers and scope:
    - **Bucket A — Composable today:** Zero engine edits needed; batch-author in capability-grouped slices of ~15–35 cards instead of 1–2 cards per slice.
    - **Bucket B — Unlocked by minimal local primitives:** Land each shared primitive once with directed counterexamples, observability guards, and learning tokens, then batch-author every FDN card it unlocks.
    - **Bucket C — Explicitly deferred:** Record as `definition pending` in `fdn.jsonl` with the exact missing authority and owning parallel track. Do not add one-off shortcuts.
@@ -87,8 +87,8 @@ Candidates still to verify:
 Every slice follows the same authoring rules: file each card once under its **first printing's set module** (`managym/cards/src/<set>.rs`) with its Scryfall printing ID, register via `cards()` and `cards/src/lib.rs`, snapshot shell + Oracle text in `managym/tests/fixtures/scryfall_cards.json`, update `fdn.jsonl` (`status: "source definition found"`, exact source path), and add directed set tests covering normal paths and counterexamples.
 
 ### Slice 2 — Triage + Token/Static/Lifegain Model Proof (run next)
-This slice tests the entire redesigned model immediately:
-1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and eleven deferrals documented. Audit the remaining 207 rows against native rules, starting with Drakuseth, Maw of Flames. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
+Begin with the Arahbo and Helpful Hunter position. Audit those two definitions, then exercise both trigger orders before extending the batch. Complete the cohort partition across the remaining slices.
+1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and eleven deferrals documented. Audit each group against native rules before authoring it. Start the targeting group with Drakuseth, Maw of Flames. The token group can proceed independently. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
 2. **Tokens + `StaticAbility::Continuous` proof:** Add `token.cat_1_1_w` and `token.cat_1_1_w_lifelink` in `tokens.rs`. Author **Arahbo, the First Fang**, **Helpful Hunter**, **Prideful Parent**, **Regal Caracal**, and **Anthem of Champions** using `StaticAbility::Continuous`. Verify:
    - Arahbo + Helpful Hunter: Hunter draws 1, Arahbo creates 1 ordinary Cat (`token.cat_1_1_w`) that gets Arahbo's lord bonus and does *not* recursively trigger Arahbo; test both trigger orders.
    - Regal Caracal: creates 2 `token.cat_1_1_w_lifelink` tokens; remove Caracal and confirm those tokens retain lifelink while Arahbo's Cat does not.
