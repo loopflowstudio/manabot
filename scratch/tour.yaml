@@ -1,4 +1,4 @@
-at: 5ad8faba94048b5d4bd76536c62106cb1b91b4bf
+at: 1169bdcb1a7dd8922ad2e18c707f776ea33d327d
 first:
   - path: docs/engine.md
     why: Compare transforming, changing zones and copying departed sources.
@@ -21,9 +21,9 @@ first:
   - path: managym/src/flow/zones.rs
     why: Follow movement, face identity and prospective entry.
   - path: managym/src/flow/proposed_event.rs
-    why: Track revealed hand knowledge across a committed move.
+    why: Keep both destination appearances with one movement result.
   - path: managym/src/flow/decision.rs
-    why: Bind committed token arrivals to the resolving effect.
+    why: Follow paired arrivals through ordering and discard binding.
   - path: managym/src/agent/effect_execution.rs
     why: Project pending copies from their captured values.
   - path: managym/src/flow/stabilization.rs
