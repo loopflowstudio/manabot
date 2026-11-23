@@ -1,21 +1,15 @@
-at: 5b6d4989598d110c3df104029d8b57f8b064f90d
+at: b75a567051e4dc6b916c6ef76c8c5639f90a1b24
 first:
-  - path: docs/engine-python.md
-    why: Public reset and terminal outcome contracts
-  - path: managym/cards/tests/cards/ori.rs
-    why: Resolve Pact on two responding branches
-  - path: managym/cards/tests/cards/dgm.rs
-    why: Four Gate searches exercise explicit victory
-  - path: managym/src/flow/game.rs
-    why: Distinguish instructed losses and explicit victory
-  - path: managym/src/flow/sba.rs
-    why: Consult live protections before committing outcomes
-  - path: managym/src/flow/payment.rs
-    why: Return the source before responses
   - path: managym/src/agent/env.rs
-    why: Check rewards from both seats
+    why: Both step APIs project one committed outcome
   - path: tests/env/test_game_snapshot.py
-    why: Replay Pact from a saved upkeep
-  - path: scratch/plan.md
-    why: Remaining interactions and focused evidence
+    why: Compare Pact results across four restored branches
+  - path: managym/cards/src/eoe.rs
+    why: Silencer uses ordinary combat triggers and poison
+  - path: managym/cards/tests/cards/eoe.rs
+    why: Distinguish qualifying hits and committed poison
+  - path: managym/cards/tests/cards/ori.rs
+    why: Follow Pact choices across controller and appearance changes
+  - path: managym/cards/tests/cards/dgm.rs
+    why: Flash Herald in the activation response window
 hide: []
