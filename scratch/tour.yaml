@@ -1,10 +1,15 @@
-at: c392dcfa04a37369fbe5ab87c80967870c6bc3f4
+at: 7ada41e6384111c02f41f9fdb910e39120a77cb7
 first:
-  - path: managym/cards/src/fdn.rs
-    why: Defines Hunter’s attack choice and death trigger
-  - path: managym/state/src/predicate.rs
-    why: Accepts event-time creature status for type checks
-  - path: managym/src/flow/triggers.rs
-    why: Applies departure characteristics to each victim
   - path: managym/cards/tests/cards/fdn.rs
-    why: Forks pending abilities and checks both viewers
+    why: Sacrifice, restore and ward payment branches
+  - path: managym/src/flow/zones.rs
+    why: Records death from the departing creature
+  - path: managym/src/flow/triggers.rs
+    why: Delayed watchers read the same departure
+  - path: managym/cards/src/fdn.rs
+    why: Prowler uses ward and the shared turn fact
+  - path: managym/cards/tests/cards/observability.rs
+    why: Both viewers see the active player's fact
+hide:
+  - path: protocol/
+    why: Schema copies reflect the optional turn field
