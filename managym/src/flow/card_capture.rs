@@ -145,7 +145,7 @@ impl ManaUse {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardSnapshot {
     pub copy: usize,
     pub definition: u32,
@@ -419,14 +419,138 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::player::PlayerConfig;
+    use crate::state::{game_object::Target, player::PlayerConfig};
     use std::collections::BTreeMap;
 
-    fn configs() -> Vec<PlayerConfig> {
+    fn configs_with_card(card: &str) -> Vec<PlayerConfig> {
         ["a", "b"]
             .into_iter()
-            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 20)])))
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([(card.into(), 20)])))
             .collect()
+    }
+
+    fn copied_spell(name: &str, targets: Vec<Target>) -> (Game, ObjectId) {
+        let (caster, copier) = (PlayerId(0), PlayerId(1));
+        let mut game = Game::new_capturing(configs_with_card(name), 17, true);
+        let card = game.state.zones.zone_objects(ZoneType::Hand, caster)[0];
+        let indices = (0..targets.len()).collect();
+        let spell = game.push_spell_to_stack(card, caster, targets, indices, Default::default());
+        let Some(Target::StackSpell(copy)) =
+            game.copy_stack_object(Target::StackSpell(spell), copier)
+        else {
+            panic!("expected a spell copy");
+        };
+        assert_ne!(copy.slot(), spell.slot());
+        (game, copy)
+    }
+
+    fn copy_moves(game: &Game, copy: ObjectId) -> impl Iterator<Item = &CardMove> {
+        game.card_capture
+            .as_ref()
+            .unwrap()
+            .moves
+            .iter()
+            .filter(move |m| m.object.copy == copy.slot())
+    }
+
+    fn copy_history(game: &Game, copy: ObjectId) -> Vec<(Option<ZoneType>, Option<ZoneType>, u32)> {
+        copy_moves(game, copy)
+            .map(|m| (m.from, m.object.zone, m.object.incarnation))
+            .collect()
+    }
+
+    #[test]
+    fn capture_tracks_a_copied_spell_from_stack_entry_until_it_ceases() {
+        use ZoneType::{Graveyard, Stack};
+
+        let (mut game, copy) = copied_spell("Lightning Bolt", vec![Target::Player(PlayerId(0))]);
+        game.resolve_top_of_stack();
+        game.perform_state_based_actions();
+
+        assert_eq!(
+            copy_history(&game, copy),
+            [
+                (None, Some(Stack), 0),
+                (Some(Stack), Some(Graveyard), 1),
+                (Some(Graveyard), None, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn capture_tracks_a_copied_permanent_spell_as_the_token_it_becomes() {
+        use crate::state::game_object::ObjectKind;
+        use ZoneType::{Battlefield, Graveyard, Stack};
+
+        let (mut game, copy) = copied_spell("Gray Ogre", vec![]);
+        game.resolve_top_of_stack();
+        let token = game.state.zones.successor(copy).unwrap();
+        assert_eq!(game.state[token].kind(), ObjectKind::Token);
+        game.move_object(token, Graveyard);
+        game.perform_state_based_actions();
+
+        assert_eq!(
+            copy_history(&game, copy),
+            [
+                (None, Some(Stack), 0),
+                (Some(Stack), Some(Battlefield), 1),
+                (Some(Battlefield), Some(Graveyard), 2),
+                (Some(Graveyard), None, 2),
+            ]
+        );
+    }
+
+    #[test]
+    fn capture_matches_the_final_snapshot_of_an_unresolved_spell_copy() {
+        let (mut game, copy) = copied_spell("Gray Ogre", vec![]);
+        game.lose_game(PlayerId(0));
+        assert!(game.is_game_over());
+
+        let mut moves = copy_moves(&game, copy);
+        let entry = moves.next().expect("spell copy's stack entry");
+        assert!(moves.next().is_none());
+        assert_eq!(
+            (entry.from, entry.object.zone, entry.object.incarnation),
+            (None, Some(ZoneType::Stack), 0)
+        );
+        assert_eq!(entry.object.name, "Gray Ogre");
+        assert_eq!(entry.object.origin, "generated");
+        assert_eq!((entry.object.owner, entry.controller), (1, 1));
+        assert_eq!(entry.cause, "move");
+        assert!(snapshots(&game).contains(&entry.object));
+    }
+
+    #[test]
+    fn copying_triggered_and_activated_abilities_records_no_card_movements() {
+        use crate::state::{mana::Mana, stack_object::StackObject};
+
+        let mut game = Game::new_capturing(configs_with_card("The Fire Nation Drill"), 17, true);
+        let player = game.active_player();
+        let copier = game.non_active_player();
+        let card = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+        let drill = game.move_object(card, ZoneType::Battlefield);
+        assert!(game.flush_triggers().is_none());
+        let permanent = game.state.permanent_of(drill).unwrap();
+        *game.state.mana_pool_mut(player) = Mana::parse("R").into();
+        game.activate_ability_action(player, permanent, 0).unwrap();
+
+        let [StackObject::TriggeredAbility(trigger), StackObject::ActivatedAbility(activation)] =
+            game.state.stack_objects.as_slice()
+        else {
+            panic!("expected both Drill abilities on the stack");
+        };
+        let moves_before = game.card_capture.as_ref().unwrap().moves.len();
+        for id in [trigger.id, activation.id] {
+            let original = Target::StackAbility(id);
+            let copy = game.copy_stack_object(original, copier).unwrap();
+            assert!(matches!(copy, Target::StackAbility(_)));
+            assert_ne!(copy, original);
+            assert_eq!(game.state.stack_objects.last().unwrap().as_target(), copy);
+        }
+        assert_eq!(
+            game.card_capture.as_ref().unwrap().moves.len(),
+            moves_before
+        );
     }
 
     #[test]
@@ -436,7 +560,7 @@ mod tests {
             state::mana::{Mana, ManaCost},
         };
         let payer = PlayerId(0);
-        let mut players = configs();
+        let mut players = configs_with_card("Mountain");
         players[0] = PlayerConfig::new(
             "a",
             BTreeMap::from([
@@ -486,7 +610,7 @@ mod tests {
         use crate::flow::turn::PhaseKind;
         let (active, defender) = (PlayerId(0), PlayerId(1));
         let mut game = Game::construct(
-            configs().into(),
+            configs_with_card("Mountain").into(),
             17,
             true,
             Some(CaptureMode::Exposure),
@@ -539,8 +663,8 @@ mod tests {
 
     #[test]
     fn capture_preserves_rules_and_excludes_forks() {
-        let plain = Game::new(configs(), 17, true);
-        let mut captured = Game::new_capturing(configs(), 17, true);
+        let plain = Game::new(configs_with_card("Mountain"), 17, true);
+        let mut captured = Game::new_capturing(configs_with_card("Mountain"), 17, true);
         assert_eq!(
             plain.state.deterministic_hash(),
             captured.state.deterministic_hash()
@@ -571,7 +695,7 @@ mod tests {
 
     #[test]
     fn selection_bounce_and_redraw_keep_distinct_causes() {
-        let mut game = Game::new_capturing(configs(), 18, true);
+        let mut game = Game::new_capturing(configs_with_card("Mountain"), 18, true);
         let object = game
             .state
             .zones
@@ -690,7 +814,7 @@ mod tests {
     #[test]
     fn exposure_capture_keeps_physical_identity_across_face_changes() {
         use std::sync::Arc;
-        let mut game = Game::new_capturing(configs(), 17, true);
+        let mut game = Game::new_capturing(configs_with_card("Mountain"), 17, true);
         let object = game.state.zones.zone_objects(ZoneType::Hand, PlayerId(0))[0];
         let before = snapshot(&game, object);
         // A controlled face switch uses two real definitions without asserting

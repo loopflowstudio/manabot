@@ -378,8 +378,7 @@ impl Game {
             return None;
         };
 
-        let object_id = self.add_object(object);
-        Some(object_id)
+        Some(self.add_object(object))
     }
 
     pub(crate) fn finish_created_token(&mut self, object: ObjectId, attacking: bool) {
@@ -427,10 +426,25 @@ impl Game {
 
     /// Allocate a newly created token or spell copy outside every zone.
     /// All companion stores grow here, in the same creation order.
-    pub(crate) fn add_object(&mut self, object: Object) -> ObjectId {
+    fn add_object(&mut self, object: Object) -> ObjectId {
         self.state.objects.push(object);
         self.state.object_to_permanent.push(None);
         self.state.zones.allocate()
+    }
+
+    /// A spell copy starts on the stack at incarnation zero. Capture its
+    /// creation without emitting a rules zone-change event.
+    pub(crate) fn create_spell_copy(
+        &mut self,
+        source: ObjectId,
+        id: PublicId,
+        controller: PlayerId,
+    ) -> ObjectId {
+        let copy = Object::spell_copy(self.state[source].clone(), id, controller);
+        let object = self.add_object(copy);
+        self.state.place_object(object, controller, ZoneType::Stack);
+        self.capture_object_move(object, None, Some(ZoneType::Stack), controller);
+        object
     }
 
     /// Count permanents a player controls matching a predicate (e.g.

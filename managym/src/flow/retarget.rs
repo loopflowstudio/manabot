@@ -170,16 +170,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
-                let copy = crate::state::game_object::Object::spell_copy(
-                    self.state[spell.object].clone(),
-                    id,
-                    controller,
-                );
-                let copied = self.add_object(copy);
-                self.state
-                    .place_object(copied, controller, crate::state::zone::ZoneType::Stack);
+                spell.object = self.create_spell_copy(spell.object, id, controller);
                 spell.id = id;
-                spell.object = copied;
                 spell.controller = controller;
                 StackObject::Spell(spell)
             }
